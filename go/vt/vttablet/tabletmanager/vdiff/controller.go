@@ -21,6 +21,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -127,18 +128,20 @@ func (ct *controller) run(ctx context.Context) {
 	row := qr.Named().Row()
 	state := VDiffState(strings.ToLower(row["state"].ToString()))
 	switch state {
-	case PendingState:
-		log.Infof("Starting vdiff %s", ct.uuid)
+	case PendingState, StartedState:
+		action := "Starting"
+		if state == StartedState {
+			action = "Restarting"
+		}
+		log.Infof("%s vdiff %s", action, ct.uuid)
 		if err := ct.start(ctx, dbClient); err != nil {
 			log.Errorf("Encountered an error for vdiff %s: %s", ct.uuid, err)
-			insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", err))
-			if err = ct.updateState(dbClient, ErrorState, err); err != nil {
-				log.Errorf("Encountered an error marking vdiff %s as errored: %v", ct.uuid, err)
+			if err := ct.saveErrorState(ctx, err); err != nil {
+				log.Errorf("Unable to save error state for vdiff %s; giving up because %s", ct.uuid, err.Error())
 			}
-			return
 		}
 	default:
-		log.Infof("VDiff %s was not marked as pending, doing nothing", state)
+		log.Infof("VDiff %s was not marked as runnable (state: %s), doing nothing", ct.uuid, state)
 	}
 }
 
@@ -270,4 +273,54 @@ func newMigrationSource() *migrationSource {
 func (ct *controller) validate() error {
 	// TODO: check if vreplication workflow has errors, what else?
 	return nil
+}
+
+// saveErrorState saves the error state for the vdiff in the database.
+// It never gives up trying to save the error state, unless the context
+// has been cancelled or the done channel has been closed -- indicating
+// that the engine is closing or the vdiff has been explicitly stopped.
+// Note that when the engine is later opened the started vdiff will be
+// restarted even though we were unable to save the error state.
+// It uses exponential backoff with a factor of 1.5 to avoid creating
+// too many database connections.
+func (ct *controller) saveErrorState(ctx context.Context, saveErr error) error {
+	retryDelay := 100 * time.Millisecond
+	maxRetryDelay := 60 * time.Second
+	save := func() error {
+		dbClient := ct.vde.dbClientFactoryFiltered()
+		if err := dbClient.Connect(); err != nil {
+			return err
+		}
+		defer dbClient.Close()
+
+		if err := ct.updateState(dbClient, ErrorState, saveErr); err != nil {
+			return err
+		}
+		insertVDiffLog(ctx, dbClient, ct.id, fmt.Sprintf("Error: %s", saveErr))
+
+		return nil
+	}
+
+	for {
+		if err := save(); err != nil {
+			log.Warningf("Failed to persist vdiff error state: %v. Will retry in %s", err, retryDelay.String())
+			select {
+			case <-ctx.Done():
+				return fmt.Errorf("engine is shutting down")
+			case <-ct.done:
+				return fmt.Errorf("vdiff was stopped")
+			case <-time.After(retryDelay):
+				if retryDelay < maxRetryDelay {
+					retryDelay = time.Duration(float64(retryDelay) * 1.5)
+					if retryDelay > maxRetryDelay {
+						retryDelay = maxRetryDelay
+					}
+				}
+				continue
+			}
+		}
+
+		// Success
+		return nil
+	}
 }
