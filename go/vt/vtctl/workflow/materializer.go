@@ -387,6 +387,7 @@ func Materialize(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManage
 		ts:       ts,
 		sourceTs: ts,
 		tmc:      tmc,
+		ms:       ms,
 	}
 
 	err := mz.prepareMaterializerStreams()

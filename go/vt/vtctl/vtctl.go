@@ -2476,13 +2476,13 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("a single argument is required: <json_spec>")
 	}
-	ms := &vtctldatapb.MaterializeSettings{}
-	if err := json2.Unmarshal([]byte(subFlags.Arg(0)), ms); err != nil {
-		return err
-	}
-	ms.Cell = *cells
-	ms.TabletTypes = *tabletTypes
-	return wr.Materialize(ctx, ms)
+	_, err := wr.VtctldServer().Materialize(ctx, &vtctldatapb.MaterializeRequest{
+		Cells:           *cells,
+		TabletTypes:     *tabletTypes,
+		MaterializeSpec: subFlags.Arg(0),
+	})
+
+	return err
 }
 
 func useVDiffV2(args []string) bool {
