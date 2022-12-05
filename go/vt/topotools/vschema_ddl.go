@@ -239,37 +239,20 @@ func ApplyVSchemaDDL(ksName string, ks *vschemapb.Keyspace, alterVschema *sqlpar
 
 		return ks, nil
 	case sqlparser.CreateViewDDLAction:
-		createView := alterVschema.ViewSpec.CreateView
-		name := createView.ViewName.Name.String()
+		viewSpec := alterVschema.ViewSpec
+		name := viewSpec.ViewName.Name.String()
 		if _, ok := ks.Tables[name]; ok {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.TableExists, "vschema: Table '%s' already exists in keyspace %s", name, ksName)
+			return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.TableExists, "vschema: Table '%s' already exists in keyspace %s", name, ksName)
 		}
 		if ks.Views == nil {
 			ks.Views = make(map[string]string)
 		}
-		if !createView.IsReplace {
+		if !viewSpec.IsReplace {
 			if _, ok := ks.Views[name]; ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.TableExists, "vschema: View '%s' already exists in keyspace %s", name, ksName)
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.TableExists, "vschema: View '%s' already exists in keyspace %s", name, ksName)
 			}
 		}
-		ks.Views[name] = sqlparser.String(createView.Select)
-		return ks, nil
-	case sqlparser.DropViewDDLAction:
-		dropView := alterVschema.ViewSpec.DropView
-		for _, view := range dropView.FromTables {
-			name := view.Name.String()
-			if _, ok := ks.Views[name]; ok {
-				delete(ks.Views, name)
-				continue
-			}
-			if _, ok := ks.Tables[name]; ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongObject, "vschema: '%s' is not VIEW in keyspace %s", name, ksName)
-			}
-			if !dropView.IfExists {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadTableError, "vschema: Unknown table '%s' in keyspace %s", name, ksName)
-			}
-		}
-
+		ks.Views[name] = sqlparser.String(viewSpec.Select)
 		return ks, nil
 	}
 

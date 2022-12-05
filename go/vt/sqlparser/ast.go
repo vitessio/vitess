@@ -450,10 +450,6 @@ type (
 		Table TableName
 	}
 
-	ViewSpec struct {
-		CreateView *CreateView
-		DropView   *DropView
-	}
 	// AlterVschema represents a ALTER VSCHEMA statement.
 	AlterVschema struct {
 		Action DDLAction
@@ -468,8 +464,8 @@ type (
 		// AutoIncSpec is set for AddAutoIncDDLAction.
 		AutoIncSpec *AutoIncSpec
 
-		// ViewSpec is set for View Actions.
-		ViewSpec *ViewSpec
+		// ViewSpec is set for CreateViewDDLAction.
+		ViewSpec *CreateView
 	}
 
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement

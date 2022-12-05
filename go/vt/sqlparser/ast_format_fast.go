@@ -387,10 +387,7 @@ func (node *AlterVschema) formatFast(buf *TrackedBuffer) {
 		node.AutoIncSpec.formatFast(buf)
 	case CreateViewDDLAction:
 		buf.WriteString("alter vschema ")
-		node.ViewSpec.CreateView.formatFast(buf)
-	case DropViewDDLAction:
-		buf.WriteString("alter vschema ")
-		node.ViewSpec.DropView.formatFast(buf)
+		node.ViewSpec.formatFast(buf)
 	default:
 		buf.WriteString(node.Action.ToString())
 		buf.WriteString(" table ")

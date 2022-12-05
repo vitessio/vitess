@@ -1131,8 +1131,6 @@ func (action DDLAction) ToString() string {
 		return AddAutoIncStr
 	case CreateViewDDLAction:
 		return CreateViewStr
-	case DropViewDDLAction:
-		return DropViewStr
 	default:
 		return "Unknown DDL Action"
 	}

@@ -527,7 +527,6 @@ const (
 	ERDerivedMustHaveAlias         = 1248
 	ERTableNameNotAllowedHere      = 1250
 	ERQueryInterrupted             = 1317
-	ERWrongObject                  = 1347
 	ERTruncatedWrongValueForField  = 1366
 	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406

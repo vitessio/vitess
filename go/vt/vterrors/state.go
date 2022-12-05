@@ -44,7 +44,6 @@ const (
 	DupFieldName
 	WrongValueCountOnRow
 	WrongValue
-	WrongObject
 
 	// failed precondition
 	NoDB
@@ -53,6 +52,7 @@ const (
 	CantDoThisInTransaction
 	RequiresPrimaryKey
 	OperandColumns
+	TableExists
 
 	// not found
 	BadDb
@@ -62,7 +62,6 @@ const (
 	UnknownSystemVariable
 	UnknownTable
 	NoSuchSession
-	TableExists
 
 	// already exists
 	DbCreateExists
