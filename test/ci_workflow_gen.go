@@ -73,13 +73,13 @@ var (
 		"ers_prs_newfeatures_heavy",
 		"15",
 		"vtgate_general_heavy",
-		"vtbackup_transform",
+		"vtbackup",
 		"18",
 		"xb_backup",
+		"backup_pitr",
 		"21",
 		"22",
 		"mysql_server_vault",
-		"26",
 		"vstream_failover",
 		"vstream_stoponreshard_true",
 		"vstream_stoponreshard_false",
@@ -96,6 +96,7 @@ var (
 		"onlineddl_scheduler",
 		"onlineddl_revertible",
 		"tabletmanager_throttler",
+		"tabletmanager_throttler_topo",
 		"tabletmanager_throttler_custom_config",
 		"tabletmanager_tablegc",
 		"tabletmanager_consul",
@@ -168,6 +169,8 @@ func clusterMySQLVersions(clusterName string) mysqlVersions {
 	case strings.HasPrefix(clusterName, "onlineddl_"):
 		return allMySQLVersions
 	case clusterName == "schemadiff_vrepl":
+		return allMySQLVersions
+	case clusterName == "backup_pitr":
 		return allMySQLVersions
 	case clusterName == "tabletmanager_tablegc":
 		return allMySQLVersions
@@ -410,8 +413,12 @@ func setupTestDockerFile(test *selfHostedTest) error {
 	return nil
 }
 
-func writeFileFromTemplate(templateFile, path string, test any) error {
-	tpl, err := template.ParseFiles(templateFile)
+func writeFileFromTemplate(templateFile, filePath string, test any) error {
+	tpl := template.New(path.Base(templateFile))
+	tpl.Funcs(template.FuncMap{
+		"contains": strings.Contains,
+	})
+	tpl, err := tpl.ParseFiles(templateFile)
 	if err != nil {
 		return fmt.Errorf("Error: %s\n", err)
 	}
@@ -422,7 +429,7 @@ func writeFileFromTemplate(templateFile, path string, test any) error {
 		return fmt.Errorf("Error: %s\n", err)
 	}
 
-	f, err := os.Create(path)
+	f, err := os.Create(filePath)
 	if err != nil {
 		return fmt.Errorf("Error creating file: %s\n", err)
 	}
@@ -432,6 +439,6 @@ func writeFileFromTemplate(templateFile, path string, test any) error {
 	if _, err := f.WriteString(mergeBlankLines(buf)); err != nil {
 		return err
 	}
-	fmt.Printf("Generated %s\n", path)
+	fmt.Printf("Generated %s\n", filePath)
 	return nil
 }

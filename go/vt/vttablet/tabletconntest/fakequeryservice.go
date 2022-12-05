@@ -42,10 +42,11 @@ type FakeQueryService struct {
 	TestingGateway bool
 
 	// these fields are used to simulate and synchronize on errors
-	HasError      bool
-	HasBeginError bool
-	TabletError   error
-	ErrorWait     chan struct{}
+	HasError        bool
+	HasBeginError   bool
+	HasReserveError bool
+	TabletError     error
+	ErrorWait       chan struct{}
 
 	// these fields are used to simulate and synchronize on panics
 	Panics                   bool
@@ -566,7 +567,20 @@ func (f *FakeQueryService) BeginExecute(ctx context.Context, target *querypb.Tar
 
 // BeginStreamExecute combines Begin and StreamExecute.
 func (f *FakeQueryService) BeginStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, reservedID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.TransactionState, error) {
-	panic("FakeQueryService does not implement BeginStreamExecute")
+	state, err := f.Begin(ctx, target, options)
+	if err != nil {
+		return state, err
+	}
+
+	for _, preQuery := range preQueries {
+		_, err := f.Execute(ctx, target, preQuery, nil, state.TransactionID, reservedID, options)
+		if err != nil {
+			return state, err
+		}
+	}
+
+	err = f.StreamExecute(ctx, target, sql, bindVariables, state.TransactionID, reservedID, options, callback)
+	return state, err
 }
 
 var (
@@ -710,7 +724,24 @@ func (f *FakeQueryService) ReserveExecute(ctx context.Context, target *querypb.T
 
 // ReserveStreamExecute satisfies the Gateway interface
 func (f *FakeQueryService) ReserveStreamExecute(ctx context.Context, target *querypb.Target, preQueries []string, sql string, bindVariables map[string]*querypb.BindVariable, transactionID int64, options *querypb.ExecuteOptions, callback func(*sqltypes.Result) error) (queryservice.ReservedState, error) {
-	panic("implement me")
+	state, err := f.reserve(transactionID)
+	if err != nil {
+		return state, err
+	}
+	err = f.StreamExecute(ctx, target, sql, bindVariables, transactionID, state.ReservedID, options, callback)
+	return state, err
+}
+
+func (f *FakeQueryService) reserve(transactionID int64) (queryservice.ReservedState, error) {
+	reserveID := transactionID
+	if reserveID == 0 {
+		reserveID = beginTransactionID
+	}
+	if f.HasReserveError {
+		return queryservice.ReservedState{}, f.TabletError
+	}
+	state := queryservice.ReservedState{ReservedID: reserveID, TabletAlias: TestAlias}
+	return state, nil
 }
 
 // Release implements the QueryService interface

@@ -421,11 +421,13 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 }
 
 func (db *DB) comQueryOrdered(query string) (*sqltypes.Result, error) {
-	var afterFn = func() {}
-	var entry ExpectedExecuteFetch
-	var err error
-	var expected string
-	var result *sqltypes.Result
+	var (
+		afterFn  func()
+		entry    ExpectedExecuteFetch
+		err      error
+		expected string
+		result   *sqltypes.Result
+	)
 
 	defer func() {
 		if afterFn != nil {

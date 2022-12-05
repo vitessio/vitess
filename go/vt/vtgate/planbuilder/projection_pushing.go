@@ -76,7 +76,7 @@ func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlpa
 	if err != nil {
 		return 0, false, err
 	}
-	if added && ctx.SemTable.DirectDeps(expr.Expr).NumberOfTables() > 0 {
+	if added && ctx.SemTable.DirectDeps(expr.Expr).NonEmpty() {
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
 	}
 	if added {
@@ -120,7 +120,7 @@ func pushProjectionIntoSemiJoin(
 func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, node *orderedAggregate, inner, hasAggregation bool) (int, bool, error) {
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
 	for _, aggregate := range node.aggregates {
-		if sqlparser.EqualsExpr(aggregate.Expr, expr.Expr) {
+		if ctx.SemTable.EqualsExpr(aggregate.Expr, expr.Expr) {
 			return aggregate.Col, false, nil
 		}
 		if isColName && colName.Name.EqualString(aggregate.Alias) {
@@ -128,7 +128,7 @@ func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		}
 	}
 	for _, key := range node.groupByKeys {
-		if sqlparser.EqualsExpr(key.Expr, expr.Expr) {
+		if ctx.SemTable.EqualsExpr(key.Expr, expr.Expr) {
 			return key.KeyCol, false, nil
 		}
 	}

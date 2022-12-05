@@ -2234,14 +2234,18 @@
       "Original": "select id from user where user.id = 1 or user.name = 'aa' and user.id in (1, 2)",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "IN",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
         },
         "FieldQuery": "select id from `user` where 1 != 1",
-        "Query": "select id from `user` where `user`.id = 1 or `user`.`name` = 'aa' and `user`.id in (1, 2)",
-        "Table": "`user`"
+        "Query": "select id from `user` where (`user`.id = 1 or `user`.`name` = 'aa') and `user`.id in ::__vals",
+        "Table": "`user`",
+        "Values": [
+          "(INT64(1), INT64(2))"
+        ],
+        "Vindex": "user_index"
       },
       "TablesUsed": [
         "user.user"
@@ -6246,7 +6250,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = 1 or id = 2",
+        "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(INT64(1), INT64(2))"
@@ -6287,7 +6291,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = 1 or id = 2 or id = 3",
+        "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(INT64(1), INT64(2), INT64(3))"
@@ -6328,7 +6332,7 @@
           "Sharded": true
         },
         "FieldQuery": "select col from `user` where 1 != 1",
-        "Query": "select col from `user` where id = 1 or id = 2 or (id = 3 or id = 4)",
+        "Query": "select col from `user` where id in ::__vals",
         "Table": "`user`",
         "Values": [
           "(INT64(1), INT64(2), INT64(3), INT64(4))"
@@ -6493,6 +6497,202 @@
       },
       "TablesUsed": [
         "main.unsharded"
+      ]
+    }
+  },
+  {
+    "comment": "Single table unique vindex route hiding behind a silly OR",
+    "query": "select id from user where (id = 5 and name ='apa') or (id = 5 and foo = 'bar')",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='apa') or (id = 5 and foo = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and `name` = 'apa' or id = 5 and foo = 'bar'",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='apa') or (id = 5 and foo = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "EqualUnique",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and (`name` = 'apa' or foo = 'bar')",
+        "Table": "`user`",
+        "Values": [
+          "INT64(5)"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Single table IN vindex route hiding behind OR",
+    "query": "select id from user where (id = 5 and name ='foo') or (id = 12 and name = 'bar')",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='foo') or (id = 12 and name = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and `name` = 'foo' or id = 12 and `name` = 'bar'",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from user where (id = 5 and name ='foo') or (id = 12 and name = 'bar')",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "IN",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select id from `user` where 1 != 1",
+        "Query": "select id from `user` where id = 5 and `name` = 'foo' or id = 12 and `name` = 'bar'",
+        "Table": "`user`",
+        "Values": [
+          "(INT64(5), INT64(12))"
+        ],
+        "Vindex": "user_index"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Like clause evaluated on the vtgate",
+    "query": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
+    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "repeat(a.textcol1, :1) like 'And%res'",
+            "Inputs": [
+              {
+                "OperatorType": "Aggregate",
+                "Variant": "Ordered",
+                "Aggregates": "sum(1) AS sum(a.id)",
+                "GroupBy": "0 COLLATE latin1_swedish_ci",
+                "Inputs": [
+                  {
+                    "OperatorType": "Projection",
+                    "Expressions": [
+                      "[COLUMN 0] as textcol1",
+                      "[COLUMN 1] * [COLUMN 2] as sum(a.id)"
+                    ],
+                    "Inputs": [
+                      {
+                        "OperatorType": "Join",
+                        "Variant": "Join",
+                        "JoinColumnIndexes": "L:0,L:1,R:1",
+                        "JoinVars": {
+                          "a_textcol1": 0
+                        },
+                        "TableName": "`user`_`user`",
+                        "Inputs": [
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select a.textcol1, sum(a.id) from `user` as a where 1 != 1 group by a.textcol1",
+                            "OrderBy": "0 ASC COLLATE latin1_swedish_ci",
+                            "Query": "select a.textcol1, sum(a.id) from `user` as a group by a.textcol1 order by a.textcol1 asc",
+                            "Table": "`user`"
+                          },
+                          {
+                            "OperatorType": "Route",
+                            "Variant": "Scatter",
+                            "Keyspace": {
+                              "Name": "user",
+                              "Sharded": true
+                            },
+                            "FieldQuery": "select 1, count(*) from `user` as b where 1 != 1 group by 1",
+                            "Query": "select 1, count(*) from `user` as b where b.textcol2 = :a_textcol1 group by 1",
+                            "Table": "`user`"
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "two predicates that mean the same thing",
+    "query": "select textcol1 from user where foo = 42 and user.foo = 42",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select textcol1 from user where foo = 42 and user.foo = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select textcol1 from `user` where 1 != 1",
+        "Query": "select textcol1 from `user` where foo = 42 and `user`.foo = 42",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select textcol1 from user where foo = 42 and user.foo = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select textcol1 from `user` where 1 != 1",
+        "Query": "select textcol1 from `user` where foo = 42",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
       ]
     }
   }

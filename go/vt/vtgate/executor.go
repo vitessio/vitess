@@ -268,8 +268,7 @@ func (e *Executor) StreamExecute(
 				// the framework currently sends all results as one packet.
 				byteCount := 0
 				if len(qr.Fields) > 0 {
-					qrfield := &sqltypes.Result{Fields: qr.Fields}
-					if err := callback(qrfield); err != nil {
+					if err := callback(qr.Metadata()); err != nil {
 						return err
 					}
 					seenResults.Set(true)
@@ -530,10 +529,12 @@ func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession
 	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, safeSession.Options, logStats, false /* canAutocommit */, ignoreMaxMemoryRows)
 }
 
-func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats) (*sqltypes.Result, error) {
+func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
-	err := e.txConn.Begin(ctx, safeSession)
+
+	begin := stmt.(*sqlparser.Begin)
+	err := e.txConn.Begin(ctx, safeSession, begin.TxAccessModes)
 	logStats.ExecuteTime = time.Since(execStart)
 
 	e.updateQueryCounts("Begin", "", "", 0)
@@ -969,21 +970,21 @@ type iQueryOption interface {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *logstats.LogStats) (*engine.Plan, error) {
+func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *logstats.LogStats) (*engine.Plan, sqlparser.Statement, error) {
 	if e.VSchema() == nil {
-		return nil, errors.New("vschema not initialized")
+		return nil, nil, errors.New("vschema not initialized")
 	}
 
 	stmt, reserved, err := sqlparser.Parse2(sql)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	query := sql
 	statement := stmt
 	reservedVars := sqlparser.NewReservedVars("vtg", reserved)
 	bindVarNeeds := &sqlparser.BindVarNeeds{}
 	if !sqlparser.IgnoreMaxPayloadSizeDirective(statement) && !isValidPayloadSize(query) {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
+		return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "query payload size above threshold")
 	}
 	ignoreMaxMemoryRows := sqlparser.IgnoreMaxMaxMemoryRowsDirective(stmt)
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
@@ -992,7 +993,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	// Normalize if possible and retry.
 	if e.canNormalizeStatement(stmt, qo, setVarComment) {
@@ -1009,7 +1010,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 			vcursor,
 		)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		statement = result.AST
 		bindVarNeeds = result.BindVarNeeds
@@ -1028,13 +1029,13 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	if sqlparser.CachePlan(statement) && qo.cachePlan() {
 		if plan, ok := e.plans.Get(planKey); ok {
 			logStats.CachedPlan = true
-			return plan.(*engine.Plan), nil
+			return plan.(*engine.Plan), stmt, nil
 		}
 	}
 
 	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	plan.Warnings = vcursor.warnings
@@ -1045,7 +1046,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	if err == nil && qo.cachePlan() && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-	return plan, err
+	return plan, stmt, err
 }
 
 func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
@@ -1219,7 +1220,7 @@ func (e *Executor) Prepare(ctx context.Context, method string, safeSession *Safe
 func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	// Start an implicit transaction if necessary.
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession); err != nil {
+		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return nil, err
 		}
 	}
@@ -1256,7 +1257,7 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
 	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
-	plan, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
+	plan, _, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
 
@@ -1342,6 +1343,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		vsm:                vsm,
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		ts:                 ts,
+		copyCompletedShard: make(map[string]struct{}),
 	}
 	_ = vs.stream(ctx)
 	return nil

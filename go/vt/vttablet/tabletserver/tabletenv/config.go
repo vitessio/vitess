@@ -95,13 +95,13 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.IntVar(&currentConfig.OltpReadPool.Size, "queryserver-config-pool-size", defaultConfig.OltpReadPool.Size, "query server read pool size, connection pool is used by regular queries (non streaming, not in a transaction)")
 	fs.IntVar(&currentConfig.OltpReadPool.PrefillParallelism, "queryserver-config-pool-prefill-parallelism", defaultConfig.OltpReadPool.PrefillParallelism, "Query server read pool prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
-	_ = fs.MarkDeprecated("queryserver-config-pool-prefill-parallelism", "This flag is deprecated.")
+	_ = fs.MarkDeprecated("queryserver-config-pool-prefill-parallelism", "it will be removed in a future release.")
 	fs.IntVar(&currentConfig.OlapReadPool.Size, "queryserver-config-stream-pool-size", defaultConfig.OlapReadPool.Size, "query server stream connection pool size, stream pool is used by stream queries: queries that return results to client in a streaming fashion")
 	fs.IntVar(&currentConfig.OlapReadPool.PrefillParallelism, "queryserver-config-stream-pool-prefill-parallelism", defaultConfig.OlapReadPool.PrefillParallelism, "Query server stream pool prefill parallelism, a non-zero value will prefill the pool using the specified parallelism")
-	_ = fs.MarkDeprecated("queryserver-config-stream-pool-prefill-parallelism", "This flag is deprecated.")
+	_ = fs.MarkDeprecated("queryserver-config-stream-pool-prefill-parallelism", "it will be removed in a future release.")
 	fs.IntVar(&currentConfig.TxPool.Size, "queryserver-config-transaction-cap", defaultConfig.TxPool.Size, "query server transaction cap is the maximum number of transactions allowed to happen at any given point of a time for a single vttablet. E.g. by setting transaction cap to 100, there are at most 100 transactions will be processed by a vttablet and the 101th transaction will be blocked (and fail if it cannot get connection within specified timeout)")
 	fs.IntVar(&currentConfig.TxPool.PrefillParallelism, "queryserver-config-transaction-prefill-parallelism", defaultConfig.TxPool.PrefillParallelism, "Query server transaction prefill parallelism, a non-zero value will prefill the pool using the specified parallism.")
-	_ = fs.MarkDeprecated("queryserver-config-transaction-prefill-parallelism", "This flag is deprecated.")
+	_ = fs.MarkDeprecated("queryserver-config-transaction-prefill-parallelism", "it will be removed in a future release.")
 	fs.IntVar(&currentConfig.MessagePostponeParallelism, "queryserver-config-message-postpone-cap", defaultConfig.MessagePostponeParallelism, "query server message postpone cap is the maximum number of messages that can be postponed at any given time. Set this number to substantially lower than transaction cap, so that the transaction pool isn't exhausted by the message subsystem.")
 	SecondsVar(fs, &currentConfig.Oltp.TxTimeoutSeconds, "queryserver-config-transaction-timeout", defaultConfig.Oltp.TxTimeoutSeconds, "query server transaction timeout (in seconds), a transaction will be killed if it takes longer than this value")
 	SecondsVar(fs, &currentConfig.GracePeriods.ShutdownSeconds, "shutdown_grace_period", defaultConfig.GracePeriods.ShutdownSeconds, "how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.")
@@ -122,6 +122,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	SecondsVar(fs, &currentConfig.OlapReadPool.TimeoutSeconds, "queryserver-config-stream-pool-timeout", defaultConfig.OlapReadPool.TimeoutSeconds, "query server stream pool timeout (in seconds), it is how long vttablet waits for a connection from the stream pool. If set to 0 (default) then there is no timeout.")
 	SecondsVar(fs, &currentConfig.TxPool.TimeoutSeconds, "queryserver-config-txpool-timeout", defaultConfig.TxPool.TimeoutSeconds, "query server transaction pool timeout, it is how long vttablet waits if tx pool is full")
 	SecondsVar(fs, &currentConfig.OltpReadPool.IdleTimeoutSeconds, "queryserver-config-idle-timeout", defaultConfig.OltpReadPool.IdleTimeoutSeconds, "query server idle timeout (in seconds), vttablet manages various mysql connection pools. This config means if a connection has not been used in given idle timeout, this connection will be removed from pool. This effectively manages number of connection objects and optimize the pool performance.")
+	SecondsVar(fs, &currentConfig.OltpReadPool.MaxLifetimeSeconds, "queryserver-config-pool-conn-max-lifetime", defaultConfig.OltpReadPool.MaxLifetimeSeconds, "query server connection max lifetime (in seconds), vttablet manages various mysql connection pools. This config means if a connection has lived at least this long, it connection will be removed from pool upon the next time it is returned to the pool.")
 	fs.IntVar(&currentConfig.OltpReadPool.MaxWaiters, "queryserver-config-query-pool-waiter-cap", defaultConfig.OltpReadPool.MaxWaiters, "query server query pool waiter limit, this is the maximum number of queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.OlapReadPool.MaxWaiters, "queryserver-config-stream-pool-waiter-cap", defaultConfig.OlapReadPool.MaxWaiters, "query server stream pool waiter limit, this is the maximum number of streaming queries that can be queued waiting to get a connection")
 	fs.IntVar(&currentConfig.TxPool.MaxWaiters, "queryserver-config-txpool-waiter-cap", defaultConfig.TxPool.MaxWaiters, "query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection")
@@ -165,8 +166,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.ConsolidatorStreamQuerySize, "consolidator-stream-query-size", defaultConfig.ConsolidatorStreamQuerySize, "Configure the stream consolidator query size in bytes. Setting to 0 disables the stream consolidator.")
 	fs.Int64Var(&currentConfig.ConsolidatorStreamTotalSize, "consolidator-stream-total-size", defaultConfig.ConsolidatorStreamTotalSize, "Configure the stream consolidator total size in bytes. Setting to 0 disables the stream consolidator.")
 	flagutil.DualFormatBoolVar(fs, &currentConfig.DeprecatedCacheResultFields, "enable_query_plan_field_caching", defaultConfig.DeprecatedCacheResultFields, "This option fetches & caches fields (columns) when storing query plans")
-	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "This flag is deprecated.")
-	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "This flag is deprecated.")
+	_ = fs.MarkDeprecated("enable_query_plan_field_caching", "it will be removed in a future release.")
+	_ = fs.MarkDeprecated("enable-query-plan-field-caching", "it will be removed in a future release.")
 
 	fs.DurationVar(&healthCheckInterval, "health_check_interval", 20*time.Second, "Interval between health checks")
 	fs.DurationVar(&degradedThreshold, "degraded_threshold", 30*time.Second, "replication lag after which a replica is considered degraded")
@@ -193,6 +194,8 @@ func Init() {
 	// TODO(sougou): Make a decision on whether this should be global or per-pool.
 	currentConfig.OlapReadPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
 	currentConfig.TxPool.IdleTimeoutSeconds = currentConfig.OltpReadPool.IdleTimeoutSeconds
+	currentConfig.OlapReadPool.MaxLifetimeSeconds = currentConfig.OltpReadPool.MaxLifetimeSeconds
+	currentConfig.TxPool.MaxLifetimeSeconds = currentConfig.OltpReadPool.MaxLifetimeSeconds
 
 	if enableHotRowProtection {
 		if enableHotRowProtectionDryRun {
@@ -325,6 +328,7 @@ type ConnPoolConfig struct {
 	Size               int     `json:"size,omitempty"`
 	TimeoutSeconds     Seconds `json:"timeoutSeconds,omitempty"`
 	IdleTimeoutSeconds Seconds `json:"idleTimeoutSeconds,omitempty"`
+	MaxLifetimeSeconds Seconds `json:"maxLifetimeSeconds,omitempty"`
 	PrefillParallelism int     `json:"prefillParallelism,omitempty"`
 	MaxWaiters         int     `json:"maxWaiters,omitempty"`
 }

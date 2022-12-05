@@ -21,7 +21,7 @@ jobs:
           skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -38,7 +38,8 @@ jobs:
             - 'bootstrap.sh'
             - 'tools/**'
             - 'build.env'
-            - 'go.[sumod]'
+            - 'go.sum'
+            - 'go.mod'
             - 'Makefile'
             - 'go/vt/vtadmin/**'
             - '.github/workflows/check_make_vtadmin_authz_testgen.yml'
@@ -47,13 +48,12 @@ jobs:
       uses: actions/setup-go@v3
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
       with:
-        go-version: 1.18.7
+        go-version: 1.19.3
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'
       run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
-
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
 
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.vtadmin_changes == 'true'

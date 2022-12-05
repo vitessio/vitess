@@ -98,10 +98,8 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 func checkHealth(t *testing.T, url string) bool {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
-	if err != nil || resp.StatusCode != 200 {
-		return false
-	}
-	return true
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
@@ -130,9 +128,9 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		_, output, err := throttlerCheckSelf(tablet, appName)
+		output, err := throttlerCheckSelf(tablet, appName)
 		require.NoError(t, err)
-		require.NotNil(t, output)
+
 		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
 		require.NoError(t, err)
 		if wantCode == gotCode {
@@ -239,7 +237,12 @@ func validateThatQueryExecutesOnTablet(t *testing.T, conn *mysql.Conn, tablet *c
 	return newCount == count+1
 }
 
-func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string) {
+// waitForWorkflowState waits for all of the given workflow's
+// streams to reach the provided state. You can pass optional
+// key value pairs of the form "key==value" to also wait for
+// additional stream sub-state such as "Message==for vdiff".
+// Invalid checks are ignored.
+func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wantState string, fieldEqualityChecks ...string) {
 	done := false
 	timer := time.NewTimer(workflowStateTimeout)
 	log.Infof("Waiting for workflow %q to fully reach %q state", ksWorkflow, wantState)
@@ -253,9 +256,21 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 			tabletStreams.ForEach(func(streamId, streamInfos gjson.Result) bool { // for each stream
 				if streamId.String() == "PrimaryReplicationStatuses" {
 					streamInfos.ForEach(func(attributeKey, attributeValue gjson.Result) bool { // for each attribute in the stream
+						// we need to wait for all streams to have the desired state
 						state = attributeValue.Get("State").String()
-						if state != wantState {
-							done = false // we need to wait for all streams to have the desired state
+						if state == wantState {
+							for i := 0; i < len(fieldEqualityChecks); i++ {
+								if kvparts := strings.Split(fieldEqualityChecks[i], "=="); len(kvparts) == 2 {
+									key := kvparts[0]
+									val := kvparts[1]
+									res := attributeValue.Get(key).String()
+									if !strings.EqualFold(res, val) {
+										done = false
+									}
+								}
+							}
+						} else {
+							done = false
 						}
 						return true
 					})
@@ -270,8 +285,13 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 		}
 		select {
 		case <-timer.C:
-			require.FailNowf(t, "workflow %q did not fully reach the expected state of %q before the timeout of %s; last seen output: %s",
-				ksWorkflow, wantState, workflowStateTimeout, output)
+			var extraRequirements string
+			if len(fieldEqualityChecks) > 0 {
+				extraRequirements = fmt.Sprintf(" with the additional requirements of \"%v\"", fieldEqualityChecks)
+			}
+			require.FailNowf(t, "workflow state not reached",
+				"Workflow %q did not fully reach the expected state of %q%s before the timeout of %s; last seen output: %s",
+				ksWorkflow, wantState, extraRequirements, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
 		}
@@ -436,13 +456,6 @@ func printShardPositions(vc *VitessCluster, ksShards []string) {
 	}
 }
 
-func clearRoutingRules(t *testing.T, vc *VitessCluster) error {
-	if _, err := vc.VtctlClient.ExecuteCommandWithOutput("ApplyRoutingRules", "--", "--rules={}"); err != nil {
-		return err
-	}
-	return nil
-}
-
 func printRoutingRules(t *testing.T, vc *VitessCluster, msg string) error {
 	var output string
 	var err error
@@ -547,16 +560,32 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
 	require.NoError(t, err)
 
-	// Verify that there's no delete marked rows and we reset the auto-inc value
-	res, err := tablet.QueryTablet("select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'",
-		"", false)
-	require.NoError(t, err)
-	require.NotNil(t, res)
-	require.Equal(t, 1, len(res.Rows))
-	dataFree, err := res.Rows[0][0].ToInt64()
-	require.NoError(t, err)
-	require.Equal(t, int64(0), dataFree, "data_free should be 0")
-	autoIncrement, err := res.Rows[0][1].ToInt64()
-	require.NoError(t, err)
-	require.Equal(t, int64(1), autoIncrement, "auto_increment should be 1")
+	// Verify that there's no delete marked rows and we reset the auto-inc value.
+	// MySQL doesn't always immediately update information_schema so we wait.
+	tmr := time.NewTimer(defaultTimeout)
+	defer tmr.Stop()
+	query := "select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'"
+	var dataFree, autoIncrement int64
+	for {
+		res, err := tablet.QueryTablet(query, "", false)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		require.Equal(t, 1, len(res.Rows))
+		dataFree, err = res.Rows[0][0].ToInt64()
+		require.NoError(t, err)
+		autoIncrement, err = res.Rows[0][1].ToInt64()
+		require.NoError(t, err)
+		if dataFree == 0 && autoIncrement == 1 {
+			return
+		}
+
+		select {
+		case <-tmr.C:
+			require.FailNowf(t, "timed out waiting for copy_state table to be optimized",
+				"data_free should be 0 and auto_increment should be 1, last seen values were %d and %d respectively",
+				dataFree, autoIncrement)
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }

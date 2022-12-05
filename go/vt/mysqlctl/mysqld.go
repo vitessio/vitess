@@ -100,21 +100,33 @@ type Mysqld struct {
 }
 
 func init() {
-	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient", "vtexplain"} {
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
 		servenv.OnParseFor(cmd, registerMySQLDFlags)
+	}
+	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+		servenv.OnParseFor(cmd, registerReparentFlags)
+	}
+	for _, cmd := range []string{"mysqlctl", "mysqlctld", "vtcombo", "vttablet", "vttestserver"} {
+		servenv.OnParseFor(cmd, registerPoolFlags)
 	}
 }
 
 func registerMySQLDFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
-	fs.IntVar(&dbaPoolSize, "dba_pool_size", dbaPoolSize, "Size of the connection pool for dba connections")
-	fs.DurationVar(&DbaIdleTimeout, "dba_idle_timeout", DbaIdleTimeout, "Idle timeout for dba connections")
-	fs.IntVar(&appPoolSize, "app_pool_size", appPoolSize, "Size of the connection pool for app connections")
-	fs.DurationVar(&appIdleTimeout, "app_idle_timeout", appIdleTimeout, "Idle timeout for app connections")
 	fs.DurationVar(&PoolDynamicHostnameResolution, "pool_hostname_resolve_interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 	fs.StringVar(&mycnfTemplateFile, "mysqlctl_mycnf_template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	fs.StringVar(&socketFile, "mysqlctl_socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
 	fs.DurationVar(&replicationConnectRetry, "replication_connect_retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
+}
+
+func registerReparentFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&DisableActiveReparents, "disable_active_reparents", DisableActiveReparents, "if set, do not allow active reparents. Use this to protect a cluster using external reparents.")
+}
+
+func registerPoolFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&dbaPoolSize, "dba_pool_size", dbaPoolSize, "Size of the connection pool for dba connections")
+	fs.DurationVar(&DbaIdleTimeout, "dba_idle_timeout", DbaIdleTimeout, "Idle timeout for dba connections")
+	fs.DurationVar(&appIdleTimeout, "app_idle_timeout", appIdleTimeout, "Idle timeout for app connections")
+	fs.IntVar(&appPoolSize, "app_pool_size", appPoolSize, "Size of the connection pool for app connections")
 }
 
 // NewMysqld creates a Mysqld object based on the provided configuration
@@ -125,11 +137,11 @@ func NewMysqld(dbcfgs *dbconfigs.DBConfigs) *Mysqld {
 	}
 
 	// Create and open the connection pool for dba access.
-	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", dbaPoolSize, DbaIdleTimeout, PoolDynamicHostnameResolution)
+	result.dbaPool = dbconnpool.NewConnectionPool("DbaConnPool", dbaPoolSize, DbaIdleTimeout, 0, PoolDynamicHostnameResolution)
 	result.dbaPool.Open(dbcfgs.DbaWithDB())
 
 	// Create and open the connection pool for app access.
-	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", appPoolSize, appIdleTimeout, PoolDynamicHostnameResolution)
+	result.appPool = dbconnpool.NewConnectionPool("AppConnPool", appPoolSize, appIdleTimeout, 0, PoolDynamicHostnameResolution)
 	result.appPool.Open(dbcfgs.AppWithDB())
 
 	/*
@@ -1192,4 +1204,81 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
 	res := qr.Named().Row()
 	versionComment, _ := res.ToString("@@global.version_comment")
 	return versionComment
+}
+
+// applyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
+// $ mysqlbinlog --include-gtids binlog.file | mysql
+func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTIDSet) error {
+	var pipe io.ReadCloser
+	var mysqlbinlogCmd *exec.Cmd
+	var mysqlCmd *exec.Cmd
+
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return err
+	}
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
+	}
+	{
+		name, err := binaryPath(dir, "mysqlbinlog")
+		if err != nil {
+			return err
+		}
+		args := []string{}
+		if gtids := includeGTIDs.String(); gtids != "" {
+			args = append(args,
+				"--include-gtids",
+				gtids,
+			)
+		}
+		args = append(args, binlogFile)
+
+		mysqlbinlogCmd = exec.Command(name, args...)
+		mysqlbinlogCmd.Dir = dir
+		mysqlbinlogCmd.Env = env
+		log.Infof("applyBinlogFile: running %#v", mysqlbinlogCmd)
+		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
+		if err != nil {
+			return err
+		}
+	}
+	{
+		name, err := binaryPath(dir, "mysql")
+		if err != nil {
+			return err
+		}
+		params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+		if err != nil {
+			return err
+		}
+		cnf, err := mysqld.defaultsExtraFile(params)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(cnf)
+		args := []string{
+			"--defaults-extra-file=" + cnf,
+		}
+		mysqlCmd = exec.Command(name, args...)
+		mysqlCmd.Dir = dir
+		mysqlCmd.Env = env
+		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
+	}
+	// Run both processes, piped:
+	if err := mysqlbinlogCmd.Start(); err != nil {
+		return err
+	}
+	if err := mysqlCmd.Start(); err != nil {
+		return err
+	}
+	// Wait for both to complete:
+	if err := mysqlbinlogCmd.Wait(); err != nil {
+		return err
+	}
+	if err := mysqlCmd.Wait(); err != nil {
+		return err
+	}
+	return nil
 }

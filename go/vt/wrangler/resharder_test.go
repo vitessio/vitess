@@ -106,7 +106,7 @@ func TestResharderOneToMany(t *testing.T) {
 			env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 			env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-			err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes, true, false)
+			err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, tc.cells, tc.tabletTypes, defaultOnDDL, true, false)
 			require.NoError(t, err)
 			env.tmc.verifyQueries(t)
 		})
@@ -142,7 +142,7 @@ func TestResharderManyToOne(t *testing.T) {
 
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -183,7 +183,7 @@ func TestResharderManyToMany(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -236,7 +236,7 @@ func TestResharderOneRefTable(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -287,7 +287,7 @@ func TestReshardStopFlags(t *testing.T) {
 	)
 	// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", false, true)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, false, true)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -355,7 +355,7 @@ func TestResharderOneRefStream(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -432,7 +432,7 @@ func TestResharderNoRefStream(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -476,7 +476,7 @@ func TestResharderCopySchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, "update _vt.vreplication set state='Running' where db_name='vt_ks'", &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, false, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, false, "", "", defaultOnDDL, true, false)
 	assert.NoError(t, err)
 	env.tmc.verifyQueries(t)
 }
@@ -507,7 +507,7 @@ func TestResharderDupWorkflow(t *testing.T) {
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.EqualError(t, err, "validateWorkflowName.VReplicationExec: workflow resharderTest already exists in keyspace ks on tablet 210")
 	env.tmc.verifyQueries(t)
 }
@@ -532,7 +532,7 @@ func TestResharderServingState(t *testing.T) {
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, rsSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"-80"}, nil, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"-80"}, nil, true, "", "", defaultOnDDL, true, false)
 	assert.EqualError(t, err, "buildResharder: source shard -80 is not in serving state")
 
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
@@ -541,7 +541,7 @@ func TestResharderServingState(t *testing.T) {
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, rsSelectFrozenQuery, &sqltypes.Result{})
-	err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"0"}, true, "", "", true, false)
+	err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"0"}, true, "", "", defaultOnDDL, true, false)
 	assert.EqualError(t, err, "buildResharder: target shard 0 is in serving state")
 
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s' and workflow='%s'", env.keyspace, env.workflow), &sqltypes.Result{})
@@ -550,7 +550,7 @@ func TestResharderServingState(t *testing.T) {
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(200, rsSelectFrozenQuery, &sqltypes.Result{})
 	env.tmc.expectVRQuery(210, rsSelectFrozenQuery, &sqltypes.Result{})
-	err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"-80"}, true, "", "", true, false)
+	err = env.wr.Reshard(context.Background(), env.keyspace, env.workflow, []string{"0"}, []string{"-80"}, true, "", "", defaultOnDDL, true, false)
 	assert.EqualError(t, err, "buildResharder: ValidateForReshard: source and target keyranges don't match: - vs -80")
 }
 
@@ -582,7 +582,7 @@ func TestResharderTargetAlreadyResharding(t *testing.T) {
 	env.tmc.expectVRQuery(200, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), result)
 	env.tmc.expectVRQuery(210, fmt.Sprintf("select 1 from _vt.vreplication where db_name='vt_%s'", env.keyspace), &sqltypes.Result{})
 	env.tmc.expectVRQuery(100, rsSelectFrozenQuery, &sqltypes.Result{})
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.EqualError(t, err, "buildResharder: validateTargets: some streams already exist in the target shards, please clean them up and retry the command")
 	env.tmc.verifyQueries(t)
 }
@@ -630,7 +630,7 @@ func TestResharderUnnamedStream(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.EqualError(t, err, "buildResharder: readRefStreams: VReplication streams must have named workflows for migration: shard: ks:0")
 	env.tmc.verifyQueries(t)
 }
@@ -694,7 +694,7 @@ func TestResharderMismatchedRefStreams(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(110, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result2)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	want := "buildResharder: readRefStreams: streams are mismatched across source shards"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Reshard err: %v, want %v", err, want)
@@ -734,7 +734,7 @@ func TestResharderTableNotInVSchema(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	assert.EqualError(t, err, "buildResharder: readRefStreams: blsIsReference: table t1 not found in vschema")
 	env.tmc.verifyQueries(t)
 }
@@ -798,7 +798,7 @@ func TestResharderMixedTablesOrder1(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	want := "buildResharder: readRefStreams: blsIsReference: cannot reshard streams with a mix of reference and sharded tables"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Reshard err: %v, want %v", err.Error(), want)
@@ -865,7 +865,7 @@ func TestResharderMixedTablesOrder2(t *testing.T) {
 	)
 	env.tmc.expectVRQuery(100, fmt.Sprintf("select workflow, source, cell, tablet_types from _vt.vreplication where db_name='vt_%s' and message != 'FROZEN'", env.keyspace), result)
 
-	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", true, false)
+	err := env.wr.Reshard(context.Background(), env.keyspace, env.workflow, env.sources, env.targets, true, "", "", defaultOnDDL, true, false)
 	want := "buildResharder: readRefStreams: blsIsReference: cannot reshard streams with a mix of reference and sharded tables"
 	if err == nil || !strings.HasPrefix(err.Error(), want) {
 		t.Errorf("Reshard err: %v, want %v", err.Error(), want)

@@ -618,8 +618,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		sqlparser.DDLStatement,
 		*sqlparser.AlterVschema,
 		*sqlparser.Use,
-		*sqlparser.OtherAdmin,
-		*sqlparser.SetTransaction:
+		*sqlparser.OtherAdmin:
 		return &sqltypes.Result{}
 	}
 

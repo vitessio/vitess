@@ -1,0 +1,48 @@
+{
+  "sharded":true,
+  "vindexes": {
+    "hash_index": {
+      "type": "hash"
+    },
+    "twopc_lookup_vdx": {
+      "type": "lookup_hash_unique",
+      "params": {
+        "table": "twopc_lookup",
+        "from": "name",
+        "to": "id",
+        "autocommit": "true"
+      },
+      "owner": "twopc_user"
+    }
+  },
+  "tables": {
+    "twopc_user":{
+      "column_vindexes": [
+        {
+          "column": "user_id",
+          "name": "hash_index"
+        },
+        {
+          "column": "name",
+          "name": "twopc_lookup_vdx"
+        }
+      ]
+    },
+    "twopc_lookup": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        }
+      ]
+    },
+    "test": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash_index"
+        }
+      ]
+    }
+  }
+}

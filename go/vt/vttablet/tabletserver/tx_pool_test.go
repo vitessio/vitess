@@ -615,6 +615,137 @@ func TestTxTimeoutReusedReservedConn(t *testing.T) {
 	require.Equal(t, int64(1), txPool.env.Stats().KillCounters.Counts()["Transactions"]-startingTxKills)
 }
 
+func TestTxPoolBeginStatements(t *testing.T) {
+	_, txPool, _, closer := setup(t)
+	defer closer()
+
+	testCases := []struct {
+		txIsolationLevel querypb.ExecuteOptions_TransactionIsolation
+		txAccessModes    []querypb.ExecuteOptions_TransactionAccessMode
+		readOnly         bool
+
+		expBeginSQL string
+		expErr      string
+	}{{
+		txIsolationLevel: querypb.ExecuteOptions_DEFAULT,
+		expBeginSQL:      "begin",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_DEFAULT,
+		readOnly:         true,
+		expBeginSQL:      "start transaction read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_READ_UNCOMMITTED,
+		expBeginSQL:      "set transaction isolation level read uncommitted; begin",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_READ_UNCOMMITTED,
+		readOnly:         true,
+		expBeginSQL:      "set transaction isolation level read uncommitted; start transaction read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_READ_COMMITTED,
+		expBeginSQL:      "set transaction isolation level read committed; begin",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_READ_COMMITTED,
+		readOnly:         true,
+		expBeginSQL:      "set transaction isolation level read committed; start transaction read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_REPEATABLE_READ,
+		expBeginSQL:      "set transaction isolation level repeatable read; begin",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_REPEATABLE_READ,
+		readOnly:         true,
+		expBeginSQL:      "set transaction isolation level repeatable read; start transaction read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_SERIALIZABLE,
+		expBeginSQL:      "set transaction isolation level serializable; begin",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_SERIALIZABLE,
+		readOnly:         true,
+		expBeginSQL:      "set transaction isolation level serializable; start transaction read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
+		expBeginSQL:      "set session session_track_gtids = START_GTID; set transaction isolation level repeatable read; start transaction with consistent snapshot, read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT_READ_ONLY,
+		readOnly:         true,
+		expBeginSQL:      "set session session_track_gtids = START_GTID; set transaction isolation level repeatable read; start transaction with consistent snapshot, read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_AUTOCOMMIT,
+		expBeginSQL:      "",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_AUTOCOMMIT,
+		readOnly:         true,
+		expBeginSQL:      "",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_DEFAULT,
+		txAccessModes: []querypb.ExecuteOptions_TransactionAccessMode{
+			querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+		},
+		expBeginSQL: "start transaction with consistent snapshot",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_READ_COMMITTED,
+		txAccessModes: []querypb.ExecuteOptions_TransactionAccessMode{
+			querypb.ExecuteOptions_READ_ONLY,
+		},
+		expBeginSQL: "set transaction isolation level read committed; start transaction read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_REPEATABLE_READ,
+		txAccessModes: []querypb.ExecuteOptions_TransactionAccessMode{
+			querypb.ExecuteOptions_READ_WRITE,
+		},
+		expBeginSQL: "set transaction isolation level repeatable read; start transaction read write",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_SERIALIZABLE,
+		txAccessModes: []querypb.ExecuteOptions_TransactionAccessMode{
+			querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+			querypb.ExecuteOptions_READ_WRITE,
+		},
+		expBeginSQL: "set transaction isolation level serializable; start transaction with consistent snapshot, read write",
+	}, {
+		// read write access mode set when readOnly is true. This should fail.
+		txIsolationLevel: querypb.ExecuteOptions_DEFAULT,
+		txAccessModes: []querypb.ExecuteOptions_TransactionAccessMode{
+			querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+			querypb.ExecuteOptions_READ_WRITE,
+		},
+		readOnly: true,
+		expErr:   "cannot start read write transaction on a read only tablet",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_DEFAULT,
+		txAccessModes: []querypb.ExecuteOptions_TransactionAccessMode{
+			querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+			querypb.ExecuteOptions_READ_ONLY,
+		},
+		readOnly:    true,
+		expBeginSQL: "start transaction with consistent snapshot, read only",
+	}, {
+		txIsolationLevel: querypb.ExecuteOptions_REPEATABLE_READ,
+		txAccessModes: []querypb.ExecuteOptions_TransactionAccessMode{
+			querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+		},
+		readOnly:    true,
+		expBeginSQL: "set transaction isolation level repeatable read; start transaction with consistent snapshot, read only",
+	}}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("%v:%v:readOnly:%v", tc.txIsolationLevel, tc.txAccessModes, tc.readOnly), func(t *testing.T) {
+			options := &querypb.ExecuteOptions{
+				TransactionIsolation:  tc.txIsolationLevel,
+				TransactionAccessMode: tc.txAccessModes,
+			}
+			conn, beginSQL, _, err := txPool.Begin(ctx, options, tc.readOnly, 0, nil, nil)
+			if tc.expErr != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), tc.expErr)
+				require.Nil(t, conn)
+				return
+			}
+			require.NoError(t, err)
+			conn.Release(tx.ConnRelease)
+			require.Equal(t, tc.expBeginSQL, beginSQL)
+		})
+	}
+}
+
 func newTxPool() (*TxPool, *fakeLimiter) {
 	return newTxPoolWithEnv(newEnv("TabletServerTest"))
 }

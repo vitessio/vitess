@@ -45,7 +45,7 @@ func (fk *fkContraint) FkWalk(node sqlparser.SQLNode) (kontinue bool, err error)
 }
 
 // buildGeneralDDLPlan builds a general DDL plan, which can be either normal DDL or online DDL.
-// The two behave compeltely differently, and have two very different primitives.
+// The two behave completely differently, and have two very different primitives.
 // We want to be able to dynamically choose between normal/online plans according to Session settings.
 // However, due to caching of plans, we're unable to make that choice right now. In this function we don't have
 // a session context. It's only when we Execute() the primitive that we have that context.
@@ -107,29 +107,22 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 	var err error
 
 	switch ddl := ddlStatement.(type) {
-	case *sqlparser.AlterTable, *sqlparser.TruncateTable:
+	case *sqlparser.AlterTable, *sqlparser.CreateTable, *sqlparser.TruncateTable:
 		err = checkFKError(vschema, ddlStatement)
 		if err != nil {
 			return nil, nil, err
 		}
-		// For Alter Table and other statements, the table must already exist
-		// We should find the target of the query from this tables location
+		// For ALTER TABLE and TRUNCATE TABLE, the table must already exist
+		//
+		// For CREATE TABLE, the table may (in the case of --declarative)
+		// already exist.
+		//
+		// We should find the target of the query from this tables location.
 		destination, keyspace, err = findTableDestinationAndKeyspace(vschema, ddlStatement)
 	case *sqlparser.CreateView:
 		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
 		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
-	case *sqlparser.CreateTable:
-		err = checkFKError(vschema, ddlStatement)
-		if err != nil {
-			return nil, nil, err
-		}
-		destination, keyspace, _, err = vschema.TargetDestination(ddlStatement.GetTable().Qualifier.String())
-		if err != nil {
-			return nil, nil, err
-		}
-		// Remove the keyspace name as the database name might be different.
-		ddlStatement.SetTable("", ddlStatement.GetTable().Name.String())
 	case *sqlparser.DropView, *sqlparser.DropTable:
 		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
 	case *sqlparser.RenameTable:

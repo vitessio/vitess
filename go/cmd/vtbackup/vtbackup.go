@@ -111,6 +111,7 @@ var (
 	initKeyspace       string
 	initShard          string
 	concurrency        = 4
+	incrementalFromPos string
 	// mysqlctld-like flags
 	mysqlPort        = 3306
 	mysqlSocket      string
@@ -118,6 +119,7 @@ var (
 	initDBSQLFile    string
 	detachedMode     bool
 	keepAliveTimeout = 0 * time.Second
+	disableRedoLog   = false
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -132,6 +134,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	fs.StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
 	fs.IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
+	fs.StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
 	// mysqlctld-like flags
 	fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
 	fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
@@ -139,6 +142,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "path to .sql file to run after mysql_install_db")
 	fs.BoolVar(&detachedMode, "detach", detachedMode, "detached mode - run backups detached from the terminal")
 	fs.DurationVar(&keepAliveTimeout, "keep-alive-timeout", keepAliveTimeout, "Wait until timeout elapses after a successful backup before shutting down.")
+	fs.BoolVar(&disableRedoLog, "disable-redo-log", disableRedoLog, "Disable InnoDB redo log during replication-from-primary phase of backup.")
 
 	acl.RegisterFlags(fs)
 }
@@ -279,15 +283,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	backupParams := mysqlctl.BackupParams{
-		Cnf:          mycnf,
-		Mysqld:       mysqld,
-		Logger:       logutil.NewConsoleLogger(),
-		Concurrency:  concurrency,
-		HookExtraEnv: extraEnv,
-		TopoServer:   topoServer,
-		Keyspace:     initKeyspace,
-		Shard:        initShard,
-		TabletAlias:  topoproto.TabletAliasString(tabletAlias),
+		Cnf:                mycnf,
+		Mysqld:             mysqld,
+		Logger:             logutil.NewConsoleLogger(),
+		Concurrency:        concurrency,
+		IncrementalFromPos: incrementalFromPos,
+		HookExtraEnv:       extraEnv,
+		TopoServer:         topoServer,
+		Keyspace:           initKeyspace,
+		Shard:              initShard,
+		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
@@ -347,6 +352,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		restorePos = mysql.Position{}
 	default:
 		return fmt.Errorf("can't restore from backup: %v", err)
+	}
+
+	// Disable redo logging (if we can) before we start replication.
+	disabledRedoLog := false
+	if disableRedoLog {
+		if err := mysqld.DisableRedoLog(ctx); err != nil {
+			log.Warningf("Error disabling redo logging: %v", err)
+		} else {
+			disabledRedoLog = true
+		}
 	}
 
 	// We have restored a backup. Now start replication.
@@ -429,6 +444,13 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	log.Infof("Replication caught up to %v", status.Position)
 	if !status.Position.AtLeast(primaryPos) && status.Position.Equal(restorePos) {
 		return fmt.Errorf("not taking backup: replication did not make any progress from restore point: %v", restorePos)
+	}
+
+	// Re-enable redo logging.
+	if disabledRedoLog {
+		if err := mysqld.EnableRedoLog(ctx); err != nil {
+			return fmt.Errorf("failed to re-enable redo log: %v", err)
+		}
 	}
 
 	if restartBeforeBackup {

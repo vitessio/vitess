@@ -109,6 +109,7 @@ Therefore, file a JIRA ticket with Sonatype to get added ([example for a differe
 Follow [Sonatype's GPG instructions](https://central.sonatype.org/pages/working-with-pgp-signatures.html).
 
 Install `gpg-agent` (needed below) e.g. on Ubuntu via: `sudo apt-get install gnupg-agent`.
+for Mac you need to install 'gnupg' via 'brew install gnupg'
 
 #### Login configuration
 
@@ -196,6 +197,10 @@ On the release day, there are several things to do:
   > - Two new Pull Requests have to be created.
   > - One against `main`, it will contain only the new release notes.
   > - And another against the release branch, this one contains the release notes and the release commit. (The commit on which we did `git tag`) 
+- **Build k8s Docker images and publish them**
+  > - The docker image for `base`, `lite`, etc are built automatically by DockerHub. The k8s images however are dependent on these images and are required to be built manually.
+  > - These images should be built after the `base` image has been built and available on DockerHub.
+  > - To build and publish these images, run `./release.sh` from the directory `vitess/docker`.
 
 ### Post-Release
 
@@ -250,6 +255,7 @@ This section is divided into two parts:
           ```
       This command will generate the release notes by looking at all the commits between the tag `v14.0.0` and the reference `HEAD`.
       It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
+      Please verify the generated release notes to make sure it is well-formatted and all the bookmarks are generated properly.
 
 
 3. Follow the instruction prompted by the `do_release` Makefile command's output in order to push the tags, branches and create the Pull Requests.
@@ -324,12 +330,12 @@ The script will prompt the command that will allow you to push the code freeze c
 > 
 > For this example, we assume we juste released `v12.0.0`.
 
-1.  Checkout to the release commit.
+1. Checkout to the release commit.
     ```shell
     git checkout v12.0.0
     ```
 
-2.  Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
+2. Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
 
     ```bash
     eval $(gpg-agent --daemon --no-grab --write-env-file $HOME/.gpg-agent-info)
@@ -337,7 +343,13 @@ The script will prompt the command that will allow you to push the code freeze c
     export GPG_AGENT_INFO
     ```
 
-3.  Deploy (upload) the Java code to the oss.sonatype.org repository:
+3. Export following to avoid any version conflicts
+    ```bash
+    export MAVEN_OPTS="--add-opens=java.base/java.util=ALL-UNNAMED --add-opens=java.base/java.lang.reflect=ALL-UNNAMED --add-opens=java.base/java.text=ALL-UNNAMED 
+    --add-opens=java.desktop/java.awt.font=ALL-UNNAMED"
+    ```
+
+4. Deploy (upload) the Java code to the oss.sonatype.org repository:
 
     > **Warning:** After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
 
@@ -345,3 +357,4 @@ The script will prompt the command that will allow you to push the code freeze c
     mvn clean deploy -P release -DskipTests
     cd ..
     ```
+5. It will take some time for artifacts to appear on [maven directory](https://mvnrepository.com/artifact/io.vitess/vitess-client)
