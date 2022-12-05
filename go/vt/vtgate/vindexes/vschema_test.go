@@ -1982,7 +1982,7 @@ func TestBuildVSchemaReferenceTableSourceKeyspaceMustExist(t *testing.T) {
 	vschema := BuildVSchema(&input)
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
-		"source \"unsharded.src\" may not reference a non-existence keyspace \"unsharded\": ref")
+		"source \"unsharded.src\" references a non-existent keyspace \"unsharded\"")
 }
 
 func TestBuildVSchemaReferenceTableSourceTableMustExist(t *testing.T) {
@@ -2008,10 +2008,10 @@ func TestBuildVSchemaReferenceTableSourceTableMustExist(t *testing.T) {
 	vschema := BuildVSchema(&input)
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
-		"source \"unsharded.src\" may not reference a non-existent table \"src\" in keyspace \"unsharded\": ref")
+		"source \"unsharded.src\" references a table \"src\" that is not present in the VSchema of keyspace \"unsharded\"")
 }
 
-func TestBuildVSchemaReferenceTableSourceMayNotReferenceShardedKeyspace(t *testing.T) {
+func TestBuildVSchemaReferenceTableSourceMayUseShardedKeyspace(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"sharded1": {
@@ -2045,12 +2045,10 @@ func TestBuildVSchemaReferenceTableSourceMayNotReferenceShardedKeyspace(t *testi
 	}
 	vschema := BuildVSchema(&input)
 	require.NoError(t, vschema.Keyspaces["sharded1"].Error)
-	require.Error(t, vschema.Keyspaces["sharded2"].Error)
-	require.EqualError(t, vschema.Keyspaces["sharded2"].Error,
-		"source \"sharded1.src\" may not reference a table in a sharded keyspace \"sharded1\": ref")
+	require.NoError(t, vschema.Keyspaces["sharded2"].Error)
 }
 
-func TestBuildVSchemaReferenceTableSourceTableMustBeBasic(t *testing.T) {
+func TestBuildVSchemaReferenceTableSourceTableMustBeBasicOrReference(t *testing.T) {
 	input := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"unsharded1": {
@@ -2064,14 +2062,16 @@ func TestBuildVSchemaReferenceTableSourceTableMustBeBasic(t *testing.T) {
 			"unsharded2": {
 				Sharded: false,
 				Tables: map[string]*vschemapb.Table{
-					"src2": {},
+					"src2": {
+						Type:   "reference",
+						Source: "unsharded1.src1",
+					},
 				},
 			},
 			"unsharded3": {
 				Tables: map[string]*vschemapb.Table{
 					"src3": {
-						Type:   "reference",
-						Source: "unsharded2.src2",
+						Type: "reference",
 					},
 				},
 			},
@@ -2099,9 +2099,7 @@ func TestBuildVSchemaReferenceTableSourceTableMustBeBasic(t *testing.T) {
 	require.Error(t, vschema.Keyspaces["sharded1"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded1"].Error,
 		"source \"unsharded1.src1\" may not reference a table of type \"sequence\": ref1")
-	require.Error(t, vschema.Keyspaces["sharded2"].Error)
-	require.EqualError(t, vschema.Keyspaces["sharded2"].Error,
-		"source \"unsharded3.src3\" may not reference a table of type \"reference\": ref2")
+	require.NoError(t, vschema.Keyspaces["sharded2"].Error)
 }
 
 func TestBuildVSchemaSourceMayBeReferencedAtMostOncePerKeyspace(t *testing.T) {
@@ -2132,6 +2130,44 @@ func TestBuildVSchemaSourceMayBeReferencedAtMostOncePerKeyspace(t *testing.T) {
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
 		"source \"unsharded.src\" may not be referenced more than once per keyspace: ref1, ref2")
+}
+
+func TestBuildVSchemaMayNotChainReferences(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded1": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   TypeReference,
+						Source: "unsharded2.ref",
+					},
+				},
+			},
+			"unsharded2": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   TypeReference,
+						Source: "unsharded3.ref",
+					},
+				},
+			},
+			"unsharded3": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded1.ref",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["unsharded1"].Error)
+	require.EqualError(t, vschema.Keyspaces["unsharded1"].Error,
+		"reference chaining is not allowed ref => unsharded2.ref => unsharded3.ref: ref")
 }
 
 func TestSequence(t *testing.T) {
@@ -2501,7 +2537,12 @@ func TestFindTable(t *testing.T) {
 					Sharded: true,
 					Name:    "ksb",
 				},
-				Source: "ksa.t2",
+				Source: &Source{
+					sqlparser.TableName{
+						Qualifier: sqlparser.NewIdentifierCS("ksa"),
+						Name:      sqlparser.NewIdentifierCS("t2"),
+					},
+				},
 			},
 		},
 	}

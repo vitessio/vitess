@@ -3401,27 +3401,21 @@ func TestGen4JoinUnqualifiedReferenceTable(t *testing.T) {
 	require.Nil(t, sbc2.Queries)
 }
 
-func TestGen4JoinCrossShardQualifiedReferenceTable(t *testing.T) {
+func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	executor.pv = querypb.ExecuteOptions_Gen4
 
 	query := "select user.id from user join TestUnsharded.zip_detail on user.zip_detail_id = TestUnsharded.zip_detail.id"
 	_, err := executorExec(executor, query, nil)
 	require.NoError(t, err)
-	unshardedWantQueries := []*querypb.BoundQuery{}
-	for i := 0; i < 8; /*# of shards in sharded keyspace*/ i++ {
-		unshardedWantQueries = append(unshardedWantQueries, &querypb.BoundQuery{
-			Sql:           "select 1 from zip_detail where zip_detail.id = :user_zip_detail_id",
-			BindVariables: map[string]*querypb.BindVariable{"user_zip_detail_id": {Type: sqltypes.Int32, Value: []byte("1")}},
-		})
-	}
+
 	shardedWantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select `user`.zip_detail_id, `user`.id from `user`",
+			Sql:           "select `user`.id from `user`, zip_detail where `user`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
-	utils.MustMatch(t, unshardedWantQueries, sbclookup.Queries)
+	require.Nil(t, sbclookup.Queries)
 	utils.MustMatch(t, shardedWantQueries, sbc1.Queries)
 	utils.MustMatch(t, shardedWantQueries, sbc2.Queries)
 
@@ -3432,22 +3426,14 @@ func TestGen4JoinCrossShardQualifiedReferenceTable(t *testing.T) {
 	query = "select simple.id from simple join TestExecutor.zip_detail on simple.zip_detail_id = TestExecutor.zip_detail.id"
 	_, err = executorExec(executor, query, nil)
 	require.NoError(t, err)
-	unshardedWantQueries = []*querypb.BoundQuery{
+	unshardedWantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select `simple`.zip_detail_id, `simple`.id from `simple`",
+			Sql:           "select `simple`.id from `simple`, zip_detail where `simple`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
-	shardedWantQueries = []*querypb.BoundQuery{
-		{
-			Sql: "select 1 from zip_detail where zip_detail.id = :simple_zip_detail_id",
-			BindVariables: map[string]*querypb.BindVariable{
-				"simple_zip_detail_id": {Type: sqltypes.Int32, Value: []byte("1")},
-			},
-		},
-	}
 	utils.MustMatch(t, unshardedWantQueries, sbclookup.Queries)
-	utils.MustMatch(t, shardedWantQueries, sbc1.Queries)
+	require.Nil(t, sbc1.Queries)
 	require.Nil(t, sbc2.Queries)
 }
 

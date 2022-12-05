@@ -204,3 +204,14 @@ func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlpar
 	}
 	return qg, nil
 }
+
+// Clone implements the Operator interface
+func (qt *QueryTable) Clone() *QueryTable {
+	return &QueryTable{
+		ID:          qt.ID,
+		Alias:       sqlparser.CloneRefOfAliasedTableExpr(qt.Alias),
+		Table:       sqlparser.CloneTableName(qt.Table),
+		Predicates:  qt.Predicates,
+		IsInfSchema: qt.IsInfSchema,
+	}
+}

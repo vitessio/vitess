@@ -732,7 +732,7 @@ func createRoute(
 	if queryTable.IsInfSchema {
 		return createInfSchemaRoute(ctx, queryTable)
 	}
-	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, solves)
+	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, solves, true /*planAlternates*/)
 }
 
 // findVSchemaTableAndCreateRoute consults the VSchema to find a suitable
@@ -742,6 +742,7 @@ func findVSchemaTableAndCreateRoute(
 	queryTable *QueryTable,
 	tableName sqlparser.TableName,
 	solves semantics.TableSet,
+	planAlternates bool,
 ) (*Route, error) {
 	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if target != nil {
@@ -756,8 +757,7 @@ func findVSchemaTableAndCreateRoute(
 		queryTable,
 		vschemaTable,
 		solves,
-		// Don't plan alternates if the table query is qualified.
-		queryTable.Table.Qualifier.IsEmpty(),
+		planAlternates,
 	)
 }
 
@@ -771,6 +771,7 @@ func createRouteFromVSchemaTable(
 ) (*Route, error) {
 	if vschemaTable.Name.String() != queryTable.Table.Name.String() {
 		// we are dealing with a routed table
+		queryTable = queryTable.Clone()
 		name := queryTable.Table.Name
 		queryTable.Table.Name = vschemaTable.Name
 		astTable, ok := queryTable.Alias.Expr.(sqlparser.TableName)
@@ -889,14 +890,33 @@ func createAlternateRoutesFromVSchemaTable(
 	routes := make(map[*vindexes.Keyspace]*Route)
 
 	switch vschemaTable.Type {
-	case "":
-		for _, referenceTable := range vschemaTable.ReferencedBy {
-			route, err := createRouteFromVSchemaTable(
+	case "", vindexes.TypeReference:
+		for ksName, referenceTable := range vschemaTable.ReferencedBy {
+			route, err := findVSchemaTableAndCreateRoute(
 				ctx,
 				queryTable,
-				referenceTable,
+				sqlparser.TableName{
+					Name:      referenceTable.Name,
+					Qualifier: sqlparser.NewIdentifierCS(ksName),
+				},
 				solves,
-				false /*planAlternates*/)
+				false, /*planAlternates*/
+			)
+			if err != nil {
+				return nil, err
+			}
+			routes[route.Keyspace] = route
+		}
+
+		if vschemaTable.Source != nil {
+			route, err := findVSchemaTableAndCreateRoute(
+				ctx,
+				// Call path may modify this value.
+				queryTable,
+				vschemaTable.Source.TableName,
+				solves,
+				false, /*planAlternates*/
+			)
 			if err != nil {
 				return nil, err
 			}

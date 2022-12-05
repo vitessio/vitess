@@ -24,6 +24,8 @@ import (
 	"os"
 	"testing"
 
+	"vitess.io/vitess/go/mysql"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -31,15 +33,19 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
-	clusterInstance       *cluster.LocalProcessCluster
-	cell                  = "zone1"
-	hostname              = "localhost"
+	clusterInstance *cluster.LocalProcessCluster
+	cell            = "zone1"
+	hostname        = "localhost"
+	mysqlParams     mysql.ConnParams
+	vtParams        mysql.ConnParams
+
 	unshardedKeyspaceName = "uks"
 	unshardedSQLSchema    = `
-		CREATE TABLE zip(
+		CREATE TABLE IF NOT EXISTS zip(
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			code5 INT(5) NOT NULL,
 			PRIMARY KEY(id)
@@ -50,7 +56,7 @@ var (
 			   (2, 82845),
 			   (3, 11237);
 
-		CREATE TABLE zip_detail(
+		CREATE TABLE IF NOT EXISTS zip_detail(
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			zip_id BIGINT NOT NULL,
 			discontinued_at DATE,
@@ -72,14 +78,14 @@ var (
 	`
 	shardedKeyspaceName = "sks"
 	shardedSQLSchema    = `
-		CREATE TABLE zip_detail(
+		CREATE TABLE IF NOT EXISTS zip_detail(
 			id BIGINT NOT NULL AUTO_INCREMENT,
 			zip_id BIGINT NOT NULL,
 			discontinued_at DATE,
 			PRIMARY KEY(id)
 		) ENGINE=InnoDB;
 
-		CREATE TABLE delivery_failure (
+		CREATE TABLE IF NOT EXISTS delivery_failure (
 			id BIGINT NOT NULL,
 			zip_detail_id BIGINT NOT NULL,
 			reason VARCHAR(255),
@@ -140,7 +146,7 @@ func TestMain(m *testing.M) {
 			SchemaSQL: shardedSQLSchema,
 			VSchema:   shardedVSchema,
 		}
-		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 1, false); err != nil {
+		if err := clusterInstance.StartKeyspace(*sKeyspace, []string{"-80", "80-"}, 0, false); err != nil {
 			return 1
 		}
 
@@ -148,6 +154,18 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartVtgate(); err != nil {
 			return 1
 		}
+
+		vtParams = mysql.ConnParams{
+			Host: "localhost",
+			Port: clusterInstance.VtgateMySQLPort,
+		}
+
+		conn, closer, err := utils.NewMySQL(clusterInstance, "mks", unshardedSQLSchema+shardedSQLSchema)
+		if err != nil {
+			return 1
+		}
+		defer closer()
+		mysqlParams = conn
 
 		// Materialize zip_detail to sharded keyspace.
 		if err := clusterInstance.VtctlProcess.ExecuteCommand(

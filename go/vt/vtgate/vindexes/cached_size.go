@@ -394,6 +394,18 @@ func (cached *ReverseBits) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	return size
 }
+func (cached *Source) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field TableName vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.TableName.CachedSize(false)
+	return size
+}
 
 //go:nocheckptr
 func (cached *Table) CachedSize(alloc bool) int64 {
@@ -402,7 +414,7 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(208)
+		size += int64(192)
 	}
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
@@ -459,8 +471,8 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 			size += v.CachedSize(true)
 		}
 	}
-	// field Source string
-	size += hack.RuntimeAllocSize(int64(len(cached.Source)))
+	// field Source *vitess.io/vitess/go/vt/vtgate/vindexes.Source
+	size += cached.Source.CachedSize(true)
 	return size
 }
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {

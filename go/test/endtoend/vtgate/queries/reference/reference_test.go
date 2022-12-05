@@ -18,16 +18,26 @@ package reference
 
 import (
 	"context"
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 )
+
+func start(t *testing.T) (*mysql.Conn, func()) {
+	ctx := context.Background()
+	vtConn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+
+	return vtConn, func() {
+		vtConn.Close()
+		cluster.PanicHandler(t)
+	}
+}
 
 // TestGlobalReferenceRouting tests that unqualified queries for reference
 // tables go to the right place.
@@ -53,78 +63,77 @@ import (
 // When: we execute `DELETE FROM zip_detail ...`,
 // Then: `zip_detail` should be routed to `uks`.
 func TestReferenceRouting(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
-	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
-	defer conn.Close()
+	conn, closer := start(t)
+	defer closer()
 
 	// INSERT should route an unqualified zip_detail to unsharded keyspace.
-	utils.Exec(t, conn,
-		"INSERT INTO zip_detail(id, zip_id, discontinued_at) VALUES(3, 1, DATE('2022-12-03'))")
+	utils.Exec(t, conn, "INSERT INTO zip_detail(id, zip_id, discontinued_at) VALUES(3, 1, DATE('2022-12-03'))")
 	// Verify with qualified zip_detail queries to each keyspace. The unsharded
 	// keyspace should have an extra row.
-	uqr := utils.Exec(t, conn,
-		"SELECT COUNT(zd.id) FROM "+unshardedKeyspaceName+".zip_detail zd WHERE id = 3")
-	if got, want := fmt.Sprintf("%v", uqr.Rows), `[[INT64(1)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
-	sqr := utils.Exec(t, conn,
-		"SELECT COUNT(zd.id) FROM "+shardedKeyspaceName+".zip_detail zd WHERE id = 3")
-	if got, want := fmt.Sprintf("%v", sqr.Rows), `[[INT64(0)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
+	utils.AssertMatches(
+		t,
+		conn,
+		"SELECT COUNT(zd.id) FROM "+unshardedKeyspaceName+".zip_detail zd WHERE id = 3",
+		`[[INT64(1)]]`,
+	)
+	utils.AssertMatches(
+		t,
+		conn,
+		"SELECT COUNT(zd.id) FROM "+shardedKeyspaceName+".zip_detail zd WHERE id = 3",
+		`[[INT64(0)]]`,
+	)
 
 	// UPDATE should route an unqualified zip_detail to unsharded keyspace.
 	utils.Exec(t, conn,
 		"UPDATE zip_detail SET discontinued_at = NULL WHERE id = 2")
 	// Verify with qualified zip_detail queries to each keyspace. The unsharded
 	// keyspace should have a matching row, but not the sharded keyspace.
-	uqr = utils.Exec(t, conn,
-		"SELECT COUNT(id) FROM "+unshardedKeyspaceName+".zip_detail WHERE discontinued_at IS NULL")
-	if got, want := fmt.Sprintf("%v", uqr.Rows), `[[INT64(1)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
-	sqr = utils.Exec(t, conn,
-		"SELECT COUNT(id) FROM "+shardedKeyspaceName+".zip_detail WHERE discontinued_at IS NULL")
-	if got, want := fmt.Sprintf("%v", sqr.Rows), `[[INT64(0)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
+	utils.AssertMatches(
+		t,
+		conn,
+		"SELECT COUNT(id) FROM "+unshardedKeyspaceName+".zip_detail WHERE discontinued_at IS NULL",
+		`[[INT64(1)]]`,
+	)
+	utils.AssertMatches(
+		t,
+		conn,
+		"SELECT COUNT(id) FROM "+shardedKeyspaceName+".zip_detail WHERE discontinued_at IS NULL",
+		`[[INT64(0)]]`,
+	)
 
 	// SELECT a table in unsharded keyspace and JOIN unqualified zip_detail.
-	qr := utils.Exec(t, conn,
-		"SELECT COUNT(zd.id) FROM zip z JOIN zip_detail zd ON z.id = zd.zip_id WHERE zd.id = 3")
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(1)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
+	utils.AssertMatches(
+		t,
+		conn,
+		"SELECT COUNT(zd.id) FROM zip z JOIN zip_detail zd ON z.id = zd.zip_id WHERE zd.id = 3",
+		`[[INT64(1)]]`,
+	)
 
 	// SELECT a table in sharded keyspace and JOIN unqualified zip_detail.
 	// Use gen4 planner to avoid errors from gen3 planner.
-	qr = utils.Exec(t, conn,
+	utils.AssertMatches(
+		t,
+		conn,
 		`SELECT /*vt+ PLANNER=gen4 */ COUNT(zd.id)
 		 FROM delivery_failure df
-		 JOIN zip_detail zd ON zd.id = df.zip_detail_id WHERE zd.id = 3`)
-	if got, want := fmt.Sprintf("%v", qr.Rows), `[[INT64(0)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
+		 JOIN zip_detail zd ON zd.id = df.zip_detail_id WHERE zd.id = 3`,
+		`[[INT64(0)]]`,
+	)
 
 	// DELETE should route an unqualified zip_detail to unsharded keyspace.
-	utils.Exec(t, conn,
-		"DELETE FROM zip_detail")
+	utils.Exec(t, conn, "DELETE FROM zip_detail")
 	// Verify with qualified zip_detail queries to each keyspace. The unsharded
 	// keyspace should not have any rows; the sharded keyspace should.
-	uqr = utils.Exec(t, conn,
-		"SELECT COUNT(id) FROM "+unshardedKeyspaceName+".zip_detail")
-	if got, want := fmt.Sprintf("%v", uqr.Rows), `[[INT64(0)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
-	sqr = utils.Exec(t, conn,
-		"SELECT COUNT(id) FROM "+shardedKeyspaceName+".zip_detail")
-	if got, want := fmt.Sprintf("%v", sqr.Rows), `[[INT64(2)]]`; got != want {
-		t.Errorf("got:\n%v want\n%v", got, want)
-	}
+	utils.AssertMatches(
+		t,
+		conn,
+		"SELECT COUNT(id) FROM "+unshardedKeyspaceName+".zip_detail",
+		`[[INT64(0)]]`,
+	)
+	utils.AssertMatches(
+		t,
+		conn,
+		"SELECT COUNT(id) FROM "+shardedKeyspaceName+".zip_detail",
+		`[[INT64(2)]]`,
+	)
 }

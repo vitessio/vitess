@@ -497,15 +497,17 @@ func tryMerge(
 		return nil, nil
 	}
 
-	if altARoute := aRoute.AlternateInKeyspace(bRoute.Keyspace); altARoute != nil {
-		aRoute = altARoute
-	}
-
-	if altBRoute := bRoute.AlternateInKeyspace(aRoute.Keyspace); altBRoute != nil {
-		bRoute = altBRoute
-	}
-
 	sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
+
+	if !sameKeyspace {
+		if altARoute := aRoute.AlternateInKeyspace(bRoute.Keyspace); altARoute != nil {
+			aRoute = altARoute
+			sameKeyspace = true
+		} else if altBRoute := bRoute.AlternateInKeyspace(aRoute.Keyspace); altBRoute != nil {
+			bRoute = altBRoute
+			sameKeyspace = true
+		}
+	}
 
 	if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
 		tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
