@@ -572,7 +572,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
 		shardActionInfo := actionInfo(rs.Target, session, autocommit)
-		log.Infof("[INTEROP DEBUG] Shard info for target %s:\n action: %s\n txnID: %d\n alias: %s\n", rs.Target.String(), shardActionInfo.actionNeeded, shardActionInfo.transactionID, shardActionInfo.alias)
+		log.Infof("[INTEROP DEBUG] Shard info for target %s, index %d :\n action: %s\n txnID: %d\n alias: %s\n", rs.Target.String(), i, shardActionInfo.actionNeeded, shardActionInfo.transactionID, shardActionInfo.alias)
 		updated, err := action(rs, i, shardActionInfo)
 		if updated == nil {
 			return
