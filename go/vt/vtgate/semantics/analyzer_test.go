@@ -882,7 +882,7 @@ func TestInvalidQueries(t *testing.T) {
 		err: "Column 'id' in field list is ambiguous",
 	}, {
 		sql: "select sql_calc_found_rows id from a union select 1 limit 109",
-		err: "SQL_CALC_FOUND_ROWS not supported with union",
+		err: "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union",
 	}, {
 		sql: "select * from (select sql_calc_found_rows id from a) as t",
 		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",

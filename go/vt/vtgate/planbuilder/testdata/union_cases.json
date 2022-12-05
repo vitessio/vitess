@@ -2278,7 +2278,7 @@
     "comment": "union with invalid order by clause with table qualifier",
     "query": "select id from user union select 3 order by user.id",
     "v3-plan": "VT12001: unsupported: cannot do ORDER BY on top of UNION",
-    "gen4-plan": "Table 'user' from one of the SELECTs cannot be used in global ORDER clause"
+    "gen4-plan": "Table `user` from one of the SELECTs cannot be used in global ORDER clause"
   },
   {
     "comment": "union with invalid order by clause with table qualifier",

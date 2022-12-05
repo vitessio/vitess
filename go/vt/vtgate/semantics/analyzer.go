@@ -18,11 +18,10 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // analyzer controls the flow of the analysis.
@@ -299,7 +298,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return NewError(CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 		}
 		if len(currScope.tables) != 1 {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Next statement should not contain multiple tables")
+			return NewError(NextWithMultipleTables)
 		}
 		vindexTbl := currScope.tables[0].GetVindexTable()
 		if vindexTbl == nil {
@@ -313,13 +312,13 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return NewError(UnsupportedNaturalJoin, node.Join.ToString())
 		}
 	case *sqlparser.LockingFunc:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
+		return NewError(LockOnlyWithDual, sqlparser.String(node))
 	case *sqlparser.Union:
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
-					return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table '%s' from one of the SELECTs cannot be used in global ORDER clause", node.Qualifier.Name)
+					return false, NewError(QualifiedOrderInUnion, sqlparser.String(node.Qualifier.Name))
 				}
 			case *sqlparser.Subquery:
 				return false, nil
@@ -334,7 +333,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return err
 		}
 	case *sqlparser.JSONTableExpr:
-		return vterrors.VT12001("json_table expressions")
+		return NewError(JSONTables)
 	}
 
 	return nil

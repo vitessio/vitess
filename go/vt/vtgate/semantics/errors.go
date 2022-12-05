@@ -57,9 +57,13 @@ const (
 	CantUseOptionHere
 	MissingInVSchema
 	NotSequenceTable
+	NextWithMultipleTables
+	LockOnlyWithDual
+	QualifiedOrderInUnion
+	JSONTables
 )
 
-func NewError(code ErrorCode, args ...any) error {
+func NewError(code ErrorCode, args ...any) *Error {
 	return &Error{
 		Code: code,
 		args: args,
@@ -105,6 +109,21 @@ var errors = map[ErrorCode]info{
 	NotSequenceTable: {
 		format: "NEXT used on a non-sequence table",
 		code:   vtrpcpb.Code_INVALID_ARGUMENT,
+	},
+	NextWithMultipleTables: {
+		format: "Next statement should not contain multiple tables",
+		typ:    Bug,
+	},
+	LockOnlyWithDual: {
+		format: "%v allowed only with dual",
+		code:   vtrpcpb.Code_UNIMPLEMENTED,
+	},
+	QualifiedOrderInUnion: {
+		format: "Table %s from one of the SELECTs cannot be used in global ORDER clause",
+	},
+	JSONTables: {
+		format: "json_table expressions",
+		typ:    Unsupported,
 	},
 }
 
