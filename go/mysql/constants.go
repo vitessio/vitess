@@ -596,9 +596,6 @@ const (
 	// SSClientError is the state on client errors
 	SSClientError = "42000"
 
-	// SSTableExists is ER_TABLE_EXISTS_ERROR
-	SSTableExists = "42S01"
-
 	// SSDupFieldName is ER_DUP_FIELD_NAME
 	SSDupFieldName = "42S21"
 

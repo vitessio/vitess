@@ -52,7 +52,6 @@ const (
 	CantDoThisInTransaction
 	RequiresPrimaryKey
 	OperandColumns
-	TableExists
 
 	// not found
 	BadDb
