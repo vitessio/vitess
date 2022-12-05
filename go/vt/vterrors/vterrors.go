@@ -177,8 +177,8 @@ func Code(err error) vtrpcpb.Code {
 	if err == nil {
 		return vtrpcpb.Code_OK
 	}
-	if err, ok := err.(*fundamental); ok {
-		return err.code
+	if err, ok := err.(ErrorWithCode); ok {
+		return err.ErrorCode()
 	}
 
 	cause := Cause(err)
@@ -203,8 +203,9 @@ func ErrState(err error) State {
 	if err == nil {
 		return Undefined
 	}
-	if err, ok := err.(*fundamental); ok {
-		return err.state
+
+	if err, ok := err.(ErrorWithState); ok {
+		return err.ErrorState()
 	}
 
 	cause := Cause(err)
@@ -338,3 +339,6 @@ func Equals(a, b error) bool {
 func Print(err error) string {
 	return fmt.Sprintf("%v: %v\n", Code(err), err.Error())
 }
+
+func (f *fundamental) ErrorState() State       { return f.state }
+func (f *fundamental) ErrorCode() vtrpcpb.Code { return f.code }
