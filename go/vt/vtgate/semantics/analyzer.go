@@ -202,7 +202,7 @@ func checkUnionColumns(union *sqlparser.Union) error {
 	}
 
 	if len(secondProj) != count {
-		return &Error{Code: UnionColumnsDoNotMatch}
+		return NewError(UnionColumnsDoNotMatch)
 	}
 
 	return nil
@@ -261,11 +261,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: vterrors.VT12001("multiple tables in update")}
+			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
 		}
 		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return UnshardedError{Inner: vterrors.VT12001("multiple tables in update")}
+			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
@@ -310,7 +310,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-			return vterrors.VT12001(node.Join.ToString())
+			return NewError(UnsupportedNaturalJoin, node.Join.ToString())
 		}
 	case *sqlparser.LockingFunc:
 		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
