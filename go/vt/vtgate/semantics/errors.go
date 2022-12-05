@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -61,6 +62,9 @@ const (
 	LockOnlyWithDual
 	QualifiedOrderInUnion
 	JSONTables
+	Buggy
+	ColumnNotFound
+	AmbiguousColumn
 )
 
 func NewError(code ErrorCode, args ...any) *Error {
@@ -125,30 +129,52 @@ var errors = map[ErrorCode]info{
 		format: "json_table expressions",
 		typ:    Unsupported,
 	},
+	Buggy: {
+		format: "%s",
+		typ:    Bug,
+	},
+	ColumnNotFound: {
+		format: "symbol %s not found",
+		state:  vterrors.BadFieldError,
+		code:   vtrpcpb.Code_INVALID_ARGUMENT,
+	},
+	AmbiguousColumn: {
+		format: "Column '%s' in field lfist is ambiguous",
+		state:  vterrors.BadFieldError,
+		code:   vtrpcpb.Code_INVALID_ARGUMENT,
+	},
 }
 
 func (n *Error) Error() string {
-	var format string
 	f, ok := errors[n.Code]
 	if !ok {
 		return "unknown error"
 	}
-	format = f.format
+
+	format := f.format
 
 	if f.id != "" {
 		format = fmt.Sprintf("%s: %s", f.id, format)
-
 	}
 
 	switch f.typ {
 	case Unsupported:
 		format = "VT12001: unsupported: " + format
 	case Bug:
-		format = "[BUG] " + format
+		format = "VT13001: [BUG] " + format
 	}
 
-	sprintf := fmt.Sprintf(format, n.args...)
-	return sprintf
+	var args []any
+	for _, arg := range n.args {
+		ast, isAST := arg.(sqlparser.SQLNode)
+		if isAST {
+			args = append(args, sqlparser.String(ast))
+		} else {
+			args = append(args, arg)
+		}
+	}
+
+	return fmt.Sprintf(format, args...)
 }
 
 func (n *Error) ErrorState() vterrors.State {

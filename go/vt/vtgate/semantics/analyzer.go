@@ -312,13 +312,13 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return NewError(UnsupportedNaturalJoin, node.Join.ToString())
 		}
 	case *sqlparser.LockingFunc:
-		return NewError(LockOnlyWithDual, sqlparser.String(node))
+		return NewError(LockOnlyWithDual, node)
 	case *sqlparser.Union:
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
-					return false, NewError(QualifiedOrderInUnion, sqlparser.String(node.Qualifier.Name))
+					return false, NewError(QualifiedOrderInUnion, node.Qualifier.Name)
 				}
 			case *sqlparser.Subquery:
 				return false, nil
