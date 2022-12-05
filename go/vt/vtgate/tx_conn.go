@@ -65,7 +65,6 @@ func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
 // Commit commits the current transaction. The type of commit can be
 // best effort or 2pc depending on the session setting.
 func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
-	log.Infof("[INTEROP DEBUG] In tx_conn commit, printing stack")
 	debug.PrintStack()
 	defer session.ResetTx()
 	if !session.InTransaction() {
@@ -86,11 +85,16 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 }
 
 func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
-	log.Infof("[INTEROP DEBUG] In tx_conn query service fetcher. Alias: %s", alias.Uid)
 	qs, _ := txc.gateway.(*DiscoveryGateway)
 	if qs != nil {
 		return qs, nil
 	}
+
+	// backportin this fix https://github.com/slackhq/vitess/commit/18234019398bac30dfe4040f529cb5a7fe68bc00#diff-7bebc940701cac0568c9b8c894141f0b0dd4d96092aa452a3892f7e700a3a87aL86
+	if alias == nil {
+		return txc.gateway, nil
+	}
+
 	return txc.gateway.QueryServiceByAlias(alias, nil)
 }
 
