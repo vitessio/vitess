@@ -30,20 +30,33 @@ type (
 		Code ErrorCode
 		args []any
 	}
+	ErrType int
 
 	info struct {
-		format      string
-		state       vterrors.State
-		code        vtrpcpb.Code
-		id          string
-		unsupported bool
+		format string
+		state  vterrors.State
+		code   vtrpcpb.Code
+		id     string
+		typ    ErrType
 	}
+)
+
+const (
+	Other ErrType = iota
+	Unsupported
+	Bug
 )
 
 const (
 	UnionColumnsDoNotMatch ErrorCode = iota
 	UnsupportedMultiTablesInUpdate
 	UnsupportedNaturalJoin
+	TableNotUpdatable
+	UnionWithSQLCalcFoundRows
+	SQLCalcFoundRowsUsage
+	CantUseOptionHere
+	MissingInVSchema
+	NotSequenceTable
 )
 
 func NewError(code ErrorCode, args ...any) error {
@@ -60,12 +73,38 @@ var errors = map[ErrorCode]info{
 		code:   vtrpcpb.Code_FAILED_PRECONDITION,
 	},
 	UnsupportedMultiTablesInUpdate: {
-		format:      "multiple tables in update",
-		unsupported: true,
+		format: "multiple tables in update",
+		typ:    Unsupported,
+	},
+	TableNotUpdatable: {
+		format: "The target table %s of the UPDATE is not updatable",
+		state:  vterrors.NonUpdateableTable,
+		code:   vtrpcpb.Code_INVALID_ARGUMENT,
 	},
 	UnsupportedNaturalJoin: {
-		format:      "%s",
-		unsupported: true,
+		format: "%s",
+		typ:    Unsupported,
+	},
+	UnionWithSQLCalcFoundRows: {
+		format: "SQL_CALC_FOUND_ROWS not supported with union",
+		typ:    Unsupported,
+	},
+	SQLCalcFoundRowsUsage: {
+		format: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+		code:   vtrpcpb.Code_INVALID_ARGUMENT,
+	},
+	CantUseOptionHere: {
+		format: "Incorrect usage/placement of '%s'",
+		state:  vterrors.CantUseOptionHere,
+		code:   vtrpcpb.Code_INVALID_ARGUMENT,
+	},
+	MissingInVSchema: {
+		format: "Table information is not provided in vschema",
+		code:   vtrpcpb.Code_INVALID_ARGUMENT,
+	},
+	NotSequenceTable: {
+		format: "NEXT used on a non-sequence table",
+		code:   vtrpcpb.Code_INVALID_ARGUMENT,
 	},
 }
 
@@ -76,10 +115,17 @@ func (n *Error) Error() string {
 		return "unknown error"
 	}
 	format = f.format
+
 	if f.id != "" {
 		format = fmt.Sprintf("%s: %s", f.id, format)
-	} else if f.unsupported {
+
+	}
+
+	switch f.typ {
+	case Unsupported:
 		format = "VT12001: unsupported: " + format
+	case Bug:
+		format = "[BUG] " + format
 	}
 
 	sprintf := fmt.Sprintf(format, n.args...)
@@ -101,9 +147,12 @@ func (n *Error) ErrorCode() vtrpcpb.Code {
 		return vtrpcpb.Code_UNKNOWN
 	}
 
-	if f.unsupported {
+	switch f.typ {
+	case Unsupported:
 		return vtrpcpb.Code_UNIMPLEMENTED
+	case Bug:
+		return vtrpcpb.Code_INTERNAL
+	default:
+		return f.code
 	}
-
-	return f.code
 }

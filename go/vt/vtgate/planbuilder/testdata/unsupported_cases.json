@@ -351,8 +351,7 @@
   {
     "comment": "union with SQL_CALC_FOUND_ROWS",
     "query": "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1",
-    "v3-plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union",
-    "gen4-plan": "SQL_CALC_FOUND_ROWS not supported with union"
+    "plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union"
   },
   {
     "comment": "set with DEFAULT - vitess aware",

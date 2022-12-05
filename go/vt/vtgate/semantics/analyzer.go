@@ -269,15 +269,15 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the UPDATE is not updatable", alias.As.String())
+			return NewError(TableNotUpdatable, alias.As.String())
 		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+			return NewError(UnionWithSQLCalcFoundRows)
 		}
 		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+			return NewError(SQLCalcFoundRowsUsage)
 		}
 		errMsg := "INTO"
 		nextVal := false
@@ -291,22 +291,22 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return nil
 		}
 		if a.scoper.currentScope().parent != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of '%s'", errMsg)
+			return NewError(CantUseOptionHere, errMsg)
 		}
 	case *sqlparser.Nextval:
 		currScope := a.scoper.currentScope()
 		if currScope.parent != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+			return NewError(CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 		}
 		if len(currScope.tables) != 1 {
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Next statement should not contain multiple tables")
 		}
 		vindexTbl := currScope.tables[0].GetVindexTable()
 		if vindexTbl == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table information is not provided in vschema")
+			return NewError(MissingInVSchema)
 		}
 		if vindexTbl.Type != vindexes.TypeSequence {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
+			return NewError(NotSequenceTable)
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
