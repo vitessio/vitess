@@ -168,6 +168,13 @@ func (stc *ScatterConn) ExecuteMultiShard(
 		return nil, []error{vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] got mismatched number of queries and shards")}
 	}
 
+	for i, q := range queries {
+		log.Infof("[INTEROP DEBUG] query%d: %s\n", i, q.Sql)
+		log.Infof("[INTEROP DEBUG] resolve shard%d: %s\n\n", i, rss[i].Target.String())
+	}
+
+	log.Infof("[INTEROP DEBUG] number of shard sessions: %d", len(session.ShardSessions))
+
 	// mu protects qr
 	var mu sync.Mutex
 	qr = new(sqltypes.Result)
@@ -565,6 +572,7 @@ func (stc *ScatterConn) multiGoTransaction(
 		defer stc.endAction(startTime, allErrors, statsKey, &err, session)
 
 		shardActionInfo := actionInfo(rs.Target, session, autocommit)
+		log.Infof("[INTEROP DEBUG] Shard info for target %s:\n action: %s\n txnID: %d\n alias: %s\n", rs.Target.String(), shardActionInfo.actionNeeded, shardActionInfo.transactionID, shardActionInfo.alias)
 		updated, err := action(rs, i, shardActionInfo)
 		if updated == nil {
 			return
