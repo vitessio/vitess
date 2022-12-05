@@ -203,6 +203,7 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
 	latestInstances := make(map[inst.InstanceKey]bool)
+	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
 		if tablet.MysqlHostname == "" {
@@ -228,9 +229,14 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 			log.Error(err)
 			continue
 		}
-		loader(&instanceKey)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			loader(&instanceKey)
+		}()
 		log.Infof("Discovered: %v", tablet)
 	}
+	wg.Wait()
 
 	// Forget tablets that were removed.
 	toForget := make(map[inst.InstanceKey]*topodatapb.Tablet)
@@ -286,18 +292,15 @@ func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Conte
 		return nil, nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
 	atomic.AddInt32(&shardsLockCounter, 1)
 	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	if err != nil {
-		cancel()
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err
 	}
 	return ctx, func(e *error) {
 		defer atomic.AddInt32(&shardsLockCounter, -1)
 		unlock(e)
-		cancel()
 	}, nil
 }
 
