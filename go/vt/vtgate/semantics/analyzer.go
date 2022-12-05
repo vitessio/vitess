@@ -202,7 +202,7 @@ func checkUnionColumns(union *sqlparser.Union) error {
 	}
 
 	if len(secondProj) != count {
-		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+		return &Error{Code: UnionColumnsDoNotMatch}
 	}
 
 	return nil
