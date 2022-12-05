@@ -385,11 +385,6 @@ func (node *AlterVschema) formatFast(buf *TrackedBuffer) {
 		node.Table.formatFast(buf)
 		buf.WriteString(" add auto_increment ")
 		node.AutoIncSpec.formatFast(buf)
-	case CreateViewDDLAction:
-		buf.WriteString("alter vschema create view ")
-		node.Table.formatFast(buf)
-		buf.WriteString(" as ")
-		node.Statement.formatFast(buf)
 	default:
 		buf.WriteString(node.Action.ToString())
 		buf.WriteString(" table ")

@@ -984,11 +984,6 @@ func (a *application) rewriteRefOfAlterVschema(parent SQLNode, node *AlterVschem
 	}) {
 		return false
 	}
-	if !a.rewriteSelectStatement(node, node.Statement, func(newNode, parent SQLNode) {
-		parent.(*AlterVschema).Statement = newNode.(SelectStatement)
-	}) {
-		return false
-	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
