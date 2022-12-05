@@ -160,6 +160,7 @@ Usage of vttablet:
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+      --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
@@ -242,7 +243,7 @@ Usage of vttablet:
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --relay_log_max_items int                                          Maximum number of rows for VReplication target buffering. (default 5000)
       --relay_log_max_size int                                           Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)
-      --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
+      --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
       --restore_concurrency int                                          (init restore parameter) how many concurrent files to restore at once (default 4)
       --restore_from_backup                                              (init restore parameter) will check BackupStorage for a recent backup at startup and start there

@@ -68,6 +68,7 @@ Usage of vtgate:
       --keyspaces_to_watch strings                                       Specifies which keyspaces this vtgate should have access to while routing queries or accessing the vschema.
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
       --legacy_replication_lag_algorithm                                 Use the legacy algorithm when selecting vttablets for serving. (default true)
+      --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --lock_heartbeat_time duration                                     If there is lock function used. This will keep the lock connection active by using this heartbeat (default 5s)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
@@ -134,7 +135,7 @@ Usage of vtgate:
       --querylog-format string                                           format for query logs ("text" or "json") (default "text")
       --querylog-row-threshold uint                                      Number of rows a query has to return or affect before being logged; not useful for streaming queries. 0 means all queries will be logged.
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
-      --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
+      --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --retry-count int                                                  retry count (default 2)
       --schema_change_signal                                             Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work (default true)
       --schema_change_signal_user string                                 User to be used to send down query to vttablet to retrieve schema changes

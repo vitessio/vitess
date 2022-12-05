@@ -1,5 +1,5 @@
 Usage of vtctld:
-      --action_timeout duration                                          time to wait for an action before resorting to force (default 2m0s)
+      --action_timeout duration                                          time to wait for an action before resorting to force (default 1m0s)
       --alsologtostderr                                                  log to standard error as well as files
       --azblob_backup_account_key_file string                            Path to a file containing the Azure Storage account key; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_KEY will be used as the key itself (NOT a file path).
       --azblob_backup_account_name string                                Azure Storage Account name for backups; if this flag is unset, the environment variable VT_AZBLOB_ACCOUNT_NAME will be used.
@@ -60,6 +60,7 @@ Usage of vtctld:
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+      --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
       --log_err_stacks                                                   log stack traces for errors
@@ -74,7 +75,7 @@ Usage of vtctld:
       --pprof strings                                                    enable profiling
       --proxy_tablets                                                    Setting this true will make vtctld proxy the tablet status instead of redirecting to them
       --purge_logs_interval duration                                     how often try to remove old logs (default 1h0m0s)
-      --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
+      --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --s3_backup_aws_endpoint string                                    endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                                      AWS region to use. (default "us-east-1")
       --s3_backup_aws_retries int                                        AWS request retries. (default -1)
