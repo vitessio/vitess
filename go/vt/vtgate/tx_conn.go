@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"fmt"
+	"runtime/debug"
 	"sync"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -64,6 +65,8 @@ func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
 // Commit commits the current transaction. The type of commit can be
 // best effort or 2pc depending on the session setting.
 func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
+	log.Infof("[INTEROP DEBUG] In tx_conn commit, printing stack")
+	debug.PrintStack()
 	defer session.ResetTx()
 	if !session.InTransaction() {
 		return nil
@@ -83,6 +86,7 @@ func (txc *TxConn) Commit(ctx context.Context, session *SafeSession) error {
 }
 
 func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.QueryService, error) {
+	log.Infof("[INTEROP DEBUG] In tx_conn query service fetcher. Alias: %s", alias.Uid)
 	qs, _ := txc.gateway.(*DiscoveryGateway)
 	if qs != nil {
 		return qs, nil

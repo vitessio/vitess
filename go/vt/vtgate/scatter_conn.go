@@ -608,6 +608,7 @@ func (stc *ScatterConn) multiGoTransaction(
 	}
 
 	if session.MustRollback() {
+		log.Infof("[INTEROP DEBUG] Rolling back transaction\n")
 		_ = stc.txConn.Rollback(ctx, session)
 	}
 	return allErrors

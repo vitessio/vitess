@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -116,6 +117,7 @@ func (e *Executor) newExecute(ctx context.Context, safeSession *SafeSession, sql
 	}
 
 	if plan.Instructions.NeedsTransaction() {
+		log.Info("[INTEROP DEBUG] Needs Transaction...\n")
 		return e.insideTransaction(ctx, safeSession, logStats,
 			e.executePlan(ctx, plan, vcursor, bindVars, execStart))
 	}
