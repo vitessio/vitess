@@ -289,6 +289,8 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 			log.Warningf("ERS - %s", value)
 		case logutilpb.Level_ERROR:
 			log.Errorf("ERS - %s", value)
+		default:
+			log.Infof("ERS - %s", value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(ctx,
@@ -301,6 +303,9 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
 		},
 	)
+	if err != nil {
+		log.Errorf("Error running ERS - %v", err)
+	}
 
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
