@@ -33,7 +33,7 @@ import (
 // Also tests that VTOrc can handle multiple failures, if the durability policies allow it
 func TestDownPrimary(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--remote_operation_timeout=10s"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 	}, 1, "semi_sync")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
@@ -67,8 +67,12 @@ func TestDownPrimary(t *testing.T) {
 	// Make the rdonly vttablet unavailable
 	err := rdonly.VttabletProcess.TearDown()
 	require.NoError(t, err)
+	err = rdonly.MysqlctlProcess.Stop()
+	require.NoError(t, err)
 	// Make the current primary vttablet unavailable.
 	err = curPrimary.VttabletProcess.TearDown()
+	require.NoError(t, err)
+	err = curPrimary.MysqlctlProcess.Stop()
 	require.NoError(t, err)
 	defer func() {
 		// we remove the tablet from our global list
