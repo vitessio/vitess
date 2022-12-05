@@ -464,8 +464,8 @@ type (
 		// AutoIncSpec is set for AddAutoIncDDLAction.
 		AutoIncSpec *AutoIncSpec
 
-		// ViewSpec is set for CreateViewDDLAction.
-		ViewSpec *CreateView
+		// Statement is set for CreateViewDDLAction.
+		Statement SelectStatement
 	}
 
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
