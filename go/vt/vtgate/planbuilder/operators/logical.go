@@ -312,7 +312,7 @@ func crossJoin(ctx *plancontext.PlanningContext, exprs sqlparser.TableExprs) (op
 		if output == nil {
 			output = op
 		} else {
-			output = createJoin(output, op)
+			output = createJoin(ctx, output, op)
 		}
 	}
 	return output, nil
