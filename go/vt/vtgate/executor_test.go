@@ -536,9 +536,66 @@ func TestExecutorShow(t *testing.T) {
 
 	_, err = executor.Execute(ctx, "TestExecute", session, "use @primary", nil)
 	require.NoError(t, err)
-	_, err = executor.Execute(ctx, "TestExecute", session, "show tables", nil)
-	assert.EqualError(t, err, errNoKeyspace.Error(), "'show tables' should fail without a keyspace")
-	assert.Empty(t, sbclookup.Queries, "sbclookup unexpectedly has queries already")
+
+	query := "show tables"
+	qr, err := executor.Execute(ctx, "TestExecute", session, "show tables", nil)
+	require.NoError(t, err)
+	assert.Empty(t, sbclookup.Queries, "show global tables should be answered only by vtgate without consulting tablets")
+	wantqr := &sqltypes.Result{
+		Fields: buildVarCharFields("Global_tables"),
+		Rows: [][]sqltypes.Value{
+			buildVarCharRow("dual"),
+			buildVarCharRow("erl_lu_idx"),
+			buildVarCharRow("ins_lookup"),
+			buildVarCharRow("insert_ignore_test"),
+			buildVarCharRow("keyrange_table"),
+			buildVarCharRow("ksid_table"),
+			buildVarCharRow("lu_idx"),
+			buildVarCharRow("main1"),
+			buildVarCharRow("multicoltbl"),
+			buildVarCharRow("music"),
+			buildVarCharRow("music_extra"),
+			buildVarCharRow("music_extra_reversed"),
+			buildVarCharRow("music_user_map"),
+			buildVarCharRow("name_lastname_keyspace_id_map"),
+			buildVarCharRow("name_user_map"),
+			buildVarCharRow("noauto_table"),
+			buildVarCharRow("nrl_lu_idx"),
+			buildVarCharRow("nv_lu_idx"),
+			buildVarCharRow("sharded_table"),
+			buildVarCharRow("sharded_user_msgs"),
+			buildVarCharRow("simple"),
+			buildVarCharRow("srl_lu_idx"),
+			buildVarCharRow("t1"),
+			buildVarCharRow("t1_lkp_idx"),
+			buildVarCharRow("t2_lookup"),
+			buildVarCharRow("tbl_cfc"),
+			buildVarCharRow("user"),
+			buildVarCharRow("user2"),
+			buildVarCharRow("user_extra"),
+			buildVarCharRow("user_msgs"),
+			buildVarCharRow("user_region"),
+			buildVarCharRow("user_seq"),
+			buildVarCharRow("wo_lu_idx"),
+			buildVarCharRow("zip_detail"),
+		},
+	}
+	// utils.MustMatch truncates diff. Compare piece-by-piece instead.
+	// See: https://github.com/google/go-cmp/issues/264
+	utils.MustMatch(t, wantqr.Fields, qr.Fields, fmt.Sprintf("unexpected results running query: %s", query))
+	var i int
+	for i = 0; i < len(qr.Rows); i++ {
+		row := qr.Rows[i]
+		if i < len(wantqr.Rows) {
+			wantrow := wantqr.Rows[i]
+			utils.MustMatch(t, wantrow, row, fmt.Sprintf("unexpected difference in row %d: %s", i, query))
+		} else {
+			utils.MustMatch(t, nil, qr.Rows[i:], "extra rows in actual results not present in wanted results")
+		}
+	}
+	if i < len(wantqr.Rows) {
+		utils.MustMatch(t, qr.Rows[i:], nil, "extra rows in wanted results not present in actual results")
+	}
 
 	showResults := &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -552,8 +609,8 @@ func TestExecutorShow(t *testing.T) {
 	}
 	sbclookup.SetResults([]*sqltypes.Result{showResults})
 
-	query := fmt.Sprintf("show tables from %v", KsTestUnsharded)
-	qr, err := executor.Execute(ctx, "TestExecute", session, query, nil)
+	query = fmt.Sprintf("show tables from %v", KsTestUnsharded)
+	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
 
 	assert.Equal(t, 1, len(sbclookup.Queries), "Tablet should have received one 'show' query. Instead received: %v", sbclookup.Queries)
@@ -561,7 +618,7 @@ func TestExecutorShow(t *testing.T) {
 	want := "show tables"
 	assert.Equal(t, want, lastQuery, "Got: %v, want %v", lastQuery, want)
 
-	wantqr := showResults
+	wantqr = showResults
 	utils.MustMatch(t, wantqr, qr, fmt.Sprintf("unexpected results running query: %s", query))
 
 	wantErrNoTable := "table unknown_table not found"

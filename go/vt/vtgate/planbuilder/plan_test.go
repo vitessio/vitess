@@ -575,6 +575,14 @@ func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, err
 	return nil, nil
 }
 
+func (vw *vschemaWrapper) GetGlobalTables() []*vindexes.Table {
+	return vw.v.GetGlobalTables()
+}
+
+func (vw *vschemaWrapper) HasGlobalKeyspaceName(ks string) bool {
+	return vw.v.HasGlobalKeyspaceName(ks)
+}
+
 func (vw *vschemaWrapper) Planner() plancontext.PlannerVersion {
 	return vw.version
 }

@@ -812,6 +812,17 @@ func (vschema *VSchema) GetKeyspace(keyspace string) *Keyspace {
 	return v.Keyspace
 }
 
+func (vschema *VSchema) GetGlobalTables() []*Table {
+	var tables []*Table
+	for _, table := range vschema.global.tables {
+		tables = append(tables, table)
+	}
+	sort.Slice(tables, func(i, j int) bool {
+		return tables[i].Name.String() < tables[j].Name.String()
+	})
+	return tables
+}
+
 func (vschema *VSchema) HasGlobalKeyspaceName(keyspace string) bool {
 	return vschema.global.hasKeyspaceName(keyspace)
 }

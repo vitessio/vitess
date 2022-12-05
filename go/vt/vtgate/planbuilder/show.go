@@ -46,6 +46,8 @@ const (
 	charset = "charset"
 )
 
+const unspecifiedKeyspace = ""
+
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
 		return buildByPassDDLPlan(sql, vschema)
@@ -95,7 +97,9 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		return buildShowTblPlan(show, vschema)
 	case sqlparser.Database, sqlparser.Keyspace:
 		return buildDBPlan(show, vschema)
-	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Table, sqlparser.Trigger:
+	case sqlparser.Table:
+		return buildShowTblsPlan(show, vschema)
+	case sqlparser.OpenTable, sqlparser.TableStatus, sqlparser.Trigger:
 		return buildPlanWithDB(show, vschema)
 	case sqlparser.StatusGlobal, sqlparser.StatusSession:
 		return buildSendAnywherePlan(show, vschema)
@@ -213,6 +217,43 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 	}, nil
 }
 
+func buildShowTblsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
+	dbName := show.DbName.String()
+
+	// If this is a global keyspace, we can answer the query with global
+	// tables.
+	if vschema.HasGlobalKeyspaceName(dbName) {
+		var rows [][]sqltypes.Value
+
+		for _, table := range vschema.GetGlobalTables() {
+			rows = append(rows, buildVarCharRow(table.Name.String()))
+		}
+
+		var field string
+		if dbName == unspecifiedKeyspace {
+			field = "Global_tables"
+		} else {
+			field = "Tables_in_" + dbName
+		}
+
+		return engine.NewRowsPrimitive(rows, buildVarCharFields(field)), nil
+	}
+
+	// Otherwise, send plan down to real db.
+	send, err := buildPlanWithDB(show, vschema)
+	if err != nil {
+		return nil, err
+	}
+
+	if show.DbName.IsEmpty() {
+		dbName = send.Keyspace.Name
+	} else {
+		dbName = show.DbName.String()
+	}
+
+	return engine.NewRenameField([]string{"Tables_in_" + dbName}, []int{0}, send)
+}
+
 func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	ks, err := vschema.AllKeyspace()
 	if err != nil {
@@ -283,8 +324,7 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 	}, nil
 }
 
-func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
-	dbName := show.DbName
+func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (*engine.Send, error) {
 	dbDestination := show.DbName.String()
 	if sqlparser.SystemSchema(dbDestination) {
 		ks, err := vschema.AnyKeyspace()
@@ -304,27 +344,15 @@ func buildPlanWithDB(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (en
 		destination = key.DestinationAnyShard{}
 	}
 
-	if dbName.IsEmpty() {
-		dbName = sqlparser.NewIdentifierCS(keyspace.Name)
-	}
-
 	query := sqlparser.String(show)
-	var plan engine.Primitive
-	plan = &engine.Send{
+
+	return &engine.Send{
 		Keyspace:          keyspace,
 		TargetDestination: destination,
 		Query:             query,
 		IsDML:             false,
 		SingleShardOnly:   true,
-	}
-	if show.Command == sqlparser.Table {
-		plan, err = engine.NewRenameField([]string{"Tables_in_" + dbName.String()}, []int{0}, plan)
-		if err != nil {
-			return nil, err
-		}
-	}
-	return plan, nil
-
+	}, nil
 }
 
 func buildVarCharFields(names ...string) []*querypb.Field {

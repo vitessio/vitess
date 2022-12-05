@@ -34,6 +34,8 @@ type VSchema interface {
 	KeyspaceExists(keyspace string) bool
 	AllKeyspace() ([]*vindexes.Keyspace, error)
 	FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
+	GetGlobalTables() []*vindexes.Table
+	HasGlobalKeyspaceName(keyspace string) bool
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion
 	SetPlannerVersion(pv PlannerVersion)

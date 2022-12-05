@@ -370,6 +370,15 @@ func (vc *vcursorImpl) FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
 	return nil, nil
 }
 
+func (vc *vcursorImpl) GetGlobalTables() []*vindexes.Table {
+	return vc.vschema.GetGlobalTables()
+}
+
+// HasGlobalKeyspaceName provides there is a global keyspace with this name.
+func (vc *vcursorImpl) HasGlobalKeyspaceName(ks string) bool {
+	return vc.vschema.HasGlobalKeyspaceName(ks)
+}
+
 // Planner implements the ContextVSchema interface
 func (vc *vcursorImpl) Planner() plancontext.PlannerVersion {
 	if vc.safeSession.Options != nil &&
