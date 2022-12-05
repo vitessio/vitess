@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -224,17 +225,18 @@ func TestShardPrimary(t *testing.T) {
 // verifyRefreshTabletsInKeyspaceShard calls refreshTabletsInKeyspaceShard with the forceRefresh parameter provided and verifies that
 // the number of instances refreshed matches the parameter and all the tablets match the ones provided
 func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instanceRefreshRequired int, tablets []*topodatapb.Tablet) {
-	instancesRefreshed := 0
+	var instancesRefreshed atomic.Int32
+	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
 	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(instanceKey *inst.InstanceKey) {
-		instancesRefreshed++
+		instancesRefreshed.Add(1)
 	}, forceRefresh)
 	// Verify that all the tablets are present in the database
 	for _, tablet := range tablets {
 		verifyTabletInfo(t, tablet, "")
 	}
 	// Verify that refresh as many tablets as expected
-	assert.EqualValues(t, instanceRefreshRequired, instancesRefreshed)
+	assert.EqualValues(t, instanceRefreshRequired, instancesRefreshed.Load())
 }
 
 // verifyTabletInfo verifies that the tablet information read from the vtorc database
