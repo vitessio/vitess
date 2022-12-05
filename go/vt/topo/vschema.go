@@ -17,10 +17,11 @@ limitations under the License.
 package topo
 
 import (
-	"context"
 	"path"
 
 	"google.golang.org/protobuf/proto"
+
+	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -85,7 +86,6 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 			Sharded:  false,
 			Vindexes: make(map[string]*vschemapb.Vindex),
 			Tables:   make(map[string]*vschemapb.Table),
-			Views:    make(map[string]string),
 		})
 		if err != nil {
 			log.Errorf("could not create blank vschema: %v", err)

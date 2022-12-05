@@ -17,7 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"context"
 	"reflect"
 	"sort"
 	"testing"
@@ -28,6 +27,8 @@ import (
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
+	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
@@ -664,47 +665,4 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 
 	// restore the disallowed state
 	vschemaacl.AuthorizedDDLUsers = ""
-}
-
-func TestViewVschemaTableDDL(t *testing.T) {
-	vschemaacl.AuthorizedDDLUsers = "%"
-	defer func() {
-		vschemaacl.AuthorizedDDLUsers = ""
-	}()
-	executor, _, _, _ := createExecutorEnv()
-	ks := KsTestUnsharded
-
-	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
-	executor.serv.WatchSrvVSchema(context.Background(), "aa", func(vschema *vschemapb.SrvVSchema, err error) bool {
-		vschemaUpdates <- vschema
-		return true
-	})
-
-	vschema := <-vschemaUpdates
-	_, ok := vschema.Keyspaces[ks].Views["t_view"]
-	require.Falsef(t, ok, "view t_view should not exist in vschema")
-
-	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
-	stmt := "alter vschema create view t_view as select * from simple"
-	_, err := executor.Execute(context.Background(), "TestViewVschemaTableDDL", session, stmt, nil)
-	require.NoError(t, err)
-	_ = waitForVschemaView(t, ks, "t_view", executor)
-}
-
-func waitForVschemaView(t *testing.T, ks string, view string, executor *Executor) *vschemapb.SrvVSchema {
-	t.Helper()
-
-	// Wait up to 100ms until the vindex manager gets notified of the update
-	for i := 0; i < 10; i++ {
-		vschema := executor.vm.GetCurrentSrvVschema()
-		for t := range vschema.Keyspaces[ks].Views {
-			if t == view {
-				return vschema
-			}
-		}
-		time.Sleep(10 * time.Millisecond)
-	}
-
-	t.Fatalf("updated vschema does not contain the view: %v", view)
-	return nil
 }
