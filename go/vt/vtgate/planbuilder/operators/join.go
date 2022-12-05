@@ -67,7 +67,7 @@ func (j *Join) Compact(ctx *plancontext.PlanningContext) (ops.Operator, rewrite.
 	newOp := &QueryGraph{
 		Tables:     append(lqg.Tables, rqg.Tables...),
 		innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
-		NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
+		NoDeps:     ctx.SemTable.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 	}
 	if j.Predicate != nil {
 		err := newOp.collectPredicate(ctx, j.Predicate)
@@ -85,14 +85,14 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) 
 	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
 }
 
-func createJoin(LHS, RHS ops.Operator) ops.Operator {
+func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Operator {
 	lqg, lok := LHS.(*QueryGraph)
 	rqg, rok := RHS.(*QueryGraph)
 	if lok && rok {
 		op := &QueryGraph{
 			Tables:     append(lqg.Tables, rqg.Tables...),
 			innerJoins: append(lqg.innerJoins, rqg.innerJoins...),
-			NoDeps:     sqlparser.AndExpressions(lqg.NoDeps, rqg.NoDeps),
+			NoDeps:     ctx.SemTable.AndExpressions(lqg.NoDeps, rqg.NoDeps),
 		}
 		return op
 	}
@@ -100,7 +100,7 @@ func createJoin(LHS, RHS ops.Operator) ops.Operator {
 }
 
 func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
-	op := createJoin(lhs, rhs)
+	op := createJoin(ctx, lhs, rhs)
 	if tableExpr.Condition.On != nil {
 		var err error
 		predicate := sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)
@@ -142,7 +142,7 @@ func (j *Join) IsInner() bool {
 	return !j.LeftJoin
 }
 
-func (j *Join) AddJoinPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) error {
-	j.Predicate = sqlparser.AndExpressions(j.Predicate, expr)
+func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 	return nil
 }
