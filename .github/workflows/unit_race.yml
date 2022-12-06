@@ -8,7 +8,7 @@ jobs:
 
   build:
     name: Unit Test (Race)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
     steps:
     - name: Check if workflow needs to be skipped
       id: skip-workflow
@@ -18,7 +18,7 @@ jobs:
           skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
