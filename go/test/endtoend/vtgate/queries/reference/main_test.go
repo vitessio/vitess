@@ -170,6 +170,9 @@ func TestMain(m *testing.M) {
 		// Materialize zip_detail to sharded keyspace.
 		if err := clusterInstance.VtctlProcess.ExecuteCommand(
 			"Materialize",
+			"--",
+			"--tablet_types",
+			"PRIMARY",
 			`{
 				"workflow": "materialize_zip_detail",
 				"source_keyspace": "`+unshardedKeyspaceName+`",
