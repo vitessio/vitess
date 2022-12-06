@@ -675,8 +675,6 @@ func restartPrimaryAndReplica(t *testing.T) {
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
 		require.Nil(t, err)
-		err = tablet.VttabletProcess.CreateDB(keyspaceName)
-		require.Nil(t, err)
 		err = tablet.VttabletProcess.Setup()
 		require.Nil(t, err)
 	}
