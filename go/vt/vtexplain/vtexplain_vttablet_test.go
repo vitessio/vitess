@@ -23,12 +23,18 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestRun(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
+	sidecardb.InitVTSchemaOnTabletInit = false
+	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
+
 	testVSchema := `
 {
 	"test_keyspace": {
@@ -78,6 +84,10 @@ create table t2 (
 }
 
 func TestParseSchema(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
+	sidecardb.InitVTSchemaOnTabletInit = false
+	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
+
 	testSchema := `
 create table t1 (
 	id bigint(20) unsigned not null default 123,

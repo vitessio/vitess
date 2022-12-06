@@ -73,7 +73,8 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any)
 		return nil, err
 	}
 
-	if sidecardb.InitVTSchemaOnTabletInit || !enableWithDDLForTests {
+	// if we are using the new schema init logic AND we are not running withddl unit tests
+	if sidecardb.InitVTSchemaOnTabletInit && !enableWithDDLForTests {
 		return execQuery(query)
 	}
 

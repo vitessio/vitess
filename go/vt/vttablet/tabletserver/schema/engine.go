@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -152,8 +153,10 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
 		se.dbCreationFailed = false
-		if err := syncVTDatabase(ctx, conn); err != nil {
-			return err
+		// upgrade _vt if required, for a tablet with an existing database
+		err = syncVTDatabase(ctx, conn)
+		if err != nil && strings.Contains(err.Error(), "--read-only") {
+			err = nil
 		}
 		conn.Close()
 		return nil
@@ -186,6 +189,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+	// creates _vt schema, the first time the database is created
 	if err := syncVTDatabase(ctx, conn); err != nil {
 		return err
 	}
