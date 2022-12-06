@@ -22,6 +22,8 @@ import (
 	"vitess.io/vitess/go/viperutil/internal/registry"
 )
 
+// Debug provides the Debug functionality normally accessible to a given viper
+// instance, but for a combination of the private static and dynamic registries.
 func Debug() {
 	v := viper.New()
 	_ = v.MergeConfigMap(registry.Static.AllSettings())
