@@ -827,7 +827,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("invalid table name: t1.t2.t3, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"unqualified": {
-				Error: errors.New("table t1 must be qualified"),
+				Error: errors.New("invalid table name: t1, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"badkeyspace": {
 				Error: errors.New("Unknown database 'ks3' in vschema"),
@@ -1929,7 +1929,7 @@ func TestBuildVSchemaReferenceTableSourceMustBeQualified(t *testing.T) {
 	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
 	require.Error(t, vschema.Keyspaces["sharded"].Error)
 	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
-		"invalid source \"src\" for reference table: ref; table src must be qualified")
+		"invalid source \"src\" for reference table: ref; invalid table name: src, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)")
 }
 
 func TestBuildVSchemaReferenceTableSourceMustBeInDifferentKeyspace(t *testing.T) {

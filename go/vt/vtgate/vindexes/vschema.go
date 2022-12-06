@@ -626,9 +626,9 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 				delete(vschema.globalTables, tname)
 				ksvschema.Error = vterrors.Errorf(
 					vtrpcpb.Code_NOT_FOUND,
-					"cannot resolve sequence %s: %v",
+					"cannot resolve sequence %s: %s",
 					table.AutoIncrement.Sequence,
-					err,
+					err.Error(),
 				)
 
 				continue
@@ -682,8 +682,8 @@ func extractQualifiedTableParts(qualifiedTableName string) (string, string, erro
 	case 2:
 		return arr[0], arr[1], nil
 	}
-	return "", "", vterrors.Errorf(
-		vtrpcpb.Code_INVALID_ARGUMENT,
+	// Using fmt.Errorf instead of vterrors here because this error is always wrapped in vterrors.
+	return "", "", fmt.Errorf(
 		"invalid table name: %s, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)",
 		qualifiedTableName,
 	)
@@ -735,7 +735,10 @@ outer:
 			toTable, err = escapeQualifiedTable(toTable)
 			if err != nil {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
-					Error: err,
+					Error: vterrors.Errorf(
+						vtrpcpb.Code_INVALID_ARGUMENT,
+						err.Error(),
+					),
 				}
 				continue outer
 			}
