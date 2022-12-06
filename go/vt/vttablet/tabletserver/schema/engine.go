@@ -204,6 +204,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	ctx := tabletenv.LocalContext()
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
+		log.Infof("inside EnsureConnectionAndDB with TabletType %v...", tabletType)
 		se.dbCreationFailed = false
 		// upgrade _vt if required, for a tablet with an existing database
 		if tabletType == topodatapb.TabletType_PRIMARY {
