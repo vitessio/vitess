@@ -25,6 +25,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -468,6 +470,7 @@ func TestWaitForPosCancel(t *testing.T) {
 }
 
 func TestCreateDBAndTable(t *testing.T) {
+	withddl.EnableWithDDLForTests = true
 	defer func() { globalStats = &vrStats{} }()
 
 	defer deleteTablet(addTablet(100))

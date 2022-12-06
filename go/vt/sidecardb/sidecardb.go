@@ -185,9 +185,7 @@ func (si *VTSchemaInit) findTableSchemaDiff(current, desired string) (string, er
 		log.Infof("current schema %s", current)
 
 	} else {
-		if strings.Contains(tableAlterSQL, "CREATE TABLE") {
-			tableAlterSQL = strings.Replace(tableAlterSQL, "CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
-		}
+		tableAlterSQL = strings.Replace(tableAlterSQL, "CREATE TABLE", "CREATE TABLE IF NOT EXISTS", 1)
 	}
 
 	return tableAlterSQL, nil

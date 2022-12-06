@@ -21,9 +21,12 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"testing"
 	"time"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -11923,4 +11926,8 @@ func TestValidateShard(t *testing.T) {
 			assert.Equal(t, tt.expected, resp)
 		})
 	}
+}
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
 }

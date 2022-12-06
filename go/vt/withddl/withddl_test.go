@@ -280,9 +280,11 @@ func TestMain(m *testing.M) {
 	tabletenvtest.LoadTabletEnvFlags()
 	tabletenv.Init()
 
+	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
 	if sidecardb.InitVTSchemaOnTabletInit {
-		enableWithDDLForTests = true
+		EnableWithDDLForTests = true
 	}
+	sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
 
 	exitCode := func() int {
 		// Launch MySQL.

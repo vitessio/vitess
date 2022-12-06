@@ -135,6 +135,8 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 }
 
 func TestExplain(t *testing.T) {
+	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
+	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
 	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
 	sidecardb.InitVTSchemaOnTabletInit = false
 	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
@@ -177,6 +179,9 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
+	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
+
 	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
 	sidecardb.InitVTSchemaOnTabletInit = false
 	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
@@ -218,6 +223,9 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
+	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
+	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
+
 	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
 	sidecardb.InitVTSchemaOnTabletInit = false
 	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
@@ -310,6 +318,8 @@ func testShardInfo(ks, start, end string, primaryServing bool, t *testing.T) *to
 }
 
 func TestUsingKeyspaceShardMap(t *testing.T) {
+	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
+	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
 	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
 	sidecardb.InitVTSchemaOnTabletInit = false
 	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()

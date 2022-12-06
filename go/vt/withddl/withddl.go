@@ -31,7 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-var enableWithDDLForTests bool
+var EnableWithDDLForTests bool
 
 const QueryToTriggerWithDDL = "SELECT _vt_no_such_column__init_schema FROM _vt.vreplication LIMIT 1"
 
@@ -74,7 +74,9 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any)
 	}
 
 	// if we are using the new schema init logic AND we are not running withddl unit tests
-	if sidecardb.InitVTSchemaOnTabletInit && !enableWithDDLForTests {
+	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
+	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
+	if sidecardb.InitVTSchemaOnTabletInit && !EnableWithDDLForTests {
 		return execQuery(query)
 	}
 

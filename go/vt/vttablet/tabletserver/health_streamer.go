@@ -407,6 +407,8 @@ func (hs *healthStreamer) reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
+	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
 	if sidecardb.InitVTSchemaOnTabletInit { // _vt schema should be the desired one by now
 		return true, nil
 	}

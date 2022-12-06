@@ -27,6 +27,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"github.com/spyzhov/ajson"
 	"github.com/stretchr/testify/require"
 
@@ -141,7 +143,7 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))
-
+	withddl.EnableWithDDLForTests = true
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
