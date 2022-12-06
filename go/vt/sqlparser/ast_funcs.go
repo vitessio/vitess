@@ -54,6 +54,11 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 // returning an error will abort the visitation and return the error
 type Visit func(node SQLNode) (kontinue bool, err error)
 
+// ASTComparison is used to compare AST trees and override the normal comparison logic
+type ASTComparison interface {
+	ColNames(a, b *ColName) bool
+}
+
 // Append appends the SQLNode to the buffer.
 func Append(buf *strings.Builder, node SQLNode) {
 	tbuf := &TrackedBuffer{
@@ -1006,7 +1011,7 @@ func (node *Select) AddHaving(expr Expr) {
 // AddGroupBy adds a grouping expression, unless it's already present
 func (node *Select) AddGroupBy(expr Expr) {
 	for _, gb := range node.GroupBy {
-		if EqualsExpr(gb, expr) {
+		if EqualsExpr(gb, expr, nil) {
 			// group by columns are sets - duplicates don't add anything, so we can just skip these
 			return
 		}
@@ -1895,6 +1900,20 @@ func (columnFormat ColumnFormat) ToString() string {
 	}
 }
 
+// ToString returns the TxAccessMode type as a string
+func (ty TxAccessMode) ToString() string {
+	switch ty {
+	case WithConsistentSnapshot:
+		return WithConsistentSnapshotStr
+	case ReadWrite:
+		return ReadWriteStr
+	case ReadOnly:
+		return ReadOnlyStr
+	default:
+		return "Unknown Transaction Access Mode"
+	}
+}
+
 // CompliantName is used to get the name of the bind variable to use for this column name
 func (node *ColName) CompliantName() string {
 	if !node.Qualifier.IsEmpty() {
@@ -2128,4 +2147,50 @@ func RemoveKeyspace(in SQLNode) SQLNode {
 func convertStringToInt(integer string) int {
 	val, _ := strconv.Atoi(integer)
 	return val
+}
+
+// SplitAndExpression breaks up the Expr into AND-separated conditions
+// and appends them to filters. Outer parenthesis are removed. Precedence
+// should be taken into account if expressions are recombined.
+func SplitAndExpression(filters []Expr, node Expr) []Expr {
+	if node == nil {
+		return filters
+	}
+	switch node := node.(type) {
+	case *AndExpr:
+		filters = SplitAndExpression(filters, node.Left)
+		return SplitAndExpression(filters, node.Right)
+	}
+	return append(filters, node)
+}
+
+// AndExpressions ands together two or more expressions, minimising the expr when possible
+func AndExpressions(exprs ...Expr) Expr {
+	switch len(exprs) {
+	case 0:
+		return nil
+	case 1:
+		return exprs[0]
+	default:
+		result := (Expr)(nil)
+	outer:
+		// we'll loop and remove any duplicates
+		for i, expr := range exprs {
+			if expr == nil {
+				continue
+			}
+			if result == nil {
+				result = expr
+				continue outer
+			}
+
+			for j := 0; j < i; j++ {
+				if EqualsExpr(expr, exprs[j], nil) {
+					continue outer
+				}
+			}
+			result = &AndExpr{Left: result, Right: expr}
+		}
+		return result
+	}
 }

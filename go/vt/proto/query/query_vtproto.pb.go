@@ -377,6 +377,27 @@ func (m *ExecuteOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.TransactionAccessMode) > 0 {
+		var pksize2 int
+		for _, num := range m.TransactionAccessMode {
+			pksize2 += sov(uint64(num))
+		}
+		i -= pksize2
+		j1 := i
+		for _, num1 := range m.TransactionAccessMode {
+			num := uint64(num1)
+			for num >= 1<<7 {
+				dAtA[j1] = uint8(uint64(num)&0x7f | 0x80)
+				num >>= 7
+				j1++
+			}
+			dAtA[j1] = uint8(num)
+			j1++
+		}
+		i = encodeVarint(dAtA, i, uint64(pksize2))
+		i--
+		dAtA[i] = 0x72
+	}
 	if m.Consolidator != 0 {
 		i = encodeVarint(dAtA, i, uint64(m.Consolidator))
 		i--
@@ -4283,6 +4304,13 @@ func (m *ExecuteOptions) SizeVT() (n int) {
 	if m.Consolidator != 0 {
 		n += 1 + sov(uint64(m.Consolidator))
 	}
+	if len(m.TransactionAccessMode) > 0 {
+		l = 0
+		for _, e := range m.TransactionAccessMode {
+			l += sov(uint64(e))
+		}
+		n += 1 + sov(uint64(l)) + l
+	}
 	if m.unknownFields != nil {
 		n += len(m.unknownFields)
 	}
@@ -6862,6 +6890,75 @@ func (m *ExecuteOptions) UnmarshalVT(dAtA []byte) error {
 				if b < 0x80 {
 					break
 				}
+			}
+		case 14:
+			if wireType == 0 {
+				var v ExecuteOptions_TransactionAccessMode
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					v |= ExecuteOptions_TransactionAccessMode(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				m.TransactionAccessMode = append(m.TransactionAccessMode, v)
+			} else if wireType == 2 {
+				var packedLen int
+				for shift := uint(0); ; shift += 7 {
+					if shift >= 64 {
+						return ErrIntOverflow
+					}
+					if iNdEx >= l {
+						return io.ErrUnexpectedEOF
+					}
+					b := dAtA[iNdEx]
+					iNdEx++
+					packedLen |= int(b&0x7F) << shift
+					if b < 0x80 {
+						break
+					}
+				}
+				if packedLen < 0 {
+					return ErrInvalidLength
+				}
+				postIndex := iNdEx + packedLen
+				if postIndex < 0 {
+					return ErrInvalidLength
+				}
+				if postIndex > l {
+					return io.ErrUnexpectedEOF
+				}
+				var elementCount int
+				if elementCount != 0 && len(m.TransactionAccessMode) == 0 {
+					m.TransactionAccessMode = make([]ExecuteOptions_TransactionAccessMode, 0, elementCount)
+				}
+				for iNdEx < postIndex {
+					var v ExecuteOptions_TransactionAccessMode
+					for shift := uint(0); ; shift += 7 {
+						if shift >= 64 {
+							return ErrIntOverflow
+						}
+						if iNdEx >= l {
+							return io.ErrUnexpectedEOF
+						}
+						b := dAtA[iNdEx]
+						iNdEx++
+						v |= ExecuteOptions_TransactionAccessMode(b&0x7F) << shift
+						if b < 0x80 {
+							break
+						}
+					}
+					m.TransactionAccessMode = append(m.TransactionAccessMode, v)
+				}
+			} else {
+				return fmt.Errorf("proto: wrong wireType = %d for field TransactionAccessMode", wireType)
 			}
 		default:
 			iNdEx = preIndex

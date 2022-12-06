@@ -33,7 +33,7 @@ func (c *columnDetails) identicalOtherThanName(other *sqlparser.ColumnDefinition
 	if other == nil {
 		return false
 	}
-	return sqlparser.EqualsColumnType(c.col.Type, other.Type)
+	return sqlparser.EqualsColumnType(c.col.Type, other.Type, nil)
 }
 
 func (c *columnDetails) prevColName() string {
@@ -82,7 +82,7 @@ func NewColumnDefinitionEntity(c *sqlparser.ColumnDefinition) *ColumnDefinitionE
 // It returns an AlterTable statement if changes are found, or nil if not.
 // the other table may be of different name; its name is ignored.
 func (c *ColumnDefinitionEntity) ColumnDiff(other *ColumnDefinitionEntity, _ *DiffHints) *ModifyColumnDiff {
-	if sqlparser.EqualsRefOfColumnDefinition(c.columnDefinition, other.columnDefinition) {
+	if sqlparser.EqualsRefOfColumnDefinition(c.columnDefinition, other.columnDefinition, nil) {
 		return nil
 	}
 

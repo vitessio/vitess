@@ -48,6 +48,7 @@ const (
 	// the three bases for files to restore
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
+	backupBinlogDir             = "BinLog"
 	backupData                  = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
@@ -317,16 +318,23 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, ErrNoBackup
 	}
 
-	bh, err := FindBackupToRestore(ctx, params, bhs)
+	restorePath, err := FindBackupToRestore(ctx, params, bhs)
 	if err != nil {
 		return nil, err
 	}
-
+	if restorePath.IsEmpty() {
+		// This condition should not happen; but we validate for sanity
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
+	}
+	bh := restorePath.FullBackupHandle()
 	re, err := GetRestoreEngine(ctx, bh)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
 	}
-
+	params.Logger.Infof("Restore: %v", restorePath.String())
+	if params.DryRun {
+		return nil, nil
+	}
 	manifest, err := re.ExecuteRestore(ctx, params, bh)
 	if err != nil {
 		return nil, err
@@ -378,10 +386,24 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
+	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
+		params.Logger.Infof("Restore: applying %v incremental backups", len(handles))
+		for _, bh := range handles {
+			manifest, err := re.ExecuteRestore(ctx, params, bh)
+			if err != nil {
+				return nil, err
+			}
+			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
+		}
+		params.Logger.Infof("Restore: done applying incremental backups")
+	}
+
+	params.Logger.Infof("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
 		return nil, err
 	}
 
 	restoreDuration.Set(int64(time.Since(startTs).Seconds()))
+	params.Logger.Infof("Restore: complete")
 	return manifest, nil
 }

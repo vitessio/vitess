@@ -23,6 +23,16 @@ It is possible to enable/disable, to change throttling threshold as well as the 
 
 See https://github.com/vitessio/vitess/pull/11604
 
+### Incremental backup and point in time recovery
+
+In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced native incremental backup and point in time recovery:
+
+- It is possible to take an incremental backup, starting with last known (full or incremental) backup, and up to either a specified (GTID) position, or current ("auto") position.
+- The backup is done by copying binary logs. The binary logs are rotated as needed.
+- It is then possible to restore a backup up to a given point in time (GTID position). This involves finding a restore path consisting of a full backup and zero or more incremental backups, applied up to the given point in time.
+- A server restored to a point in time remains in `DRAINED` tablet type, and does not join the replication stream (thus, "frozen" in time).
+- It is possible to take incremental backups from different tablets. It is OK to have overlaps in incremental backup contents. The restore process chooses a valid path, and is valid as long as there are no gaps in the backed up binary log content.
+
 ### Breaking Changes
 
 #### Orchestrator Integration Deletion
@@ -51,11 +61,14 @@ Other aspects of the VReplication copy-phase logic are preserved:
 
  Other phases, catchup, fast-forward, and replicating/"running", are unchanged.
 
-### vttablet --throttler-config-via-topo
+#### VTTablet: --queryserver-config-pool-conn-max-lifetime
+`--queryserver-config-pool-conn-max-lifetime=[integer]` allows you to set a timeout on each connection in the query server connection pool. It chooses a random value between its value and twice its value, and when a connection has lived longer than the chosen value, it'll be removed from the pool the next time it's returned to the pool.
+
+#### vttablet --throttler-config-via-topo
 
 The flag `--throttler-config-via-topo` switches throttler configuration from `vttablet`-flags to the topo service. This flag is `false` by default, for backwards compatibility. It will default to `true` in future versions.
 
-### vtctldclient UpdateThrottlerConfig
+#### vtctldclient UpdateThrottlerConfig
 
 Tablet throttler configuration is now supported in `topo`. Updating the throttler configuration is done via `vtctldclient UpdateThrottlerConfig` and applies to all tablet in all cells for a given keyspace.
 
@@ -82,6 +95,55 @@ $ vtctldclient UpdateThrottlerConfig --custom_query "" --check_as_check_shard --
 
 See https://github.com/vitessio/vitess/pull/11604
 
+#### vtctldclient Backup --incremental_from_pos
+
+The `Backup` command now supports `--incremental_from_pos` flag, which can receive a valid position or the value `auto`. For example:
+
+```shell
+$ vtctlclient -- Backup --incremental_from_pos "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615" zone1-0000000102
+$ vtctlclient -- Backup --incremental_from_pos "auto" zone1-0000000102
+```
+
+When the value is `auto`, the position is evaluated as the last successful backup's `Position`. The idea with incremental backups is to create a contiguous (overlaps allowed) sequence of backups that store all changes from last full backup.
+
+The incremental backup copies binary log files. It does not take MySQL down nor places any locks. It does not interrupt traffic on the MySQL server. The incremental backup copies comlete binlog files. It initially rotates binary logs, then copies anything from the requested position and up to the last completed binary log.
+
+The backup thus does not necessarily start _exactly_ at the requested position. It starts with the first binary log that has newer entries than requested position. It is OK if the binary logs include transactions prior to the equested position. The restore process will discard any duplicates.
+
+Normally, you can expect the backups to be precisely contiguous. Consider an `auto` value: due to the nature of log rotation and the fact we copy complete binlog files, the next incremental backup will start with the first binay log not covered by the previous backup, which in itself copied the one previous binlog file in full. Again, it is completely valid to enter any good position.
+
+The incremental backup fails if it is unable to attain binary logs from given position (ie binary logs have been purged).
+
+The manifest of an incremental backup has a non-empty `FromPosition` value, and a `Incremental = true` value.
+
+#### vtctldclient RestoreFromBackup  --restore_to_pos
+
+- `--restore_to_pos`: request to restore the server up to the given position (inclusive) and not one step further.
+- `--dry_run`:        when `true`, calculate the restore process, if possible, evaluate a path, but exit without actually making any changes to the server.
+
+Examples:
+
+```
+$ vtctlclient -- RestoreFromBackup  --restore_to_pos  "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220" zone1-0000000102
+```
+
+The restore process seeks a restore _path_: a sequence of backups (handles/manifests) consisting of one full backup followed by zero or more incremental backups, that can bring the server up to the requested position, inclusive.
+
+The command fails if it cannot evaluate a restore path. Possible reasons:
+
+- there's gaps in the incremental backups
+- existing backups don't reach as far as requested position
+- all full backups exceed requested position (so there's no way to get into an ealier position)
+
+The command outputs the restore path.
+
+There may be multiple restore paths, the command prefers a path with the least number of backups. This has nothing to say about the amount and size of binary logs involved.
+
+The `RestoreFromBackup  --restore_to_pos` ends with:
+
+- the restored server in intentionally broken replication setup
+- tablet type is `DRAINED`
+
 ### Important bug fixes
 
 #### Corrupted results for non-full-group-by queries with JOINs
@@ -89,6 +151,42 @@ See https://github.com/vitessio/vitess/pull/11604
 An issue in versions `<= v14.0.3` and `<= v15.0.0` that generated corrupted results for non-full-group-by queries with a JOIN
 is now fixed. The full issue can be found [here](https://github.com/vitessio/vitess/issues/11625), and its fix [here](https://github.com/vitessio/vitess/pull/11633).
 
-### Deprecations
+### Deprecations and Removals
 
 The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
+
+The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
+
+### MySQL Compatibility
+
+#### Transaction Isolation Level
+Support added for `set [session] transaction isolation level <transaction_characteristic>`
+```sql
+transaction_characteristic: {
+    ISOLATION LEVEL level
+  | access_mode
+}
+
+level: {
+     REPEATABLE READ
+   | READ COMMITTED
+   | READ UNCOMMITTED
+   | SERIALIZABLE
+}
+```
+This will set the transaction isolation level for the current session. 
+This will be applied to any shard where the session will open a transaction.
+
+#### Transaction Access Mode
+Support added for `start transaction` with transaction characteristic.
+```sql
+START TRANSACTION
+    [transaction_characteristic [, transaction_characteristic] ...]
+
+transaction_characteristic: {
+    WITH CONSISTENT SNAPSHOT
+  | READ WRITE
+  | READ ONLY
+}
+```
+This will allow users to start a transaction with these characteristics.

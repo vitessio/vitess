@@ -23197,6 +23197,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest allow_primary */
         allow_primary?: (boolean|null);
+
+        /** BackupRequest incremental_from_pos */
+        incremental_from_pos?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -23213,6 +23216,9 @@ export namespace tabletmanagerdata {
 
         /** BackupRequest allow_primary. */
         public allow_primary: boolean;
+
+        /** BackupRequest incremental_from_pos. */
+        public incremental_from_pos: string;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -23380,6 +23386,12 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest backup_time */
         backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest restore_to_pos */
+        restore_to_pos?: (string|null);
+
+        /** RestoreFromBackupRequest dry_run */
+        dry_run?: (boolean|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -23393,6 +23405,12 @@ export namespace tabletmanagerdata {
 
         /** RestoreFromBackupRequest backup_time. */
         public backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest restore_to_pos. */
+        public restore_to_pos: string;
+
+        /** RestoreFromBackupRequest dry_run. */
+        public dry_run: boolean;
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -25108,6 +25126,9 @@ export namespace query {
 
         /** ExecuteOptions consolidator */
         consolidator?: (query.ExecuteOptions.Consolidator|null);
+
+        /** ExecuteOptions transaction_access_mode */
+        transaction_access_mode?: (query.ExecuteOptions.TransactionAccessMode[]|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -25145,6 +25166,9 @@ export namespace query {
 
         /** ExecuteOptions consolidator. */
         public consolidator: query.ExecuteOptions.Consolidator;
+
+        /** ExecuteOptions transaction_access_mode. */
+        public transaction_access_mode: query.ExecuteOptions.TransactionAccessMode[];
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -25262,6 +25286,13 @@ export namespace query {
             CONSOLIDATOR_DISABLED = 1,
             CONSOLIDATOR_ENABLED = 2,
             CONSOLIDATOR_ENABLED_REPLICAS = 3
+        }
+
+        /** TransactionAccessMode enum. */
+        enum TransactionAccessMode {
+            CONSISTENT_SNAPSHOT = 0,
+            READ_WRITE = 1,
+            READ_ONLY = 2
         }
     }
 
@@ -35777,6 +35808,9 @@ export namespace vtctldata {
 
         /** BackupRequest concurrency */
         concurrency?: (number|Long|null);
+
+        /** BackupRequest incremental_from_pos */
+        incremental_from_pos?: (string|null);
     }
 
     /** Represents a BackupRequest. */
@@ -35796,6 +35830,9 @@ export namespace vtctldata {
 
         /** BackupRequest concurrency. */
         public concurrency: (number|Long);
+
+        /** BackupRequest incremental_from_pos. */
+        public incremental_from_pos: string;
 
         /**
          * Creates a new BackupRequest instance using the specified properties.
@@ -45941,6 +45978,12 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest backup_time */
         backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest restore_to_pos */
+        restore_to_pos?: (string|null);
+
+        /** RestoreFromBackupRequest dry_run */
+        dry_run?: (boolean|null);
     }
 
     /** Represents a RestoreFromBackupRequest. */
@@ -45957,6 +46000,12 @@ export namespace vtctldata {
 
         /** RestoreFromBackupRequest backup_time. */
         public backup_time?: (vttime.ITime|null);
+
+        /** RestoreFromBackupRequest restore_to_pos. */
+        public restore_to_pos: string;
+
+        /** RestoreFromBackupRequest dry_run. */
+        public dry_run: boolean;
 
         /**
          * Creates a new RestoreFromBackupRequest instance using the specified properties.
@@ -52353,7 +52402,8 @@ export namespace binlogdata {
         JOURNAL = 16,
         VERSION = 17,
         LASTPK = 18,
-        SAVEPOINT = 19
+        SAVEPOINT = 19,
+        COPY_COMPLETED = 20
     }
 
     /** Properties of a RowChange. */
