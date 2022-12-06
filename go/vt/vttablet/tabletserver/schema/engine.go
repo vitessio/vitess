@@ -183,6 +183,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		log.Infof("error inside EnsureConnectionAndDB %v", err)
 	}
 	if err == nil {
+		log.Infof("inside EnsureConnectionAndDB with TabletType %v...", tabletType)
 		se.dbCreationFailed = false
 		dbaConn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.DbaConnector())
 		if err != nil {

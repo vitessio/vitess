@@ -45,6 +45,12 @@ func CreateReparentJournal() []string {
 ENGINE=InnoDB`, mysql.MaximumPositionSize)}
 }
 
+// Add a dummy call to create _vt database;
+// this is to test current primary position.
+func CreateDummyDatabase() []string {
+	return []string{"CREATE DATABASE IF NOT EXISTS _dummy"}
+}
+
 // AlterReparentJournal returns the commands to execute to change
 // column master_alias -> primary_alias or the other way
 // In 13.0.0 we introduced renaming of primary_alias -> master_alias.
