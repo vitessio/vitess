@@ -23,7 +23,11 @@ import (
 	"strings"
 )
 
-// TODO: docs for all these.
+// StringEnum provides a string-like flag value that raises an error if given a
+// value not in the set of allowed choices.
+//
+// This parse-time validation can be case-sensitive or not, depending on which
+// constructor (NewStringEnum vs NewCaseInsensitiveStringEnum) was used.
 type StringEnum struct {
 	name string
 	val  string
@@ -34,12 +38,22 @@ type StringEnum struct {
 	choiceMapper    func(string) string
 }
 
+// ErrInvalidChoice is returned when parsing a value that is not a valid choice
+// for the StringEnum flag.
 var ErrInvalidChoice = errors.New("invalid choice for enum")
 
+// NewStringEnum returns a new string enum flag with the given name, default,
+// and choices.
+//
+// Parse-time validation is case-sensitive.
 func NewStringEnum(name string, initialValue string, choices []string) *StringEnum {
 	return newStringEnum(name, initialValue, choices, false)
 }
 
+// NewCaseInsensitiveStringEnum returns a new string enum flag with the given
+// name, default, and choices.
+//
+// Parse-time validation is case-insensitive.
 func NewCaseInsensitiveStringEnum(name string, initialValue string, choices []string) *StringEnum {
 	return newStringEnum(name, initialValue, choices, true)
 }
@@ -80,6 +94,7 @@ func newStringEnum(name string, initialValue string, choices []string, caseInsen
 	}
 }
 
+// Set is part of the pflag.Value interface.
 func (s *StringEnum) Set(arg string) error {
 	if _, ok := s.choices[s.choiceMapper(arg)]; !ok {
 		msg := "%w (valid choices: %v"
@@ -95,5 +110,8 @@ func (s *StringEnum) Set(arg string) error {
 	return nil
 }
 
+// String is part of the pflag.Value interface.
 func (s *StringEnum) String() string { return s.val }
-func (s *StringEnum) Type() string   { return "string" }
+
+// Type is part of the pflag.Value interface.
+func (s *StringEnum) Type() string { return "string" }
