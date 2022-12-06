@@ -100,12 +100,11 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 	}
 
 	for input, want := range table {
-		got, err := ParseMysql56GTIDSet(input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-			continue
-		}
-		assert.Equal(t, want, got, "parseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
+		t.Run(input, func(t *testing.T) {
+			got, err := ParseMysql56GTIDSet(input)
+			require.NoError(t, err)
+			assert.Equal(t, want, got)
+		})
 	}
 }
 
