@@ -347,6 +347,7 @@ func TestSchemaChange(t *testing.T) {
 	// ALTER VIEW
 	t.Run("ALTER VIEW where view exists", func(t *testing.T) {
 		// The view exists
+		checkTable(t, viewName, true)
 		uuid := testOnlineDDLStatementForView(t, alterViewStatement, ddlStrategy, "vtgate", "success_alter")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -627,7 +628,7 @@ func TestSchemaChange(t *testing.T) {
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
-	t.Run("postponed revert", func(t *testing.T) {
+	testPostponedRevert := func(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
 		var wg sync.WaitGroup
@@ -642,14 +643,39 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
-		// This part may take a while, because we depend on vreplicatoin polling
+		// This part may take a while, because we depend on vreplication polling
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 		cancel() // will cause runMultipleConnections() to terminate
 		wg.Wait()
+	}
+	t.Run("postponed revert", func(t *testing.T) {
+		testPostponedRevert(t)
 		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
+	})
+
+	t.Run("postponed revert view", func(t *testing.T) {
+		t.Run("CREATE VIEW again", func(t *testing.T) {
+			// The view does not exist
+			uuid := testOnlineDDLStatementForView(t, createViewStatement, ddlStrategy, "vtgate", "success_create")
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, viewName, true)
+			testRevertedUUID(t, uuid, "")
+		})
+		t.Run("ALTER VIEW again", func(t *testing.T) {
+			// The view exists
+			checkTable(t, viewName, true)
+			uuid := testOnlineDDLStatementForView(t, alterViewStatement, ddlStrategy, "vtgate", "success_alter")
+			uuids = append(uuids, uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, viewName, true)
+			testRevertedUUID(t, uuid, "")
+		})
+		testPostponedRevert(t)
+		checkTable(t, viewName, true)
 	})
 
 	// INSTANT DDL
