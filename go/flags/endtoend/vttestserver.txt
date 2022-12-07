@@ -134,7 +134,6 @@ Usage of vttestserver:
       --vtgate_grpc_crl string                                           the server crl to use to validate server certificates when connecting
       --vtgate_grpc_key string                                           the key to use to connect
       --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
-      --workflow_manager_init                                            Enable workflow manager
       --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup_backup_flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup_prepare_flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command

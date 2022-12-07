@@ -84,8 +84,8 @@ services:
       - sh
       - -c
       - ' $$VTROOT/bin/vtctld -topo_implementation consul -topo_global_server_address
-      consul1:8500 -topo_global_root vitess/global -cell test -workflow_manager_init
-      -workflow_manager_use_election -service_map ''grpc-vtctl'' -backup_storage_implementation
+      consul1:8500 -topo_global_root vitess/global -cell test 
+      -service_map ''grpc-vtctl'' -backup_storage_implementation
       file -file_backup_storage_root $$VTDATAROOT/backups -logtostderr=true -port
       8080 -grpc_port 15999 -pid_file $$VTDATAROOT/tmp/vtctld.pid '
     depends_on:

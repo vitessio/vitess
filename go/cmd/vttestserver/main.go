@@ -152,8 +152,6 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
-	fs.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
-
 	fs.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
 	fs.StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")

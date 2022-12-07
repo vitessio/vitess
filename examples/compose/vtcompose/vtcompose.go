@@ -672,8 +672,6 @@ func generateVtctld(opts vtOptions) string {
     command: ["sh", "-c", " /vt/bin/vtctld \
         %[3]s \
         --cell %[4]s \
-        --workflow_manager_init \
-        --workflow_manager_use_election \
         --service_map 'grpc-vtctl,grpc-vtctld' \
         --backup_storage_implementation file \
         --file_backup_storage_root /vt/vtdataroot/backups \
