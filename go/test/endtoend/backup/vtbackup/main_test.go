@@ -22,6 +22,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -89,8 +90,12 @@ func TestMain(m *testing.M) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
+		// Since password update is DML we need to insert it before we disable
+		// super-read-only therefore doing the split below.
+		spilltedString := strings.Split(sql, "# add custom sql here")
+		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+		sql = firstPart + spilltedString[1]
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
 			return 1, err
@@ -126,13 +131,24 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
-
+		vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+		if err != nil {
+			return 1, err
+		}
+		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+		if vtTabletVersion <= 15 {
+			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
+				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+					return 1, err
+				}
+			}
+		}
 		// Create database
-		for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
+		/*for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
 			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
 				return 1, err
 			}
-		}
+		}*/
 
 		return m.Run(), nil
 	}()

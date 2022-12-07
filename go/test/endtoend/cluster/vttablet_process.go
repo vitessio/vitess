@@ -628,3 +628,69 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 
 	return vttablet
 }
+
+// UnsetSuperReadOnly switch-off super-read-only flag in db
+func (vttablet *VttabletProcess) UnsetSuperReadOnly(dbname string) error {
+	conn, err := vttablet.defaultConn("")
+	if err != nil {
+		log.Infof("error in getting connection object %s", err)
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteUnSetSuperReadOnly()
+	return err
+}
+
+// UnsetReadOnly switch-off read-only flag in db
+func (vttablet *VttabletProcess) UnsetReadOnly(dbname string) error {
+	conn, err := vttablet.defaultConn("")
+	if err != nil {
+		log.Infof("error in getting connection object %s", err)
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteUnSetReadOnly()
+	return err
+}
+
+// QueryTabletWithSuperReadOnlyHandling lets you execute a query in this tablet while disabling super-read-only and get the result
+// It will enable super-read-only once its done executing the query.
+func (vttablet *VttabletProcess) QueryTabletWithSuperReadOnlyHandling(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	if !useDb {
+		keyspace = ""
+	}
+	dbParams := NewConnParams(vttablet.DbPort, vttablet.DbPassword, path.Join(vttablet.Directory, "mysql.sock"), keyspace)
+	conn, err := vttablet.conn(&dbParams)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	return executeQueryWithSuperReadOnlyHandling(conn, query)
+}
+
+// executeQuery will retry the query up to 10 times with a small sleep in between each try.
+// This allows the tests to be more robust in the face of transient failures. It disables
+// super-read-only during query execution.
+func executeQueryWithSuperReadOnlyHandling(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
+	var (
+		err    error
+		result *sqltypes.Result
+	)
+	retries := 10
+	retryDelay := 1 * time.Second
+	for i := 0; i < retries; i++ {
+		if i > 0 {
+			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
+			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+		}
+		result, err = dbConn.ExecuteFetchWithReadOnlyHandling(query, 10000, true)
+		if err == nil {
+			break
+		}
+		time.Sleep(retryDelay)
+	}
+
+	return result, err
+}
