@@ -3765,6 +3765,22 @@ func TestSelectHexAndBit(t *testing.T) {
 	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
 }
 
+// TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.
+// This also validates that cache_size is able to calculate the cfc vindex plan size.
+func TestSelectCFC(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	for i := 1; i < 100; i++ {
+		_, err := executor.Execute(context.Background(), "TestSelectCFC", session,
+			"select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, executor.plans.Misses())
+		assert.EqualValues(t, i-1, executor.plans.Hits())
+	}
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())

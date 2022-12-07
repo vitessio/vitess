@@ -324,14 +324,14 @@ func (wr *Wrangler) SwitchReads(ctx context.Context, targetKeyspace, workflowNam
 		wr.Logger().Errorf(errorMsg)
 		return nil, fmt.Errorf(errorMsg)
 	}
-	log.Infof("SwitchReads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
+	log.Infof("Switching reads: %s.%s tt %+v, cells %+v, workflow state: %+v", targetKeyspace, workflowName, servedTypes, cells, ws)
 	var switchReplicas, switchRdonly bool
 	for _, servedType := range servedTypes {
 		if servedType != topodatapb.TabletType_REPLICA && servedType != topodatapb.TabletType_RDONLY {
 			return nil, fmt.Errorf("tablet type must be REPLICA or RDONLY: %v", servedType)
 		}
 		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_REPLICA && len(ws.ReplicaCellsSwitched) == 0 {
-			return nil, fmt.Errorf("requesting reversal of SwitchReads for REPLICAs but REPLICA reads have not been switched")
+			return nil, fmt.Errorf("requesting reversal of read traffic for REPLICAs but REPLICA reads have not been switched")
 		}
 		if direction == workflow.DirectionBackward && servedType == topodatapb.TabletType_RDONLY && len(ws.RdonlyCellsSwitched) == 0 {
 			return nil, fmt.Errorf("requesting reversal of SwitchReads for RDONLYs but RDONLY reads have not been switched")

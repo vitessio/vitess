@@ -867,6 +867,7 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 		Rows: [][]sqltypes.Value{
+			buildVarCharRow("TestExecutor", "cfc", "cfc", "", ""),
 			buildVarCharRow("TestExecutor", "hash_index", "hash", "", ""),
 			buildVarCharRow("TestExecutor", "idx1", "hash", "", ""),
 			buildVarCharRow("TestExecutor", "idx_noauto", "hash", "", "noauto_table"),

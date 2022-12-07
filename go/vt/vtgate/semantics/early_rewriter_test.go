@@ -179,7 +179,7 @@ func TestExpandStar(t *testing.T) {
 					}
 					for _, tbl := range st.ExpandedColumns {
 						for _, col := range tbl {
-							if sqlparser.EqualsExpr(aliasedExpr.Expr, col) {
+							if sqlparser.EqualsExpr(aliasedExpr.Expr, col, nil) {
 								found++
 								continue outer
 							}

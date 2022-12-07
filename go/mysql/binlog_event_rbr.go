@@ -71,21 +71,25 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	result.Name = string(data[pos+1 : pos+1+l])
 	pos += 1 + l + 1
 
-	// FIXME(alainjobart) this is varlength encoded.
-	columnCount := int(data[pos])
-	pos++
+	columnCount, read, ok := readLenEncInt(data, pos)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected column count at position %v (data=%v)", pos, data)
+	}
+	pos = read
 
-	result.Types = data[pos : pos+columnCount]
-	pos += columnCount
+	result.Types = data[pos : pos+int(columnCount)]
+	pos += int(columnCount)
 
-	// FIXME(alainjobart) this is a var-len-string.
-	l = int(data[pos])
-	pos++
+	metaLen, read, ok := readLenEncInt(data, pos)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected metadata length at position %v (data=%v)", pos, data)
+	}
+	pos = read
 
 	// Allocate and parse / copy Metadata.
 	result.Metadata = make([]uint16, columnCount)
-	expectedEnd := pos + l
-	for c := 0; c < columnCount; c++ {
+	expectedEnd := pos + int(metaLen)
+	for c := uint64(0); c < columnCount; c++ {
 		var err error
 		result.Metadata[c], pos, err = metadataRead(data, pos, result.Types[c])
 		if err != nil {
@@ -97,7 +101,7 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	}
 
 	// A bit array that says if each column can be NULL.
-	result.CanBeNull, _ = newBitmap(data, pos, columnCount)
+	result.CanBeNull, _ = newBitmap(data, pos, int(columnCount))
 
 	return result, nil
 }
@@ -997,22 +1001,24 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		pos += int(extraDataLength)
 	}
 
-	// FIXME(alainjobart) this is var len encoded.
-	columnCount := int(data[pos])
-	pos++
+	columnCount, read, ok := readLenEncInt(data, pos)
+	if !ok {
+		return result, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected column count at position %v (data=%v)", pos, data)
+	}
+	pos = read
 
 	numIdentifyColumns := 0
 	numDataColumns := 0
 
 	if hasIdentify {
 		// Bitmap of the columns used for identify.
-		result.IdentifyColumns, pos = newBitmap(data, pos, columnCount)
+		result.IdentifyColumns, pos = newBitmap(data, pos, int(columnCount))
 		numIdentifyColumns = result.IdentifyColumns.BitCount()
 	}
 
 	if hasData {
 		// Bitmap of columns that are present.
-		result.DataColumns, pos = newBitmap(data, pos, columnCount)
+		result.DataColumns, pos = newBitmap(data, pos, int(columnCount))
 		numDataColumns = result.DataColumns.BitCount()
 	}
 
@@ -1027,7 +1033,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			// Get the identify values.
 			startPos := pos
 			valueIndex := 0
-			for c := 0; c < columnCount; c++ {
+			for c := 0; c < int(columnCount); c++ {
 				if !result.IdentifyColumns.Bit(c) {
 					// This column is not represented.
 					continue
@@ -1057,7 +1063,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			// Get the values.
 			startPos := pos
 			valueIndex := 0
-			for c := 0; c < columnCount; c++ {
+			for c := 0; c < int(columnCount); c++ {
 				if !result.DataColumns.Bit(c) {
 					// This column is not represented.
 					continue
