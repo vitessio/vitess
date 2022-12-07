@@ -74,4 +74,5 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /test/ @GuptaManan100 @frouioui @rohit-nayak-ps @deepthi @mattlord @harshit-gangal
 /tools/ @frouioui @rohit-nayak-ps
 /web/vtadmin @ajm188 @notfelineit
+/web/vtadmin/src/proto @deepthi @harshit-gangal @mattlord
 /web/vtctld2 @notfelineit @rohit-nayak-ps

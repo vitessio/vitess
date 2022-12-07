@@ -96,7 +96,7 @@ create table customer(cid int, name varbinary(128), meta json default null, typ 
 		}
 	}
 
-	moveTables(t, defaultCell.Name, "stress_workflow", sourceKs, targetKs, "largebin")
+	moveTablesAction(t, "Create", defaultCell.Name, "stress_workflow", sourceKs, targetKs, "largebin")
 
 	keyspaceTgt := defaultCell.Keyspaces[targetKs]
 	for _, shard := range keyspaceTgt.Shards {

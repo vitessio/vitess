@@ -7,12 +7,15 @@ concurrency:
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
-  GITHUB_PR_HEAD_SHA: "${{`{{ github.event.pull_request.head.sha }}`}}"
+  EXPERIMENTAL_GITHUB_OIDC_TOKEN_AUTH: 1
 
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
     runs-on: ubuntu-20.04
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     - name: Skip CI
@@ -30,7 +33,7 @@ jobs:
           skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -55,6 +58,9 @@ jobs:
             - 'config/**'
             - 'bootstrap.sh'
             - '.github/workflows/{{.FileName}}'
+            {{- if or (contains .Name "onlineddl") (contains .Name "schemadiff") }}
+            - 'go/test/endtoend/onlineddl/vrepl_suite/testdata'
+            {{- end}}
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
