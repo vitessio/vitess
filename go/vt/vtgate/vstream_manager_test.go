@@ -285,7 +285,7 @@ func TestVStreamManagerGetCells(t *testing.T) {
 	tcases := []*testArgs{
 		{"default-local", "", false, []string{"aa"}},
 		{"default-local-cell-alias", "", true, []string{"local:aa", "region1"}},
-		{"with-opt-cells", "local,bb,cc", true, []string{"local:aa", "bb", "cc"}},
+		{"with-opt-cells", "local:,bb,cc", true, []string{"local:aa", "bb", "cc"}},
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())

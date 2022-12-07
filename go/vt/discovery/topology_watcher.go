@@ -161,7 +161,7 @@ func (tw *TopologyWatcher) loadTablets() {
 			return
 		default:
 		}
-		log.Errorf("cannot get tablets for cell: %v: %v", tw.cell, err)
+		log.Errorf("cannot get tablets for cell:%v: %v", tw.cell, err)
 		return
 	}
 

@@ -412,18 +412,16 @@ func (vs *vstream) alignStreams(ctx context.Context, event *binlogdatapb.VEvent,
 }
 
 // getCells determines the availability zones to select tablets from.
-// 3 scenarios:
+// 2 scenarios:
 //
-// 1. No cells specified by the client via the gRPC request and vstreamCellAliasFallback = False
-// Tablets from the local cell of the VTGate will be selected by default
+// 1. No cells specified by the client via the gRPC request.
+// Tablets from the local cell of the VTGate AND the cell alias that this cell belongs to will be selected by default
+// Local cell will take precedence.
 //
-// 2. No cells specified by the client via the gRPC request and vstreamCellAliasFallback = True
-// Tablets from the local cell AND the cell alias that the VTGate's local cell belongs to qill be selected/
-// The local cell of the VTGate will take precendence over any other cell in the alias.
-//
-// 3. Cells are specified by the client via the gRPC request
-// These cell will take precendence over vstreamCellAliasFallback and only tablets belonging to the specified cells will be selected.
-// If the "local" tag is passed in as an option in the list of optCells,
+// 2. Cells are specified by the client via the gRPC request
+// These cels will take precendence over the default local cell and its alias
+// and only tablets belonging to the specified cells will be selected.
+// If the "local:" tag is passed in as an option in the list of optCells,
 // the local cell of the VTGate will take precedence over any other cell specified.
 func (vs *vstream) getCells(ctx context.Context) []string {
 	var cells []string
@@ -431,7 +429,7 @@ func (vs *vstream) getCells(ctx context.Context) []string {
 		for i, cell := range strings.Split(strings.TrimSpace(vs.optCells), ",") {
 			// if the local tag is passed in, we must give local cell priority
 			// during tablet selection. Append the VTGate's local cell to the list of cells
-			if i == 0 && cell == "local" {
+			if i == 0 && cell == "local:" {
 				cells = append(cells, fmt.Sprintf("local:%s", vs.vsm.cell))
 				continue
 			}
