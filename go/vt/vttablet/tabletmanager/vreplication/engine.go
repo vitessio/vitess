@@ -153,8 +153,8 @@ type journalEvent struct {
 
 type PostCopyActionType int
 type PostCopyAction struct {
-	Type   PostCopyActionType `json:"type"`
-	Action string             `json:"action"`
+	Type PostCopyActionType `json:"type"`
+	Task string             `json:"task"`
 }
 
 // NewEngine creates a new Engine.

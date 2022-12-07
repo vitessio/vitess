@@ -617,8 +617,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			)
 		}
 		action, err := json.Marshal(PostCopyAction{
-			Type:   PostCopyActionSQL,
-			Action: sqlparser.String(alterReAdd),
+			Type: PostCopyActionSQL,
+			Task: sqlparser.String(alterReAdd),
 		})
 		if err != nil {
 			return err
@@ -702,8 +702,8 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 
 		switch action.Type {
 		case PostCopyActionSQL:
-			log.Infof("Executing VReplication MoveTables post copy SQL action for table %q: %s", tableName, action.Action)
-			if _, err := dbClient.ExecuteFetch(action.Action, -1); err != nil {
+			log.Infof("Executing VReplication MoveTables post copy SQL action for table %q: %s", tableName, action.Task)
+			if _, err := dbClient.ExecuteFetch(action.Task, -1); err != nil {
 				return err
 			}
 		default:
