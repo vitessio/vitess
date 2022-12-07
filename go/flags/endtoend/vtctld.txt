@@ -150,3 +150,4 @@ Usage of vtctld:
       --vtctl_healthcheck_timeout duration                               the health check timeout period (default 1m0s)
       --vtctl_healthcheck_topology_refresh duration                      refresh interval for re-reading the topology (default 30s)
       --vtctld_sanitize_log_messages                                     When true, vtctld sanitizes logging.
+      --vtctld_show_topology_crud                                        Controls the display of the CRUD topology actions in the vtctld UI. (default true)

@@ -40,9 +40,9 @@ In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` dire
 
 However, the vtctld HTTP API will remain at `{$vtctld_web_port}/api`.
 
-#### vtctld Flag Deletions
-With the removal of the vtctld UI, the following vtctld flags have been removed:
-- `--vtctld_show_topology_crud`: This was a flag that controlled the display of CRUD topology actions in the vtctld UI. The UI is removed, so thi flag is no longer necessary.
+#### vtctld Flag Deprecation & Deletions
+With the removal of the vtctld UI, the following vtctld flags have been deprecated:
+- `--vtctld_show_topology_crud`: This was a flag that controlled the display of CRUD topology actions in the vtctld UI. The UI is removed, so this flag is no longer necessary.
 
 The following deprecated flags have also been removed:
 - `--enable_realtime_stats`
