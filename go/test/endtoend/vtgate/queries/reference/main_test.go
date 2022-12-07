@@ -20,27 +20,22 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"testing"
+	"time"
 
 	"vitess.io/vitess/go/mysql"
 
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/test/endtoend/utils"
 )
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
 	cell            = "zone1"
 	hostname        = "localhost"
-	mysqlParams     mysql.ConnParams
 	vtParams        mysql.ConnParams
 
 	unshardedKeyspaceName = "uks"
@@ -63,9 +58,6 @@ var (
 			PRIMARY KEY(id)
 		) ENGINE=InnoDB;
 
-		INSERT INTO zip_detail(id, zip_id, discontinued_at)
-		VALUES (1, 1, '2022-05-13'),
-			   (2, 2, '2022-08-15');
 	`
 	unshardedVSchema = `
 		{
@@ -78,13 +70,6 @@ var (
 	`
 	shardedKeyspaceName = "sks"
 	shardedSQLSchema    = `
-		CREATE TABLE IF NOT EXISTS zip_detail(
-			id BIGINT NOT NULL AUTO_INCREMENT,
-			zip_id BIGINT NOT NULL,
-			discontinued_at DATE,
-			PRIMARY KEY(id)
-		) ENGINE=InnoDB;
-
 		CREATE TABLE IF NOT EXISTS delivery_failure (
 			id BIGINT NOT NULL,
 			zip_detail_id BIGINT NOT NULL,
@@ -155,37 +140,95 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		if err := clusterInstance.WaitForTabletsToHealthyInVtgate(); err != nil {
+			return 1
+		}
+
 		vtParams = mysql.ConnParams{
 			Host: "localhost",
 			Port: clusterInstance.VtgateMySQLPort,
 		}
 
-		conn, closer, err := utils.NewMySQL(clusterInstance, "mks", unshardedSQLSchema+shardedSQLSchema)
-		if err != nil {
-			return 1
-		}
-		defer closer()
-		mysqlParams = conn
+		// TODO(maxeng) remove when we have a proper way to check
+		// materialization lag and cutover.
+		done := make(chan bool, 1)
+		expectRows := 2
+		go func() {
+			ctx := context.Background()
+			vtgateAddr := fmt.Sprintf("%s:%d", clusterInstance.Hostname, clusterInstance.VtgateProcess.GrpcPort)
+			vtgateConn, err := vtgateconn.Dial(ctx, vtgateAddr)
+			if err != nil {
+				done <- false
+				return
+			}
+			defer vtgateConn.Close()
+
+			maxWait := time.After(300 * time.Second)
+			for _, ks := range clusterInstance.Keyspaces {
+				if ks.Name != shardedKeyspaceName {
+					continue
+				}
+				for _, s := range ks.Shards {
+					var ok bool
+					for !ok {
+						select {
+						case <-maxWait:
+							fmt.Println("Waited too long for materialization, cancelling.")
+							done <- false
+							return
+						default:
+						}
+						shard := fmt.Sprintf("%s/%s@primary", ks.Name, s.Name)
+						session := vtgateConn.Session(shard, nil)
+						_, err := session.Execute(ctx, "SHOW CREATE TABLE zip_detail", map[string]*querypb.BindVariable{})
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Failed to SHOW CREATE TABLE zip_detail; might not exist yet: %v\n", err)
+							time.Sleep(1 * time.Second)
+							continue
+						}
+						qr, err := session.Execute(ctx, "SELECT * FROM zip_detail", map[string]*querypb.BindVariable{})
+						if err != nil {
+							fmt.Fprintf(os.Stderr, "Failed to query sharded keyspace for zip_detail rows: %v\n", err)
+							done <- false
+							return
+						}
+						if len(qr.Rows) != expectRows {
+							fmt.Fprintf(os.Stderr, "Shard %s doesn't yet have expected number of zip_detail rows\n", shard)
+							time.Sleep(10 * time.Second)
+							continue
+						}
+						fmt.Fprintf(os.Stdout, "Shard %s has expected number of zip_detail rows.\n", shard)
+						ok = true
+					}
+				}
+				fmt.Println("All shards have expected number of zip_detail rows.")
+				done <- true
+			}
+		}()
 
 		// Materialize zip_detail to sharded keyspace.
-		if err := clusterInstance.VtctlProcess.ExecuteCommand(
+		output, err := clusterInstance.VtctlProcess.ExecuteCommandWithOutput(
 			"Materialize",
 			"--",
 			"--tablet_types",
 			"PRIMARY",
 			`{
-				"workflow": "materialize_zip_detail",
+				"workflow": "copy_zip_detail",
 				"source_keyspace": "`+unshardedKeyspaceName+`",
 				"target_keyspace": "`+shardedKeyspaceName+`",
+				"tablet_types": "PRIMARY",
 				"table_settings": [
 					{
 						"target_table": "zip_detail",
-						"source_expression": "select * from zip_detail"
+						"source_expression": "select * from zip_detail",
+						"create_ddl": "copy"
 					}
-				],
-				"stop_after_copy": true
+				]
 			}`,
-		); err != nil {
+		)
+		fmt.Fprintf(os.Stderr, "Output from materialize: %s\n", output)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Got error trying to start materialize zip_detail: %v\n", err)
 			return 1
 		}
 
@@ -195,9 +238,19 @@ func TestMain(m *testing.M) {
 		if err != nil {
 			return 1
 		}
+		defer vtgateConn.Close()
+
+		session := vtgateConn.Session("@primary", nil)
+		// INSERT some zip_detail rows.
+		if _, err := session.Execute(ctx, `
+			INSERT INTO zip_detail(id, zip_id, discontinued_at)
+			VALUES (1, 1, '2022-05-13'),
+				   (2, 2, '2022-08-15')
+		`, map[string]*querypb.BindVariable{}); err != nil {
+			return 1
+		}
 
 		// INSERT some delivery_failure rows.
-		session := vtgateConn.Session("@primary", nil)
 		if _, err := session.Execute(ctx, `
 			INSERT INTO delivery_failure(id, zip_detail_id, reason)
 			VALUES (1, 1, 'Failed delivery due to discontinued zipcode.'),
@@ -207,83 +260,41 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// TODO(maxeng) remove when we have a proper way to check
-		// materialization lag and cutover.
-		ctx, cancel := context.WithCancel(ctx)
-		defer cancel()
-		reader, err := vtgateConn.VStream(
-			ctx,
-			topodatapb.TabletType_PRIMARY,
-			&binlogdatapb.VGtid{
-				ShardGtids: []*binlogdatapb.ShardGtid{
-					{
-						Keyspace: shardedKeyspaceName,
-						Shard:    "-80",
-						Gtid:     "",
-					},
-					{
-						Keyspace: shardedKeyspaceName,
-						Shard:    "80-",
-						Gtid:     "",
-					},
-				},
-			},
-			&binlogdatapb.Filter{
-				Rules: []*binlogdatapb.Rule{
-					{
-						Match:  "zip_detail",
-						Filter: "select * from zip_detail",
-					},
-				},
-			},
-			&vtgatepb.VStreamFlags{},
-		)
-		if err != nil {
-			return 1
-		}
-		expectRowChanges := 4
-		for {
-			evs, err := reader.Recv()
-			switch err {
-			case nil:
-				for _, ev := range evs {
-					if ev.Type != binlogdatapb.VEventType_ROW {
-						continue
-					}
-					expectRowChanges = expectRowChanges - len(ev.RowEvent.RowChanges)
-					if expectRowChanges <= 0 {
-						goto MATERIALIZED
-					}
-				}
-			case io.EOF:
-				cancel()
+		select {
+		case ok := <-done:
+			if !ok {
+				fmt.Fprintf(os.Stderr, "Materialize did not succeed.\n")
+				return 1
 			}
 		}
-	MATERIALIZED:
-		vtgateConn.Close()
 
 		deleted := false
 		for !deleted {
-			// Stop materialize zip_detail to sharded keyspace.
-			if err := clusterInstance.VtctlProcess.ExecuteCommand(
-				"Workflow",
-				"--",
-				shardedKeyspaceName+".copy_zip_detail",
-				"delete",
-			); err != nil {
-				return 1
-			}
-
 			// Verify workflow is deleted.
-			err := clusterInstance.VtctlProcess.ExecuteCommand(
+			output, err = clusterInstance.VtctlProcess.ExecuteCommandWithOutput(
 				"Workflow",
 				"--",
 				shardedKeyspaceName+".copy_zip_detail",
 				"show",
 			)
+			fmt.Fprintf(os.Stderr, "Tried to show copy_zip_detail workflow: %v\n", output)
 			if err != nil {
 				deleted = true
 			}
+
+			// Stop materialize zip_detail to sharded keyspace.
+			output, err := clusterInstance.VtctlProcess.ExecuteCommandWithOutput(
+				"Workflow",
+				"--",
+				shardedKeyspaceName+".copy_zip_detail",
+				"delete",
+			)
+			fmt.Fprintf(os.Stderr, "Tried to delete copy_zip_detail workflow: %v\n", output)
+			if err != nil {
+				return 1
+			}
+
+			deleted = true
 		}
 
 		return m.Run()

@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -43,8 +44,9 @@ type VindexFunc struct {
 	// Cols contains source column numbers: 0 for id, 1 for keyspace_id.
 	Cols []int
 	// TODO(sougou): add support for MultiColumn.
-	Vindex vindexes.SingleColumn
-	Value  evalengine.Expr
+	Vindex    vindexes.SingleColumn
+	Value     evalengine.Expr
+	TableName sqlparser.TableName
 
 	// VindexFunc does not take inputs
 	noInputs
@@ -86,6 +88,11 @@ func (vf *VindexFunc) GetKeyspaceName() string {
 // GetTableName specifies the table that this primitive routes to.
 func (vf *VindexFunc) GetTableName() string {
 	return ""
+}
+
+// GetTablesUsed specifies the table that this primitive routes to.
+func (vf *VindexFunc) GetTablesUsed() []string {
+	return []string{vf.TableName.Name.String()}
 }
 
 // TryExecute performs a non-streaming exec.

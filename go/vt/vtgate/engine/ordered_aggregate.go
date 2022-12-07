@@ -221,6 +221,15 @@ func (oa *OrderedAggregate) GetTableName() string {
 	return oa.Input.GetTableName()
 }
 
+// GetTablesUsed specifies the table that this primitive routes to.
+func (oa *OrderedAggregate) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, input := range oa.Inputs() {
+		add(input.GetTablesUsed())
+	}
+	return collect()
+}
+
 // SetTruncateColumnCount sets the truncate column count.
 func (oa *OrderedAggregate) SetTruncateColumnCount(count int) {
 	oa.TruncateColumnCount = count

@@ -471,6 +471,7 @@ func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute
 		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
 		Source:              join,
+		MergedWith:          []*Route{bRoute},
 	}
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {

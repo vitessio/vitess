@@ -92,22 +92,22 @@ func gen4SelectStmtPlanner(
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
-	plan, st, err := getPlan(stmt)
+	plan, _, err := getPlan(stmt)
 	if err != nil {
 		return nil, err
 	}
 
 	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
-		primitive, st := gen4PredicateRewrite(stmt, getPlan)
-		if primitive != nil {
-			return newPlanResult(primitive, tablesFromSemantics(st)...), nil
+		plan2, _ := gen4PredicateRewrite(stmt, getPlan)
+		if plan2 != nil {
+			return newPlanResult(plan2.Primitive(), plan2.Primitive().GetTablesUsed()...), nil
 		}
 	}
 
 	primitive := plan.Primitive()
 	if !isSel {
-		return newPlanResult(primitive, tablesFromSemantics(st)...), nil
+		return newPlanResult(primitive, primitive.GetTablesUsed()...), nil
 	}
 
 	// this is done because engine.Route doesn't handle the empty result well
@@ -122,7 +122,7 @@ func gen4SelectStmtPlanner(
 			prim.SendTo.NoRoutesSpecialHandling = true
 		}
 	}
-	return newPlanResult(primitive, tablesFromSemantics(st)...), nil
+	return newPlanResult(primitive, primitive.GetTablesUsed()...), nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
@@ -141,7 +141,7 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	if err != nil {
 		return nil, err
 	}
-	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
+	return newPlanResult(plan.Primitive(), plan.Primitive().GetTablesUsed()...), nil
 }
 
 func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
@@ -152,7 +152,7 @@ func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VS
 	return nil, plan, nil
 }
 
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (engine.Primitive, *semantics.SemTable) {
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (logicalPlan, *semantics.SemTable) {
 	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
@@ -161,7 +161,7 @@ func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sq
 	plan2, st, err := getPlan(rewritten)
 	if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
 		// we only use this new plan if it's better than the old one we got
-		return plan2.Primitive(), st
+		return plan2, st
 	}
 	return nil, nil
 }
@@ -293,7 +293,7 @@ func gen4UpdateStmtPlanner(
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		upd := &engine.Update{DML: edml}
-		return newPlanResult(upd, tablesFromSemantics(semTable)...), nil
+		return newPlanResult(upd, upd.GetTablesUsed()...), nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -328,7 +328,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
+	return newPlanResult(plan.Primitive(), plan.Primitive().GetTablesUsed()...), nil
 }
 
 func gen4DeleteStmtPlanner(
@@ -372,7 +372,7 @@ func gen4DeleteStmtPlanner(
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(deleteStmt)
 		del := &engine.Delete{DML: edml}
-		return newPlanResult(del, tablesFromSemantics(semTable)...), nil
+		return newPlanResult(del, del.GetTablesUsed()...), nil
 	}
 
 	if err := checkIfDeleteSupported(deleteStmt, semTable); err != nil {
@@ -406,7 +406,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
+	return newPlanResult(plan.Primitive(), plan.Primitive().GetTablesUsed()...), nil
 }
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) (err error) {

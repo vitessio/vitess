@@ -53,6 +53,15 @@ func (f *Filter) GetTableName() string {
 	return f.Input.GetTableName()
 }
 
+// GetTablesUsed specifies the table that this primitive routes to.
+func (f *Filter) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, source := range f.Inputs() {
+		add(source.GetTablesUsed())
+	}
+	return collect()
+}
+
 // TryExecute satisfies the Primitive interface.
 func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	result, err := vcursor.ExecutePrimitive(ctx, f.Input, bindVars, wantfields)

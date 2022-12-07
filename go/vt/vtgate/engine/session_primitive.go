@@ -60,6 +60,11 @@ func (s *SessionPrimitive) GetTableName() string {
 	return ""
 }
 
+// GetTablesused implements the Primitive interface
+func (s *SessionPrimitive) GetTablesUsed() []string {
+	return []string{}
+}
+
 // TryExecute implements the Primitive interface
 func (s *SessionPrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return s.action(vcursor.Session())

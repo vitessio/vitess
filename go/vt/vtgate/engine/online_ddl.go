@@ -71,6 +71,11 @@ func (v *OnlineDDL) GetTableName() string {
 	return v.DDL.GetTable().Name.String()
 }
 
+// GetTablesUsed implements the Primitive interface
+func (v *OnlineDDL) GetTablesUsed() []string {
+	return singleQualifiedTableName(v.Keyspace, v.DDL.GetTable())
+}
+
 // TryExecute implements the Primitive interface
 func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{

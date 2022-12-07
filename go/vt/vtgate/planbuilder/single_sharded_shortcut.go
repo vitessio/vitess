@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"sort"
-	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -52,7 +51,7 @@ func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectSt
 				Opcode:   engine.Unsharded,
 				Keyspace: ks,
 			},
-			TableName: strings.Join(tableNames, ", "),
+			TableNames: tableNames,
 		},
 		Select: stmt,
 	}
@@ -63,8 +62,8 @@ func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectSt
 	return plan, nil
 }
 
-func getTableNames(semTable *semantics.SemTable) ([]string, error) {
-	tableNameMap := map[string]any{}
+func getTableNames(semTable *semantics.SemTable) ([]sqlparser.TableName, error) {
+	tableNameMap := make(map[string]sqlparser.TableName)
 
 	for _, tableInfo := range semTable.Tables {
 		tblObj := tableInfo.GetVindexTable()
@@ -72,19 +71,24 @@ func getTableNames(semTable *semantics.SemTable) ([]string, error) {
 			// probably a derived table
 			continue
 		}
-		var name string
 		if tableInfo.IsInfSchema() {
-			name = "tableName"
+			tableNameMap["tableName"] = sqlparser.TableName{
+				Name: sqlparser.NewIdentifierCS("tableName"),
+			}
 		} else {
-			name = sqlparser.String(tblObj.Name)
+			tableNameMap[sqlparser.String(tblObj.Name)] = sqlparser.TableName{
+				Name: tblObj.Name,
+			}
 		}
-		tableNameMap[name] = nil
 	}
-
-	var tableNames []string
-	for name := range tableNameMap {
-		tableNames = append(tableNames, name)
+	var keys []string
+	for k := range tableNameMap {
+		keys = append(keys, k)
 	}
-	sort.Strings(tableNames)
+	sort.Strings(keys)
+	var tableNames []sqlparser.TableName
+	for _, k := range keys {
+		tableNames = append(tableNames, tableNameMap[k])
+	}
 	return tableNames, nil
 }

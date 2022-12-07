@@ -62,6 +62,15 @@ func (ps *PulloutSubquery) GetTableName() string {
 	return ps.Underlying.GetTableName()
 }
 
+// GetTablesUsed specifies the table that this primitive routes to.
+func (ps *PulloutSubquery) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, input := range ps.Inputs() {
+		add(input.GetTablesUsed())
+	}
+	return collect()
+}
+
 // TryExecute satisfies the Primitive interface.
 func (ps *PulloutSubquery) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	combinedVars, err := ps.execSubquery(ctx, vcursor, bindVars)

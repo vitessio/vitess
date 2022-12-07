@@ -55,6 +55,11 @@ func (gc *Gen4CompareV3) GetTableName() string {
 	return gc.Gen4.GetTableName()
 }
 
+// GetTablesUsed implements the Primitive interface
+func (gc *Gen4CompareV3) GetTablesUsed() []string {
+	return gc.Gen4.GetTablesUsed()
+}
+
 // GetFields implements the Primitive interface
 func (gc *Gen4CompareV3) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return gc.Gen4.GetFields(ctx, vcursor, bindVars)

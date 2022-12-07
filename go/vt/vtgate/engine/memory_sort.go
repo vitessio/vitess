@@ -60,6 +60,15 @@ func (ms *MemorySort) GetTableName() string {
 	return ms.Input.GetTableName()
 }
 
+// GetTablesUsed specifies the table that this primitive routes to.
+func (ms *MemorySort) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, input := range ms.Inputs() {
+		add(input.GetTablesUsed())
+	}
+	return collect()
+}
+
 // SetTruncateColumnCount sets the truncate column count.
 func (ms *MemorySort) SetTruncateColumnCount(count int) {
 	ms.TruncateColumnCount = count

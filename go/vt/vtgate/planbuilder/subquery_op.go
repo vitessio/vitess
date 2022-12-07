@@ -76,13 +76,13 @@ func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalP
 		// Instead of looking for it in the AST, we have a copy in the subquery tree that we can update
 		n.Extracted.NeedsRewrite = true
 		replaceSubQuery(ctx, oroute.Select)
-		return mergeSystemTableInformation(oroute, iroute)
+		return mergeRoutes(oroute, iroute)
 	}
 	return nil
 }
 
-// mergeSystemTableInformation copies over information from the second route to the first and appends to it
-func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
+// mergeRoutes copies over information from the second route to the first and appends to it
+func mergeRoutes(a *routeGen4, b *routeGen4) logicalPlan {
 	// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
 	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
@@ -90,6 +90,9 @@ func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
 	for k, v := range b.eroute.SysTableTableName {
 		a.eroute.SysTableTableName[k] = v
 	}
+
+	a.eroute.MergedWith = append(a.eroute.MergedWith, b.eroute)
+
 	return a
 }
 

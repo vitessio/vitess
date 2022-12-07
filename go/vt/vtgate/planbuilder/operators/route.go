@@ -59,6 +59,9 @@ type (
 		// Alternates contains alternate routes to equivalent sources in
 		// other keyspaces.
 		Alternates map[*vindexes.Keyspace]*Route
+
+		// Routes that have been merged into this one.
+		MergedWith []*Route
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query

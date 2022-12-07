@@ -124,6 +124,15 @@ func (jn *SemiJoin) GetTableName() string {
 	return jn.Left.GetTableName() + "_" + jn.Right.GetTableName()
 }
 
+// GetTablesUsed specifies the table that this primitive routes to.
+func (jn *SemiJoin) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, input := range jn.Inputs() {
+		add(input.GetTablesUsed())
+	}
+	return collect()
+}
+
 // NeedsTransaction implements the Primitive interface
 func (jn *SemiJoin) NeedsTransaction() bool {
 	return jn.Right.NeedsTransaction() || jn.Left.NeedsTransaction()

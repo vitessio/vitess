@@ -19,6 +19,7 @@ package engine
 import (
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/test/utils"
@@ -39,7 +40,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]any{
 			"Query":      route.Query,
-			"Table":      route.TableName,
+			"Table":      route.GetTableName(),
 			"FieldQuery": route.FieldQuery,
 			"Vindex":     route.Vindex.String(),
 		},
@@ -58,8 +59,10 @@ func createRoute() *Route {
 			TargetDestination: key.DestinationAllShards{},
 			Vindex:            hash.(*vindexes.Hash),
 		},
-		Query:      "select all the things",
-		TableName:  "tableName",
+		Query: "select all the things",
+		TableNames: []sqlparser.TableName{{
+			Name: sqlparser.NewIdentifierCS("tableName"),
+		}},
 		FieldQuery: "more query",
 	}
 }
@@ -97,7 +100,7 @@ func getDescriptionFor(route *Route) PrimitiveDescription {
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]any{
 			"Query":      route.Query,
-			"Table":      route.TableName,
+			"Table":      route.GetTableName(),
 			"FieldQuery": route.FieldQuery,
 			"Vindex":     route.Vindex.String(),
 		},

@@ -88,7 +88,7 @@
       "Original": "select user.col from user join ambiguous_ref_with_source",
       "QueryType": "SELECT",
       "TablesUsed": [
-        "main.ambiguous_ref_with_source",
+        "user.ambiguous_ref_with_source",
         "user.user"
       ]
     }
@@ -182,7 +182,7 @@
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join user",
       "QueryType": "SELECT",
       "TablesUsed": [
-        "main.ambiguous_ref_with_source",
+        "user.ambiguous_ref_with_source",
         "user.user"
       ]
     }
@@ -247,7 +247,7 @@
       "Original": "select ambiguous_ref_with_source.col from ambiguous_ref_with_source join (select aa from user where user.id=1) user",
       "QueryType": "SELECT",
       "TablesUsed": [
-        "main.ambiguous_ref_with_source",
+        "user.ambiguous_ref_with_source",
         "user.user"
       ]
     }
@@ -304,7 +304,7 @@
       "Original": "select user.col from user join main.ambiguous_ref_with_source",
       "QueryType": "SELECT",
       "TablesUsed": [
-        "main.ambiguous_ref_with_source",
+        "user.ambiguous_ref_with_source",
         "user.user"
       ]
     }
@@ -455,7 +455,7 @@
       "Original": "update user.ambiguous_ref_with_source set col = 1",
       "QueryType": "UPDATE",
       "TablesUsed": [
-        "user.ambiguous_ref_with_source"
+        "main.ambiguous_ref_with_source"
       ]
     }
   },
@@ -521,7 +521,7 @@
       "Original": "delete from user.ambiguous_ref_with_source where col = 1",
       "QueryType": "DELETE",
       "TablesUsed": [
-        "user.ambiguous_ref_with_source"
+        "main.ambiguous_ref_with_source"
       ]
     }
   },
@@ -564,7 +564,7 @@
     }
   },
   {
-    "comment": "join with unqualified reference does not optimize routes if source & reference different names",
+    "comment": "join with unqualified reference does not optimize routes if source & reference different names; TODO(maxeng) not working",
     "query": "select user.col from user join ref_in_source",
     "v3-plan": {
       "Instructions": {
@@ -615,7 +615,7 @@
       "Original": "select user.col from user join ref_in_source",
       "QueryType": "SELECT",
       "TablesUsed": [
-        "main.ref_in_source",
+        "user.ref_with_source",
         "user.user"
       ]
     }
@@ -672,7 +672,7 @@
       "Original": "select user.col from user join rerouted_ref",
       "QueryType": "SELECT",
       "TablesUsed": [
-        "main.rerouted_ref",
+        "user.ref",
         "user.user"
       ]
     }

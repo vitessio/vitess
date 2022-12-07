@@ -54,6 +54,11 @@ func (r *Rows) GetTableName() string {
 	return ""
 }
 
+// GetTablesUsed implements the Primitive interface
+func (r *Rows) GetTablesUsed() []string {
+	return []string{}
+}
+
 // TryExecute implements the Primitive interface
 func (r *Rows) TryExecute(context.Context, VCursor, map[string]*querypb.BindVariable, bool) (*sqltypes.Result, error) {
 	return &sqltypes.Result{

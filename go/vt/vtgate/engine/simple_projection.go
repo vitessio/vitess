@@ -53,6 +53,15 @@ func (sc *SimpleProjection) GetTableName() string {
 	return sc.Input.GetTableName()
 }
 
+// GetTablesUsed specifies the table that this primitive routes to.
+func (sc *SimpleProjection) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, input := range sc.Inputs() {
+		add(input.GetTablesUsed())
+	}
+	return collect()
+}
+
 // TryExecute performs a non-streaming exec.
 func (sc *SimpleProjection) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	inner, err := vcursor.ExecutePrimitive(ctx, sc.Input, bindVars, wantfields)

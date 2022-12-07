@@ -142,6 +142,8 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 		}
 	}
 
+	outer.MergedWith = append(outer.MergedWith, inner)
+
 	return outer, nil
 }
 
@@ -243,6 +245,9 @@ func tryMergeSubqueryWithRoute(
 	// Special case: Inner query won't return any results / is not routable.
 	if subqueryRoute.RouteOpCode == engine.None {
 		merged, err := merger(outerOp, subqueryRoute)
+		if err != nil {
+			return nil, err
+		}
 		return merged, err
 	}
 
@@ -251,11 +256,9 @@ func tryMergeSubqueryWithRoute(
 	// vindex on the outer query's operand.
 	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
 		merged, err := merger(outerOp, subqueryRoute)
-
 		if err != nil {
 			return nil, err
 		}
-
 		if merged != nil {
 			// since we inlined the subquery into the outer query, new vindex options might have been enabled,
 			// so we go over our current options to check if anything better has come up.

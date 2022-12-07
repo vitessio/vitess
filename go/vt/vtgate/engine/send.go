@@ -84,6 +84,11 @@ func (s *Send) GetTableName() string {
 	return ""
 }
 
+// GetTablesUsed implements Primitive interface
+func (s *Send) GetTablesUsed() []string {
+	return []string{}
+}
+
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, 0)

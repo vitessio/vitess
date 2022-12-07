@@ -49,6 +49,15 @@ func (s SQLCalcFoundRows) GetTableName() string {
 	return s.LimitPrimitive.GetTableName()
 }
 
+// GetTablesused implements the Primitive interface
+func (s SQLCalcFoundRows) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, input := range s.Inputs() {
+		add(input.GetTablesUsed())
+	}
+	return collect()
+}
+
 // TryExecute implements the Primitive interface
 func (s SQLCalcFoundRows) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	limitQr, err := vcursor.ExecutePrimitive(ctx, s.LimitPrimitive, bindVars, wantfields)

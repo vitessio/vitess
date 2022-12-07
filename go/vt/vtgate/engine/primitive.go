@@ -207,6 +207,7 @@ type (
 		RouteType() string
 		GetKeyspaceName() string
 		GetTableName() string
+		GetTablesUsed() []string
 		GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error)
 		NeedsTransaction() bool
 

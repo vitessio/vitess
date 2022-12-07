@@ -69,6 +69,15 @@ func (sa *ScalarAggregate) GetTableName() string {
 	return sa.Input.GetTableName()
 }
 
+// GetTablesUsed implements the Primitive interface
+func (sa *ScalarAggregate) GetTablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, input := range sa.Inputs() {
+		add(input.GetTablesUsed())
+	}
+	return collect()
+}
+
 // GetFields implements the Primitive interface
 func (sa *ScalarAggregate) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	qr, err := sa.Input.GetFields(ctx, vcursor, bindVars)
