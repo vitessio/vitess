@@ -739,7 +739,6 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
-
 	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
