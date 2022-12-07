@@ -111,6 +111,7 @@ const (
 	sqlSelectQueuedMigrations = `SELECT
 			migration_uuid,
 			ddl_action,
+			is_view,
 			postpone_launch,
 			postpone_completion,
 			ready_to_complete

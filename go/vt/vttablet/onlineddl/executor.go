@@ -2145,25 +2145,36 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		readyToComplete := row.AsBool("ready_to_complete", false)
 		ddlAction := row["ddl_action"].ToString()
+		isView := row.AsBool("is_view", false)
 
 		if postponeLaunch {
 			// We don't even look into this migration until its postpone_launch flag is cleared
 			continue
 		}
 
+		isImmediateDDL := false
+		switch ddlAction {
+		case sqlparser.CreateStr, sqlparser.DropStr:
+			isImmediateDDL = true
+		case sqlparser.AlterStr:
+			if isView {
+				isImmediateDDL = true
+			}
+		}
 		if !readyToComplete {
-			// Whether postponsed or not, CREATE and DROP operations are inherently "ready to complete"
-			// because their operation is instantaneous.
-			switch ddlAction {
-			case sqlparser.CreateStr, sqlparser.DropStr:
+			// see if we need to update ready_to_complete
+			if isImmediateDDL {
+				// Whether postponsed or not, CREATE and DROP operations, as well as VIEW operations,
+				// are inherently "ready to complete" because their operation is immediate.
 				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
 					return err
 				}
 			}
 		}
-		if ddlAction == sqlparser.AlterStr || !postponeCompletion {
+
+		if !(isImmediateDDL && postponeCompletion) {
 			// Any non-postponed migration can be scheduled
-			// postponed ALTER can be scheduled
+			// postponed ALTER ALTER can be scheduled (because gh-ost or vreplication will postpone the cut-over)
 			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
