@@ -26,8 +26,6 @@ echo "Starting vtctld..."
 vtctld \
  $TOPOLOGY_FLAGS \
  --cell $cell \
- --workflow_manager_init \
- --workflow_manager_use_election \
  --service_map 'grpc-vtctl,grpc-vtctld' \
  --backup_storage_implementation file \
  --file_backup_storage_root $VTDATAROOT/backups \
