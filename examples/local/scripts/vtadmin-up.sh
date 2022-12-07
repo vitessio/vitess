@@ -20,6 +20,7 @@ vtadmin \
   --rbac \
   --rbac-config="./vtadmin/rbac.yaml" \
   --cluster "id=local,name=local,discovery=staticfile,discovery-staticfile-path=./vtadmin/discovery.json,tablet-fqdn-tmpl={{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
+  --cluster "id=prod,name=prod,discovery=staticfile,discovery-staticfile-path=./vtadmin/discovery.json,tablet-fqdn-tmpl={{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
   > "${log_dir}/vtadmin-api.out" 2>&1 &
 
 vtadmin_api_pid=$!

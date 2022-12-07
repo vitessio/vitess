@@ -146,8 +146,5 @@ func InitVtctld(ts *topo.Server) error {
 	// Serve the REST API for the vtctld web app.
 	initAPI(context.Background(), ts, actionRepo, healthCheck)
 
-	// Init workflow manager.
-	initWorkflowManager(ts)
-
 	return nil
 }
