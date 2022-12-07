@@ -25,7 +25,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/mysql"
@@ -52,11 +51,8 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// TableNames specifies the tables to send the query to.
-	TableNames []sqlparser.TableName
-
-	// Primitives (typically Routes) that this route was merged with.
-	MergedWith []Primitive
+	// TableName specifies the tables to send the query to.
+	TableName string
 
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
 	FieldQuery string
@@ -167,15 +163,7 @@ func (route *Route) GetKeyspaceName() string {
 
 // GetTableName specifies the table that this primitive routes to.
 func (route *Route) GetTableName() string {
-	var escaped []string
-	for _, name := range route.TableNames {
-		if sqlparser.SystemSchema(name.Qualifier.String()) {
-			escaped = append(escaped, sqlparser.String(name))
-		} else {
-			escaped = append(escaped, sqlparser.String(name.Name))
-		}
-	}
-	return strings.Join(escaped, ", ")
+	return route.TableName
 }
 
 // SetTruncateColumnCount sets the truncate column count.

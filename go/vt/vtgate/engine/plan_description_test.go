@@ -19,7 +19,6 @@ package engine
 import (
 	"testing"
 
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"vitess.io/vitess/go/test/utils"
@@ -59,10 +58,8 @@ func createRoute() *Route {
 			TargetDestination: key.DestinationAllShards{},
 			Vindex:            hash.(*vindexes.Hash),
 		},
-		Query: "select all the things",
-		TableNames: []sqlparser.TableName{{
-			Name: sqlparser.NewIdentifierCS("tableName"),
-		}},
+		Query:      "select all the things",
+		TableName:  "tableName",
 		FieldQuery: "more query",
 	}
 }

@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"sort"
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
@@ -163,16 +164,8 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 		vindex = op.Selected.FoundVindex
 		values = op.Selected.Values
 	}
-	var mergedWith []engine.Primitive
-	for _, mr := range op.MergedWith {
-		er, err := routeToEngineRoute(ctx, mr)
-		if err != nil {
-			return nil, err
-		}
-		mergedWith = append(mergedWith, er)
-	}
 	return &engine.Route{
-		TableNames: tableNames,
+		TableName: strings.Join(tableNames, ", "),
 		RoutingParameters: &engine.RoutingParameters{
 			Opcode:              op.RouteOpCode,
 			Keyspace:            op.Keyspace,
@@ -181,7 +174,6 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 			SysTableTableName:   op.SysTableTableName,
 			SysTableTableSchema: op.SysTableTableSchema,
 		},
-		MergedWith: mergedWith,
 	}, nil
 }
 
@@ -220,14 +212,6 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	}
 	ast := upd.AST
 	replaceSubQuery(ctx, ast)
-	var mergedWith []engine.Primitive
-	for _, mr := range op.MergedWith {
-		er, err := routeToEngineRoute(ctx, mr)
-		if err != nil {
-			return nil, err
-		}
-		mergedWith = append(mergedWith, er)
-	}
 	edml := &engine.DML{
 		Query: generateQuery(ast),
 		Table: []*vindexes.Table{
@@ -241,7 +225,6 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 			Values:            values,
 			TargetDestination: op.TargetDestination,
 		},
-		MergedWith: mergedWith,
 	}
 
 	directives := upd.AST.GetParsedComments().Directives()
@@ -353,8 +336,8 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 	return condition
 }
 
-func getAllTableNames(op *operators.Route) ([]sqlparser.TableName, error) {
-	tableNameMap := map[string]sqlparser.TableName{}
+func getAllTableNames(op *operators.Route) ([]string, error) {
+	tableNameMap := map[string]any{}
 	err := rewrite.Visit(op, func(op ops.Operator) error {
 		tbl, isTbl := op.(*operators.Table)
 		var name string
@@ -364,24 +347,19 @@ func getAllTableNames(op *operators.Route) ([]sqlparser.TableName, error) {
 			} else {
 				name = sqlparser.String(tbl.QTable.Table.Name)
 			}
-			tableNameMap[name] = tbl.QTable.Table
+			tableNameMap[name] = nil
 		}
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
-	var keys []string
-	for k := range tableNameMap {
-		keys = append(keys, k)
+	var tableNames []string
+	for name := range tableNameMap {
+		tableNames = append(tableNames, name)
 	}
-	sort.Strings(keys)
-	var names []sqlparser.TableName
-	for _, key := range keys {
-		name := tableNameMap[key]
-		names = append(names, name)
-	}
-	return names, nil
+	sort.Strings(tableNames)
+	return tableNames, nil
 }
 
 func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, isRoot bool) (logicalPlan, error) {
@@ -697,7 +675,7 @@ func mergeUnionLogicalPlans(ctx *plancontext.PlanningContext, left logicalPlan, 
 
 	if canMergeUnionPlans(ctx, lroute, rroute) {
 		lroute.Select = &sqlparser.Union{Left: lroute.Select, Distinct: false, Right: rroute.Select}
-		return mergeRoutes(lroute, rroute)
+		return mergeSystemTableInformation(lroute, rroute)
 	}
 	return nil
 }

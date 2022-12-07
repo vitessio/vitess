@@ -145,7 +145,7 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(112)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
@@ -164,15 +164,6 @@ func (cached *DML) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.OwnedVindexQuery)))
 	// field RoutingParameters *vitess.io/vitess/go/vt/vtgate/engine.RoutingParameters
 	size += cached.RoutingParameters.CachedSize(true)
-	// field MergedWith []vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.MergedWith)) * int64(16))
-		for _, elem := range cached.MergedWith {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
 	return size
 }
 func (cached *Delete) CachedSize(alloc bool) int64 {
@@ -766,26 +757,12 @@ func (cached *Route) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(160)
+		size += int64(128)
 	}
 	// field Query string
 	size += hack.RuntimeAllocSize(int64(len(cached.Query)))
-	// field TableNames []vitess.io/vitess/go/vt/sqlparser.TableName
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.TableNames)) * int64(32))
-		for _, elem := range cached.TableNames {
-			size += elem.CachedSize(false)
-		}
-	}
-	// field MergedWith []vitess.io/vitess/go/vt/vtgate/engine.Primitive
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.MergedWith)) * int64(16))
-		for _, elem := range cached.MergedWith {
-			if cc, ok := elem.(cachedObject); ok {
-				size += cc.CachedSize(true)
-			}
-		}
-	}
+	// field TableName string
+	size += hack.RuntimeAllocSize(int64(len(cached.TableName)))
 	// field FieldQuery string
 	size += hack.RuntimeAllocSize(int64(len(cached.FieldQuery)))
 	// field OrderBy []vitess.io/vitess/go/vt/vtgate/engine.OrderByParams

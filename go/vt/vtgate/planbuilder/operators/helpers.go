@@ -122,6 +122,14 @@ func CostOf(op ops.Operator) (cost int) {
 	return
 }
 
+func QualifiedStrings(ks *vindexes.Keyspace, ss []string) []string {
+	add, collect := collectSortedUniqueStrings()
+	for _, s := range ss {
+		add(qualifiedString(ks, s))
+	}
+	return collect()
+}
+
 func QualifiedTableNames(ks *vindexes.Keyspace, ts []sqlparser.TableName) []string {
 	add, collect := collectSortedUniqueStrings()
 	for _, t := range ts {

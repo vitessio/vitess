@@ -61,8 +61,6 @@ type DML struct {
 	// RoutingParameters parameters required for query routing.
 	*RoutingParameters
 
-	MergedWith []Primitive
-
 	txNeeded
 }
 
