@@ -452,12 +452,6 @@ var commands = []commandGroup{
 				help:   `Move table(s) to another keyspace, table_specs is a list of tables or the tables section of the vschema for the target keyspace. Example: '{"t1":{"column_vindexes": [{"column": "id1", "name": "hash"}]}, "t2":{"column_vindexes": [{"column": "id2", "name": "hash"}]}}'.  In the case of an unsharded target keyspace the vschema for each table may be empty. Example: '{"t1":{}, "t2":{}}'.`,
 			},
 			{
-				name:   "DropSources",
-				method: commandDropSources,
-				params: "[--dry_run] [--rename_tables] <keyspace.workflow>",
-				help:   "After a MoveTables or Resharding workflow cleanup unused artifacts like source tables, source shards and denylists",
-			},
-			{
 				name:   "CreateLookupVindex",
 				method: commandCreateLookupVindex,
 				params: "[--cells=<source_cells>] [--tablet_types=<source_tablet_types>] <keyspace> <json_spec>",
@@ -480,18 +474,6 @@ var commands = []commandGroup{
 				method: commandVDiff,
 				params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=in_order:RDONLY,REPLICA,PRIMARY] [--filtered_replication_wait_time=30s] [--max_extra_rows_to_compare=1000] <keyspace.workflow>",
 				help:   "Perform a diff of all tables in the workflow",
-			},
-			{
-				name:   "SwitchReads",
-				method: commandSwitchReads,
-				params: "[--cells=c1,c2,...] [--reverse] [--tablet_types=REPLICA,RDONLY] [--dry_run] <keyspace.workflow>",
-				help:   "Switch read traffic for the specified workflow.",
-			},
-			{
-				name:   "SwitchWrites",
-				method: commandSwitchWrites,
-				params: "[--timeout=30s] [--reverse] [--reverse_replication=true] [--dry_run] <keyspace.workflow>",
-				help:   "Switch write traffic for the specified workflow.",
 			},
 			{
 				name:   "FindAllShardsInKeyspace",
@@ -2054,100 +2036,12 @@ func commandValidateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return wr.ValidateKeyspace(ctx, keyspace, *pingTablets)
 }
 
-func useV1(args []string) bool {
-	for _, arg := range args {
-		if arg == "-v1" || arg == "--v1" {
-			return true
-		}
-	}
-	return false
-}
-
 func commandReshard(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	if !useV1(args) {
-		log.Infof("*** Using Reshard v2 flow ***")
-		return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
-	}
-	wr.Logger().Printf("*** The Reshard v1 flow is deprecated, consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-
-	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
-	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from.")
-	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Skip copying of schema to targets")
-
-	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
-	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
-	onDDL := "IGNORE"
-	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
-	_ = subFlags.Bool("v1", true, "")
-
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 3 {
-		return fmt.Errorf("three arguments are required: <keyspace.workflow>, source_shards, target_shards")
-	}
-	onDDL = strings.ToUpper(onDDL)
-	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
-		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
-	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	source := strings.Split(subFlags.Arg(1), ",")
-	target := strings.Split(subFlags.Arg(2), ",")
-	return wr.Reshard(ctx, keyspace, workflow, source, target, *skipSchemaCopy, *cells,
-		*tabletTypes, onDDL, *autoStart, *stopAfterCopy)
+	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.ReshardWorkflow)
 }
 
 func commandMoveTables(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	if !useV1(args) {
-		log.Infof("*** Using MoveTables v2 flow ***")
-		return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
-	}
-	wr.Logger().Printf("*** The MoveTables v1 flow is deprecated, consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-
-	workflow := subFlags.String("workflow", "", "Workflow name. Can be any descriptive string. Will be used to later migrate traffic via SwitchReads/SwitchWrites.")
-	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
-	tabletTypes := subFlags.String("tablet_types", "", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY.")
-	allTables := subFlags.Bool("all", false, "Move all tables from the source keyspace")
-	excludes := subFlags.String("exclude", "", "Tables to exclude (comma-separated) if --all is specified")
-
-	autoStart := subFlags.Bool("auto_start", true, "If false, streams will start in the Stopped state and will need to be explicitly started")
-	stopAfterCopy := subFlags.Bool("stop_after_copy", false, "Streams will be stopped once the copy phase is completed")
-	dropForeignKeys := subFlags.Bool("drop_foreign_keys", false, "If true, tables in the target keyspace will be created without foreign keys.")
-	onDDL := "IGNORE"
-	subFlags.StringVar(&onDDL, "on-ddl", onDDL, "What to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE.")
-	_ = subFlags.Bool("v1", true, "")
-
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	onDDL = strings.ToUpper(onDDL)
-	if _, ok := binlogdatapb.OnDDLAction_value[onDDL]; !ok {
-		return fmt.Errorf("invalid value for on-ddl: %v", onDDL)
-	}
-	if *workflow == "" {
-		return fmt.Errorf("a workflow name must be specified")
-	}
-	if !*allTables && len(*excludes) > 0 {
-		return fmt.Errorf("you can only specify tables to exclude if all tables are to be moved (with --all)")
-	}
-	if *allTables {
-		if subFlags.NArg() != 2 {
-			return fmt.Errorf("two arguments are required: source_keyspace, target_keyspace")
-		}
-	} else {
-		if subFlags.NArg() != 3 {
-			return fmt.Errorf("three arguments are required: source_keyspace, target_keyspace, tableSpecs")
-		}
-	}
-
-	source := subFlags.Arg(0)
-	target := subFlags.Arg(1)
-	tableSpecs := subFlags.Arg(2)
-	return wr.MoveTables(ctx, *workflow, source, target, tableSpecs, *cells, *tabletTypes, *allTables,
-		*excludes, *autoStart, *stopAfterCopy, "", *dropForeignKeys, "", onDDL, nil)
+	return commandVRWorkflow(ctx, wr, subFlags, args, wrangler.MoveTablesWorkflow)
 }
 
 // VReplicationWorkflowAction defines subcommands passed to vtctl for movetables or reshard
@@ -2189,7 +2083,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 
 	cells := subFlags.String("cells", "", "Cell(s) or CellAlias(es) (comma-separated) to replicate from.")
 	tabletTypes := subFlags.String("tablet_types", "in_order:REPLICA,PRIMARY", "Source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). Defaults to --vreplication_tablet_type parameter value for the tablet, which has the default value of in_order:REPLICA,PRIMARY. Note: SwitchTraffic overrides this default and uses in_order:RDONLY,REPLICA,PRIMARY to switch all traffic by default.")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken. --dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
+	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchTraffic and only reports the actions to be taken. --dry_run is only supported for SwitchTraffic, ReverseTraffic and Complete.")
 	timeout := subFlags.Duration("timeout", defaultWaitTime, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout. --timeout is only supported for SwitchTraffic and ReverseTraffic.")
 	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication (default true). --reverse_replication is only supported for SwitchTraffic.")
 	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up).  --keep_data is only supported for Complete and Cancel.")
@@ -2223,9 +2117,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 	targetShards := subFlags.String("target_shards", "", "Reshard only. Target shards")
 	*targetShards = strings.TrimSpace(*targetShards)
 	skipSchemaCopy := subFlags.Bool("skip_schema_copy", false, "Reshard only. Skip copying of schema to target shards")
-
-	_ = subFlags.Bool("v1", false, "Enables usage of v1 command structure. (default false). Must be added to run the command with --workflow")
-	_ = subFlags.Bool("v2", true, "")
 
 	if err := subFlags.Parse(args); err != nil {
 		return err
@@ -2659,124 +2550,6 @@ func splitKeyspaceWorkflow(in string) (keyspace, workflow string, err error) {
 		return "", "", fmt.Errorf("invalid format for <keyspace.workflow>: %s", in)
 	}
 	return splits[0], splits[1], nil
-}
-
-func commandDropSources(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** DropSources is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of commandDropSources and only reports the actions to be taken")
-	renameTables := subFlags.Bool("rename_tables", false, "Rename tables instead of dropping them")
-	keepData := subFlags.Bool("keep_data", false, "Do not drop tables or shards (if true, only vreplication artifacts are cleaned up)")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("<keyspace.workflow> is required")
-	}
-	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-
-	removalType := workflow.DropTable
-	if *renameTables {
-		removalType = workflow.RenameTable
-	}
-
-	_, _, _ = dryRun, keyspace, workflowName
-	dryRunResults, err := wr.DropSources(ctx, keyspace, workflowName, removalType, *keepData, false, false, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		wr.Logger().Printf("Dry Run results for commandDropSources run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
-	}
-	return nil
-}
-
-func commandSwitchReads(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** SwitchReads is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-
-	reverse := subFlags.Bool("reverse", false, "Moves the served tablet type backward instead of forward.")
-	cellsStr := subFlags.String("cells", "", "Specifies a comma-separated list of cells to update")
-	tabletTypes := subFlags.String("tablet_types", "rdonly,replica", "Tablet types to switch one or both of rdonly/replica")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchReads and only reports the actions to be taken")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	tabletTypesArr := strings.Split(*tabletTypes, ",")
-	var servedTypes []topodatapb.TabletType
-	for _, tabletType := range tabletTypesArr {
-		servedType, err := parseTabletType(tabletType, []topodatapb.TabletType{topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY})
-		if err != nil {
-			return err
-		}
-		servedTypes = append(servedTypes, servedType)
-	}
-	var cells []string
-	if *cellsStr != "" {
-		cells = strings.Split(*cellsStr, ",")
-	}
-	direction := workflow.DirectionForward
-	if *reverse {
-		direction = workflow.DirectionBackward
-	}
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("<keyspace.workflow> is required")
-	}
-	keyspace, workflowName, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	dryRunResults, err := wr.SwitchReads(ctx, keyspace, workflowName, servedTypes, cells, direction, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		wr.Logger().Printf("Dry Run results for SwitchReads run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
-	}
-	return nil
-}
-
-func commandSwitchWrites(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	wr.Logger().Printf("*** SwitchWrites is deprecated. Consider using v2 commands instead, see https://vitess.io/docs/reference/vreplication/v2/ ***\n")
-
-	timeout := subFlags.Duration("timeout", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout.")
-	filteredReplicationWaitTime := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for vreplication to catch up on primary migrations. The migration will be cancelled on a timeout.")
-	_ = subFlags.MarkDeprecated("filtered_replication_wait_time", "Use --timeout instead.")
-	reverseReplication := subFlags.Bool("reverse_replication", true, "Also reverse the replication")
-	cancel := subFlags.Bool("cancel", false, "Cancel the failed migration and serve from source")
-	reverse := subFlags.Bool("reverse", false, "Reverse a previous SwitchWrites serve from source")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of SwitchWrites and only reports the actions to be taken")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-
-	if subFlags.NArg() != 1 {
-		return fmt.Errorf("<keyspace.workflow> is required")
-	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	if filteredReplicationWaitTime != timeout {
-		timeout = filteredReplicationWaitTime
-	}
-
-	journalID, dryRunResults, err := wr.SwitchWrites(ctx, keyspace, workflow, *timeout, *cancel, *reverse, *reverseReplication, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		wr.Logger().Printf("Dry Run results for SwitchWrites run at %s\nParameters: %s\n\n", time.Now().Format(time.RFC822), strings.Join(args, " "))
-		wr.Logger().Printf("%s\n", strings.Join(*dryRunResults, "\n"))
-	} else {
-		wr.Logger().Infof("Migration Journal ID: %v", journalID)
-	}
-
-	return nil
 }
 
 func commandFindAllShardsInKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {

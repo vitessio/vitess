@@ -25,7 +25,7 @@ jobs:
             skip='true'
           fi
           echo Skip ${skip}
-          echo "::set-output name=skip-workflow::${skip}"  
+          echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT  
 
       - name: Checkout code
         if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -169,7 +169,7 @@ jobs:
 
       - name: Install golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.46.2
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@v1.50.1
 
       - name: Clean Env
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
