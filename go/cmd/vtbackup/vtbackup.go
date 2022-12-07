@@ -74,7 +74,6 @@ import (
 	"vitess.io/vitess/go/cmd"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -159,7 +158,6 @@ func main() {
 
 	servenv.ParseFlags("vtbackup")
 	servenv.Init()
-
 	ctx, cancel := context.WithCancel(context.Background())
 	servenv.OnClose(func() {
 		cancel()
@@ -296,6 +294,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
+		log.Infof("inside initialBackup creating reparent journal.")
 		// Take a backup of this empty DB without restoring anything.
 		// First, initialize it the way InitShardPrimary would, so this backup
 		// produces a result that can be used to skip InitShardPrimary entirely.
@@ -309,7 +308,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		defer func() {
 			_ = mysqld.SetSuperReadOnly(true)
 		}()
-		cmds := mysqlctl.CreateReparentJournal()
+		/*cmds := mysqlctl.CreateReparentJournal()
 		cmds = append(cmds, fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s", sqlescape.EscapeID(dbName)))
 		if err := mysqld.ExecuteSuperQueryList(ctx, cmds); err != nil {
 			return fmt.Errorf("can't initialize database: %v", err)
@@ -317,6 +316,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 
 		// Execute Alter commands on reparent_journal and ignore errors
 		cmds = mysqlctl.AlterReparentJournal()
+		_ = mysqld.ExecuteSuperQueryList(ctx, cmds)*/
+		cmds := mysqlctl.CreateDummyDatabase()
 		_ = mysqld.ExecuteSuperQueryList(ctx, cmds)
 
 		backupParams.BackupTime = time.Now()
@@ -401,6 +402,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err != nil {
 		return err
 	}
+
+	log.Infof("primary position is: %s", primaryPos.String())
 
 	// Remember the time when we fetched the primary position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it

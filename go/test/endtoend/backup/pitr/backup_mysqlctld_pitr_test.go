@@ -138,9 +138,9 @@ func TestIncrementalBackupMysqlctld(t *testing.T) {
 			if tc.writeBeforeBackup {
 				backup.InsertRowOnPrimary(t, "")
 			}
-			// we wait for 1 second because backups ar ewritten to a directory named after the current timestamp,
-			// in 1 second resolution. We want to aoid two backups that have the same pathname. Realistically this
-			// is only ever a problem in this endtoend test, not in production.
+			// we wait for 1 second because backups are written to a directory named after the current timestamp,
+			// in 1 second resolution. We want to avoid two backups that have the same pathname. Realistically this
+			// is only ever a problem in this end-to-end test, not in production.
 			// Also, we gie the replica a chance to catch up.
 			time.Sleep(1100 * time.Millisecond)
 			waitForReplica(t)

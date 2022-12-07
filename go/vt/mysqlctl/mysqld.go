@@ -1261,10 +1261,26 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		args := []string{
 			"--defaults-extra-file=" + cnf,
 		}
+
+		// We disable super_read_only, in case it is in the default MySQL startup
+		// parameters.  We do it blindly, since this will fail on MariaDB, which doesn't
+		// have super_read_only This is safe, since we're restarting MySQL after the restore anyway
+		log.Infof("Restore: disabling super_read_only")
+		if err := mysqld.SetSuperReadOnly(false); err != nil {
+			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+				log.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
+			} else {
+				log.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
+				return err
+			}
+		}
+
 		mysqlCmd = exec.Command(name, args...)
 		mysqlCmd.Dir = dir
 		mysqlCmd.Env = env
 		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
+		mysqlCmd.Stdout = os.Stderr
+		mysqlCmd.Stderr = os.Stderr
 	}
 	// Run both processes, piped:
 	if err := mysqlbinlogCmd.Start(); err != nil {
@@ -1278,6 +1294,9 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		return err
 	}
 	if err := mysqlCmd.Wait(); err != nil {
+		println(mysqlCmd.Stdout)
+		println(mysqlCmd.Stderr)
+		println(mysqlCmd.Stdin)
 		return err
 	}
 	return nil
