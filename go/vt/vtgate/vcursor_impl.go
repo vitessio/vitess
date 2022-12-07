@@ -1096,3 +1096,7 @@ func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
 }
+
+func (vc *vcursorImpl) IsViewsEnabled() bool {
+	return enableViews
+}

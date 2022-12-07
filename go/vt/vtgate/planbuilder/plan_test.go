@@ -263,6 +263,15 @@ func TestSysVarSetDisabled(t *testing.T) {
 	testFile(t, "set_sysvar_disabled_cases.json", makeTestOutput(t), vschemaWrapper, false)
 }
 
+func TestViews(t *testing.T) {
+	vschemaWrapper := &vschemaWrapper{
+		v:           loadSchema(t, "vschemas/schema.json", true),
+		enableViews: true,
+	}
+
+	testFile(t, "view_cases.json", makeTestOutput(t), vschemaWrapper, false)
+}
+
 func TestOne(t *testing.T) {
 	vschema := &vschemaWrapper{
 		v: loadSchema(t, "vschemas/schema.json", true),
@@ -532,6 +541,7 @@ type vschemaWrapper struct {
 	dest          key.Destination
 	sysVarEnabled bool
 	version       plancontext.PlannerVersion
+	enableViews   bool
 }
 
 func (vw *vschemaWrapper) IsShardRoutingEnabled() bool {
@@ -722,6 +732,10 @@ func (vw *vschemaWrapper) currentDb() string {
 
 func (vw *vschemaWrapper) FindRoutedShard(keyspace, shard string) (string, error) {
 	return "", nil
+}
+
+func (vw *vschemaWrapper) IsViewsEnabled() bool {
+	return vw.enableViews
 }
 
 type (

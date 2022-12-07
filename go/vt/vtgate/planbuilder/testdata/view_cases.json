@@ -1,0 +1,31 @@
+[
+  {
+    "comment": "Alter View",
+    "query": "alter view user.user_extra as select* from user.user",
+    "plan": "TODO: validates that everything points to the same destination and keyspace, and that the view exists."
+  },
+  {
+    "comment": "create view with subquery in unsharded keyspace with UNION clauses in subqueries",
+    "query": "create view user.view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "create view user.view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded"
+      },
+      "TablesUsed": [
+        "user.view_a"
+      ]
+    }
+  },
+  {
+    "comment": "Drop view",
+    "query": "drop view main.a",
+    "plan": "TODO: validates that everything points to the same destination and keyspace, and that the view exists."
+  }
+]

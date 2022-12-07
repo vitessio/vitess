@@ -123,8 +123,10 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
 		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
-	case *sqlparser.DropView, *sqlparser.DropTable:
-		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
+	case *sqlparser.DropView:
+		destination, keyspace, err = buildDropView(vschema, ddlStatement)
+	case *sqlparser.DropTable:
+		destination, keyspace, err = buildDropTable(vschema, ddlStatement)
 	case *sqlparser.RenameTable:
 		destination, keyspace, err = buildRenameTable(vschema, ddl)
 	default:
@@ -196,6 +198,11 @@ func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement s
 }
 
 func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reservedVars *sqlparser.ReservedVars, enableOnlineDDL, enableDirectDDL bool) (key.Destination, *vindexes.Keyspace, error) {
+	if vschema.IsViewsEnabled() {
+		// TODO: validates that everything points to the same destination and keyspace, and that the view exists.
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "TODO: validates that everything points to the same destination and keyspace, and that the view exists.")
+	}
+
 	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
@@ -242,6 +249,15 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if err != nil {
 		return nil, nil, err
 	}
+	if vschema.IsViewsEnabled() {
+		if keyspace == nil {
+			keyspace, err = vschema.DefaultKeyspace()
+			if err != nil {
+				return nil, nil, err
+			}
+		}
+		return destination, keyspace, nil
+	}
 	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
@@ -264,7 +280,15 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	return destination, keyspace, nil
 }
 
-func buildDropViewOrTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+	if vschema.IsViewsEnabled() {
+		// TODO: validates that everything points to the same destination and keyspace, and that the view exists.
+		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "TODO: validates that everything points to the same destination and keyspace, and that the view exists.")
+	}
+	return buildDropTable(vschema, ddlStatement)
+}
+
+func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	for i, tab := range ddlStatement.GetFromTables() {

@@ -101,12 +101,27 @@ order by table_name, ordinal_position`
 
 	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
+
+	// Views
+	CreateViewsTable = `
+CREATE TABLE IF NOT EXISTS _vt.VIEWS (
+  TABLE_CATALOG varchar(512) NOT NULL DEFAULT '',
+  TABLE_SCHEMA varchar(64) NOT NULL DEFAULT '',
+  TABLE_NAME varchar(64) NOT NULL DEFAULT '',
+  VIEW_DEFINITION longtext NOT NULL,
+  CHECK_OPTION varchar(8) NOT NULL DEFAULT '',
+  IS_UPDATABLE varchar(3) NOT NULL DEFAULT '',
+  DEFINER varchar(93) NOT NULL DEFAULT '',
+  SECURITY_TYPE varchar(7) NOT NULL DEFAULT '',
+  CHARACTER_SET_CLIENT varchar(32) NOT NULL DEFAULT '',
+  COLLATION_CONNECTION varchar(32) NOT NULL DEFAULT '')`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to
 var VTDatabaseInit = []string{
 	CreateVTDatabase,
 	CreateSchemaCopyTable,
+	CreateViewsTable,
 }
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
