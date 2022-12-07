@@ -561,13 +561,13 @@ func TestSubqueriesMappingWhereClause(t *testing.T) {
 			}
 
 			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, sel.Where.Expr))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq, nil))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, sel.Where.Expr, nil))
 			assert.EqualValues(t, tc.opCode, extractedSubq.OpCode)
 			if tc.otherSideName == "" {
 				assert.Nil(t, extractedSubq.OtherSide)
 			} else {
-				assert.True(t, sqlparser.EqualsExpr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
+				assert.True(t, sqlparser.EqualsExpr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName), nil))
 			}
 		})
 	}
@@ -595,8 +595,8 @@ func TestSubqueriesMappingSelectExprs(t *testing.T) {
 
 			subq := sel.SelectExprs[tc.selExprIdx].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery)
 			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, subq))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq, nil))
+			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, subq, nil))
 			assert.EqualValues(t, engine.PulloutValue, extractedSubq.OpCode)
 		})
 	}

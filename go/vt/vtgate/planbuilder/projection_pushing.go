@@ -76,7 +76,7 @@ func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlpa
 	if err != nil {
 		return 0, false, err
 	}
-	if added && ctx.SemTable.DirectDeps(expr.Expr).NumberOfTables() > 0 {
+	if added && ctx.SemTable.DirectDeps(expr.Expr).NonEmpty() {
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
 	}
 	if added {

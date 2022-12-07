@@ -124,16 +124,16 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 		var a, b, c Expr
 		switch {
 		// (A and B) or (A and C) => A AND (B OR C)
-		case EqualsExpr(land.Left, rand.Left):
+		case EqualsExpr(land.Left, rand.Left, nil):
 			a, b, c = land.Left, land.Right, rand.Right
 		// (A and B) or (C and A) => A AND (B OR C)
-		case EqualsExpr(land.Left, rand.Right):
+		case EqualsExpr(land.Left, rand.Right, nil):
 			a, b, c = land.Left, land.Right, rand.Left
 		// (B and A) or (A and C) => A AND (B OR C)
-		case EqualsExpr(land.Right, rand.Left):
+		case EqualsExpr(land.Right, rand.Left, nil):
 			a, b, c = land.Right, land.Left, rand.Right
 		// (B and A) or (C and A) => A AND (B OR C)
-		case EqualsExpr(land.Right, rand.Right):
+		case EqualsExpr(land.Right, rand.Right, nil):
 			a, b, c = land.Right, land.Left, rand.Left
 		default:
 			return expr, NoChange
@@ -142,7 +142,7 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	case lok:
 		// Simplification
 		// (A AND B) OR A => A
-		if EqualsExpr(or.Right, land.Left) || EqualsExpr(or.Right, land.Right) {
+		if EqualsExpr(or.Right, land.Left, nil) || EqualsExpr(or.Right, land.Right, nil) {
 			return or.Right, Changed
 		}
 		// Distribution Law
@@ -151,7 +151,7 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	case rok:
 		// Simplification
 		// A OR (A AND B) => A
-		if EqualsExpr(or.Left, rand.Left) || EqualsExpr(or.Left, rand.Right) {
+		if EqualsExpr(or.Left, rand.Left, nil) || EqualsExpr(or.Left, rand.Right, nil) {
 			return or.Left, Changed
 		}
 		// Distribution Law
@@ -176,7 +176,7 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, RewriteState) {
 	// looks for A = X OR A = Y and turns them into A IN (X, Y)
 	col, ok := l.Left.(*ColName)
-	if !ok || !EqualsExpr(col, r.Left) {
+	if !ok || !EqualsExpr(col, r.Left, nil) {
 		return nil, NoChange
 	}
 
@@ -219,7 +219,7 @@ func uniquefy(tuple ValTuple) (output ValTuple) {
 outer:
 	for _, expr := range tuple {
 		for _, seen := range output {
-			if EqualsExpr(expr, seen) {
+			if EqualsExpr(expr, seen, nil) {
 				continue outer
 			}
 		}
@@ -243,14 +243,14 @@ func simplifyAnd(expr *AndExpr) (Expr, RewriteState) {
 	if or, ok := and.Left.(*OrExpr); ok {
 		// Simplification
 		// (A OR B) AND A => A
-		if EqualsExpr(or.Left, and.Right) || EqualsExpr(or.Right, and.Right) {
+		if EqualsExpr(or.Left, and.Right, nil) || EqualsExpr(or.Right, and.Right, nil) {
 			return and.Right, Changed
 		}
 	}
 	if or, ok := and.Right.(*OrExpr); ok {
 		// Simplification
 		// A OR (A AND B) => A
-		if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Right, and.Left) {
+		if EqualsExpr(or.Left, and.Left, nil) || EqualsExpr(or.Right, and.Left, nil) {
 			return or.Left, Changed
 		}
 	}
@@ -283,7 +283,7 @@ outer1:
 		curr := leaves[0]
 		leaves = leaves[1:]
 		for _, alreadyIn := range predicates {
-			if EqualsExpr(alreadyIn, curr) {
+			if EqualsExpr(alreadyIn, curr, nil) {
 				continue outer1
 			}
 		}
@@ -328,7 +328,7 @@ outer1:
 		curr := leaves[0]
 		leaves = leaves[1:]
 		for _, alreadyIn := range predicates {
-			if EqualsExpr(alreadyIn, curr) {
+			if EqualsExpr(alreadyIn, curr, nil) {
 				continue outer1
 			}
 		}
