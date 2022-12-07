@@ -300,7 +300,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		for _, t := range tablets {
 			if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
 				th = t
-				if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+				if *routeReplicaToRdonly && (target.TabletType == topodatapb.TabletType_REPLICA || target.TabletType == topodatapb.TabletType_RDONLY) {
 					target = th.Target
 				}
 				break
