@@ -258,6 +258,130 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 }
 
+func TestVStreamCopyWithoutKeyspaceShard(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("insert into t1_copy_all(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = conn.ExecuteFetch("insert into t1_copy_all_ks2(id1,id2) values(10,10), (20,20)", 1, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/t1_copy_all.*/",
+		}},
+	}
+	flags := &vtgatepb.VStreamFlags{}
+
+	expectedKs1EventNum := 2 /* num shards */ * (9 /* begin/field/vgtid:pos/4 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
+	expectedKs2EventNum := 2 /* num shards */ * (6 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
+	expectedFullyCopyCompletedNum := 1
+
+	cases := []struct {
+		name                    string
+		shardGtid               *binlogdatapb.ShardGtid
+		expectedEventNum        int
+		expectedCompletedEvents []string
+	}{
+		{
+			name: "copy from all keyspaces",
+			shardGtid: &binlogdatapb.ShardGtid{
+				Gtid: "",
+			},
+			expectedEventNum: expectedKs1EventNum + expectedKs2EventNum + expectedFullyCopyCompletedNum,
+			expectedCompletedEvents: []string{
+				`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
+				`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
+				`type:COPY_COMPLETED keyspace:"ks2" shard:"-80"`,
+				`type:COPY_COMPLETED keyspace:"ks2" shard:"80-"`,
+				`type:COPY_COMPLETED`,
+			},
+		},
+		{
+			name: "copy from all shards in the keyspace",
+			shardGtid: &binlogdatapb.ShardGtid{
+				Keyspace: "ks",
+				Gtid:     "",
+			},
+			expectedEventNum: expectedKs1EventNum + expectedFullyCopyCompletedNum,
+			expectedCompletedEvents: []string{
+				`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
+				`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
+				`type:COPY_COMPLETED`,
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gconn, conn, mconn, closeConnections := initialize(ctx, t)
+			defer closeConnections()
+
+			var vgtid = &binlogdatapb.VGtid{}
+			vgtid.ShardGtids = []*binlogdatapb.ShardGtid{c.shardGtid}
+			reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+			_, _ = conn, mconn
+			if err != nil {
+				t.Fatal(err)
+			}
+			require.NotNil(t, reader)
+			var evs []*binlogdatapb.VEvent
+			var completedEvs []*binlogdatapb.VEvent
+			for {
+				e, err := reader.Recv()
+				switch err {
+				case nil:
+					evs = append(evs, e...)
+
+					for _, ev := range e {
+						if ev.Type == binlogdatapb.VEventType_COPY_COMPLETED {
+							completedEvs = append(completedEvs, ev)
+						}
+					}
+
+					printEvents(evs) // for debugging ci failures
+
+					if len(evs) == c.expectedEventNum {
+						// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
+						// On the other hand, the last event should always be a fully COPY_COMPLETED event.
+						// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
+						sort.Slice(completedEvs[:len(completedEvs)-1], func(i, j int) bool {
+							if completedEvs[i].GetKeyspace() != completedEvs[j].GetKeyspace() {
+								return completedEvs[i].GetKeyspace() < completedEvs[j].GetKeyspace()
+							}
+							return completedEvs[i].GetShard() < completedEvs[j].GetShard()
+						})
+						for i, ev := range completedEvs {
+							require.Regexp(t, c.expectedCompletedEvents[i], ev.String())
+						}
+						t.Logf("TestVStreamCopyWithoutKeyspaceShard was successful")
+						return
+					} else if c.expectedEventNum < len(evs) {
+						t.Fatalf("len(events)=%v are not expected\n", len(evs))
+					}
+				case io.EOF:
+					log.Infof("stream ended\n")
+					cancel()
+				default:
+					log.Errorf("Returned err %v", err)
+					t.Fatalf("remote error: %v\n", err)
+				}
+			}
+		})
+	}
+}
+
 func TestVStreamCopyResume(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
