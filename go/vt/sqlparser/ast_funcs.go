@@ -34,6 +34,11 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// Generate all the AST helpers using the tooling in `go/tools`
+
+//go:generate go run ../../tools/asthelpergen/main  --in . --iface vitess.io/vitess/go/vt/sqlparser.SQLNode --clone_exclude "*ColName" --equals_custom "*ColName"
+//go:generate go run ../../tools/astfmtgen vitess.io/vitess/go/vt/sqlparser/...
+
 // Walk calls visit on every node.
 // If visit returns true, the underlying nodes
 // are also visited. If it returns an error, walking

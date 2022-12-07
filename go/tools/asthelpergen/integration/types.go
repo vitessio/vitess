@@ -22,7 +22,7 @@ import (
 	"strings"
 )
 
-//go:generate go run ../main --in . --iface vitess.io/vitess/go/tools/asthelpergen/integration.AST --except "*NoCloneType"
+//go:generate go run ../main --in . --iface vitess.io/vitess/go/tools/asthelpergen/integration.AST --clone_exclude "*NoCloneType"
 
 // AST is the interface all interface types implement
 type AST interface {
