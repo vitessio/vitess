@@ -69,16 +69,6 @@ func (vr *VindexLookup) GetTableName() string {
 	return vr.SendTo.GetTableName()
 }
 
-// GetTablesUsed implements the Primitive interface
-func (vr *VindexLookup) GetTablesUsed() []string {
-	//add, collect := concatSortedUniqueStringSlices()
-	//for _, input := range vr.Inputs() {
-	//	add(input.GetTablesUsed())
-	//}
-	//return collect()
-	return vr.SendTo.GetTablesUsed()
-}
-
 // GetFields implements the Primitive interface
 func (vr *VindexLookup) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return vr.SendTo.GetFields(ctx, vcursor, bindVars)

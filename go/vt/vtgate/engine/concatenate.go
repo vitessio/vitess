@@ -75,15 +75,6 @@ func (c *Concatenate) GetTableName() string {
 	return res
 }
 
-// GetTablesUsed the tables that this primitive uses.
-func (c *Concatenate) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	for _, source := range c.Inputs() {
-		add(source.GetTablesUsed())
-	}
-	return collect()
-}
-
 func formatTwoOptionsNicely(a, b string) string {
 	if a == b {
 		return a

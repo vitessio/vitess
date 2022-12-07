@@ -62,15 +62,6 @@ func (r *RenameFields) GetTableName() string {
 	return r.Input.GetTableName()
 }
 
-// GetTablesUsed implements the primitive interface
-func (r *RenameFields) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	for _, input := range r.Inputs() {
-		add(input.GetTablesUsed())
-	}
-	return collect()
-}
-
 // TryExecute implements the Primitive interface
 func (r *RenameFields) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(ctx, r.Input, bindVars, wantfields)

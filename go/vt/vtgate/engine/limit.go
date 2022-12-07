@@ -52,15 +52,6 @@ func (l *Limit) GetTableName() string {
 	return l.Input.GetTableName()
 }
 
-// GetTablesUsed specifies the table that this primitive routes to.
-func (l *Limit) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	for _, input := range l.Inputs() {
-		add(input.GetTablesUsed())
-	}
-	return collect()
-}
-
 // TryExecute satisfies the Primitive interface.
 func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	count, offset, err := l.getCountAndOffset(vcursor, bindVars)

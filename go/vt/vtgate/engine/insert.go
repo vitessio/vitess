@@ -227,18 +227,6 @@ func (ins *Insert) GetTableName() string {
 	return ""
 }
 
-// GetTablesUsed specifies the table that this primitive routes to.
-func (ins *Insert) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	if ins.Table != nil {
-		add(singleQualifiedIdentifier(ins.Keyspace, ins.Table.Name))
-	}
-	for _, input := range ins.Inputs() {
-		add(input.GetTablesUsed())
-	}
-	return collect()
-}
-
 // TryExecute performs a non-streaming exec.
 func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)

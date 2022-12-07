@@ -51,14 +51,6 @@ func (r *ReplaceVariables) GetTableName() string {
 	return r.Input.GetTableName()
 }
 
-func (r *ReplaceVariables) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	for _, input := range r.Inputs() {
-		add(input.GetTablesUsed())
-	}
-	return collect()
-}
-
 // TryExecute implements the Primitive interface
 func (r *ReplaceVariables) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	qr, err := vcursor.ExecutePrimitive(ctx, r.Input, bindVars, wantfields)

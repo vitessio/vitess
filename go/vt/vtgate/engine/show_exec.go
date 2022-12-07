@@ -47,10 +47,6 @@ func (s *ShowExec) GetTableName() string {
 	return ""
 }
 
-func (s *ShowExec) GetTablesUsed() []string {
-	return []string{}
-}
-
 func (s *ShowExec) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
 	qr, err := s.TryExecute(ctx, vcursor, bindVars, true)
 	if err != nil {

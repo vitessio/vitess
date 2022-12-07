@@ -55,15 +55,6 @@ func (v *VTExplain) GetTableName() string {
 	return v.Input.GetTableName()
 }
 
-// GetTablesUsed implements the Primitive interface
-func (v *VTExplain) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	for _, input := range v.Inputs() {
-		add(input.GetTablesUsed())
-	}
-	return collect()
-}
-
 // GetFields implements the Primitive interface
 func (v *VTExplain) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return v.Input.GetFields(ctx, vcursor, bindVars)

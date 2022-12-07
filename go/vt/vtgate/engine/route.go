@@ -178,24 +178,6 @@ func (route *Route) GetTableName() string {
 	return strings.Join(escaped, ", ")
 }
 
-func (route *Route) GetTablesUsed() []string {
-	add, collect := collectSortedUniqueStrings()
-	for _, name := range route.TableNames {
-		if sqlparser.SystemSchema(name.Qualifier.String()) {
-			continue
-		}
-		add(qualifiedTableName(route.Keyspace, name))
-	}
-	tablesUsed := collect()
-
-	addSlice, collect := concatSortedUniqueStringSlices()
-	addSlice(tablesUsed)
-	for _, mergedRoute := range route.MergedWith {
-		addSlice(mergedRoute.GetTablesUsed())
-	}
-	return collect()
-}
-
 // SetTruncateColumnCount sets the truncate column count.
 func (route *Route) SetTruncateColumnCount(count int) {
 	route.TruncateColumnCount = count

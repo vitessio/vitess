@@ -235,15 +235,6 @@ func (d *Distinct) GetTableName() string {
 	return d.Source.GetTableName()
 }
 
-// GetTablesUsed implements the Primitive interface
-func (d *Distinct) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	for _, source := range d.Inputs() {
-		add(source.GetTablesUsed())
-	}
-	return collect()
-}
-
 // GetFields implements the Primitive interface
 func (d *Distinct) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return d.Source.GetFields(ctx, vcursor, bindVars)

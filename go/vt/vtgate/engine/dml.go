@@ -122,22 +122,6 @@ func (dml *DML) GetTableName() string {
 	return ""
 }
 
-// GetTablesUsed specifies the table that this primitive routes to.
-func (dml *DML) GetTablesUsed() []string {
-	add, collect := collectSortedUniqueStrings()
-	for _, table := range dml.Table {
-		add(qualifiedIdentifier(dml.Keyspace, table.Name))
-	}
-	tablesUsed := collect()
-
-	addSlice, collect := concatSortedUniqueStringSlices()
-	addSlice(tablesUsed)
-	for _, merged := range dml.MergedWith {
-		addSlice(merged.GetTablesUsed())
-	}
-	return collect()
-}
-
 // GetSingleTable returns single table used in dml.
 func (dml *DML) GetSingleTable() (*vindexes.Table, error) {
 	if len(dml.Table) > 1 {

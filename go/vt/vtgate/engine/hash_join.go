@@ -212,15 +212,6 @@ func (hj *HashJoin) GetTableName() string {
 	return hj.Left.GetTableName() + "_" + hj.Right.GetTableName()
 }
 
-// GetTableUsed implements the Primitive interface
-func (hj *HashJoin) GetTablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
-	for _, input := range hj.Inputs() {
-		add(input.GetTablesUsed())
-	}
-	return collect()
-}
-
 // GetFields implements the Primitive interface
 func (hj *HashJoin) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	joinVars := make(map[string]*querypb.BindVariable)

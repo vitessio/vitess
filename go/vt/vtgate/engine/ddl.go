@@ -78,11 +78,6 @@ func (ddl *DDL) GetTableName() string {
 	return ddl.DDL.GetTable().Name.String()
 }
 
-// GetTablesUsed implements the Primitive interface
-func (ddl *DDL) GetTablesUsed() []string {
-	return singleQualifiedTableName(ddl.Keyspace, ddl.DDL.GetTable())
-}
-
 // IsOnlineSchemaDDL returns true if the query is an online schema change DDL
 func (ddl *DDL) isOnlineSchemaDDL() bool {
 	switch ddl.DDL.GetAction() {

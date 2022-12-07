@@ -90,11 +90,6 @@ func (vf *VindexFunc) GetTableName() string {
 	return ""
 }
 
-// GetTablesUsed specifies the table that this primitive routes to.
-func (vf *VindexFunc) GetTablesUsed() []string {
-	return []string{vf.TableName.Name.String()}
-}
-
 // TryExecute performs a non-streaming exec.
 func (vf *VindexFunc) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return vf.mapVindex(ctx, vcursor, bindVars)

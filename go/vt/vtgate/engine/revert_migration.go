@@ -69,11 +69,6 @@ func (v *RevertMigration) GetTableName() string {
 	return ""
 }
 
-// GetTablesUsed implements the Primitive interface
-func (v *RevertMigration) GetTablesUsed() []string {
-	return []string{}
-}
-
 // TryExecute implements the Primitive interface
 func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (result *sqltypes.Result, err error) {
 	result = &sqltypes.Result{

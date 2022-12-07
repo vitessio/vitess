@@ -94,10 +94,6 @@ func (c *DBDDL) GetTableName() string {
 	return ""
 }
 
-func (c *DBDDL) GetTablesUsed() []string {
-	return []string{}
-}
-
 // TryExecute implements the Primitive interface
 func (c *DBDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	name := vcursor.GetDBDDLPluginName()

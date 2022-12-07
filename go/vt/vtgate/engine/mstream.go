@@ -60,11 +60,6 @@ func (m *MStream) GetTableName() string {
 	return m.TableName
 }
 
-// GetTablesUsed implements the Primitive interface
-func (m *MStream) GetTablesUsed() []string {
-	return singleQualifiedString(m.Keyspace, m.GetTableName())
-}
-
 // TryExecute implements the Primitive interface
 func (m *MStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for Stream")

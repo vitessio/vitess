@@ -61,11 +61,6 @@ func (v *VStream) GetTableName() string {
 	return v.TableName
 }
 
-// GetTablesUsed implements the Primitive interface
-func (v *VStream) GetTablesUsed() []string {
-	return singleQualifiedString(v.Keyspace, v.GetTableName())
-}
-
 // TryExecute implements the Primitive interface
 func (v *VStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for VStream")
