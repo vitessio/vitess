@@ -125,5 +125,6 @@ func (v *VTExplain) Inputs() []Primitive {
 func (v *VTExplain) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "VTEXPLAIN",
+		Other:        map[string]any{"Type": v.Type.ToString()},
 	}
 }
