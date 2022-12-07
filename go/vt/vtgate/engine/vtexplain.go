@@ -35,9 +35,10 @@ type (
 		Query      string
 		FiredFrom  Primitive
 	}
+
 	VTExplain struct {
 		Input Primitive
-		Type  sqlparser.ExplainType
+		Type  sqlparser.VtExplainType
 	}
 )
 

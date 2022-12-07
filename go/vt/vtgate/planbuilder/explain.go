@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"encoding/json"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -38,14 +39,31 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	case *sqlparser.ExplainStmt:
 		switch explain.Type {
 		case sqlparser.VitessType:
-			return buildVitessTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			// TODO: change parser to not create explain format = vitess at all
+			// instead create VTEXPLAIN FORMAT = TABLE
+			//return buildVitessTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		case sqlparser.VTExplainType:
-			return buildVTExplainTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			// TODO: change parser to not create explain format = vtexplain at all
+			// instead create VTEXPLAIN FORMAT = QUERIES
+			//return buildVTExplainTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		default:
 			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
+}
+
+func buildVTExplainPlan(vtexplainStmt *sqlparser.VtExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	switch vtexplainStmt.Type {
+	case sqlparser.QueriesVtExplainType:
+		return buildVTExplainTypePlan(vtexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case sqlparser.TableVtExplainType, sqlparser.JSONVtExplainType:
+		return buildVitessTypePlan(vtexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case sqlparser.ExhaustiveVtExplainType:
+		// TODO
+		return nil, nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vtexplainStmt.Type.ToString())
 }
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
@@ -75,11 +93,34 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
 }
 
-func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildVitessTypePlan(explain *sqlparser.VtExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	innerInstruction, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
+	switch explain.Type {
+	case sqlparser.TableVtExplainType:
+		return tableTypeVitessExplain(innerInstruction), nil
+	case sqlparser.JSONVtExplainType:
+		description := engine.PrimitiveToPlanDescription(innerInstruction.primitive)
+		output, err := json.MarshalIndent(description, "", "\t")
+		if err != nil {
+			return nil, err
+		}
+		fields := []*querypb.Field{
+			{Name: "JSON", Type: querypb.Type_VARCHAR},
+		}
+		rows := []sqltypes.Row{
+			{
+				sqltypes.NewVarChar(string(output)),
+			},
+		}
+		return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable code: buildVitessTypePlan got invalid type")
+}
+
+func tableTypeVitessExplain(innerInstruction *planResult) *planResult {
 	descriptions := treeLines(engine.PrimitiveToPlanDescription(innerInstruction.primitive))
 
 	var rows [][]sqltypes.Value
@@ -111,11 +152,10 @@ func buildVitessTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser
 		{Name: "tabletType", Type: querypb.Type_VARCHAR},
 		{Name: "query", Type: querypb.Type_VARCHAR},
 	}
-
-	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
+	return newPlanResult(engine.NewRowsPrimitive(rows, fields))
 }
 
-func buildVTExplainTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildVTExplainTypePlan(explain *sqlparser.VtExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	input, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
