@@ -17,8 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -204,7 +206,13 @@ func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.
 	return tables[tableName.String()]
 }
 
-func analyzeDDL(stmt sqlparser.DDLStatement, tables map[string]*schema.Table) *Plan {
+func analyzeDDL(stmt sqlparser.DDLStatement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (*Plan, error) {
+	switch stmt.(type) {
+	case *sqlparser.AlterView, *sqlparser.DropView, *sqlparser.CreateView:
+		if viewsEnabled {
+			return analyzeViewsDDL(stmt, dbName, tables)
+		}
+	}
 	// DDLs and some other statements below don't get fully parsed.
 	// We have to use the original query at the time of execution.
 	// We are in the process of changing this
@@ -213,5 +221,20 @@ func analyzeDDL(stmt sqlparser.DDLStatement, tables map[string]*schema.Table) *P
 	if stmt.IsFullyParsed() {
 		fullQuery = GenerateFullQuery(stmt)
 	}
-	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}
+	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
+}
+
+func analyzeViewsDDL(stmt sqlparser.DDLStatement, dbName string, tables map[string]*schema.Table) (*Plan, error) {
+	switch stmt := stmt.(type) {
+	case *sqlparser.CreateView:
+		sql := fmt.Sprintf(mysql.InsertIntoViewsTable, "def", dbName, stmt.ViewName, sqlparser.String(stmt.Select), stmt.CheckOption, "NO", sqlparser.String(stmt.Definer), stmt.Security, "utf8mb4", "utf8mb4_0900_ai_ci")
+		parsedSQL, err := sqlparser.Parse(sql)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanView, FullStmt: parsedSQL}, nil
+	case *sqlparser.DropView:
+	case *sqlparser.AlterView:
+	}
+	return nil, nil
 }

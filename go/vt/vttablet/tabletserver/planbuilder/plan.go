@@ -37,7 +37,7 @@ var (
 	PassthroughDMLs = false
 )
 
-//_______________________________________________
+// _______________________________________________
 
 // PlanType indicates a query plan type.
 type PlanType int
@@ -55,6 +55,7 @@ const (
 	PlanDelete
 	PlanDeleteLimit
 	PlanDDL
+	PlanView
 	PlanSet
 	// PlanOtherRead is for statements like show, etc.
 	PlanOtherRead
@@ -148,7 +149,7 @@ func (pt PlanType) MarshalJSON() ([]byte, error) {
 	return json.Marshal(pt.String())
 }
 
-//_______________________________________________
+// _______________________________________________
 
 // Plan contains the parameters for executing a request.
 type Plan struct {
@@ -200,7 +201,7 @@ func (plan *Plan) TableNames() (names []string) {
 }
 
 // Build builds a plan based on the schema.
-func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbName string) (plan *Plan, err error) {
+func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (plan *Plan, err error) {
 	switch stmt := statement.(type) {
 	case *sqlparser.Union:
 		plan, err = &Plan{
@@ -218,7 +219,7 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 	case *sqlparser.Set:
 		plan, err = analyzeSet(stmt), nil
 	case sqlparser.DDLStatement:
-		plan = analyzeDDL(stmt, tables)
+		plan, err = analyzeDDL(stmt, tables, dbName, viewsEnabled)
 	case *sqlparser.AlterMigration:
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.RevertMigration:

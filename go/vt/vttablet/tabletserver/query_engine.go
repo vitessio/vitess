@@ -332,7 +332,7 @@ func (qe *QueryEngine) GetPlan(ctx context.Context, logStats *tabletenv.LogStats
 	if err != nil {
 		return nil, err
 	}
-	splan, err := planbuilder.Build(statement, qe.tables, qe.env.Config().DB.DBName)
+	splan, err := planbuilder.Build(statement, qe.tables, qe.env.Config().DB.DBName, qe.env.Config().EnableViews)
 	if err != nil {
 		return nil, err
 	}

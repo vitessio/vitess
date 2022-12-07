@@ -698,7 +698,7 @@ func TestPlanPoolUnsafe(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			statement, err := sqlparser.Parse(tcase.query)
 			require.NoError(t, err)
-			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName")
+			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName", false)
 			// Plan building will not fail, but it will mark that reserved connection is needed.
 			// checking plan is valid will fail.
 			require.NoError(t, err)

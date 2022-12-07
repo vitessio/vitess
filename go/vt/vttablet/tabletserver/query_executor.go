@@ -182,6 +182,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execOther()
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
+	case p.PlanView:
+		return qre.execAutocommit(qre.execView)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
 	case p.PlanCallProc:
@@ -204,6 +206,11 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return &sqltypes.Result{}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
+}
+
+func (qre *QueryExecutor) execView(conn *StatefulConnection) (*sqltypes.Result, error) {
+	// TODO: execute the query
+	return nil, nil
 }
 
 func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
