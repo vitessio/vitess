@@ -496,6 +496,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteVindexParam(parent, node, replacer)
 	case *VindexSpec:
 		return a.rewriteRefOfVindexSpec(parent, node, replacer)
+	case *VtExplainStmt:
+		return a.rewriteRefOfVtExplainStmt(parent, node, replacer)
 	case *WeightStringFuncExpr:
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
 	case *When:
@@ -7937,6 +7939,38 @@ func (a *application) rewriteRefOfVindexSpec(parent SQLNode, node *VindexSpec, r
 	}
 	return true
 }
+func (a *application) rewriteRefOfVtExplainStmt(parent SQLNode, node *VtExplainStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*VtExplainStmt).Statement = newNode.(Statement)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*VtExplainStmt).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfWeightStringFuncExpr(parent SQLNode, node *WeightStringFuncExpr, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8897,6 +8931,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfUse(parent, node, replacer)
 	case *VStream:
 		return a.rewriteRefOfVStream(parent, node, replacer)
+	case *VtExplainStmt:
+		return a.rewriteRefOfVtExplainStmt(parent, node, replacer)
 	default:
 		// this should never happen
 		return true

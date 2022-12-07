@@ -639,6 +639,16 @@ type (
 		Comments  *ParsedComments
 	}
 
+	// VtExplainType is an enum for VtExplainStmt.Type
+	VtExplainType int8
+
+	// VtExplainStmt represents an VtExplain statement
+	VtExplainStmt struct {
+		Type      VtExplainType
+		Statement Statement
+		Comments  *ParsedComments
+	}
+
 	// ExplainTab represents the Explain table
 	ExplainTab struct {
 		Table TableName
@@ -736,6 +746,7 @@ func (*TruncateTable) iStatement()     {}
 func (*RenameTable) iStatement()       {}
 func (*CallProc) iStatement()          {}
 func (*ExplainStmt) iStatement()       {}
+func (*VtExplainStmt) iStatement()     {}
 func (*ExplainTab) iStatement()        {}
 func (*PrepareStmt) iStatement()       {}
 func (*ExecuteStmt) iStatement()       {}
@@ -1261,47 +1272,52 @@ func (node *AlterView) SetFromTables(tables TableNames) {
 	// irrelevant
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *RenameTable) SetComments(comments Comments) {
 	// irrelevant
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *TruncateTable) SetComments(comments Comments) {
 	// irrelevant
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *AlterTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *ExplainStmt) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
+func (node *VtExplainStmt) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments implements Commented interface.
 func (node *CreateTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *CreateView) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *DropTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *DropView) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *AlterView) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
@@ -1336,49 +1352,54 @@ func (node *VStream) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *RenameTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *TruncateTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *AlterTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *ExplainStmt) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
+func (node *VtExplainStmt) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
+// GetParsedComments implements Commented interface.
 func (node *CreateTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *CreateView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *DropTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *DropView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *AlterView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }

@@ -496,6 +496,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitVindexParam(in, f)
 	case *VindexSpec:
 		return VisitRefOfVindexSpec(in, f)
+	case *VtExplainStmt:
+		return VisitRefOfVtExplainStmt(in, f)
 	case *WeightStringFuncExpr:
 		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *When:
@@ -3879,6 +3881,21 @@ func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfVtExplainStmt(in *VtExplainStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfWeightStringFuncExpr(in *WeightStringFuncExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4695,6 +4712,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfUse(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
+	case *VtExplainStmt:
+		return VisitRefOfVtExplainStmt(in, f)
 	default:
 		// this should never happen
 		return nil

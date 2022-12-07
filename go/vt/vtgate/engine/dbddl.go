@@ -139,7 +139,7 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 	}
 
 	for {
-		_, errors := vcursor.ExecuteMultiShard(ctx, destinations, queries, false, true)
+		_, errors := vcursor.ExecuteMultiShard(ctx, c, destinations, queries, false, true)
 
 		noErr := true
 		for _, err := range errors {

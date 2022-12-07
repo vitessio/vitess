@@ -249,6 +249,9 @@ const (
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
 	VTExplainStr   = "vtexplain"
+	TableStr       = "table"
+	QueriesStr     = "queries"
+	ExhaustiveStr  = "exhaustive"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -280,7 +283,7 @@ const (
 	ProcedureStr               = " procedure status"
 	StatusGlobalStr            = " global status"
 	StatusSessionStr           = " status"
-	TableStr                   = " tables"
+	TablesStr                  = " tables"
 	TableStatusStr             = " table status"
 	TriggerStr                 = " triggers"
 	VariableGlobalStr          = " global variables"
@@ -724,6 +727,14 @@ const (
 	VTExplainType
 	TraditionalType
 	AnalyzeType
+)
+
+// Constant for Enum Type - VtExplainType
+const (
+	QueriesVtExplainType VtExplainType = iota
+	TableVtExplainType
+	JSONVtExplainType
+	ExhaustiveVtExplainType
 )
 
 // Constant for Enum Type - SelectIntoType

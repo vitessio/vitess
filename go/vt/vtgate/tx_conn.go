@@ -17,14 +17,13 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
@@ -106,7 +105,7 @@ func (txc *TxConn) commitShard(ctx context.Context, s *vtgatepb.Session_ShardSes
 	}
 	s.TransactionId = 0
 	s.ReservedId = reservedID
-	logging.log(s.Target, "commit", false, nil)
+	logging.log(nil, s.Target, "commit", false, nil)
 	return nil
 }
 
@@ -212,7 +211,7 @@ func (txc *TxConn) Rollback(ctx context.Context, session *SafeSession) error {
 		}
 		s.TransactionId = 0
 		s.ReservedId = reservedID
-		logging.log(s.Target, "rollback", false, nil)
+		logging.log(nil, s.Target, "rollback", false, nil)
 		return nil
 	})
 	if err != nil {

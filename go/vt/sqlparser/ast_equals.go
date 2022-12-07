@@ -1448,6 +1448,12 @@ func EqualsSQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return EqualsRefOfVindexSpec(a, b)
+	case *VtExplainStmt:
+		b, ok := inB.(*VtExplainStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVtExplainStmt(a, b)
 	case *WeightStringFuncExpr:
 		b, ok := inB.(*WeightStringFuncExpr)
 		if !ok {
@@ -4395,6 +4401,19 @@ func EqualsRefOfVindexSpec(a, b *VindexSpec) bool {
 		EqualsSliceOfVindexParam(a.Params, b.Params)
 }
 
+// EqualsRefOfVtExplainStmt does deep equals between the two objects.
+func EqualsRefOfVtExplainStmt(a, b *VtExplainStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsStatement(a.Statement, b.Statement) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments)
+}
+
 // EqualsRefOfWeightStringFuncExpr does deep equals between the two objects.
 func EqualsRefOfWeightStringFuncExpr(a, b *WeightStringFuncExpr) bool {
 	if a == b {
@@ -6348,6 +6367,12 @@ func EqualsStatement(inA, inB Statement) bool {
 			return false
 		}
 		return EqualsRefOfVStream(a, b)
+	case *VtExplainStmt:
+		b, ok := inB.(*VtExplainStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVtExplainStmt(a, b)
 	default:
 		// this should never happen
 		return false

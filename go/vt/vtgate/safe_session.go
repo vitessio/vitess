@@ -881,7 +881,7 @@ func (session *SafeSession) EnableLogging() {
 	session.logging = &executeLogger{}
 }
 
-func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv map[string]*querypb.BindVariable) {
+func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return
 	}

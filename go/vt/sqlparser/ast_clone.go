@@ -497,6 +497,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneVindexParam(in)
 	case *VindexSpec:
 		return CloneRefOfVindexSpec(in)
+	case *VtExplainStmt:
+		return CloneRefOfVtExplainStmt(in)
 	case *WeightStringFuncExpr:
 		return CloneRefOfWeightStringFuncExpr(in)
 	case *When:
@@ -3017,6 +3019,17 @@ func CloneRefOfVindexSpec(n *VindexSpec) *VindexSpec {
 	return &out
 }
 
+// CloneRefOfVtExplainStmt creates a deep clone of the input.
+func CloneRefOfVtExplainStmt(n *VtExplainStmt) *VtExplainStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statement = CloneStatement(n.Statement)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
 // CloneRefOfWeightStringFuncExpr creates a deep clone of the input.
 func CloneRefOfWeightStringFuncExpr(n *WeightStringFuncExpr) *WeightStringFuncExpr {
 	if n == nil {
@@ -3832,6 +3845,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfUse(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
+	case *VtExplainStmt:
+		return CloneRefOfVtExplainStmt(in)
 	default:
 		// this should never happen
 		return nil

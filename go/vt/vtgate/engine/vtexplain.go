@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 type (
@@ -32,9 +33,11 @@ type (
 		TabletType topodatapb.TabletType
 		Cell       string
 		Query      string
+		FiredFrom  Primitive
 	}
 	VTExplain struct {
 		Input Primitive
+		Type  sqlparser.ExplainType
 	}
 )
 

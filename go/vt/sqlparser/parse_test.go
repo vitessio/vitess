@@ -2104,6 +2104,17 @@ var (
 	}, {
 		input: "explain format = traditional select * from t",
 	}, {
+		input: "vtexplain format = queries select * from t",
+	}, {
+		input: "vtexplain format = table select * from t",
+	}, {
+		input: "vtexplain format = json select * from t",
+	}, {
+		input: "vtexplain format = exhaustive select * from t",
+	}, {
+		input:  "vtexplain select * from t",
+		output: "vtexplain format = queries select * from t",
+	}, {
 		input: "explain analyze select * from t",
 	}, {
 		input: "explain format = tree select * from t",

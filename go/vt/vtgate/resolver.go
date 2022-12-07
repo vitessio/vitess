@@ -19,15 +19,10 @@ package vtgate
 import (
 	"context"
 
-	"vitess.io/vitess/go/vt/vtgate/logstats"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // Resolver is the layer to resolve KeyspaceIds and KeyRanges
@@ -48,75 +43,6 @@ func NewResolver(resolver *srvtopo.Resolver, serv srvtopo.Server, cell string, s
 		resolver:    resolver,
 		toposerv:    serv,
 		cell:        cell,
-	}
-}
-
-// isRetryableError will be true if the error should be retried.
-func isRetryableError(err error) bool {
-	return vterrors.Code(err) == vtrpcpb.Code_FAILED_PRECONDITION
-}
-
-// Execute executes a non-streaming query based on provided destination.
-// It retries query if new keyspace/shards are re-resolved after a retryable error.
-func (res *Resolver) Execute(
-	ctx context.Context,
-	sql string,
-	bindVars map[string]*querypb.BindVariable,
-	keyspace string,
-	tabletType topodatapb.TabletType,
-	destination key.Destination,
-	session *SafeSession,
-	options *querypb.ExecuteOptions,
-	logStats *logstats.LogStats,
-	canAutocommit bool,
-	ignoreMaxMemoryRows bool,
-) (*sqltypes.Result, error) {
-	rss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
-	if err != nil {
-		return nil, err
-	}
-	if logStats != nil {
-		logStats.ShardQueries = uint64(len(rss))
-	}
-
-	autocommit := len(rss) == 1 && canAutocommit && session.AutocommitApproval()
-
-	queries := make([]*querypb.BoundQuery, len(rss))
-	for i := range rss {
-		queries[i] = &querypb.BoundQuery{
-			Sql:           sql,
-			BindVariables: bindVars,
-		}
-	}
-
-	session.SetOptions(options)
-
-	for {
-		qr, errors := res.scatterConn.ExecuteMultiShard(
-			ctx,
-			rss,
-			queries,
-			session,
-			autocommit,
-			ignoreMaxMemoryRows,
-		)
-		err = vterrors.Aggregate(errors)
-		if isRetryableError(err) {
-			newRss, err := res.resolver.ResolveDestination(ctx, keyspace, tabletType, destination)
-			if err != nil {
-				return nil, err
-			}
-			if !srvtopo.ResolvedShardsEqual(rss, newRss) {
-				// If the mapping to underlying shards changed,
-				// we might be resharding. Try again.
-				rss = newRss
-				continue
-			}
-		}
-		if err != nil {
-			return nil, err
-		}
-		return qr, err
 	}
 }
 
