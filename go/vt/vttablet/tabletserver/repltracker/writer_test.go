@@ -21,10 +21,10 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -42,11 +42,9 @@ var (
 )
 
 func TestCreateSchema(t *testing.T) {
-	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
-	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
-	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
-	sidecardb.InitVTSchemaOnTabletInit = false
-	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 
 	db := fakesqldb.New(t)
 	defer db.Close()

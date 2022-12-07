@@ -31,11 +31,9 @@ import (
 )
 
 func TestRun(t *testing.T) {
-	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
-	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
-	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
-	sidecardb.InitVTSchemaOnTabletInit = false
-	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 
 	testVSchema := `
 {
@@ -86,11 +84,9 @@ create table t2 (
 }
 
 func TestParseSchema(t *testing.T) {
-	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
-	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
-	oldInitVTSchemaOnTabletInit := sidecardb.InitVTSchemaOnTabletInit
-	sidecardb.InitVTSchemaOnTabletInit = false
-	defer func() { sidecardb.InitVTSchemaOnTabletInit = oldInitVTSchemaOnTabletInit }()
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
 
 	testSchema := `
 create table t1 (

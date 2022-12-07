@@ -61,6 +61,7 @@ func TestEnsureDB(t *testing.T) {
 
 // TestLocalMetadata tests the contents of local_metadata table after vttablet startup
 func TestLocalMetadata(t *testing.T) {
+	t.Skip("Local Metadata has been removed")
 	defer cluster.PanicHandler(t)
 	// by default tablets are started with --restore_from_backup
 	// so metadata should exist

@@ -71,7 +71,7 @@ type Exec func(ctx context.Context, query string, maxRows int, wantFields bool, 
 // Init creates or upgrades the _vt schema based on declarative schema for all _vt tables
 func Init(ctx context.Context, exec Exec) error {
 	PrintCallerDetails()
-	if !InitVTSchemaOnTabletInit {
+	if !GetInitVTSchemaFlag() {
 		log.Infof("init-vt-schema-on-tablet-init NOT set, not updating _vt schema on tablet init")
 		return nil
 	}

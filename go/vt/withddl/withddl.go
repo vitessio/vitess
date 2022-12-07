@@ -74,9 +74,7 @@ func (wd *WithDDL) Exec(ctx context.Context, query string, fQuery any, fDDL any)
 	}
 
 	// if we are using the new schema init logic AND we are not running withddl unit tests
-	sidecardb.InitVTSchemaOnTabletInitMu.Lock()
-	defer sidecardb.InitVTSchemaOnTabletInitMu.Unlock()
-	if sidecardb.InitVTSchemaOnTabletInit && !EnableWithDDLForTests {
+	if sidecardb.GetInitVTSchemaFlag() && !EnableWithDDLForTests {
 		return execQuery(query)
 	}
 
