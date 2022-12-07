@@ -39,13 +39,11 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	case *sqlparser.ExplainStmt:
 		switch explain.Type {
 		case sqlparser.VitessType:
-			// TODO: change parser to not create explain format = vitess at all
-			// instead create VTEXPLAIN FORMAT = TABLE
-			//return buildVitessTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			vschema.PlannerWarning("EXPLAIN FORMAT = VITESS is deprecated, please use VTEXPLAIN FORMAT = TABLE instead.")
+			return buildVitessTypePlan(&sqlparser.VtExplainStmt{Type: sqlparser.TableVtExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		case sqlparser.VTExplainType:
-			// TODO: change parser to not create explain format = vtexplain at all
-			// instead create VTEXPLAIN FORMAT = QUERIES
-			//return buildVTExplainTypePlan(explain, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VTEXPLAIN FORMAT = QUERIES instead.")
+			return buildVTExplainTypePlan(&sqlparser.VtExplainStmt{Type: sqlparser.QueriesVtExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		default:
 			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}

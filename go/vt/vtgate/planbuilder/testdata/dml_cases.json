@@ -6020,7 +6020,8 @@
             "Query": "delete from `user`",
             "Table": "user"
           }
-        ]
+        ],
+        "Type": "queries"
       },
       "TablesUsed": [
         "user.user"
@@ -6051,7 +6052,8 @@
             "Query": "delete from `user`",
             "Table": "user"
           }
-        ]
+        ],
+        "Type": "queries"
       },
       "TablesUsed": [
         "user.user"
