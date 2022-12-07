@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"errors"
 	"sync"
 	"testing"
@@ -25,8 +26,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
-
-	"context"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -457,9 +456,16 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
+	sm.te = &delayedTxEngine{}
 	sm.qe.(*testQueryEngine).failMySQL = true
 	order.Set(0)
 	sm.CheckMySQL()
+	// We know checkMySQL will take atleast 50 milliseconds since txEngine.Close has a sleep in the test code
+	time.Sleep(10 * time.Millisecond)
+	// this asserts that checkMySQL is running
+	assert.EqualValues(t, 0, sm.checkMySQLThrottler.Size())
+	// When we are in CheckMySQL state, we should not be accepting any new requests which aren't transactional
+	assert.False(t, sm.IsServing())
 
 	// Rechecking immediately should be a no-op:
 	sm.CheckMySQL()
@@ -491,6 +497,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
+	assert.True(t, sm.IsServing())
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.Target().TabletType)
 	assert.Equal(t, StateServing, sm.State())
 }
