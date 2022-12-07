@@ -148,6 +148,14 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 		opCode = engine.Scatter
 	}
 
+	if vindexTable.Source != nil {
+		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		vindexTable = sourceTable
+	}
+
 	var dest key.Destination
 	var typ topodatapb.TabletType
 	var err error

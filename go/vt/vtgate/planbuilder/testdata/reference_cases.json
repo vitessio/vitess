@@ -439,7 +439,25 @@
     "comment": "update qualified ambiguous reference table error no primary vindex",
     "query": "update user.ambiguous_ref_with_source set col = 1",
     "v3-plan": "table 'ambiguous_ref_with_source' does not have a primary vindex",
-    "gen4-plan": "table 'ambiguous_ref_with_source' does not have a primary vindex"
+    "gen4-plan": {
+      "Instructions": {
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "MultiShardAutocommit": false,
+        "OperatorType": "Update",
+        "Query": "update ambiguous_ref_with_source set col = 1",
+        "Table": "ambiguous_ref_with_source",
+        "TargetTabletType": "PRIMARY",
+        "Variant": "Scatter"
+      },
+      "Original": "update user.ambiguous_ref_with_source set col = 1",
+      "QueryType": "UPDATE",
+      "TablesUsed": [
+        "user.ambiguous_ref_with_source"
+      ]
+    }
   },
   {
     "comment": "delete from unqualified ambiguous reference table routes to source",
@@ -487,7 +505,25 @@
     "comment": "delete from qualified ambiguous reference table error no primary vindex",
     "query": "delete from user.ambiguous_ref_with_source where col = 1",
     "v3-plan": "table 'ambiguous_ref_with_source' does not have a primary vindex",
-    "gen4-plan": "table 'ambiguous_ref_with_source' does not have a primary vindex"
+    "gen4-plan": {
+      "Instructions": {
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "MultiShardAutocommit": false,
+        "OperatorType": "Delete",
+        "Query": "delete from ambiguous_ref_with_source where col = 1",
+        "Table": "ambiguous_ref_with_source",
+        "TargetTabletType": "PRIMARY",
+        "Variant": "Scatter"
+      },
+      "Original": "delete from user.ambiguous_ref_with_source where col = 1",
+      "QueryType": "DELETE",
+      "TablesUsed": [
+        "user.ambiguous_ref_with_source"
+      ]
+    }
   },
   {
     "comment": "join with unqualified unambiguous ref with source routes to requested table",

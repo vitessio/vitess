@@ -215,7 +215,7 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(source, vschema)
-	buildReferences(source, vschema, false /*allowUnresolvedReferences*/)
+	buildReferences(source, vschema)
 	buildGlobalTables(source, vschema)
 	resolveAutoIncrement(source, vschema)
 	addDual(vschema)
@@ -242,7 +242,6 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
 	buildKeyspaces(formal, vschema)
-	buildReferences(formal, vschema, true /*allowUnresolvedReferences*/)
 	err := vschema.Keyspaces[keyspace].Error
 	return vschema.Keyspaces[keyspace], err
 }
@@ -306,10 +305,10 @@ func buildKeyspaceGlobalTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvsche
 	}
 }
 
-func buildReferences(source *vschemapb.SrvVSchema, vschema *VSchema, allowUnresolved bool) {
+func buildReferences(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
-		if err := buildKeyspaceReferences(ks, vschema, ksvschema, allowUnresolved); err != nil && ksvschema.Error == nil {
+		if err := buildKeyspaceReferences(ks, vschema, ksvschema); err != nil && ksvschema.Error == nil {
 			ksvschema.Error = err
 		}
 	}
@@ -319,7 +318,6 @@ func buildKeyspaceReferences(
 	ks *vschemapb.Keyspace,
 	vschema *VSchema,
 	ksvschema *KeyspaceSchema,
-	allowUnresolved bool,
 ) error {
 	keyspace := ksvschema.Keyspace
 	for tname, t := range ksvschema.Tables {
@@ -342,11 +340,8 @@ func buildKeyspaceReferences(
 		}
 
 		// Validate that reference can be resolved.
-		sourceKs, sourceT, err := vschema.findKeyspaceAndTableBySource(source)
+		_, sourceT, err := vschema.findKeyspaceAndTableBySource(source)
 		if sourceT == nil {
-			if sourceKs == nil && allowUnresolved {
-				return nil
-			}
 			return err
 		}
 
