@@ -296,9 +296,9 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 		1 + // table name length
 		len(tm.Name) +
 		1 + // [00]
-		1 + // column-count FIXME(alainjobart) len enc
+		lenEncIntSize(uint64(len(tm.Types))) + // column-count len enc
 		len(tm.Types) +
-		1 + // lenenc-str column-meta-def FIXME(alainjobart) len enc
+		lenEncIntSize(uint64(metadataLength)) + // lenenc-str column-meta-def
 		metadataLength +
 		len(tm.CanBeNull.data)
 	data := make([]byte, length)
@@ -320,15 +320,10 @@ func NewTableMapEvent(f BinlogFormat, s *FakeBinlogStream, tableID uint64, tm *T
 	data[pos] = 0
 	pos++
 
-	data[pos] = byte(len(tm.Types)) // FIXME(alainjobart) lenenc
-	pos++
-
+	pos = writeLenEncInt(data, pos, uint64(len(tm.Types)))
 	pos += copy(data[pos:], tm.Types)
 
-	// Per-column meta data. Starting with len-enc length.
-	// FIXME(alainjobart) lenenc
-	data[pos] = byte(metadataLength)
-	pos++
+	pos = writeLenEncInt(data, pos, uint64(metadataLength))
 	for c, typ := range tm.Types {
 		pos = metadataWrite(data, pos, typ, tm.Metadata[c])
 	}
@@ -366,10 +361,20 @@ func newRowsEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, tableID uint64,
 		panic("Not implemented, post_header_length==6")
 	}
 
+	hasIdentify := typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2 ||
+		typ == eDeleteRowsEventV1 || typ == eDeleteRowsEventV2
+	hasData := typ == eWriteRowsEventV1 || typ == eWriteRowsEventV2 ||
+		typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2
+
+	rowLen := rows.DataColumns.Count()
+	if hasIdentify {
+		rowLen = rows.IdentifyColumns.Count()
+	}
+
 	length := 6 + // table id
 		2 + // flags
 		2 + // extra data length, no extra data.
-		1 + // num columns FIXME(alainjobart) len enc
+		lenEncIntSize(uint64(rowLen)) + // num columns
 		len(rows.IdentifyColumns.data) + // only > 0 for Update & Delete
 		len(rows.DataColumns.data) // only > 0 for Write & Update
 	for _, row := range rows.Rows {
@@ -379,11 +384,6 @@ func newRowsEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, tableID uint64,
 			len(row.Data)
 	}
 	data := make([]byte, length)
-
-	hasIdentify := typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2 ||
-		typ == eDeleteRowsEventV1 || typ == eDeleteRowsEventV2
-	hasData := typ == eWriteRowsEventV1 || typ == eWriteRowsEventV2 ||
-		typ == eUpdateRowsEventV1 || typ == eUpdateRowsEventV2
 
 	data[0] = byte(tableID)
 	data[1] = byte(tableID >> 8)
@@ -396,12 +396,7 @@ func newRowsEvent(f BinlogFormat, s *FakeBinlogStream, typ byte, tableID uint64,
 	data[8] = 0x02
 	data[9] = 0x00
 
-	if hasIdentify {
-		data[10] = byte(rows.IdentifyColumns.Count()) // FIXME(alainjobart) len
-	} else {
-		data[10] = byte(rows.DataColumns.Count()) // FIXME(alainjobart) len
-	}
-	pos := 11
+	pos := writeLenEncInt(data, 10, uint64(rowLen))
 
 	if hasIdentify {
 		pos += copy(data[pos:], rows.IdentifyColumns.data)

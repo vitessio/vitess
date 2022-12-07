@@ -873,7 +873,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 		if t1Option, ok := t1OptionsMap[t2Option.Name]; ok {
 			options1 := sqlparser.TableOptions{t1Option}
 			options2 := sqlparser.TableOptions{t2Option}
-			if !sqlparser.EqualsTableOptions(options1, options2) {
+			if !sqlparser.EqualsTableOptions(options1, options2, nil) {
 				// options are different.
 				// However, we don't automatically apply these changes. It depends on the option!
 				switch strings.ToUpper(t1Option.Name) {
@@ -954,7 +954,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	}
 	var droppedPartitions1 []*sqlparser.PartitionDefinition
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
-	for len(definitions1) > 0 && !sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0]) {
+	for len(definitions1) > 0 && !sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0], nil) {
 		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
 		definitions1 = definitions1[1:]
 	}
@@ -966,14 +966,14 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	if len(definitions1) > len(definitions2) {
 		return false, nil, nil
 	}
-	// To save computation, and because we've already shown that sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0]),
+	// To save computation, and because we've already shown that sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0]), nil,
 	// we can skip one element
 	definitions1 = definitions1[1:]
 	definitions2 = definitions2[1:]
 	// Now let's ensure that whatever is remaining in definitions1 is an exact match for a prefix of definitions2
 	// It's ok if we end up with leftover elements in definition2
 	for len(definitions1) > 0 {
-		if !sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0]) {
+		if !sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0], nil) {
 			return false, nil, nil
 		}
 		definitions1 = definitions1[1:]
@@ -1016,7 +1016,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			IsAll:  true,
 		}
 		alterTable.PartitionSpec = partitionSpec
-	case sqlparser.EqualsRefOfPartitionOption(t1Partitions, t2Partitions):
+	case sqlparser.EqualsRefOfPartitionOption(t1Partitions, t2Partitions, nil):
 		// identical partitioning
 		return nil, nil
 	default:
@@ -1101,13 +1101,13 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 		if t1Constraint, ok := t1ConstraintsMap[normalizedT2ConstraintName]; ok {
 			// constraint exists in both tables
 			// check diff between before/after columns:
-			if !sqlparser.EqualsConstraintInfo(t2Constraint.Details, t1Constraint.Details) {
+			if !sqlparser.EqualsConstraintInfo(t2Constraint.Details, t1Constraint.Details, nil) {
 				// constraints with same name have different definition.
 				// First we check if this is only the enforced setting that changed which can
 				// be directly altered.
 				check1Details, ok1 := t1Constraint.Details.(*sqlparser.CheckConstraintDefinition)
 				check2Details, ok2 := t2Constraint.Details.(*sqlparser.CheckConstraintDefinition)
-				if ok1 && ok2 && sqlparser.EqualsExpr(check1Details.Expr, check2Details.Expr) {
+				if ok1 && ok2 && sqlparser.EqualsExpr(check1Details.Expr, check2Details.Expr, nil) {
 					// We have the same expression, so we have a different Enforced here
 					alterConstraint := &sqlparser.AlterCheck{
 						Name:     t2Constraint.Name,
@@ -1178,7 +1178,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		if t1Key, ok := t1KeysMap[t2KeyName]; ok {
 			// key exists in both tables
 			// check diff between before/after columns:
-			if !sqlparser.EqualsRefOfIndexDefinition(t2Key, t1Key) {
+			if !sqlparser.EqualsRefOfIndexDefinition(t2Key, t1Key, nil) {
 				indexVisibilityChange, newVisibility := indexOnlyVisibilityChange(t1Key, t2Key)
 				if indexVisibilityChange {
 					alterTable.AlterOptions = append(alterTable.AlterOptions, &sqlparser.AlterIndex{
@@ -1243,7 +1243,7 @@ func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, b
 		t2KeyKeptOptions = append(t2KeyKeptOptions, opt)
 	}
 	t2KeyCopy.Options = t2KeyKeptOptions
-	if sqlparser.EqualsRefOfIndexDefinition(t2KeyCopy, t1KeyCopy) {
+	if sqlparser.EqualsRefOfIndexDefinition(t2KeyCopy, t1KeyCopy, nil) {
 		return true, t2KeyInvisible
 	}
 	return false, false
@@ -2122,6 +2122,6 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 	if other == nil {
 		return false
 	}
-	return sqlparser.EqualsRefOfTableSpec(c.TableSpec, other.TableSpec) &&
-		sqlparser.EqualsRefOfParsedComments(c.Comments, other.Comments)
+	return sqlparser.EqualsRefOfTableSpec(c.TableSpec, other.TableSpec, nil) &&
+		sqlparser.EqualsRefOfParsedComments(c.Comments, other.Comments, nil)
 }
