@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -33,7 +34,7 @@ type Delete struct {
 	noPredicates
 }
 
-var _ PhysicalOperator = (*Delete)(nil)
+var _ ops.PhysicalOperator = (*Delete)(nil)
 
 // Introduces implements the PhysicalOperator interface
 func (d *Delete) Introduces() semantics.TableSet {
@@ -44,8 +45,7 @@ func (d *Delete) Introduces() semantics.TableSet {
 func (d *Delete) IPhysical() {}
 
 // Clone implements the Operator interface
-func (d *Delete) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 0)
+func (d *Delete) Clone(inputs []ops.Operator) ops.Operator {
 	return &Delete{
 		QTable:           d.QTable,
 		VTable:           d.VTable,

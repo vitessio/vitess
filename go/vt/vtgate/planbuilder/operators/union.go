@@ -20,13 +20,14 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
 type Union struct {
-	Sources     []Operator
-	SelectStmts []*sqlparser.Select
-	Distinct    bool
+	Sources  []ops.Operator
+	Distinct bool
 
 	// TODO this should be removed. For now it's used to fail queries
 	Ordering sqlparser.OrderBy
@@ -34,21 +35,20 @@ type Union struct {
 	noColumns
 }
 
-var _ PhysicalOperator = (*Union)(nil)
+var _ ops.PhysicalOperator = (*Union)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (u *Union) IPhysical() {}
 
 // Clone implements the Operator interface
-func (u *Union) Clone(inputs []Operator) Operator {
+func (u *Union) Clone(inputs []ops.Operator) ops.Operator {
 	newOp := *u
-	checkSize(inputs, len(u.Sources))
 	newOp.Sources = inputs
 	return &newOp
 }
 
 // Inputs implements the Operator interface
-func (u *Union) Inputs() []Operator {
+func (u *Union) Inputs() []ops.Operator {
 	return u.Sources
 }
 
@@ -73,9 +73,13 @@ Notice how `X.col = 42` has been translated to `foo = 42` and `id = 42` on respe
 The first SELECT of the union dictates the column names, and the second is whatever expression
 can be found on the same offset. The names of the RHS are discarded.
 */
-func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	offsets := make(map[string]int)
-	for i, selectExpr := range u.SelectStmts[0].SelectExprs {
+	sel, err := u.GetSelectFor(0)
+	if err != nil {
+		return nil, err
+	}
+	for i, selectExpr := range sel.SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on UNION where the first SELECT contains star or next")
@@ -105,7 +109,13 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 				return false
 			}
 
-			ae, ok := u.SelectStmts[i].SelectExprs[idx].(*sqlparser.AliasedExpr)
+			var sel *sqlparser.Select
+			sel, err = u.GetSelectFor(i)
+			if err != nil {
+				return false
+			}
+
+			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
 				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
 				return false
@@ -117,7 +127,63 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 			return nil, err
 		}
 		u.Sources[i], err = u.Sources[i].AddPredicate(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return u, nil
+}
+
+func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
+	src := u.Sources[source]
+	for {
+		switch op := src.(type) {
+		case *Horizon:
+			return sqlparser.GetFirstSelect(op.Select), nil
+		case *Route:
+			src = op.Source
+		default:
+			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
+		}
+	}
+}
+
+func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
+	var newSources []ops.Operator
+	anythingChanged := false
+	for _, source := range u.Sources {
+		var other *Union
+		horizon, ok := source.(*Horizon)
+		if ok {
+			union, ok := horizon.Source.(*Union)
+			if ok {
+				other = union
+			}
+		}
+		if other == nil {
+			newSources = append(newSources, source)
+			continue
+		}
+		anythingChanged = true
+		switch {
+		case len(other.Ordering) == 0 && !other.Distinct:
+			fallthrough
+		case u.Distinct:
+			// if the current UNION is a DISTINCT, we can safely ignore everything from children UNIONs, except LIMIT
+			newSources = append(newSources, other.Sources...)
+
+		default:
+			newSources = append(newSources, other)
+		}
+	}
+	if anythingChanged {
+		u.Sources = newSources
+	}
+	identity := rewrite.SameTree
+	if anythingChanged {
+		identity = rewrite.NewTree
+	}
+
+	return u, identity, nil
 }

@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
@@ -60,9 +61,9 @@ type (
 	}
 )
 
-var _ Operator = (*QueryGraph)(nil)
+var _ ops.Operator = (*QueryGraph)(nil)
 
-// Introduces implements the tableIDIntroducer interface
+// Introduces implements the TableIDIntroducer interface
 func (qg *QueryGraph) Introduces() semantics.TableSet {
 	var ts semantics.TableSet
 	for _, table := range qg.Tables {
@@ -109,17 +110,21 @@ func (qg *QueryGraph) getPredicateByDeps(ts semantics.TableSet) ([]sqlparser.Exp
 	}
 	return nil, false
 }
-func (qg *QueryGraph) addJoinPredicates(ts semantics.TableSet, expr sqlparser.Expr) {
+func (qg *QueryGraph) addJoinPredicates(ctx *plancontext.PlanningContext, ts semantics.TableSet, predicate sqlparser.Expr) {
 	for _, join := range qg.innerJoins {
 		if join.deps == ts {
-			join.exprs = append(join.exprs, expr)
+			if ctx.SemTable.ContainsExpr(predicate, join.exprs) {
+				return
+			}
+
+			join.exprs = append(join.exprs, predicate)
 			return
 		}
 	}
 
 	qg.innerJoins = append(qg.innerJoins, &innerJoin{
 		deps:  ts,
-		exprs: []sqlparser.Expr{expr},
+		exprs: []sqlparser.Expr{predicate},
 	})
 }
 
@@ -129,21 +134,23 @@ func (qg *QueryGraph) collectPredicate(ctx *plancontext.PlanningContext, predica
 	case 0:
 		qg.addNoDepsPredicate(predicate)
 	case 1:
-		found := qg.addToSingleTable(deps, predicate)
+		found := qg.addToSingleTable(ctx, deps, predicate)
 		if !found {
 			// this could be a predicate that only has dependencies from outside this QG
-			qg.addJoinPredicates(deps, predicate)
+			qg.addJoinPredicates(ctx, deps, predicate)
 		}
 	default:
-		qg.addJoinPredicates(deps, predicate)
+		qg.addJoinPredicates(ctx, deps, predicate)
 	}
 	return nil
 }
 
-func (qg *QueryGraph) addToSingleTable(table semantics.TableSet, predicate sqlparser.Expr) bool {
+func (qg *QueryGraph) addToSingleTable(ctx *plancontext.PlanningContext, table semantics.TableSet, predicate sqlparser.Expr) bool {
 	for _, t := range qg.Tables {
 		if table == t.ID {
-			t.Predicates = append(t.Predicates, predicate)
+			if !ctx.SemTable.ContainsExpr(predicate, t.Predicates) {
+				t.Predicates = append(t.Predicates, predicate)
+			}
 			return true
 		}
 	}
@@ -175,8 +182,7 @@ func (qg *QueryGraph) UnsolvedPredicates(_ *semantics.SemTable) []sqlparser.Expr
 }
 
 // Clone implements the Operator interface
-func (qg *QueryGraph) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 0)
+func (qg *QueryGraph) Clone(inputs []ops.Operator) ops.Operator {
 	result := &QueryGraph{
 		Tables:     nil,
 		innerJoins: nil,
@@ -189,7 +195,7 @@ func (qg *QueryGraph) Clone(inputs []Operator) Operator {
 	return result
 }
 
-func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (qg *QueryGraph) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		err := qg.collectPredicate(ctx, e)
 		if err != nil {

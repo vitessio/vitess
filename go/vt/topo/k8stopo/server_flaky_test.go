@@ -143,5 +143,5 @@ func TestKubernetesTopo(t *testing.T) {
 		}
 
 		return ts
-	})
+	}, []string{"checkTryLock", "checkShardWithLock"})
 }

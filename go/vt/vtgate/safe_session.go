@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
@@ -146,15 +147,44 @@ func NewAutocommitSession(sessn *vtgatepb.Session) *SafeSession {
 func (session *SafeSession) ResetTx() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	if !session.Session.InReservedConn {
+		session.ShardSessions = nil
+		session.PreSessions = nil
+		session.PostSessions = nil
+	}
+}
+
+// Reset clears the session
+func (session *SafeSession) Reset() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+}
+
+// ResetAll resets the shard sessions and lock session.
+func (session *SafeSession) ResetAll() {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.resetCommonLocked()
+	session.ShardSessions = nil
+	session.PreSessions = nil
+	session.PostSessions = nil
+	session.LockSession = nil
+	session.AdvisoryLock = nil
+}
+
+func (session *SafeSession) resetCommonLocked() {
 	session.mustRollback = false
 	session.autocommitState = notAutocommittable
 	session.Session.InTransaction = false
 	session.commitOrder = vtgatepb.CommitOrder_NORMAL
 	session.Savepoints = nil
-	if !session.Session.InReservedConn {
-		session.ShardSessions = nil
-		session.PreSessions = nil
-		session.PostSessions = nil
+	if session.Options != nil {
+		session.Options.TransactionAccessMode = nil
 	}
 }
 
@@ -170,20 +200,6 @@ func (session *SafeSession) GetQueryTimeout() int64 {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	return session.QueryTimeout
-}
-
-// Reset clears the session
-func (session *SafeSession) Reset() {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.commitOrder = vtgatepb.CommitOrder_NORMAL
-	session.Savepoints = nil
-	session.ShardSessions = nil
-	session.PreSessions = nil
-	session.PostSessions = nil
 }
 
 // SavePoints returns the save points of the session. It's safe to use concurrently
@@ -508,20 +524,26 @@ func (session *SafeSession) SetSystemVariable(name string, expr string) {
 	session.SystemVariables[name] = expr
 }
 
-// GetSystemVariables takes a visitor function that will save each system variables of the session
+// GetSystemVariables takes a visitor function that will receive each MySQL system variable in the session.
+// This function will only yield system variables which apply to MySQL itself; Vitess-aware system variables
+// will be skipped.
 func (session *SafeSession) GetSystemVariables(f func(k string, v string)) {
 	session.mu.Lock()
 	defer session.mu.Unlock()
 	for k, v := range session.SystemVariables {
+		if sysvars.IsVitessAware(k) {
+			continue
+		}
 		f(k, v)
 	}
 }
 
-// HasSystemVariables returns whether the session has system variables set or not.
-func (session *SafeSession) HasSystemVariables() bool {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	return len(session.SystemVariables) > 0
+// HasSystemVariables returns whether the session has system variables that would apply to MySQL
+func (session *SafeSession) HasSystemVariables() (found bool) {
+	session.GetSystemVariables(func(_ string, _ string) {
+		found = true
+	})
+	return
 }
 
 // SetOptions sets the options
@@ -554,18 +576,19 @@ func (session *SafeSession) SetReservedConn(reservedConn bool) {
 
 // SetPreQueries returns the prequeries that need to be run when reserving a connection
 func (session *SafeSession) SetPreQueries() []string {
-	session.mu.Lock()
-	defer session.mu.Unlock()
+	// extract keys
+	var keys []string
+	sysVars := make(map[string]string)
+	session.GetSystemVariables(func(k string, v string) {
+		keys = append(keys, k)
+		sysVars[k] = v
+	})
 
-	if len(session.SystemVariables) == 0 {
+	// if not system variables to set, return
+	if len(keys) == 0 {
 		return nil
 	}
 
-	// extract keys
-	keys := make([]string, 0, len(session.SystemVariables))
-	for k := range session.SystemVariables {
-		keys = append(keys, k)
-	}
 	// sort the keys
 	sort.Strings(keys)
 
@@ -574,10 +597,10 @@ func (session *SafeSession) SetPreQueries() []string {
 	first := true
 	for _, k := range keys {
 		if first {
-			preQuery.WriteString(fmt.Sprintf("set @@%s = %s", k, session.SystemVariables[k]))
+			preQuery.WriteString(fmt.Sprintf("set @@%s = %s", k, sysVars[k]))
 			first = false
 		} else {
-			preQuery.WriteString(fmt.Sprintf(", @@%s = %s", k, session.SystemVariables[k]))
+			preQuery.WriteString(fmt.Sprintf(", @@%s = %s", k, sysVars[k]))
 		}
 	}
 	return []string{preQuery.String()}
@@ -617,22 +640,6 @@ func (session *SafeSession) InLockSession() bool {
 func (session *SafeSession) ResetLock() {
 	session.mu.Lock()
 	defer session.mu.Unlock()
-	session.LockSession = nil
-	session.AdvisoryLock = nil
-}
-
-// ResetAll resets the shard sessions and lock session.
-func (session *SafeSession) ResetAll() {
-	session.mu.Lock()
-	defer session.mu.Unlock()
-	session.mustRollback = false
-	session.autocommitState = notAutocommittable
-	session.Session.InTransaction = false
-	session.commitOrder = vtgatepb.CommitOrder_NORMAL
-	session.Savepoints = nil
-	session.ShardSessions = nil
-	session.PreSessions = nil
-	session.PostSessions = nil
 	session.LockSession = nil
 	session.AdvisoryLock = nil
 }

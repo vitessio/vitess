@@ -85,6 +85,39 @@ func (mcmp *MySQLCompare) AssertMatchesAny(query string, expected ...string) {
 	mcmp.t.Errorf("Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
 }
 
+// AssertMatchesAnyNoCompare ensures the given query produces any one of the expected results.
+// This method does not compare the mysql and vitess results together
+func (mcmp *MySQLCompare) AssertMatchesAnyNoCompare(query string, expected ...string) {
+	mcmp.t.Helper()
+
+	mQr, vQr := mcmp.execNoCompare(query)
+	got := fmt.Sprintf("%v", mQr.Rows)
+	valid := false
+	for _, e := range expected {
+		diff := cmp.Diff(e, got)
+		if diff == "" {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		mcmp.t.Errorf("MySQL Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
+	}
+	valid = false
+
+	got = fmt.Sprintf("%v", vQr.Rows)
+	for _, e := range expected {
+		diff := cmp.Diff(e, got)
+		if diff == "" {
+			valid = true
+			break
+		}
+	}
+	if !valid {
+		mcmp.t.Errorf("Vitess Query: %s (-want +got):\n%v\nGot:%s", query, expected, got)
+	}
+}
+
 // AssertContainsError executes the query on both Vitess and MySQL.
 // Both clients need to return an error. The error of Vitess must be matching the given expectation.
 func (mcmp *MySQLCompare) AssertContainsError(query, expected string) {

@@ -21,12 +21,14 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator, bool, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Operator, rewrite.TreeIdentity, error) {
 	var unmerged []*SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
@@ -46,7 +48,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator,
 		}
 		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, merger)
 		if err != nil {
-			return nil, false, err
+			return nil, rewrite.SameTree, err
 		}
 
 		if merged != nil {
@@ -67,26 +69,26 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (Operator,
 		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
 			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
-				return nil, false, err
+				return nil, rewrite.SameTree, err
 			}
 			outer = correlatedTree
 			continue
 		}
 
-		return nil, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, rewrite.SameTree, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
 		tree.Outer = outer
 		outer = tree
 	}
-	return outer, true, nil
+	return outer, rewrite.NewTree, nil
 }
 
-func unresolvedAndSource(ctx *plancontext.PlanningContext, op Operator) ([]sqlparser.Expr, Operator) {
-	preds := unresolvedPredicates(op, ctx.SemTable)
+func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
+	preds := UnresolvedPredicates(op, ctx.SemTable)
 	if filter, ok := op.(*Filter); ok {
-		if sqlparser.EqualsExprs(preds, filter.Predicates) {
+		if sqlparser.EqualsExprs(preds, filter.Predicates, ctx.SemTable.ASTComparison()) {
 			// if we are seeing a single filter with only these predicates,
 			// we can throw away the filter and just use the source
 			return preds, filter.Source
@@ -98,21 +100,6 @@ func unresolvedAndSource(ctx *plancontext.PlanningContext, op Operator) ([]sqlpa
 
 func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner) (*Route, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
-
-	// go over the subquery and add its tables to the one's solved by the route it is merged with
-	// this is needed to so that later when we try to push projections, we get the correct
-	// solved tableID from the route, since it also includes the tables from the subquery after merging
-	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch n := node.(type) {
-		case *sqlparser.AliasedTableExpr:
-			ts := TableID(outer)
-			ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
-		}
-		return true, nil
-	}, subq.ExtractedSubquery.Subquery)
-	if err != nil {
-		return nil, err
-	}
 	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
 	for k, v := range inner.SysTableTableName {
 		if outer.SysTableTableName == nil {
@@ -129,7 +116,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	// predicates list, so this might be a no-op.
 	subQueryWasPredicate := false
 	for i, predicate := range outer.SeenPredicates {
-		if sqlparser.EqualsExpr(predicate, subq.ExtractedSubquery) {
+		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
 			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
 
 			subQueryWasPredicate = true
@@ -140,7 +127,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 		}
 	}
 
-	err = outer.resetRoutingSelections(ctx)
+	err := outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +145,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	return outer, nil
 }
 
-func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op Operator) bool {
+func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStatement, op ops.Operator) bool {
 	validVindex := func(expr sqlparser.Expr) bool {
 		sc := findColumnVindex(ctx, op, expr)
 		return sc != nil && sc.IsUnique()
@@ -200,11 +187,11 @@ func isMergeable(ctx *plancontext.PlanningContext, query sqlparser.SelectStateme
 
 func tryMergeSubQueryOp(
 	ctx *plancontext.PlanningContext,
-	outer, subq Operator,
+	outer, subq ops.Operator,
 	subQueryInner *SubQueryInner,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
-) (Operator, error) {
+) (ops.Operator, error) {
 	switch outerOp := outer.(type) {
 	case *Filter:
 		op, err := tryMergeSubQueryOp(ctx, outerOp.Source, subq, subQueryInner, joinPredicates, merger)
@@ -224,12 +211,12 @@ func tryMergeSubQueryOp(
 
 func tryMergeSubqueryWithRoute(
 	ctx *plancontext.PlanningContext,
-	subq Operator,
+	subq ops.Operator,
 	outerOp *Route,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 	subQueryInner *SubQueryInner,
-) (Operator, error) {
+) (ops.Operator, error) {
 	subqueryRoute, isRoute := subq.(*Route)
 	if !isRoute {
 		return nil, nil
@@ -281,12 +268,12 @@ func tryMergeSubqueryWithRoute(
 
 func tryMergeSubqueryWithJoin(
 	ctx *plancontext.PlanningContext,
-	subq Operator,
+	subq ops.Operator,
 	outerOp *ApplyJoin,
 	joinPredicates []sqlparser.Expr,
 	merger mergeFunc,
 	subQueryInner *SubQueryInner,
-) (PhysicalOperator, error) {
+) (ops.PhysicalOperator, error) {
 	// Trying to merge the subquery with the left-hand or right-hand side of the join
 
 	if outerOp.LeftJoin {
@@ -336,10 +323,10 @@ func tryMergeSubqueryWithJoin(
 // the child of joinTree which does not contain the subquery is the otherTree
 func rewriteColumnsInSubqueryOpForJoin(
 	ctx *plancontext.PlanningContext,
-	innerOp Operator,
+	innerOp ops.Operator,
 	outerTree *ApplyJoin,
 	subQueryInner *SubQueryInner,
-) (Operator, error) {
+) (ops.Operator, error) {
 	resultInnerOp := innerOp
 	var rewriteError error
 	// go over the entire expression in the subquery
@@ -372,11 +359,9 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(TableID(resultInnerOp))
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(TableID(resultInnerOp))
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
 
 	// return any error while rewriting
 	return resultInnerOp, rewriteError
@@ -384,7 +369,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 func createCorrelatedSubqueryOp(
 	ctx *plancontext.PlanningContext,
-	innerOp, outerOp Operator,
+	innerOp, outerOp ops.Operator,
 	preds []sqlparser.Expr,
 	extractedSubquery *sqlparser.ExtractedSubquery,
 ) (*CorrelatedSubQueryOp, error) {
@@ -406,7 +391,7 @@ func createCorrelatedSubqueryOp(
 				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
-					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
+					// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
 					for colName, bindVar := range bindVars {
 						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))

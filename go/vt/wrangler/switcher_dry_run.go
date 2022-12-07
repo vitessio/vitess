@@ -131,7 +131,7 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
-	dr.drLog.Log("SwitchWrites completed, freeze and delete vreplication streams on:")
+	dr.drLog.Log("Switch writes completed, freeze and delete vreplication streams on:")
 	logs := make([]string, 0)
 	for _, t := range ts.Targets() {
 		logs = append(logs, fmt.Sprintf("\ttablet %d", t.GetPrimary().Alias.Uid))

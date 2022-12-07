@@ -31,6 +31,26 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+func TestVexecUpdateTemplates(t *testing.T) {
+	{
+		match, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates)
+		assert.NoError(t, err)
+		assert.False(t, match)
+	}
+	queries := []string{
+		`update _vt.schema_migrations set migration_status='cancel-all' where mysql_schema='vt_commerce'`,
+		`update _vt.schema_migrations set migration_status = 'cancel-all' where migration_uuid='a5a563da_dc1a_11ec_a416_0a43f95f28a3' and mysql_schema = 'vt_commerce'`,
+		`update _vt.schema_migrations set migration_status = 'cancel-all' where migration_uuid='a5a563da_dc1a_11ec_a416_0a43f95f28a3' and mysql_schema = 'vt_commerce' and shard='0'`,
+	}
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			match, err := sqlparser.QueryMatchesTemplates(query, vexecUpdateTemplates)
+			assert.NoError(t, err)
+			assert.True(t, match)
+		})
+	}
+}
+
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{}
 	tt := []struct {
@@ -93,7 +113,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			}, createTable)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.countConstraints, len(uniqueConstraintNames))
-			assert.Equal(t, tc.countConstraints, len(constraintMap))
+			assert.Equalf(t, tc.countConstraints, len(constraintMap), "got contraints: %v", constraintMap)
 		})
 	}
 }
@@ -120,6 +140,18 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			alter:  "alter table t add fulltext key name0_ft (name0), add column i int, add fulltext key name1_ft (name1), add fulltext key name2_ft (name2)",
 			expect: []string{"alter table t add fulltext key name0_ft (name0), add column i int", "alter table t add fulltext key name1_ft (name1)", "alter table t add fulltext key name2_ft (name2)"},
 		},
+		{
+			alter:  "alter table t add constraint check (id != 1)",
+			expect: []string{"alter table t add constraint chk_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
+		{
+			alter:  "alter table t add constraint t_chk_1 check (id != 1)",
+			expect: []string{"alter table t add constraint chk_1_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
+		{
+			alter:  "alter table t add constraint some_check check (id != 1)",
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
@@ -129,7 +161,8 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			m := map[string]string{}
-			alters, err := e.validateAndEditAlterTableStatement(context.Background(), alterTable, m)
+			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t"}
+			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
 			assert.NoError(t, err)
 			altersStrings := []string{}
 			for _, alter := range alters {

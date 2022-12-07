@@ -20,6 +20,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -39,14 +40,13 @@ type (
 	}
 )
 
-var _ PhysicalOperator = (*Table)(nil)
+var _ ops.PhysicalOperator = (*Table)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (to *Table) IPhysical() {}
 
 // Clone implements the Operator interface
-func (to *Table) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 0)
+func (to *Table) Clone([]ops.Operator) ops.Operator {
 	var columns []*sqlparser.ColName
 	for _, name := range to.Columns {
 		columns = append(columns, sqlparser.CloneRefOfColName(name))
@@ -64,7 +64,7 @@ func (to *Table) Introduces() semantics.TableSet {
 }
 
 // AddPredicate implements the PhysicalOperator interface
-func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	return newFilter(to, expr), nil
 }
 

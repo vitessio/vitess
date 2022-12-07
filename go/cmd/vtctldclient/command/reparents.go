@@ -53,6 +53,7 @@ WARNING: this can cause data loss on an already-replicating shard. PlannedRepare
 EmergencyReparentShard should be used instead.
 `,
 		DisableFlagsInUseLine: true,
+		Deprecated:            "Please use PlannedReparentShard instead",
 		Args:                  cobra.ExactArgs(2),
 		RunE:                  commandInitShardPrimary,
 	}

@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -31,38 +33,25 @@ func TestFormatDescriptionEvent(t *testing.T) {
 	s := NewFakeBinlogStream()
 
 	event := NewFormatDescriptionEvent(f, s)
-	if !event.IsValid() {
-		t.Fatalf("IsValid() returned false")
-	}
-	if !event.IsFormatDescription() {
-		t.Fatalf("IsFormatDescription returned false")
-	}
+	require.True(t, event.IsValid(), "IsValid() returned false")
+	require.True(t, event.IsFormatDescription(), "IsFormatDescription returned false")
+
 	gotF, err := event.Format()
-	if err != nil {
-		t.Fatalf("Format failed: %v", err)
-	}
-	if !reflect.DeepEqual(gotF, f) {
-		t.Fatalf("Parsed BinlogFormat doesn't match, got:\n%v\nexpected:\n%v", gotF, f)
-	}
+	require.NoError(t, err, "Format failed: %v", err)
+	require.True(t, reflect.DeepEqual(gotF, f), "Parsed BinlogFormat doesn't match, got:\n%v\nexpected:\n%v", gotF, f)
 
 	// MariaDB
 	f = NewMariaDBBinlogFormat()
 	s = NewFakeBinlogStream()
 
 	event = NewFormatDescriptionEvent(f, s)
-	if !event.IsValid() {
-		t.Fatalf("IsValid() returned false")
-	}
-	if !event.IsFormatDescription() {
-		t.Fatalf("IsFormatDescription returned false")
-	}
+	require.True(t, event.IsValid(), "IsValid() returned false")
+	require.True(t, event.IsFormatDescription(), "IsFormatDescription returned false")
+
 	gotF, err = event.Format()
-	if err != nil {
-		t.Fatalf("Format failed: %v", err)
-	}
-	if !reflect.DeepEqual(gotF, f) {
-		t.Fatalf("Parsed BinlogFormat doesn't match, got:\n%v\nexpected:\n%v", gotF, f)
-	}
+	require.NoError(t, err, "Format failed: %v", err)
+	require.True(t, reflect.DeepEqual(gotF, f), "Parsed BinlogFormat doesn't match, got:\n%v\nexpected:\n%v", gotF, f)
+
 }
 
 func TestQueryEvent(t *testing.T) {
@@ -79,24 +68,16 @@ func TestQueryEvent(t *testing.T) {
 		},
 	}
 	event := NewQueryEvent(f, s, q)
-	if !event.IsValid() {
-		t.Fatalf("NewQueryEvent returned an invalid event")
-	}
-	if !event.IsQuery() {
-		t.Fatalf("NewQueryEvent returned a non-query event: %v", event)
-	}
+	require.True(t, event.IsValid(), "NewQueryEvent returned an invalid event")
+	require.True(t, event.IsQuery(), "NewQueryEvent returned a non-query event: %v", event)
+
 	event, _, err := event.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("StripChecksum failed: %v", err)
-	}
+	require.NoError(t, err, "StripChecksum failed: %v", err)
 
 	gotQ, err := event.Query(f)
-	if err != nil {
-		t.Fatalf("event.Query() failed: %v", err)
-	}
-	if !reflect.DeepEqual(gotQ, q) {
-		t.Fatalf("event.Query() returned %v was expecting %v", gotQ, q)
-	}
+	require.NoError(t, err, "event.Query() failed: %v", err)
+	require.True(t, reflect.DeepEqual(gotQ, q), "event.Query() returned %v was expecting %v", gotQ, q)
+
 }
 
 func TestXIDEvent(t *testing.T) {
@@ -104,12 +85,9 @@ func TestXIDEvent(t *testing.T) {
 	s := NewFakeBinlogStream()
 
 	event := NewXIDEvent(f, s)
-	if !event.IsValid() {
-		t.Fatalf("NewXIDEvent().IsValid() is false")
-	}
-	if !event.IsXID() {
-		t.Fatalf("NewXIDEvent().IsXID() is false")
-	}
+	require.True(t, event.IsValid(), "NewXIDEvent().IsValid() is false")
+	require.True(t, event.IsXID(), "NewXIDEvent().IsXID() is false")
+
 }
 
 func TestIntVarEvent(t *testing.T) {
@@ -117,28 +95,21 @@ func TestIntVarEvent(t *testing.T) {
 	s := NewFakeBinlogStream()
 
 	event := NewIntVarEvent(f, s, IntVarLastInsertID, 0x123456789abcdef0)
-	if !event.IsValid() {
-		t.Fatalf("NewIntVarEvent().IsValid() is false")
-	}
-	if !event.IsIntVar() {
-		t.Fatalf("NewIntVarEvent().IsIntVar() is false")
-	}
+	require.True(t, event.IsValid(), "NewIntVarEvent().IsValid() is false")
+	require.True(t, event.IsIntVar(), "NewIntVarEvent().IsIntVar() is false")
+
 	name, value, err := event.IntVar(f)
 	if name != IntVarLastInsertID || value != 0x123456789abcdef0 || err != nil {
 		t.Fatalf("IntVar() returned %v/%v/%v", name, value, err)
 	}
 
 	event = NewIntVarEvent(f, s, IntVarInvalidInt, 0x123456789abcdef0)
-	if !event.IsValid() {
-		t.Fatalf("NewIntVarEvent().IsValid() is false")
-	}
-	if !event.IsIntVar() {
-		t.Fatalf("NewIntVarEvent().IsIntVar() is false")
-	}
+	require.True(t, event.IsValid(), "NewIntVarEvent().IsValid() is false")
+	require.True(t, event.IsIntVar(), "NewIntVarEvent().IsIntVar() is false")
+
 	name, value, err = event.IntVar(f)
-	if err == nil {
-		t.Fatalf("IntVar(invalid) returned %v/%v/%v", name, value, err)
-	}
+	require.Error(t, err, "IntVar(invalid) returned %v/%v/%v", name, value, err)
+
 }
 
 func TestInvalidEvents(t *testing.T) {
@@ -153,24 +124,18 @@ func TestInvalidEvents(t *testing.T) {
 
 	// InvalidFormatDescriptionEvent
 	event = NewInvalidFormatDescriptionEvent(f, s)
-	if !event.IsValid() {
-		t.Fatalf("NewInvalidFormatDescriptionEvent().IsValid() is false")
-	}
-	if !event.IsFormatDescription() {
-		t.Fatalf("NewInvalidFormatDescriptionEvent().IsFormatDescription() is false")
-	}
+	require.True(t, event.IsValid(), "NewInvalidFormatDescriptionEvent().IsValid() is false")
+	require.True(t, event.IsFormatDescription(), "NewInvalidFormatDescriptionEvent().IsFormatDescription() is false")
+
 	if _, err := event.Format(); err == nil {
 		t.Fatalf("NewInvalidFormatDescriptionEvent().Format() returned err=nil")
 	}
 
 	// InvalidQueryEvent
 	event = NewInvalidQueryEvent(f, s)
-	if !event.IsValid() {
-		t.Fatalf("NewInvalidQueryEvent().IsValid() is false")
-	}
-	if !event.IsQuery() {
-		t.Fatalf("NewInvalidQueryEvent().IsQuery() is false")
-	}
+	require.True(t, event.IsValid(), "NewInvalidQueryEvent().IsValid() is false")
+	require.True(t, event.IsQuery(), "NewInvalidQueryEvent().IsQuery() is false")
+
 	if _, err := event.Query(f); err == nil {
 		t.Fatalf("NewInvalidQueryEvent().Query() returned err=nil")
 	}
@@ -183,56 +148,38 @@ func TestMariadDBGTIDEVent(t *testing.T) {
 
 	// With built-in begin.
 	event := NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, true)
-	if !event.IsValid() {
-		t.Fatalf("NewMariaDBGTIDEvent().IsValid() is false")
-	}
-	if !event.IsGTID() {
-		t.Fatalf("NewMariaDBGTIDEvent().IsGTID() if false")
-	}
+	require.True(t, event.IsValid(), "NewMariaDBGTIDEvent().IsValid() is false")
+	require.True(t, event.IsGTID(), "NewMariaDBGTIDEvent().IsGTID() if false")
+
 	event, _, err := event.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("StripChecksum failed: %v", err)
-	}
+	require.NoError(t, err, "StripChecksum failed: %v", err)
 
 	gtid, hasBegin, err := event.GTID(f)
-	if err != nil {
-		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned error: %v", err)
-	}
-	if !hasBegin {
-		t.Fatalf("NewMariaDBGTIDEvent() didn't store hasBegin properly.")
-	}
+	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
+	require.True(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
+
 	mgtid, ok := gtid.(MariadbGTID)
-	if !ok {
-		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
-	}
+	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
+
 	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {
 		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned invalid GITD: %v", mgtid)
 	}
 
 	// Without built-in begin.
 	event = NewMariaDBGTIDEvent(f, s, MariadbGTID{Domain: 0, Sequence: 0x123456789abcdef0}, false)
-	if !event.IsValid() {
-		t.Fatalf("NewMariaDBGTIDEvent().IsValid() is false")
-	}
-	if !event.IsGTID() {
-		t.Fatalf("NewMariaDBGTIDEvent().IsGTID() if false")
-	}
+	require.True(t, event.IsValid(), "NewMariaDBGTIDEvent().IsValid() is false")
+	require.True(t, event.IsGTID(), "NewMariaDBGTIDEvent().IsGTID() if false")
+
 	event, _, err = event.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("StripChecksum failed: %v", err)
-	}
+	require.NoError(t, err, "StripChecksum failed: %v", err)
 
 	gtid, hasBegin, err = event.GTID(f)
-	if err != nil {
-		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned error: %v", err)
-	}
-	if hasBegin {
-		t.Fatalf("NewMariaDBGTIDEvent() didn't store hasBegin properly.")
-	}
+	require.NoError(t, err, "NewMariaDBGTIDEvent().GTID() returned error: %v", err)
+	require.False(t, hasBegin, "NewMariaDBGTIDEvent() didn't store hasBegin properly.")
+
 	mgtid, ok = gtid.(MariadbGTID)
-	if !ok {
-		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
-	}
+	require.True(t, ok, "NewMariaDBGTIDEvent().GTID() returned a non-MariaDBGTID GTID")
+
 	if mgtid.Domain != 0 || mgtid.Server != 0x87654321 || mgtid.Sequence != 0x123456789abcdef0 {
 		t.Fatalf("NewMariaDBGTIDEvent().GTID() returned invalid GITD: %v", mgtid)
 	}
@@ -278,29 +225,61 @@ func TestTableMapEvent(t *testing.T) {
 	tm.CanBeNull.Set(9, true)
 
 	event := NewTableMapEvent(f, s, 0x102030405060, tm)
-	if !event.IsValid() {
-		t.Fatalf("NewTableMapEvent().IsValid() is false")
-	}
-	if !event.IsTableMap() {
-		t.Fatalf("NewTableMapEvent().IsTableMap() if false")
-	}
+	require.True(t, event.IsValid(), "NewTableMapEvent().IsValid() is false")
+	require.True(t, event.IsTableMap(), "NewTableMapEvent().IsTableMap() if false")
 
 	event, _, err := event.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("StripChecksum failed: %v", err)
-	}
+	require.NoError(t, err, "StripChecksum failed: %v", err)
 
 	tableID := event.TableID(f)
-	if tableID != 0x102030405060 {
-		t.Fatalf("NewTableMapEvent().ID returned %x", tableID)
-	}
+	require.Equal(t, uint64(0x102030405060), tableID, "NewTableMapEvent().ID returned %x", tableID)
+
 	gotTm, err := event.TableMap(f)
-	if err != nil {
-		t.Fatalf("NewTableMapEvent().TableMapEvent() returned error: %v", err)
+	require.NoError(t, err, "NewTableMapEvent().TableMapEvent() returned error: %v", err)
+	require.True(t, reflect.DeepEqual(gotTm, tm), "NewTableMapEvent().TableMapEvent() got TableMap:\n%v\nexpected:\n%v", gotTm, tm)
+
+}
+
+func TestLargeTableMapEvent(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+
+	colLen := 256
+	types := make([]byte, 0, colLen)
+	metadata := make([]uint16, 0, colLen)
+
+	for i := 0; i < colLen; i++ {
+		types = append(types, TypeLongLong)
+		metadata = append(metadata, 0)
 	}
-	if !reflect.DeepEqual(gotTm, tm) {
-		t.Fatalf("NewTableMapEvent().TableMapEvent() got TableMap:\n%v\nexpected:\n%v", gotTm, tm)
+
+	tm := &TableMap{
+		Flags:     0x8090,
+		Database:  "my_database",
+		Name:      "my_table",
+		Types:     types,
+		CanBeNull: NewServerBitmap(colLen),
+		Metadata:  metadata,
 	}
+	tm.CanBeNull.Set(1, true)
+	tm.CanBeNull.Set(2, true)
+	tm.CanBeNull.Set(5, true)
+	tm.CanBeNull.Set(9, true)
+
+	event := NewTableMapEvent(f, s, 0x102030405060, tm)
+	require.True(t, event.IsValid(), "NewTableMapEvent().IsValid() is false")
+	require.True(t, event.IsTableMap(), "NewTableMapEvent().IsTableMap() if false")
+
+	event, _, err := event.StripChecksum(f)
+	require.NoError(t, err, "StripChecksum failed: %v", err)
+
+	tableID := event.TableID(f)
+	require.Equal(t, uint64(0x102030405060), tableID, "NewTableMapEvent().ID returned %x", tableID)
+
+	gotTm, err := event.TableMap(f)
+	require.NoError(t, err, "NewTableMapEvent().TableMapEvent() returned error: %v", err)
+	require.True(t, reflect.DeepEqual(gotTm, tm), "NewTableMapEvent().TableMapEvent() got TableMap:\n%v\nexpected:\n%v", gotTm, tm)
+
 }
 
 func TestRowsEvent(t *testing.T) {
@@ -374,27 +353,108 @@ func TestRowsEvent(t *testing.T) {
 	}
 
 	event := NewUpdateRowsEvent(f, s, 0x102030405060, rows)
-	if !event.IsValid() {
-		t.Fatalf("NewRowsEvent().IsValid() is false")
-	}
-	if !event.IsUpdateRows() {
-		t.Fatalf("NewRowsEvent().IsUpdateRows() if false")
-	}
+	require.True(t, event.IsValid(), "NewRowsEvent().IsValid() is false")
+	require.True(t, event.IsUpdateRows(), "NewRowsEvent().IsUpdateRows() if false")
 
 	event, _, err := event.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("StripChecksum failed: %v", err)
-	}
+	require.NoError(t, err, "StripChecksum failed: %v", err)
 
 	tableID = event.TableID(f)
-	if tableID != 0x102030405060 {
-		t.Fatalf("NewRowsEvent().ID returned %x", tableID)
-	}
+	require.Equal(t, uint64(0x102030405060), tableID, "NewRowsEvent().ID returned %x", tableID)
+
 	gotRows, err := event.Rows(f, tm)
-	if err != nil {
-		t.Fatalf("NewRowsEvent().Rows() returned error: %v", err)
+	require.NoError(t, err, "NewRowsEvent().Rows() returned error: %v", err)
+	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
+
+}
+func TestLargeRowsEvent(t *testing.T) {
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+
+	/*
+		    Reason for nolint
+		    Used in line 384 to 387
+		    tableID = event.ID(f)
+				if tableID != 0x102030405060 {
+					t.Fatalf("NewRowsEvent().ID returned %x", tableID)
+				}
+	*/
+	tableID := uint64(0x102030405060) //nolint
+
+	colLen := 256
+	types := make([]byte, 0, colLen)
+	metadata := make([]uint16, 0, colLen)
+
+	for i := 0; i < colLen; i++ {
+		types = append(types, TypeLong)
+		metadata = append(metadata, 0)
 	}
-	if !reflect.DeepEqual(gotRows, rows) {
-		t.Fatalf("NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
+
+	tm := &TableMap{
+		Flags:     0x8090,
+		Database:  "my_database",
+		Name:      "my_table",
+		Types:     types,
+		CanBeNull: NewServerBitmap(colLen),
+		Metadata:  metadata,
 	}
+	tm.CanBeNull.Set(1, true)
+
+	identify := make([]byte, 0, colLen*4)
+	data := make([]byte, 0, colLen*4)
+	for i := 0; i < colLen; i++ {
+		identify = append(identify, 0x10, 0x20, 0x30, 0x40)
+		data = append(data, 0x10, 0x20, 0x30, 0x40)
+	}
+
+	// Do an update packet with all fields set.
+	rows := Rows{
+		Flags:           0x1234,
+		IdentifyColumns: NewServerBitmap(colLen),
+		DataColumns:     NewServerBitmap(colLen),
+		Rows: []Row{
+			{
+				NullIdentifyColumns: NewServerBitmap(colLen),
+				NullColumns:         NewServerBitmap(colLen),
+				Identify:            identify,
+				Data:                data,
+			},
+		},
+	}
+
+	// All rows are included, none are NULL.
+	for i := 0; i < colLen; i++ {
+		rows.IdentifyColumns.Set(i, true)
+		rows.DataColumns.Set(i, true)
+	}
+
+	// Test the Rows we just created, to be sure.
+	// 1076895760 is 0x40302010.
+	identifies, _ := rows.StringIdentifiesForTests(tm, 0)
+	expected := make([]string, 0, colLen)
+	for i := 0; i < colLen; i++ {
+		expected = append(expected, "1076895760")
+	}
+	if !reflect.DeepEqual(identifies, expected) {
+		t.Fatalf("bad Rows identify, got %v expected %v", identifies, expected)
+	}
+	values, _ := rows.StringValuesForTests(tm, 0)
+	if !reflect.DeepEqual(values, expected) {
+		t.Fatalf("bad Rows data, got %v expected %v", values, expected)
+	}
+
+	event := NewUpdateRowsEvent(f, s, 0x102030405060, rows)
+	require.True(t, event.IsValid(), "NewRowsEvent().IsValid() is false")
+	require.True(t, event.IsUpdateRows(), "NewRowsEvent().IsUpdateRows() if false")
+
+	event, _, err := event.StripChecksum(f)
+	require.NoError(t, err, "StripChecksum failed: %v", err)
+
+	tableID = event.TableID(f)
+	require.Equal(t, uint64(0x102030405060), tableID, "NewRowsEvent().ID returned %x", tableID)
+
+	gotRows, err := event.Rows(f, tm)
+	require.NoError(t, err, "NewRowsEvent().Rows() returned error: %v", err)
+	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
+
 }

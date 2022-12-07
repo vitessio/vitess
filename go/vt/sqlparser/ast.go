@@ -369,28 +369,6 @@ type (
 		Exprs    SetExprs
 	}
 
-	// SetTransaction represents a SET TRANSACTION statement.
-	SetTransaction struct {
-		Comments        *ParsedComments
-		Scope           Scope
-		Characteristics []Characteristic
-	}
-
-	// Scope is an enum for scope of query
-	Scope int8
-
-	// Characteristic is a transaction related change
-	Characteristic interface {
-		SQLNode
-		iChar()
-	}
-
-	// IsolationLevel is an enum for isolation levels
-	IsolationLevel int8
-
-	// AccessMode is enum for the mode - ReadOnly or ReadWrite
-	AccessMode int8
-
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
 		Comments *ParsedComments
@@ -473,6 +451,11 @@ type (
 
 	// ShowThrottledApps represents a SHOW VITESS_THROTTLED_APPS statement
 	ShowThrottledApps struct {
+		Comments Comments
+	}
+
+	// ShowThrottlerStatus represents a SHOW VITESS_THROTTLED_APPS statement
+	ShowThrottlerStatus struct {
 		Comments Comments
 	}
 
@@ -579,8 +562,13 @@ type (
 		DBName IdentifierCS
 	}
 
+	// TxAccessMode is an enum for Transaction Access Mode
+	TxAccessMode int8
+
 	// Begin represents a Begin statement.
-	Begin struct{}
+	Begin struct {
+		TxAccessModes []TxAccessMode
+	}
 
 	// Commit represents a Commit statement.
 	Commit struct{}
@@ -702,55 +690,55 @@ type (
 	}
 )
 
-func (*Union) iStatement()             {}
-func (*Select) iStatement()            {}
-func (*Stream) iStatement()            {}
-func (*VStream) iStatement()           {}
-func (*Insert) iStatement()            {}
-func (*Update) iStatement()            {}
-func (*Delete) iStatement()            {}
-func (*Set) iStatement()               {}
-func (*SetTransaction) iStatement()    {}
-func (*DropDatabase) iStatement()      {}
-func (*Flush) iStatement()             {}
-func (*Show) iStatement()              {}
-func (*Use) iStatement()               {}
-func (*Begin) iStatement()             {}
-func (*Commit) iStatement()            {}
-func (*Rollback) iStatement()          {}
-func (*SRollback) iStatement()         {}
-func (*Savepoint) iStatement()         {}
-func (*Release) iStatement()           {}
-func (*OtherRead) iStatement()         {}
-func (*OtherAdmin) iStatement()        {}
-func (*CommentOnly) iStatement()       {}
-func (*Select) iSelectStatement()      {}
-func (*Union) iSelectStatement()       {}
-func (*Load) iStatement()              {}
-func (*CreateDatabase) iStatement()    {}
-func (*AlterDatabase) iStatement()     {}
-func (*CreateTable) iStatement()       {}
-func (*CreateView) iStatement()        {}
-func (*AlterView) iStatement()         {}
-func (*LockTables) iStatement()        {}
-func (*UnlockTables) iStatement()      {}
-func (*AlterTable) iStatement()        {}
-func (*AlterVschema) iStatement()      {}
-func (*AlterMigration) iStatement()    {}
-func (*RevertMigration) iStatement()   {}
-func (*ShowMigrationLogs) iStatement() {}
-func (*ShowThrottledApps) iStatement() {}
-func (*DropTable) iStatement()         {}
-func (*DropView) iStatement()          {}
-func (*TruncateTable) iStatement()     {}
-func (*RenameTable) iStatement()       {}
-func (*CallProc) iStatement()          {}
-func (*ExplainStmt) iStatement()       {}
-func (*VtExplainStmt) iStatement()     {}
-func (*ExplainTab) iStatement()        {}
-func (*PrepareStmt) iStatement()       {}
-func (*ExecuteStmt) iStatement()       {}
-func (*DeallocateStmt) iStatement()    {}
+func (*Union) iStatement()               {}
+func (*Select) iStatement()              {}
+func (*Stream) iStatement()              {}
+func (*VStream) iStatement()             {}
+func (*Insert) iStatement()              {}
+func (*Update) iStatement()              {}
+func (*Delete) iStatement()              {}
+func (*Set) iStatement()                 {}
+func (*DropDatabase) iStatement()        {}
+func (*Flush) iStatement()               {}
+func (*Show) iStatement()                {}
+func (*Use) iStatement()                 {}
+func (*Begin) iStatement()               {}
+func (*Commit) iStatement()              {}
+func (*Rollback) iStatement()            {}
+func (*SRollback) iStatement()           {}
+func (*Savepoint) iStatement()           {}
+func (*Release) iStatement()             {}
+func (*OtherRead) iStatement()           {}
+func (*OtherAdmin) iStatement()          {}
+func (*CommentOnly) iStatement()         {}
+func (*Select) iSelectStatement()        {}
+func (*Union) iSelectStatement()         {}
+func (*Load) iStatement()                {}
+func (*CreateDatabase) iStatement()      {}
+func (*AlterDatabase) iStatement()       {}
+func (*CreateTable) iStatement()         {}
+func (*CreateView) iStatement()          {}
+func (*AlterView) iStatement()           {}
+func (*LockTables) iStatement()          {}
+func (*UnlockTables) iStatement()        {}
+func (*AlterTable) iStatement()          {}
+func (*AlterVschema) iStatement()        {}
+func (*AlterMigration) iStatement()      {}
+func (*RevertMigration) iStatement()     {}
+func (*ShowMigrationLogs) iStatement()   {}
+func (*ShowThrottledApps) iStatement()   {}
+func (*ShowThrottlerStatus) iStatement() {}
+func (*DropTable) iStatement()           {}
+func (*DropView) iStatement()            {}
+func (*TruncateTable) iStatement()       {}
+func (*RenameTable) iStatement()         {}
+func (*CallProc) iStatement()            {}
+func (*ExplainStmt) iStatement()         {}
+func (*VtExplainStmt) iStatement()       {}
+func (*ExplainTab) iStatement()          {}
+func (*PrepareStmt) iStatement()         {}
+func (*ExecuteStmt) iStatement()         {}
+func (*DeallocateStmt) iStatement()      {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -2295,6 +2283,9 @@ type (
 		Qualifier TableName
 	}
 
+	// Scope is an enum for scope of query
+	Scope int8
+
 	Variable struct {
 		Scope Scope
 		Name  IdentifierCI
@@ -3248,6 +3239,3 @@ type IdentifierCI struct {
 type IdentifierCS struct {
 	v string
 }
-
-func (IsolationLevel) iChar() {}
-func (AccessMode) iChar()     {}

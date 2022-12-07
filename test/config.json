@@ -91,6 +91,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"backup_pitr": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/pitr", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "backup_pitr",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "30m"],
@@ -114,27 +123,9 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtbackup_transform",
+			"Shard": "vtbackup",
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "15m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtbackup_transform",
-			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform_mysqlctld": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "21", 
-			"RetryMax": 1,
-			"Tags": []
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
@@ -369,17 +360,6 @@
 				"site_test"
 			]
 		},
-		"pitrtls": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "26",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
 		"recovery": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/unshardedrecovery"],
@@ -496,6 +476,17 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_throttler_topo": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "tabletmanager_throttler_topo",
+			"RetryMax": 1,
+			"Tags": [
+				"site_test"
+			]
+		},
 		"tabletmanager_throttler_custom_config": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_custom_config"],
@@ -547,6 +538,15 @@
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vtgate_queries_derived": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/derived"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_queries_aggregation": {
@@ -714,15 +714,6 @@
 		"vtgate_mysql80": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "mysql80",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"vtgate_mysql80_derived": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80/derived"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "mysql80",

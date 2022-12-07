@@ -86,7 +86,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	config := env.Config()
 
 	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
 		return &heartbeatWriter{}
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
@@ -101,8 +101,8 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, mysqlctl.PoolDynamicHostnameResolution),
-		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, mysqlctl.PoolDynamicHostnameResolution),
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 	}
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks

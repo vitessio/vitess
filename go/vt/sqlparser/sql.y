@@ -78,7 +78,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   optVal        Expr
   constraintInfo ConstraintInfo
   alterOption      AlterOption
-  characteristic Characteristic
 
   ins           *Insert
   colName       *ColName
@@ -158,7 +157,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
   partSpecs     []*PartitionSpec
-  characteristics []Characteristic
   selectExpr    SelectExpr
   columns       Columns
   partitions    Partitions
@@ -177,7 +175,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   colKeyOpt     ColumnKeyOption
   referenceAction ReferenceAction
   matchAction MatchAction
-  isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
   lock 		Lock
@@ -191,6 +188,8 @@ func bindVariable(yylex yyLexer, bvar string) {
   intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
+  txAccessModes []TxAccessMode
+  txAccessMode TxAccessMode
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -315,9 +314,12 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Migration tokens
 %token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+// Throttler tokens
+%token <str> VITESS_THROTTLER
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
+%token <str> CONSISTENT SNAPSHOT
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
@@ -516,13 +518,10 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list
-%type <str> charset_or_character_set charset_or_character_set_or_names
+%type <setExprs> set_list transaction_chars
+%type <setExpr> set_expression transaction_char
+%type <str> charset_or_character_set charset_or_character_set_or_names isolation_level
 %type <updateExpr> update_expression
-%type <setExpr> set_expression
-%type <characteristic> transaction_char
-%type <characteristics> transaction_chars
-%type <isolationLevel> isolation_level
 %type <str> for_from from_or_on
 %type <str> default_opt
 %type <ignore> ignore_opt
@@ -592,6 +591,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
+%type <txAccessModes> tx_chacteristics_opt tx_chars
+%type <txAccessMode> tx_char
 %start any_command
 
 %%
@@ -1013,56 +1014,98 @@ set_statement:
     $$ = NewSetStatement(Comments($2).Parsed(), $3)
   }
 
+set_list:
+  set_expression
+  {
+    $$ = SetExprs{$1}
+  }
+| set_list ',' set_expression
+  {
+    $$ = append($1, $3)
+  }
+
+set_expression:
+  set_variable '=' ON
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
+  }
+| set_variable '=' OFF
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
+  }
+| set_variable '=' expression
+  {
+    $$ = &SetExpr{Var: $1, Expr: $3}
+  }
+| charset_or_character_set_or_names charset_value collate_opt
+  {
+    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
+  }
+
+set_variable:
+  ID
+  {
+    $$ = NewSetVariable(string($1), SessionScope)
+  }
+| variable_expr
+  {
+    $$ = $1
+  }
+| set_session_or_global ID
+  {
+    $$ = NewSetVariable(string($2), $1)
+  }
+
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Scope: $3, Characteristics: $5}
+    $$ = NewSetStatement(Comments($2).Parsed(), UpdateSetExprsScope($5, $3))
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Characteristics: $4, Scope: NoScope}
+    $$ = NewSetStatement(Comments($2).Parsed(), $4)
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = []Characteristic{$1}
+    $$ = SetExprs{$1}
   }
 | transaction_chars ',' transaction_char
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = $3
+    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: NewStrLiteral($3)}
   }
 | READ WRITE
   {
-    $$ = ReadWrite
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("off")}
   }
 | READ ONLY
   {
-    $$ = ReadOnly
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("on")}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = RepeatableRead
+    $$ = RepeatableReadStr
   }
 | READ COMMITTED
   {
-    $$ = ReadCommitted
+    $$ = ReadCommittedStr
   }
 | READ UNCOMMITTED
   {
-    $$ = ReadUncommitted
+    $$ = ReadUncommittedStr
   }
 | SERIALIZABLE
   {
-    $$ = Serializable
+    $$ = SerializableStr
   }
 
 set_session_or_global:
@@ -4026,6 +4069,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}}
   }
+| SHOW VITESS_THROTTLER STATUS
+  {
+    $$ = &ShowThrottlerStatus{}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
@@ -4225,10 +4272,44 @@ begin_statement:
   {
     $$ = &Begin{}
   }
-| START TRANSACTION
+| START TRANSACTION tx_chacteristics_opt
   {
-    $$ = &Begin{}
+    $$ = &Begin{TxAccessModes: $3}
   }
+
+tx_chacteristics_opt:
+  {
+    $$ = nil
+  }
+| tx_chars
+  {
+    $$ = $1
+  }
+
+tx_chars:
+  tx_char
+  {
+    $$ = []TxAccessMode{$1}
+  }
+| tx_chars ',' tx_char
+  {
+    $$ = append($1, $3)
+  }
+
+tx_char:
+  WITH CONSISTENT SNAPSHOT
+  {
+    $$ = WithConsistentSnapshot
+  }
+| READ WRITE
+  {
+    $$ = ReadWrite
+  }
+| READ ONLY
+  {
+    $$ = ReadOnly
+  }
+
 
 commit_statement:
   COMMIT
@@ -7150,48 +7231,6 @@ update_expression:
     $$ = &UpdateExpr{Name: $1, Expr: $3}
   }
 
-set_list:
-  set_expression
-  {
-    $$ = SetExprs{$1}
-  }
-| set_list ',' set_expression
-  {
-    $$ = append($1, $3)
-  }
-
-set_expression:
-  set_variable '=' ON
-  {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
-  }
-| set_variable '=' OFF
-  {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
-  }
-| set_variable '=' expression
-  {
-    $$ = &SetExpr{Var: $1, Expr: $3}
-  }
-| charset_or_character_set_or_names charset_value collate_opt
-  {
-    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
-  }
-
-set_variable:
-  ID
-  {
-    $$ = NewSetVariable(string($1), SessionScope)
-  }
-| variable_expr
-  {
-    $$ = $1
-  }
-| set_session_or_global ID
-  {
-    $$ = NewSetVariable(string($2), $1)
-  }
-
 charset_or_character_set:
   CHARSET
 | CHARACTER SET
@@ -7532,6 +7571,7 @@ non_reserved_keyword:
 | COMPRESSED
 | COMPRESSION
 | CONNECTION
+| CONSISTENT
 | COPY
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV
@@ -7780,6 +7820,7 @@ non_reserved_keyword:
 | SKIP
 | SLOW
 | SMALLINT
+| SNAPSHOT
 | SQL
 | SRID
 | START
@@ -7852,6 +7893,7 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VITESS_TARGET
 | VITESS_THROTTLED_APPS
+| VITESS_THROTTLER
 | VSCHEMA
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD

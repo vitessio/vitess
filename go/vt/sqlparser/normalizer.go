@@ -62,7 +62,7 @@ func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVari
 func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	// no need to normalize the statement types
-	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
+	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
 		_ = Rewrite(node, nz.WalkSelect, nil)
@@ -88,7 +88,15 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
 	case *Literal:
-		nz.convertLiteralDedup(node, cursor)
+		parent := cursor.Parent()
+		switch parent.(type) {
+		case *Order, GroupBy:
+			return false
+		case *Limit:
+			nz.convertLiteral(node, cursor)
+		default:
+			nz.convertLiteralDedup(node, cursor)
+		}
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *FramePoint:
@@ -97,9 +105,6 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	case *ColName, TableName:
 		// Common node types that never contain Literals or ListArgs but create a lot of object
 		// allocations.
-		return false
-	case OrderBy, GroupBy:
-		// do not make a bind var for order by column_position
 		return false
 	case *ConvertType:
 		// we should not rewrite the type description

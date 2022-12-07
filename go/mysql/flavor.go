@@ -157,6 +157,7 @@ type flavor interface {
 	enableBinlogPlaybackCommand() string
 	disableBinlogPlaybackCommand() string
 
+	baseShowTables() string
 	baseShowTablesWithSizes() string
 
 	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
@@ -573,8 +574,13 @@ func (c *Conn) DisableBinlogPlaybackCommand() string {
 	return c.flavor.disableBinlogPlaybackCommand()
 }
 
-// BaseShowTables returns a query that shows tables and their sizes
+// BaseShowTables returns a query that shows tables
 func (c *Conn) BaseShowTables() string {
+	return c.flavor.baseShowTables()
+}
+
+// BaseShowTablesWithSizes returns a query that shows tables and their sizes
+func (c *Conn) BaseShowTablesWithSizes() string {
 	return c.flavor.baseShowTablesWithSizes()
 }
 

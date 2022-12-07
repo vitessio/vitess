@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSortSIDList(t *testing.T) {
@@ -43,9 +44,7 @@ func TestSortSIDList(t *testing.T) {
 		{1, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 	}
 	sortSIDs(input)
-	if !reflect.DeepEqual(input, want) {
-		t.Errorf("got %#v, want %#v", input, want)
-	}
+	assert.True(t, reflect.DeepEqual(input, want), "got %#v, want %#v", input, want)
 }
 
 func TestParseMysql56GTIDSet(t *testing.T) {
@@ -80,6 +79,14 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:8-7:10-20": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},
+		// Same repeating SIDs
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5,00010203-0405-0607-0809-0a0b0c0d0e0f:10-20": {
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
+		// Same repeating SIDs, backwards order
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20,00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": {
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
 		// Multiple SIDs
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": {
 			sid1: []interval{{1, 5}, {10, 20}},
@@ -93,14 +100,11 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 	}
 
 	for input, want := range table {
-		got, err := ParseMysql56GTIDSet(input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-			continue
-		}
-		if !got.Equal(want) {
-			t.Errorf("ParseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
-		}
+		t.Run(input, func(t *testing.T) {
+			got, err := ParseMysql56GTIDSet(input)
+			require.NoError(t, err)
+			assert.Equal(t, want, got)
+		})
 	}
 }
 
@@ -119,9 +123,7 @@ func TestParseMysql56GTIDSetInvalid(t *testing.T) {
 
 	for _, input := range table {
 		_, err := ParseMysql56GTIDSet(input)
-		if err == nil {
-			t.Errorf("ParseMysql56GTIDSet(%#v) expected error, got none", err)
-		}
+		assert.Error(t, err, "parseMysql56GTIDSet(%#v) expected error, got none", err)
 	}
 }
 
@@ -151,9 +153,8 @@ func TestMysql56GTIDSetString(t *testing.T) {
 
 	for want, input := range table {
 		got := strings.ToLower(input.String())
-		if got != want {
-			t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
-		}
+		assert.Equal(t, want, got, "%#v.String() = %#v, want %#v", input, got, want)
+
 	}
 }
 
@@ -229,9 +230,8 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 	}
 
 	for _, other := range contained {
-		if !set.Contains(other) {
-			t.Errorf("Contains(%#v) = false, want true", other)
-		}
+		assert.True(t, set.Contains(other), "Contains(%#v) = false, want true", other)
+
 	}
 
 	// Test cases that should return Contains() = false.
@@ -265,6 +265,28 @@ func TestMysql56GTIDSetContains(t *testing.T) {
 	}
 }
 
+func TestMysql56GTIDSetContains2(t *testing.T) {
+	set1, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-243")
+	require.NoError(t, err)
+	set2, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+	require.NoError(t, err)
+	set3, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-632")
+	require.NoError(t, err)
+	set4, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-664")
+	require.NoError(t, err)
+	set5, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:20-243")
+	require.NoError(t, err)
+
+	compareSet, err := ParseMysql56GTIDSet("16b1039f-22b6-11ed-b765-0a43f95f28a3:1-615")
+	require.NoError(t, err)
+
+	assert.True(t, compareSet.Contains(set1))
+	assert.True(t, compareSet.Contains(set2))
+	assert.False(t, compareSet.Contains(set3))
+	assert.False(t, compareSet.Contains(set4))
+	assert.True(t, compareSet.Contains(set5))
+}
+
 func TestMysql56GTIDSetEqual(t *testing.T) {
 	sid1 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid2 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 16}
@@ -288,13 +310,10 @@ func TestMysql56GTIDSetEqual(t *testing.T) {
 	}
 
 	for _, other := range equal {
-		if !set.Equal(other) {
-			t.Errorf("%#v.Equal(%#v) = false, want true", set, other)
-		}
+		assert.True(t, set.Equal(other), "%#v.Equal(%#v) = false, want true", set, other)
 		// Equality should be transitive.
-		if !other.Equal(set) {
-			t.Errorf("%#v.Equal(%#v) = false, want true", other, set)
-		}
+		assert.True(t, other.Equal(set), "%#v.Equal(%#v) = false, want true", other, set)
+
 	}
 
 	// Test cases that should return Equal() = false.
@@ -442,10 +461,8 @@ func TestMysql56GTIDSetUnion(t *testing.T) {
 		sid2: []interval{{1, 6}, {20, 50}, {60, 72}},
 		sid3: []interval{{1, 45}},
 	}
+	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
 
-	if !got.Equal(want) {
-		t.Errorf("set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-	}
 }
 
 func TestMysql56GTIDSetDifference(t *testing.T) {
@@ -477,10 +494,7 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 		sid4: []interval{{1, 30}},
 		sid5: []interval{{1, 1}, {7, 7}},
 	}
-
-	if !got.Equal(want) {
-		t.Errorf("got %#v; want %#v", got, want)
-	}
+	assert.True(t, got.Equal(want), "got %#v; want %#v", got, want)
 
 	sid10 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
 	sid11 := SID{0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15}
@@ -492,9 +506,8 @@ func TestMysql56GTIDSetDifference(t *testing.T) {
 	}
 	got = set10.Difference(set11)
 	want = Mysql56GTIDSet{}
-	if !got.Equal(want) {
-		t.Errorf("got %#v; want %#v", got, want)
-	}
+	assert.True(t, got.Equal(want), "got %#v; want %#v", got, want)
+
 }
 
 func TestMysql56GTIDSetSIDBlock(t *testing.T) {
@@ -530,18 +543,13 @@ func TestMysql56GTIDSetSIDBlock(t *testing.T) {
 		6, 0, 0, 0, 0, 0, 0, 0,
 	}
 	got := input.SIDBlock()
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.SIDBlock() = %#v, want %#v", input, got, want)
-	}
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.SIDBlock() = %#v, want %#v", input, got, want)
 
 	// Testing the conversion back.
 	set, err := NewMysql56GTIDSetFromSIDBlock(want)
-	if err != nil {
-		t.Fatalf("Reconstructing Mysql56GTIDSet from SID block failed: %v", err)
-	}
-	if !reflect.DeepEqual(set, input) {
-		t.Errorf("NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
-	}
+	require.NoError(t, err, "Reconstructing Mysql56GTIDSet from SID block failed: %v", err)
+	assert.True(t, reflect.DeepEqual(set, input), "NewMysql56GTIDSetFromSIDBlock(%#v) = %#v, want %#v", want, set, input)
+
 }
 
 func TestMySQL56GTIDSetLast(t *testing.T) {
@@ -610,6 +618,46 @@ func TestSubtract(t *testing.T) {
 			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 			difference: "",
+		}, {
+			name:       "subtract prefix",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-3",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:4-8",
+		}, {
+			name:       "subtract mid",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:2-3",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1:4-8",
+		}, {
+			name:       "subtract suffix",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-8",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6",
+		}, {
+			name:       "subtract complex range 1",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-8",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:12-17",
+		}, {
+			name:       "subtract complex range 2",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:14-17",
+		}, {
+			name:       "subtract complex range 3",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
+		}, {
+			name:       "subtract repeating uuid",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
+		}, {
+			name:       "subtract repeating uuid in descending order",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-17,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
 		}, {
 			name:    "parsing error in left set",
 			lhs:     "incorrect set",

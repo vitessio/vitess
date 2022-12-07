@@ -219,14 +219,14 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 			lft, ok := node.LeftExpr.(*sqlparser.AliasedTableExpr)
 			if ok {
 				ts := semTable.TableSetFor(lft)
-				if searchedTS.Equals(ts) {
+				if searchedTS == ts {
 					cursor.Replace(node.RightExpr)
 				}
 			}
 			rgt, ok := node.RightExpr.(*sqlparser.AliasedTableExpr)
 			if ok {
 				ts := semTable.TableSetFor(rgt)
-				if searchedTS.Equals(ts) {
+				if searchedTS == ts {
 					cursor.Replace(node.LeftExpr)
 				}
 			}
@@ -242,7 +242,7 @@ func removeTable(clone sqlparser.SelectStatement, searchedTS semantics.TableSet,
 				lft, ok := tbl.(*sqlparser.AliasedTableExpr)
 				if ok {
 					ts := semTable.TableSetFor(lft)
-					if searchedTS.Equals(ts) {
+					if searchedTS == ts {
 						node.From = append(node.From[:i], node.From[i+1:]...)
 						return true
 					}

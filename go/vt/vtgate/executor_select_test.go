@@ -1222,6 +1222,21 @@ func TestSelectEqual(t *testing.T) {
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
 }
 
+func TestSelectINFromOR(t *testing.T) {
+	executor, sbc1, _, _ := createExecutorEnv()
+	executor.pv = querypb.ExecuteOptions_Gen4
+
+	_, err := executorExec(executor, "select 1 from user where id = 1 and name = 'apa' or id = 2 and name = 'toto'", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql: "select 1 from `user` where id = 1 and `name` = 'apa' or id = 2 and `name` = 'toto'",
+		BindVariables: map[string]*querypb.BindVariable{
+			"__vals": sqltypes.TestBindVariable([]any{int64(1), int64(2)}),
+		},
+	}}
+	utils.MustMatch(t, wantQueries, sbc1.Queries)
+}
+
 func TestSelectDual(t *testing.T) {
 	executor, sbc1, _, lookup := createExecutorEnv()
 
@@ -3748,6 +3763,22 @@ func TestSelectHexAndBit(t *testing.T) {
 		"select 1 + 0b1001, 1 + b'1001', 1 + 0x9, 1 + x'09'", nil)
 	require.NoError(t, err)
 	require.Equal(t, `[[UINT64(10) UINT64(10) UINT64(10) UINT64(10)]]`, fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestSelectCFC tests validates that cfc vindex plan gets cached and same plan is getting reused.
+// This also validates that cache_size is able to calculate the cfc vindex plan size.
+func TestSelectCFC(t *testing.T) {
+	executor, _, _, _ := createExecutorEnv()
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	for i := 1; i < 100; i++ {
+		_, err := executor.Execute(context.Background(), "TestSelectCFC", session,
+			"select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
+		require.NoError(t, err)
+		assert.EqualValues(t, 1, executor.plans.Misses())
+		assert.EqualValues(t, i-1, executor.plans.Hits())
+	}
 }
 
 func TestMain(m *testing.M) {

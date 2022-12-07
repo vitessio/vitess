@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -32,7 +33,7 @@ import (
 
 type (
 	Route struct {
-		Source Operator
+		Source ops.Operator
 
 		RouteOpCode engine.Opcode
 		Keyspace    *vindexes.Keyspace
@@ -86,7 +87,7 @@ type (
 	}
 )
 
-var _ PhysicalOperator = (*Route)(nil)
+var _ ops.PhysicalOperator = (*Route)(nil)
 
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
@@ -117,8 +118,7 @@ func (r *Route) Cost() int {
 }
 
 // Clone implements the Operator interface
-func (r *Route) Clone(inputs []Operator) Operator {
-	checkSize(inputs, 1)
+func (r *Route) Clone(inputs []ops.Operator) ops.Operator {
 	cloneRoute := *r
 	cloneRoute.Source = inputs[0]
 	cloneRoute.VindexPreds = make([]*VindexPlusPredicates, len(r.VindexPreds))
@@ -131,8 +131,8 @@ func (r *Route) Clone(inputs []Operator) Operator {
 }
 
 // Inputs implements the Operator interface
-func (r *Route) Inputs() []Operator {
-	return []Operator{r.Source}
+func (r *Route) Inputs() []ops.Operator {
+	return []ops.Operator{r.Source}
 }
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
@@ -791,12 +791,33 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 
 	if plan.RouteOpCode == engine.Scatter && len(table.Predicates) > 0 {
 		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
-		for _, pred := range table.Predicates {
-			rewritten := tryRewriteOrToIn(pred)
-			if rewritten != nil {
-				err = plan.UpdateRoutingLogic(ctx, rewritten)
+		oldPredicates := table.Predicates
+		table.Predicates = nil
+		plan.SeenPredicates = nil
+		for _, pred := range oldPredicates {
+			rewritten := sqlparser.RewritePredicate(pred)
+			predicates := sqlparser.SplitAndExpression(nil, rewritten.(sqlparser.Expr))
+			for _, predicate := range predicates {
+				table.Predicates = append(table.Predicates, predicate)
+				err = plan.UpdateRoutingLogic(ctx, predicate)
 				if err != nil {
 					return nil, err
+				}
+			}
+		}
+
+		if plan.RouteOpCode == engine.Scatter {
+			// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
+			for _, expr := range table.Predicates {
+				or, ok := expr.(*sqlparser.OrExpr)
+				if !ok {
+					continue
+				}
+				for _, predicate := range sqlparser.ExtractINFromOR(or) {
+					err = plan.UpdateRoutingLogic(ctx, predicate)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
 		}
@@ -805,7 +826,7 @@ func createRoute(ctx *plancontext.PlanningContext, table *QueryTable, solves sem
 	return plan, nil
 }
 
-func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Operator, error) {
+func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	err := r.UpdateRoutingLogic(ctx, expr)
 	if err != nil {
 		return nil, err

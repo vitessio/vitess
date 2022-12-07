@@ -161,9 +161,8 @@ install_etcd() {
   file="etcd-${version}-${platform}-${target}.${ext}"
 
   # This is how we'd download directly from source:
-  # download_url=https://github.com/etcd-io/etcd/releases/download
-  # wget "$download_url/$version/$file"
-  $VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
+  $VTROOT/tools/wget-retry "https://github.com/etcd-io/etcd/releases/download/$version/$file"
+  #$VTROOT/tools/wget-retry "${VITESS_RESOURCES_DOWNLOAD_URL}/${file}"
   if [ "$ext" = "tar.gz" ]; then
     tar xzf "$file"
   else
@@ -275,10 +274,10 @@ install_all() {
   fi
 
   # etcd
-  command -v etcd && echo "etcd already installed" || install_dep "etcd" "v3.5.3" "$VTROOT/dist/etcd" install_etcd
+  install_dep "etcd" "v3.5.6" "$VTROOT/dist/etcd" install_etcd
 
   # k3s
-  command -v  k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
+  command -v k3s || install_dep "k3s" "v1.0.0" "$VTROOT/dist/k3s" install_k3s
 
   # consul
   if [ "$BUILD_CONSUL" == 1 ] ; then

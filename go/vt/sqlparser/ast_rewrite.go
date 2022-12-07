@@ -22,8 +22,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return true
 	}
 	switch node := node.(type) {
-	case AccessMode:
-		return a.rewriteAccessMode(parent, node, replacer)
 	case *AddColumns:
 		return a.rewriteRefOfAddColumns(parent, node, replacer)
 	case *AddConstraintDefinition:
@@ -210,8 +208,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
-	case IsolationLevel:
-		return a.rewriteIsolationLevel(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
 	case *JSONAttributesExpr:
@@ -398,8 +394,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSetExpr(parent, node, replacer)
 	case SetExprs:
 		return a.rewriteSetExprs(parent, node, replacer)
-	case *SetTransaction:
-		return a.rewriteRefOfSetTransaction(parent, node, replacer)
 	case *Show:
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowBasic:
@@ -414,6 +408,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowOther(parent, node, replacer)
 	case *ShowThrottledApps:
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
+	case *ShowThrottlerStatus:
+		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Std:
@@ -6359,42 +6355,6 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 	}
 	return true
 }
-func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*SetTransaction).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	for x, el := range node.Characteristics {
-		if !a.rewriteCharacteristic(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent SQLNode) {
-				parent.(*SetTransaction).Characteristics[idx] = newNode.(Characteristic)
-			}
-		}(x)) {
-			return false
-		}
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6565,6 +6525,30 @@ func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, rep
 	return true
 }
 func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowThrottledApps, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *ShowThrottlerStatus, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -8458,20 +8442,6 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return true
 	}
 }
-func (a *application) rewriteCharacteristic(parent SQLNode, node Characteristic, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	switch node := node.(type) {
-	case AccessMode:
-		return a.rewriteAccessMode(parent, node, replacer)
-	case IsolationLevel:
-		return a.rewriteIsolationLevel(parent, node, replacer)
-	default:
-		// this should never happen
-		return true
-	}
-}
 func (a *application) rewriteColTuple(parent SQLNode, node ColTuple, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8909,14 +8879,14 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Set:
 		return a.rewriteRefOfSet(parent, node, replacer)
-	case *SetTransaction:
-		return a.rewriteRefOfSetTransaction(parent, node, replacer)
 	case *Show:
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
 	case *ShowThrottledApps:
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
+	case *ShowThrottlerStatus:
+		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:
@@ -8955,27 +8925,6 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		// this should never happen
 		return true
 	}
-}
-func (a *application) rewriteAccessMode(parent SQLNode, node AccessMode, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
 }
 func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
 	if a.pre != nil {
@@ -9020,27 +8969,6 @@ func (a *application) rewriteArgument(parent SQLNode, node Argument, replacer re
 	return true
 }
 func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
