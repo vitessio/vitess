@@ -23,7 +23,7 @@ fi
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
 
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
 
 # exclude end to end tests
 packages_to_test=$(echo "$packages_with_tests" | cut -d" " -f1 | grep -v "endtoend")

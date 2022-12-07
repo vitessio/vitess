@@ -36,10 +36,12 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
+
+	// Register topo implementations.
 	_ "vitess.io/vitess/go/vt/topo/consultopo"
 	_ "vitess.io/vitess/go/vt/topo/etcd2topo"
 	_ "vitess.io/vitess/go/vt/topo/k8stopo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 	_ "vitess.io/vitess/go/vt/topo/zk2topo"
 )
 

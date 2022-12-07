@@ -88,7 +88,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
 	preds := UnresolvedPredicates(op, ctx.SemTable)
 	if filter, ok := op.(*Filter); ok {
-		if sqlparser.EqualsExprs(preds, filter.Predicates) {
+		if sqlparser.EqualsExprs(preds, filter.Predicates, ctx.SemTable.ASTComparison()) {
 			// if we are seeing a single filter with only these predicates,
 			// we can throw away the filter and just use the source
 			return preds, filter.Source
@@ -100,21 +100,6 @@ func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]s
 
 func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner) (*Route, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
-
-	// go over the subquery and add its tables to the one's solved by the route it is merged with
-	// this is needed to so that later when we try to push projections, we get the correct
-	// solved tableID from the route, since it also includes the tables from the subquery after merging
-	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch n := node.(type) {
-		case *sqlparser.AliasedTableExpr:
-			ts := TableID(outer)
-			ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
-		}
-		return true, nil
-	}, subq.ExtractedSubquery.Subquery)
-	if err != nil {
-		return nil, err
-	}
 	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
 	for k, v := range inner.SysTableTableName {
 		if outer.SysTableTableName == nil {
@@ -131,7 +116,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	// predicates list, so this might be a no-op.
 	subQueryWasPredicate := false
 	for i, predicate := range outer.SeenPredicates {
-		if sqlparser.EqualsExpr(predicate, subq.ExtractedSubquery) {
+		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
 			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
 
 			subQueryWasPredicate = true
@@ -142,7 +127,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 		}
 	}
 
-	err = outer.resetRoutingSelections(ctx)
+	err := outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -374,11 +359,9 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(TableID(resultInnerOp))
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(TableID(resultInnerOp))
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(TableID(resultInnerOp))
 
 	// return any error while rewriting
 	return resultInnerOp, rewriteError
@@ -408,7 +391,7 @@ func createCorrelatedSubqueryOp(
 				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
-					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
+					// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
 					for colName, bindVar := range bindVars {
 						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))

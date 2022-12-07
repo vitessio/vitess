@@ -4466,22 +4466,20 @@
       "Instructions": {
         "OperatorType": "Aggregate",
         "Variant": "Ordered",
-        "Aggregates": "random(0) AS id",
-        "GroupBy": "(2|1)",
+        "GroupBy": "(0|1)",
         "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 2] as id",
-              "[COLUMN 1]",
-              "[COLUMN 0] as id"
+              "[COLUMN 0] as id",
+              "[COLUMN 1]"
             ],
             "Inputs": [
               {
                 "OperatorType": "Join",
                 "Variant": "Join",
-                "JoinColumnIndexes": "L:0,L:1,L:0",
+                "JoinColumnIndexes": "L:0,L:1",
                 "TableName": "`user`_user_extra",
                 "Inputs": [
                   {
@@ -4491,9 +4489,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select `user`.id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
+                    "FieldQuery": "select id, weight_string(id) from `user` where 1 != 1 group by id, weight_string(id)",
                     "OrderBy": "(0|1) ASC",
-                    "Query": "select `user`.id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
+                    "Query": "select id, weight_string(id) from `user` group by id, weight_string(id) order by id asc",
                     "Table": "`user`"
                   },
                   {
@@ -4503,8 +4501,8 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select 1 from user_extra where 1 != 1 group by 1",
-                    "Query": "select 1 from user_extra group by 1",
+                    "FieldQuery": "select 1 from user_extra where 1 != 1",
+                    "Query": "select 1 from user_extra",
                     "Table": "user_extra"
                   }
                 ]

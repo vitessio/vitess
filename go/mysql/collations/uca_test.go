@@ -25,6 +25,9 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
@@ -53,9 +56,8 @@ func testcollation(t testing.TB, name string) Collation {
 	t.Helper()
 	testinit()
 	coll := testcollationMap[name]
-	if coll == nil {
-		t.Fatalf("missing collation: %s", name)
-	}
+	require.NotNil(t, coll, "missing collation: %s", name)
+
 	return coll
 }
 
@@ -81,9 +83,8 @@ func TestWeightsForSpace(t *testing.T) {
 		default:
 			continue
 		}
-		if actual != expected {
-			t.Errorf("expected Weight(' ') == 0x%X, got 0x%X", expected, actual)
-		}
+		assert.Equal(t, expected, actual, "expected Weight(' ') == 0x%X, got 0x%X", expected, actual)
+
 	}
 }
 
@@ -104,9 +105,8 @@ func TestKanaSensitivity(t *testing.T) {
 		t.Run(tc.collation, func(t *testing.T) {
 			collation := testcollation(t, tc.collation)
 			equal := collation.Collate([]byte(Kana1), []byte(Kana2), false) == 0
-			if equal != tc.equal {
-				t.Errorf("expected %q == %q to be %v", Kana1, Kana2, tc.equal)
-			}
+			assert.Equal(t, tc.equal, equal, "expected %q == %q to be %v", Kana1, Kana2, tc.equal)
+
 		})
 	}
 }
@@ -135,9 +135,8 @@ func TestContractions(t *testing.T) {
 
 			for _, in := range tc.inputs {
 				weightString := coll.WeightString(nil, []byte(in), 0)
-				if !bytes.Equal(weightString, tc.expected) {
-					t.Errorf("weight_string(%q) = %#v (expected %#v)", in, weightString, tc.expected)
-				}
+				assert.True(t, bytes.Equal(weightString, tc.expected), "weight_string(%q) = %#v (expected %#v)", in, weightString, tc.expected)
+
 			}
 		})
 	}
@@ -157,9 +156,8 @@ func TestReplacementCharacter(t *testing.T) {
 		t.Run(tc.collation, func(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 			weightString := coll.WeightString(nil, []byte(string(utf8.RuneError)), 0)
-			if !bytes.Equal(weightString, tc.expected) {
-				t.Errorf("weight_string(\\uFFFD) = %#v (expected %#v)", weightString, tc.expected)
-			}
+			assert.True(t, bytes.Equal(weightString, tc.expected), "weight_string(\\uFFFD) = %#v (expected %#v)", weightString, tc.expected)
+
 		})
 	}
 }
@@ -182,9 +180,8 @@ func TestIsPrefix(t *testing.T) {
 			right := string(input[:size])
 
 			cmp := coll.Collate([]byte(left), []byte(right), true)
-			if cmp != 0 {
-				t.Errorf("IsPrefix(%q, %q) = %d (expected 0)", left, right, cmp)
-			}
+			assert.Equal(t, 0, cmp, "IsPrefix(%q, %q) = %d (expected 0)", left, right, cmp)
+
 		}
 	}
 }
@@ -799,10 +796,8 @@ func TestCompareWithWeightString(t *testing.T) {
 	for _, tc := range cases {
 		left := collation.WeightString(nil, []byte(tc.left), 0)
 		right := collation.WeightString(nil, []byte(tc.right), 0)
+		assert.Equal(t, tc.equal, bytes.Equal(left, right), "expected %q / %v == %q / %v to be %v", tc.left, left, tc.right, right, tc.equal)
 
-		if bytes.Equal(left, right) != tc.equal {
-			t.Errorf("expected %q / %v == %q / %v to be %v", tc.left, left, tc.right, right, tc.equal)
-		}
 	}
 }
 
@@ -835,9 +830,8 @@ func TestFastIterators(t *testing.T) {
 		t.Run(tc.collation, func(t *testing.T) {
 			coll := testcollation(t, tc.collation)
 			result := coll.WeightString(nil, allASCIICharacters, 0)
-			if !bytes.Equal(tc.expected, result) {
-				t.Errorf("weight_string(%q) = %#v (expected %#v)", allASCIICharacters, result, tc.expected)
-			}
+			assert.True(t, bytes.Equal(tc.expected, result), "weight_string(%q) = %#v (expected %#v)", allASCIICharacters, result, tc.expected)
+
 		})
 	}
 }
@@ -905,9 +899,8 @@ func TestEqualities(t *testing.T) {
 		collation = &ConsistentCollation{Collation: collation, t: t}
 
 		cmp := collation.Collate([]byte(tc.left), []byte(tc.right), false)
-		if (cmp == 0) != tc.equal {
-			t.Errorf("expected %q == %q to be %v", tc.left, tc.right, tc.equal)
-		}
+		assert.Equal(t, tc.equal, (cmp == 0), "expected %q == %q to be %v", tc.left, tc.right, tc.equal)
+
 	}
 }
 

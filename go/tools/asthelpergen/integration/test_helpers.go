@@ -98,3 +98,7 @@ func Rewrite(node AST, pre, post ApplyFunc) AST {
 
 	return outer.AST
 }
+
+// ASTComparison is sent around to allow for overriding of equality logic for some types
+// in this test package it's never actually used
+type ASTComparison interface{ cmp() bool }
