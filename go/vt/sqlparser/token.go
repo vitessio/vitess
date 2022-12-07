@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strings"
 	"unicode"
 
 	"github.com/dolthub/vitess/go/bytes2"
@@ -1003,11 +1004,19 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 		tkn.next()
 	}
 	if !isLetter(tkn.lastChar) {
+		// If there isn't a previous error, then return the colon as it may be a valid token
+		if tkn.LastError == nil {
+			return int(':'), buffer.Bytes()
+		}
 		return LEX_ERROR, buffer.Bytes()
 	}
 	for isLetter(tkn.lastChar) || isDigit(tkn.lastChar) || tkn.lastChar == '.' {
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
+	}
+	// Due to the way this is written to handle bindings, it includes the colon on the LOOP keyword, so this is a workaround
+	if buffer.Len() == 5 && strings.ToLower(string(buffer.Bytes())) == ":loop" {
+		return LOOP, []byte("LOOP")
 	}
 	return token, buffer.Bytes()
 }

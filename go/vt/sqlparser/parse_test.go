@@ -2906,6 +2906,69 @@ close cur1;
 close cur2;
 end`,
 		},
+		{
+			input:  `CREATE PROCEDURE testproc() BEGIN
+  DECLARE done INT DEFAULT FALSE;
+  DECLARE a CHAR(16);
+  DECLARE b INT;
+  DECLARE cur1 CURSOR FOR SELECT id, data FROM test.t1;
+  DECLARE CONTINUE HANDLER FOR NOT FOUND SET done = TRUE;
+
+  OPEN cur1;
+
+  read_loop : LOOP
+    FETCH cur1 INTO a, b;
+    IF done THEN
+      LEAVE read_loop;
+    END IF;
+    IF a < b THEN
+      INSERT INTO test.t3 VALUES (a,b);
+    ELSE
+      ITERATE read_loop;
+    END IF;
+  END LOOP;
+
+  BEGIN
+    DECLARE EXIT HANDLER FOR NOT FOUND BEGIN END;
+    LOOP
+      FETCH cur1 INTO a, b;
+    END LOOP;
+  END;
+
+  empty_loop: LOOP
+    LEAVE empty_loop;
+  END LOOP empty_loop;
+
+  CLOSE cur1;
+END`,
+			output: `create procedure testproc () begin
+declare done INT default false;
+declare a CHAR(16);
+declare b INT;
+declare cur1 cursor for select id, `+"`data`"+` from test.t1;
+declare continue handler for not found set done = true;
+open cur1;
+read_loop: loop
+fetch cur1 into a, b;
+if done then leave read_loop;
+end if;
+if a < b then insert into test.t3 values (a, b);
+else iterate read_loop;
+end if;
+end loop read_loop;
+begin
+declare exit handler for not found begin
+end;
+loop
+fetch cur1 into a, b;
+end loop;
+end;
+empty_loop: loop
+leave empty_loop;
+end loop empty_loop;
+close cur1;
+end`,
+		},
 	}
 )
 
