@@ -3542,7 +3542,7 @@
         "Table": "`user`, dual"
       },
       "TablesUsed": [
-        "user.dual",
+        "main.dual",
         "user.user"
       ]
     }
@@ -5170,7 +5170,7 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "user.dual",
+        "main.dual",
         "user.user"
       ]
     }

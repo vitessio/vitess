@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"sort"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -27,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (logicalPlan, error) {
+func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (logicalPlan, []string, error) {
 	// this method is used when the query we are handling has all tables in the same unsharded keyspace
 	sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
@@ -43,7 +44,7 @@ func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectSt
 
 	tableNames, err := getTableNames(ctx.SemTable)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	plan := &routeGen4{
 		eroute: &engine.Route{
@@ -57,9 +58,9 @@ func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectSt
 	}
 
 	if err := plan.WireupGen4(ctx); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return plan, nil
+	return plan, operators.QualifiedTableNames(ks, tableNames), nil
 }
 
 func getTableNames(semTable *semantics.SemTable) ([]sqlparser.TableName, error) {

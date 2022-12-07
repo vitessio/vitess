@@ -187,3 +187,11 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tre
 
 	return u, identity, nil
 }
+
+func (u *Union) TablesUsed() []string {
+	addSlice, collect := concatSortedUniqueStringSlices()
+	for _, input := range u.Inputs() {
+		addSlice(input.TablesUsed())
+	}
+	return collect()
+}

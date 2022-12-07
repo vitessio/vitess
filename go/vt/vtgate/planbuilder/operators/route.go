@@ -958,3 +958,12 @@ func (r *Route) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
 
 	return nil
 }
+
+func (r *Route) TablesUsed() []string {
+	addSlice, collect := concatSortedUniqueStringSlices()
+	addSlice(r.Source.TablesUsed())
+	for _, mergedRoute := range r.MergedWith {
+		addSlice(mergedRoute.TablesUsed())
+	}
+	return collect()
+}

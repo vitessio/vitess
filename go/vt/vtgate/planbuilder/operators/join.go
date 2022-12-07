@@ -146,3 +146,11 @@ func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 	j.Predicate = ctx.SemTable.AndExpressions(j.Predicate, expr)
 	return nil
 }
+
+func (j *Join) TablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, source := range j.Inputs() {
+		add(source.TablesUsed())
+	}
+	return collect()
+}

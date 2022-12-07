@@ -63,6 +63,16 @@ func (s *SubQueryInner) Inputs() []ops.Operator {
 	return []ops.Operator{s.Inner}
 }
 
+// TablesUsed implements the Operator interface
+func (s *SubQueryInner) TablesUsed() []string {
+	addSlice, collect := concatSortedUniqueStringSlices()
+	for _, input := range s.Inputs() {
+		addSlice(input.TablesUsed())
+	}
+	return collect()
+
+}
+
 // Clone implements the Operator interface
 func (s *SubQuery) Clone(inputs []ops.Operator) ops.Operator {
 	result := &SubQuery{
@@ -85,6 +95,16 @@ func (s *SubQuery) Inputs() []ops.Operator {
 		operators = append(operators, inner)
 	}
 	return operators
+}
+
+// TablesUsed implements the Operator interface
+func (s *SubQuery) TablesUsed() []string {
+	addSlice, collect := concatSortedUniqueStringSlices()
+	for _, input := range s.Inputs() {
+		addSlice(input.TablesUsed())
+	}
+	return collect()
+
 }
 
 func createSubqueryFromStatement(ctx *plancontext.PlanningContext, stmt sqlparser.Statement) (*SubQuery, error) {

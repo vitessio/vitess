@@ -55,3 +55,11 @@ func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 func (h *Horizon) Inputs() []ops.Operator {
 	return []ops.Operator{h.Source}
 }
+
+func (h *Horizon) TablesUsed() []string {
+	add, collect := concatSortedUniqueStringSlices()
+	for _, source := range h.Inputs() {
+		add(source.TablesUsed())
+	}
+	return collect()
+}

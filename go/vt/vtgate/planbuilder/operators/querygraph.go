@@ -43,6 +43,7 @@ type (
 
 		noInputs
 		noColumns
+		noTablesUsed
 	}
 
 	innerJoin struct {
