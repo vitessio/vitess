@@ -55,92 +55,112 @@ func TestNormalizeAlphabetically(t *testing.T) {
 
 func TestQueryMatchesTemplates(t *testing.T) {
 	testcases := []struct {
+		name string
 		q    string
 		tmpl []string
 		out  bool
 	}{{
-		q: "select id from tbl",
+		name: "trivial, identical",
+		q:    "select id from tbl",
 		tmpl: []string{
 			"select id from tbl",
 		},
 		out: true,
 	}, {
-		q: "select id from tbl",
+		name: "trivial, identical from list",
+		q:    "select id from tbl",
 		tmpl: []string{
 			"select name from tbl",
 			"select id from tbl",
 		},
 		out: true,
 	}, {
-		q: "select id from tbl where a=3",
+		name: "trivial no match",
+		q:    "select id from tbl where a=3",
 		tmpl: []string{
 			"select id from tbl",
 		},
 		out: false,
 	}, {
-		// int value
-		q: "select id from tbl where a=3",
+		name: "int value",
+		q:    "select id from tbl where a=3",
 		tmpl: []string{
 			"select name from tbl where a=17",
 			"select id from tbl where a=5",
 		},
 		out: true,
 	}, {
-		// string value
-		q: "select id from tbl where a='abc'",
+		name: "string value",
+		q:    "select id from tbl where a='abc'",
 		tmpl: []string{
 			"select name from tbl where a='x'",
 			"select id from tbl where a='y'",
 		},
 		out: true,
 	}, {
-		// two params
-		q: "select id from tbl where a='abc' and b='def'",
+		name: "two params",
+		q:    "select id from tbl where a='abc' and b='def'",
 		tmpl: []string{
 			"select name from tbl where a='x' and b = 'y'",
 			"select id from tbl where a='x' and b = 'y'",
 		},
 		out: true,
 	}, {
-		// no match
-		q: "select id from tbl where a='abc' and b='def'",
+		name: "no match",
+		q:    "select id from tbl where a='abc' and b='def'",
 		tmpl: []string{
 			"select name from tbl where a='x' and b = 'y'",
 			"select id from tbl where a='x' and c = 'y'",
 		},
 		out: false,
 	}, {
-		// reorder AND params
-		q: "select id from tbl where a='abc' and b='def'",
+		name: "reorder AND params",
+		q:    "select id from tbl where a='abc' and b='def'",
 		tmpl: []string{
 			"select id from tbl where b='x' and a = 'y'",
 		},
 		out: true,
 	}, {
-		// no reorder OR params
-		q: "select id from tbl where a='abc' or b='def'",
+		name: "no reorder OR params",
+		q:    "select id from tbl where a='abc' or b='def'",
 		tmpl: []string{
 			"select id from tbl where b='x' or a = 'y'",
 		},
 		out: false,
 	}, {
-		// strict reorder OR params
-		q: "select id from tbl where a='abc' or b='def'",
+		name: "strict reorder OR params",
+		q:    "select id from tbl where a='abc' or b='def'",
 		tmpl: []string{
 			"select id from tbl where a='x' or b = 'y'",
 		},
 		out: true,
 	}, {
-		// reorder AND params, range test
-		q: "select id from tbl where a >'abc' and b<3",
+		name: "identical 'x' annotation in template, identical query values",
+		q:    "select id from tbl where a='abc' or b='abc'",
+		tmpl: []string{
+			"select id from tbl where a='x' or b = 'x'",
+		},
+		out: true,
+	}, {
+		name: "identical 'x' annotation in template, different query values",
+		q:    "select id from tbl where a='abc' or b='def'",
+		tmpl: []string{
+			"select id from tbl where a='x' or b = 'x'",
+		},
+		out: false,
+	}, {
+		name: "reorder AND params, range test",
+		q:    "select id from tbl where a >'abc' and b<3",
 		tmpl: []string{
 			"select id from tbl where b<17 and a > 'y'",
 		},
 		out: true,
 	}}
 	for _, tc := range testcases {
-		match, err := QueryMatchesTemplates(tc.q, tc.tmpl)
-		assert.NoError(t, err)
-		assert.Equal(t, tc.out, match)
+		t.Run(tc.name, func(t *testing.T) {
+			match, err := QueryMatchesTemplates(tc.q, tc.tmpl)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.out, match)
+		})
 	}
 }
