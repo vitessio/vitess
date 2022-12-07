@@ -1205,3 +1205,80 @@ func (mysqld *Mysqld) GetVersionComment(ctx context.Context) string {
 	versionComment, _ := res.ToString("@@global.version_comment")
 	return versionComment
 }
+
+// applyBinlogFile extracts a binary log file and applies it to MySQL. It is the equivalent of:
+// $ mysqlbinlog --include-gtids binlog.file | mysql
+func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTIDSet) error {
+	var pipe io.ReadCloser
+	var mysqlbinlogCmd *exec.Cmd
+	var mysqlCmd *exec.Cmd
+
+	dir, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return err
+	}
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
+	}
+	{
+		name, err := binaryPath(dir, "mysqlbinlog")
+		if err != nil {
+			return err
+		}
+		args := []string{}
+		if gtids := includeGTIDs.String(); gtids != "" {
+			args = append(args,
+				"--include-gtids",
+				gtids,
+			)
+		}
+		args = append(args, binlogFile)
+
+		mysqlbinlogCmd = exec.Command(name, args...)
+		mysqlbinlogCmd.Dir = dir
+		mysqlbinlogCmd.Env = env
+		log.Infof("applyBinlogFile: running %#v", mysqlbinlogCmd)
+		pipe, err = mysqlbinlogCmd.StdoutPipe() // to be piped into mysql
+		if err != nil {
+			return err
+		}
+	}
+	{
+		name, err := binaryPath(dir, "mysql")
+		if err != nil {
+			return err
+		}
+		params, err := mysqld.dbcfgs.DbaConnector().MysqlParams()
+		if err != nil {
+			return err
+		}
+		cnf, err := mysqld.defaultsExtraFile(params)
+		if err != nil {
+			return err
+		}
+		defer os.Remove(cnf)
+		args := []string{
+			"--defaults-extra-file=" + cnf,
+		}
+		mysqlCmd = exec.Command(name, args...)
+		mysqlCmd.Dir = dir
+		mysqlCmd.Env = env
+		mysqlCmd.Stdin = pipe // piped from mysqlbinlog
+	}
+	// Run both processes, piped:
+	if err := mysqlbinlogCmd.Start(); err != nil {
+		return err
+	}
+	if err := mysqlCmd.Start(); err != nil {
+		return err
+	}
+	// Wait for both to complete:
+	if err := mysqlbinlogCmd.Wait(); err != nil {
+		return err
+	}
+	if err := mysqlCmd.Wait(); err != nil {
+		return err
+	}
+	return nil
+}

@@ -135,7 +135,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 	if len(unresolved) > 0 {
 		// if we have any predicates that none of the joins or tables took care of,
 		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
-		result = newFilter(result, sqlparser.AndExpressions(unresolved...))
+		result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
 	}
 
 	return
@@ -418,7 +418,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, error) {
 	merger := func(a, b *Route) (*Route, error) {
-		return createRouteOperatorForJoin(a, b, joinPredicates, inner)
+		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
 	}
 
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
@@ -443,7 +443,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
+func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -454,7 +454,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		}
 	}
 
-	join := NewApplyJoin(aRoute.Source, bRoute.Source, sqlparser.AndExpressions(joinPredicates...), !inner)
+	join := NewApplyJoin(aRoute.Source, bRoute.Source, ctx.SemTable.AndExpressions(joinPredicates...), !inner)
 	r := &Route{
 		RouteOpCode:         aRoute.RouteOpCode,
 		Keyspace:            aRoute.Keyspace,

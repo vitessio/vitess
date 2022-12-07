@@ -63,7 +63,7 @@ var (
 )
 
 const (
-	// for some tests we keep an open transaction during a SwitchWrites and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
+	// for some tests we keep an open transaction during a Switch writes and commit it afterwards, to reproduce https://github.com/vitessio/vitess/issues/9400
 	// we also then delete the extra row (if) added so that the row counts for the future count comparisons stay the same
 	openTxQuery       = "insert into customer(cid, name, typ, sport, meta) values(4, 'openTxQuery',1,'football,baseball','{}');"
 	deleteOpenTxQuery = "delete from customer where name = 'openTxQuery'"
@@ -82,34 +82,36 @@ func init() {
 	defaultReplicas = 1
 }
 
-func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.Response, respBody string, err error) {
+func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody string, err error) {
 	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.TabletHostname, tablet.Port, path)
-	resp, err = httpClient.Get(apiURL)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
-		return resp, respBody, err
+		return "", err
 	}
+	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
-	return resp, respBody, err
+	return respBody, err
 }
 
-func throttleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func throttleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
 }
 
-func unthrottleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func unthrottleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
 }
 
-func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http.Response, respBody string, err error) {
+func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (respBody string, err error) {
 	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, app)
-	resp, err = httpClient.Get(apiURL)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
-		return resp, respBody, err
+		return "", err
 	}
+	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
-	return resp, respBody, err
+	return respBody, err
 }
 
 // TestVReplicationDDLHandling tests the DDL handling in
@@ -157,7 +159,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 		targetKs, table, newColumn)
 
 	// Test IGNORE behavior
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=IGNORE")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=IGNORE")
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on source
@@ -169,13 +171,13 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
 	// Confirm new col does exist on source
 	waitForQueryResult(t, vtgateConn, sourceKs, checkColQuerySource, "[[INT64(1)]]")
-	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
-	// Drop the column on soruce to start fresh again
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
+	// Drop the column on source to start fresh again
 	_, err = vtgateConn.ExecuteFetch(dropColDDL, 1, false)
 	require.NoError(t, err, "error executing %q: %v", dropColDDL, err)
 
 	// Test STOP behavior (new col now exists nowhere)
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=STOP")
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Add new col on the source
@@ -185,10 +187,10 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForWorkflowState(t, vc, ksWorkflow, "Stopped", fmt.Sprintf("Message==Stopped at DDL %s", addColDDL))
 	// Confirm that the target does not have new col
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
-	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 
 	// Test EXEC behavior (new col now exists on source)
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, table, "--on-ddl=EXEC")
 	// Wait until we get through the copy phase...
 	catchup(t, targetTab, workflow, "MoveTables")
 	// Confirm target has new col from copy phase
@@ -200,7 +202,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	waitForWorkflowState(t, vc, ksWorkflow, "Running")
 	// Confirm new col was dropped on target
 	waitForQueryResult(t, vtgateConn, targetKs, checkColQueryTarget, "[[INT64(0)]]")
-	cancelMoveTables(t, defaultCellName, workflow, sourceKs, targetKs, table)
+	moveTablesAction(t, "Cancel", defaultCellName, workflow, sourceKs, targetKs, table)
 }
 
 func TestVreplicationCopyThrottling(t *testing.T) {
@@ -241,7 +243,9 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	// History should have been generated on the source primary tablet
 	waitForInnoDBHistoryLength(t, vc.getPrimaryTablet(t, sourceKs, shard), maxSourceTrxHistory)
 	// We need to force primary tablet types as the history list has been increased on the source primary
-	moveTablesWithTabletTypes(t, defaultCell.Name, workflow, sourceKs, targetKs, table, "primary")
+	// We use a small timeout and ignore errors as we don't expect the MoveTables to start here
+	// because of the InnoDB History List length.
+	moveTablesActionWithTabletTypes(t, "Create", defaultCell.Name, workflow, sourceKs, targetKs, table, "primary", 5*time.Second, true)
 	// Wait for the copy phase to start
 	waitForWorkflowState(t, vc, fmt.Sprintf("%s.%s", targetKs, workflow), workflowStateCopying)
 	// The initial copy phase should be blocking on the history list
@@ -396,7 +400,7 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	insertInitialData(t)
 
 	tables := "product,customer,merchant,orders"
-	moveTables(t, defaultCellName, workflow, sourceKs, targetKs, tables)
+	moveTablesAction(t, "Create", defaultCellName, workflow, sourceKs, targetKs, tables)
 	// Wait until we get through the copy phase...
 	catchup(t, vc.getPrimaryTablet(t, targetKs, shard), workflow, "MoveTables")
 
@@ -690,15 +694,16 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 
 		tables := "customer,Lead,Lead-1,db_order_test"
-		moveTables(t, sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
+		moveTablesAction(t, "Create", sourceCellOrAlias, workflow, sourceKs, targetKs, tables)
 
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
 		productTab := vc.Cells[defaultCell.Name].Keyspaces["product"].Shards["0"].Tablets["zone1-100"].Vttablet
 
 		// Wait to finish the copy phase for all tables
-		catchup(t, customerTab1, workflow, "MoveTables")
-		catchup(t, customerTab2, workflow, "MoveTables")
+		workflowType := "MoveTables"
+		catchup(t, customerTab1, workflow, workflowType)
+		catchup(t, customerTab2, workflow, workflowType)
 
 		// Confirm that the 0 scale decimal field, dec80, is replicated correctly
 		dec80Replicated := false
@@ -731,16 +736,16 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		}
 
 		vdiff1(t, ksWorkflow, "")
-		switchReadsDryRun(t, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
-		switchReads(t, allCellNames, ksWorkflow)
+		switchReadsDryRun(t, workflowType, allCellNames, ksWorkflow, dryRunResultsReadCustomerShard)
+		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", query, query))
 
 		var commit func(t *testing.T)
 		if withOpenTx {
 			commit, _ = vc.startQuery(t, openTxQuery)
 		}
-		switchWritesDryRun(t, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
-		switchWrites(t, ksWorkflow, false)
+		switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultsSwitchWritesCustomerShard)
+		switchWrites(t, workflowType, ksWorkflow, false)
 		checkThatVDiffFails(t, targetKs, workflow)
 
 		if withOpenTx && commit != nil {
@@ -767,12 +772,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
 
 		execVtgateQuery(t, vtgateConn, "customer", "update customer set meta = convert(x'7b7d' using utf8mb4) where cid = 1")
-		reverseKsWorkflow := "product.p2c_reverse"
 		if testReverse {
 			//Reverse Replicate
-			switchReads(t, allCellNames, reverseKsWorkflow)
+			switchReads(t, workflowType, allCellNames, ksWorkflow, true)
 			printShardPositions(vc, ksShards)
-			switchWrites(t, reverseKsWorkflow, false)
+			switchWrites(t, workflowType, ksWorkflow, true)
 
 			output, err := vc.VtctlClient.ExecuteCommandWithOutput("Workflow", ksWorkflow, "show")
 			require.NoError(t, err)
@@ -787,17 +791,18 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			insertQuery1 = "insert into customer(cid, name) values(1004, 'tempCustomer7')"
 			require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery1, matchInsertQuery1))
 
+			waitForNoWorkflowLag(t, vc, targetKs, workflow)
+
 			//Go forward again
-			switchReads(t, allCellNames, ksWorkflow)
-			switchWrites(t, ksWorkflow, false)
-			dropSourcesDryRun(t, ksWorkflow, false, dryRunResultsDropSourcesDropCustomerShard)
-			dropSourcesDryRun(t, ksWorkflow, true, dryRunResultsDropSourcesRenameCustomerShard)
+			switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+			switchWrites(t, workflowType, ksWorkflow, false)
 
 			var exists bool
 			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
 			require.True(t, exists)
-			dropSources(t, ksWorkflow)
+
+			moveTablesAction(t, "Complete", allCellNames, workflow, sourceKs, targetKs, tables)
 
 			exists, err = checkIfDenyListExists(t, vc, "product:0", "customer")
 			require.NoError(t, err, "Error getting denylist for customer:0")
@@ -952,8 +957,10 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 				t.Fatal(err)
 			}
 		}
-		if err := vc.VtctlClient.ExecuteCommand("Reshard", "--", "--v1", "--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", ksWorkflow, "--", sourceShards, targetShards); err != nil {
-			t.Fatalf("Reshard command failed with %+v\n", err)
+		workflowType := "Reshard"
+		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
+			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Create", ksWorkflow); err != nil {
+			t.Fatalf("Reshard Create command failed with %+v\n", err)
 		}
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
 		targetShards = "," + targetShards + ","
@@ -967,12 +974,15 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 			}
 		}
 		vdiff1(t, ksWorkflow, "")
-		switchReads(t, allCellNames, ksWorkflow)
+		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 		if dryRunResultSwitchWrites != nil {
-			switchWritesDryRun(t, ksWorkflow, dryRunResultSwitchWrites)
+			switchWritesDryRun(t, workflowType, ksWorkflow, dryRunResultSwitchWrites)
 		}
-		switchWrites(t, ksWorkflow, false)
-		dropSources(t, ksWorkflow)
+		switchWrites(t, workflowType, ksWorkflow, false)
+		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
+			"--cells="+sourceCellOrAlias, "--tablet_types=replica,primary", "Complete", ksWorkflow); err != nil {
+			t.Fatalf("Reshard Complete command failed with %+v\n", err)
+		}
 		for tabletName, count := range counts {
 			if tablets[tabletName] == nil {
 				continue
@@ -991,17 +1001,18 @@ func shardOrders(t *testing.T) {
 		tables := "orders"
 		ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 		applyVSchema(t, ordersVSchema, targetKs)
-		moveTables(t, cell, workflow, sourceKs, targetKs, tables)
+		moveTablesAction(t, "Create", cell, workflow, sourceKs, targetKs, tables)
 
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
 		customerTab1 := custKs.Shards["-80"].Tablets["zone1-200"].Vttablet
 		customerTab2 := custKs.Shards["80-"].Tablets["zone1-300"].Vttablet
-		catchup(t, customerTab1, workflow, "MoveTables")
-		catchup(t, customerTab2, workflow, "MoveTables")
+		workflowType := "MoveTables"
+		catchup(t, customerTab1, workflow, workflowType)
+		catchup(t, customerTab2, workflow, workflowType)
 		vdiff1(t, ksWorkflow, "")
-		switchReads(t, allCellNames, ksWorkflow)
-		switchWrites(t, ksWorkflow, false)
-		dropSources(t, ksWorkflow)
+		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+		switchWrites(t, workflowType, ksWorkflow, false)
+		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
 		waitForRowCountInTablet(t, customerTab1, "customer", "orders", 1)
 		waitForRowCountInTablet(t, customerTab2, "customer", "orders", 2)
 		waitForRowCount(t, vtgateConn, "customer", "orders", 3)
@@ -1040,16 +1051,17 @@ func shardMerchant(t *testing.T) {
 		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "80-"), 1); err != nil {
 			t.Fatal(err)
 		}
-		moveTables(t, cell, workflow, sourceKs, targetKs, tables)
+		moveTablesAction(t, "Create", cell, workflow, sourceKs, targetKs, tables)
 		merchantKs := vc.Cells[defaultCell.Name].Keyspaces[merchantKeyspace]
 		merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet
 		merchantTab2 := merchantKs.Shards["80-"].Tablets["zone1-500"].Vttablet
-		catchup(t, merchantTab1, workflow, "MoveTables")
-		catchup(t, merchantTab2, workflow, "MoveTables")
+		workflowType := "MoveTables"
+		catchup(t, merchantTab1, workflow, workflowType)
+		catchup(t, merchantTab2, workflow, workflowType)
 
 		vdiff1(t, fmt.Sprintf("%s.%s", merchantKeyspace, workflow), "")
-		switchReads(t, allCellNames, ksWorkflow)
-		switchWrites(t, ksWorkflow, false)
+		switchReads(t, workflowType, allCellNames, ksWorkflow, false)
+		switchWrites(t, workflowType, ksWorkflow, false)
 		printRoutingRules(t, vc, "After merchant movetables")
 
 		// confirm that the backticking of keyspaces in the routing rules works
@@ -1058,7 +1070,7 @@ func shardMerchant(t *testing.T) {
 		if err != nil {
 			require.FailNow(t, output)
 		}
-		dropSources(t, ksWorkflow)
+		moveTablesAction(t, "Complete", cell, workflow, sourceKs, targetKs, tables)
 
 		waitForRowCountInTablet(t, merchantTab1, merchantKeyspace, "merchant", 1)
 		waitForRowCountInTablet(t, merchantTab2, merchantKeyspace, "merchant", 1)
@@ -1090,7 +1102,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
-				_, body, err := throttleApp(tab, sourceThrottlerAppName)
+				body, err := throttleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 
@@ -1108,7 +1120,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range productTablets {
-				_, body, err := unthrottleApp(tab, sourceThrottlerAppName)
+				body, err := unthrottleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 				// give time for unthrottling to take effect and for target to fetch data
@@ -1123,7 +1135,7 @@ func materializeProduct(t *testing.T) {
 			// Now, throttle vreplication (vcopier/vapplier) on target tablets, and
 			// insert some more rows.
 			for _, tab := range customerTablets {
-				_, body, err := throttleApp(tab, targetThrottlerAppName)
+				body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 				// Wait for throttling to take effect (caching will expire by this time):
@@ -1141,7 +1153,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
 			for _, tab := range customerTablets {
-				_, body, err := unthrottleApp(tab, targetThrottlerAppName)
+				body, err := unthrottleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 			}
@@ -1284,54 +1296,75 @@ func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info str
 	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), maxWait)
 }
 
-func moveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
+func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
 	var err error
 	if len(extraFlags) > 0 {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-			"--tablet_types="+"primary,replica,rdonly", strings.Join(extraFlags, " "), sourceKs, targetKs, tables)
+		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables,
+			"--cells="+cell, "--tablet_types=primary,replica,rdonly", strings.Join(extraFlags, " "),
+			action, fmt.Sprintf("%s.%s", targetKs, workflow))
 	} else {
-		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-			"--tablet_types="+"primary,replica,rdonly", sourceKs, targetKs, tables)
+		err = vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
+			"--tablet_types=primary,replica,rdonly", action, fmt.Sprintf("%s.%s", targetKs, workflow))
 	}
 	if err != nil {
-		t.Fatalf("MoveTables command failed with %+v\n", err)
+		t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
 	}
 }
-func moveTablesWithTabletTypes(t *testing.T, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--v1", "--cells="+cell, "--workflow="+workflow,
-		"--tablet_types="+tabletTypes, sourceKs, targetKs, tables); err != nil {
-		t.Fatalf("MoveTables command failed with %+v\n", err)
+func moveTablesActionWithTabletTypes(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, tabletTypes string, timeout time.Duration, ignoreErrors bool) {
+	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--tables="+tables, "--cells="+cell,
+		"--tablet_types="+tabletTypes, "--timeout="+timeout.String(), action, fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
+		if !ignoreErrors {
+			t.Fatalf("MoveTables %s command failed with %+v\n", action, err)
+		}
 	}
 }
-func cancelMoveTables(t *testing.T, cell, workflow, sourceKs, targetKs, tables string) {
-	if err := vc.VtctlClient.ExecuteCommand("MoveTables", "--", "--source="+sourceKs, "--cells="+cell, "--tables="+tables,
-		"--tablet_types="+"primary,replica,rdonly", "Cancel", fmt.Sprintf("%s.%s", targetKs, workflow)); err != nil {
-		t.Fatalf("MoveTables Cancel command failed with %+v\n", err)
-	}
-}
+
 func applyVSchema(t *testing.T, vschema, keyspace string) {
 	err := vc.VtctlClient.ExecuteCommand("ApplyVSchema", "--", "--vschema", vschema, keyspace)
 	require.NoError(t, err)
 }
 
-func switchReadsDryRun(t *testing.T, cells, ksWorkflow string, dryRunResults []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=replica", "--dry_run", ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("SwitchReads DryRun Error: %s: %s", err, output))
+func switchReadsDryRun(t *testing.T, workflowType, cells, ksWorkflow string, dryRunResults []string) {
+	if workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_MoveTables)] &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_Reshard)] {
+		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
+			"workflow type specified: %s", workflowType)
+	}
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly,replica",
+		"--dry_run", "SwitchTraffic", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("Switching Reads DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
 
-func switchReads(t *testing.T, cells, ksWorkflow string) {
+func switchReads(t *testing.T, workflowType, cells, ksWorkflow string, reverse bool) {
+	if workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_MoveTables)] &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_Reshard)] {
+		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
+			"workflow type specified: %s", workflowType)
+	}
 	var output string
 	var err error
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=rdonly", ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
-	output, err = vc.VtctlClient.ExecuteCommandWithOutput("SwitchReads", "--", "--cells="+cells, "--tablet_types=replica", ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("SwitchReads Error: %s: %s", err, output))
+	command := "SwitchTraffic"
+	if reverse {
+		command = "ReverseTraffic"
+	}
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=rdonly",
+		command, ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
+	output, err = vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--cells="+cells, "--tablet_types=replica",
+		command, ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("%s Error: %s: %s", command, err, output))
 }
 
-func switchWritesDryRun(t *testing.T, ksWorkflow string, dryRunResults []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "--", "--dry_run", ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("SwitchWrites DryRun Error: %s: %s", err, output))
+func switchWritesDryRun(t *testing.T, workflowType, ksWorkflow string, dryRunResults []string) {
+	if workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_MoveTables)] &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_Reshard)] {
+		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
+			"workflow type specified: %s", workflowType)
+	}
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary", "--dry_run",
+		"SwitchTraffic", ksWorkflow)
+	require.NoError(t, err, fmt.Sprintf("Switch writes DryRun Error: %s: %s", err, output))
 	validateDryRunResults(t, output, dryRunResults)
 }
 
@@ -1339,7 +1372,7 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	// Temporary code: print lots of info for debugging occasional flaky failures in customer reshard in CI for multicell test
 	debug := true
 	if debug {
-		log.Infof("------------------- START Extra debug info %s SwitchWrites %s", msg, ksWorkflow)
+		log.Infof("------------------- START Extra debug info %s Switch writes %s", msg, ksWorkflow)
 		ksShards := []string{"product/0", "customer/-80", "customer/80-"}
 		printShardPositions(vc, ksShards)
 		custKs := vc.Cells[defaultCell.Name].Keyspaces["customer"]
@@ -1365,32 +1398,25 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 	}
 }
 
-func switchWrites(t *testing.T, ksWorkflow string, reverse bool) {
+func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
+	if workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_MoveTables)] &&
+		workflowType != binlogdatapb.VReplicationWorkflowType_name[int32(binlogdatapb.VReplicationWorkflowType_Reshard)] {
+		require.FailNowf(t, "Invalid workflow type for SwitchTraffic, must be MoveTables or Reshard",
+			"workflow type specified: %s", workflowType)
+	}
+	command := "SwitchTraffic"
+	if reverse {
+		command = "ReverseTraffic"
+	}
 	const SwitchWritesTimeout = "91s" // max: 3 tablet picker 30s waits + 1
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("SwitchWrites", "--",
-		"--filtered_replication_wait_time="+SwitchWritesTimeout, fmt.Sprintf("--reverse=%t", reverse), ksWorkflow)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput(workflowType, "--", "--tablet_types=primary",
+		"--timeout="+SwitchWritesTimeout, command, ksWorkflow)
 	if output != "" {
-		fmt.Printf("Output of SwitchWrites for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
+		fmt.Printf("Output of switching writes for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
-	//printSwitchWritesExtraDebug is useful when debugging failures in SwitchWrites due to corner cases/races
+	//printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug
-	require.NoError(t, err, fmt.Sprintf("SwitchWrites Error: %s: %s", err, output))
-}
-
-func dropSourcesDryRun(t *testing.T, ksWorkflow string, renameTables bool, dryRunResults []string) {
-	args := []string{"DropSources", "--", "--dry_run"}
-	if renameTables {
-		args = append(args, "--rename_tables")
-	}
-	args = append(args, ksWorkflow)
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput(args...)
-	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
-	validateDryRunResults(t, output, dryRunResults)
-}
-
-func dropSources(t *testing.T, ksWorkflow string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("DropSources", ksWorkflow)
-	require.NoError(t, err, fmt.Sprintf("DropSources Error: %s: %s", err, output))
+	require.NoError(t, err, fmt.Sprintf("Switch writes Error: %s: %s", err, output))
 }
 
 // generateInnoDBRowHistory generates at least maxSourceTrxHistory rollback segment entries.

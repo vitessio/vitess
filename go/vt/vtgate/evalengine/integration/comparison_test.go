@@ -157,7 +157,6 @@ var comparisonElements = []string{"NULL", "-1", "0", "1",
 
 func TestAllComparisons(t *testing.T) {
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
-
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
