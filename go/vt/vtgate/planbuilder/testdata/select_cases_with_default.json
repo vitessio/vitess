@@ -61,7 +61,7 @@
         "Vindex": "user_index"
       },
       "TablesUsed": [
-        "second_user.dual",
+        "user.dual",
         "user.user"
       ]
     }

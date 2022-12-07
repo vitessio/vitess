@@ -66,6 +66,10 @@ func (f *fakePrimitive) GetTableName() string {
 	return "fakeTable"
 }
 
+func (f *fakePrimitive) GetTablesUsed() []string {
+	return []string{fmt.Sprintf("%s.%s", f.GetKeyspaceName(), f.GetTableName())}
+}
+
 func (f *fakePrimitive) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	f.log = append(f.log, fmt.Sprintf("Execute %v %v", printBindVars(bindVars), wantfields))
 	if f.results == nil {
