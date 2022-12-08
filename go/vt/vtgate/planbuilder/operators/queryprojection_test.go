@@ -98,8 +98,8 @@ func TestQP(t *testing.T) {
 				assert.Equal(t, len(sel.SelectExprs), len(qp.SelectExprs))
 				require.Equal(t, len(tcase.expOrder), len(qp.OrderExprs), "not enough order expressions in QP")
 				for index, expOrder := range tcase.expOrder {
-					assert.True(t, sqlparser.EqualsSQLNode(expOrder.Inner, qp.OrderExprs[index].Inner, nil), "want: %+v, got %+v", sqlparser.String(expOrder.Inner), sqlparser.String(qp.OrderExprs[index].Inner))
-					assert.True(t, sqlparser.EqualsSQLNode(expOrder.WeightStrExpr, qp.OrderExprs[index].WeightStrExpr, nil), "want: %v, got %v", sqlparser.String(expOrder.WeightStrExpr), sqlparser.String(qp.OrderExprs[index].WeightStrExpr))
+					assert.True(t, sqlparser.Equals.SQLNode(expOrder.Inner, qp.OrderExprs[index].Inner), "want: %+v, got %+v", sqlparser.String(expOrder.Inner), sqlparser.String(qp.OrderExprs[index].Inner))
+					assert.True(t, sqlparser.Equals.SQLNode(expOrder.WeightStrExpr, qp.OrderExprs[index].WeightStrExpr), "want: %v, got %v", sqlparser.String(expOrder.WeightStrExpr), sqlparser.String(qp.OrderExprs[index].WeightStrExpr))
 				}
 			}
 		})

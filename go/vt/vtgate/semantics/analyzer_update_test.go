@@ -112,7 +112,7 @@ func TestUpdSetSubquery(t *testing.T) {
 			for _, esubq := range extractedSubqs {
 				subq := esubq.Subquery
 				extractedSubq := semTable.SubqueryRef[subq]
-				assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq, nil))
+				assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
 			}
 		})
 	}
@@ -140,7 +140,7 @@ func TestUpdWhereSubquery(t *testing.T) {
 			for _, esubq := range extractedSubqs {
 				subq := esubq.Subquery
 				extractedSubq := semTable.SubqueryRef[subq]
-				assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq, nil))
+				assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
 			}
 		})
 	}
@@ -166,7 +166,7 @@ func TestUpdSetAndWhereSubquery(t *testing.T) {
 			for _, esubq := range extractedSubqs {
 				subq := esubq.Subquery
 				extractedSubq := semTable.SubqueryRef[subq]
-				assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq, nil))
+				assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
 			}
 		})
 	}

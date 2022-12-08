@@ -190,16 +190,23 @@ var acceptableBuildErrorsOn = map[string]any{
 	"ast_visit.go":   nil,
 }
 
+type Options struct {
+	Packages      []string
+	RootInterface string
+
+	Clone  CloneOptions
+	Equals EqualsOptions
+}
+
 // GenerateASTHelpers loads the input code, constructs the necessary generators,
 // and generates the rewriter and clone methods for the AST
-func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType string) (map[string]*jen.File, error) {
+func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
-	}, packagePatterns...)
+	}, options.Packages...)
 
 	if err != nil {
-		log.Fatal("error loading package")
-		return nil, err
+		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}
 
 	checkErrors(loaded, func(fileName string) bool {
@@ -212,17 +219,17 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 		scopes[pkg.PkgPath] = pkg.Types.Scope()
 	}
 
-	pos := strings.LastIndexByte(rootIface, '.')
+	pos := strings.LastIndexByte(options.RootInterface, '.')
 	if pos < 0 {
-		return nil, fmt.Errorf("unexpected input type: %s", rootIface)
+		return nil, fmt.Errorf("unexpected input type: %s", options.RootInterface)
 	}
 
-	pkgname := rootIface[:pos]
-	typename := rootIface[pos+1:]
+	pkgname := options.RootInterface[:pos]
+	typename := options.RootInterface[pos+1:]
 
 	scope := scopes[pkgname]
 	if scope == nil {
-		return nil, fmt.Errorf("no scope found for type '%s'", rootIface)
+		return nil, fmt.Errorf("no scope found for type '%s'", options.RootInterface)
 	}
 
 	tt := scope.Lookup(typename)
@@ -233,8 +240,8 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	nt := tt.Type().(*types.Named)
 	pName := nt.Obj().Pkg().Name()
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
-		newEqualsGen(pName),
-		newCloneGen(pName, exceptCloneType),
+		newEqualsGen(pName, &options.Equals),
+		newCloneGen(pName, &options.Clone),
 		newVisitGen(pName),
 		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
 	)

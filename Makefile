@@ -177,16 +177,13 @@ parser:
 demo:
 	go install ./examples/demo/demo.go
 
-codegen: asthelpergen sizegen parser astfmtgen
+codegen: asthelpergen sizegen parser
 
 visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main \
-		--in ./go/vt/sqlparser \
-		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
-		--except "*ColName"
+	go generate ./go/vt/sqlparser/...
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
@@ -196,9 +193,6 @@ sizegen:
 		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
 		--gen vitess.io/vitess/go/sqltypes.Result
-
-astfmtgen:
-	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
