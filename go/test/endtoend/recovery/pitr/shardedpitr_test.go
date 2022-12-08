@@ -23,6 +23,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -89,6 +90,9 @@ var (
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
 		"--serving_state_grace_period", "1s"}
+
+	defaultTimeout = 30 * time.Second
+	defaultTick    = 1 * time.Second
 )
 
 // Test pitr (Point in time recovery).
@@ -296,23 +300,23 @@ func performResharding(t *testing.T) {
 	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "--", "--force", "ks/80-", shard1Primary.Alias)
 	require.NoError(t, err)
 
-	// we need to create the schema, and the worker will do data copying
-	for _, keyspaceShard := range []string{"ks/-80", "ks/80-"} {
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("CopySchemaShard", "ks/0", keyspaceShard)
-		require.NoError(t, err)
-	}
-
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--v1", "ks.reshardWorkflow", "0", "--", "-80,80-")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--source_shards=0", "--target_shards=-80,80-", "Create", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_types=rdonly", "ks.reshardWorkflow")
+	waitTimeout := 30 * time.Second
+	shard0Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, waitTimeout)
+	shard1Primary.VttabletProcess.WaitForVReplicationToCatchup(t, "ks.reshardWorkflow", dbName, waitTimeout)
+
+	waitForNoWorkflowLag(t, clusterInstance, "ks.reshardWorkflow")
+
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=rdonly", "SwitchTraffic", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchReads", "--", "--tablet_types=replica", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=replica", "SwitchTraffic", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	// then serve primary from the split shards
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SwitchWrites", "ks.reshardWorkflow")
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--tablet_types=primary", "SwitchTraffic", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
 	// remove the original tablets in the original shard
@@ -551,4 +555,28 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 	require.NoError(t, err)
 
 	tablet.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 20*time.Second)
+}
+
+// waitForNoWorkflowLag waits for the VReplication workflow's MaxVReplicationTransactionLag
+// value to be 0.
+func waitForNoWorkflowLag(t *testing.T, vc *cluster.LocalProcessCluster, ksWorkflow string) {
+	lag := int64(0)
+	timer := time.NewTimer(defaultTimeout)
+	defer timer.Stop()
+	for {
+		output, err := vc.VtctlclientProcess.ExecuteCommandWithOutput("Workflow", "--", ksWorkflow, "show")
+		require.NoError(t, err)
+		lag, err = jsonparser.GetInt([]byte(output), "MaxVReplicationTransactionLag")
+		require.NoError(t, err)
+		if lag == 0 {
+			return
+		}
+		select {
+		case <-timer.C:
+			require.FailNow(t, fmt.Sprintf("workflow %q did not eliminate VReplication lag before the timeout of %s; last seen MaxVReplicationTransactionLag: %d",
+				ksWorkflow, defaultTimeout, lag))
+		default:
+			time.Sleep(defaultTick)
+		}
+	}
 }

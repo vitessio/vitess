@@ -323,52 +323,6 @@ func IsDMLStatement(stmt Statement) bool {
 	return false
 }
 
-// SplitAndExpression breaks up the Expr into AND-separated conditions
-// and appends them to filters. Outer parenthesis are removed. Precedence
-// should be taken into account if expressions are recombined.
-func SplitAndExpression(filters []Expr, node Expr) []Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *AndExpr:
-		filters = SplitAndExpression(filters, node.Left)
-		return SplitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
-
-// AndExpressions ands together two or more expressions, minimising the expr when possible
-func AndExpressions(exprs ...Expr) Expr {
-	switch len(exprs) {
-	case 0:
-		return nil
-	case 1:
-		return exprs[0]
-	default:
-		result := (Expr)(nil)
-	outer:
-		// we'll loop and remove any duplicates
-		for i, expr := range exprs {
-			if expr == nil {
-				continue
-			}
-			if result == nil {
-				result = expr
-				continue outer
-			}
-
-			for j := 0; j < i; j++ {
-				if EqualsExpr(expr, exprs[j]) {
-					continue outer
-				}
-			}
-			result = &AndExpr{Left: result, Right: expr}
-		}
-		return result
-	}
-}
-
 // TableFromStatement returns the qualified table name for the query.
 // This works only for select statements.
 func TableFromStatement(sql string) (TableName, error) {

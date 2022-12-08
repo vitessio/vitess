@@ -242,6 +242,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "use_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "set_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "union_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "large_union_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "transaction_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "lock_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "large_cases.json", testOutputTempDir, vschemaWrapper, false)
@@ -546,7 +547,7 @@ func (vw *vschemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vw *vschemaWrapper) ConnCollation() collations.ID {
-	return collations.Unknown
+	return collations.CollationUtf8ID
 }
 
 func (vw *vschemaWrapper) PlannerWarning(_ string) {

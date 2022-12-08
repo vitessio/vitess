@@ -157,7 +157,6 @@ var comparisonElements = []string{"NULL", "-1", "0", "1",
 
 func TestAllComparisons(t *testing.T) {
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
-
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
@@ -413,6 +412,34 @@ func TestTypes(t *testing.T) {
 		`X'444444'`,
 		`_binary "foobar"`,
 		`-0x0`,
+	}
+
+	for _, query := range queries {
+		compareRemoteExpr(t, conn, query)
+	}
+}
+
+func TestUnderscoreAndPercentage(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var queries = []string{
+		`'pokemon' LIKE 'poke%'`,
+		`'pokemon' LIKE 'poke\%'`,
+		`'poke%mon' LIKE 'poke\%mon'`,
+		`'pokemon' LIKE 'poke\%mon'`,
+		`'poke%mon' = 'poke%mon'`,
+		`'poke\%mon' = 'poke%mon'`,
+		`'poke%mon' = 'poke\%mon'`,
+		`'poke\%mon' = 'poke\%mon'`,
+		`'pokemon' LIKE 'poke_on'`,
+		`'pokemon' LIKE 'poke\_on'`,
+		`'poke_mon' LIKE 'poke\_mon'`,
+		`'pokemon' LIKE 'poke\_mon'`,
+		`'poke_mon' = 'poke_mon'`,
+		`'poke\_mon' = 'poke_mon'`,
+		`'poke_mon' = 'poke\_mon'`,
+		`'poke\_mon' = 'poke\_mon'`,
 	}
 
 	for _, query := range queries {
