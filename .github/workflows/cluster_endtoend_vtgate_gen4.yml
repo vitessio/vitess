@@ -2,6 +2,15 @@
 
 name: Cluster (vtgate_gen4)
 on: [push, pull_request]
+
+env:
+
+  # This is used if we need to pin the xtrabackup version used in tests.
+  # Doing so here because 2.4.25 crashes in our 5.7 tests. See:
+  #   https://jira.percona.com/browse/PXB-2756
+  # If this is NOT set then the latest version available will be used.
+  XTRABACKUP_VERSION: "2.4.24-1"
+
 concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_gen4)')
   cancel-in-progress: true
@@ -60,11 +69,17 @@ jobs:
         # install JUnit report formatter
         go get -u github.com/vitessio/go-junit-report@HEAD
 
-        wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+        wget "https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get install -y gnupg2
-        sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+        sudo dpkg -i "percona-release_latest.$(lsb_release -sc)_all.deb"
         sudo apt-get update
-        sudo apt-get install percona-xtrabackup-24
+        if [[ -n $XTRABACKUP_VERSION ]]; then
+          debfile="percona-xtrabackup-24_$XTRABACKUP_VERSION.$(lsb_release -sc)_amd64.deb"
+          wget "https://repo.percona.com/pxb-24/apt/pool/main/p/percona-xtrabackup-24/$debfile"
+          sudo apt install -y "./$debfile"
+        else
+          sudo apt-get install -y percona-xtrabackup-24
+        fi
 
     - name: Setup launchable dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
