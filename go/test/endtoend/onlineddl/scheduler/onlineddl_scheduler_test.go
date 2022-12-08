@@ -648,7 +648,7 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	// INSTANT DDL
-	instantDDLCapable, err := capableOf(mysql.InstantDDLFlavorCapability)
+	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)
 	if instantDDLCapable {
 		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
