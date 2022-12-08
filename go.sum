@@ -628,8 +628,6 @@ github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/sftp v1.10.1/go.mod h1:lYOWFsE0bwd1+KfKJaKeuokY15vzFx25BLbzYYoAxZI=
-github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a h1:y0OpQ4+5tKxeh9+H+2cVgASl9yMZYV9CILinKOiKafA=
-github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a/go.mod h1:GJFUzQuXIoB2Kjn1ZfDhJr/42D5nWOqRcIQVgCxTuIE=
 github.com/planetscale/tengo v0.10.3-ps.v1-vitess h1:O0R5Eu2K3dQF/V+/drgUpsv29yyg7Rx35i5LlEIsPxA=
 github.com/planetscale/tengo v0.10.3-ps.v1-vitess/go.mod h1:XodsLMQeYnfuMNSCgHsM5rZ0cqaXHU/v0FC6H4bzGno=
 github.com/planetscale/vtprotobuf v0.2.0 h1:65H8opMdnSwIUvrRZ51o6rFxA01t9XG91qi997v9FoA=
