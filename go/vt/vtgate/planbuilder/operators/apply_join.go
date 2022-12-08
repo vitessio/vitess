@@ -194,7 +194,7 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 }
 
 func (a *ApplyJoin) TablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
+	add, collect := ConcatSortedUniqueStringSlices()
 	for _, input := range a.Inputs() {
 		add(input.TablesUsed())
 	}

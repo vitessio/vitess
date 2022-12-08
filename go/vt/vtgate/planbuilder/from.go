@@ -367,7 +367,6 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	} else {
 		sel.From = sqlparser.TableExprs{ajoin}
 	}
-
 	// join table name
 	if lRoute.eroute.TableName != rRoute.eroute.TableName {
 		lRoute.eroute.TableName = strings.Join([]string{lRoute.eroute.TableName, rRoute.eroute.TableName}, ", ")

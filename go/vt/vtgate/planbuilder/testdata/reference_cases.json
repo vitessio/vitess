@@ -436,7 +436,7 @@
     }
   },
   {
-    "comment": "update qualified ambiguous reference table error no primary vindex",
+    "comment": "update qualified ambiguous reference table v3 error no primary vindex v4 route to source",
     "query": "update user.ambiguous_ref_with_source set col = 1",
     "v3-plan": "table 'ambiguous_ref_with_source' does not have a primary vindex",
     "gen4-plan": {
@@ -502,7 +502,7 @@
     }
   },
   {
-    "comment": "delete from qualified ambiguous reference table error no primary vindex",
+    "comment": "delete from qualified ambiguous reference table v3 error no primary vindex v4 route to source",
     "query": "delete from user.ambiguous_ref_with_source where col = 1",
     "v3-plan": "table 'ambiguous_ref_with_source' does not have a primary vindex",
     "gen4-plan": {
@@ -564,7 +564,7 @@
     }
   },
   {
-    "comment": "join with unqualified reference does not optimize routes if source & reference different names; TODO(maxeng) not working",
+    "comment": "join with unqualified reference optimize routes when source & reference have different names",
     "query": "select user.col from user join ref_in_source",
     "v3-plan": {
       "Instructions": {

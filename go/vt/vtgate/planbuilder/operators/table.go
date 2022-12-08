@@ -83,7 +83,7 @@ func (to *Table) TablesUsed() []string {
 	if sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
 		return nil
 	}
-	return singleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
+	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
 }
 
 func addColumn(op ColNameColumns, e sqlparser.Expr) (int, error) {

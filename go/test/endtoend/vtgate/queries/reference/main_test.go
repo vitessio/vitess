@@ -260,41 +260,21 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		select {
-		case ok := <-done:
-			if !ok {
-				fmt.Fprintf(os.Stderr, "Materialize did not succeed.\n")
-				return 1
-			}
+		if ok := <-done; !ok {
+			fmt.Fprintf(os.Stderr, "Materialize did not succeed.\n")
+			return 1
 		}
 
-		deleted := false
-		for !deleted {
-			// Verify workflow is deleted.
-			output, err = clusterInstance.VtctlProcess.ExecuteCommandWithOutput(
-				"Workflow",
-				"--",
-				shardedKeyspaceName+".copy_zip_detail",
-				"show",
-			)
-			fmt.Fprintf(os.Stderr, "Tried to show copy_zip_detail workflow: %v\n", output)
-			if err != nil {
-				deleted = true
-			}
-
-			// Stop materialize zip_detail to sharded keyspace.
-			output, err := clusterInstance.VtctlProcess.ExecuteCommandWithOutput(
-				"Workflow",
-				"--",
-				shardedKeyspaceName+".copy_zip_detail",
-				"delete",
-			)
-			fmt.Fprintf(os.Stderr, "Tried to delete copy_zip_detail workflow: %v\n", output)
-			if err != nil {
-				return 1
-			}
-
-			deleted = true
+		// Stop materialize zip_detail to sharded keyspace.
+		err = clusterInstance.VtctlProcess.ExecuteCommand(
+			"Workflow",
+			"--",
+			shardedKeyspaceName+".copy_zip_detail",
+			"delete",
+		)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to stop materialization workflow: %v", err)
+			return 1
 		}
 
 		return m.Run()

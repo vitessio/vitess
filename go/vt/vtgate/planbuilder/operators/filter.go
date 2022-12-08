@@ -96,7 +96,7 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tr
 }
 
 func (f *Filter) TablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
+	add, collect := ConcatSortedUniqueStringSlices()
 	for _, source := range f.Inputs() {
 		add(source.TablesUsed())
 	}

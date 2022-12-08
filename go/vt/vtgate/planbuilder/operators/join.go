@@ -148,7 +148,7 @@ func (j *Join) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlparser
 }
 
 func (j *Join) TablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
+	add, collect := ConcatSortedUniqueStringSlices()
 	for _, source := range j.Inputs() {
 		add(source.TablesUsed())
 	}

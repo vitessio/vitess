@@ -61,7 +61,7 @@ func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
 
 func (u *Update) TablesUsed() []string {
 	if u.VTable != nil {
-		return singleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
+		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
 	}
 	return nil
 }

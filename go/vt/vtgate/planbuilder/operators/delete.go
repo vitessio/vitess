@@ -56,7 +56,7 @@ func (d *Delete) Clone(inputs []ops.Operator) ops.Operator {
 
 func (d *Delete) TablesUsed() []string {
 	if d.VTable != nil {
-		return singleQualifiedIdentifier(d.VTable.Keyspace, d.VTable.Name)
+		return SingleQualifiedIdentifier(d.VTable.Keyspace, d.VTable.Name)
 	}
 	return nil
 }

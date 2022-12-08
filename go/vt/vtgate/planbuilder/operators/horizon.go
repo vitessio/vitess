@@ -57,7 +57,7 @@ func (h *Horizon) Inputs() []ops.Operator {
 }
 
 func (h *Horizon) TablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
+	add, collect := ConcatSortedUniqueStringSlices()
 	for _, source := range h.Inputs() {
 		add(source.TablesUsed())
 	}

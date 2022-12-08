@@ -622,7 +622,6 @@ func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 			return err
 		}
 	}
-
 	return nil
 }
 
@@ -914,7 +913,6 @@ func createAlternateRoutesFromVSchemaTable(
 		if vschemaTable.Source != nil {
 			route, err := findVSchemaTableAndCreateRoute(
 				ctx,
-				// Call path may modify this value.
 				queryTable,
 				vschemaTable.Source.TableName,
 				solves,
@@ -960,7 +958,7 @@ func (r *Route) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
 }
 
 func (r *Route) TablesUsed() []string {
-	addSlice, collect := concatSortedUniqueStringSlices()
+	addSlice, collect := ConcatSortedUniqueStringSlices()
 	addSlice(r.Source.TablesUsed())
 	for _, mergedRoute := range r.MergedWith {
 		addSlice(mergedRoute.TablesUsed())

@@ -69,7 +69,7 @@ func (s *SubQueryOp) Inputs() []ops.Operator {
 
 // TablesUsed implements the Operator interface
 func (s *SubQueryOp) TablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
+	add, collect := ConcatSortedUniqueStringSlices()
 	for _, input := range s.Inputs() {
 		add(input.TablesUsed())
 	}
@@ -105,7 +105,7 @@ func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
 
 // TablesUsed implements the Operator interface
 func (c *CorrelatedSubQueryOp) TablesUsed() []string {
-	add, collect := concatSortedUniqueStringSlices()
+	add, collect := ConcatSortedUniqueStringSlices()
 	for _, input := range c.Inputs() {
 		add(input.TablesUsed())
 	}

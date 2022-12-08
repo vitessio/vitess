@@ -256,9 +256,11 @@ func tryMergeSubqueryWithRoute(
 	// vindex on the outer query's operand.
 	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
 		merged, err := merger(outerOp, subqueryRoute)
+
 		if err != nil {
 			return nil, err
 		}
+
 		if merged != nil {
 			// since we inlined the subquery into the outer query, new vindex options might have been enabled,
 			// so we go over our current options to check if anything better has come up.
