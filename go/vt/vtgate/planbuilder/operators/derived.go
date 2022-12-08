@@ -116,8 +116,11 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
-		if err == semantics.ErrMultipleTables {
-			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		if err == semantics.ErrNotSingleTable {
+			return &Filter{
+				Source:     d,
+				Predicates: []sqlparser.Expr{expr},
+			}, nil
 		}
 		return nil, err
 	}
