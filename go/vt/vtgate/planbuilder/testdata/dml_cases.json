@@ -6218,5 +6218,28 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "insert into ref; TODO(maxeng) is this a bug?",
+    "query": "insert into ref(col) values(1)",
+    "plan": {
+      "Instructions": {
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "MultiShardAutocommit": false,
+        "OperatorType": "Insert",
+        "Query": "insert into ref(col) values (1)",
+        "TableName": "ref",
+        "TargetTabletType": "PRIMARY",
+        "Variant": "Sharded"
+      },
+      "Original": "insert into ref(col) values(1)",
+      "QueryType": "INSERT",
+      "TablesUsed": [
+        "user.ref"
+      ]
+    }
   }
 ]

@@ -394,13 +394,27 @@ func (cached *ReverseBits) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.name)))
 	return size
 }
+func (cached *Source) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field TableName vitess.io/vitess/go/vt/sqlparser.TableName
+	size += cached.TableName.CachedSize(false)
+	return size
+}
+
+//go:nocheckptr
 func (cached *Table) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(192)
 	}
 	// field Type string
 	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
@@ -442,6 +456,23 @@ func (cached *Table) CachedSize(alloc bool) int64 {
 	{
 		size += hack.RuntimeAllocSize(int64(cap(cached.Pinned)))
 	}
+	// field ReferencedBy map[string]*vitess.io/vitess/go/vt/vtgate/vindexes.Table
+	if cached.ReferencedBy != nil {
+		size += int64(48)
+		hmap := reflect.ValueOf(cached.ReferencedBy)
+		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
+		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
+		if len(cached.ReferencedBy) > 0 || numBuckets > 1 {
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
+		}
+		for k, v := range cached.ReferencedBy {
+			size += hack.RuntimeAllocSize(int64(len(k)))
+			size += v.CachedSize(true)
+		}
+	}
+	// field Source *vitess.io/vitess/go/vt/vtgate/vindexes.Source
+	size += cached.Source.CachedSize(true)
 	return size
 }
 func (cached *UnicodeLooseMD5) CachedSize(alloc bool) int64 {
