@@ -286,7 +286,7 @@ func TestVStreamCopyWithoutKeyspaceShard(t *testing.T) {
 	flags := &vtgatepb.VStreamFlags{}
 
 	expectedKs1EventNum := 2 /* num shards */ * (9 /* begin/field/vgtid:pos/4 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
-	expectedKs2EventNum := 2 /* num shards */ * (6 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
+	expectedKs2EventNum := 2 /* num shards */ * (6 /* begin/field/vgtid:pos/1 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
 	expectedFullyCopyCompletedNum := 1
 
 	cases := []struct {
