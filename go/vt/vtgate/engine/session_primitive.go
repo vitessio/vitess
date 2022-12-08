@@ -75,7 +75,7 @@ func (s *SessionPrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor
 
 // GetFields implements the Primitive interface
 func (s *SessionPrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT13001("not supported for this primitive")
+	return nil, vterrors.VT13001("not supported by the session primitive")
 }
 
 // description implements the Primitive interface
