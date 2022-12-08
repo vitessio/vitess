@@ -146,6 +146,11 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 		}
 		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into t1(id1) values %s", str.String()))
 	}
+	// too much data added in the loop, do drop and recreate the table.
+	defer func() {
+		mcmp.Exec("drop table t1")
+		mcmp.Exec(schemaSQL)
+	}()
 
 	utils.Exec(t, mcmp.VtConn, "select count(*) from t1 where id1 > 31")
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=100 */ count(*) from t1 where id1 > 31")
