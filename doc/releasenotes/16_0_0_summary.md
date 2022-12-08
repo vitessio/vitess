@@ -15,6 +15,13 @@
 
 In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
 
+### New TabletPicker Options and Default Cell Behavior
+
+In [PR 11771](https://github.com/vitessio/vitess/pull/11771) we allow for default cell alias fallback during tablet selection for VStreams when client 
+does not specify list of cells. In addition, we add the option for local cell preference during tablet selection. 
+The local cell preference takes precedence over tablet type.See PR description for examples. If a client wants to specify local cell preference in the gRPC request, 
+they can pass in a new "local:" tag with the rest of the cells under VStreamFlags. e.g. "local:,cella,cellb". 
+
 ### Tablet throttler
 
 The tablet throttler can now be configured dynamically. Configuration is now found in the topo service, and applies to all tablets in all shards and cells of a given keyspace. For backwards compatibility `v16` still supports `vttablet`-based command line flags for throttler ocnfiguration.
@@ -32,13 +39,6 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 - It is then possible to restore a backup up to a given point in time (GTID position). This involves finding a restore path consisting of a full backup and zero or more incremental backups, applied up to the given point in time.
 - A server restored to a point in time remains in `DRAINED` tablet type, and does not join the replication stream (thus, "frozen" in time).
 - It is possible to take incremental backups from different tablets. It is OK to have overlaps in incremental backup contents. The restore process chooses a valid path, and is valid as long as there are no gaps in the backed up binary log content.
-
-#### New TabletPicker Options and Default Cell Behavior
-
-In [PR 11771](https://github.com/vitessio/vitess/pull/11771) we allow for default cell alias fallback during tablet selection for VStreams when client 
-does not specify list of cells. In addition, we add the option for local cell preference during tablet selection. 
-The local cell preference takes precedence over tablet type.See PR description for examples. If a client wants to specify local cell preference in the gRPC request, 
-they can pass in a new "local:" tag with the rest of the cells under VStreamFlags. e.g. "local:,cella,cellb". 
 
 ### Breaking Changes
 
