@@ -300,9 +300,6 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		for _, t := range tablets {
 			if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
 				th = t
-				if *routeReplicaToRdonly && (target.TabletType == topodatapb.TabletType_REPLICA || target.TabletType == topodatapb.TabletType_RDONLY) {
-					target = th.Target
-				}
 				break
 			}
 		}
@@ -324,7 +321,11 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 		startTime := time.Now()
 		var canRetry bool
-		canRetry, err = inner(ctx, target, th.Conn)
+		if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+			canRetry, err = inner(ctx, th.Target, th.Conn)
+		} else {
+			canRetry, err = inner(ctx, target, th.Conn)
+		}
 		gw.updateStats(target, startTime, err)
 		if canRetry {
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
