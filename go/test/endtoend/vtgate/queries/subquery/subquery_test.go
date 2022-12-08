@@ -66,6 +66,7 @@ func TestSubqueriesExists(t *testing.T) {
 
 	mcmp.Exec("insert into t1(id1, id2) values (0,1),(1,2),(2,3),(3,4),(4,5),(5,6)")
 	mcmp.AssertMatches(`SELECT id2 FROM t1 WHERE EXISTS (SELECT id1 FROM t1 WHERE id1 > 0) ORDER BY id2`, `[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)] [INT64(5)] [INT64(6)]]`)
+	mcmp.AssertMatches(`select * from (select 1) as tmp where exists(select 1 from t1 where id1 = 1)`, `[[INT32(1)]]`)
 }
 
 func TestQueryAndSubQWithLimit(t *testing.T) {
