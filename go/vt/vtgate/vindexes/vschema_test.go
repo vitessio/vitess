@@ -303,9 +303,7 @@ func TestVSchemaViews(t *testing.T) {
 							Name: "c1",
 						}, {
 							Name: "c2",
-							Type: sqltypes.VarChar}}}},
-				Views: map[string]string{
-					"v1": "SELECT c1+c2 AS added FROM t1"}},
+							Type: sqltypes.VarChar}}}}},
 			"main": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
@@ -315,13 +313,16 @@ func TestVSchemaViews(t *testing.T) {
 							Name: "c2",
 							Type: sqltypes.VarChar}}}}}}}
 
-	got := BuildVSchema(&good)
-	require.NoError(t, got.Keyspaces["unsharded"].Error)
+	vschema := BuildVSchema(&good)
+	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
 
-	view := got.FindView("unsharded", "v1")
+	// add view to unsharded keyspace.
+	vschema.AddView("unsharded", "v1", "SELECT c1+c2 AS added FROM t1")
+
+	view := vschema.FindView("unsharded", "v1")
 	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
 
-	view = got.FindView("", "v1")
+	view = vschema.FindView("", "v1")
 	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
 }
 
@@ -1057,7 +1058,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 					"dual": dual},
 				Vindexes: map[string]Vindex{
 					"stfu1": vindex1},
-				Views: map[string]sqlparser.SelectStatement{}}}}
+			}}}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1137,7 +1138,7 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
 					"stfu1": vindex2},
-				Views: map[string]sqlparser.SelectStatement{}}}}
+			}}}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1245,13 +1246,12 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 					"t1":   t1a,
 					"dual": duala},
 				Vindexes: map[string]Vindex{},
-				Views:    map[string]sqlparser.SelectStatement{}},
+			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
 					"t1":   t1b,
 					"dual": dualb},
-				Views:    map[string]sqlparser.SelectStatement{},
 				Vindexes: map[string]Vindex{}}}}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
@@ -1315,7 +1315,6 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 					"dual": duala,
 				},
 				Vindexes: map[string]Vindex{},
-				Views:    map[string]sqlparser.SelectStatement{},
 			},
 			"ksb": {
 				Keyspace: ksb,
@@ -1324,7 +1323,6 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 					"dual": dualb,
 				},
 				Vindexes: map[string]Vindex{},
-				Views:    map[string]sqlparser.SelectStatement{},
 			},
 		},
 	}
@@ -1459,7 +1457,6 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
 				},
-				Views: map[string]sqlparser.SelectStatement{},
 			},
 			"ksb": {
 				Keyspace: ksb,
@@ -1470,7 +1467,6 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
 				},
-				Views: map[string]sqlparser.SelectStatement{},
 			},
 		},
 	}
@@ -1782,7 +1778,6 @@ func TestSequence(t *testing.T) {
 					"dual": duala,
 				},
 				Vindexes: map[string]Vindex{},
-				Views:    map[string]sqlparser.SelectStatement{},
 			},
 			"sharded": {
 				Keyspace: kss,
@@ -1794,7 +1789,6 @@ func TestSequence(t *testing.T) {
 				Vindexes: map[string]Vindex{
 					"stfu1": vindex1,
 				},
-				Views: map[string]sqlparser.SelectStatement{},
 			},
 		},
 	}
@@ -2193,7 +2187,6 @@ func TestBuildKeyspaceSchema(t *testing.T) {
 			"t2": t2,
 		},
 		Vindexes: map[string]Vindex{},
-		Views:    map[string]sqlparser.SelectStatement{},
 	}
 	if !reflect.DeepEqual(got, want) {
 		gs, _ := json.Marshal(got)

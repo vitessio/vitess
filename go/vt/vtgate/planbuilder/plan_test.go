@@ -497,6 +497,15 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 			t.Fatal(ks.Error)
 		}
 
+		// adding view in user keyspace
+		if ks.Keyspace.Name == "user" {
+			if err = vschema.AddView(ks.Keyspace.Name,
+				"user_details_view",
+				"select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"); err != nil {
+				t.Fatal(err)
+			}
+		}
+
 		// setting a default value to all the text columns in the tables of this keyspace
 		// so that we can "simulate" a real case scenario where the vschema is aware of
 		// columns' collations.

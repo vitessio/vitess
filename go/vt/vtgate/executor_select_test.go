@@ -3783,10 +3783,14 @@ func TestSelectCFC(t *testing.T) {
 
 func TestSelectView(t *testing.T) {
 	executor, sbc, _, _ := createExecutorEnv()
+	// add the view to local vschema
+	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id")
+	require.NoError(t, err)
+
 	executor.normalize = true
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
-	_, err := executor.Execute(context.Background(), "TestSelectView", session,
+	_, err = executor.Execute(context.Background(), "TestSelectView", session,
 		"select * from user_details_view", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{

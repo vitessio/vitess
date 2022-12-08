@@ -249,27 +249,28 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		}
 		vschema.Keyspaces[ksname] = ksvschema
 		ksvschema.Error = buildTables(ks, vschema, ksvschema)
-		if ksvschema.Error == nil {
-			ksvschema.Views, ksvschema.Error = vschema.buildViews(ks, ksname)
-		}
 	}
 }
 
-func (vschema *VSchema) buildViews(protoKS *vschemapb.Keyspace, ksname string) (map[string]sqlparser.SelectStatement, error) {
-	views := map[string]sqlparser.SelectStatement{}
-	for name, query := range protoKS.Views {
-		ast, err := sqlparser.Parse(query)
-		if err != nil {
-			return nil, err
-		}
-		selectStmt, ok := ast.(sqlparser.SelectStatement)
-		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected SELECT or UNION query, got %T", ast)
-		}
-		views[name] = selectStmt
-		vschema.addTableName(ksname, name)
+func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
 	}
-	return views, nil
+	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		return err
+	}
+	selectStmt, ok := ast.(sqlparser.SelectStatement)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected SELECT or UNION query, got %T", ast)
+	}
+	if ks.Views == nil {
+		ks.Views = make(map[string]sqlparser.SelectStatement)
+	}
+	ks.Views[viewName] = selectStmt
+	vschema.addTableName(ksname, viewName)
+	return nil
 }
 
 func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) error {
