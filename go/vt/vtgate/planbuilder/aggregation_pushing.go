@@ -105,7 +105,7 @@ func (hp *horizonPlanning) pushAggregation(
 
 		return
 	default:
-		err = vterrors.VT12001(fmt.Sprintf("using aggregation on top of a %T plan is not yet supported", plan))
+		err = vterrors.VT12001(fmt.Sprintf("using aggregation on top of a %T plan", plan))
 		return
 	}
 }
@@ -125,7 +125,7 @@ func pushAggrOnRoute(
 	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
-		return nil, nil, nil, vterrors.VT12001("can't plan aggregation on union")
+		return nil, nil, nil, vterrors.VT12001("cannot plan aggregation on union")
 	}
 
 	var groupingCols []int
@@ -459,7 +459,7 @@ func splitAggregationsToLeftAndRight(
 				rhsAggrs = append(rhsAggrs, &newAggr)
 				lhsAggrs = append(lhsAggrs, other)
 			default:
-				return nil, nil, vterrors.VT12001("aggregation on columns from different sources not supported yet")
+				return nil, nil, vterrors.VT12001("aggregation on columns from different sources")
 			}
 		}
 	}
@@ -488,7 +488,7 @@ func splitGroupingsToLeftAndRight(
 			groupingOffsets = append(groupingOffsets, len(rhsGrouping)+1)
 			rhsGrouping = append(rhsGrouping, groupBy)
 		default:
-			return nil, nil, nil, vterrors.VT12001("grouping on columns from different sources not supported yet")
+			return nil, nil, nil, vterrors.VT12001("grouping on columns from different sources")
 		}
 	}
 	return lhsGrouping, rhsGrouping, groupingOffsets, nil

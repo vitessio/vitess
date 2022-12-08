@@ -87,7 +87,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr, reservedVars, where)
 	case *sqlparser.JSONTableExpr:
-		return vterrors.VT12001("json_table expressions")
+		return vterrors.VT12001("JSON_TABLE expressions")
 	}
 	return vterrors.VT13001(fmt.Sprintf("unexpected table expression type: %T", tableExpr))
 }
@@ -222,7 +222,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	if vindex != nil {
 		single, ok := vindex.(vindexes.SingleColumn)
 		if !ok {
-			return vterrors.VT12001("multi-column vindexes not supported")
+			return vterrors.VT12001("multi-column vindexes")
 		}
 		pb.plan, pb.st = newVindexFunc(alias, single)
 		return nil

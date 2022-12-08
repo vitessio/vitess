@@ -1137,7 +1137,7 @@
   {
     "comment": "scatter order by with order by column not present",
     "query": "select col from user order by id",
-    "v3-plan": "VT12001: unsupported: in scatter query: ORDER BY must reference a column in the select list: id asc",
+    "v3-plan": "VT12001: unsupported: in scatter query: ORDER BY must reference a column in the SELECT list: id asc",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col from user order by id",

@@ -98,7 +98,7 @@ func newJoin(lpb, rpb *primitiveBuilder, ajoin *sqlparser.JoinTableExpr, reserve
 				return err
 			}
 		case ajoin.Condition.Using != nil:
-			return vterrors.VT12001("join with USING(column_list) clause for complex queries")
+			return vterrors.VT12001("JOIN with USING(column_list) clause for complex queries")
 		}
 	}
 	lpb.plan = &join{

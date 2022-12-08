@@ -80,7 +80,7 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 // checkValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.VT12001("where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
+		return vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 	}
 
 	return nil

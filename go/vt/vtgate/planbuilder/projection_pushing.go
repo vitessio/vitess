@@ -71,7 +71,7 @@ func pushProjectionIntoVindexFunc(node *vindexFunc, expr *sqlparser.AliasedExpr,
 
 func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenateGen4, inner bool, reuseCol bool) (int, bool, error) {
 	if hasAggregation {
-		return 0, false, vterrors.VT12001("aggregation on unions")
+		return 0, false, vterrors.VT12001("aggregation on UNIONs")
 	}
 	offset, added, err := pushProjection(ctx, expr, node.sources[0], inner, reuseCol, hasAggregation)
 	if err != nil {

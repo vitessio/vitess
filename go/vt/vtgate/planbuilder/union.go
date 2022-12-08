@@ -32,7 +32,7 @@ func buildUnionPlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		union := stmt.(*sqlparser.Union)
 		if union.With != nil {
-			return nil, vterrors.VT12001("with expression in union statement")
+			return nil, vterrors.VT12001("WITH expression in UNION statement")
 		}
 		// For unions, create a pb with anonymous scope.
 		pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
@@ -96,7 +96,7 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reserved
 		return pb.processUnion(part, reservedVars, outer)
 	case *sqlparser.Select:
 		if part.SQLCalcFoundRows {
-			return vterrors.VT12001("SQL_CALC_FOUND_ROWS not supported with union")
+			return vterrors.VT12001("SQL_CALC_FOUND_ROWS not supported with UNION")
 		}
 		return pb.processSelect(part, reservedVars, outer, "")
 	}

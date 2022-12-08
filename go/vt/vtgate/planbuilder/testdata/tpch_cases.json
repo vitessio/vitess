@@ -690,7 +690,7 @@
     "comment": "TPC-H query 9",
     "query": "select nation, o_year, sum(amount) as sum_profit from ( select n_name as nation, extract(year from o_orderdate) as o_year, l_extendedprice * (1 - l_discount) - ps_supplycost * l_quantity as amount from part, supplier, lineitem, partsupp, orders, nation where s_suppkey = l_suppkey and ps_suppkey = l_suppkey and ps_partkey = l_partkey and p_partkey = l_partkey and o_orderkey = l_orderkey and s_nationkey = n_nationkey and p_name like '%green%' ) as profit group by nation, o_year order by nation, o_year desc",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources not supported yet"
+    "gen4-plan": "VT12001: unsupported: aggregation on columns from different sources"
   },
   {
     "comment": "TPC-H query 10",
@@ -983,7 +983,7 @@
   {
     "comment": "TPC-H query 13",
     "query": "select c_count, count(*) as custdist from ( select c_custkey, count(o_orderkey) from customer left outer join orders on c_custkey = o_custkey and o_comment not like '%special%requests%' group by c_custkey ) as c_orders(c_custkey, c_count) group by c_count order by custdist desc, c_count desc",
-    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan is not yet supported"
+    "plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.orderedAggregate plan"
   },
   {
     "comment": "TPC-H query 14",
@@ -1119,7 +1119,7 @@
     "comment": "TPC-H query 16",
     "query": "select p_brand, p_type, p_size, count(distinct ps_suppkey) as supplier_cnt from partsupp, part where p_partkey = ps_partkey and p_brand <> 'Brand#45' and p_type not like 'MEDIUM POLISHED%' and p_size in (49, 14, 23, 45, 19, 3, 36, 9) and ps_suppkey not in ( select s_suppkey from supplier where s_comment like '%Customer%Complaints%' ) group by p_brand, p_type, p_size order by supplier_cnt desc, p_brand, p_type, p_size",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.pulloutSubquery plan is not yet supported"
+    "gen4-plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.pulloutSubquery plan"
   },
   {
     "comment": "TPC-H query 17",

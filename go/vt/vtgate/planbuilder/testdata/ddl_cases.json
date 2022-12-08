@@ -162,7 +162,7 @@
   {
     "comment": "alter db main",
     "query": "alter database main collate utf8",
-    "plan": "VT12001: unsupported: alter database"
+    "plan": "VT12001: unsupported: ALTER DATABASE"
   },
   {
     "comment": "drop db foo",

@@ -86,7 +86,7 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
 		if colNumber == -1 {
-			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: ORDER BY must reference a column in the select list: %s", sqlparser.String(order)))
+			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: ORDER BY must reference a column in the SELECT list: %s", sqlparser.String(order)))
 		}
 		// TODO(king-11) need to pass in collation here
 		ob := engine.OrderByParams{

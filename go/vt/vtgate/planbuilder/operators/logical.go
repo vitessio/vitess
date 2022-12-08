@@ -89,7 +89,7 @@ func createOperatorFromUnion(ctx *plancontext.PlanningContext, node *sqlparser.U
 
 	_, isRHSUnion := node.Right.(*sqlparser.Union)
 	if isRHSUnion {
-		return nil, vterrors.VT12001("nesting of UNIONs on the right-hand side is not yet supported")
+		return nil, vterrors.VT12001("nesting of UNIONs on the right-hand side")
 	}
 	opRHS, err := createLogicalOperatorFromAST(ctx, node.Right)
 	if err != nil {
@@ -149,7 +149,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 
 	if r.RouteOpCode == engine.Scatter && updStmt.Limit != nil {
 		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard update with limit is not supported")
+		return nil, vterrors.VT12001("multi shard UPDATE with LIMIT")
 	}
 
 	subq, err := createSubqueryFromStatement(ctx, updStmt)
@@ -214,7 +214,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	if route.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
 		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard delete with limit is not supported")
+		return nil, vterrors.VT12001("multi shard DELETE with LIMIT is not supported")
 	}
 
 	subq, err := createSubqueryFromStatement(ctx, deleteStmt)
@@ -336,7 +336,7 @@ func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparse
 	}
 
 	if tableInfo.IsInfSchema() {
-		return nil, nil, vterrors.VT12001("can't update information schema tables")
+		return nil, nil, vterrors.VT12001("cannot update information schema tables")
 	}
 
 	var predicates []sqlparser.Expr

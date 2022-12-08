@@ -84,5 +84,5 @@ func (v *AlterVSchema) TryStreamExecute(ctx context.Context, vcursor VCursor, bi
 
 // GetFields implements the Primitive interface
 func (v *AlterVSchema) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*query.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.VT12001("GetFields is not supported by AlterVSchema")
+	return nil, vterrors.VT12001("GetFields on the AlterVSchema primitive")
 }

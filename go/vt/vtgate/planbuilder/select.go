@@ -37,7 +37,7 @@ func buildSelectPlan(query string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		sel := stmt.(*sqlparser.Select)
 		if sel.With != nil {
-			return nil, vterrors.VT12001("with expression in select statement")
+			return nil, vterrors.VT12001("WITH expression in SELECT statement")
 		}
 
 		p, err := handleDualSelects(sel, vschema)
@@ -362,7 +362,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			continue
 		}
 		if len(lockFunctions) > 0 {
-			return nil, vterrors.VT12001("lock function and other expression in same select query")
+			return nil, vterrors.VT12001("LOCK function and other expression in same select query")
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {

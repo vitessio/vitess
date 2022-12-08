@@ -2852,7 +2852,7 @@
   {
     "comment": "Scatter order by and aggregation: order by column must reference column from select list",
     "query": "select col, count(*) from user group by col order by c1",
-    "v3-plan": "VT12001: unsupported: memory sort: ORDER BY must reference a column in the select list: c1 asc",
+    "v3-plan": "VT12001: unsupported: memory sort: ORDER BY must reference a column in the SELECT list: c1 asc",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) from user group by col order by c1",

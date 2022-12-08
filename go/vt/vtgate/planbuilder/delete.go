@@ -28,7 +28,7 @@ func buildDeletePlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		del := stmt.(*sqlparser.Delete)
 		if del.With != nil {
-			return nil, vterrors.VT12001("with expression in DELETE statement")
+			return nil, vterrors.VT12001("WITH expression in DELETE statement")
 		}
 		var err error
 		if len(del.TableExprs) == 1 && len(del.Targets) == 1 {
@@ -47,7 +47,7 @@ func buildDeletePlan(string) stmtPlanner {
 		}
 
 		if len(del.Targets) > 1 {
-			return nil, vterrors.VT12001("multi-table DELETE statement is not supported in a sharded database")
+			return nil, vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
 		}
 
 		edelTable, err := edel.GetSingleTable()

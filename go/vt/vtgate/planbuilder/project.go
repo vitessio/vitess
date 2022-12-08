@@ -46,7 +46,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		} else {
 			// Pushing of non-trivial expressions not allowed for RHS of left joins.
 			if _, ok := expr.Expr.(*sqlparser.ColName); !ok && node.ejoin.Opcode == engine.LeftJoin {
-				return nil, nil, 0, vterrors.VT12001("cross-shard left join and column expressions")
+				return nil, nil, 0, vterrors.VT12001("cross-shard LEFT JOIN and column expressions")
 			}
 
 			newRight, col, colNumber, err := planProjection(pb, node.Right, expr, origin)
@@ -151,7 +151,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		// Catch the case where no where clause was specified. If so, the opcode
 		// won't be set.
 		if node.eVindexFunc.Opcode == engine.VindexNone {
-			return nil, nil, 0, vterrors.VT12001("where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
+			return nil, nil, 0, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
 		}
 		col, ok := expr.Expr.(*sqlparser.ColName)
 		if !ok {

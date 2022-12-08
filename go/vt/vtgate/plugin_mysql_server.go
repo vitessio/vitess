@@ -341,7 +341,7 @@ func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
 func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
-	return vterrors.VT12001("ComBinlogDumpGTID")
+	return vterrors.VT12001("ComBinlogDumpGTID for the VTGate handler")
 }
 
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {

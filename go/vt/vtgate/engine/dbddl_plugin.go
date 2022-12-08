@@ -26,12 +26,12 @@ type failDBDDL struct{}
 
 // CreateDatabase implements the DropCreateDB interface
 func (failDBDDL) CreateDatabase(context.Context, string) error {
-	return vterrors.VT12001("create database is not supported")
+	return vterrors.VT12001("create database by failDBDDL")
 }
 
 // DropDatabase implements the DropCreateDB interface
 func (failDBDDL) DropDatabase(context.Context, string) error {
-	return vterrors.VT12001("drop database is not supported")
+	return vterrors.VT12001("drop database by failDBDDL")
 }
 
 type noOp struct{}

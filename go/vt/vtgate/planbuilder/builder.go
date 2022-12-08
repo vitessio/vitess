@@ -307,7 +307,7 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 		if !ksExists {
 			return nil, vterrors.VT05002(ksName)
 		}
-		return nil, vterrors.VT12001("alter database")
+		return nil, vterrors.VT12001("ALTER DATABASE")
 	case *sqlparser.CreateDatabase:
 		if dbDDL.IfNotExists && ksExists {
 			return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil

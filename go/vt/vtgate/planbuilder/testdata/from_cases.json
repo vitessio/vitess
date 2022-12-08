@@ -6121,7 +6121,7 @@
   {
     "comment": "join with USING construct",
     "query": "select * from authoritative join unsharded_authoritative using(col1)",
-    "v3-plan": "VT12001: unsupported: join with USING(column_list) clause for complex queries",
+    "v3-plan": "VT12001: unsupported: JOIN with USING(column_list) clause for complex queries",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select * from authoritative join unsharded_authoritative using(col1)",

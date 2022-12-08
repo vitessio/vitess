@@ -54,11 +54,11 @@ func gen4SelectStmtPlanner(
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
-			return nil, vterrors.VT12001("with expression in select statement")
+			return nil, vterrors.VT12001("WITH expression in SELECT statement")
 		}
 	case *sqlparser.Union:
 		if node.With != nil {
-			return nil, vterrors.VT12001("with expression in union statement")
+			return nil, vterrors.VT12001("WITH expression in UNION statement")
 		}
 	}
 
@@ -266,7 +266,7 @@ func gen4UpdateStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if updStmt.With != nil {
-		return nil, vterrors.VT12001("with expression in update statement")
+		return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 	}
 
 	ksName := ""
@@ -337,7 +337,7 @@ func gen4DeleteStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if deleteStmt.With != nil {
-		return nil, vterrors.VT12001("with expression in delete statement")
+		return nil, vterrors.VT12001("WITH expression in DELETE statement")
 	}
 
 	var err error
@@ -572,7 +572,7 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	}
 
 	if len(del.Targets) > 1 {
-		return vterrors.VT12001("multi-table DELETE statement is not supported in sharded database")
+		return vterrors.VT12001("multi-table DELETE statement is not supported in sharded keyspace")
 	}
 
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {

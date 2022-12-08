@@ -309,7 +309,7 @@ func planRouteOrdering(orderBy v3OrderBy, node *route) (logicalPlan, error) {
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
 		if colNumber == -1 {
-			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: ORDER BY must reference a column in the select list: %s", sqlparser.String(order)))
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: ORDER BY must reference a column in the SELECT list: %s", sqlparser.String(order)))
 		}
 		starColFixedIndex := colNumber
 		if selectStatement, ok := node.Select.(*sqlparser.Select); ok {

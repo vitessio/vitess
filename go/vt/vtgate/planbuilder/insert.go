@@ -60,7 +60,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
 	}
 	if ins.Action == sqlparser.ReplaceAct {
-		return nil, vterrors.VT12001("REPLACE INTO with sharded schema")
+		return nil, vterrors.VT12001("REPLACE INTO with sharded keyspace")
 	}
 	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
@@ -272,7 +272,7 @@ func getStatementAndPlanner(
 		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
 		selectStmt = stmt
 	default:
-		err = vterrors.VT12001(fmt.Sprintf("insert plan with %T", ins.Rows))
+		err = vterrors.VT12001(fmt.Sprintf("INSERT plan with %T", ins.Rows))
 	}
 
 	if err != nil {

@@ -104,7 +104,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				err = vterrors.VT12001("can't push predicates on concatenate")
+				err = vterrors.VT12001("cannot push predicates on concatenate")
 				return false
 			}
 
@@ -116,7 +116,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
-				err = vterrors.VT12001("can't push predicates on concatenate")
+				err = vterrors.VT12001("cannot push predicates on concatenate")
 				return false
 			}
 			cursor.Replace(ae.Expr)

@@ -27,7 +27,7 @@
   {
     "comment": "scatter order by with * expression",
     "query": "select * from user order by id",
-    "v3-plan": "VT12001: unsupported: in scatter query: ORDER BY must reference a column in the select list: id asc",
+    "v3-plan": "VT12001: unsupported: in scatter query: ORDER BY must reference a column in the SELECT list: id asc",
     "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
@@ -44,13 +44,13 @@
   {
     "comment": "join with USING construct",
     "query": "select * from user join user_extra using(id)",
-    "v3-plan": "VT12001: unsupported: join with USING(column_list) clause for complex queries",
+    "v3-plan": "VT12001: unsupported: JOIN with USING(column_list) clause for complex queries",
     "gen4-plan": "can't handle JOIN USING without authoritative tables"
   },
   {
     "comment": "join with USING construct with 3 tables",
     "query": "select user.id from user join user_extra using(id) join music using(id2)",
-    "v3-plan": "VT12001: unsupported: join with USING(column_list) clause for complex queries",
+    "v3-plan": "VT12001: unsupported: JOIN with USING(column_list) clause for complex queries",
     "gen4-plan": "can't handle JOIN USING without authoritative tables"
   },
   {
@@ -142,8 +142,8 @@
   {
     "comment": "sharded delete with limit clasue",
     "query": "delete from user_extra limit 10",
-    "v3-plan": "VT12001: unsupported: multi-shard delete with limit",
-    "gen4-plan": "VT12001: unsupported: multi shard delete with limit is not supported"
+    "v3-plan": "VT12001: unsupported: multi-shard delete with LIMIT",
+    "gen4-plan": "VT12001: unsupported: multi shard DELETE with LIMIT is not supported"
   },
   {
     "comment": "sharded subquery in unsharded subquery in unsharded delete",
@@ -160,8 +160,8 @@
   {
     "comment": "scatter update with limit clause",
     "query": "update user_extra set val = 1 where (name = 'foo' or id = 1) limit 1",
-    "v3-plan": "VT12001: unsupported: multi-shard update with limit",
-    "gen4-plan": "VT12001: unsupported: multi shard update with limit is not supported"
+    "v3-plan": "VT12001: unsupported: multi-shard update with LIMIT",
+    "gen4-plan": "VT12001: unsupported: multi shard UPDATE with LIMIT"
   },
   {
     "comment": "multi delete multi table",
@@ -171,31 +171,31 @@
   {
     "comment": "update changes primary vindex column",
     "query": "update user set id = 1 where id = 1",
-    "v3-plan": "VT12001: unsupported: You can't update primary vindex columns. Invalid update on vindex: user_index",
+    "v3-plan": "VT12001: unsupported: you cannot update primary vindex columns; invalid update on vindex: user_index",
     "gen4-plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: user_index"
   },
   {
     "comment": "update change in multicol vindex column",
     "query": "update multicol_tbl set colc = 5, colb = 4 where cola = 1 and colb = 2",
-    "v3-plan": "VT12001: unsupported: You can't update primary vindex columns. Invalid update on vindex: multicolIdx",
+    "v3-plan": "VT12001: unsupported: you cannot update primary vindex columns; invalid update on vindex: multicolIdx",
     "gen4-plan": "VT12001: unsupported: you cannot UPDATE primary vindex columns; invalid update on vindex: multicolIdx"
   },
   {
     "comment": "update changes non lookup vindex column",
     "query": "update user_metadata set md5 = 1 where user_id = 1",
-    "v3-plan": "VT12001: unsupported: You can only update lookup vindexes. Invalid update on vindex: user_md5_index",
+    "v3-plan": "VT12001: unsupported: you can only update lookup vindexes; invalid update on vindex: user_md5_index",
     "gen4-plan": "VT12001: unsupported: you can only UPDATE lookup vindexes; invalid update on vindex: user_md5_index"
   },
   {
     "comment": "update with complex set clause",
     "query": "update music set id = id + 1 where id = 1",
-    "v3-plan": "VT12001: unsupported: Only values are supported. Invalid update on column: `id` with expr: [id + 1]",
+    "v3-plan": "VT12001: unsupported: only values are supported: invalid update on column: `id` with expr: [id + 1]",
     "gen4-plan": "VT12001: unsupported: only values are supported; invalid update on column: `id` with expr: [id + 1]"
   },
   {
     "comment": "update by primary keyspace id, changing one vindex column, limit without order clause",
     "query": "update user_metadata set email = 'juan@vitess.io' where user_id = 1 limit 10",
-    "v3-plan": "VT12001: unsupported: Need to provide order by clause when using limit. Invalid update on vindex: email_user_map",
+    "v3-plan": "VT12001: unsupported: need to provide ORDER BY clause when using LIMIT; invalid update on vindex: email_user_map",
     "gen4-plan": "VT12001: unsupported: you need to provide the ORDER BY clause when using LIMIT; invalid update on vindex: email_user_map"
   },
   {
@@ -244,87 +244,93 @@
   {
     "comment": "sharded replace no vindex",
     "query": "replace into user(val) values(1, 'foo')",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "sharded replace with vindex",
     "query": "replace into user(id, name) values(1, 'foo')",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "replace no column list",
     "query": "replace into user values(1, 2, 3)",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "replace with mimatched column list",
     "query": "replace into user(id) values (1, 2)",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "replace with one vindex",
     "query": "replace into user(id) values (1)",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "replace with non vindex on vindex-enabled table",
     "query": "replace into user(nonid) values (2)",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "replace with all vindexes supplied",
     "query": "replace into user(nonid, name, id) values (2, 'foo', 1)",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "replace for non-vindex autoinc",
     "query": "replace into user_extra(nonid) values (2)",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "replace with multiple rows",
     "query": "replace into user(id) values (1), (2)",
-    "plan": "VT12001: unsupported: REPLACE INTO with sharded schema"
+    "plan": "VT12001: unsupported: REPLACE INTO with sharded keyspace"
   },
   {
     "comment": "select keyspace_id from user_index where id = 1 and id = 2",
     "query": "select keyspace_id from user_index where id = 1 and id = 2",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
+    "v3-plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)",
+    "gen4-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
   },
   {
     "comment": "select keyspace_id from user_index where func(id)",
     "query": "select keyspace_id from user_index where func(id)",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
+    "v3-plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)",
+    "gen4-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
   },
   {
     "comment": "select keyspace_id from user_index where id > 1",
     "query": "select keyspace_id from user_index where id > 1",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
+    "v3-plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)",
+    "gen4-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
   },
   {
     "comment": "select keyspace_id from user_index where 1 = id",
     "query": "select keyspace_id from user_index where 1 = id",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
+    "v3-plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)",
+    "gen4-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
   },
   {
     "comment": "select keyspace_id from user_index where keyspace_id = 1",
     "query": "select keyspace_id from user_index where keyspace_id = 1",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
+    "v3-plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)",
+    "gen4-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
   },
   {
     "comment": "select keyspace_id from user_index where id = id+1",
     "query": "select keyspace_id from user_index where id = id+1",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
+    "v3-plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)",
+    "gen4-plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
   },
   {
     "comment": "vindex func without where condition",
     "query": "select keyspace_id from user_index",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
   },
   {
     "comment": "vindex func in subquery without where",
     "query": "select id from user where exists(select keyspace_id from user_index)",
-    "plan": "VT12001: unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
+    "plan": "VT12001: unsupported: WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
   },
   {
     "comment": "select func(keyspace_id) from user_index where id = :id",
@@ -351,7 +357,8 @@
   {
     "comment": "union with SQL_CALC_FOUND_ROWS",
     "query": "(select sql_calc_found_rows id from user where id = 1 limit 1) union select id from user where id = 1",
-    "plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union"
+    "v3-plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with UNION",
+    "gen4-plan": "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union"
   },
   {
     "comment": "set with DEFAULT - vitess aware",
@@ -440,23 +447,22 @@
   {
     "comment": "unsupported with clause in delete statement",
     "query": "with x as (select * from user) delete from x",
-    "v3-plan": "VT12001: unsupported: with expression in DELETE statement",
-    "gen4-plan": "VT12001: unsupported: with expression in delete statement"
+    "plan": "VT12001: unsupported: WITH expression in DELETE statement"
   },
   {
     "comment": "unsupported with clause in update statement",
     "query": "with x as (select * from user) update x set name = 'f'",
-    "plan": "VT12001: unsupported: with expression in update statement"
+    "plan": "VT12001: unsupported: WITH expression in UPDATE statement"
   },
   {
     "comment": "unsupported with clause in select statement",
     "query": "with x as (select * from user) select * from x",
-    "plan": "VT12001: unsupported: with expression in select statement"
+    "plan": "VT12001: unsupported: WITH expression in SELECT statement"
   },
   {
     "comment": "unsupported with clause in union statement",
     "query": "with x as (select * from user) select * from x union select * from x",
-    "plan": "VT12001: unsupported: with expression in union statement"
+    "plan": "VT12001: unsupported: WITH expression in UNION statement"
   },
   {
     "comment": "scatter aggregate with complex select list (can't build order by)",
@@ -468,7 +474,7 @@
     "comment": "aggregation on union",
     "query": "select sum(col) from (select col from user union all select col from unsharded) t",
     "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
-    "gen4-plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.concatenateGen4 plan is not yet supported"
+    "gen4-plan": "VT12001: unsupported: using aggregation on top of a *planbuilder.concatenateGen4 plan"
   },
   {
     "comment": "insert having subquery in row values",
@@ -483,12 +489,13 @@
   {
     "comment": "json_table expressions",
     "query": "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt",
-    "plan": "VT12001: unsupported: json_table expressions"
+    "v3-plan": "VT12001: unsupported: JSON_TABLE expressions",
+    "gen4-plan": "VT12001: unsupported: json_table expressions"
   },
   {
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
-    "plan": "VT12001: unsupported: lock function and other expression in same select query"
+    "plan": "VT12001: unsupported: LOCK function and other expression in same select query"
   },
   {
     "comment": "systable union query in derived table with constraint on outside (star projection)",
