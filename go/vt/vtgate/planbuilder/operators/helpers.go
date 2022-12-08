@@ -82,6 +82,24 @@ func TableID(op ops.Operator) (result semantics.TableSet) {
 	return
 }
 
+// TableUser is used to signal that this operator directly interacts with one or more tables
+type TableUser interface {
+	TablesUsed() []string
+}
+
+func TablesUsed(op ops.Operator) []string {
+	addString, collect := collectSortedUniqueStrings()
+	_ = rewrite.Visit(op, func(this ops.Operator) error {
+		if tbl, ok := this.(TableUser); ok {
+			for _, u := range tbl.TablesUsed() {
+				addString(u)
+			}
+		}
+		return nil
+	})
+	return collect()
+}
+
 func UnresolvedPredicates(op ops.Operator, st *semantics.SemTable) (result []sqlparser.Expr) {
 	type unresolved interface {
 		// UnsolvedPredicates returns any predicates that have dependencies on the given Operator and
@@ -122,33 +140,6 @@ func CostOf(op ops.Operator) (cost int) {
 	return
 }
 
-func CollectSortedUniqueStrings() (add func(string), collect func() []string) {
-	uniq := make(map[string]any)
-	add = func(v string) {
-		uniq[v] = nil
-	}
-	collect = func() []string {
-		sorted := make([]string, 0, len(uniq))
-		for v := range uniq {
-			sorted = append(sorted, v)
-		}
-		sort.Strings(sorted)
-		return sorted
-	}
-
-	return add, collect
-}
-
-func ConcatSortedUniqueStringSlices() (add func([]string), collect func() []string) {
-	subadd, collect := CollectSortedUniqueStrings()
-	add = func(vs []string) {
-		for _, v := range vs {
-			subadd(v)
-		}
-	}
-	return add, collect
-}
-
 func QualifiedIdentifier(ks *vindexes.Keyspace, i sqlparser.IdentifierCS) string {
 	return QualifiedString(ks, i.String())
 }
@@ -158,7 +149,7 @@ func QualifiedString(ks *vindexes.Keyspace, s string) string {
 }
 
 func QualifiedStrings(ks *vindexes.Keyspace, ss []string) []string {
-	add, collect := CollectSortedUniqueStrings()
+	add, collect := collectSortedUniqueStrings()
 	for _, s := range ss {
 		add(QualifiedString(ks, s))
 	}
@@ -170,7 +161,7 @@ func QualifiedTableName(ks *vindexes.Keyspace, t sqlparser.TableName) string {
 }
 
 func QualifiedTableNames(ks *vindexes.Keyspace, ts []sqlparser.TableName) []string {
-	add, collect := CollectSortedUniqueStrings()
+	add, collect := collectSortedUniqueStrings()
 	for _, t := range ts {
 		add(QualifiedTableName(ks, t))
 	}
@@ -178,7 +169,7 @@ func QualifiedTableNames(ks *vindexes.Keyspace, ts []sqlparser.TableName) []stri
 }
 
 func QualifiedTables(ks *vindexes.Keyspace, vts []*vindexes.Table) []string {
-	add, collect := CollectSortedUniqueStrings()
+	add, collect := collectSortedUniqueStrings()
 	for _, vt := range vts {
 		add(QualifiedIdentifier(ks, vt.Name))
 	}
@@ -195,4 +186,21 @@ func SingleQualifiedString(ks *vindexes.Keyspace, s string) []string {
 
 func SingleQualifiedTableName(ks *vindexes.Keyspace, t sqlparser.TableName) []string {
 	return SingleQualifiedIdentifier(ks, t.Name)
+}
+
+func collectSortedUniqueStrings() (add func(string), collect func() []string) {
+	uniq := make(map[string]any)
+	add = func(v string) {
+		uniq[v] = nil
+	}
+	collect = func() []string {
+		sorted := make([]string, 0, len(uniq))
+		for v := range uniq {
+			sorted = append(sorted, v)
+		}
+		sort.Strings(sorted)
+		return sorted
+	}
+
+	return add, collect
 }

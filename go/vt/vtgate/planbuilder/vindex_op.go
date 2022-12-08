@@ -43,10 +43,9 @@ func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex)
 		tableID:       op.Solved,
 		resultColumns: nil,
 		eVindexFunc: &engine.VindexFunc{
-			Opcode:    op.OpCode,
-			TableName: op.Table.Table,
-			Vindex:    single,
-			Value:     expr,
+			Opcode: op.OpCode,
+			Vindex: single,
+			Value:  expr,
 		},
 	}
 

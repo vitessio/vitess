@@ -40,10 +40,6 @@ type (
 		// AddColumn tells an operator to also output an additional column specified.
 		// The offset to the column is returned.
 		AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error)
-
-		// TablesUsed reports a unique, sorted liset of keyspace-qualified
-		// tables that the operator tree interacts with.
-		TablesUsed() []string
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan

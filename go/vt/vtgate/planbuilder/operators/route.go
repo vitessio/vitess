@@ -957,11 +957,14 @@ func (r *Route) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
 	return nil
 }
 
+// TablesUsed returns tables used by MergedWith routes, which are not included
+// in Inputs() and thus not a part of the operator tree
 func (r *Route) TablesUsed() []string {
-	addSlice, collect := ConcatSortedUniqueStringSlices()
-	addSlice(r.Source.TablesUsed())
-	for _, mergedRoute := range r.MergedWith {
-		addSlice(mergedRoute.TablesUsed())
+	addString, collect := collectSortedUniqueStrings()
+	for _, mw := range r.MergedWith {
+		for _, u := range TablesUsed(mw) {
+			addString(u)
+		}
 	}
 	return collect()
 }

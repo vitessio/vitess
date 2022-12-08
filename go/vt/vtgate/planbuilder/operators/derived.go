@@ -160,10 +160,6 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 	return pos, nil
 }
 
-func (d *Derived) TablesUsed() []string {
-	return d.Source.TablesUsed()
-}
-
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
 	for idx, val := range columnOffset {
 		if val == valToAdd {

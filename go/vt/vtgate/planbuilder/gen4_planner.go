@@ -235,7 +235,7 @@ func newBuildSelectPlan(
 		return nil, nil, nil, err
 	}
 
-	return plan, semTable, op.TablesUsed(), nil
+	return plan, semTable, operators.TablesUsed(op), nil
 }
 
 // optimizePlan removes unnecessary simpleProjections that have been created while planning
@@ -328,7 +328,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), op.TablesUsed()...), nil
+	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
 func gen4DeleteStmtPlanner(
@@ -406,7 +406,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), op.TablesUsed()...), nil
+	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) (err error) {

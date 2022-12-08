@@ -50,9 +50,6 @@ type (
 
 	// helper type that implements AddPredicate() returning an error
 	noPredicates struct{}
-
-	// helper type that implements TablesUsed() returning nil
-	noTablesUsed struct{}
 )
 
 func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (ops.Operator, error) {
@@ -99,9 +96,4 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, e
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this operator cannot accept predicates")
-}
-
-// TablesUsed implements the Operator interface
-func (noTablesUsed) TablesUsed() []string {
-	return nil
 }

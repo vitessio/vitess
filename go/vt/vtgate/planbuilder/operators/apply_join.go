@@ -192,11 +192,3 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 	a.ColumnsAST = append(a.ColumnsAST, expr)
 	return len(a.Columns) - 1, nil
 }
-
-func (a *ApplyJoin) TablesUsed() []string {
-	add, collect := ConcatSortedUniqueStringSlices()
-	for _, input := range a.Inputs() {
-		add(input.TablesUsed())
-	}
-	return collect()
-}

@@ -94,11 +94,3 @@ func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tr
 	f.Predicates = append(f.Predicates, other.Predicates...)
 	return f, rewrite.NewTree, nil
 }
-
-func (f *Filter) TablesUsed() []string {
-	add, collect := ConcatSortedUniqueStringSlices()
-	for _, source := range f.Inputs() {
-		add(source.TablesUsed())
-	}
-	return collect()
-}

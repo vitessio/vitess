@@ -67,15 +67,6 @@ func (s *SubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{s.Outer, s.Inner}
 }
 
-// TablesUsed implements the Operator interface
-func (s *SubQueryOp) TablesUsed() []string {
-	add, collect := ConcatSortedUniqueStringSlices()
-	for _, input := range s.Inputs() {
-		add(input.TablesUsed())
-	}
-	return collect()
-}
-
 // IPhysical implements the PhysicalOperator interface
 func (c *CorrelatedSubQueryOp) IPhysical() {}
 
@@ -101,13 +92,4 @@ func (c *CorrelatedSubQueryOp) Clone(inputs []ops.Operator) ops.Operator {
 // Inputs implements the Operator interface
 func (c *CorrelatedSubQueryOp) Inputs() []ops.Operator {
 	return []ops.Operator{c.Outer, c.Inner}
-}
-
-// TablesUsed implements the Operator interface
-func (c *CorrelatedSubQueryOp) TablesUsed() []string {
-	add, collect := ConcatSortedUniqueStringSlices()
-	for _, input := range c.Inputs() {
-		add(input.TablesUsed())
-	}
-	return collect()
 }
