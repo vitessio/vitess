@@ -151,20 +151,21 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	//check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	// check that the restored replica has the right local_metadata
-	result, err := replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")
-	require.Nil(t, err)
-	require.NotNil(t, result)
-	require.NotEmpty(t, result.Rows)
-	assert.Equal(t, replica2.Alias, result.Rows[0][1].ToString(), "Alias")
-	assert.Equal(t, "ks.0", result.Rows[1][1].ToString(), "ClusterAlias")
-	assert.Equal(t, cell, result.Rows[2][1].ToString(), "DataCenter")
-	if tabletType == "replica" {
-		assert.Equal(t, "neutral", result.Rows[3][1].ToString(), "PromotionRule")
-	} else {
-		assert.Equal(t, "must_not", result.Rows[3][1].ToString(), "PromotionRule")
+	if false { //FIXME local_metadata has been deleted
+		// check that the restored replica has the right local_metadata
+		result, err := replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")
+		require.Nil(t, err)
+		require.NotNil(t, result)
+		require.NotEmpty(t, result.Rows)
+		assert.Equal(t, replica2.Alias, result.Rows[0][1].ToString(), "Alias")
+		assert.Equal(t, "ks.0", result.Rows[1][1].ToString(), "ClusterAlias")
+		assert.Equal(t, cell, result.Rows[2][1].ToString(), "DataCenter")
+		if tabletType == "replica" {
+			assert.Equal(t, "neutral", result.Rows[3][1].ToString(), "PromotionRule")
+		} else {
+			assert.Equal(t, "must_not", result.Rows[3][1].ToString(), "PromotionRule")
+		}
 	}
-
 	removeBackups(t)
 	verifyBackupCount(t, shardKsName, 0)
 }
