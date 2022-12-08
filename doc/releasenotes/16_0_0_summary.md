@@ -15,6 +15,10 @@
 
 In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
 
+#### <a id="vstream-copy-resume"/>tabletpicker options
+
+In [PR 11771](https://github.com/vitessio/vitess/pull/11771) we allow for default cell alias fallback during tablet selection for VStreams when client does not specify list of cells. In addition, we add the option for local cell preference during tablet selection. The local cell preference takes precedence over tablet type.See PR description for examples. If a client wants to specify local cell preference in the gRPC request, they can pass in a new "local:" tag with the rest of the cells under VStreamFlags. e.g. "local:,cella,cellb". 
+
 ### Breaking Changes
 
 #### Orchestrator Integration Deletion
