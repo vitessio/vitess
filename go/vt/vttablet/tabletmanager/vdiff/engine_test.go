@@ -46,8 +46,41 @@ var (
 				Columns:           []string{"c1", "c2"},
 				PrimaryKeyColumns: []string{"c1"},
 				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			}, {
+				Name:              "nonpktext",
+				Columns:           []string{"c1", "textcol"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|textcol", "int64|varchar"),
+			}, {
+				Name:              "pktext",
+				Columns:           []string{"textcol", "c2"},
+				PrimaryKeyColumns: []string{"textcol"},
+				Fields:            sqltypes.MakeTestFields("textcol|c2", "varchar|int64"),
+			}, {
+				Name:              "multipk",
+				Columns:           []string{"c1", "c2"},
+				PrimaryKeyColumns: []string{"c1", "c2"},
+				Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+			}, {
+				Name:              "aggr",
+				Columns:           []string{"c1", "c2", "c3", "c4"},
+				PrimaryKeyColumns: []string{"c1"},
+				Fields:            sqltypes.MakeTestFields("c1|c2|c3|c4", "int64|int64|int64|int64"),
+			}, {
+				Name:              "datze",
+				Columns:           []string{"id", "dt"},
+				PrimaryKeyColumns: []string{"id"},
+				Fields:            sqltypes.MakeTestFields("id|dt", "int64|datetime"),
 			},
 		},
+	}
+	tableDefMap = map[string]int{
+		"t1":        0,
+		"nonpktext": 1,
+		"pktext":    2,
+		"multipk":   3,
+		"aggr":      4,
+		"datze":     5,
 	}
 )
 
