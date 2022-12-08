@@ -236,6 +236,10 @@ func ParseFlags(cmd string) {
 		os.Exit(0)
 	}
 
+	if log.UsePlanetScaleLogger {
+		log.SetPlanetScaleLog()
+	}
+
 	args := flag.Args()
 	if len(args) > 0 {
 		flag.Usage()
