@@ -19,6 +19,7 @@ package vdiff
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -498,6 +499,107 @@ func TestBuildPlanSuccess(t *testing.T) {
 	}
 }
 
+func TestBuildPlanInclude(t *testing.T) {
+	tablet := addTablet(100)
+	tablet.Type = topodatapb.TabletType_PRIMARY
+	defer deleteTablet(tablet)
+	resetBinlogClient()
+	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	vde := &Engine{
+		controllers:             make(map[int64]*controller),
+		ts:                      env.TopoServ,
+		thisTablet:              tablet,
+		dbClientFactoryFiltered: dbClientFactory,
+		dbClientFactoryDba:      dbClientFactory,
+		dbName:                  vdiffdb,
+	}
+	require.False(t, vde.IsOpen())
+	opts := &tabletmanagerdatapb.VDiffOptions{
+		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
+	}
+
+	dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
+	vde.Open(context.Background(), vreplEngine)
+	defer vde.Close()
+	assert.True(t, vde.IsOpen())
+
+	vde.Open(context.Background(), vreplEngine)
+	defer vde.Close()
+	assert.True(t, vde.IsOpen())
+	assert.Equal(t, 0, len(vde.controllers))
+
+	vde.mu.Lock()
+	defer vde.mu.Unlock()
+
+	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		vdiffTestCols,
+		vdiffTestColTypes,
+	),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), wfName, env.KeyspaceName, env.ShardName, vdiffdb, PendingState, optionsJS),
+	)
+	dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, env.TopoServ, vde, opts)
+	require.NoError(t, err)
+
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "t1",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}, {
+			Name:              "t2",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}, {
+			Name:              "t3",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}, {
+			Name:              "t4",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		}},
+	}
+	tmc.schema = schm
+	defer func() {
+		tmc.schema = testSchema
+	}()
+	rule := &binlogdatapb.Rule{
+		Match: "/.*",
+	}
+	filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{rule}}
+
+	testcases := []struct {
+		tables []string
+	}{
+		{tables: []string{"t2"}},
+		{tables: []string{"t2", "t3"}},
+		{tables: []string{"t1", "t2", "t3", "t4"}},
+		{tables: []string{"t1", "t2", "t3", "t4"}},
+	}
+
+	for _, tcase := range testcases {
+		dbc := binlogplayer.NewMockDBClient(t)
+		opts.CoreOptions.Tables = strings.Join(tcase.tables, ",")
+		wd, err := newWorkflowDiffer(ct, opts)
+		require.NoError(t, err)
+		for _, table := range tcase.tables {
+			query := fmt.Sprintf(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
+						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						where vdt.vdiff_id = 1 and vdt.table_name = '%s'`, table)
+			dbc.ExpectRequest(query, noResults, nil)
+		}
+		err = wd.buildPlan(dbc, filter, schm)
+		require.NoError(t, err)
+		require.Equal(t, len(tcase.tables), len(wd.tableDiffers))
+	}
+}
+
 func TestBuildPlanFailure(t *testing.T) {
 	UUID := uuid.New()
 	tablet := addTablet(100)
@@ -586,4 +688,13 @@ func TestBuildPlanFailure(t *testing.T) {
 		err = wd.buildPlan(dbc, filter, testSchema)
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
+}
+
+func TestDiffTableAggregates(t *testing.T) {
+}
+
+func TestDiffUnsharded(t *testing.T) {
+}
+
+func TestDiffSharded(t *testing.T) {
 }
