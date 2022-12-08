@@ -321,7 +321,11 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 		startTime := time.Now()
 		var canRetry bool
-		canRetry, err = inner(ctx, target, th.Conn)
+		if *routeReplicaToRdonly && target.TabletType == topodatapb.TabletType_REPLICA {
+			canRetry, err = inner(ctx, th.Target, th.Conn)
+		} else {
+			canRetry, err = inner(ctx, target, th.Conn)
+		}
 		gw.updateStats(target, startTime, err)
 		if canRetry {
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
