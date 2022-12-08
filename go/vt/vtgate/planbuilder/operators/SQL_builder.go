@@ -118,7 +118,7 @@ func (qb *queryBuilder) joinInnerWith(other *queryBuilder, onCondition sqlparser
 	if otherSel.Where != nil {
 		predExprs := sqlparser.SplitAndExpression(nil, predicate)
 		otherExprs := sqlparser.SplitAndExpression(nil, otherSel.Where.Expr)
-		predicate = sqlparser.AndExpressions(append(predExprs, otherExprs...)...)
+		predicate = qb.ctx.SemTable.AndExpressions(append(predExprs, otherExprs...)...)
 	}
 	if predicate != nil {
 		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}
@@ -157,7 +157,7 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 		predicate = sel.Where.Expr
 	}
 	if otherSel.Where != nil {
-		predicate = sqlparser.AndExpressions(predicate, otherSel.Where.Expr)
+		predicate = qb.ctx.SemTable.AndExpressions(predicate, otherSel.Where.Expr)
 	}
 	if predicate != nil {
 		sel.Where = &sqlparser.Where{Type: sqlparser.WhereClause, Expr: predicate}

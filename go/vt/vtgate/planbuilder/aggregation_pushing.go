@@ -146,7 +146,7 @@ func pushAggrOnRoute(
 	} else {
 		// if we haven't already pushed the aggregations, now is the time
 		for _, aggregation := range aggregations {
-			param := addAggregationToSelect(sel, aggregation)
+			param := addAggregationToSelect(ctx, sel, aggregation)
 			vtgateAggregation = append(vtgateAggregation, []offsets{param})
 		}
 	}
@@ -193,7 +193,7 @@ func pushAggrsAndGroupingInOrder(
 	for it.next() {
 		groupBy, aggregation := it.current()
 		if aggregation != nil {
-			param := addAggregationToSelect(sel, *aggregation)
+			param := addAggregationToSelect(ctx, sel, *aggregation)
 			vtgateAggregation = append(vtgateAggregation, []offsets{param})
 			continue
 		}
@@ -210,14 +210,14 @@ func pushAggrsAndGroupingInOrder(
 }
 
 // addAggregationToSelect adds the aggregation to the SELECT statement and returns the AggregateParams to be used outside
-func addAggregationToSelect(sel *sqlparser.Select, aggregation operators.Aggr) offsets {
+func addAggregationToSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select, aggregation operators.Aggr) offsets {
 	// TODO: removing duplicated aggregation expression should also be done at the join level
 	for i, expr := range sel.SelectExprs {
 		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
 		if !isAliasedExpr {
 			continue
 		}
-		if sqlparser.EqualsExpr(aliasedExpr.Expr, aggregation.Original.Expr) {
+		if ctx.SemTable.EqualsExpr(aliasedExpr.Expr, aggregation.Original.Expr) {
 			return newOffset(i)
 		}
 	}

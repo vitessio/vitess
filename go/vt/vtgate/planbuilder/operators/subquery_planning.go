@@ -86,7 +86,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
 	preds := UnresolvedPredicates(op, ctx.SemTable)
 	if filter, ok := op.(*Filter); ok {
-		if sqlparser.EqualsExprs(preds, filter.Predicates) {
+		if ctx.SemTable.ASTEquals().Exprs(preds, filter.Predicates) {
 			// if we are seeing a single filter with only these predicates,
 			// we can throw away the filter and just use the source
 			return preds, filter.Source
@@ -114,7 +114,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	// predicates list, so this might be a no-op.
 	subQueryWasPredicate := false
 	for i, predicate := range outer.SeenPredicates {
-		if sqlparser.EqualsExpr(predicate, subq.ExtractedSubquery) {
+		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
 			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
 
 			subQueryWasPredicate = true
@@ -389,7 +389,7 @@ func createCorrelatedSubqueryOp(
 				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
-					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
+					// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
 					for colName, bindVar := range bindVars {
 						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))

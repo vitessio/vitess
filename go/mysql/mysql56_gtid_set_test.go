@@ -79,6 +79,14 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:8-7:10-20": {
 			sid1: []interval{{1, 5}, {10, 20}},
 		},
+		// Same repeating SIDs
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5,00010203-0405-0607-0809-0a0b0c0d0e0f:10-20": {
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
+		// Same repeating SIDs, backwards order
+		"00010203-0405-0607-0809-0a0b0c0d0e0f:10-20,00010203-0405-0607-0809-0a0b0c0d0e0f:1-5": {
+			sid1: []interval{{1, 5}, {10, 20}},
+		},
 		// Multiple SIDs
 		"00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20,00010203-0405-0607-0809-0a0b0c0d0eff:1-5:50": {
 			sid1: []interval{{1, 5}, {10, 20}},
@@ -92,12 +100,11 @@ func TestParseMysql56GTIDSet(t *testing.T) {
 	}
 
 	for input, want := range table {
-		got, err := ParseMysql56GTIDSet(input)
-		if err != nil {
-			t.Errorf("unexpected error: %v", err)
-			continue
-		}
-		assert.True(t, got.Equal(want), "parseMysql56GTIDSet(%#v) = %#v, want %#v", input, got, want)
+		t.Run(input, func(t *testing.T) {
+			got, err := ParseMysql56GTIDSet(input)
+			require.NoError(t, err)
+			assert.Equal(t, want, got)
+		})
 	}
 }
 
@@ -611,6 +618,46 @@ func TestSubtract(t *testing.T) {
 			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65cca-3fe4-11ed-bbfb-091034d48b3e:1",
 			difference: "",
+		}, {
+			name:       "subtract prefix",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-3",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:4-8",
+		}, {
+			name:       "subtract mid",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:2-3",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1:4-8",
+		}, {
+			name:       "subtract suffix",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-8",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6",
+		}, {
+			name:       "subtract complex range 1",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-8",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:12-17",
+		}, {
+			name:       "subtract complex range 2",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:14-17",
+		}, {
+			name:       "subtract complex range 3",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
+		}, {
+			name:       "subtract repeating uuid",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-17",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
+		}, {
+			name:       "subtract repeating uuid in descending order",
+			lhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:12-17,8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-8",
+			rhs:        "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:7-13",
+			difference: "8bc65c84-3fe4-11ed-a912-257f0fcdd6c9:1-6:14-17",
 		}, {
 			name:    "parsing error in left set",
 			lhs:     "incorrect set",

@@ -22,12 +22,8 @@ import (
 	"strings"
 )
 
-/*
-These types are used to test the rewriter generator against these types.
-To recreate them, just run:
+//go:generate go run ../main --in . --iface vitess.io/vitess/go/tools/asthelpergen/integration.AST --clone_exclude "*NoCloneType"
 
-go run go/tools/asthelpergen -in ./go/tools/asthelpergen/integration -iface vitess.io/vitess/go/tools/asthelpergen/integration.AST -except "*NoCloneType"
-*/
 // AST is the interface all interface types implement
 type AST interface {
 	String() string
@@ -178,3 +174,5 @@ type application struct {
 	pre, post ApplyFunc
 	cur       Cursor
 }
+
+var Equals = &Comparator{}

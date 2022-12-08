@@ -139,7 +139,7 @@ var errors = map[ErrorCode]info{
 		code:   vtrpcpb.Code_INVALID_ARGUMENT,
 	},
 	AmbiguousColumn: {
-		format: "Column '%s' in field lfist is ambiguous",
+		format: "Column '%s' in field list is ambiguous",
 		state:  vterrors.BadFieldError,
 		code:   vtrpcpb.Code_INVALID_ARGUMENT,
 	},

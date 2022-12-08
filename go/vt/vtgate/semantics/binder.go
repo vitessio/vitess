@@ -124,7 +124,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 		switch tbl := tbl.(type) {
 		case *vTableInfo:
 			for _, col := range tbl.cols {
-				if sqlparser.EqualsExpr(node, col) {
+				if sqlparser.Equals.Expr(node, col) {
 					ts = ts.Merge(b.recursive[col])
 				}
 			}

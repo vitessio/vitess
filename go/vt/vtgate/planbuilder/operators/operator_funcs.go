@@ -59,16 +59,18 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op o
 
 		var keep []sqlparser.Expr
 		for _, e := range sqlparser.SplitAndExpression(nil, op.Predicate) {
-			if !ctx.SemTable.EqualsExpr(expr, e) {
-				keep = append(keep, e)
+			if ctx.SemTable.EqualsExpr(expr, e) {
 				isRemoved = true
+			} else {
+				keep = append(keep, e)
 			}
 		}
-		op.Predicate = sqlparser.AndExpressions(keep...)
 
 		if !isRemoved {
 			return nil, vterrors.VT12001(fmt.Sprintf("remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr)))
 		}
+
+		op.Predicate = ctx.SemTable.AndExpressions(keep...)
 		return op, nil
 	case *Filter:
 		idx := -1

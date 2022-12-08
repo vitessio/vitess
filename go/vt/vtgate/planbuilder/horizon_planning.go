@@ -69,7 +69,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	var err error
-	hp.qp, err = operators.CreateQPFromSelect(hp.sel)
+	hp.qp, err = operators.CreateQPFromSelect(ctx, hp.sel)
 	if err != nil {
 		return nil, err
 	}
@@ -245,7 +245,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 
 	var order []operators.OrderBy
 	if hp.qp.CanPushDownSorting {
-		hp.qp.AlignGroupByAndOrderBy()
+		hp.qp.AlignGroupByAndOrderBy(ctx)
 		// the grouping order might have changed, so we reload the grouping expressions
 		grouping = hp.qp.GetGrouping()
 		order = hp.qp.OrderExprs
@@ -266,14 +266,14 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	if hp.sel.Having != nil {
-		rewriter := hp.qp.AggrRewriter()
+		rewriter := hp.qp.AggrRewriter(ctx)
 		sqlparser.Rewrite(hp.sel.Having.Expr, rewriter.Rewrite(), nil)
 		if rewriter.Err != nil {
 			return nil, rewriter.Err
 		}
 	}
 
-	aggregationExprs, err := hp.qp.AggregationExpressions()
+	aggregationExprs, err := hp.qp.AggregationExpressions(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -654,7 +654,7 @@ func isSpecialOrderBy(o operators.OrderBy) bool {
 
 func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, error) {
 	for _, order := range orderExprs {
-		err := checkOrderExprCanBePlannedInScatter(plan, order, hasStar)
+		err := checkOrderExprCanBePlannedInScatter(ctx, plan, order, hasStar)
 		if err != nil {
 			return nil, err
 		}
@@ -683,7 +683,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operator
 
 // checkOrderExprCanBePlannedInScatter verifies that the given order by expression can be planned.
 // It checks if the expression exists in the plan's select list when the query is a scatter.
-func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order operators.OrderBy, hasStar bool) error {
+func checkOrderExprCanBePlannedInScatter(ctx *plancontext.PlanningContext, plan *routeGen4, order operators.OrderBy, hasStar bool) error {
 	if !hasStar {
 		return nil
 	}
@@ -691,7 +691,7 @@ func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order operators.OrderB
 	found := false
 	for _, expr := range sel.SelectExprs {
 		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
-		if isAliasedExpr && sqlparser.EqualsExpr(aliasedExpr.Expr, order.Inner.Expr) {
+		if isAliasedExpr && ctx.SemTable.EqualsExpr(aliasedExpr.Expr, order.Inner.Expr) {
 			found = true
 			break
 		}
@@ -811,7 +811,7 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	}
 
 	for _, order := range orderExprs {
-		offset, woffset, found := findExprInOrderedAggr(plan, order)
+		offset, woffset, found := findExprInOrderedAggr(ctx, plan, order)
 		if !found {
 			return nil, vterrors.VT13001(fmt.Sprintf("expected to find ORDER BY expression (%s) in orderedAggregate", sqlparser.String(order.Inner)))
 		}
@@ -828,16 +828,16 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	return ms, nil
 }
 
-func findExprInOrderedAggr(plan *orderedAggregate, order operators.OrderBy) (keyCol int, weightStringCol int, found bool) {
+func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggregate, order operators.OrderBy) (keyCol int, weightStringCol int, found bool) {
 	for _, key := range plan.groupByKeys {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, key.Expr) {
+		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, key.Expr) ||
+			ctx.SemTable.EqualsExpr(order.Inner.Expr, key.Expr) {
 			return key.KeyCol, key.WeightStringCol, true
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
+		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+			ctx.SemTable.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
 	}

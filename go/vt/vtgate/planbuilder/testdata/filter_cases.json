@@ -6659,5 +6659,42 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "two predicates that mean the same thing",
+    "query": "select textcol1 from user where foo = 42 and user.foo = 42",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select textcol1 from user where foo = 42 and user.foo = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select textcol1 from `user` where 1 != 1",
+        "Query": "select textcol1 from `user` where foo = 42 and `user`.foo = 42",
+        "Table": "`user`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select textcol1 from user where foo = 42 and user.foo = 42",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Scatter",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "FieldQuery": "select textcol1 from `user` where 1 != 1",
+        "Query": "select textcol1 from `user` where foo = 42",
+        "Table": "`user`"
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
+    }
   }
 ]

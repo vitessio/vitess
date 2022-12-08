@@ -17,8 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"fmt"
-
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -117,8 +115,11 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	}
 	tableInfo, err := ctx.SemTable.TableInfoForExpr(expr)
 	if err != nil {
-		if err == semantics.ErrMultipleTables {
-			return nil, semantics.ProjError{Inner: vterrors.VT12001(fmt.Sprintf("unable to push predicates to derived table: %s", sqlparser.String(expr)))}
+		if err == semantics.ErrNotSingleTable {
+			return &Filter{
+				Source:     d,
+				Predicates: []sqlparser.Expr{expr},
+			}, nil
 		}
 		return nil, err
 	}
