@@ -52,10 +52,9 @@ func main() {
 			return strings.TrimSpace(strings.Join(strings.Split(s, ":")[1:], ":"))
 		},
 	})
-	parse, err := t.Parse(tmpl)
-	t = template.Must(parse, err)
+	t = template.Must(t.Parse(tmpl))
 
-	err = t.ExecuteTemplate(os.Stdout, "template", vterrors.Errors)
+	err := t.ExecuteTemplate(os.Stdout, "template", vterrors.Errors)
 	if err != nil {
 		log.Fatal(err)
 	}
