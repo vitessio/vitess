@@ -148,6 +148,14 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 		opCode = engine.Scatter
 	}
 
+	if vindexTable.Source != nil {
+		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		vindexTable = sourceTable
+	}
+
 	var dest key.Destination
 	var typ topodatapb.TabletType
 	var err error
@@ -463,6 +471,7 @@ func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute
 		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
 		Source:              join,
+		MergedWith:          []*Route{bRoute},
 	}
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
@@ -498,6 +507,16 @@ func tryMerge(
 	}
 
 	sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
+
+	if !sameKeyspace {
+		if altARoute := aRoute.AlternateInKeyspace(bRoute.Keyspace); altARoute != nil {
+			aRoute = altARoute
+			sameKeyspace = true
+		} else if altBRoute := bRoute.AlternateInKeyspace(aRoute.Keyspace); altBRoute != nil {
+			bRoute = altBRoute
+			sameKeyspace = true
+		}
+	}
 
 	if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
 		tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
