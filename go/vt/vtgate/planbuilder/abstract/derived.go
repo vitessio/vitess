@@ -17,9 +17,7 @@ limitations under the License.
 package abstract
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -44,8 +42,11 @@ func (d *Derived) TableID() semantics.TableSet {
 func (d *Derived) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	tableInfo, err := semTable.TableInfoForExpr(expr)
 	if err != nil {
-		if err == semantics.ErrMultipleTables {
-			return nil, semantics.ProjError{Inner: vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: unable to split predicates to derived table: %s", sqlparser.String(expr))}
+		if err == semantics.ErrNotSingleTable {
+			return &Filter{
+				Source:     d,
+				Predicates: []sqlparser.Expr{expr},
+			}, nil
 		}
 		return nil, err
 	}

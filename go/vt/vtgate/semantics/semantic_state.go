@@ -116,8 +116,8 @@ type (
 )
 
 var (
-	// ErrMultipleTables refers to an error happening when something should be used only for single tables
-	ErrMultipleTables = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+	// ErrNotSingleTable refers to an error happening when something should be used only for single tables
+	ErrNotSingleTable = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 )
 
 // CopyDependencies copies the dependencies from one expression into the other
@@ -169,7 +169,7 @@ func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExp
 func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	offset := id.TableOffset()
 	if offset < 0 {
-		return nil, ErrMultipleTables
+		return nil, ErrNotSingleTable
 	}
 	return st.Tables[offset], nil
 }
