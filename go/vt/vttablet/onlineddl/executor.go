@@ -75,6 +75,8 @@ var (
 	ErrExecutorMigrationAlreadyRunning = errors.New("cannot run migration since a migration is already running")
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
 	ErrMigrationNotFound = errors.New("migration not found")
+	// ErrCannotUpdateMigrationMessage indicates inability to UPDATE _vt.schema_migrations with a text message
+	ErrCannotUpdateMigrationMessage = errors.New("unexpected: cannot update migration message")
 )
 
 var vexecUpdateTemplates = []string{
@@ -4003,18 +4005,34 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
 	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
-	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
-		sqltypes.StringBindVariable(message),
-		sqltypes.StringBindVariable(uuid),
-	)
-	if err != nil {
-		return err
-	}
-	_, err = e.execQuery(ctx, query)
-	if err != nil {
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
+			sqltypes.StringBindVariable(message),
+			sqltypes.StringBindVariable(uuid),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = e.execQuery(ctx, query)
+		if err == nil {
+			break
+		}
+		// We failed updating the migration message. This can happen when the message has binary data.
+		// As a workaround, we cut the mssage in half and try again, repeatedly
+		if message == ErrCannotUpdateMigrationMessage.Error() {
+			// end of the road. If we could not update _this_, then we are broken
+			return vterrors.Wrapf(ErrCannotUpdateMigrationMessage, "migration uuid=%v", uuid)
+		}
 		log.Errorf("FAIL updateMigrationMessage: uuid=%s, message=%s, error=%v", uuid, message, err)
+		message = message[0 : len(message)/2]
+		if message == "" {
+			message = ErrCannotUpdateMigrationMessage.Error()
+		}
 	}
-	return err
+	return nil
 }
 
 func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
