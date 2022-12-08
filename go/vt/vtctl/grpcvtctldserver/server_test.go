@@ -11230,7 +11230,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 					"primary:0": "version1",
 					"replica:0": "version1",
 				}
-				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+				SetVersionFunc(testutil.MockGetVersionFromTablet(addrVersionMap))
 			},
 			shouldErr: false,
 		},
@@ -11250,7 +11250,7 @@ func TestValidateVersionKeyspace(t *testing.T) {
 					"primary:0": "version1",
 					"replica:0": "version2",
 				}
-				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+				SetVersionFunc(testutil.MockGetVersionFromTablet(addrVersionMap))
 			},
 			shouldErr: false,
 		},
@@ -11342,7 +11342,7 @@ func TestValidateVersionShard(t *testing.T) {
 					"primary:0": "version1",
 					"replica:0": "version1",
 				}
-				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+				SetVersionFunc(testutil.MockGetVersionFromTablet(addrVersionMap))
 			},
 			shouldErr: false,
 		},
@@ -11360,7 +11360,7 @@ func TestValidateVersionShard(t *testing.T) {
 					"primary:0": "version1",
 					"replica:0": "version2",
 				}
-				getVersionFromTablet = testutil.MockGetVersionFromTablet(addrVersionMap)
+				SetVersionFunc(testutil.MockGetVersionFromTablet(addrVersionMap))
 			},
 			shouldErr: false,
 		},
