@@ -352,7 +352,7 @@
     }
   },
   {
-    "comment": "insert into qualified ambiguous reference table routes requested keyspace",
+    "comment": "insert into qualified ambiguous reference table routes v3 to requested keyspace gen4 to source",
     "query": "insert into user.ambiguous_ref_with_source(col) values(1)",
     "v3-plan": {
       "Instructions": {
@@ -376,20 +376,20 @@
     "gen4-plan": {
       "Instructions": {
         "Keyspace": {
-          "Name": "user",
-          "Sharded": true
+          "Name": "main",
+          "Sharded": false
         },
         "MultiShardAutocommit": false,
         "OperatorType": "Insert",
         "Query": "insert into ambiguous_ref_with_source(col) values (1)",
         "TableName": "ambiguous_ref_with_source",
         "TargetTabletType": "PRIMARY",
-        "Variant": "Sharded"
+        "Variant": "Unsharded"
       },
       "Original": "insert into user.ambiguous_ref_with_source(col) values(1)",
       "QueryType": "INSERT",
       "TablesUsed": [
-        "user.ambiguous_ref_with_source"
+        "main.ambiguous_ref_with_source"
       ]
     }
   },
