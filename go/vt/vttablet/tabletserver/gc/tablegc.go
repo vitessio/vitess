@@ -43,13 +43,13 @@ import (
 )
 
 const (
-	leaderCheckInterval = 5 * time.Second
 	// evacHours is a hard coded, reasonable time for a table to spend in EVAC state
 	evacHours        = 72
 	throttlerAppName = "tablegc"
 )
 
 var (
+	leaderCheckInterval     = 5 * time.Second
 	checkInterval           = 1 * time.Hour
 	purgeReentranceInterval = 1 * time.Minute
 	gcLifecycle             = "hold,purge,evac,drop"
@@ -67,6 +67,7 @@ func registerGCFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&purgeReentranceInterval, "gc_purge_check_interval", purgeReentranceInterval, "Interval between purge discovery checks")
 	// gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
 	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
+	fs.DurationVar(&leaderCheckInterval, "leader_check_interval", leaderCheckInterval, "Interval between transition to primary is check.")
 }
 
 var (
