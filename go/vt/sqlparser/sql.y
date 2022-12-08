@@ -199,7 +199,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SQL_NO_CACHE SQL_CACHE
 %left <bytes> JOIN STRAIGHT_JOIN LEFT RIGHT INNER OUTER CROSS NATURAL USE FORCE
 %left <bytes> ON USING
-%token <empty> '(' ',' ')' '@'
+%token <empty> '(' ',' ')' '@' ':'
 %token <bytes> ID HEX STRING INTEGRAL FLOAT HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BIT_LITERAL
 %token <bytes> NULL TRUE FALSE OFF
 %right <bytes> INTO
@@ -255,8 +255,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CLASS_ORIGIN SUBCLASS_ORIGIN MESSAGE_TEXT MYSQL_ERRNO CONSTRAINT_CATALOG CONSTRAINT_SCHEMA
 %token <bytes> CONSTRAINT_NAME CATALOG_NAME SCHEMA_NAME TABLE_NAME COLUMN_NAME CURSOR_NAME SIGNAL RESIGNAL SQLSTATE
 
-// DECLARE Tokens
-%token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION FETCH OPEN CLOSE
+// Stored Procedure Tokens
+%token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION FETCH OPEN CLOSE LOOP LEAVE ITERATE
 
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
@@ -332,8 +332,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> FLOAT4 FLOAT8
 %token <bytes> GET
 %token <bytes> HIGH_PRIORITY HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND
-%token <bytes> INSENSITIVE INT1 INT2 INT3 INT4 INT8 IO_AFTER_GTIDS IO_BEFORE_GTIDS ITERATE
-%token <bytes> LEAVE LINEAR LOOP
+%token <bytes> INSENSITIVE INT1 INT2 INT3 INT4 INT8 IO_AFTER_GTIDS IO_BEFORE_GTIDS LINEAR
 %token <bytes> MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MIDDLEINT MINUTE_MICROSECOND MINUTE_SECOND
 %token <bytes> PURGE
 %token <bytes> READ_WRITE REPEAT RETURN RLIKE
@@ -365,6 +364,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement open_statement close_statement fetch_statement
+%type <statement> loop_statement leave_statement iterate_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
 %type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement
 %type <statements> statement_list
@@ -1974,6 +1974,10 @@ declare_statement:
   {
     $$ = &Declare{Handler: &DeclareHandler{Action: $2, ConditionValues: $5, Statement: $6}}
   }
+| DECLARE declare_handler_action HANDLER FOR declare_handler_condition_list BEGIN END
+  {
+    $$ = &Declare{Handler: &DeclareHandler{Action: $2, ConditionValues: $5, Statement: &BeginEndBlock{}}}
+  }
 | DECLARE reserved_sql_id_list column_type charset_opt collate_opt
   {
     $3.Charset = $4
@@ -2070,6 +2074,37 @@ fetch_variable_list:
 | fetch_variable_list ',' ID
   {
     $$ = append($$, string($3))
+  }
+
+loop_statement:
+  LOOP statement_list ';' END LOOP
+  {
+    $$ = &Loop{Label: "", Statements: $2}
+  }
+| ID ':' LOOP statement_list ';' END LOOP
+  {
+    $$ = &Loop{Label: string($1), Statements: $4}
+  }
+| ID ':' LOOP statement_list ';' END LOOP ID
+  {
+    label := string($1)
+    if label != string($8) {
+      yylex.Error("End-label "+string($8)+" without match")
+      return 1
+    }
+    $$ = &Loop{Label: label, Statements: $4}
+  }
+
+leave_statement:
+  LEAVE ID
+  {
+    $$ = &Leave{Label: string($2)}
+  }
+
+iterate_statement:
+  ITERATE ID
+  {
+    $$ = &Iterate{Label: string($2)}
   }
 
 signal_statement:
@@ -2250,6 +2285,9 @@ statement_list_statement:
 | declare_statement
 | open_statement
 | close_statement
+| loop_statement
+| leave_statement
+| iterate_statement
 | fetch_statement
 | signal_statement
 | resignal_statement

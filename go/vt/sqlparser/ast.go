@@ -404,6 +404,9 @@ func (*Declare) iStatement()           {}
 func (*OpenCursor) iStatement()        {}
 func (*CloseCursor) iStatement()       {}
 func (*FetchCursor) iStatement()       {}
+func (*Loop) iStatement()              {}
+func (*Leave) iStatement()             {}
+func (*Iterate) iStatement()           {}
 func (*Call) iStatement()              {}
 func (*Load) iStatement()              {}
 func (*Savepoint) iStatement()         {}
@@ -1200,6 +1203,70 @@ func (oc *FetchCursor) Format(buf *TrackedBuffer) {
 
 // walkSubtree implements the interface WalkableSQLNode.
 func (oc *FetchCursor) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// Loop represents the LOOP statement
+type Loop struct {
+	Label string
+	Statements Statements
+}
+
+// Format implements the interface SQLNode.
+func (l *Loop) Format(buf *TrackedBuffer) {
+	beginLabel := ""
+	endLabel := ""
+	if len(l.Label) > 0 {
+		beginLabel = fmt.Sprintf("%s: ", l.Label)
+		endLabel = fmt.Sprintf(" %s", l.Label)
+	}
+	buf.Myprintf("%sloop\n", beginLabel)
+	for _, s := range l.Statements {
+		buf.Myprintf("%v;\n", s)
+	}
+	buf.Myprintf("end loop%s", endLabel)
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (l *Loop) walkSubtree(visit Visit) error {
+	if l == nil {
+		return nil
+	}
+	for _, s := range l.Statements {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// Leave represents the LEAVE statement
+type Leave struct {
+	Label string
+}
+
+// Format implements the interface SQLNode.
+func (l *Leave) Format(buf *TrackedBuffer) {
+	buf.Myprintf("leave %s", l.Label)
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (l *Leave) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// Iterate represents the ITERATE statement
+type Iterate struct {
+	Label string
+}
+
+// Format implements the interface SQLNode.
+func (i *Iterate) Format(buf *TrackedBuffer) {
+	buf.Myprintf("iterate %s", i.Label)
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (i *Iterate) walkSubtree(visit Visit) error {
 	return nil
 }
 
