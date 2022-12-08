@@ -970,15 +970,7 @@ type iQueryOption interface {
 
 // getPlan computes the plan for the given query. If one is in
 // the cache, it reuses it.
-func (e *Executor) getPlan(
-	ctx context.Context,
-	vcursor *vcursorImpl,
-	sql string,
-	comments sqlparser.MarginComments,
-	bindVars map[string]*querypb.BindVariable,
-	qo iQueryOption,
-	logStats *logstats.LogStats,
-) (*engine.Plan, sqlparser.Statement, error) {
+func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, qo iQueryOption, logStats *logstats.LogStats) (*engine.Plan, sqlparser.Statement, error) {
 	if e.VSchema() == nil {
 		return nil, nil, errors.New("vschema not initialized")
 	}
@@ -1027,35 +1019,26 @@ func (e *Executor) getPlan(
 	logStats.SQL = comments.Leading + query + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
-	plan, err := e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, reservedVars, bindVarNeeds, stmt)
-	return plan, stmt, err
+	return e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, stmt, reservedVars, bindVarNeeds)
 }
 
-func (e *Executor) cacheAndBuildStatement(
-	ctx context.Context,
-	vcursor *vcursorImpl,
-	query string,
-	statement sqlparser.Statement,
-	qo iQueryOption,
-	logStats *logstats.LogStats,
-	reservedVars *sqlparser.ReservedVars,
-	bindVarNeeds *sqlparser.BindVarNeeds,
-	stmt sqlparser.Statement,
-) (*engine.Plan, error) {
+func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
 	_, _ = planHash.Write([]byte{':'})
 	_, _ = planHash.Write(hack.StringBytes(query))
 	planKey := hex.EncodeToString(planHash.Sum(nil))
+
 	if sqlparser.CachePlan(statement) && qo.cachePlan() {
 		if plan, ok := e.plans.Get(planKey); ok {
 			logStats.CachedPlan = true
-			return plan.(*engine.Plan), nil
+			return plan.(*engine.Plan), stmt, nil
 		}
 	}
+
 	plan, err := planbuilder.BuildFromStmt(query, statement, reservedVars, vcursor, bindVarNeeds, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	plan.Warnings = vcursor.warnings
@@ -1066,7 +1049,7 @@ func (e *Executor) cacheAndBuildStatement(
 	if err == nil && qo.cachePlan() && sqlparser.CachePlan(statement) {
 		e.plans.Set(planKey, plan)
 	}
-	return plan, nil
+	return plan, stmt, err
 }
 
 func (e *Executor) canNormalizeStatement(stmt sqlparser.Statement, qo iQueryOption, setVarComment string) bool {
