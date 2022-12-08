@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -56,9 +54,7 @@ var (
 )
 
 func TestBlockedLoadKeyspace(t *testing.T) {
-	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
-	sidecardb.SetInitVTSchemaFlag(false)
-	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
+	t.Skip("this test is not valid anymore since schemacopy is being created by default and inspite of the tablet signal being setup to false")
 
 	defer cluster.PanicHandler(t)
 	var err error

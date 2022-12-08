@@ -268,6 +268,7 @@ func TestVersion(t *testing.T) {
 	defer engine.Close()
 
 	execStatements(t, []string{
+		"create database if not exists _vt",
 		"create table _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
 	})
 	defer execStatements(t, []string{

@@ -40,7 +40,6 @@ var (
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	ignoreKeyspaceShardInFieldAndRowEvents = true
-
 	exitCode := func() int {
 		var err error
 		env, err = testenv.Init()
