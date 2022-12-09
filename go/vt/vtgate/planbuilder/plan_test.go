@@ -251,6 +251,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "show_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "systemtables_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {

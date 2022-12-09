@@ -177,7 +177,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
-			plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, pb.vschema, planSelectV3)
+			plan, _, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, pb.vschema, planSelectV3)
 			if err != nil {
 				return err
 			}
@@ -283,16 +283,16 @@ func buildSQLCalcFoundRowsPlan(
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-	planSelect func(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error),
-) (logicalPlan, error) {
-	ljt, limitPlan, err := planSelect(reservedVars, vschema, sel)
+	planSelect func(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, []string, error),
+) (logicalPlan, []string, error) {
+	ljt, limitPlan, _, err := planSelect(reservedVars, vschema, sel)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	statement2, reserved2, err := sqlparser.Parse2(originalQuery)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sel2 := statement2.(*sqlparser.Select)
 
@@ -325,18 +325,18 @@ func buildSQLCalcFoundRowsPlan(
 
 	reservedVars2 := sqlparser.NewReservedVars("vtg", reserved2)
 
-	cjt, countPlan, err := planSelect(reservedVars2, vschema, sel2)
+	cjt, countPlan, tablesUsed, err := planSelect(reservedVars2, vschema, sel2)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan, ljt: ljt, cjt: cjt}, nil
+	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan, ljt: ljt, cjt: cjt}, tablesUsed, nil
 }
 
-func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, []string, error) {
 	ljt := newJointab(reservedVars)
 	frpb := newPrimitiveBuilder(vschema, ljt)
 	err := frpb.processSelect(sel, reservedVars, nil, "")
-	return ljt, frpb.plan, err
+	return ljt, frpb.plan, nil, err
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {
