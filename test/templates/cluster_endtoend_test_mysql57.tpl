@@ -175,6 +175,7 @@ jobs:
         # Increase our open file descriptor limit as we could hit this
         ulimit -n 65536
         cat <<-EOF>>./config/mycnf/mysql57.cnf
+
         innodb_buffer_pool_dump_at_shutdown=OFF
         innodb_buffer_pool_load_at_startup=OFF
         innodb_buffer_pool_size=64M
