@@ -51,7 +51,7 @@ type noopVCursor struct {
 }
 
 func (t *noopVCursor) SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -60,7 +60,7 @@ func (t *noopVCursor) InTransaction() bool {
 }
 
 func (t *noopVCursor) SetCommitOrder(co vtgatepb.CommitOrder) {
-	//TODO implement me
+	// TODO implement me
 	panic("implement me")
 }
 
@@ -317,6 +317,10 @@ func (t *noopVCursor) ResolveDestinationsMultiCol(ctx context.Context, keyspace 
 
 func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
+}
+
+func (t *noopVCursor) DeepClone() VCursor {
+	return t
 }
 
 var _ VCursor = (*loggingVCursor)(nil)
@@ -709,6 +713,10 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 		f.log = append(f.log, "SET_VAR can be used")
 	}
 	return useSetVar
+}
+
+func (f *loggingVCursor) DeepClone() VCursor {
+	return f
 }
 
 func (t *noopVCursor) VtExplainLogging() {}
