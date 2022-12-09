@@ -643,10 +643,10 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t2 not found"),
 			},
 		},
-		uniqueTables: map[string]*string{
-			"t1":   &t1.Keyspace.Name,
-			"t2":   &t2.Keyspace.Name,
-			"dual": &dual1.Keyspace.Name,
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"t2":   t2,
+			"dual": dual1,
 		},
 		uniqueVindexes: map[string]Vindex{
 			"stfu1": vindex1,
@@ -1043,9 +1043,9 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*string{
-			"t1":   &t1.Keyspace.Name,
-			"dual": &dual.Keyspace.Name,
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual,
 		},
 		uniqueVindexes: map[string]Vindex{
 			"stfu1": vindex1,
@@ -1123,9 +1123,9 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*string{
-			"t1":   &t1.Keyspace.Name,
-			"dual": &dual.Keyspace.Name},
+		uniqueTables: map[string]*Table{
+			"t1":   t1,
+			"dual": dual},
 		uniqueVindexes: map[string]Vindex{
 			"stlu1": vindex1,
 			"stfu1": vindex2},
@@ -1235,9 +1235,9 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*string{
+		uniqueTables: map[string]*Table{
 			"t1":   nil,
-			"dual": &duala.Keyspace.Name},
+			"dual": duala},
 		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
@@ -1302,9 +1302,9 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*string{
+		uniqueTables: map[string]*Table{
 			"t1":   nil,
-			"dual": &duala.Keyspace.Name,
+			"dual": duala,
 		},
 		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
@@ -1440,9 +1440,9 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*string{
+		uniqueTables: map[string]*Table{
 			"t1":   nil,
-			"dual": &duala.Keyspace.Name,
+			"dual": duala,
 		},
 		uniqueVindexes: map[string]Vindex{
 			"stlu1": nil,
@@ -1761,11 +1761,11 @@ func TestSequence(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*string{
-			"seq":  &seq.Keyspace.Name,
-			"t1":   &t1.Keyspace.Name,
-			"t2":   &t2.Keyspace.Name,
-			"dual": &dualb.Keyspace.Name,
+		uniqueTables: map[string]*Table{
+			"seq":  seq,
+			"t1":   t1,
+			"t2":   t2,
+			"dual": dualb,
 		},
 		uniqueVindexes: map[string]Vindex{
 			"stfu1": vindex1,

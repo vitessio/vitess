@@ -64,7 +64,7 @@ type VSchema struct {
 	// uniqueTables contains the name of all tables in all keyspaces. if the table is uniquely named, the value will
 	// be the name of the keyspace where this table exists. if multiple keyspaces have a table with the same name, the
 	// value will be a `nil` value
-	uniqueTables      map[string]*string
+	uniqueTables      map[string]*Table
 	uniqueVindexes    map[string]Vindex
 	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
 	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
@@ -196,7 +196,7 @@ type AutoIncrement struct {
 func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	vschema = &VSchema{
 		RoutingRules:   make(map[string]*RoutingRule),
-		uniqueTables:   make(map[string]*string),
+		uniqueTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
@@ -221,7 +221,7 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		},
 	}
 	vschema := &VSchema{
-		uniqueTables:   make(map[string]*string),
+		uniqueTables:   make(map[string]*Table),
 		uniqueVindexes: make(map[string]Vindex),
 		Keyspaces:      make(map[string]*KeyspaceSchema),
 	}
@@ -269,7 +269,13 @@ func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
 		ks.Views = make(map[string]sqlparser.SelectStatement)
 	}
 	ks.Views[viewName] = selectStmt
-	vschema.addTableName(ksname, viewName)
+	t := &Table{
+		Type:                    "View",
+		Name:                    sqlparser.NewIdentifierCS(viewName),
+		Keyspace:                ks.Keyspace,
+		ColumnListAuthoritative: true,
+	}
+	vschema.addTableName(t)
 	return nil
 }
 
@@ -418,19 +424,19 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 		// Add the table to the map entries.
 		// If the keyspace requires explicit routing, don't include it in global routing
 		if !ks.RequireExplicitRouting {
-			vschema.addTableName(t.Keyspace.Name, tname)
+			vschema.addTableName(t)
 		}
 		ksvschema.Tables[tname] = t
 	}
 	return nil
 }
 
-func (vschema *VSchema) addTableName(ks, name string) {
-	if _, ok := vschema.uniqueTables[name]; ok {
-		vschema.uniqueTables[name] = nil
+func (vschema *VSchema) addTableName(t *Table) {
+	tname := t.Name.String()
+	if _, ok := vschema.uniqueTables[tname]; ok {
+		vschema.uniqueTables[tname] = nil
 	} else {
-		local := ks
-		vschema.uniqueTables[name] = &local
+		vschema.uniqueTables[tname] = t
 	}
 }
 
@@ -479,7 +485,7 @@ func addDual(vschema *VSchema) {
 			// the keyspaces. For consistency, we'll always use the
 			// first keyspace by lexical ordering.
 			first = ksname
-			vschema.uniqueTables["dual"] = &ks.Keyspace.Name
+			vschema.uniqueTables["dual"] = t
 		}
 	}
 }
@@ -591,8 +597,8 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 // findTable is like FindTable, but does not return an error if a table is not found.
 func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	if keyspace == "" {
-		ks, ok := vschema.uniqueTables[tablename]
-		if ks == nil {
+		t, ok := vschema.uniqueTables[tablename]
+		if t == nil {
 			if ok {
 				return nil, fmt.Errorf("ambiguous table reference: %s", tablename)
 			}
@@ -607,7 +613,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 				return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}, nil
 			}
 		}
-		keyspace = *ks
+		keyspace = t.Keyspace.Name
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
@@ -675,14 +681,14 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatemen
 				break
 			}
 		default:
-			ks, ok := vschema.uniqueTables[name]
+			t, ok := vschema.uniqueTables[name]
 			if !ok {
 				return nil
 			}
-			if ok && ks == nil {
+			if ok && t == nil {
 				return nil
 			}
-			keyspace = *ks
+			keyspace = t.Keyspace.Name
 		}
 	}
 
