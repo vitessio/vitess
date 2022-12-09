@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"google.golang.org/protobuf/proto"
+
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -1090,4 +1092,11 @@ func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
 }
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
+}
+
+func (vc *vcursorImpl) BackgroundVCursor() engine.VCursor {
+	cloneCtx := vc.clone()
+	sess := proto.Clone(cloneCtx.safeSession.Session).(*vtgatepb.Session)
+	cloneCtx.safeSession = NewSafeSession(sess)
+	return cloneCtx
 }
