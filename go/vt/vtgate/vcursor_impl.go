@@ -1094,7 +1094,7 @@ func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName str
 	return vc.vschema.FindRoutedShard(keyspace, shard)
 }
 
-func (vc *vcursorImpl) BackgroundVCursor() engine.VCursor {
+func (vc *vcursorImpl) DeepClone() engine.VCursor {
 	cloneCtx := vc.clone()
 	sess := proto.Clone(cloneCtx.safeSession.Session).(*vtgatepb.Session)
 	cloneCtx.safeSession = NewSafeSession(sess)

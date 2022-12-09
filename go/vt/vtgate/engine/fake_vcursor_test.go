@@ -319,7 +319,7 @@ func (t *noopVCursor) GetDBDDLPluginName() string {
 	panic("unimplemented")
 }
 
-func (t *noopVCursor) BackgroundVCursor() VCursor {
+func (t *noopVCursor) DeepClone() VCursor {
 	return t
 }
 
@@ -715,7 +715,7 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 	return useSetVar
 }
 
-func (f *loggingVCursor) BackgroundVCursor() VCursor {
+func (f *loggingVCursor) DeepClone() VCursor {
 	return f
 }
 
