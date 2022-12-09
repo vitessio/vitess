@@ -31,53 +31,23 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
 func TestBuildPlanSuccess(t *testing.T) {
+	vdenv := newSingleTabletTestVDiffEnv(t)
+	defer vdenv.close()
 	UUID := uuid.New()
-	tablet := addTablet(100)
-	tablet.Type = topodatapb.TabletType_PRIMARY
-	defer deleteTablet(tablet)
-	resetBinlogClient()
-	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vde := &Engine{
-		controllers:             make(map[int64]*controller),
-		ts:                      vdiffEnv.tenv.TopoServ,
-		thisTablet:              tablet,
-		dbClientFactoryFiltered: dbClientFactory,
-		dbClientFactoryDba:      dbClientFactory,
-		dbName:                  vdiffdb,
-	}
-	require.False(t, vde.IsOpen())
-	opts := &tabletmanagerdatapb.VDiffOptions{
-		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
-	}
-
-	dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-	vde.Open(context.Background(), vdiffEnv.vreplEngine)
-	defer vde.Close()
-	assert.True(t, vde.IsOpen())
-
-	vde.Open(context.Background(), vdiffEnv.vreplEngine)
-	defer vde.Close()
-	assert.True(t, vde.IsOpen())
-	assert.Equal(t, 0, len(vde.controllers))
-
-	vde.mu.Lock()
-	defer vde.mu.Unlock()
-
 	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffEnv.workflow, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffEnv.dbName, PendingState, optionsJS),
 	)
-	dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, vdiffEnv.tenv.TopoServ, vde, opts)
+
+	vdiffEnv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffEnv.dbClientFactory, vdiffEnv.tenv.TopoServ, vdiffEnv.vde, vdiffEnv.opts)
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -487,8 +457,8 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}
 			dbc := binlogplayer.NewMockDBClient(t)
 			filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-			opts.CoreOptions.Tables = tcase.table
-			wd, err := newWorkflowDiffer(ct, opts)
+			vdiffEnv.opts.CoreOptions.Tables = tcase.table
+			wd, err := newWorkflowDiffer(ct, vdiffEnv.opts)
 			require.NoError(t, err)
 			dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 			err = wd.buildPlan(dbc, filter, testSchema)
@@ -500,46 +470,17 @@ func TestBuildPlanSuccess(t *testing.T) {
 }
 
 func TestBuildPlanInclude(t *testing.T) {
-	tablet := addTablet(100)
-	tablet.Type = topodatapb.TabletType_PRIMARY
-	defer deleteTablet(tablet)
-	resetBinlogClient()
-	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vde := &Engine{
-		controllers:             make(map[int64]*controller),
-		ts:                      vdiffEnv.tenv.TopoServ,
-		thisTablet:              tablet,
-		dbClientFactoryFiltered: dbClientFactory,
-		dbClientFactoryDba:      dbClientFactory,
-		dbName:                  vdiffdb,
-	}
-	require.False(t, vde.IsOpen())
-	opts := &tabletmanagerdatapb.VDiffOptions{
-		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
-	}
-
-	dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-	vde.Open(context.Background(), vdiffEnv.vreplEngine)
-	defer vde.Close()
-	assert.True(t, vde.IsOpen())
-
-	vde.Open(context.Background(), vdiffEnv.vreplEngine)
-	defer vde.Close()
-	assert.True(t, vde.IsOpen())
-	assert.Equal(t, 0, len(vde.controllers))
-
-	vde.mu.Lock()
-	defer vde.mu.Unlock()
+	vdenv := newSingleTabletTestVDiffEnv(t)
+	defer vdenv.close()
 
 	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), vdiffEnv.workflow, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffEnv.dbName, PendingState, optionsJS),
 	)
-	dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, vdiffEnv.tenv.TopoServ, vde, opts)
+	vdiffEnv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffEnv.dbClientFactory, vdiffEnv.tenv.TopoServ, vdiffEnv.vde, vdiffEnv.opts)
 	require.NoError(t, err)
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -585,8 +526,8 @@ func TestBuildPlanInclude(t *testing.T) {
 
 	for _, tcase := range testcases {
 		dbc := binlogplayer.NewMockDBClient(t)
-		opts.CoreOptions.Tables = strings.Join(tcase.tables, ",")
-		wd, err := newWorkflowDiffer(ct, opts)
+		vdiffEnv.opts.CoreOptions.Tables = strings.Join(tcase.tables, ",")
+		wd, err := newWorkflowDiffer(ct, vdiffEnv.opts)
 		require.NoError(t, err)
 		for _, table := range tcase.tables {
 			query := fmt.Sprintf(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
@@ -601,47 +542,18 @@ func TestBuildPlanInclude(t *testing.T) {
 }
 
 func TestBuildPlanFailure(t *testing.T) {
+	vdenv := newSingleTabletTestVDiffEnv(t)
+	defer vdenv.close()
 	UUID := uuid.New()
-	tablet := addTablet(100)
-	tablet.Type = topodatapb.TabletType_PRIMARY
-	defer deleteTablet(tablet)
-	resetBinlogClient()
-	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	vde := &Engine{
-		controllers:             make(map[int64]*controller),
-		ts:                      vdiffEnv.tenv.TopoServ,
-		thisTablet:              tablet,
-		dbClientFactoryFiltered: dbClientFactory,
-		dbClientFactoryDba:      dbClientFactory,
-		dbName:                  vdiffdb,
-	}
-	require.False(t, vde.IsOpen())
-	opts := &tabletmanagerdatapb.VDiffOptions{
-		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
-	}
-
-	dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-	vde.Open(context.Background(), vdiffEnv.vreplEngine)
-	defer vde.Close()
-	assert.True(t, vde.IsOpen())
-
-	vde.Open(context.Background(), vdiffEnv.vreplEngine)
-	defer vde.Close()
-	assert.True(t, vde.IsOpen())
-	assert.Equal(t, 0, len(vde.controllers))
-
-	vde.mu.Lock()
-	defer vde.mu.Unlock()
 
 	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffEnv.workflow, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffEnv.dbName, PendingState, optionsJS),
 	)
-	dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, vdiffEnv.tenv.TopoServ, vde, opts)
+	vdiffEnv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffEnv.dbClientFactory, vdiffEnv.tenv.TopoServ, vdiffEnv.vde, vdiffEnv.opts)
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -681,8 +593,8 @@ func TestBuildPlanFailure(t *testing.T) {
 	for _, tcase := range testcases {
 		dbc := binlogplayer.NewMockDBClient(t)
 		filter := &binlogdatapb.Filter{Rules: []*binlogdatapb.Rule{tcase.input}}
-		opts.CoreOptions.Tables = tcase.input.Match
-		wd, err := newWorkflowDiffer(ct, opts)
+		vdiffEnv.opts.CoreOptions.Tables = tcase.input.Match
+		wd, err := newWorkflowDiffer(ct, vdiffEnv.opts)
 		require.NoError(t, err)
 		dbc.ExpectRequestRE("select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report", noResults, nil)
 		err = wd.buildPlan(dbc, filter, testSchema)
@@ -694,19 +606,6 @@ func TestDiffTableAggregates(t *testing.T) {
 }
 
 func TestDiffUnsharded(t *testing.T) {
-	vdiffTestEnv := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
-	defer vdiffTestEnv.close()
-
-	testcases := []struct {
-		id string
-	}{}
-
-	for _, tcase := range testcases {
-		t.Run(tcase.id, func(t *testing.T) {
-			vdiffTestEnv.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, make([]*sqltypes.Result, 0))
-			vdiffTestEnv.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, make([]*sqltypes.Result, 0))
-		})
-	}
 }
 
 func TestDiffSharded(t *testing.T) {

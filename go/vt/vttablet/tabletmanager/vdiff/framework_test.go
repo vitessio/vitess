@@ -25,13 +25,15 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
-	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -48,33 +50,32 @@ import (
 )
 
 const (
-	// vdiffStopPosition is the default stop position for the target vreplication.
-	// It can be overridden with the positons argument to newTestVDiffEnv.
-	vdiffStopPosition = "MariaDB/5-456-892"
-	// vdiffSourceGtid should be the position reported by the source side VStreamResults.
-	// It's expected to be higher the vdiffStopPosition.
-	vdiffSourceGtid = "MariaDB/5-456-893"
-	// vdiffTargetPrimaryPosition is the primary position of the target after
-	// vreplication has been synchronized.
-	vdiffTargetPrimaryPosition = "MariaDB/6-456-892"
+	optionsJS         = `{"core_options": {"auto_retry": true}}`
+	vdiffTestCols     = "id|vdiff_uuid|workflow|keyspace|shard|db_name|state|options|last_error"
+	vdiffTestColTypes = "int64|varchar|varbinary|varbinary|varchar|varbinary|varbinary|json|varbinary"
 )
 
 type testVDiffEnv struct {
 	workflow        string
-	vstreamerEngine *vstreamer.Engine
-	vreplEngine     *vreplication.Engine
+	dbName          string
+	vse             *vstreamer.Engine
+	vre             *vreplication.Engine
+	vde             *Engine
 	tenv            *testenv.Env
 	tmc             *fakeTMClient
+	opts            *tabletmanagerdatapb.VDiffOptions
+	dbClient        *binlogplayer.MockDBClient
+	dbClientFactory func() binlogplayer.DBClient
 
 	mu      sync.Mutex
-	tablets map[int]*testVDiffTablet
+	tablets map[int]*fakeTabletConn
 }
 
 var (
-	vdiffEnv          = &testVDiffEnv{}
+	// vdiffEnv has to be a global for RegisterDialer to work.
+	vdiffEnv          *testVDiffEnv
 	globalFBC         = &fakeBinlogClient{}
 	globalDBQueries   = make(chan string, 1000)
-	vdiffdb           = "vdiff_test"
 	doNotLogDBQueries = false
 )
 
@@ -85,10 +86,12 @@ type LogExpectation struct {
 
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		return &fakeTabletConn{
-			QueryService: fakes.ErrorQueryService,
-			tablet:       tablet,
-		}, nil
+		vdiffEnv.mu.Lock()
+		defer vdiffEnv.mu.Unlock()
+		if qs, ok := vdiffEnv.tablets[int(tablet.Alias.Uid)]; ok {
+			return qs, nil
+		}
+		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
 	})
 	tabletconntest.SetProtocol("go.vt.vttablet.tabletmanager.vdiff.framework_test", "test")
 
@@ -96,46 +99,6 @@ func init() {
 
 	tmclient.RegisterTabletManagerClientFactory("test", func() tmclient.TabletManagerClient { return vdiffEnv.tmc })
 	tmclienttest.SetProtocol("go.vt.vttablet.tabletmanager.vdiff.framework_test", "test")
-}
-
-func TestMain(m *testing.M) {
-	binlogplayer.SetProtocol("vdiff_test_framework", "test")
-	exitCode := func() int {
-		var err error
-		vdiffEnv.tenv, err = testenv.Init()
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "%v", err)
-			return 1
-		}
-		defer vdiffEnv.tenv.Close()
-
-		vdiffEnv.tmc = newFakeTMClient()
-
-		vdiffEnv.vstreamerEngine = vstreamer.NewEngine(vdiffEnv.tenv.TabletEnv, vdiffEnv.tenv.SrvTopo, vdiffEnv.tenv.SchemaEngine, nil, vdiffEnv.tenv.Cells[0])
-		vdiffEnv.vstreamerEngine.InitDBConfig(vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName)
-		vdiffEnv.vstreamerEngine.Open()
-		defer vdiffEnv.vstreamerEngine.Close()
-
-		ddls := binlogplayer.CreateVReplicationTable()
-		ddls = append(ddls, binlogplayer.AlterVReplicationTable...)
-		ddls = append(ddls, withDDL.DDLs()...)
-		ddls = append(ddls, fmt.Sprintf("create database %s", vdiffdb))
-
-		for _, ddl := range ddls {
-			if err := vdiffEnv.tenv.Mysqld.ExecuteSuperQuery(context.Background(), ddl); err != nil {
-				fmt.Fprintf(os.Stderr, "%v", err)
-			}
-		}
-
-		vdiffEnv.vreplEngine = vreplication.NewTestEngine(vdiffEnv.tenv.TopoServ, vdiffEnv.tenv.Cells[0], vdiffEnv.tenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffdb, nil)
-		vdiffEnv.vreplEngine.Open(context.Background())
-		defer vdiffEnv.vreplEngine.Close()
-
-		vdiffEnv.tmc.schema = testSchema
-
-		return m.Run()
-	}()
-	os.Exit(exitCode)
 }
 
 func resetBinlogClient() {
@@ -154,34 +117,6 @@ func shortCircuitTestAfterQuery(query string, dbClient *binlogplayer.MockDBClien
 
 //--------------------------------------
 // Topos and tablets
-
-func addTablet(id int) *topodatapb.Tablet {
-	tablet := &topodatapb.Tablet{
-		Alias: &topodatapb.TabletAlias{
-			Cell: vdiffEnv.tenv.Cells[0],
-			Uid:  uint32(id),
-		},
-		Keyspace: vdiffEnv.tenv.KeyspaceName,
-		Shard:    vdiffEnv.tenv.ShardName,
-		KeyRange: &topodatapb.KeyRange{},
-		Type:     topodatapb.TabletType_REPLICA,
-		PortMap: map[string]int32{
-			"test": int32(id),
-		},
-	}
-	if err := vdiffEnv.tenv.TopoServ.CreateTablet(context.Background(), tablet); err != nil {
-		panic(err)
-	}
-	vdiffEnv.tenv.SchemaEngine.Reload(context.Background())
-	return tablet
-}
-
-func deleteTablet(tablet *topodatapb.Tablet) {
-	vdiffEnv.tenv.TopoServ.DeleteTablet(context.Background(), tablet.Alias)
-	// This is not automatically removed from shard replication, which results in log spam.
-	topo.DeleteTabletReplicationData(context.Background(), vdiffEnv.tenv.TopoServ, tablet)
-	vdiffEnv.tenv.SchemaEngine.Reload(context.Background())
-}
 
 // fakeTabletConn implement TabletConn interface. We only care about the
 // health check part. The state reported by the tablet will depend
@@ -216,7 +151,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return vdiffEnv.vstreamerEngine.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
+	return vdiffEnv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -238,7 +173,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 		}
 		row = r.Rows[0]
 	}
-	return vdiffEnv.vstreamerEngine.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	return vdiffEnv.vse.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
@@ -320,7 +255,7 @@ type realDBClient struct {
 }
 
 func (dbc *realDBClient) DBName() string {
-	return vdiffdb
+	return vdiffEnv.dbName
 }
 
 func (dbc *realDBClient) Connect() error {
@@ -328,7 +263,7 @@ func (dbc *realDBClient) Connect() error {
 	if err != nil {
 		return err
 	}
-	app.DbName = vdiffdb
+	app.DbName = vdiffEnv.dbName
 	conn, err := mysql.Connect(context.Background(), app)
 	if err != nil {
 		return err
@@ -448,92 +383,76 @@ func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb
 	return pos, nil
 }
 
-//----------------------------------------------
+// ----------------------------------------------
 // testVDiffEnv
 
-func newTestVDiffEnv(sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
-	vdiffEnv := &testVDiffEnv{
-		workflow: "vdiffTest",
-		tablets:  make(map[int]*testVDiffTablet),
+func newSingleTabletTestVDiffEnv(t *testing.T) *testVDiffEnv {
+	binlogplayer.SetProtocol("vdiff_test_framework", "test")
+
+	vdiffEnv = &testVDiffEnv{
+		workflow: "testwf",
+		dbName:   "vdiff_test",
+		tablets:  make(map[int]*fakeTabletConn),
 		tmc:      newFakeTMClient(),
 	}
 
-	tabletID := 100
-	for _, shard := range sourceShards {
-		_ = vdiffEnv.addTablet(tabletID, "source", shard, topodatapb.TabletType_PRIMARY)
-		_ = vdiffEnv.addTablet(tabletID+1, "source", shard, topodatapb.TabletType_REPLICA)
-		vdiffEnv.tmc.waitpos[tabletID+1] = vdiffStopPosition
+	var err error
+	vdiffEnv.tenv, err = testenv.Init()
+	require.NoError(t, err)
 
-		tabletID += 10
-	}
-	tabletID = 200
-	for _, shard := range targetShards {
-		primary := vdiffEnv.addTablet(tabletID, "target", shard, topodatapb.TabletType_PRIMARY)
-		_ = vdiffEnv.addTablet(tabletID+1, "target", shard, topodatapb.TabletType_REPLICA)
+	vdiffEnv.tmc = newFakeTMClient()
 
-		var rows []string
-		var posRows []string
-		for j, sourceShard := range sourceShards {
-			bls := &binlogdatapb.BinlogSource{
-				Keyspace: "source",
-				Shard:    sourceShard,
-				Filter: &binlogdatapb.Filter{
-					Rules: []*binlogdatapb.Rule{{
-						Match:  "t1",
-						Filter: query,
-					}},
-				},
-			}
-			rows = append(rows, fmt.Sprintf("%d|%v|||", j+1, bls))
-			position := vdiffStopPosition
-			if pos := positions[sourceShard+shard]; pos != "" {
-				position = pos
-			}
-			posRows = append(posRows, fmt.Sprintf("%v|%s", bls, position))
+	vdiffEnv.vse = vstreamer.NewEngine(vdiffEnv.tenv.TabletEnv, vdiffEnv.tenv.SrvTopo, vdiffEnv.tenv.SchemaEngine, nil, vdiffEnv.tenv.Cells[0])
+	vdiffEnv.vse.InitDBConfig(vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName)
+	vdiffEnv.vse.Open()
+	defer vdiffEnv.vse.Close()
 
-			// vdiff.syncTargets. This actually happens after stopTargets.
-			// But this is one statement per stream.
-			vdiffEnv.tmc.setVRResults(
-				primary.tablet,
-				fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d", vdiffSourceGtid, j+1),
-				&sqltypes.Result{},
-			)
+	ddls := binlogplayer.CreateVReplicationTable()
+	ddls = append(ddls, binlogplayer.AlterVReplicationTable...)
+	ddls = append(ddls, withDDL.DDLs()...)
+	ddls = append(ddls, fmt.Sprintf("create database %s", vdiffEnv.dbName))
+
+	for _, ddl := range ddls {
+		if err := vdiffEnv.tenv.Mysqld.ExecuteSuperQuery(context.Background(), ddl); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
 		}
-		// migrater buildMigrationTargets
-		vdiffEnv.tmc.setVRResults(
-			primary.tablet,
-			"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
-				"int64|varchar|varchar|varchar|varchar|int64|int64"),
-				rows...,
-			),
-		)
-
-		// vdiff.stopTargets
-		vdiffEnv.tmc.setVRResults(primary.tablet, "update _vt.vreplication set state='Stopped', message='for vdiff' where db_name='vt_target' and workflow='vdiffTest'", &sqltypes.Result{})
-		vdiffEnv.tmc.setVRResults(
-			primary.tablet,
-			"select source, pos from _vt.vreplication where db_name='vt_target' and workflow='vdiffTest'",
-			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"source|pos",
-				"varchar|varchar"),
-				posRows...,
-			),
-		)
-
-		// vdiff.syncTargets (continued)
-		vdiffEnv.tmc.vrpos[tabletID] = vdiffSourceGtid
-		vdiffEnv.tmc.pos[tabletID] = vdiffTargetPrimaryPosition
-
-		// vdiff.startQueryStreams
-		vdiffEnv.tmc.waitpos[tabletID+1] = vdiffTargetPrimaryPosition
-
-		// vdiff.restartTargets
-		vdiffEnv.tmc.setVRResults(primary.tablet, "update _vt.vreplication set state='Running', message='', stop_pos='' where db_name='vt_target' and workflow='vdiffTest'", &sqltypes.Result{})
-
-		tabletID += 10
 	}
+
+	vdiffEnv.vre = vreplication.NewTestEngine(vdiffEnv.tenv.TopoServ, vdiffEnv.tenv.Cells[0], vdiffEnv.tenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffEnv.dbName, nil)
+	vdiffEnv.vre.Open(context.Background())
+	defer vdiffEnv.vre.Close()
+
+	vdiffEnv.tmc.schema = testSchema
+
+	tabletID := 100
+	primary := vdiffEnv.addTablet(tabletID, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, topodatapb.TabletType_PRIMARY)
+
+	vdiffEnv.dbClient = binlogplayer.NewMockDBClient(t)
+	vdiffEnv.dbClientFactory = func() binlogplayer.DBClient { return vdiffEnv.dbClient }
+	vdiffEnv.vde = &Engine{
+		controllers:             make(map[int64]*controller),
+		ts:                      vdiffEnv.tenv.TopoServ,
+		thisTablet:              primary.tablet,
+		dbClientFactoryFiltered: vdiffEnv.dbClientFactory,
+		dbClientFactoryDba:      vdiffEnv.dbClientFactory,
+		dbName:                  vdiffEnv.dbName,
+	}
+	require.False(t, vdiffEnv.vde.IsOpen())
+
+	vdiffEnv.opts = &tabletmanagerdatapb.VDiffOptions{
+		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
+	}
+
+	vdiffEnv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
+	vdiffEnv.vde.Open(context.Background(), vdiffEnv.vre)
+	assert.True(t, vdiffEnv.vde.IsOpen())
+
+	vdiffEnv.vde.Open(context.Background(), vdiffEnv.vre)
+	assert.True(t, vdiffEnv.vde.IsOpen())
+	assert.Equal(t, 0, len(vdiffEnv.vde.controllers))
+
+	resetBinlogClient()
+
 	return vdiffEnv
 }
 
@@ -542,11 +461,17 @@ func (tvde *testVDiffEnv) close() {
 	defer tvde.mu.Unlock()
 	for _, t := range tvde.tablets {
 		vdiffEnv.tenv.TopoServ.DeleteTablet(context.Background(), t.tablet.Alias)
+		topo.DeleteTabletReplicationData(context.Background(), vdiffEnv.tenv.TopoServ, t.tablet)
+		vdiffEnv.tenv.SchemaEngine.Reload(context.Background())
 	}
 	tvde.tablets = nil
+	vdiffEnv.vse.Close()
+	vdiffEnv.vre.Close()
+	vdiffEnv.vde.Close()
+	vdiffEnv.tenv.Close()
 }
 
-func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testVDiffTablet {
+func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *fakeTabletConn {
 	tvde.mu.Lock()
 	defer tvde.mu.Unlock()
 	tablet := &topodatapb.Tablet{
@@ -562,7 +487,7 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 			"test": int32(id),
 		},
 	}
-	tvde.tablets[id] = newTestVDiffTablet(tablet)
+	tvde.tablets[id] = &fakeTabletConn{tablet: tablet}
 	if err := vdiffEnv.tenv.TopoServ.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
@@ -575,62 +500,6 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 			panic(err)
 		}
 	}
+	tvde.tenv.SchemaEngine.Reload(context.Background())
 	return tvde.tablets[id]
-}
-
-//----------------------------------------------
-// testVDiffTablet
-
-type testVDiffTablet struct {
-	queryservice.QueryService
-	tablet  *topodatapb.Tablet
-	queries map[string][]*binlogdatapb.VStreamResultsResponse
-}
-
-func newTestVDiffTablet(tablet *topodatapb.Tablet) *testVDiffTablet {
-	return &testVDiffTablet{
-		QueryService: fakes.ErrorQueryService,
-		tablet:       tablet,
-		queries:      make(map[string][]*binlogdatapb.VStreamResultsResponse),
-	}
-}
-
-func (tvt *testVDiffTablet) StreamHealth(ctx context.Context, callback func(*querypb.StreamHealthResponse) error) error {
-	return callback(&querypb.StreamHealthResponse{
-		Serving: true,
-		Target: &querypb.Target{
-			Keyspace:   tvt.tablet.Keyspace,
-			Shard:      tvt.tablet.Shard,
-			TabletType: tvt.tablet.Type,
-		},
-		RealtimeStats: &querypb.RealtimeStats{},
-	})
-}
-
-func (tvt *testVDiffTablet) VStreamResults(ctx context.Context, target *querypb.Target, query string, send func(*binlogdatapb.VStreamResultsResponse) error) error {
-	results, ok := tvt.queries[query]
-	if !ok {
-		return fmt.Errorf("query %q not in list", query)
-	}
-	for _, result := range results {
-		if err := send(result); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (tvt *testVDiffTablet) setResults(query string, gtid string, results []*sqltypes.Result) {
-	vrs := []*binlogdatapb.VStreamResultsResponse{{
-		Fields: results[0].Fields,
-		Gtid:   gtid,
-	}}
-
-	for _, result := range results[1:] {
-		vr := &binlogdatapb.VStreamResultsResponse{
-			Rows: sqltypes.RowsToProto3(result.Rows),
-		}
-		vrs = append(vrs, vr)
-	}
-	tvt.queries[query] = vrs
 }

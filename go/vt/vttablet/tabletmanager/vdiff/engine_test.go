@@ -29,14 +29,9 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 var (
-	wfName            = "testwf"
-	optionsJS         = `{"core_options": {"auto_retry": true}}`
-	vdiffTestCols     = "id|vdiff_uuid|workflow|keyspace|shard|db_name|state|options|last_error"
-	vdiffTestColTypes = "int64|varchar|varbinary|varbinary|varchar|varbinary|varbinary|json|varbinary"
 	singleRowAffected = &sqltypes.Result{RowsAffected: 1}
 	noResults         = &sqltypes.Result{}
 	testSchema        = &tabletmanagerdatapb.SchemaDefinition{
@@ -85,6 +80,8 @@ var (
 )
 
 func TestEngineOpen(t *testing.T) {
+	vdenv := newSingleTabletTestVDiffEnv(t)
+	defer vdenv.close()
 	UUID := uuid.New().String()
 	source := `keyspace:"testsrc" shard:"0" filter:{rules:{match:"t1" filter:"select * from t1"}}`
 	tests := []struct {
@@ -107,48 +104,43 @@ func TestEngineOpen(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tablet := addTablet(100)
-			tablet.Type = topodatapb.TabletType_PRIMARY
-			defer deleteTablet(tablet)
-			resetBinlogClient()
-			dbClient := binlogplayer.NewMockDBClient(t)
-			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-			vde := &Engine{
+			vdenv.dbClient = binlogplayer.NewMockDBClient(t)
+			vdenv.vde = &Engine{
 				controllers:             make(map[int64]*controller),
-				ts:                      vdiffEnv.tenv.TopoServ,
-				thisTablet:              tablet,
-				dbClientFactoryFiltered: dbClientFactory,
-				dbClientFactoryDba:      dbClientFactory,
-				dbName:                  vdiffdb,
+				ts:                      vdenv.tenv.TopoServ,
+				thisTablet:              vdenv.tablets[100].tablet,
+				dbClientFactoryFiltered: vdenv.dbClientFactory,
+				dbClientFactoryDba:      vdenv.dbClientFactory,
+				dbName:                  vdenv.dbName,
 			}
-			require.False(t, vde.IsOpen())
+			require.False(t, vdenv.vde.IsOpen())
 
 			initialQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, tt.state, optionsJS),
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdenv.workflow, vdenv.tenv.KeyspaceName, vdenv.tenv.ShardName, vdiffEnv.dbName, tt.state, optionsJS),
 			)
 
-			dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", initialQR, nil)
+			vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", initialQR, nil)
 
-			dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, tt.state, optionsJS),
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffEnv.workflow, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffEnv.dbName, tt.state, optionsJS),
 			), nil)
 
-			dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", wfName, vdiffdb), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			vdenv.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", vdiffEnv.workflow, vdiffEnv.dbName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"id|workflow|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type",
 				"int64|varbinary|blob|varbinary|varbinary|int64|int64|varbinary|varbinary|int64|int64|varbinary|varbinary|varbinary|int64|varbinary|int64|int64|int64|varchar|int64",
 			),
-				fmt.Sprintf("1|%s|%s|MySQL56/f69ed286-6909-11ed-8342-0a50724f3211:1-110||9223372036854775807|9223372036854775807||PRIMARY,REPLICA|1669511347|0|Running||%s|200||1669511347|1|0||1", wfName, source, vdiffdb),
+				fmt.Sprintf("1|%s|%s|MySQL56/f69ed286-6909-11ed-8342-0a50724f3211:1-110||9223372036854775807|9223372036854775807||PRIMARY,REPLICA|1669511347|0|Running||%s|200||1669511347|1|0||1", vdiffEnv.workflow, source, vdiffEnv.dbName),
 			), nil)
 
-			dbClient.ExpectRequest("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = 1", singleRowAffected, nil)
-			dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: started')", singleRowAffected, nil)
-			dbClient.ExpectRequest(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
+			vdenv.dbClient.ExpectRequest("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = 1", singleRowAffected, nil)
+			vdenv.dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: started')", singleRowAffected, nil)
+			vdenv.dbClient.ExpectRequest(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
 						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vdt.vdiff_id = 1 and vdt.table_name = 't1'`, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"lastpk|mismatch|report",
@@ -156,13 +148,13 @@ func TestEngineOpen(t *testing.T) {
 			),
 				`fields:{name:"c1" type:INT64 table:"t1" org_table:"t1" database:"vt_customer" org_name:"c1" column_length:20 charset:63 flags:53251} rows:{lengths:1 values:"1"}|0|{}`,
 			), nil)
-			dbClient.ExpectRequest("select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = 'vdiff_test' and table_name in ('t1')", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			vdenv.dbClient.ExpectRequest("select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = 'vdiff_test' and table_name in ('t1')", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"table_name|table_rows",
 				"varchar|int64",
 			),
 				"t1|1",
 			), nil)
-			dbClient.ExpectRequest(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
+			vdenv.dbClient.ExpectRequest(`select vdt.lastpk as lastpk, vdt.mismatch as mismatch, vdt.report as report
 						from _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vdt.vdiff_id = 1 and vdt.table_name = 't1'`, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 				"lastpk|mismatch|report",
@@ -172,18 +164,20 @@ func TestEngineOpen(t *testing.T) {
 			), nil)
 
 			// Now let's short circuit the vdiff as we know that the open has worked as expected.
-			shortCircuitTestAfterQuery("update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'", dbClient)
+			shortCircuitTestAfterQuery("update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'", vdiffEnv.dbClient)
 
-			vde.Open(context.Background(), vdiffEnv.vreplEngine)
-			defer vde.Close()
-			assert.True(t, vde.IsOpen())
-			assert.Equal(t, 1, len(vde.controllers))
-			dbClient.Wait()
+			vdenv.vde.Open(context.Background(), vdiffEnv.vre)
+			defer vdenv.vde.Close()
+			assert.True(t, vdenv.vde.IsOpen())
+			assert.Equal(t, 1, len(vdenv.vde.controllers))
+			vdenv.dbClient.Wait()
 		})
 	}
 }
 
 func TestEngineRetryErroredVDiffs(t *testing.T) {
+	vdenv := newSingleTabletTestVDiffEnv(t)
+	defer vdenv.close()
 	UUID := uuid.New().String()
 	source := `keyspace:"testsrc" shard:"0" filter:{rules:{match:"t1" filter:"select * from t1"}}`
 	expectedControllerCnt := 0
@@ -202,7 +196,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, optionsJS,
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, vdiffEnv.workflow, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffEnv.dbName, optionsJS,
 					mysql.NewSQLError(mysql.ERNoSuchTable, "42S02", "Table 'foo' doesn't exist")),
 			),
 		},
@@ -212,7 +206,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, optionsJS,
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, vdiffEnv.workflow, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffEnv.dbName, optionsJS,
 					mysql.NewSQLError(mysql.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")),
 			),
 			expectRetry: true,
@@ -221,29 +215,8 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			tablet := addTablet(100)
-			tablet.Type = topodatapb.TabletType_PRIMARY
-			defer deleteTablet(tablet)
-			resetBinlogClient()
-			dbClient := binlogplayer.NewMockDBClient(t)
-			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-			vde := &Engine{
-				controllers:             make(map[int64]*controller),
-				ts:                      vdiffEnv.tenv.TopoServ,
-				thisTablet:              tablet,
-				dbClientFactoryFiltered: dbClientFactory,
-				dbClientFactoryDba:      dbClientFactory,
-				dbName:                  vdiffdb,
-			}
-			require.False(t, vde.IsOpen())
+			vdiffEnv.dbClient.ExpectRequest("select * from _vt.vdiff where state = 'error' and options->>'$.core_options.auto_retry' = 'true'", tt.retryQueryResults, nil)
 
-			dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-			vde.Open(context.Background(), vdiffEnv.vreplEngine)
-			defer vde.Close()
-			assert.True(t, vde.IsOpen())
-			assert.Equal(t, 0, len(vde.controllers))
-
-			dbClient.ExpectRequest("select * from _vt.vdiff where state = 'error' and options->>'$.core_options.auto_retry' = 'true'", tt.retryQueryResults, nil)
 			// Right now this only supports a single row as with multiple rows we have
 			// multiple controllers in separate goroutines and the order is not
 			// guaranteed. If we want to support multiple rows here then we'll need to
@@ -254,31 +227,31 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			for _, row := range tt.retryQueryResults.Rows {
 				id := row[0].ToString()
 				if tt.expectRetry {
-					dbClient.ExpectRequestRE("update _vt.vdiff as vd left join _vt.vdiff_table as vdt on \\(vd.id = vdt.vdiff_id\\) set vd.state = 'pending'.*", singleRowAffected, nil)
-					dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %s", id), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+					vdiffEnv.dbClient.ExpectRequestRE("update _vt.vdiff as vd left join _vt.vdiff_table as vdt on \\(vd.id = vdt.vdiff_id\\) set vd.state = 'pending'.*", singleRowAffected, nil)
+					vdiffEnv.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vdiff where id = %s", id), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						vdiffTestCols,
 						vdiffTestColTypes,
 					),
-						fmt.Sprintf("%s|%s|%s|%s|%s|%s|pending|%s|", id, UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, optionsJS),
+						fmt.Sprintf("%s|%s|%s|%s|%s|%s|pending|%s|", id, UUID, vdiffEnv.workflow, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffEnv.dbName, optionsJS),
 					), nil)
-					dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", wfName, vdiffdb), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+					vdiffEnv.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", vdiffEnv.workflow, vdiffEnv.dbName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"id|workflow|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type",
 						"int64|varbinary|blob|varbinary|varbinary|int64|int64|varbinary|varbinary|int64|int64|varbinary|varbinary|varbinary|int64|varbinary|int64|int64|int64|varchar|int64",
 					),
-						fmt.Sprintf("%s|%s|%s|MySQL56/f69ed286-6909-11ed-8342-0a50724f3211:1-110||9223372036854775807|9223372036854775807||PRIMARY,REPLICA|1669511347|0|Running||%s|200||1669511347|1|0||1", id, wfName, source, vdiffdb),
+						fmt.Sprintf("%s|%s|%s|MySQL56/f69ed286-6909-11ed-8342-0a50724f3211:1-110||9223372036854775807|9223372036854775807||PRIMARY,REPLICA|1669511347|0|Running||%s|200||1669511347|1|0||1", id, vdiffEnv.workflow, source, vdiffEnv.dbName),
 					), nil)
 
 					// At this point we know that we kicked off the expected retry so we can short circit the vdiff.
-					shortCircuitTestAfterQuery(fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = %s", id), dbClient)
+					shortCircuitTestAfterQuery(fmt.Sprintf("update _vt.vdiff set state = 'started', last_error = '' , started_at = utc_timestamp() where id = %s", id), vdiffEnv.dbClient)
 
 					expectedControllerCnt++
 				}
 			}
 
-			err := vde.retryVDiffs(vde.ctx)
+			err := vdiffEnv.vde.retryVDiffs(vdiffEnv.vde.ctx)
 			assert.NoError(t, err)
-			assert.Equal(t, expectedControllerCnt, len(vde.controllers))
-			dbClient.Wait()
+			assert.Equal(t, expectedControllerCnt, len(vdiffEnv.vde.controllers))
+			vdiffEnv.dbClient.Wait()
 		})
 	}
 
