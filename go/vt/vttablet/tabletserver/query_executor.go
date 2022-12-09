@@ -26,6 +26,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/pools"
@@ -182,8 +184,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execOther()
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
-	case p.PlanView:
-		return qre.execAutocommit(qre.execView)
+	case p.PlanViewDDL:
+		return qre.execAutocommit(qre.execViewDDL)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
 	case p.PlanCallProc:
@@ -206,11 +208,6 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return &sqltypes.Result{}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
-}
-
-func (qre *QueryExecutor) execView(conn *StatefulConnection) (*sqltypes.Result, error) {
-	// TODO: execute the query
-	return nil, nil
 }
 
 func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
@@ -294,6 +291,19 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execProc(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
+}
+
+func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	switch qre.plan.FullStmt.(type) {
+	case *sqlparser.CreateView:
+		bindVars := qre.generateBindVarsForViewDDLInsert()
+		sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+		if err != nil {
+			return nil, err
+		}
+		return withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	}
+	return nil, nil
 }
 
 // Stream performs a streaming query execution.
@@ -1099,4 +1109,13 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
+}
+
+func (qre *QueryExecutor) generateBindVarsForViewDDLInsert() map[string]*querypb.BindVariable {
+	createView := qre.plan.FullStmt.(*sqlparser.CreateView)
+	bindVars := make(map[string]*querypb.BindVariable)
+	bindVars["TABLE_NAME"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
+	bindVars["VIEW_DEFINITION"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))
+	bindVars["CREATE_STATEMENT"] = sqltypes.StringBindVariable(sqlparser.String(createView))
+	return bindVars
 }

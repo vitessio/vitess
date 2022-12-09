@@ -404,3 +404,7 @@ func (client *QueryClient) SetReservedID(id int64) {
 func (client *QueryClient) StreamHealth(sendFunc func(*querypb.StreamHealthResponse) error) error {
 	return client.server.StreamHealth(client.ctx, sendFunc)
 }
+
+func (client *QueryClient) UpdateContext(ctx context.Context) {
+	client.ctx = ctx
+}

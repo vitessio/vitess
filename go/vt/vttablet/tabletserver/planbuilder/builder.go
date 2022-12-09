@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/mysql"
@@ -206,11 +205,11 @@ func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.
 	return tables[tableName.String()]
 }
 
-func analyzeDDL(stmt sqlparser.DDLStatement, tables map[string]*schema.Table, dbName string, viewsEnabled bool) (*Plan, error) {
+func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 	switch stmt.(type) {
 	case *sqlparser.AlterView, *sqlparser.DropView, *sqlparser.CreateView:
 		if viewsEnabled {
-			return analyzeViewsDDL(stmt, dbName, tables)
+			return analyzeViewsDDL(stmt)
 		}
 	}
 	// DDLs and some other statements below don't get fully parsed.
@@ -224,16 +223,16 @@ func analyzeDDL(stmt sqlparser.DDLStatement, tables map[string]*schema.Table, db
 	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
 }
 
-func analyzeViewsDDL(stmt sqlparser.DDLStatement, dbName string, tables map[string]*schema.Table) (*Plan, error) {
+func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.CreateView:
-		sql := fmt.Sprintf(mysql.InsertIntoViewsTable, "def", dbName, stmt.ViewName, sqlparser.String(stmt.Select), stmt.CheckOption, "NO", sqlparser.String(stmt.Definer), stmt.Security, "utf8mb4", "utf8mb4_0900_ai_ci")
-		parsedSQL, err := sqlparser.Parse(sql)
+		insert, err := sqlparser.Parse(mysql.InsertIntoViewsTable)
 		if err != nil {
 			return nil, err
 		}
-		return &Plan{PlanID: PlanView, FullStmt: parsedSQL}, nil
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: stmt}, nil
 	case *sqlparser.DropView:
+
 	case *sqlparser.AlterView:
 	}
 	return nil, nil

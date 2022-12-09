@@ -118,6 +118,7 @@ func StartServer(connParams, connAppDebugParams mysql.ConnParams, dbName string)
 	config.Healthcheck.IntervalSeconds = 0.1
 	config.Oltp.TxTimeoutSeconds = 5
 	config.Olap.TxTimeoutSeconds = 5
+	config.EnableViews = true
 	gotBytes, _ := yaml2.Marshal(config)
 	log.Infof("Config:\n%s", gotBytes)
 	return StartCustomServer(connParams, connAppDebugParams, dbName, config)

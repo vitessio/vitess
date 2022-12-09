@@ -322,6 +322,13 @@ var tableACLConfig = `{
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]
+    },
+    {
+      "name": "vitess_views",
+      "table_names_or_prefixes": ["views"],
+      "readers": ["dev"],
+      "writers": ["dev"],
+      "admins": ["dev"]
     }
   ]
 }`
