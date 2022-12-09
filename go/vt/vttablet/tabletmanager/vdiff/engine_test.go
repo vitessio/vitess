@@ -115,7 +115,7 @@ func TestEngineOpen(t *testing.T) {
 			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 			vde := &Engine{
 				controllers:             make(map[int64]*controller),
-				ts:                      env.TopoServ,
+				ts:                      vdiffEnv.tenv.TopoServ,
 				thisTablet:              tablet,
 				dbClientFactoryFiltered: dbClientFactory,
 				dbClientFactoryDba:      dbClientFactory,
@@ -127,7 +127,7 @@ func TestEngineOpen(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, tt.state, optionsJS),
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, tt.state, optionsJS),
 			)
 
 			dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", initialQR, nil)
@@ -136,7 +136,7 @@ func TestEngineOpen(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, tt.state, optionsJS),
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, tt.state, optionsJS),
 			), nil)
 
 			dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", wfName, vdiffdb), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -174,7 +174,7 @@ func TestEngineOpen(t *testing.T) {
 			// Now let's short circuit the vdiff as we know that the open has worked as expected.
 			shortCircuitTestAfterQuery("update _vt.vdiff_table set table_rows = 1 where vdiff_id = 1 and table_name = 't1'", dbClient)
 
-			vde.Open(context.Background(), vreplEngine)
+			vde.Open(context.Background(), vdiffEnv.vreplEngine)
 			defer vde.Close()
 			assert.True(t, vde.IsOpen())
 			assert.Equal(t, 1, len(vde.controllers))
@@ -202,7 +202,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS,
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, optionsJS,
 					mysql.NewSQLError(mysql.ERNoSuchTable, "42S02", "Table 'foo' doesn't exist")),
 			),
 		},
@@ -212,7 +212,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 				vdiffTestCols,
 				vdiffTestColTypes,
 			),
-				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS,
+				fmt.Sprintf("1|%s|%s|%s|%s|%s|error|%s|%v", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, optionsJS,
 					mysql.NewSQLError(mysql.ERLockWaitTimeout, "HY000", "Lock wait timeout exceeded; try restarting transaction")),
 			),
 			expectRetry: true,
@@ -229,7 +229,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 			vde := &Engine{
 				controllers:             make(map[int64]*controller),
-				ts:                      env.TopoServ,
+				ts:                      vdiffEnv.tenv.TopoServ,
 				thisTablet:              tablet,
 				dbClientFactoryFiltered: dbClientFactory,
 				dbClientFactoryDba:      dbClientFactory,
@@ -238,7 +238,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 			require.False(t, vde.IsOpen())
 
 			dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-			vde.Open(context.Background(), vreplEngine)
+			vde.Open(context.Background(), vdiffEnv.vreplEngine)
 			defer vde.Close()
 			assert.True(t, vde.IsOpen())
 			assert.Equal(t, 0, len(vde.controllers))
@@ -259,7 +259,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 						vdiffTestCols,
 						vdiffTestColTypes,
 					),
-						fmt.Sprintf("%s|%s|%s|%s|%s|%s|pending|%s|", id, UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, optionsJS),
+						fmt.Sprintf("%s|%s|%s|%s|%s|%s|pending|%s|", id, UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, optionsJS),
 					), nil)
 					dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", wfName, vdiffdb), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 						"id|workflow|source|pos|stop_pos|max_tps|max_replication_lag|cell|tablet_types|time_updated|transaction_timestamp|state|message|db_name|rows_copied|tags|time_heartbeat|workflow_type|time_throttled|component_throttled|workflow_sub_type",

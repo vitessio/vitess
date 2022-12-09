@@ -46,7 +46,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vde := &Engine{
 		controllers:             make(map[int64]*controller),
-		ts:                      env.TopoServ,
+		ts:                      vdiffEnv.tenv.TopoServ,
 		thisTablet:              tablet,
 		dbClientFactoryFiltered: dbClientFactory,
 		dbClientFactoryDba:      dbClientFactory,
@@ -58,11 +58,11 @@ func TestBuildPlanSuccess(t *testing.T) {
 	}
 
 	dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-	vde.Open(context.Background(), vreplEngine)
+	vde.Open(context.Background(), vdiffEnv.vreplEngine)
 	defer vde.Close()
 	assert.True(t, vde.IsOpen())
 
-	vde.Open(context.Background(), vreplEngine)
+	vde.Open(context.Background(), vdiffEnv.vreplEngine)
 	defer vde.Close()
 	assert.True(t, vde.IsOpen())
 	assert.Equal(t, 0, len(vde.controllers))
@@ -74,10 +74,10 @@ func TestBuildPlanSuccess(t *testing.T) {
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, PendingState, optionsJS),
 	)
 	dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, env.TopoServ, vde, opts)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, vdiffEnv.tenv.TopoServ, vde, opts)
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -508,7 +508,7 @@ func TestBuildPlanInclude(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vde := &Engine{
 		controllers:             make(map[int64]*controller),
-		ts:                      env.TopoServ,
+		ts:                      vdiffEnv.tenv.TopoServ,
 		thisTablet:              tablet,
 		dbClientFactoryFiltered: dbClientFactory,
 		dbClientFactoryDba:      dbClientFactory,
@@ -520,11 +520,11 @@ func TestBuildPlanInclude(t *testing.T) {
 	}
 
 	dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-	vde.Open(context.Background(), vreplEngine)
+	vde.Open(context.Background(), vdiffEnv.vreplEngine)
 	defer vde.Close()
 	assert.True(t, vde.IsOpen())
 
-	vde.Open(context.Background(), vreplEngine)
+	vde.Open(context.Background(), vdiffEnv.vreplEngine)
 	defer vde.Close()
 	assert.True(t, vde.IsOpen())
 	assert.Equal(t, 0, len(vde.controllers))
@@ -536,10 +536,10 @@ func TestBuildPlanInclude(t *testing.T) {
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), wfName, env.KeyspaceName, env.ShardName, vdiffdb, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, PendingState, optionsJS),
 	)
 	dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, env.TopoServ, vde, opts)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, vdiffEnv.tenv.TopoServ, vde, opts)
 	require.NoError(t, err)
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -565,9 +565,9 @@ func TestBuildPlanInclude(t *testing.T) {
 			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
 		}},
 	}
-	tmc.schema = schm
+	vdiffEnv.tmc.schema = schm
 	defer func() {
-		tmc.schema = testSchema
+		vdiffEnv.tmc.schema = testSchema
 	}()
 	rule := &binlogdatapb.Rule{
 		Match: "/.*",
@@ -610,7 +610,7 @@ func TestBuildPlanFailure(t *testing.T) {
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vde := &Engine{
 		controllers:             make(map[int64]*controller),
-		ts:                      env.TopoServ,
+		ts:                      vdiffEnv.tenv.TopoServ,
 		thisTablet:              tablet,
 		dbClientFactoryFiltered: dbClientFactory,
 		dbClientFactoryDba:      dbClientFactory,
@@ -622,11 +622,11 @@ func TestBuildPlanFailure(t *testing.T) {
 	}
 
 	dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-	vde.Open(context.Background(), vreplEngine)
+	vde.Open(context.Background(), vdiffEnv.vreplEngine)
 	defer vde.Close()
 	assert.True(t, vde.IsOpen())
 
-	vde.Open(context.Background(), vreplEngine)
+	vde.Open(context.Background(), vdiffEnv.vreplEngine)
 	defer vde.Close()
 	assert.True(t, vde.IsOpen())
 	assert.Equal(t, 0, len(vde.controllers))
@@ -638,10 +638,10 @@ func TestBuildPlanFailure(t *testing.T) {
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, env.KeyspaceName, env.ShardName, vdiffdb, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, wfName, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, vdiffdb, PendingState, optionsJS),
 	)
 	dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
-	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, env.TopoServ, vde, opts)
+	ct, err := newController(context.Background(), controllerQR.Named().Row(), dbClientFactory, vdiffEnv.tenv.TopoServ, vde, opts)
 	require.NoError(t, err)
 
 	testcases := []struct {
@@ -694,6 +694,19 @@ func TestDiffTableAggregates(t *testing.T) {
 }
 
 func TestDiffUnsharded(t *testing.T) {
+	vdiffTestEnv := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	defer vdiffTestEnv.close()
+
+	testcases := []struct {
+		id string
+	}{}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.id, func(t *testing.T) {
+			vdiffTestEnv.tablets[101].setResults("select c1, c2 from t1 order by c1 asc", vdiffSourceGtid, make([]*sqltypes.Result, 0))
+			vdiffTestEnv.tablets[201].setResults("select c1, c2 from t1 order by c1 asc", vdiffTargetPrimaryPosition, make([]*sqltypes.Result, 0))
+		})
+	}
 }
 
 func TestDiffSharded(t *testing.T) {
