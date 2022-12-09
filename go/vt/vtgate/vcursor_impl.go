@@ -23,8 +23,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -1069,14 +1067,9 @@ func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
 }
 
 func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
-	v := vc.clone()
-	v.safeSession = NewAutocommitSession(vc.safeSession.Session)
-	return v
-}
-
-func (vc *vcursorImpl) clone() *vcursorImpl {
-	v := &vcursorImpl{
-		safeSession:     vc.safeSession,
+	safeSession := NewAutocommitSession(vc.safeSession.Session)
+	return &vcursorImpl{
+		safeSession:     safeSession,
 		keyspace:        vc.keyspace,
 		tabletType:      vc.tabletType,
 		destination:     vc.destination,
@@ -1091,7 +1084,6 @@ func (vc *vcursorImpl) clone() *vcursorImpl {
 		warnShardedOnly: vc.warnShardedOnly,
 		pv:              vc.pv,
 	}
-	return v
 }
 
 func (vc *vcursorImpl) VtExplainLogging() {
@@ -1103,11 +1095,4 @@ func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
 }
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
-}
-
-func (vc *vcursorImpl) DeepClone() engine.VCursor {
-	cloneCtx := vc.clone()
-	sess := proto.Clone(cloneCtx.safeSession.Session).(*vtgatepb.Session)
-	cloneCtx.safeSession = NewSafeSession(sess)
-	return cloneCtx
 }

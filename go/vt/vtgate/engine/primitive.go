@@ -194,9 +194,6 @@ type (
 
 		// SetTransactionIsolation sets the transaction isolation level for any new transaction on the session.
 		SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation)
-
-		// DeepClone returns a copy of this VCursor that can be used to perform Vitess queries after the RPC that instantiated this cursor has terminated.
-		DeepClone() VCursor
 	}
 
 	// Match is used to check if a Primitive matches
