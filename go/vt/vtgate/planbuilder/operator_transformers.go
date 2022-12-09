@@ -153,13 +153,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 	}, nil
 }
 
-func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
-	switch src := op.Source.(type) {
-	case *operators.Update:
-		return transformUpdatePlan(ctx, op, src)
-	case *operators.Delete:
-		return transformDeletePlan(ctx, op, src)
-	}
+func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (*engine.Route, error) {
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
 		return nil, err
@@ -170,24 +164,38 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		vindex = op.Selected.FoundVindex
 		values = op.Selected.Values
 	}
+	return &engine.Route{
+		TableName: strings.Join(tableNames, ", "),
+		RoutingParameters: &engine.RoutingParameters{
+			Opcode:              op.RouteOpCode,
+			Keyspace:            op.Keyspace,
+			Vindex:              vindex,
+			Values:              values,
+			SysTableTableName:   op.SysTableTableName,
+			SysTableTableSchema: op.SysTableTableSchema,
+		},
+	}, nil
+}
+
+func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
+	switch src := op.Source.(type) {
+	case *operators.Update:
+		return transformUpdatePlan(ctx, op, src)
+	case *operators.Delete:
+		return transformDeletePlan(ctx, op, src)
+	}
 	condition := getVindexPredicate(ctx, op)
 	sel, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
 		return nil, err
 	}
 	replaceSubQuery(ctx, sel)
+	eroute, err := routeToEngineRoute(ctx, op)
+	if err != nil {
+		return nil, err
+	}
 	return &routeGen4{
-		eroute: &engine.Route{
-			TableName: strings.Join(tableNames, ", "),
-			RoutingParameters: &engine.RoutingParameters{
-				Opcode:              op.RouteOpCode,
-				Keyspace:            op.Keyspace,
-				Vindex:              vindex,
-				Values:              values,
-				SysTableTableName:   op.SysTableTableName,
-				SysTableTableSchema: op.SysTableTableSchema,
-			},
-		},
+		eroute:    eroute,
 		Select:    sel,
 		tables:    operators.TableID(op),
 		condition: condition,
