@@ -1056,9 +1056,14 @@ func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
 }
 
 func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
-	safeSession := NewAutocommitSession(vc.safeSession.Session)
-	return &vcursorImpl{
-		safeSession:     safeSession,
+	v := vc.clone()
+	v.safeSession = NewAutocommitSession(vc.safeSession.Session)
+	return v
+}
+
+func (vc *vcursorImpl) clone() *vcursorImpl {
+	v := &vcursorImpl{
+		safeSession:     vc.safeSession,
 		keyspace:        vc.keyspace,
 		tabletType:      vc.tabletType,
 		destination:     vc.destination,
@@ -1073,6 +1078,7 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 		warnShardedOnly: vc.warnShardedOnly,
 		pv:              vc.pv,
 	}
+	return v
 }
 
 func (vc *vcursorImpl) VtExplainLogging() {
