@@ -3887,6 +3887,52 @@ func TestSelectCFC(t *testing.T) {
 	}
 }
 
+func TestSelectView(t *testing.T) {
+	executor, sbc, _, _ := createExecutorEnv()
+	// add the view to local vschema
+	err := executor.vschema.AddView(KsTestSharded, "user_details_view", "select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id")
+	require.NoError(t, err)
+
+	executor.normalize = true
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	_, err = executor.Execute(context.Background(), "TestSelectView", session,
+		"select * from user_details_view", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id) as user_details_view",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+
+	sbc.Queries = nil
+	_, err = executor.Execute(context.Background(), "TestSelectView", session,
+		"select * from user_details_view where id = 2", nil)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id) as user_details_view where id = :id",
+		BindVariables: map[string]*querypb.BindVariable{
+			"id": sqltypes.Int64BindVariable(2),
+		},
+	}}
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+
+	sbc.Queries = nil
+	_, err = executor.Execute(context.Background(), "TestSelectView", session,
+		"select * from user_details_view where id in (1,2,3,4,5)", nil)
+	require.NoError(t, err)
+	bvtg1, _ := sqltypes.BuildBindVariable([]int64{1, 2, 3, 4, 5})
+	bvals, _ := sqltypes.BuildBindVariable([]int64{1, 2})
+	wantQueries = []*querypb.BoundQuery{{
+		Sql: "select * from (select `user`.id, user_extra.col from `user` join user_extra on `user`.id = user_extra.user_id) as user_details_view where id in ::__vals",
+		BindVariables: map[string]*querypb.BindVariable{
+			"vtg1":   bvtg1,
+			"__vals": bvals,
+		},
+	}}
+	utils.MustMatch(t, wantQueries, sbc.Queries)
+}
+
 func TestMain(m *testing.M) {
 	_flag.ParseFlagsForTest()
 	os.Exit(m.Run())
