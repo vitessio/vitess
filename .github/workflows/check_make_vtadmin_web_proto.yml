@@ -43,7 +43,7 @@ jobs:
       uses: actions/setup-go@v2
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
       with:
-        go-version: 1.18.7
+        go-version: 1.18.9
 
     - name: Setup Node
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
