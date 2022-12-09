@@ -61,7 +61,6 @@ type testVDiffEnv struct {
 	vse             *vstreamer.Engine
 	vre             *vreplication.Engine
 	vde             *Engine
-	tenv            *testenv.Env
 	tmc             *fakeTMClient
 	opts            *tabletmanagerdatapb.VDiffOptions
 	dbClient        *binlogplayer.MockDBClient
@@ -72,8 +71,9 @@ type testVDiffEnv struct {
 }
 
 var (
-	// vdiffEnv has to be a global for RegisterDialer to work.
-	vdiffEnv          *testVDiffEnv
+	// vdiffenv has to be a global for RegisterDialer to work.
+	vdiffenv          *testVDiffEnv
+	tstenv            *testenv.Env
 	globalFBC         = &fakeBinlogClient{}
 	globalDBQueries   = make(chan string, 1000)
 	doNotLogDBQueries = false
@@ -86,9 +86,9 @@ type LogExpectation struct {
 
 func init() {
 	tabletconn.RegisterDialer("test", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		vdiffEnv.mu.Lock()
-		defer vdiffEnv.mu.Unlock()
-		if qs, ok := vdiffEnv.tablets[int(tablet.Alias.Uid)]; ok {
+		vdiffenv.mu.Lock()
+		defer vdiffenv.mu.Unlock()
+		if qs, ok := vdiffenv.tablets[int(tablet.Alias.Uid)]; ok {
 			return qs, nil
 		}
 		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
@@ -97,8 +97,24 @@ func init() {
 
 	binlogplayer.RegisterClientFactory("test", func() binlogplayer.Client { return globalFBC })
 
-	tmclient.RegisterTabletManagerClientFactory("test", func() tmclient.TabletManagerClient { return vdiffEnv.tmc })
+	tmclient.RegisterTabletManagerClientFactory("test", func() tmclient.TabletManagerClient { return vdiffenv.tmc })
 	tmclienttest.SetProtocol("go.vt.vttablet.tabletmanager.vdiff.framework_test", "test")
+}
+
+func TestMain(m *testing.M) {
+	binlogplayer.SetProtocol("vdiff_test_framework", "test")
+	exitCode := func() int {
+		var err error
+		tstenv, err = testenv.Init()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+		defer tstenv.Close()
+
+		return m.Run()
+	}()
+	os.Exit(exitCode)
 }
 
 func resetBinlogClient() {
@@ -151,7 +167,7 @@ func (ftc *fakeTabletConn) VStream(ctx context.Context, request *binlogdatapb.VS
 	if vstreamHook != nil {
 		vstreamHook(ctx)
 	}
-	return vdiffEnv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
+	return vdiffenv.vse.Stream(ctx, request.Position, request.TableLastPKs, request.Filter, send)
 }
 
 // vstreamRowsHook allows you to do work just before calling VStreamRows.
@@ -173,7 +189,7 @@ func (ftc *fakeTabletConn) VStreamRows(ctx context.Context, request *binlogdatap
 		}
 		row = r.Rows[0]
 	}
-	return vdiffEnv.vse.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
+	return vdiffenv.vse.StreamRows(ctx, request.Query, row, func(rows *binlogdatapb.VStreamRowsResponse) error {
 		if vstreamRowsSendHook != nil {
 			vstreamRowsSendHook(ctx)
 		}
@@ -255,15 +271,15 @@ type realDBClient struct {
 }
 
 func (dbc *realDBClient) DBName() string {
-	return vdiffEnv.dbName
+	return vdiffenv.dbName
 }
 
 func (dbc *realDBClient) Connect() error {
-	app, err := vdiffEnv.tenv.Dbcfgs.AppWithDB().MysqlParams()
+	app, err := tstenv.Dbcfgs.AppWithDB().MysqlParams()
 	if err != nil {
 		return err
 	}
-	app.DbName = vdiffEnv.dbName
+	app.DbName = vdiffenv.dbName
 	conn, err := mysql.Connect(context.Background(), app)
 	if err != nil {
 		return err
@@ -387,88 +403,80 @@ func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb
 // testVDiffEnv
 
 func newSingleTabletTestVDiffEnv(t *testing.T) *testVDiffEnv {
-	binlogplayer.SetProtocol("vdiff_test_framework", "test")
-
-	vdiffEnv = &testVDiffEnv{
+	vdiffenv = &testVDiffEnv{
 		workflow: "testwf",
 		dbName:   "vdiff_test",
 		tablets:  make(map[int]*fakeTabletConn),
 		tmc:      newFakeTMClient(),
 	}
 
-	var err error
-	vdiffEnv.tenv, err = testenv.Init()
-	require.NoError(t, err)
-
-	vdiffEnv.tmc = newFakeTMClient()
-
-	vdiffEnv.vse = vstreamer.NewEngine(vdiffEnv.tenv.TabletEnv, vdiffEnv.tenv.SrvTopo, vdiffEnv.tenv.SchemaEngine, nil, vdiffEnv.tenv.Cells[0])
-	vdiffEnv.vse.InitDBConfig(vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName)
-	vdiffEnv.vse.Open()
-	defer vdiffEnv.vse.Close()
+	vdiffenv.vse = vstreamer.NewEngine(tstenv.TabletEnv, tstenv.SrvTopo, tstenv.SchemaEngine, nil, tstenv.Cells[0])
+	vdiffenv.vse.InitDBConfig(tstenv.KeyspaceName, tstenv.ShardName)
+	vdiffenv.vse.Open()
+	defer vdiffenv.vse.Close()
 
 	ddls := binlogplayer.CreateVReplicationTable()
 	ddls = append(ddls, binlogplayer.AlterVReplicationTable...)
 	ddls = append(ddls, withDDL.DDLs()...)
-	ddls = append(ddls, fmt.Sprintf("create database %s", vdiffEnv.dbName))
+	ddls = append(ddls, fmt.Sprintf("create database if not exists %s", vdiffenv.dbName))
 
 	for _, ddl := range ddls {
-		if err := vdiffEnv.tenv.Mysqld.ExecuteSuperQuery(context.Background(), ddl); err != nil {
+		if err := tstenv.Mysqld.ExecuteSuperQuery(context.Background(), ddl); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 		}
 	}
 
-	vdiffEnv.vre = vreplication.NewTestEngine(vdiffEnv.tenv.TopoServ, vdiffEnv.tenv.Cells[0], vdiffEnv.tenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffEnv.dbName, nil)
-	vdiffEnv.vre.Open(context.Background())
-	defer vdiffEnv.vre.Close()
+	vdiffenv.vre = vreplication.NewTestEngine(tstenv.TopoServ, tstenv.Cells[0], tstenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffenv.dbName, nil)
+	vdiffenv.vre.Open(context.Background())
+	defer vdiffenv.vre.Close()
 
-	vdiffEnv.tmc.schema = testSchema
+	vdiffenv.tmc.schema = testSchema
 
 	tabletID := 100
-	primary := vdiffEnv.addTablet(tabletID, vdiffEnv.tenv.KeyspaceName, vdiffEnv.tenv.ShardName, topodatapb.TabletType_PRIMARY)
+	primary := vdiffenv.addTablet(tabletID, tstenv.KeyspaceName, tstenv.ShardName, topodatapb.TabletType_PRIMARY)
 
-	vdiffEnv.dbClient = binlogplayer.NewMockDBClient(t)
-	vdiffEnv.dbClientFactory = func() binlogplayer.DBClient { return vdiffEnv.dbClient }
-	vdiffEnv.vde = &Engine{
+	vdiffenv.dbClient = binlogplayer.NewMockDBClient(t)
+	vdiffenv.dbClientFactory = func() binlogplayer.DBClient { return vdiffenv.dbClient }
+	vdiffenv.vde = &Engine{
 		controllers:             make(map[int64]*controller),
-		ts:                      vdiffEnv.tenv.TopoServ,
+		ts:                      tstenv.TopoServ,
 		thisTablet:              primary.tablet,
-		dbClientFactoryFiltered: vdiffEnv.dbClientFactory,
-		dbClientFactoryDba:      vdiffEnv.dbClientFactory,
-		dbName:                  vdiffEnv.dbName,
+		dbClientFactoryFiltered: vdiffenv.dbClientFactory,
+		dbClientFactoryDba:      vdiffenv.dbClientFactory,
+		dbName:                  vdiffenv.dbName,
 	}
-	require.False(t, vdiffEnv.vde.IsOpen())
+	require.False(t, vdiffenv.vde.IsOpen())
 
-	vdiffEnv.opts = &tabletmanagerdatapb.VDiffOptions{
+	vdiffenv.opts = &tabletmanagerdatapb.VDiffOptions{
 		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
 	}
 
-	vdiffEnv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
-	vdiffEnv.vde.Open(context.Background(), vdiffEnv.vre)
-	assert.True(t, vdiffEnv.vde.IsOpen())
+	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
+	vdiffenv.vde.Open(context.Background(), vdiffenv.vre)
+	assert.True(t, vdiffenv.vde.IsOpen())
 
-	vdiffEnv.vde.Open(context.Background(), vdiffEnv.vre)
-	assert.True(t, vdiffEnv.vde.IsOpen())
-	assert.Equal(t, 0, len(vdiffEnv.vde.controllers))
+	vdiffenv.vde.Open(context.Background(), vdiffenv.vre)
+	assert.True(t, vdiffenv.vde.IsOpen())
+	assert.Equal(t, 0, len(vdiffenv.vde.controllers))
 
 	resetBinlogClient()
 
-	return vdiffEnv
+	return vdiffenv
 }
 
 func (tvde *testVDiffEnv) close() {
 	tvde.mu.Lock()
 	defer tvde.mu.Unlock()
 	for _, t := range tvde.tablets {
-		vdiffEnv.tenv.TopoServ.DeleteTablet(context.Background(), t.tablet.Alias)
-		topo.DeleteTabletReplicationData(context.Background(), vdiffEnv.tenv.TopoServ, t.tablet)
-		vdiffEnv.tenv.SchemaEngine.Reload(context.Background())
+		tstenv.TopoServ.DeleteTablet(context.Background(), t.tablet.Alias)
+		topo.DeleteTabletReplicationData(context.Background(), tstenv.TopoServ, t.tablet)
+		tstenv.SchemaEngine.Reload(context.Background())
 	}
 	tvde.tablets = nil
-	vdiffEnv.vse.Close()
-	vdiffEnv.vre.Close()
-	vdiffEnv.vde.Close()
-	vdiffEnv.tenv.Close()
+	vdiffenv.vse.Close()
+	vdiffenv.vre.Close()
+	vdiffenv.vde.Close()
+	tstenv.Close()
 }
 
 func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *fakeTabletConn {
@@ -476,7 +484,7 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 	defer tvde.mu.Unlock()
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
-			Cell: vdiffEnv.tenv.Cells[0],
+			Cell: tstenv.Cells[0],
 			Uid:  uint32(id),
 		},
 		Keyspace: keyspace,
@@ -488,11 +496,11 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 		},
 	}
 	tvde.tablets[id] = &fakeTabletConn{tablet: tablet}
-	if err := vdiffEnv.tenv.TopoServ.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := tstenv.TopoServ.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		_, err := vdiffEnv.tenv.TopoServ.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
+		_, err := tstenv.TopoServ.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
 			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
@@ -500,6 +508,6 @@ func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType t
 			panic(err)
 		}
 	}
-	tvde.tenv.SchemaEngine.Reload(context.Background())
+	tstenv.SchemaEngine.Reload(context.Background())
 	return tvde.tablets[id]
 }
