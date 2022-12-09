@@ -291,7 +291,27 @@ func TestVSchemaColumns(t *testing.T) {
 	require.NoError(t, err)
 	assertColumn(t, t1.Columns[0], "c1", sqltypes.Null)
 	assertColumn(t, t1.Columns[1], "c2", sqltypes.VarChar)
+}
 
+func TestVSchemaViews(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}},
+			"main": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}}}}
 	vschema := BuildVSchema(&good)
 	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
 
