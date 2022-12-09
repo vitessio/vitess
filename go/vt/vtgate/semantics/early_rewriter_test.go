@@ -161,6 +161,9 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select 1 from t1 join t5 using (b) having b = 12",
 		expSQL: "select 1 from t1 join t5 where t1.b = t5.b having t1.b = 12",
+	}, {
+		sql:    "select * from (select 12) as t",
+		expSQL: "select t.`12` from (select 12 from dual) as t",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -179,7 +182,7 @@ func TestExpandStar(t *testing.T) {
 					}
 					for _, tbl := range st.ExpandedColumns {
 						for _, col := range tbl {
-							if sqlparser.EqualsExpr(aliasedExpr.Expr, col, nil) {
+							if sqlparser.Equals.Expr(aliasedExpr.Expr, col) {
 								found++
 								continue outer
 							}

@@ -119,6 +119,12 @@ func ParseMysql56GTIDSet(s string) (Mysql56GTIDSet, error) {
 			continue
 		}
 
+		if sidIntervals, ok := set[sid]; ok {
+			// SID already exists, we append
+			// Example:  "00010203-0405-0607-0809-0a0b0c0d0e0f:1-5,00010203-0405-0607-0809-0a0b0c0d0e0f:10-20"
+			// turns to: "00010203-0405-0607-0809-0a0b0c0d0e0f:1-5:10-20"
+			intervals = append(sidIntervals, intervals...)
+		}
 		// Internally we expect intervals to be stored in order.
 		slices.SortFunc(intervals, func(a, b interval) bool {
 			return a.start < b.start

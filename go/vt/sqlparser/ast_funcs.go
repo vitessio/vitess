@@ -34,6 +34,11 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
+// Generate all the AST helpers using the tooling in `go/tools`
+
+//go:generate go run ../../tools/asthelpergen/main  --in . --iface vitess.io/vitess/go/vt/sqlparser.SQLNode --clone_exclude "*ColName" --equals_custom "*ColName"
+//go:generate go run ../../tools/astfmtgen vitess.io/vitess/go/vt/sqlparser/...
+
 // Walk calls visit on every node.
 // If visit returns true, the underlying nodes
 // are also visited. If it returns an error, walking
@@ -53,11 +58,6 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 // returning false on kontinue means that children will not be visited
 // returning an error will abort the visitation and return the error
 type Visit func(node SQLNode) (kontinue bool, err error)
-
-// ASTComparison is used to compare AST trees and override the normal comparison logic
-type ASTComparison interface {
-	ColNames(a, b *ColName) bool
-}
 
 // Append appends the SQLNode to the buffer.
 func Append(buf *strings.Builder, node SQLNode) {
@@ -1011,7 +1011,7 @@ func (node *Select) AddHaving(expr Expr) {
 // AddGroupBy adds a grouping expression, unless it's already present
 func (node *Select) AddGroupBy(expr Expr) {
 	for _, gb := range node.GroupBy {
-		if EqualsExpr(gb, expr, nil) {
+		if Equals.Expr(gb, expr) {
 			// group by columns are sets - duplicates don't add anything, so we can just skip these
 			return
 		}
@@ -2185,7 +2185,7 @@ func AndExpressions(exprs ...Expr) Expr {
 			}
 
 			for j := 0; j < i; j++ {
-				if EqualsExpr(expr, exprs[j], nil) {
+				if Equals.Expr(expr, exprs[j]) {
 					continue outer
 				}
 			}
@@ -2194,3 +2194,6 @@ func AndExpressions(exprs ...Expr) Expr {
 		return result
 	}
 }
+
+// Equals is the default Comparator for AST expressions.
+var Equals = &Comparator{}

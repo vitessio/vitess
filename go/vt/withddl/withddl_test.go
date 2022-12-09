@@ -280,8 +280,8 @@ func TestMain(m *testing.M) {
 	tabletenvtest.LoadTabletEnvFlags()
 	tabletenv.Init()
 
-	if sidecardb.InitVTSchemaOnTabletInit {
-		enableWithDDLForTests = true
+	if sidecardb.GetInitVTSchemaFlag() {
+		EnableWithDDLForTests = true
 	}
 
 	exitCode := func() int {

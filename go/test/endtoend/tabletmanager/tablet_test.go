@@ -63,6 +63,7 @@ func TestEnsureDB(t *testing.T) {
 
 // TestLocalMetadata tests the contents of local_metadata table after vttablet startup
 func TestLocalMetadata(t *testing.T) {
+	t.Skip("Local Metadata has been removed")
 	defer cluster.PanicHandler(t)
 	// This will no longer hold true since localMetadata is removed as part of this change @rohit-nayak-ps
 	// by default tablets are started with --restore_from_backup
@@ -74,7 +75,7 @@ func TestLocalMetadata(t *testing.T) {
 
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--init_populate_metadata",
+		//"--init_populate_metadata",
 	}
 	rTablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet.TabletUID, rTablet.MySQLPort, clusterInstance.TmpDirectory)
 	err := rTablet.MysqlctlProcess.Start()
@@ -106,11 +107,12 @@ func TestLocalMetadata(t *testing.T) {
 	err = clusterInstance.StartVttablet(rTablet2, "SERVING", false, cell, keyspaceName, hostname, shardName)
 	require.NoError(t, err)
 
-	// check that tablet did _not_ get populated
-	//qr, err := rTablet2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
-	//require.NoError(t, err)
-	//require.Nil(t, qr.Rows)
-
+	if false { // FIXME local_metedata has been deleted
+		// check that tablet did _not_ get populated
+		qr, err := rTablet2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
+		require.NoError(t, err)
+		require.Nil(t, qr.Rows)
+	}
 	// Reset the VtTabletExtraArgs and kill tablets
 	clusterInstance.VtTabletExtraArgs = []string{}
 	killTablets(t, rTablet, rTablet2)

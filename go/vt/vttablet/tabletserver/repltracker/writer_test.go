@@ -21,6 +21,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -40,12 +42,15 @@ var (
 )
 
 func TestCreateSchema(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
+
 	db := fakesqldb.New(t)
 	defer db.Close()
 	tw := newTestWriter(db, mockNowFunc)
 	defer tw.Close()
 	writes.Reset()
-
 	db.OrderMatters()
 	upsert := fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)",
 		"_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard)

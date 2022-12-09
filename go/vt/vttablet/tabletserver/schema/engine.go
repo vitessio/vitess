@@ -128,12 +128,13 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 }
 
 func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn *dbconnpool.DBConnection) error {
-	log.Infof("inside syncVTDatabase %s", sidecardb.UseVTDatabaseQuery)
-	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error) {
-		/*_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
-		if err != nil {
-			return nil, err
-		}*/
+	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error) {
+		if useVT {
+			_, err := conn.ExecuteFetch(sidecardb.UseVTDatabaseQuery, maxRows, wantFields)
+			if err != nil {
+				return nil, err
+			}
+		}
 		return conn.ExecuteFetch(query, maxRows, wantFields)
 	}
 	var rsroHook sidecardb.ReSetSuperReadOnlyHook = func(ctx context.Context) (err error) {
@@ -178,7 +179,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	//time.Sleep(20 * time.Second)
 	log.Infof("inside EnsureConnectionAndDB with TabletType %v", tabletType)
 	ctx := tabletenv.LocalContext()
-	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err != nil {
 		log.Infof("error inside EnsureConnectionAndDB %v", err)
 	}

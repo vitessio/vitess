@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv/tabletenvtest"
 
 	"github.com/google/go-cmp/cmp"
@@ -133,6 +135,10 @@ func runTestCase(testcase, mode string, opts *Options, topts *testopts, t *testi
 }
 
 func TestExplain(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
+
 	tabletenvtest.LoadTabletEnvFlags()
 
 	type test struct {
@@ -171,6 +177,10 @@ func TestExplain(t *testing.T) {
 }
 
 func TestErrors(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
+
 	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
 
 	tests := []struct {
@@ -208,6 +218,10 @@ func TestErrors(t *testing.T) {
 }
 
 func TestJSONOutput(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
+
 	vte := initTest(ModeMulti, defaultTestOpts(), &testopts{}, t)
 	sql := "select 1 from user where id = 1"
 	explains, err := vte.Run(sql)
@@ -296,6 +310,10 @@ func testShardInfo(ks, start, end string, primaryServing bool, t *testing.T) *to
 }
 
 func TestUsingKeyspaceShardMap(t *testing.T) {
+	oldInitVTSchemaOnTabletInit := sidecardb.GetInitVTSchemaFlag()
+	sidecardb.SetInitVTSchemaFlag(false)
+	defer func() { sidecardb.SetInitVTSchemaFlag(oldInitVTSchemaOnTabletInit) }()
+
 	tests := []struct {
 		testcase      string
 		ShardRangeMap map[string]map[string]*topo.ShardInfo
@@ -354,6 +372,7 @@ func TestInit(t *testing.T) {
 }`
 	schema := "create table table_missing_primary_vindex (id int primary key)"
 	_, err := Init(vschema, schema, "", defaultTestOpts())
+
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "missing primary col vindex")
 }

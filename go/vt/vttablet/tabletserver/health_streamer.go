@@ -407,7 +407,8 @@ func (hs *healthStreamer) reload() error {
 }
 
 func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
-	if sidecardb.InitVTSchemaOnTabletInit { // _vt schema should be the desired one by now
+
+	if sidecardb.GetInitVTSchemaFlag() { // _vt schema should be the desired one by now
 		return true, nil
 	}
 	for _, query := range mysql.VTDatabaseInit {

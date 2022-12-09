@@ -1,0 +1,16 @@
+vtctlclient --help 2> vtctlclient.txt
+vtorc --help 2> vtorc.txt
+vtgr --help 2> vtgr.txt
+vttablet --help 2> vttablet.txt
+vtctld --help 2> vtctld.txt
+vtctldclient --help > vtctldclient.txt
+vtexplain --help 2> vtexplain.txt
+vtgate --help 2> vtgate.txt
+mysqlctld --help 2> mysqlctld.txt
+mysqlctl --help 2> mysqlctl.txt
+vtaclcheck --help > vtaclcheck.txt 2>&1
+vtbackup --help 2> vtbackup.txt
+vttestserver --help 2> vttestserver.txt
+vttlstest > vttlstest.txt
+zkctld --help 2> zkctld.txt
+zk --help 2> zk.txt

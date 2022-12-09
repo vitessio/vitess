@@ -68,7 +68,7 @@ type VTSchemaInit struct {
 }
 
 // Exec is a function prototype of callback passed to Init() which will execute the specified query
-type Exec func(ctx context.Context, query string, maxRows int, wantFields bool) (*sqltypes.Result, error)
+type Exec func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error)
 
 type SetSuperReadOnlyHook func(ctx context.Context) (needsReset bool, err error)
 type ReSetSuperReadOnlyHook func(ctx context.Context) (err error)
@@ -76,7 +76,7 @@ type ReSetSuperReadOnlyHook func(ctx context.Context) (err error)
 // Init creates or upgrades the _vt schema based on declarative schema for all _vt tables
 func Init(ctx context.Context, exec Exec, sroHook SetSuperReadOnlyHook, rsroHook ReSetSuperReadOnlyHook) error {
 	PrintCallerDetails()
-	if !InitVTSchemaOnTabletInit {
+	if !GetInitVTSchemaFlag() {
 		log.Infof("init-vt-schema-on-tablet-init NOT set, not updating _vt schema on tablet init")
 		return nil
 	}
@@ -135,7 +135,7 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 	if si.ctx.Err() != nil {
 		log.Infof("context error CreateVTDatabase ... %v", si.ctx.Err())
 	}
-	rs, err := si.exec(si.ctx, "SHOW DATABASES LIKE '_vt'", 2, false)
+	rs, err := si.exec(si.ctx, "SHOW DATABASES LIKE '_vt'", 2, false, false)
 	if err != nil {
 		log.Infof("error CreateVTDatabase ... %v", err)
 		return err
@@ -143,7 +143,7 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 
 	switch len(rs.Rows) {
 	case 0:
-		_, err := si.exec(si.ctx, CreateVTDatabaseQuery, 1, false)
+		_, err := si.exec(si.ctx, CreateVTDatabaseQuery, 1, false, false)
 		if err != nil {
 			return err
 		}
@@ -159,7 +159,7 @@ func (si *VTSchemaInit) CreateVTDatabase() error {
 
 // sets db of correct connection to dbName and returns current db
 func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
-	rs, err := si.exec(si.ctx, "select database()", 1, false)
+	rs, err := si.exec(si.ctx, "select database()", 1, false, false)
 	if err != nil {
 		return "", err
 	}
@@ -168,7 +168,7 @@ func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
 	}
 	currentDB := rs.Rows[0][0].ToString()
 	log.Infof("current db is %s", currentDB)
-	_, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false)
+	_, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false, false)
 	if err != nil {
 		return "", err
 	}
@@ -179,7 +179,7 @@ func (si *VTSchemaInit) setCurrentDatabase(dbName string) (string, error) {
 func (si *VTSchemaInit) getCurrentSchema(tableName string) (string, error) {
 	var currentTableSchema string
 	showCreateTableSQL := "show create table _vt.%s"
-	rs, err := si.exec(si.ctx, fmt.Sprintf(showCreateTableSQL, tableName), 1, false)
+	rs, err := si.exec(si.ctx, fmt.Sprintf(showCreateTableSQL, tableName), 1, false, false)
 	if err != nil {
 		log.Errorf("Error showing _vt table %s: %+v", tableName, err)
 		return "", err
@@ -254,7 +254,7 @@ func (si *VTSchemaInit) createOrUpgradeTable(table *VTTable) error {
 
 	if strings.TrimSpace(tableAlterSQL) != "" {
 		//log.Infof("tableAlterSQL is %s", tableAlterSQL)
-		_, err = si.exec(ctx, tableAlterSQL, 1, false)
+		_, err = si.exec(ctx, tableAlterSQL, 1, false, true)
 		if err != nil {
 			if strings.Contains(err.Error(), "already exists") { //todo: improve check for existing table
 				return nil
@@ -295,7 +295,7 @@ func (si *VTSchemaInit) tableExists(tableName string) bool {
 // load existing tables from _vt
 func (si *VTSchemaInit) loadExistingTables() error {
 	si.existingTables = make(map[string]bool)
-	rs, err := si.exec(si.ctx, "show tables from _vt", 1000, false)
+	rs, err := si.exec(si.ctx, "show tables from _vt", 1000, false, false)
 	if err != nil {
 		return err
 	}

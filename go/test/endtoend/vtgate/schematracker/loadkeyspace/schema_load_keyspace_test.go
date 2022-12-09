@@ -54,6 +54,8 @@ var (
 )
 
 func TestBlockedLoadKeyspace(t *testing.T) {
+	t.Skip("this test is not valid anymore since schemacopy is being created by default and inspite of the tablet signal being setup to false")
+
 	defer cluster.PanicHandler(t)
 	var err error
 

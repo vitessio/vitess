@@ -23,7 +23,6 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
@@ -415,8 +414,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 	}
 	// Nothing matched.
 	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
-	log.Errorf("Query not found: %s:%s", query, debug.Stack())
-
+	//log.Errorf("Query not found: %s:%s", query, debug.Stack())
 	return err
 }
 
