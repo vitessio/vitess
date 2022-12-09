@@ -498,6 +498,15 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 			t.Fatal(ks.Error)
 		}
 
+		// adding view in user keyspace
+		if ks.Keyspace.Name == "user" {
+			if err = vschema.AddView(ks.Keyspace.Name,
+				"user_details_view",
+				"select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"); err != nil {
+				t.Fatal(err)
+			}
+		}
+
 		// setting a default value to all the text columns in the tables of this keyspace
 		// so that we can "simulate" a real case scenario where the vschema is aware of
 		// columns' collations.
@@ -637,6 +646,14 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
 	return table, destKeyspace, destTabletType, destTarget, nil
+}
+
+func (vw *vschemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStatement {
+	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	if err != nil {
+		return nil
+	}
+	return vw.v.FindView(destKeyspace, tab.Name.String())
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
