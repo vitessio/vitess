@@ -833,8 +833,8 @@ func TestSysSchema(t *testing.T) {
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
 
 	// table_name
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+	assert.Equal(t, `VARBINARY("a")`, qr.Rows[0][10].String())
+	assert.Equal(t, `VARBINARY("a")`, qr.Rows[1][10].String())
 
 	// The field Type and the row value type are not matching and because of this wrong packet is send regarding the data of bigint unsigned to the client on vttestserver.
 	// On, Vitess cluster using protobuf we are doing the row conversion to field type and so the final row type send to client is same as field type.
