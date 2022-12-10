@@ -442,14 +442,15 @@ func initializeCluster(t *testing.T) {
 		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
 		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
 		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
-		fmt.Sprintf("create database %s;", "vt_ks"),
+		//fmt.Sprintf("create database %s;", "vt_ks"),
 		"FLUSH PRIVILEGES;",
 	}
 
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+
 			for _, query := range queryCmds {
-				_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+				_, err = tablet.VttabletProcess.QueryTabletWithSuperReadOnlyHandling(query, keyspace.Name, false)
 				require.NoError(t, err)
 			}
 

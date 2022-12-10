@@ -198,6 +198,34 @@ func New(t testing.TB) *DB {
 	return db
 }
 
+// NewWithExpectedQueries returns DB with all the queries expected at the time of vttablet Initialization
+func NewWithExpectedQueries(t testing.TB) *DB {
+	newDb := New(t)
+	newDb.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("create database if not exists `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("SET GLOBAL super_read_only='OFF'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("SET GLOBAL read_only='OFF'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("SET @@session.sql_log_bin = 0", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("SET GLOBAL super_read_only='ON'", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.local_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("ALTER TABLE _vt.vreplication .*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("ALTER TABLE _vt.local_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.shard_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("ALTER TABLE _vt.shard_metadata.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("DROP TABLE IF EXISTS _vt.blp_checkpoint", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.vreplication.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("create table if not exists _vt.resharding_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("create table if not exists _vt.copy_state.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.schema_migrations.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("SELECT.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("ALTER TABLE _vt.schema_migrations.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("CREATE TABLE IF NOT EXISTS _vt.reparent_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("CREATE TABLE if not exists _vt.schemacopy.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQueryPattern("ALTER TABLE _vt.reparent_journal.*", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	newDb.AddQuery("USE `vt_test_keyspace`", &sqltypes.Result{InsertID: 0, RowsAffected: 0})
+	return newDb
+}
+
 // Name returns the name of the DB.
 func (db *DB) Name() string {
 	db.mu.Lock()
