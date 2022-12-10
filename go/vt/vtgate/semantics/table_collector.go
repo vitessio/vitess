@@ -138,7 +138,7 @@ func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
 	offset := id.TableOffset()
 	if offset < 0 {
-		return nil, ErrMultipleTables
+		return nil, ErrNotSingleTable
 	}
 	return tc.Tables[offset], nil
 }
