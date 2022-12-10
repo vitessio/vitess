@@ -97,8 +97,8 @@ const (
 							and vd.vdiff_uuid = %s`
 	sqlVDiffSummary = `select vd.state as vdiff_state, vd.last_error as last_error, vdt.table_name as table_name,
 						vd.vdiff_uuid as 'uuid', vdt.state as table_state, vdt.table_rows as table_rows,
-						vd.started_at as started_at, vdt.table_rows as table_rows, vdt.rows_compared as rows_compared,
-						vd.completed_at as completed_at, IF(vdt.mismatch = 1, 1, 0) as has_mismatch, vdt.report as report
+						vd.started_at as started_at, vdt.rows_compared as rows_compared, vd.completed_at as completed_at,
+						IF(vdt.mismatch = 1, 1, 0) as has_mismatch, vdt.report as report
 						from _vt.vdiff as vd left join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
 						where vd.id = %d`
 	// sqlUpdateVDiffState has a penultimate placeholder for any additional columns you want to update, e.g. `, foo = 1`

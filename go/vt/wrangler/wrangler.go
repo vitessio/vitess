@@ -66,6 +66,18 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 	}
 }
 
+// New creates a new Wrangler object for use in tests. This should NOT be used
+// in production.
+func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
+	return &Wrangler{
+		logger:   logger,
+		ts:       ts,
+		tmc:      tmc,
+		vtctld:   grpcvtctldserver.NewTestVtctldServer(ts, tmc),
+		sourceTs: ts,
+	}
+}
+
 // TopoServer returns the topo.Server this wrangler is using.
 func (wr *Wrangler) TopoServer() *topo.Server {
 	return wr.ts
