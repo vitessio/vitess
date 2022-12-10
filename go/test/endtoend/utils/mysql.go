@@ -114,7 +114,7 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-
+	_, _ = f.WriteString("SET GLOBAL super_read_only='OFF';")
 	_, err = f.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;", ksName))
 	if err != nil {
 		return "", err
