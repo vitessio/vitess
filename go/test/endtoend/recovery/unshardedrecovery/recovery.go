@@ -23,6 +23,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -94,13 +95,16 @@ func TestMainImpl(m *testing.M) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
-		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-		sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
+		// Since password update is DML we need to insert it before we disable
+		// super-read-only therefore doing the split below.
+		splitString := strings.Split(sql, "# add custom sql here")
+		firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+
 		// https://github.com/vitessio/vitess/issues/8315
-		oldAlterTableMode := `
-SET GLOBAL old_alter_table = ON;
-`
-		sql = sql + oldAlterTableMode
+		oldAlterTableMode := `SET GLOBAL old_alter_table = ON;`
+		sql = firstPart + oldAlterTableMode
+		sql = sql + splitString[1]
+		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		os.WriteFile(newInitDBFile, []byte(sql), 0666)
 
 		extraArgs := []string{"--db-credentials-file", dbCredentialFile}
