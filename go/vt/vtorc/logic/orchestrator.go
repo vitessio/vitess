@@ -234,6 +234,10 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	backendLatency := latency.Elapsed("backend")
 	instanceLatency := latency.Elapsed("instance")
 
+	if forceDiscovery {
+		log.Infof("Force discovered - %+v, err - %v", instance, err)
+	}
+
 	if instance == nil {
 		failedDiscoveriesCounter.Inc(1)
 		_ = discoveryMetrics.Append(&discovery.Metric{
@@ -253,10 +257,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 				err)
 		}
 		return
-	}
-
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v", instance)
 	}
 
 	_ = discoveryMetrics.Append(&discovery.Metric{
