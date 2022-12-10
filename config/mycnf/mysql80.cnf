@@ -31,3 +31,4 @@ loose_rpl_semi_sync_master_wait_no_slave = 1
 # In order to protect against any errand GTIDs we will start mysql instance
 # as super-read-only mode.
 super-read-only
+

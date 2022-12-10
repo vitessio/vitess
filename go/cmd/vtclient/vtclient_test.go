@@ -32,7 +32,6 @@ import (
 
 func TestVtclient(t *testing.T) {
 	// Build the config for vttest.
-
 	var cfg vttest.Config
 	cfg.Topology = &vttestpb.VTTestTopology{
 		Keyspaces: []*vttestpb.Keyspace{

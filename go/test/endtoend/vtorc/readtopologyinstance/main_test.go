@@ -106,7 +106,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, fmt.Sprintf("%v:%v", keyspace.Name, shard0.Name), primaryInstance.ClusterName)
 
 	// insert an errant GTID in the replica
-	_, err = utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
+	_, err = utils.RunSQLWithSuperReadOnly(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks", true)
 	require.NoError(t, err)
 
 	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{

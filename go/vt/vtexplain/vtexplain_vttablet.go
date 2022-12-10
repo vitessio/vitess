@@ -104,7 +104,8 @@ type explainTablet struct {
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
 func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
-	db := fakesqldb.New(nil)
+	//db := fakesqldb.New(nil)
+	db := fakesqldb.NewWithExpectedQueries(nil)
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false

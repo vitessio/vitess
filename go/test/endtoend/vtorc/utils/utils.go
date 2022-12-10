@@ -582,11 +582,29 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 	defer conn.Close()
 
 	// RunSQL
-	return execute(t, conn, sql)
+	return RunSQLWithSuperReadOnly(t, sql, tablet, db, false)
 }
 
-func execute(t *testing.T, conn *mysql.Conn, query string) (*sqltypes.Result, error) {
+// RunSQLWithSuperReadOnly is used to run a SQL statement on the given tablet with super read only set to true or false
+func RunSQLWithSuperReadOnly(t *testing.T, sql string, tablet *cluster.Vttablet, db string, withSuperReadOnly bool) (*sqltypes.Result, error) {
+	// Get Connection
+	tabletParams := getMysqlConnParam(tablet, db)
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	conn, err := mysql.Connect(ctx, &tabletParams)
+	require.Nil(t, err)
+	defer conn.Close()
+
+	// RunSQL
+	return execute(t, conn, sql, withSuperReadOnly)
+}
+
+func execute(t *testing.T, conn *mysql.Conn, query string, withSuperReadOnly bool) (*sqltypes.Result, error) {
 	t.Helper()
+	if withSuperReadOnly {
+		return conn.ExecuteFetchWithReadOnlyHandling(query, 1000, true)
+	}
+
 	return conn.ExecuteFetch(query, 1000, true)
 }
 

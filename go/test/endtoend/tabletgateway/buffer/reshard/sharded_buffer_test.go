@@ -126,7 +126,7 @@ func TestBufferResharding(t *testing.T) {
 		bt.Test(t)
 	})
 
-	/*t.Run("fast queries", func(t *testing.T) {
+	t.Run("fast queries", func(t *testing.T) {
 		bt := &buffer.BufferingTest{
 			Assert:      assertResharding,
 			Failover:    reshard02,
@@ -134,5 +134,5 @@ func TestBufferResharding(t *testing.T) {
 			VSchema:     vschema,
 		}
 		bt.Test(t)
-	})*/
+	})
 }
