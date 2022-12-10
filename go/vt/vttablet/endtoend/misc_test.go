@@ -302,11 +302,8 @@ func TestBindInSelect(t *testing.T) {
 		"select :bv from dual",
 		map[string]*querypb.BindVariable{"bv": sqltypes.Int64BindVariable(1)},
 	)
-	if err != nil {
-		t.Error(err)
-		return
-	}
-	want := &sqltypes.Result{
+	require.NoError(t, err)
+	want57 := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "1",
 			Type:         sqltypes.Int64,
@@ -320,14 +317,15 @@ func TestBindInSelect(t *testing.T) {
 			},
 		},
 	}
-	if !qr.Equal(want) {
-		// MariaDB 10.3 has different behavior.
-		want2 := want.Copy()
-		want2.Fields[0].Type = sqltypes.Int32
-		want2.Rows[0][0] = sqltypes.NewInt32(1)
-		if !qr.Equal(want2) {
-			t.Errorf("Execute:\n%v, want\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want), prettyPrint(*want2))
-		}
+	want80 := want57.Copy()
+	want80.Fields[0].ColumnLength = 2
+
+	wantMaria := want57.Copy()
+	wantMaria.Fields[0].Type = sqltypes.Int32
+	wantMaria.Rows[0][0] = sqltypes.NewInt32(1)
+
+	if !qr.Equal(want57) && !qr.Equal(want80) && !qr.Equal(wantMaria) {
+		t.Errorf("Execute:\n%v, want\n%v,\n%v or\n%v", prettyPrint(*qr), prettyPrint(*want57), prettyPrint(*want80), prettyPrint(*wantMaria))
 	}
 
 	// String bind var.
@@ -339,7 +337,7 @@ func TestBindInSelect(t *testing.T) {
 		t.Error(err)
 		return
 	}
-	want = &sqltypes.Result{
+	want := &sqltypes.Result{
 		Fields: []*querypb.Field{{
 			Name:         "abcd",
 			Type:         sqltypes.VarChar,
