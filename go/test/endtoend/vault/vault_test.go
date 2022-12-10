@@ -267,6 +267,12 @@ func initializeClusterLate(t *testing.T) {
 		require.NoError(t, err)
 	}
 
+	for _, tablet := range shard.Vttablets {
+		// remove super read-only from vttablet
+		tablet.VttabletProcess.UnsetReadOnly("")
+	}
+
+	// TODO: Try moving this after InitPrimary. May be thats a better place.
 	for _, tablet := range []*cluster.Vttablet{primary, replica} {
 		for _, user := range mysqlUsers {
 			query := fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", user, hostname, mysqlPassword)
@@ -279,9 +285,9 @@ func initializeClusterLate(t *testing.T) {
 				require.NoError(t, err)
 			}
 		}
-		query := fmt.Sprintf("create database %s;", dbName)
+		/*query := fmt.Sprintf("create database %s;", dbName)
 		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
-		require.NoError(t, err)
+		require.NoError(t, err)*/
 
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
