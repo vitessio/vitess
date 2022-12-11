@@ -2227,7 +2227,7 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 	return true, nil
 }
 
-// reviewImmediateOperations reviewes a queued migration and determines whether its is an "immediate operation".
+// reviewImmediateOperations reviews a queued migration and determines whether it is an "immediate operation".
 // Immediate operations are ones that can be performed within a split second, or rather, do not require long
 // running processes. Immediate operations are:
 // - CREATE TABLE
