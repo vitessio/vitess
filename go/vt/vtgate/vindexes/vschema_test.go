@@ -616,6 +616,17 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		Type:     TypeReference,
 	}
 	want := &VSchema{
+		global: globalSchema{
+			keyspaceNames: map[string]any{},
+			tables: map[string]*Table{
+				"t1":   t1,
+				"t2":   t2,
+				"dual": dual1,
+			},
+			vindexes: map[string]Vindex{
+				"stfu1": vindex1,
+			},
+		},
 		RoutingRules: map[string]*RoutingRule{
 			"rt1": {
 				Error: errors.New("table rt1 has more than one target: [ks1.t1 ks2.t2]"),
@@ -641,14 +652,6 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			"notfound": {
 				Error: errors.New("table t2 not found"),
 			},
-		},
-		globalTables: map[string]*Table{
-			"t1":   t1,
-			"t2":   t2,
-			"dual": dual1,
-		},
-		uniqueVindexes: map[string]Vindex{
-			"stfu1": vindex1,
 		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ks1": {
@@ -1041,14 +1044,17 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 		Type:     TypeReference,
 	}
 	want := &VSchema{
+		global: globalSchema{
+			keyspaceNames: map[string]any{},
+			tables: map[string]*Table{
+				"t1":   t1,
+				"dual": dual,
+			},
+			vindexes: map[string]Vindex{
+				"stfu1": vindex1,
+			},
+		},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
-			"t1":   t1,
-			"dual": dual,
-		},
-		uniqueVindexes: map[string]Vindex{
-			"stfu1": vindex1,
-		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
@@ -1122,12 +1128,17 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
-			"t1":   t1,
-			"dual": dual},
-		uniqueVindexes: map[string]Vindex{
-			"stlu1": vindex1,
-			"stfu1": vindex2},
+		global: globalSchema{
+			keyspaceNames: map[string]any{},
+			tables: map[string]*Table{
+				"t1":   t1,
+				"dual": dual,
+			},
+			vindexes: map[string]Vindex{
+				"stlu1": vindex1,
+				"stfu1": vindex2,
+			},
+		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
@@ -1234,10 +1245,6 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
-			"t1":   nil,
-			"dual": duala},
-		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
@@ -1251,7 +1258,15 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 				Tables: map[string]*Table{
 					"t1":   t1b,
 					"dual": dualb},
-				Vindexes: map[string]Vindex{}}}}
+				Vindexes: map[string]Vindex{}}},
+		global: globalSchema{
+			keyspaceNames: map[string]any{},
+			tables: map[string]*Table{
+				"t1":   nil,
+				"dual": duala,
+			},
+			vindexes: map[string]Vindex{},
+		}}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1300,12 +1315,15 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Type:     TypeReference,
 	}
 	want := &VSchema{
-		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
-			"t1":   nil,
-			"dual": duala,
+		global: globalSchema{
+			keyspaceNames: map[string]any{},
+			tables: map[string]*Table{
+				"t1":   nil,
+				"dual": duala,
+			},
+			vindexes: map[string]Vindex{},
 		},
-		uniqueVindexes: map[string]Vindex{},
+		RoutingRules: map[string]*RoutingRule{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
@@ -1438,14 +1456,17 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 		Type:     TypeReference,
 	}
 	want := &VSchema{
+		global: globalSchema{
+			keyspaceNames: map[string]any{},
+			tables: map[string]*Table{
+				"t1":   nil,
+				"dual": duala,
+			},
+			vindexes: map[string]Vindex{
+				"stlu1": nil,
+			},
+		},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
-			"t1":   nil,
-			"dual": duala,
-		},
-		uniqueVindexes: map[string]Vindex{
-			"stlu1": nil,
-		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
@@ -2024,16 +2045,19 @@ func TestSequence(t *testing.T) {
 		Type:     TypeReference,
 	}
 	want := &VSchema{
+		global: globalSchema{
+			keyspaceNames: map[string]any{},
+			tables: map[string]*Table{
+				"seq":  seq,
+				"t1":   t1,
+				"t2":   t2,
+				"dual": dualb,
+			},
+			vindexes: map[string]Vindex{
+				"stfu1": vindex1,
+			},
+		},
 		RoutingRules: map[string]*RoutingRule{},
-		globalTables: map[string]*Table{
-			"seq":  seq,
-			"t1":   t1,
-			"t2":   t2,
-			"dual": dualb,
-		},
-		uniqueVindexes: map[string]Vindex{
-			"stfu1": vindex1,
-		},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"unsharded": {
 				Keyspace: ksu,
@@ -2924,6 +2948,154 @@ func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
 	vs := BuildVSchema(&input)
 	_, err := vs.FindTable("", "t1")
 	require.Error(t, err)
+}
+
+func TestUseGlobalKeyspaceNameToFindTables(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+					"t2": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "binary_md5",
+					},
+					"stfu1": {
+						Type: "stfu",
+						Params: map[string]string{
+							"stfu1": "1",
+						},
+						Owner: "t3",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type:   "reference",
+						Source: "unsharded.t1",
+					},
+					"t3": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+							{
+								Column: "c2",
+								Name:   "stfu1",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	builder := NewVSchemaBuilder([]string{"unsharded", "vt_global", "sharded"})
+	vs := builder.BuildVSchema(&input)
+
+	for _, ks := range vs.Keyspaces {
+		require.NoError(t, ks.Error)
+	}
+
+	// Verify conflicting global keyspace name `unsharded` cannot be used to
+	// globally route to keyspaces.
+	t1, err := vs.FindTable("unsharded", "t1")
+	require.NoError(t, err)
+	require.Equal(t, "t1", t1.Name.String())
+	require.Equal(t, "unsharded", t1.Keyspace.Name)
+	require.Nil(t, t1.Source)
+	require.Equal(t, "", t1.Type)
+
+	t2, err := vs.FindTable("unsharded", "t2")
+	require.NoError(t, err)
+	require.Equal(t, "t2", t2.Name.String())
+	require.Equal(t, "unsharded", t2.Keyspace.Name)
+
+	// This isn't global routing, it's expected behavior for unsharded
+	// keyspaces.
+	t3, err := vs.FindTable("unsharded", "t3")
+	require.NoError(t, err)
+	require.Equal(t, "t3", t3.Name.String())
+	require.Equal(t, "unsharded", t3.Keyspace.Name)
+
+	// Verify `vt_global` can be used to find all globally routable keyspaces.
+	t1, err = vs.FindTable("vt_global", "t1")
+	require.NoError(t, err)
+	require.Equal(t, "t1", t1.Name.String())
+	require.Equal(t, "unsharded", t1.Keyspace.Name)
+
+	t2, err = vs.FindTable("vt_global", "t2")
+	require.NoError(t, err)
+	require.Equal(t, "t2", t2.Name.String())
+	require.Equal(t, "unsharded", t2.Keyspace.Name)
+
+	t3, err = vs.FindTable("vt_global", "t3")
+	require.NoError(t, err)
+	require.Equal(t, "t3", t3.Name.String())
+	require.Equal(t, "sharded", t3.Keyspace.Name)
+
+	// Verify conflicting global keyspace name `sharded` cannot be used to
+	// globally route to keyspaces.
+	t1, err = vs.FindTable("sharded", "t1")
+	require.NoError(t, err)
+	require.Equal(t, "t1", t1.Name.String())
+	require.Equal(t, "sharded", t1.Keyspace.Name)
+	require.NotNil(t, t1.Source)
+	require.Equal(t, "unsharded.t1", t1.Source.String())
+	require.Equal(t, TypeReference, t1.Type)
+
+	t2, err = vs.FindTable("sharded", "t2")
+	require.Error(t, err)
+	require.Nil(t, t2)
+
+	t3, err = vs.FindTable("vt_global", "t3")
+	require.NoError(t, err)
+	require.Equal(t, "t3", t3.Name.String())
+	require.Equal(t, "sharded", t3.Keyspace.Name)
+
+	// Verify FindTableOrVindex works as expected.
+	t1, v1, err := vs.FindTableOrVindex("vt_global", "t1", topodatapb.TabletType_PRIMARY)
+	require.Nil(t, err)
+	require.Nil(t, v1)
+	require.Equal(t, "t1", t1.Name.String())
+	require.Equal(t, "unsharded", t1.Keyspace.Name)
+
+	t1, v1, err = vs.FindTableOrVindex("sharded", "t1", topodatapb.TabletType_PRIMARY)
+	require.Nil(t, err)
+	require.Nil(t, v1)
+	require.Equal(t, "t1", t1.Name.String())
+	require.Equal(t, "sharded", t1.Keyspace.Name)
+
+	t2, v2, err := vs.FindTableOrVindex("vt_global", "t2", topodatapb.TabletType_PRIMARY)
+	require.Nil(t, err)
+	require.Nil(t, v2)
+	require.Equal(t, "t2", t2.Name.String())
+	require.Equal(t, "unsharded", t2.Keyspace.Name)
+
+	t3, v3, err := vs.FindTableOrVindex("vt_global", "t3", topodatapb.TabletType_PRIMARY)
+	require.Nil(t, err)
+	require.Nil(t, v3)
+	require.Equal(t, "t3", t3.Name.String())
+	require.Equal(t, "sharded", t3.Keyspace.Name)
+
+	// This isn't global routing, it's expected behavior for unsharded
+	// keyspaces.
+	t3, v3, err = vs.FindTableOrVindex("unsharded", "t3", topodatapb.TabletType_PRIMARY)
+	require.NoError(t, err)
+	require.Nil(t, v3)
+	require.Equal(t, "t3", t3.Name.String())
+	require.Equal(t, "unsharded", t3.Keyspace.Name)
+
+	tstfu1, vstfu1, err := vs.FindTableOrVindex("vt_global", "stfu1", topodatapb.TabletType_PRIMARY)
+	require.Nil(t, err)
+	require.Nil(t, tstfu1)
+	require.NotNil(t, vstfu1)
 }
 
 func vindexNames(vindexes []*ColumnVindex) (result []string) {

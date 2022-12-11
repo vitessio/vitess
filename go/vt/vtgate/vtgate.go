@@ -102,6 +102,10 @@ var (
 	enableSchemaChangeSignal = true
 	schemaChangeUser         string
 	queryTimeout             int
+
+	// Global routing is enabled either when a default keyspace is not
+	// specified, or else when a global keyspace name is specified.
+	globalKeyspaceNames []string
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -132,6 +136,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&enableSchemaChangeSignal, "schema_change_signal", enableSchemaChangeSignal, "Enable the schema tracker; requires queryserver-config-schema-change-signal to be enabled on the underlying vttablets for this to work")
 	fs.StringVar(&schemaChangeUser, "schema_change_signal_user", schemaChangeUser, "User to be used to send down query to vttablet to retrieve schema changes")
 	fs.IntVar(&queryTimeout, "query-timeout", queryTimeout, "Sets the default query timeout (in ms). Can be overridden by session variable (query_timeout) or comment directive (QUERY_TIMEOUT_MS)")
+	fs.StringSliceVar(&globalKeyspaceNames, "global-keyspace", globalKeyspaceNames, "Global routing behavior applies when no default keyspace is set on a connection, or when a global keyspace is used. Multiple global keyspaces may defined by specifying this flag multiple times.")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
@@ -272,6 +277,7 @@ func Init(
 		si,
 		noScatter,
 		pv,
+		globalKeyspaceNames,
 	)
 
 	// connect the schema tracker with the vschema manager

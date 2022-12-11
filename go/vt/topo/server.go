@@ -53,6 +53,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
@@ -141,6 +142,9 @@ type Server struct {
 	// will read the list of addresses for that cell from the
 	// global cluster and create clients as needed.
 	cellConns map[string]cellConn
+
+	// vschemaBuilder is used to builder VSchemas.
+	vschemaBuilder *vindexes.VSchemaBuilder
 }
 
 type cellConn struct {

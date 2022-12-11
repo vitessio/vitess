@@ -135,6 +135,7 @@ func NewExecutor(
 	schemaTracker SchemaInfo,
 	noScatter bool,
 	pv plancontext.PlannerVersion,
+	globalKeyspaceNames []string,
 ) *Executor {
 	e := &Executor{
 		serv:            serv,
@@ -154,10 +155,11 @@ func NewExecutor(
 	vschemaacl.Init()
 	// we subscribe to update from the VSchemaManager
 	e.vm = &VSchemaManager{
-		subscriber: e.SaveVSchema,
-		serv:       serv,
-		cell:       cell,
-		schema:     e.schemaTracker,
+		subscriber:     e.SaveVSchema,
+		serv:           serv,
+		cell:           cell,
+		schema:         e.schemaTracker,
+		vschemaBuilder: vindexes.NewVSchemaBuilder(globalKeyspaceNames),
 	}
 	serv.WatchSrvVSchema(ctx, cell, e.vm.VSchemaUpdate)
 

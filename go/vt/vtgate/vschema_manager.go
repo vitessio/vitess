@@ -40,6 +40,7 @@ type VSchemaManager struct {
 	mu                sync.Mutex
 	currentSrvVschema *vschemapb.SrvVSchema
 	currentVschema    *vindexes.VSchema
+	vschemaBuilder    *vindexes.VSchemaBuilder
 	serv              srvtopo.Server
 	cell              string
 	subscriber        func(vschema *vindexes.VSchema, stats *VSchemaStats)
@@ -125,7 +126,7 @@ func (vm *VSchemaManager) VSchemaUpdate(v *vschemapb.SrvVSchema, err error) bool
 	if v == nil {
 		// We encountered an error, build an empty vschema.
 		if vm.currentVschema == nil {
-			vschema = vindexes.BuildVSchema(&vschemapb.SrvVSchema{})
+			vschema = vm.vschemaBuilder.BuildVSchema(&vschemapb.SrvVSchema{})
 		}
 	} else {
 		vschema = vm.buildAndEnhanceVSchema(v)
@@ -180,7 +181,7 @@ func (vm *VSchemaManager) Rebuild() {
 
 // buildAndEnhanceVSchema builds a new VSchema and uses information from the schema tracker to update it
 func (vm *VSchemaManager) buildAndEnhanceVSchema(v *vschemapb.SrvVSchema) *vindexes.VSchema {
-	vschema := vindexes.BuildVSchema(v)
+	vschema := vm.vschemaBuilder.BuildVSchema(v)
 	if vm.schema != nil {
 		vm.updateFromSchema(vschema)
 	}

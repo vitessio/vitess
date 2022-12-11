@@ -108,9 +108,10 @@ func TestVSchemaUpdate(t *testing.T) {
 			vm.schema = &fakeSchema{t: tcase.schema}
 			vm.currentSrvVschema = nil
 			vm.currentVschema = tcase.currentVSchema
+			vm.vschemaBuilder = vindexes.DefaultVSchemaBuilder()
 			vm.VSchemaUpdate(tcase.srvVschema, nil)
 
-			utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, tcase.expected, vs)
+			utils.MustMatchFn(".global")(t, tcase.expected, vs)
 			if tcase.srvVschema != nil {
 				utils.MustMatch(t, vs, vm.currentVschema, "currentVschema should have same reference as Vschema")
 			}
@@ -208,9 +209,10 @@ func TestRebuildVSchema(t *testing.T) {
 			vm.schema = &fakeSchema{t: tcase.schema}
 			vm.currentSrvVschema = tcase.srvVschema
 			vm.currentVschema = nil
+			vm.vschemaBuilder = vindexes.DefaultVSchemaBuilder()
 			vm.Rebuild()
 
-			utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, tcase.expected, vs)
+			utils.MustMatchFn(".global")(t, tcase.expected, vs)
 			if vs != nil {
 				utils.MustMatch(t, vs, vm.currentVschema, "currentVschema should have same reference as Vschema")
 			}

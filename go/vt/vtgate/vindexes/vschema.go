@@ -25,6 +25,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqlescape"
+	"vitess.io/vitess/go/vt/log"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -56,18 +57,29 @@ const (
 	TypeReference = "reference"
 )
 
+const unspecifiedKeyspace = ""
+
+var defaultVSchemaBuilder = NewVSchemaBuilder(nil)
+
+type VSchemaBuilder struct {
+	globalKeyspaceNames []string
+}
+
+func DefaultVSchemaBuilder() *VSchemaBuilder {
+	return defaultVSchemaBuilder
+}
+
+func NewVSchemaBuilder(globalKeyspaceNames []string) *VSchemaBuilder {
+	return &VSchemaBuilder{globalKeyspaceNames}
+}
+
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
-	RoutingRules map[string]*RoutingRule `json:"routing_rules"`
-
-	// uniqueTables contains the name of all tables in all keyspaces. if the table is uniquely named, the value will
-	// be the name of the keyspace where this table exists. if multiple keyspaces have a table with the same name, the
-	// value will be a `nil` value
-	globalTables      map[string]*Table
-	uniqueVindexes    map[string]Vindex
+	RoutingRules      map[string]*RoutingRule    `json:"routing_rules"`
 	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
 	ShardRoutingRules map[string]string          `json:"shard_routing_rules"`
+	global            globalSchema               `json:"-"`
 }
 
 // RoutingRule represents one routing rule.
@@ -166,6 +178,53 @@ func (col *Column) MarshalJSON() ([]byte, error) {
 	})
 }
 
+type globalSchema struct {
+	keyspaceNames map[string]any
+	tables        map[string]*Table
+	vindexes      map[string]Vindex
+}
+
+func defaultGlobalSchema() globalSchema {
+	return globalSchema{
+		keyspaceNames: map[string]any{},
+		tables:        make(map[string]*Table),
+		vindexes:      make(map[string]Vindex),
+	}
+}
+
+func (gs *globalSchema) addKeyspaceName(keyspace string) {
+	gs.keyspaceNames[keyspace] = nil
+}
+
+func (gs *globalSchema) hasKeyspaceName(keyspace string) bool {
+	if keyspace == unspecifiedKeyspace {
+		return true
+	}
+	_, ok := gs.keyspaceNames[keyspace]
+	return ok
+}
+
+func (vschema *VSchema) GetKeyspace(keyspace string) *Keyspace {
+	v, ok := vschema.Keyspaces[keyspace]
+	if !ok {
+		return nil
+	}
+	return v.Keyspace
+}
+
+func (vschema *VSchema) HasGlobalKeyspaceName(keyspace string) bool {
+	return vschema.global.hasKeyspaceName(keyspace)
+}
+
+func (vschema *VSchema) HasKeyspaceOrGlobalKeyspaceName(keyspace string) bool {
+	return vschema.HasGlobalKeyspaceName(keyspace) || vschema.HasKeyspace(keyspace)
+}
+
+func (vschema *VSchema) HasKeyspace(keyspace string) bool {
+	_, ok := vschema.Keyspaces[keyspace]
+	return ok
+}
+
 // KeyspaceSchema contains the schema(table) for a keyspace.
 type KeyspaceSchema struct {
 	Keyspace *Keyspace
@@ -213,19 +272,22 @@ func (source *Source) String() string {
 
 // BuildVSchema builds a VSchema from a SrvVSchema.
 func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
+	return defaultVSchemaBuilder.BuildVSchema(source)
+}
+
+func (vsb *VSchemaBuilder) BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	vschema = &VSchema{
-		RoutingRules:   make(map[string]*RoutingRule),
-		globalTables:   make(map[string]*Table),
-		uniqueVindexes: make(map[string]Vindex),
-		Keyspaces:      make(map[string]*KeyspaceSchema),
+		RoutingRules: make(map[string]*RoutingRule),
+		global:       defaultGlobalSchema(),
+		Keyspaces:    make(map[string]*KeyspaceSchema),
 	}
-	buildKeyspaces(source, vschema)
-	buildReferences(source, vschema)
-	buildGlobalTables(source, vschema)
-	resolveAutoIncrement(source, vschema)
-	addDual(vschema)
-	buildRoutingRule(source, vschema)
-	buildShardRoutingRule(source, vschema)
+	vsb.buildKeyspaces(source, vschema)
+	vsb.buildReferences(source, vschema)
+	vsb.buildGlobalSchema(source, vschema)
+	vsb.resolveAutoIncrement(source, vschema)
+	vsb.addDual(vschema)
+	vsb.buildRoutingRule(source, vschema)
+	vsb.buildShardRoutingRule(source, vschema)
 	return vschema
 }
 
@@ -233,6 +295,10 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 // The build ignores sequence references because those dependencies can
 // go cross-keyspace.
 func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceSchema, error) {
+	return defaultVSchemaBuilder.BuildKeyspaceSchema(input, keyspace)
+}
+
+func (vsb *VSchemaBuilder) BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceSchema, error) {
 	if input == nil {
 		input = &vschemapb.Keyspace{}
 	}
@@ -242,11 +308,10 @@ func BuildKeyspaceSchema(input *vschemapb.Keyspace, keyspace string) (*KeyspaceS
 		},
 	}
 	vschema := &VSchema{
-		globalTables:   make(map[string]*Table),
-		uniqueVindexes: make(map[string]Vindex),
-		Keyspaces:      make(map[string]*KeyspaceSchema),
+		Keyspaces: make(map[string]*KeyspaceSchema),
+		global:    defaultGlobalSchema(),
 	}
-	buildKeyspaces(formal, vschema)
+	vsb.buildKeyspaces(formal, vschema)
 	err := vschema.Keyspaces[keyspace].Error
 	return vschema.Keyspaces[keyspace], err
 }
@@ -258,7 +323,7 @@ func ValidateKeyspace(input *vschemapb.Keyspace) error {
 	return err
 }
 
-func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func (vsb *VSchemaBuilder) buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := &KeyspaceSchema{
 			Keyspace: &Keyspace{
@@ -300,7 +365,7 @@ func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
 	return nil
 }
 
-func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func (vsb *VSchemaBuilder) buildGlobalSchema(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		// If the keyspace requires explicit routing, don't include any of
@@ -308,13 +373,35 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		if ks.RequireExplicitRouting {
 			continue
 		}
-		buildKeyspaceGlobalTables(vschema, ksvschema)
+
+		for vname := range ks.Vindexes {
+			vindex := ksvschema.Vindexes[vname]
+
+			if _, ok := vschema.global.vindexes[vname]; ok {
+				vschema.global.vindexes[vname] = nil
+			} else {
+				vschema.global.vindexes[vname] = vindex
+			}
+		}
+
+		vsb.buildGlobalTables(vschema, ksvschema)
 	}
+
+	// Add any additional global keyspace names, as long as they don't conflict
+	// with other keyspace names.
+	for _, ksname := range vsb.globalKeyspaceNames {
+		if _, ok := vschema.Keyspaces[ksname]; ok {
+			log.Warningf("Ignoring a user-defined global keyspace conflicts with VSchema keyspace: %s.", ksname)
+			continue
+		}
+		vschema.global.addKeyspaceName(ksname)
+	}
+
 }
 
-func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
+func (vsb *VSchemaBuilder) buildGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 	for tname, t := range ksvschema.Tables {
-		if gt, ok := vschema.globalTables[tname]; ok {
+		if gt, ok := vschema.global.tables[tname]; ok {
 			// There is already an entry table stored in global tables
 			// with this name.
 			if gt == nil {
@@ -323,21 +410,21 @@ func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 			} else if t.isReferencedInKeyspace(gt.Keyspace.Name) {
 				// If the stored table refers to this table, store this
 				// table instead.
-				vschema.globalTables[tname] = t
+				vschema.global.tables[tname] = t
 			} else if gt.isReferencedInKeyspace(t.Keyspace.Name) {
 				// The source of this table is already stored. Do nothing.
 				continue
 			} else {
 				// Otherwise, mark this table name ambiguous.
-				vschema.globalTables[tname] = nil
+				vschema.global.tables[tname] = nil
 			}
 		} else {
-			vschema.globalTables[tname] = t
+			vschema.global.tables[tname] = t
 		}
 	}
 }
 
-func buildReferences(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func (vsb *VSchemaBuilder) buildReferences(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		if err := buildKeyspaceReferences(vschema, ksvschema); err != nil && ksvschema.Error == nil {
@@ -422,15 +509,6 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 			return err
 		}
 
-		// If the keyspace requires explicit routing, don't include its indexes
-		// in global routing.
-		if !ks.RequireExplicitRouting {
-			if _, ok := vschema.uniqueVindexes[vname]; ok {
-				vschema.uniqueVindexes[vname] = nil
-			} else {
-				vschema.uniqueVindexes[vname] = vindex
-			}
-		}
 		ksvschema.Vindexes[vname] = vindex
 	}
 	for tname, table := range ks.Tables {
@@ -632,14 +710,14 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 
 func (vschema *VSchema) addTableName(t *Table) {
 	tname := t.Name.String()
-	if _, ok := vschema.globalTables[tname]; ok {
-		vschema.globalTables[tname] = nil
+	if _, ok := vschema.global.tables[tname]; ok {
+		vschema.global.tables[tname] = nil
 	} else {
-		vschema.globalTables[tname] = t
+		vschema.global.tables[tname] = t
 	}
 }
 
-func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func (vsb *VSchemaBuilder) resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
 		for tname, table := range ks.Tables {
@@ -655,7 +733,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 			if err != nil {
 				// Better to remove the table than to leave it partially initialized.
 				delete(ksvschema.Tables, tname)
-				delete(vschema.globalTables, tname)
+				delete(vschema.global.tables, tname)
 				ksvschema.Error = vterrors.Errorf(
 					vtrpcpb.Code_NOT_FOUND,
 					"cannot resolve sequence %s: %s",
@@ -675,7 +753,7 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 
 // addDual adds dual as a valid table to all keyspaces.
 // For sharded keyspaces, it gets pinned against keyspace id '0x00'.
-func addDual(vschema *VSchema) {
+func (*VSchemaBuilder) addDual(vschema *VSchema) {
 	first := ""
 	for ksname, ks := range vschema.Keyspaces {
 		t := &Table{
@@ -690,7 +768,7 @@ func addDual(vschema *VSchema) {
 			// the keyspaces. For consistency, we'll always use the
 			// first keyspace by lexical ordering.
 			first = ksname
-			vschema.globalTables["dual"] = t
+			vschema.global.tables["dual"] = t
 		}
 	}
 }
@@ -732,7 +810,7 @@ func parseQualifiedTable(qualifiedTableName string) (sqlparser.TableName, error)
 	}, nil
 }
 
-func buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func (vsb *VSchemaBuilder) buildRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	var err error
 	if source.RoutingRules == nil {
 		return
@@ -783,7 +861,7 @@ outer:
 				}
 				continue outer
 			}
-			if toKeyspace == "" {
+			if vschema.global.hasKeyspaceName(toKeyspace) {
 				vschema.RoutingRules[rule.FromTable] = &RoutingRule{
 					Error: vterrors.Errorf(
 						vtrpcpb.Code_INVALID_ARGUMENT,
@@ -806,7 +884,7 @@ outer:
 	}
 }
 
-func buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
+func (*VSchemaBuilder) buildShardRoutingRule(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	if source.ShardRoutingRules == nil || len(source.ShardRoutingRules.Rules) == 0 {
 		return
 	}
@@ -842,8 +920,8 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 
 // findTable is like FindTable, but does not return an error if a table is not found.
 func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
-	if keyspace == "" {
-		t, ok := vschema.globalTables[tablename]
+	if vschema.global.hasKeyspaceName(keyspace) {
+		t, ok := vschema.global.tables[tablename]
 		if t == nil {
 			if ok {
 				return nil, vterrors.Errorf(
@@ -940,7 +1018,7 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatemen
 				break
 			}
 		default:
-			t, ok := vschema.globalTables[name]
+			t, ok := vschema.global.tables[name]
 			if !ok {
 				return nil
 			}
@@ -1014,8 +1092,8 @@ func (n NotFoundError) Error() string {
 // is returned only if its name is unique across all keyspaces. The function
 // returns an error only if the vindex name is ambiguous.
 func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
-	if keyspace == "" {
-		vindex, ok := vschema.uniqueVindexes[name]
+	if vschema.global.hasKeyspaceName(keyspace) {
+		vindex, ok := vschema.global.vindexes[name]
 		if vindex == nil && ok {
 			return nil, vterrors.Errorf(
 				vtrpcpb.Code_FAILED_PRECONDITION,

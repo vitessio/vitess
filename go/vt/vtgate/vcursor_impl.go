@@ -54,6 +54,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vschemaacl"
 )
 
+const unspecifiedKeyspace = ""
+
 var _ engine.VCursor = (*vcursorImpl)(nil)
 var _ plancontext.VSchema = (*vcursorImpl)(nil)
 var _ iExecute = (*Executor)(nil)
@@ -212,14 +214,14 @@ func (vc *vcursorImpl) IsShardRoutingEnabled() bool {
 	return enableShardRouting
 }
 
-// FindTable finds the specified table. If the keyspace what specified in the input, it gets used as qualifier.
+// FindTable finds the specified table. If the keyspace was specified in the input, it gets used as qualifier.
 // Otherwise, the keyspace from the request is used, if one was provided.
 func (vc *vcursorImpl) FindTable(name sqlparser.TableName) (*vindexes.Table, string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, "", destTabletType, nil, err
 	}
-	if destKeyspace == "" {
+	if destKeyspace == unspecifiedKeyspace {
 		destKeyspace = vc.keyspace
 	}
 	table, err := vc.vschema.FindTable(destKeyspace, name.Name.String())
@@ -245,7 +247,7 @@ func (vc *vcursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Tabl
 	if err != nil {
 		return nil, err
 	}
-	if destKeyspace == "" {
+	if destKeyspace == unspecifiedKeyspace {
 		destKeyspace = vc.keyspace
 	}
 
@@ -263,7 +265,7 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
 	}
-	if destKeyspace == "" {
+	if destKeyspace == unspecifiedKeyspace {
 		destKeyspace = vc.getActualKeyspace()
 	}
 	table, vindex, err := vc.vschema.FindTableOrVindex(destKeyspace, name.Name.String(), vc.tabletType)
@@ -288,14 +290,13 @@ func (vc *vcursorImpl) getActualKeyspace() string {
 // if there is one. If the keyspace specified in the target cannot be
 // identified, it returns an error.
 func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
-	if ignoreKeyspace(vc.keyspace) {
+	if vc.vschema.HasGlobalKeyspaceName(vc.keyspace) || sqlparser.SystemSchema(vc.keyspace) {
 		return nil, errNoKeyspace
 	}
-	ks, ok := vc.vschema.Keyspaces[vc.keyspace]
-	if !ok {
+	if !vc.vschema.HasKeyspace(vc.keyspace) {
 		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", vc.keyspace)
 	}
-	return ks.Keyspace, nil
+	return vc.vschema.GetKeyspace(vc.keyspace), nil
 }
 
 var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")
@@ -648,19 +649,14 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 	if err != nil {
 		return err
 	}
-	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
+	if !vc.vschema.HasKeyspaceOrGlobalKeyspaceName(keyspace) && !sqlparser.SystemSchema(keyspace) {
 		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "unknown database '%s'", keyspace)
 	}
-
 	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "can't execute the given command because you have an active transaction")
 	}
 	vc.safeSession.SetTargetString(target)
 	return nil
-}
-
-func ignoreKeyspace(keyspace string) bool {
-	return keyspace == "" || sqlparser.SystemSchema(keyspace)
 }
 
 func (vc *vcursorImpl) SetUDV(key string, value any) error {
@@ -727,17 +723,17 @@ func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sq
 // TargetDestination implements the ContextVSchema interface
 func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error) {
 	keyspaceName := vc.keyspace
-	if vc.destination == nil && qualifier != "" {
+	if vc.destination == nil && qualifier != unspecifiedKeyspace {
 		keyspaceName = qualifier
 	}
-	if keyspaceName == "" {
+	if vc.vschema.HasGlobalKeyspaceName(keyspaceName) {
 		return nil, nil, 0, errNoKeyspace
 	}
-	keyspace := vc.vschema.Keyspaces[keyspaceName]
+	keyspace := vc.vschema.GetKeyspace(keyspaceName)
 	if keyspace == nil {
 		return nil, nil, 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspaceName)
 	}
-	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
+	return vc.destination, keyspace, vc.tabletType, nil
 }
 
 // SetAutocommit implements the SessionActions interface
@@ -951,7 +947,7 @@ func (vc *vcursorImpl) ForeignKeyMode() string {
 func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
 	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
 	// Set default keyspace
-	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
+	if vschema.HasGlobalKeyspaceName(destKeyspace) && len(vschema.Keyspaces) == 1 {
 		for k := range vschema.Keyspaces {
 			destKeyspace = k
 		}
@@ -1002,10 +998,12 @@ func (vc *vcursorImpl) ExecuteVSchema(ctx context.Context, keyspace string, vsch
 	if !vschemaDDL.Table.IsEmpty() {
 		ksName = vschemaDDL.Table.Qualifier.String()
 	}
-	if ksName == "" {
+	if ksName == unspecifiedKeyspace {
 		ksName = keyspace
 	}
-	if ksName == "" {
+
+	// Global routing does not support `alter vschema` statements.
+	if vc.vschema.HasGlobalKeyspaceName(ksName) {
 		return errNoKeyspace
 	}
 
