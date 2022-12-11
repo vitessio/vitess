@@ -2185,7 +2185,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 // - which table is involved?
 // - is this a table or a view?
 // - Are we reverting a CREATE? A DROP? An ALTER?
-// This function fills in the blanks and updated the database row.
+// This function fills in the blanks and updates the database row.
 func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineDDL *schema.OnlineDDL) (changesMade bool, err error) {
 	if onlineDDL.Table != "" {
 		return false, nil
