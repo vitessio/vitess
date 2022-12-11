@@ -4004,12 +4004,12 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
 	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
 
-	maxlen := 2048
+	maxlen := 16383
 	update := func(message string) error {
-		message = strings.ToValidUTF8(message, "�")
 		if len(message) > maxlen {
 			message = message[0:maxlen]
 		}
+		message = strings.ToValidUTF8(message, "�")
 		query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
 			sqltypes.StringBindVariable(message),
 			sqltypes.StringBindVariable(uuid),
