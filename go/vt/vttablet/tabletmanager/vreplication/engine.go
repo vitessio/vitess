@@ -133,6 +133,10 @@ type Engine struct {
 	ec        *externalConnector
 
 	throttlerClient *throttle.Client
+
+	// This is set by NewTestEngine and can be used to short curcuit
+	// functions as needed in unit tests.
+	testengine bool
 }
 
 type journalEvent struct {
@@ -184,6 +188,7 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(externalConfig),
+		testengine:              true,
 	}
 	return vre
 }
@@ -720,6 +725,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		return err
 	}
 	defer vre.wg.Done()
+
+	if vre.testengine {
+		return nil
+	}
 
 	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {

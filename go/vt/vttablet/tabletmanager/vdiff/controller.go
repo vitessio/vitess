@@ -91,7 +91,7 @@ func newController(ctx context.Context, row sqltypes.RowNamedValues, dbClientFac
 		ts:              ts,
 		vde:             vde,
 		done:            make(chan struct{}),
-		tmc:             tmclient.NewTabletManagerClient(),
+		tmc:             vde.tmClientFactory(),
 		sources:         make(map[string]*migrationSource),
 		options:         options,
 	}

@@ -66,7 +66,7 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 	}
 }
 
-// New creates a new Wrangler object for use in tests. This should NOT be used
+// NewTestWrangler creates a new Wrangler object for use in tests. This should NOT be used
 // in production.
 func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
 	return &Wrangler{

@@ -36,14 +36,14 @@ import (
 )
 
 func TestBuildPlanSuccess(t *testing.T) {
-	vdenv := newSingleTabletTestVDiffEnv(t)
+	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()
 	UUID := uuid.New()
 	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffenv.dbName, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
@@ -470,14 +470,14 @@ func TestBuildPlanSuccess(t *testing.T) {
 }
 
 func TestBuildPlanInclude(t *testing.T) {
-	vdenv := newSingleTabletTestVDiffEnv(t)
+	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()
 
 	controllerQR := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffenv.dbName, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", uuid.New(), vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
 	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)
@@ -542,7 +542,7 @@ func TestBuildPlanInclude(t *testing.T) {
 }
 
 func TestBuildPlanFailure(t *testing.T) {
-	vdenv := newSingleTabletTestVDiffEnv(t)
+	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()
 	UUID := uuid.New()
 
@@ -550,7 +550,7 @@ func TestBuildPlanFailure(t *testing.T) {
 		vdiffTestCols,
 		vdiffTestColTypes,
 	),
-		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffenv.dbName, PendingState, optionsJS),
+		fmt.Sprintf("1|%s|%s|%s|%s|%s|%s|%s|", UUID, vdiffenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, PendingState, optionsJS),
 	)
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", noResults, nil)
 	ct, err := newController(context.Background(), controllerQR.Named().Row(), vdiffenv.dbClientFactory, tstenv.TopoServ, vdiffenv.vde, vdiffenv.opts)

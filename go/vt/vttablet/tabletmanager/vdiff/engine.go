@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -50,6 +51,7 @@ type Engine struct {
 	cancelRetry context.CancelFunc
 
 	ts                      *topo.Server
+	tmClientFactory         func() tmclient.TabletManagerClient
 	dbClientFactoryFiltered func() binlogplayer.DBClient
 	dbClientFactoryDba      func() binlogplayer.DBClient
 	dbName                  string
@@ -68,9 +70,10 @@ type Engine struct {
 
 func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet) *Engine {
 	vde := &Engine{
-		controllers: make(map[int64]*controller),
-		ts:          ts,
-		thisTablet:  tablet,
+		controllers:     make(map[int64]*controller),
+		ts:              ts,
+		thisTablet:      tablet,
+		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
 	}
 	return vde
 }
