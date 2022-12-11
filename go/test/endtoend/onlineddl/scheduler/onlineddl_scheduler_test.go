@@ -41,8 +41,9 @@ var (
 	shards          []cluster.Shard
 	vtParams        mysql.ConnParams
 
-	normalWaitTime   = 20 * time.Second
-	extendedWaitTime = 60 * time.Second
+	normalWaitTime            = 20 * time.Second
+	extendedWaitTime          = 60 * time.Second
+	ensureStateNotChangedTime = 5 * time.Second
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
@@ -78,6 +79,9 @@ var (
 	`
 	trivialAlterT2Statement = `
 		ALTER TABLE t2_test ENGINE=InnoDB;
+	`
+	instantAlterT1Statement = `
+		ALTER TABLE t1_test ADD COLUMN i0 INT NOT NULL DEFAULT 0;
 	`
 	dropT1Statement = `
 		DROP TABLE IF EXISTS t1_test
@@ -160,6 +164,10 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
+	require.NotEmpty(t, mysqlVersion)
+	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
 
 	var t1uuid string
 	var t2uuid string
@@ -313,7 +321,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			// now that t1 is running, let's unblock t2. We expect it to remain queued.
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, t2uuid, true)
-			time.Sleep(5 * time.Second)
+			time.Sleep(ensureStateNotChangedTime)
 			// t1 should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			// non-concurrent -- should be queued!
@@ -345,7 +353,7 @@ func TestSchemaChange(t *testing.T) {
 		t.Run("expect both running", func(t *testing.T) {
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
-			time.Sleep(5 * time.Second)
+			time.Sleep(ensureStateNotChangedTime)
 			// both should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
@@ -384,7 +392,7 @@ func TestSchemaChange(t *testing.T) {
 			// since all migrations are throttled, t1 migration is not ready_to_complete, hence
 			// t2 should not be running
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, normalWaitTime, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
-			time.Sleep(5 * time.Second)
+			time.Sleep(ensureStateNotChangedTime)
 			// both should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
@@ -393,7 +401,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.UnthrottleAllMigrations(t, &vtParams)
 			// t1 should now be ready_to_complete, hence t2 should start running
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t2uuid, extendedWaitTime, schema.OnlineDDLStatusRunning)
-			time.Sleep(5 * time.Second)
+			time.Sleep(ensureStateNotChangedTime)
 			// both should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusRunning)
@@ -566,7 +574,7 @@ func TestSchemaChange(t *testing.T) {
 		})
 		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true) // skip wait
 		t.Run("t1drop blocked", func(t *testing.T) {
-			time.Sleep(5 * time.Second)
+			time.Sleep(ensureStateNotChangedTime)
 			// drop1 migration should block. It can run concurrently to t1, but conflicts on table name
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop1uuid, schema.OnlineDDLStatusReady)
 		})
@@ -639,6 +647,28 @@ func TestSchemaChange(t *testing.T) {
 			}
 		})
 	})
+	// INSTANT DDL
+	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
+	require.NoError(t, err)
+	if instantDDLCapable {
+		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
+			t1uuid := testOnlineDDLStatement(t, instantAlterT1Statement, ddlStrategy+" --prefer-instant-ddl --postpone-completion", "vtgate", "", "", true)
+
+			t.Run("expect t1 queued", func(t *testing.T) {
+				// we want to validate that the migration remains queued even after some time passes. It must not move beyond 'queued'
+				time.Sleep(ensureStateNotChangedTime)
+				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+			})
+			t.Run("complete t1", func(t *testing.T) {
+				// Issue a complete and wait for successful completion
+				onlineddl.CheckCompleteMigration(t, &vtParams, shards, t1uuid, true)
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			})
+		})
+	}
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
