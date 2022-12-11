@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -230,6 +231,14 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 		return nil
 	}
 
+	sourceTable, err := pb.tryRedirectGen4InsertToSource(vschemaTable)
+	if err != nil {
+		return err
+	}
+	if sourceTable != nil {
+		vschemaTable = sourceTable
+	}
+
 	rb, st := newRoute(sel)
 	pb.plan, pb.st = rb, st
 	if err := st.AddVSchemaTable(alias, vschemaTable, rb); err != nil {
@@ -308,6 +317,26 @@ func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr, reserved
 		return err
 	}
 	return pb.join(rpb, ajoin, reservedVars, where)
+}
+
+// If the primitiveBuilder context is a Gen4 planner, the statement is an
+// INSERT, and the vschema table is a reference with a valid source reference,
+// then redirect the INSERT back to the source.
+func (pb *primitiveBuilder) tryRedirectGen4InsertToSource(vschemaTable *vindexes.Table) (*vindexes.Table, error) {
+	if pb.stmt == nil {
+		return nil, nil
+	}
+	if _, ok := pb.stmt.(*sqlparser.Insert); !ok {
+		return nil, nil
+	}
+	if pb.vschema.Planner() == querypb.ExecuteOptions_V3 {
+		return nil, nil
+	}
+	if vschemaTable.Type != vindexes.TypeReference || vschemaTable.Source == nil {
+		return nil, nil
+	}
+	vschemaTable, _, _, _, _, err := pb.vschema.FindTableOrVindex(vschemaTable.Source.TableName)
+	return vschemaTable, err
 }
 
 // convertToLeftJoin converts a right join into a left join.

@@ -58,3 +58,10 @@ func (u *Update) Clone(inputs []ops.Operator) ops.Operator {
 		AST:                 u.AST,
 	}
 }
+
+func (u *Update) TablesUsed() []string {
+	if u.VTable != nil {
+		return SingleQualifiedIdentifier(u.VTable.Keyspace, u.VTable.Name)
+	}
+	return nil
+}

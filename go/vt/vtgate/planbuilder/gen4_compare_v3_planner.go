@@ -58,7 +58,7 @@ func gen4CompareV3Planner(query string) func(sqlparser.Statement, *sqlparser.Res
 		v3Primitive, v3Err := planWithPlannerVersion(statement, vars, ctxVSchema, query, V3)
 
 		// check potential errors from Gen4 and V3
-		err = engine.CompareV3AndGen4Errors(v3Err, gen4Err)
+		err = engine.CompareErrors(v3Err, gen4Err, "v3", "Gen4")
 		if err != nil {
 			return nil, err
 		}

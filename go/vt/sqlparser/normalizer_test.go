@@ -320,7 +320,7 @@ func TestNormalize(t *testing.T) {
 			"zipcode": sqltypes.ValueBindVariable(sqltypes.MakeTrusted(sqltypes.Int64, []byte("01001900"))),
 		},
 	}, {
-		// Int leading with zero should also be normalized
+		// literals in limit and offset should not reuse bindvars
 		in:      `select * from t where id = 10 limit 10 offset 10`,
 		outstmt: `select * from t where id = :id limit :bv1, :bv2`,
 		outbv: map[string]*querypb.BindVariable{
@@ -328,6 +328,14 @@ func TestNormalize(t *testing.T) {
 			"bv2": sqltypes.Int64BindVariable(10),
 			"id":  sqltypes.Int64BindVariable(10),
 		},
+	}, {
+		// we don't want to replace literals on the select expressions of a derived table
+		// these expressions can be referenced from the outside,
+		// and changing them to bindvars can change the meaning of the query
+		// example of problematic query: select tmp.`1` from (select 1) as tmp
+		in:      `select * from (select 12) as t`,
+		outstmt: `select * from (select 12 from dual) as t`,
+		outbv:   map[string]*querypb.BindVariable{},
 	}}
 	for _, tc := range testcases {
 		t.Run(tc.in, func(t *testing.T) {
@@ -485,7 +493,17 @@ func BenchmarkNormalizeVTGate(b *testing.B) {
 
 			// Normalize if possible and retry.
 			if CanNormalize(stmt) || MustRewriteAST(stmt, false) {
-				result, err := PrepareAST(stmt, NewReservedVars("vtg", reservedVars), bindVars, true, keyspace, SQLSelectLimitUnset, "", nil)
+				result, err := PrepareAST(
+					stmt,
+					NewReservedVars("vtg", reservedVars),
+					bindVars,
+					true,
+					keyspace,
+					SQLSelectLimitUnset,
+					"",
+					nil, /*sysvars*/
+					nil, /*views*/
+				)
 				if err != nil {
 					b.Fatal(err)
 				}
@@ -765,7 +783,17 @@ func benchmarkNormalization(b *testing.B, sqls []string) {
 			}
 
 			reservedVars := NewReservedVars("vtg", reserved)
-			_, err = PrepareAST(stmt, reservedVars, make(map[string]*querypb.BindVariable), true, "keyspace0", SQLSelectLimitUnset, "", nil)
+			_, err = PrepareAST(
+				stmt,
+				reservedVars,
+				make(map[string]*querypb.BindVariable),
+				true,
+				"keyspace0",
+				SQLSelectLimitUnset,
+				"",
+				nil,
+				nil,
+			)
 			if err != nil {
 				b.Fatal(err)
 			}
