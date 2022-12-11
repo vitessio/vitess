@@ -2263,7 +2263,7 @@ func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysq
 	return nil
 }
 
-// reviewQueuedMigrations iterates queued migrations and sees if any information needs to be updated.
+// reviewQueuedMigrations iterates through queued migrations and sees if any information needs to be updated.
 // The function analyzes the queued migration and fills in some blanks:
 // - If this is a REVERT migration, what table is affected? What's the operation?
 // - Is this migration an "immediate operation"?
