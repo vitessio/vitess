@@ -40,18 +40,17 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
 Consider using `VTOrc` instead of `Orchestrator`.
 
-#### Error Strings
+#### Query Serving Errors
 
 In this release, we are introducing a new way to report errors from Vitess through the query interface.
 Errors will now have an error code for each error, which will make it easy to search for more information on the issue.
-Example:
-The error
+For instance, the following error:
 
 ```
 aggregate functions take a single argument 'count(user_id, name)'
 ```
 
-will now instead be:
+Will be transformed into:
 
 ```
 VT03001: aggregate functions take a single argument 'count(user_id, name)'
@@ -166,9 +165,6 @@ The `RestoreFromBackup  --restore_to_pos` ends with:
 
 - the restored server in intentionally broken replication setup
 - tablet type is `DRAINED`
-
-### Error codes
-
 
 
 ### Important bug fixes
