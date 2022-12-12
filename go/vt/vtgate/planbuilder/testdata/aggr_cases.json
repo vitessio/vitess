@@ -1608,7 +1608,7 @@
   {
     "comment": "Group by invalid column number (code is duplicated from symab).",
     "query": "select id from user group by 1.1",
-    "v3-plan": "VT13001: [BUG] column number is not an int",
+    "v3-plan": "VT13001: [BUG] column number is not an INT",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id from user group by 1.1",
