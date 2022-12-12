@@ -572,7 +572,7 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	}
 
 	if len(del.Targets) > 1 {
-		return vterrors.VT12001("multi-table DELETE statement is not supported in sharded keyspace")
+		return vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
 	}
 
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {

@@ -115,7 +115,7 @@ func unionRouteMerge(left, right logicalPlan, us *sqlparser.Union) error {
 	}
 	mergeSuccess := lroute.MergeUnion(rroute, us.Distinct)
 	if !mergeSuccess {
-		return vterrors.VT12001("UNION cannot be executed as a single route")
+		return vterrors.VT12001("execute UNION as a single route")
 	}
 
 	lroute.Select = &sqlparser.Union{Left: lroute.Select, Right: us.Right, Distinct: us.Distinct}

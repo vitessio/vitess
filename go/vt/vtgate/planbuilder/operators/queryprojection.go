@@ -125,7 +125,7 @@ func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	case *sqlparser.AliasedExpr:
 		return sel.Expr, nil
 	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("%T does not have expr", s.Col))
+		return nil, vterrors.VT13001(fmt.Sprintf("%T does not have an expression", s.Col))
 	}
 }
 

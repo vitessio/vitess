@@ -194,7 +194,7 @@ func buildSetOpReservedConn(s setting) planFunc {
 	}
 }
 
-const defaultNotSupportedErrFmt = "DEFAULT not supported for @@%s"
+const defaultNotSupportedErrFmt = "DEFAULT for @@%s"
 
 func buildSetOpVitessAware(s setting) planFunc {
 	return func(astExpr *sqlparser.SetExpr, vschema plancontext.VSchema, ec *expressionConverter) (engine.SetOp, error) {

@@ -89,10 +89,10 @@ func (noInputs) Inputs() []ops.Operator {
 
 // AddColumn implements the Operator interface
 func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, error) {
-	return 0, vterrors.VT13001("this operator cannot accept columns")
+	return 0, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
-	return nil, vterrors.VT13001("this operator cannot accept predicates")
+	return nil, vterrors.VT13001("the noColumns operator cannot accept predicates")
 }

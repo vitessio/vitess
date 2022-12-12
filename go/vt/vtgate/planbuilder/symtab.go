@@ -395,7 +395,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 // order expression.
 func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal, caller string) (int, error) {
 	if val.Type != sqlparser.IntVal {
-		return 0, vterrors.VT13001("column number is not an int")
+		return 0, vterrors.VT13001("column number is not an INT")
 	}
 	num, err := strconv.ParseInt(val.Val, 0, 64)
 	if err != nil {
@@ -613,5 +613,5 @@ func GetReturnType(input sqlparser.Expr) (querypb.Type, error) {
 	case *sqlparser.Count, *sqlparser.CountStar:
 		return querypb.Type_INT64, nil
 	}
-	return 0, vterrors.VT12001(fmt.Sprintf("cannot evaluate return type for %T", input))
+	return 0, vterrors.VT12001(fmt.Sprintf("evaluate return type for %T", input))
 }

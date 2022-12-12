@@ -60,7 +60,7 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 	case *sqlparser.ShowOther:
 		prim, err = buildShowOtherPlan(sql, vschema)
 	default:
-		return nil, vterrors.VT13001(fmt.Sprintf("undefined show type: %T", stmt.Internal))
+		return nil, vterrors.VT13001(fmt.Sprintf("undefined SHOW type: %T", stmt.Internal))
 	}
 	if err != nil {
 		return nil, err
@@ -122,7 +122,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
-	return nil, vterrors.VT13001(fmt.Sprintf("unknown show query type %s", show.Command.ToString()))
+	return nil, vterrors.VT13001(fmt.Sprintf("unknown SHOW query type %s", show.Command.ToString()))
 
 }
 
@@ -448,7 +448,7 @@ func buildShowCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema
 	case sqlparser.CreateTbl:
 		return buildCreateTblPlan(show, vschema)
 	}
-	return nil, vterrors.VT13001("unknown show query type %s", show.Command.ToString())
+	return nil, vterrors.VT13001("unknown SHOW query type %s", show.Command.ToString())
 }
 
 func buildCreateDbPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (engine.Primitive, error) {

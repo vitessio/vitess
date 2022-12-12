@@ -378,7 +378,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return nil
 
 	default:
-		return vterrors.VT13001(fmt.Sprintf("don't know how to turn %T into SQL", op))
+		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
 	return nil
 }

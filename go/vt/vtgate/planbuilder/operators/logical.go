@@ -214,7 +214,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	if route.RouteOpCode == engine.Scatter && deleteStmt.Limit != nil {
 		// TODO systay: we should probably check for other op code types - IN could also hit multiple shards (2022-04-07)
-		return nil, vterrors.VT12001("multi shard DELETE with LIMIT is not supported")
+		return nil, vterrors.VT12001("multi shard DELETE with LIMIT")
 	}
 
 	subq, err := createSubqueryFromStatement(ctx, deleteStmt)

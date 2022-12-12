@@ -43,7 +43,7 @@ func (p *primitiveWrapper) Inputs() []logicalPlan {
 }
 
 func (p *primitiveWrapper) Rewrite(...logicalPlan) error {
-	return vterrors.VT13001("can't rewrite")
+	return vterrors.VT13001("cannot rewrite")
 }
 
 func (p *primitiveWrapper) ContainsTables() semantics.TableSet {

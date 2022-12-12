@@ -538,7 +538,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 			rb.eroute.Opcode = engine.Next
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
-			return nil, vterrors.VT13001(fmt.Sprintf("unexpected select expression type: %T", node))
+			return nil, vterrors.VT13001(fmt.Sprintf("unexpected SELECT expression type: %T", node))
 		}
 	}
 	return resultColumns, nil
