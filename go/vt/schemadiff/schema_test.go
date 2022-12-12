@@ -256,6 +256,7 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 		"create view v13 as select * from t20",
 		"create table t12 (id int primary key, i int, constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create table t17 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t16 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create table t14 (id int primary key, i int, constraint f14 foreign key (i) references t14(id) on delete restrict)",
 	}
 	expectSortedTableNames := []string{
@@ -264,6 +265,7 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 		"t12",
 		"t20",
 		"t11",
+		"t16",
 		"t17",
 	}
 	expectSortedViewNames := []string{
