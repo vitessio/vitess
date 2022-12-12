@@ -163,7 +163,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
-			return vterrors.VT12001(fmt.Sprintf("%v allowed only with dual", sqlparser.String(aExpr)))
+			return vterrors.VT12001(fmt.Sprintf("%v is allowed only with dual", sqlparser.String(aExpr)))
 		}
 	}
 	if sel.SQLCalcFoundRows {
@@ -266,7 +266,7 @@ func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Se
 	query.Lock = sel.Lock
 	if sel.Into != nil {
 		if opcode != engine.Unsharded {
-			return vterrors.VT12001("INTO is not supported on sharded keyspace")
+			return vterrors.VT12001("INTO on sharded keyspace")
 		}
 		query.Into = sel.Into
 	}
@@ -362,7 +362,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			continue
 		}
 		if len(lockFunctions) > 0 {
-			return nil, vterrors.VT12001("LOCK function and other expression in same select query")
+			return nil, vterrors.VT12001(fmt.Sprintf("LOCK function and other expression: [%s] in same select query", sqlparser.String(expr)))
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {

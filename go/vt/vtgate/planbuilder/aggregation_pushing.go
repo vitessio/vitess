@@ -125,7 +125,7 @@ func pushAggrOnRoute(
 	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
-		return nil, nil, nil, vterrors.VT12001("cannot plan aggregation on union")
+		return nil, nil, nil, vterrors.VT12001("plan aggregation on union")
 	}
 
 	var groupingCols []int

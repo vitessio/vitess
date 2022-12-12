@@ -433,7 +433,7 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.SingleColum
 func BuildColName(rcs []*resultColumn, index int) (*sqlparser.ColName, error) {
 	alias := rcs[index].alias
 	if alias.IsEmpty() {
-		return nil, vterrors.VT12001("cannot reference a complex expression")
+		return nil, vterrors.VT12001("reference a complex expression")
 	}
 	for i, rc := range rcs {
 		if i == index {

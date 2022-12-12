@@ -81,7 +81,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	for i, selectExpr := range sel.SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, vterrors.VT12001("cannot push predicates on UNION where the first SELECT contains * or NEXT")
+			return nil, vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT")
 		}
 		if !ae.As.IsEmpty() {
 			offsets[ae.As.String()] = i
@@ -104,7 +104,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				err = vterrors.VT12001("cannot push predicates on concatenate")
+				err = vterrors.VT13001("cannot push predicates on concatenate, missing columns from the UNION")
 				return false
 			}
 
@@ -116,7 +116,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 
 			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
-				err = vterrors.VT12001("cannot push predicates on concatenate")
+				err = vterrors.VT12001("pushing non-aliased expression predicates on concatenate")
 				return false
 			}
 			cursor.Replace(ae.Expr)

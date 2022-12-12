@@ -336,7 +336,7 @@ func createQueryTableForDML(ctx *plancontext.PlanningContext, tableExpr sqlparse
 	}
 
 	if tableInfo.IsInfSchema() {
-		return nil, nil, vterrors.VT12001("cannot update information schema tables")
+		return nil, nil, vterrors.VT12001("update information schema tables")
 	}
 
 	var predicates []sqlparser.Expr

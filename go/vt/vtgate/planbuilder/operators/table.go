@@ -88,7 +88,7 @@ func (to *Table) TablesUsed() []string {
 func addColumn(op ColNameColumns, e sqlparser.Expr) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("can't push this expression to a table/vindex")
+		return 0, vterrors.VT13001("cannot push this expression to a table/vindex")
 	}
 	cols := op.GetColumns()
 	for idx, column := range cols {

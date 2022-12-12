@@ -435,11 +435,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !inner {
-			return nil, vterrors.VT12001("LEFT JOIN not supported for derived tables")
+			return nil, vterrors.VT12001("LEFT JOIN with derived tables")
 		}
 
 		if requiresSwitchingSides(ctx, lhs) {
-			return nil, vterrors.VT12001("JOIN not supported between derived tables")
+			return nil, vterrors.VT12001("JOIN between derived tables")
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)

@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -84,34 +85,34 @@ func planFilter(pb *primitiveBuilder, input logicalPlan, filter sqlparser.Expr, 
 
 func filterVindexFunc(node *vindexFunc, filter sqlparser.Expr) (logicalPlan, error) {
 	if node.eVindexFunc.Opcode != engine.VindexNone {
-		return nil, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)")
+		return nil, vterrors.VT12001(operators.VindexUnsupported + " (multiple filters)")
 	}
 
 	// Check LHS.
 	comparison, ok := filter.(*sqlparser.ComparisonExpr)
 	if !ok {
-		return nil, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)")
+		return nil, vterrors.VT12001(operators.VindexUnsupported + " (not a comparison)")
 	}
 	if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
-		return nil, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)")
+		return nil, vterrors.VT12001(operators.VindexUnsupported + " (not equality)")
 	}
 	colname, ok := comparison.Left.(*sqlparser.ColName)
 	if !ok {
-		return nil, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)")
+		return nil, vterrors.VT12001(operators.VindexUnsupported + " (lhs is not a column)")
 	}
 	if !colname.Name.EqualString("id") {
-		return nil, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)")
+		return nil, vterrors.VT12001(operators.VindexUnsupported + " (lhs is not id)")
 	}
 
 	// Check RHS.
 	// We have to check before calling NewPlanValue because NewPlanValue allows lists also.
 	if !sqlparser.IsValue(comparison.Right) && !sqlparser.IsSimpleTuple(comparison.Right) {
-		return nil, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)")
+		return nil, vterrors.VT12001(operators.VindexUnsupported + " (rhs is not a value)")
 	}
 	var err error
 	node.eVindexFunc.Value, err = evalengine.Translate(comparison.Right, semantics.EmptySemTable())
 	if err != nil {
-		return nil, vterrors.VT12001(fmt.Sprintf("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...): %v", err))
+		return nil, vterrors.VT12001(fmt.Sprintf("%s: %v", operators.VindexUnsupported, err))
 	}
 
 	node.eVindexFunc.Opcode = engine.VindexMap

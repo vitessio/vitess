@@ -55,12 +55,12 @@ func planOrdering(pb *primitiveBuilder, input logicalPlan, orderBy v3OrderBy) (l
 	case *orderedAggregate:
 		return planOAOrdering(pb, orderBy, node)
 	case *mergeSort:
-		return nil, vterrors.VT12001("cannot do ORDER BY on top of ORDER BY")
+		return nil, vterrors.VT12001("ORDER BY on top of ORDER BY")
 	case *concatenate:
 		if len(orderBy) == 0 {
 			return input, nil
 		}
-		return nil, vterrors.VT12001("cannot do ORDER BY on top of UNION")
+		return nil, vterrors.VT12001("ORDER BY on top of UNION")
 	}
 	return nil, vterrors.VT13001(fmt.Sprintf("unreachable %T.ordering", input))
 }

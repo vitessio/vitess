@@ -94,5 +94,5 @@ func (noColumns) AddColumn(*plancontext.PlanningContext, sqlparser.Expr) (int, e
 
 // AddPredicate implements the Operator interface
 func (noPredicates) AddPredicate(*plancontext.PlanningContext, sqlparser.Expr) (ops.Operator, error) {
-	return nil, vterrors.VT13001("this operator cannot accept columns")
+	return nil, vterrors.VT13001("this operator cannot accept predicates")
 }

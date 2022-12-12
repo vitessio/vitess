@@ -590,7 +590,7 @@ func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 		_, isSubQ := node.(*sqlparser.Subquery)
 		arg, isArg := node.(sqlparser.Argument)
 		if isSubQ || (isArg && strings.HasPrefix(string(arg), "__sq")) {
-			return false, vterrors.VT12001("subqueries disallowed in GROUP BY")
+			return false, vterrors.VT12001("subqueries in GROUP BY")
 		}
 		return true, nil
 	}, expr)

@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 )
 
 // planProjection pushes the select expression to the specified
@@ -151,7 +152,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		// Catch the case where no where clause was specified. If so, the opcode
 		// won't be set.
 		if node.eVindexFunc.Opcode == engine.VindexNone {
-			return nil, nil, 0, vterrors.VT12001("WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
+			return nil, nil, 0, vterrors.VT12001(operators.VindexUnsupported + " (where clause missing)")
 		}
 		col, ok := expr.Expr.(*sqlparser.ColName)
 		if !ok {

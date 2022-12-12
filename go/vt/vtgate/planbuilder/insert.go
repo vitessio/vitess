@@ -49,7 +49,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 
 	if len(pb.st.tables) != 1 {
 		// Unreachable.
-		return nil, vterrors.VT12001("multi-table INSERT statement is not supported in a sharded keyspace")
+		return nil, vterrors.VT12001("multi-table INSERT statement in a sharded keyspace")
 	}
 	var vschemaTable *vindexes.Table
 	for _, tval := range pb.st.tables {
@@ -113,7 +113,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 		}
 		for _, row := range rows {
 			if len(ins.Columns) != len(row) {
-				return nil, vterrors.VT13001("column list doesn't match values")
+				return nil, vterrors.VT13001("column list does not match values")
 			}
 		}
 		if err := modifyForAutoinc(ins, eins); err != nil {
