@@ -205,3 +205,44 @@ func TestGetViewDependentTableNames(t *testing.T) {
 		})
 	}
 }
+
+func TestGetForeignKeyParentTableNames(t *testing.T) {
+	tt := []struct {
+		name   string
+		table  string
+		tables []string
+	}{
+		{
+			table:  "create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
+			tables: []string{"parent"},
+		},
+		{
+			table:  "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
+			tables: []string{"parent"},
+		},
+		{
+			table:  "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
+			tables: []string{"parent"},
+		},
+		{
+			table:  "create table t1 (id int primary key, i int, i2 int, constraint f foreign key (i) references parent(id) on delete cascade, constraint f2 foreign key (i2) references parent2(id) on delete restrict)",
+			tables: []string{"parent", "parent2"},
+		},
+		{
+			table:  "create table t1 (id int primary key, i int, i2 int, constraint f foreign key (i) references parent(id) on delete cascade, constraint f2 foreign key (i2) references parent(id) on delete restrict)",
+			tables: []string{"parent", "parent"},
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.table, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(ts.table)
+			require.NoError(t, err)
+			createTable, ok := stmt.(*sqlparser.CreateTable)
+			require.True(t, ok)
+
+			tables, err := getForeignKeyParentTableNames(createTable)
+			assert.NoError(t, err)
+			assert.Equal(t, ts.tables, tables)
+		})
+	}
+}

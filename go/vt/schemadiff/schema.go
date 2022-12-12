@@ -122,6 +122,18 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 	return NewSchemaFromStatements(statements)
 }
 
+// getForeignKeyParentTableNames analyzes a CREATE TABLE definition and extracts all referened foreign key tables names.
+// A table name may appear twice in the result output, it it is referenced by more than one foreign key
+func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []string, err error) {
+	for _, cs := range createTable.TableSpec.Constraints {
+		if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
+			names = append(names, parentTableName)
+		}
+	}
+	return names, err
+}
+
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
 func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string, err error) {
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
