@@ -294,14 +294,24 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
-	switch qre.plan.FullStmt.(type) {
+	switch stmt := qre.plan.FullStmt.(type) {
 	case *sqlparser.CreateView:
-		bindVars := qre.generateBindVarsForViewDDLInsert()
+		bindVars := qre.generateBindVarsForViewDDLInsert(stmt)
 		sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
 		if err != nil {
 			return nil, err
 		}
-		return withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+		qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+		if err != nil {
+			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			// If it is a MySQL error and its code is of duplicate entry,
+			// then we would return duplicate create view error.
+			if isSQLErr && sqlErr.Number() == mysql.ERDupEntry {
+				return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "View '%s' already exists", stmt.ViewName.Name.String())
+			}
+			return nil, err
+		}
+		return qr, nil
 	}
 	return nil, nil
 }
@@ -1111,8 +1121,7 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
 }
 
-func (qre *QueryExecutor) generateBindVarsForViewDDLInsert() map[string]*querypb.BindVariable {
-	createView := qre.plan.FullStmt.(*sqlparser.CreateView)
+func (qre *QueryExecutor) generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
 	bindVars := make(map[string]*querypb.BindVariable)
 	bindVars["TABLE_NAME"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
 	bindVars["VIEW_DEFINITION"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))

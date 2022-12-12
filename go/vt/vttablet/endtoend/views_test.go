@@ -31,7 +31,7 @@ import (
 )
 
 // Test will validate all the ddl views work as per the expectation.
-func TestViewDDL(t *testing.T) {
+func TestCreateViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
 	client.UpdateContext(callerid.NewContext(
@@ -51,7 +51,7 @@ func TestViewDDL(t *testing.T) {
 
 	// view already exists. This should fail.
 	_, err = client.Execute("create view vitess_view as select * from vitess_a", nil)
-	require.Error(t, err)
+	require.ErrorContains(t, err, "View 'vitess_view' already exists")
 
 	// view already exists, but create or replace syntax should allow it to replace the view.
 	_, err = client.Execute("create or replace view vitess_view as select id, foo from vitess_a", nil)
