@@ -35,6 +35,9 @@ type Schema struct {
 
 	named  map[string]Entity
 	sorted []Entity
+
+	foreignKeyParents  []*CreateTableEntity // subset of tables
+	foreignKeyChildren []*CreateTableEntity // subset of tables
 }
 
 // newEmptySchema is used internally to initialize a Schema object
@@ -44,6 +47,9 @@ func newEmptySchema() *Schema {
 		views:  []*CreateViewEntity{},
 		named:  map[string]Entity{},
 		sorted: []Entity{},
+
+		foreignKeyParents:  []*CreateTableEntity{},
+		foreignKeyChildren: []*CreateTableEntity{},
 	}
 	return schema
 }
@@ -211,6 +217,7 @@ func (s *Schema) normalize() error {
 	// - then we only want tables that reference 1st level tables. these are 2nd level tables
 	// - etc.
 	// we stop when we have been unable to find a table in an iteration.
+	fkParents := map[string]bool{}
 	iterationLevel := 0
 	for ; ; iterationLevel++ {
 		handledAnyTablesInIteration := false
@@ -225,11 +232,15 @@ func (s *Schema) normalize() error {
 			if err != nil {
 				return err
 			}
+			if len(referencedTableNames) > 0 {
+				s.foreignKeyChildren = append(s.foreignKeyChildren, t)
+			}
 			nonSelfReferenceNames := []string{}
 			for _, referencedTableName := range referencedTableNames {
 				if referencedTableName != name {
 					nonSelfReferenceNames = append(nonSelfReferenceNames, referencedTableName)
 				}
+				fkParents[referencedTableName] = true
 			}
 			if allNamesFoundInLowerLevel(nonSelfReferenceNames, iterationLevel) {
 				s.sorted = append(s.sorted, t)
@@ -239,6 +250,11 @@ func (s *Schema) normalize() error {
 		}
 		if !handledAnyTablesInIteration {
 			break
+		}
+	}
+	for _, t := range s.tables {
+		if fkParents[t.Name()] {
+			s.foreignKeyParents = append(s.foreignKeyParents, t)
 		}
 	}
 	// We now iterate all views. We iterate "dependency levels":
@@ -288,6 +304,69 @@ func (s *Schema) normalize() error {
 				// We return the first one.
 				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
 			}
+		}
+	}
+
+	// Validate table definitions
+	for _, t := range s.tables {
+		if err := t.validate(); err != nil {
+			return err
+		}
+	}
+	colTypeEqualForForeignKey := func(a, b sqlparser.ColumnType) bool {
+		return a.Type == b.Type &&
+			a.Unsigned == b.Unsigned &&
+			a.Zerofill == b.Zerofill &&
+			sqlparser.Equals.ColumnCharset(a.Charset, b.Charset) &&
+			sqlparser.Equals.SliceOfString(a.EnumValues, b.EnumValues)
+	}
+
+	// Now validate foreign key columns:
+	// - referenced table columns must exist
+	// - foreign key columns must match in count and type to referenced table columns
+	// - referenced table as an appropriate index over referenced columns
+	for _, t := range s.tables {
+		if len(t.TableSpec.Constraints) == 0 {
+			continue
+		}
+
+		tableColumns := map[string]*sqlparser.ColumnDefinition{}
+		for _, col := range t.CreateTable.TableSpec.Columns {
+			colName := col.Name.Lowered()
+			tableColumns[colName] = col
+		}
+
+		for _, cs := range t.TableSpec.Constraints {
+			check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+			if !ok {
+				continue
+			}
+			referencedTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
+			referencedTable := s.Table(referencedTableName) // we know this exists because we validated foreign key dependencies earlier on
+
+			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
+			for _, col := range referencedTable.CreateTable.TableSpec.Columns {
+				colName := col.Name.Lowered()
+				referencedColumns[colName] = col
+			}
+			// Thanks to table validation, we already know the foreign key covered columns count is equal to the
+			// referenced table column count. Now ensure their types are identical
+			for i, col := range check.Source {
+				coveredColumn, ok := tableColumns[col.Lowered()]
+				if !ok {
+					return &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()}
+				}
+				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Lowered()
+				referencedColumn, ok := referencedColumns[referencedColumnName]
+				if !ok {
+					return &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+				}
+				if !colTypeEqualForForeignKey(coveredColumn.Type, referencedColumn.Type) {
+					return &MismatchingForeignKeyColumnTypeError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+				}
+			}
+
+			// TODO(shlomi): find a valid index
 		}
 	}
 	return nil

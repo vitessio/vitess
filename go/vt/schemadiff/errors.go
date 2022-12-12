@@ -244,8 +244,52 @@ type InvalidColumnInForeignKeyConstraintError struct {
 }
 
 func (e *InvalidColumnInForeignKeyConstraintError) Error() string {
-	return fmt.Sprintf("invalid column %s referenced by foreign key constraint %s in table %s",
+	return fmt.Sprintf("invalid column %s covered by foreign key constraint %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type InvalidReferencedColumnInForeignKeyConstraintError struct {
+	Table            string
+	Constraint       string
+	ReferencedTable  string
+	ReferencedColumn string
+}
+
+func (e *InvalidReferencedColumnInForeignKeyConstraintError) Error() string {
+	return fmt.Sprintf("invalid column %s.%s referenced by foreign key constraint %s in table %s",
+		sqlescape.EscapeID(e.ReferencedTable), sqlescape.EscapeID(e.ReferencedColumn), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type MismatchingForeignKeyColumnCountError struct {
+	Table                 string
+	Constraint            string
+	ColumnCount           int
+	ReferencedTable       string
+	ReferencedColumnCount int
+}
+
+func (e *MismatchingForeignKeyColumnCountError) Error() string {
+	return fmt.Sprintf("mismatching column count %d referenced by foreign key constraint %s in table %s. Expected %d",
+		e.ReferencedColumnCount, sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table), e.ColumnCount)
+}
+
+type MismatchingForeignKeyColumnTypeError struct {
+	Table            string
+	Constraint       string
+	Column           string
+	ReferencedTable  string
+	ReferencedColumn string
+}
+
+func (e *MismatchingForeignKeyColumnTypeError) Error() string {
+	return fmt.Sprintf("mismatching column type %s.%s and %s.%s referenced by foreign key constraint %s in table %s",
+		sqlescape.EscapeID(e.ReferencedTable),
+		sqlescape.EscapeID(e.ReferencedColumn),
+		sqlescape.EscapeID(e.Table),
+		sqlescape.EscapeID(e.Column),
+		sqlescape.EscapeID(e.Constraint),
+		sqlescape.EscapeID(e.Table),
+	)
 }
 
 type ViewDependencyUnresolvedError struct {
