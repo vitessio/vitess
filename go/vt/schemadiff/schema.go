@@ -187,10 +187,6 @@ func (s *Schema) normalize() error {
 	// If a view v1 depends on v2, then v2 must come before v1, even though v1
 	// precedes v2 alphabetically
 	dependencyLevels := make(map[string]int, len(s.tables)+len(s.views))
-	for _, t := range s.tables {
-		s.sorted = append(s.sorted, t)
-		dependencyLevels[t.Name()] = 0
-	}
 
 	allNamesFoundInLowerLevel := func(names []string, level int) bool {
 		for _, name := range names {
@@ -210,12 +206,47 @@ func (s *Schema) normalize() error {
 		return true
 	}
 
+	// We now iterate all tables. We iterate "dependency levels":
+	// - first we want all tables that don't have foreign keys or which only reference themselves
+	// - then we only want tables that reference 1st level tables. these are 2nd level tables
+	// - etc.
+	// we stop when we have been unable to find a table in an iteration.
+	iterationLevel := 0
+	for ; ; iterationLevel++ {
+		handledAnyTablesInIteration := false
+		for _, t := range s.tables {
+			name := t.Name()
+			if _, ok := dependencyLevels[name]; ok {
+				// already handled; skip
+				continue
+			}
+			// Not handled. Is this view dependent on already handled objects?
+			referencedTableNames, err := getForeignKeyParentTableNames(t.CreateTable)
+			if err != nil {
+				return err
+			}
+			nonSelfReferenceNames := []string{}
+			for _, referencedTableName := range referencedTableNames {
+				if referencedTableName != name {
+					nonSelfReferenceNames = append(nonSelfReferenceNames, referencedTableName)
+				}
+			}
+			if allNamesFoundInLowerLevel(nonSelfReferenceNames, iterationLevel) {
+				s.sorted = append(s.sorted, t)
+				dependencyLevels[t.Name()] = iterationLevel
+				handledAnyTablesInIteration = true
+			}
+		}
+		if !handledAnyTablesInIteration {
+			break
+		}
+	}
 	// We now iterate all views. We iterate "dependency levels":
 	// - first we want all views that only depend on tables. These are 1st level views.
 	// - then we only want views that depend on 1st level views or on tables. These are 2nd level views.
 	// - etc.
 	// we stop when we have been unable to find a view in an iteration.
-	for iterationLevel := 1; ; iterationLevel++ {
+	for ; ; iterationLevel++ {
 		handledAnyViewsInIteration := false
 		for _, v := range s.views {
 			name := v.Name()
