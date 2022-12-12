@@ -5014,17 +5014,17 @@
   {
     "comment": "insert using select with more columns in insert",
     "query": "insert into music(id, user_id) select 1",
-    "plan": "VT03006: column count doesn't match value count at row 1"
+    "plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert using select with more columns in select",
     "query": "insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id",
-    "plan": "VT03006: column count doesn't match value count at row 1"
+    "plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert using select with more columns in select after accounting for star column",
     "query": "insert into music(id, user_id) select id, *, 2 from user",
-    "plan": "VT03006: column count doesn't match value count at row 1"
+    "plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert using select with auto-inc column using vitess sequence, sequence column not present",
