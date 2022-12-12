@@ -2446,7 +2446,7 @@ func TestExecutorCallProc(t *testing.T) {
 			if tc.hasNoKeyspaceErr {
 				assert.EqualError(t, err, errNoKeyspace.Error())
 			} else if tc.unshardedOnlyErr {
-				require.EqualError(t, err, "CALL is not supported for sharded database")
+				require.EqualError(t, err, "CALL is not supported for sharded keyspace")
 			} else {
 				assert.NoError(t, err)
 			}

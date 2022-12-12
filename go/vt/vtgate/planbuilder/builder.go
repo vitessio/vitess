@@ -328,7 +328,7 @@ func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, erro
 
 	destination := vschema.Destination()
 	if destination == nil {
-		if err := vschema.ErrorIfShardedF(keyspace, "LOAD", "LOAD is not supported on sharded database"); err != nil {
+		if err := vschema.ErrorIfShardedF(keyspace, "LOAD", "LOAD is not supported on sharded keyspace"); err != nil {
 			return nil, err
 		}
 		destination = key.DestinationAnyShard{}

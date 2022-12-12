@@ -50,4 +50,4 @@ func buildCallProcPlan(stmt *sqlparser.CallProc, vschema plancontext.VSchema) (*
 	}), nil
 }
 
-const errNotAllowWhenSharded = "CALL is not supported for sharded database"
+const errNotAllowWhenSharded = "CALL is not supported for sharded keyspace"
