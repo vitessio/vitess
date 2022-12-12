@@ -690,7 +690,7 @@ func executeQueryWithSuperReadOnlyHandling(dbConn *mysql.Conn, query string) (*s
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
 			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
 		}
-		result, err = dbConn.ExecuteFetchWithReadOnlyHandling(query, 10000, true)
+		result, err = dbConn.ExecuteFetchWithSuperReadOnlyHandling(query, 10000, true)
 		if err == nil {
 			break
 		}
