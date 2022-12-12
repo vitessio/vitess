@@ -228,6 +228,15 @@ func (e *InvalidColumnInCheckConstraintError) Error() string {
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
 }
 
+type ForeignKeyDependencyUnresolvedError struct {
+	Table string
+}
+
+func (e *ForeignKeyDependencyUnresolvedError) Error() string {
+	return fmt.Sprintf("table %s has unresolved/loop foreign key dependencies",
+		sqlescape.EscapeID(e.Table))
+}
+
 type InvalidColumnInForeignKeyConstraintError struct {
 	Table      string
 	Constraint string

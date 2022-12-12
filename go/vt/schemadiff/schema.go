@@ -270,9 +270,18 @@ func (s *Schema) normalize() error {
 		}
 	}
 	if len(s.sorted) != len(s.tables)+len(s.views) {
-		// We have leftover views. This can happen if the schema definition is invalid:
+		// We have leftover tables or views. This can happen if the schema definition is invalid:
+		// - a table's foreign key references a nonexistent table
+		// - two or more tables have circular FK dependency
 		// - a view depends on a nonexistent table
-		// - two views have a circular dependency
+		// - two or more views have a circular dependency
+		for _, t := range s.tables {
+			if _, ok := dependencyLevels[t.Name()]; !ok {
+				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We return the first one.
+				return &ForeignKeyDependencyUnresolvedError{Table: t.Name()}
+			}
+		}
 		for _, v := range s.views {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.

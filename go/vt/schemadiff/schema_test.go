@@ -280,3 +280,25 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 	assert.Equal(t, expectSortedTableNames, schema.TableNames())
 	assert.Equal(t, expectSortedViewNames, schema.ViewNames())
 }
+
+func TestInvalidTableForeignKeyReference(t *testing.T) {
+	{
+		fkQueries := []string{
+			"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",
+			"create table t15(id int, primary key(id))",
+		}
+		_, err := NewSchemaFromQueries(fkQueries)
+		assert.Error(t, err)
+		assert.EqualError(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+	}
+	{
+		fkQueries := []string{
+			"create table t13 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict)",
+			"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",
+			"create table t12 (id int primary key, i int, constraint f13 foreign key (i) references t13(id) on delete restrict)",
+		}
+		_, err := NewSchemaFromQueries(fkQueries)
+		assert.Error(t, err)
+		assert.EqualError(t, err, (&ForeignKeyDependencyUnresolvedError{Table: "t11"}).Error())
+	}
+}
