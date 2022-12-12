@@ -296,24 +296,56 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
 	switch stmt := qre.plan.FullStmt.(type) {
 	case *sqlparser.CreateView:
-		bindVars := qre.generateBindVarsForViewDDLInsert(stmt)
-		sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
-		if err != nil {
-			return nil, err
-		}
-		qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
-		if err != nil {
-			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-			// If it is a MySQL error and its code is of duplicate entry,
-			// then we would return duplicate create view error.
-			if isSQLErr && sqlErr.Number() == mysql.ERDupEntry {
-				return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "View '%s' already exists", stmt.ViewName.Name.String())
-			}
-			return nil, err
-		}
-		return qr, nil
+		return qre.execCreateViewDDL(conn, stmt)
+	case *sqlparser.AlterView:
+		return qre.execAlterViewDDL(conn, stmt)
 	}
-	return nil, nil
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected view DDL type: %T", qre.plan.FullStmt)
+}
+
+func (qre *QueryExecutor) execCreateViewDDL(conn *StatefulConnection, stmt *sqlparser.CreateView) (*sqltypes.Result, error) {
+	bindVars := qre.generateBindVarsForViewDDLInsert(stmt)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	if err != nil {
+		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		// If it is a MySQL error and its code is of duplicate entry,
+		// then we would return duplicate create view error.
+		if isSQLErr && sqlErr.Number() == mysql.ERDupEntry {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "View '%s' already exists", stmt.ViewName.Name.String())
+		}
+		return nil, err
+	}
+	return qr, nil
+}
+
+func (qre *QueryExecutor) execAlterViewDDL(conn *StatefulConnection, stmt *sqlparser.AlterView) (*sqltypes.Result, error) {
+	createViewDDL := &sqlparser.CreateView{
+		ViewName:    stmt.ViewName,
+		Algorithm:   stmt.Algorithm,
+		Definer:     stmt.Definer,
+		Security:    stmt.Security,
+		Columns:     stmt.Columns,
+		Select:      stmt.Select,
+		CheckOption: stmt.CheckOption,
+		Comments:    stmt.Comments,
+	}
+	bindVars := qre.generateBindVarsForViewDDLInsert(createViewDDL)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	if err != nil {
+		return nil, err
+	}
+	if qr.RowsAffected == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "View '%s' does not exist", stmt.ViewName.Name.String())
+	}
+	return qr, nil
 }
 
 // Stream performs a streaming query execution.

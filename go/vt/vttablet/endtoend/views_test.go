@@ -30,7 +30,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// Test will validate all the ddl views work as per the expectation.
+// Test will validate create view ddls.
 func TestCreateViewDDL(t *testing.T) {
 	client := framework.NewClient()
 
@@ -38,6 +38,8 @@ func TestCreateViewDDL(t *testing.T) {
 		context.Background(),
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
+
+	defer client.Execute("delete from _vt.views", nil)
 
 	_, err := client.Execute("create view vitess_view as select * from vitess_a", nil)
 	require.NoError(t, err)
@@ -62,5 +64,36 @@ func TestCreateViewDDL(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t,
 		`[[VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
+		fmt.Sprintf("%v", qr.Rows))
+}
+
+// Test will validate alter view ddls.
+func TestAlterViewDDL(t *testing.T) {
+	client := framework.NewClient()
+
+	client.UpdateContext(callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	defer client.Execute("delete from _vt.views", nil)
+
+	// view does not exist, show FAIL
+	_, err := client.Execute("alter view vitess_view as select * from vitess_a", nil)
+	require.ErrorContains(t, err, "View 'vitess_view' does not exist")
+
+	// create a view.
+	_, err = client.Execute("create view vitess_view as select * from vitess_a", nil)
+	require.NoError(t, err)
+
+	// view exists, should PASS
+	_, err = client.Execute("alter view vitess_view as select id, foo from vitess_a", nil)
+	require.NoError(t, err)
+
+	// validate the row in _vt.views.
+	qr, err := client.Execute("select * from _vt.views", nil)
+	require.NoError(t, err)
+	require.Equal(t,
+		`[[VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 }

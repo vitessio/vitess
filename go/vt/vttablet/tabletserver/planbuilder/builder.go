@@ -224,20 +224,25 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 }
 
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
-	switch stmt := stmt.(type) {
+	switch viewDDL := stmt.(type) {
 	case *sqlparser.CreateView:
 		query := mysql.InsertIntoViewsTable
-		if stmt.IsReplace {
+		if viewDDL.IsReplace {
 			query = mysql.ReplaceIntoViewsTable
 		}
 		insert, err := sqlparser.Parse(query)
 		if err != nil {
 			return nil, err
 		}
-		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: stmt}, nil
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
 	case *sqlparser.DropView:
 
 	case *sqlparser.AlterView:
+		update, err := sqlparser.Parse(mysql.UpdateViewsTable)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
 	}
 	return nil, nil
 }
