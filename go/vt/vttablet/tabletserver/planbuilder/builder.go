@@ -226,7 +226,11 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch stmt := stmt.(type) {
 	case *sqlparser.CreateView:
-		insert, err := sqlparser.Parse(mysql.InsertIntoViewsTable)
+		query := mysql.InsertIntoViewsTable
+		if stmt.IsReplace {
+			query = mysql.ReplaceIntoViewsTable
+		}
+		insert, err := sqlparser.Parse(query)
 		if err != nil {
 			return nil, err
 		}

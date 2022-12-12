@@ -103,14 +103,18 @@ order by table_name, ordinal_position`
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 
 	// Views
-	CreateViewsTable = `
-CREATE TABLE IF NOT EXISTS _vt.views (
-  TABLE_NAME varchar(64) NOT NULL,
-  VIEW_DEFINITION longtext NOT NULL,
-  CREATE_STATEMENT longtext NOT NULL,
-  PRIMARY KEY (TABLE_NAME))`
+	CreateViewsTable = `CREATE TABLE IF NOT EXISTS _vt.views (
+  	TABLE_NAME varchar(64) NOT NULL,
+  	VIEW_DEFINITION longtext NOT NULL,
+  	CREATE_STATEMENT longtext NOT NULL,
+  	PRIMARY KEY (TABLE_NAME))`
 
 	InsertIntoViewsTable = `INSERT INTO _vt.views (
+	TABLE_NAME,
+	VIEW_DEFINITION,
+	CREATE_STATEMENT) VALUES (:TABLE_NAME, :VIEW_DEFINITION, :CREATE_STATEMENT)`
+
+	ReplaceIntoViewsTable = `REPLACE INTO _vt.views (
 	TABLE_NAME,
 	VIEW_DEFINITION,
 	CREATE_STATEMENT) VALUES (:TABLE_NAME, :VIEW_DEFINITION, :CREATE_STATEMENT)`

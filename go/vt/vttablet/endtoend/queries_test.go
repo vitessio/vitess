@@ -17,15 +17,11 @@ limitations under the License.
 package endtoend
 
 import (
-	"context"
 	"fmt"
 	"math/rand"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/vt/callerid"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -1762,24 +1758,6 @@ func TestQueries(t *testing.T) {
 			require.NoError(t, err)
 		})
 	}
-}
-
-func TestViewDDL(t *testing.T) {
-	client := framework.NewClient()
-
-	client.UpdateContext(callerid.NewContext(
-		context.Background(),
-		&vtrpcpb.CallerID{},
-		&querypb.VTGateCallerID{Username: "dev"}))
-
-	_, err := client.Execute("create view vitess_view as select * from vitess_a", nil)
-	require.NoError(t, err)
-
-	qr, err := client.Execute("select * from _vt.views", nil)
-	require.NoError(t, err)
-	require.Equal(t,
-		`[[VARCHAR("vitess_view") TEXT("select * from vitess_a") TEXT("create view vitess_view as select * from vitess_a")]]`,
-		fmt.Sprintf("%v", qr.Rows))
 }
 
 func name(tc framework.Testable) string {
