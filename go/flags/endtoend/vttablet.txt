@@ -160,6 +160,7 @@ Usage of vttablet:
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+      --leader_check_interval duration                                   Interval between transition to primary is check. (default 5s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
