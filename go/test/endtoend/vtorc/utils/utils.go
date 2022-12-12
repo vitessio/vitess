@@ -602,7 +602,7 @@ func RunSQLWithSuperReadOnly(t *testing.T, sql string, tablet *cluster.Vttablet,
 func execute(t *testing.T, conn *mysql.Conn, query string, withSuperReadOnly bool) (*sqltypes.Result, error) {
 	t.Helper()
 	if withSuperReadOnly {
-		return conn.ExecuteFetchWithReadOnlyHandling(query, 1000, true)
+		return conn.ExecuteFetchWithSuperReadOnlyHandling(query, 1000, true)
 	}
 
 	return conn.ExecuteFetch(query, 1000, true)
