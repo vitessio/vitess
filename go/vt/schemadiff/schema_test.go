@@ -21,6 +21,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var createQueries = []string{
@@ -152,4 +155,53 @@ func TestCopy(t *testing.T) {
 	assert.Equal(t, schema, schemaClone)
 	assert.Equal(t, schema.ToSQL(), schemaClone.ToSQL())
 	assert.False(t, schema == schemaClone)
+}
+
+func TestGetViewDependentTableNames(t *testing.T) {
+	tt := []struct {
+		name   string
+		view   string
+		tables []string
+	}{
+		{
+			view:   "create view v6 as select * from v4",
+			tables: []string{"v4"},
+		},
+		{
+			view:   "create view v2 as select * from v3, t2",
+			tables: []string{"v3", "t2"},
+		},
+		{
+			view:   "create view v3 as select * from t3 as t3",
+			tables: []string{"t3"},
+		},
+		{
+			view:   "create view v3 as select * from t3 as something_else",
+			tables: []string{"t3"},
+		},
+		{
+			view:   "create view v5 as select * from t1, (select * from v3) as some_alias",
+			tables: []string{"t1", "v3"},
+		},
+		{
+			view:   "create view v0 as select 1 from DUAL",
+			tables: []string{"dual"},
+		},
+		{
+			view:   "create view v9 as select 1",
+			tables: []string{"dual"},
+		},
+	}
+	for _, ts := range tt {
+		t.Run(ts.view, func(t *testing.T) {
+			stmt, err := sqlparser.ParseStrictDDL(ts.view)
+			require.NoError(t, err)
+			createView, ok := stmt.(*sqlparser.CreateView)
+			require.True(t, ok)
+
+			tables, err := getViewDependentTableNames(createView)
+			assert.NoError(t, err)
+			assert.Equal(t, ts.tables, tables)
+		})
+	}
 }
