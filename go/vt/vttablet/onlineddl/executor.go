@@ -4072,16 +4072,27 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
 	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
-	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
-		sqltypes.StringBindVariable(message),
-		sqltypes.StringBindVariable(uuid),
-	)
-	if err != nil {
+
+	maxlen := 16383
+	update := func(message string) error {
+		if len(message) > maxlen {
+			message = message[0:maxlen]
+		}
+		message = strings.ToValidUTF8(message, "�")
+		query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
+			sqltypes.StringBindVariable(message),
+			sqltypes.StringBindVariable(uuid),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = e.execQuery(ctx, query)
 		return err
 	}
-	_, err = e.execQuery(ctx, query)
+	err := update(message)
 	if err != nil {
-		log.Errorf("FAIL updateMigrationMessage: uuid=%s, message=%s, error=%v", uuid, message, err)
+		// If, for some reason, we're unable to update the error message, let's write a generic message
+		err = update("unable to update with original migration error message")
 	}
 	return err
 }
