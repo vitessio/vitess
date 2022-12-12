@@ -393,11 +393,6 @@
     "plan": "generating order by clause: ambiguous symbol reference: a"
   },
   {
-    "comment": "subquery of information_schema with itself and star expression in outer select",
-    "query": "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)",
-    "plan": "unsupported: '*' expression in cross-shard query"
-  },
-  {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
     "plan": "unsupported: cross-shard correlated subquery"
@@ -464,11 +459,5 @@
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
     "plan": "unsupported: lock function and other expression in same select query"
-  },
-  {
-    "comment": "systable union query in derived table with constraint on outside (star projection)",
-    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-    "v3-plan": "symbol constraint_name not found in table or subquery",
-    "gen4-plan": "can't push predicates on UNION where the first SELECT contains star or next"
   }
 ]

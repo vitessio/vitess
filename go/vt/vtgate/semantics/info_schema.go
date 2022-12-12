@@ -16,11 +16,21 @@ limitations under the License.
 
 package semantics
 
-import "vitess.io/vitess/go/vt/proto/query"
+import (
+	"sort"
+	"strings"
 
-// GetInfoSchema returns a map of all information_schema tables and their columns with types
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+)
+
+// getInfoSchema returns a map of all information_schema tables and their columns with types
 // To recreate this information from MySQL, you can run the test in info_schema_gen_test.go0
-func GetInfoSchema() map[string]map[string]query.Type {
+func getInfoSchema() map[string]map[string]query.Type {
 	infSchema := map[string]map[string]query.Type{}
 	cols := map[string]query.Type{}
 	cols["USER"] = query.Type(6165)
@@ -913,4 +923,51 @@ func GetInfoSchema() map[string]map[string]query.Type {
 	cols["COLLATION_CONNECTION"] = query.Type(6165)
 	infSchema["VIEWS"] = cols
 	return infSchema
+}
+
+type infoSchemaWithColumns struct {
+	inner          SchemaInformation
+	infoSchemaData map[string]map[string]query.Type
+}
+
+// newSchemaInfo returns a SchemaInformation that has the column information for all info_schema tables
+func newSchemaInfo(inner SchemaInformation) SchemaInformation {
+	return &infoSchemaWithColumns{inner: inner, infoSchemaData: getInfoSchema()}
+}
+
+// FindTableOrVindex implements the SchemaInformation interface
+func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	if !strings.EqualFold(tbl.Qualifier.String(), "information_schema") {
+		return i.inner.FindTableOrVindex(tbl)
+	}
+
+	ks := vindexes.Keyspace{
+		Name:    "information_schema",
+		Sharded: false,
+	}
+	var cols []vindexes.Column
+	for name, typ := range i.infoSchemaData[strings.ToUpper(tbl.Name.String())] {
+		cols = append(cols, vindexes.Column{
+			Name: sqlparser.NewIdentifierCI(name),
+			Type: typ,
+		})
+	}
+
+	sort.Slice(cols, func(i, j int) bool {
+		return cols[i].Name.String() < cols[j].Name.String()
+	})
+
+	vtbl := &vindexes.Table{
+		Type:                    "View",
+		Name:                    sqlparser.NewIdentifierCS(tbl.Name.String()),
+		Keyspace:                &ks,
+		Columns:                 cols,
+		ColumnListAuthoritative: true,
+	}
+	return vtbl, nil, "", topodatapb.TabletType_UNKNOWN, nil, nil
+}
+
+// ConnCollation implements the SchemaInformation interface
+func (i *infoSchemaWithColumns) ConnCollation() collations.ID {
+	return i.inner.ConnCollation()
 }

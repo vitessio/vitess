@@ -30,7 +30,7 @@ import (
 )
 
 func TestGenerateInfoSchemaMap(t *testing.T) {
-	t.Skip("run manually to re-create the content of the GetInfoSchema function")
+	t.Skip("run manually to re-create the content of the getInfoSchema function")
 	b := new(strings.Builder)
 
 	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:3306)/test")
