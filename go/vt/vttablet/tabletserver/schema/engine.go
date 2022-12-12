@@ -176,7 +176,6 @@ func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn 
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
-	//time.Sleep(20 * time.Second)
 	log.Infof("inside EnsureConnectionAndDB with TabletType %v", tabletType)
 	ctx := tabletenv.LocalContext()
 	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
@@ -192,9 +191,9 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 			return err
 		}
 		defer dbaConn.Close()
-		//if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
-		//	return err
-		//}
+		if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
+			return err
+		}
 		conn.Close()
 		return nil
 	}

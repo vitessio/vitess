@@ -478,7 +478,7 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 			}
 
 			for _, dbname := range db.shardNames(kpb) {
-				if err := db.Execute(cmds, dbname); err != nil {
+				if err := db.ExecuteWithSuperReadOnly(cmds, dbname); err != nil {
 					return err
 				}
 			}
@@ -506,7 +506,7 @@ func (db *LocalCluster) createDatabases() error {
 			sql = append(sql, fmt.Sprintf("create database `%s`", dbname))
 		}
 	}
-	return db.Execute(sql, "")
+	return db.ExecuteWithSuperReadOnly(sql, "")
 }
 
 // Execute runs a series of SQL statements on the MySQL instance backing
@@ -528,6 +528,34 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 	for _, cmd := range sql {
 		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
 		_, err := conn.ExecuteFetch(cmd, 0, false)
+		if err != nil {
+			return err
+		}
+	}
+
+	_, err = conn.ExecuteFetch("COMMIT", 0, false)
+	return err
+}
+
+// ExecuteWithSuperReadOnly runs a series of SQL statements with super-read-only permission
+// on the MySQL instance backing this local cluster. This is provided for debug/introspection purposes;
+// normal cluster access should be performed through the Vitess GRPC interface.
+func (db *LocalCluster) ExecuteWithSuperReadOnly(sql []string, dbname string) error {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("START TRANSACTION", 0, false)
+	if err != nil {
+		return err
+	}
+
+	for _, cmd := range sql {
+		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
+		_, err := conn.ExecuteFetchWithSuperReadOnlyHandling(cmd, 0, false)
 		if err != nil {
 			return err
 		}
@@ -692,4 +720,16 @@ func LoadSQLFile(filename, sourceroot string) ([]string, error) {
 	}
 
 	return sql, nil
+}
+
+func (db *LocalCluster) UnsetReadOnly(dbname string) error {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteUnSetSuperReadOnly()
+	return err
 }

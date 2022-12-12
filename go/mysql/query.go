@@ -328,11 +328,11 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	return res, more, err
 }
 
-// ExecuteFetchWithReadOnlyHandling should be used if you are executing a write query
+// ExecuteFetchWithSuperReadOnlyHandling should be used if you are executing a write query
 // on a tablet that may NOT be a primary and you want to execute it regardless of
 // tablet type. This function will temporarily make the mysql instance read-write and
 // re-enable read-only mode after the query is executed if needed.
-func (c *Conn) ExecuteFetchWithReadOnlyHandling(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
+func (c *Conn) ExecuteFetchWithSuperReadOnlyHandling(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
 	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
 	turnSuperReadOnly := false
 	if !c.IsMariaDB() {

@@ -104,8 +104,8 @@ type explainTablet struct {
 var _ queryservice.QueryService = (*explainTablet)(nil)
 
 func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
-	//db := fakesqldb.New(nil)
-	db := fakesqldb.NewWithExpectedQueries(nil)
+	db := fakesqldb.New(nil)
+	//db := fakesqldb.NewWithExpectedQueries(nil)
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
@@ -503,7 +503,8 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	if result != nil {
 		return callback(result)
 	}
-	switch sqlparser.Preview(query) {
+	var tmp = sqlparser.Preview(query)
+	switch tmp {
 	case sqlparser.StmtSelect:
 		// Parse the select statement to figure out the table and columns
 		// that were referenced so that the synthetic response has the
@@ -693,6 +694,10 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		result = &sqltypes.Result{
 			RowsAffected: 1,
 		}
+	case sqlparser.StmtUse:
+		result = &sqltypes.Result{}
+	case sqlparser.StmtDDL:
+		result = &sqltypes.Result{}
 	default:
 		return fmt.Errorf("unsupported query %s", query)
 	}
