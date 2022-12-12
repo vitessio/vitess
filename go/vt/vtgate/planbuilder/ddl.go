@@ -129,7 +129,7 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 	case *sqlparser.RenameTable:
 		destination, keyspace, err = buildRenameTable(vschema, ddl)
 	default:
-		return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected ddl statement type: %T", ddlStatement))
+		return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected DDL statement type: %T", ddlStatement))
 	}
 
 	if err != nil {
