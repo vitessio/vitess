@@ -40,6 +40,14 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "create database `db1` charset 'utf8mb4' collate 'utf8_bin';",
+			output: "create database db1 charset utf8mb4 collate utf8_bin",
+		},
+		{
+			input:  `create database db1 charset "utf8mb4" collate "utf8_bin";`,
+			output: `create database db1 charset utf8mb4 collate utf8_bin`,
+		},
+		{
 			// Technically, MySQL would require these reserved keywords to be backtick quoted, but it's convenient that
 			// we can support unquoted reserved keyword identifiers when we can, so adding this assertion to prevent
 			// this query from breaking. A similar query is used by sql-diff.bats runs.
