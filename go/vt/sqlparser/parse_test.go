@@ -40,6 +40,14 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "create database `db1` charset 'utf8mb4' collate 'utf8_bin';",
+			output: "create database db1 charset utf8mb4 collate utf8_bin",
+		},
+		{
+			input:  `create database db1 charset "utf8mb4" collate "utf8_bin";`,
+			output: `create database db1 charset utf8mb4 collate utf8_bin`,
+		},
+		{
 			// Technically, MySQL would require these reserved keywords to be backtick quoted, but it's convenient that
 			// we can support unquoted reserved keyword identifiers when we can, so adding this assertion to prevent
 			// this query from breaking. A similar query is used by sql-diff.bats runs.
@@ -2866,7 +2874,7 @@ END`,
 			output: "with a (j) as (select 1) (with c (k) as (select 3) select (select k from c union select 6 limit 1) as b) union select k from c",
 		},
 		{
-			input:  `CREATE PROCEDURE testproc() BEGIN
+			input: `CREATE PROCEDURE testproc() BEGIN
   DECLARE done INT DEFAULT FALSE;
   DECLARE a CHAR(16);
   DECLARE b, c INT;
@@ -2892,7 +2900,7 @@ END`,
 declare done INT default false;
 declare a CHAR(16);
 declare b, c INT;
-declare cur1 cursor for select id, `+"`data`"+` from test.t1;
+declare cur1 cursor for select id, ` + "`data`" + ` from test.t1;
 declare cur2 cursor for select i from test.t2;
 declare continue handler for not found set done = true;
 open cur1;
@@ -2907,7 +2915,7 @@ close cur2;
 end`,
 		},
 		{
-			input:  `CREATE PROCEDURE testproc() BEGIN
+			input: `CREATE PROCEDURE testproc() BEGIN
   DECLARE done INT DEFAULT FALSE;
   DECLARE a CHAR(16);
   DECLARE b INT;
@@ -2945,7 +2953,7 @@ END`,
 declare done INT default false;
 declare a CHAR(16);
 declare b INT;
-declare cur1 cursor for select id, `+"`data`"+` from test.t1;
+declare cur1 cursor for select id, ` + "`data`" + ` from test.t1;
 declare continue handler for not found set done = true;
 open cur1;
 read_loop: loop

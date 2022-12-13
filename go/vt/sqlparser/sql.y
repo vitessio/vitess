@@ -3088,11 +3088,19 @@ charset_default_opt:
   {
     $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($5), IsDefault: $1}
   }
+| default_keyword_opt CHARACTER SET equal_opt STRING
+  {
+    $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($5), IsDefault: $1}
+  }
 | default_keyword_opt CHARACTER SET equal_opt BINARY
   {
     $$ = &CharsetAndCollate{Type: string($2) + " " + string($3), Value: string($5), IsDefault: $1}
   }
 | default_keyword_opt CHARSET equal_opt ID
+  {
+    $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+  }
+| default_keyword_opt CHARSET equal_opt STRING
   {
     $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
   }
@@ -3106,6 +3114,10 @@ collate_default_opt:
   {
     $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
   }
+| default_keyword_opt COLLATE equal_opt STRING
+    {
+      $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
+    }
 | default_keyword_opt COLLATE equal_opt BINARY
   {
     $$ = &CharsetAndCollate{Type: string($2), Value: string($4), IsDefault: $1}
