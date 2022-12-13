@@ -23,7 +23,7 @@ import (
 )
 
 var (
-	VT03001 = errorWithState("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "The planner only accepts aggregate functions that take a single argument.")
+	VT03001 = errorWithState("VT03001", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "aggregate functions take a single argument '%s'", "This aggregation function only takes a single argument.")
 	VT03002 = errorWithState("VT03002", vtrpcpb.Code_INVALID_ARGUMENT, ForbidSchemaChange, "changing schema from '%s' to '%s' is not allowed", "This schema change is not allowed. You cannot change the keyspace of a table.")
 	VT03003 = errorWithState("VT03003", vtrpcpb.Code_INVALID_ARGUMENT, UnknownTable, "unknown table '%s' in MULTI DELETE", "The specified table in this DELETE statement is unknown.")
 	VT03004 = errorWithState("VT03004", vtrpcpb.Code_INVALID_ARGUMENT, NonUpdateableTable, "the target table %s of the DELETE is not updatable", "You cannot delete something that is not a real MySQL table.")
@@ -37,7 +37,7 @@ var (
 	VT03012 = errorWithoutState("VT03012", vtrpcpb.Code_INVALID_ARGUMENT, "invalid syntax: %s", "The syntax is invalid. Please refer to the MySQL documentation for the proper syntax.")
 	VT03013 = errorWithState("VT03013", vtrpcpb.Code_INVALID_ARGUMENT, NonUniqTable, "not unique table/alias: '%s'", "This table or alias name is already use. Please use another one that is unique.")
 	VT03014 = errorWithState("VT03014", vtrpcpb.Code_INVALID_ARGUMENT, BadFieldError, "unknown column '%d' in '%s'", "The given column is unknown.")
-	VT03015 = errorWithoutState("VT03015", vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", "You cannot assign more than one value to the same vindex.")
+	VT03015 = errorWithoutState("VT03015", vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", "Cannot assign multiple values to a column in an update statement.")
 	VT03016 = errorWithoutState("VT03016", vtrpcpb.Code_INVALID_ARGUMENT, "unknown vindex column: '%s'", "The given column is unknown in the vindex table.")
 	VT03017 = errorWithState("VT03017", vtrpcpb.Code_INVALID_ARGUMENT, SyntaxError, "where clause can only be of the type 'pos > <value>'", "This vstream where clause can only be a greater than filter.")
 	VT03018 = errorWithoutState("VT03018", vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table", "You cannot use the NEXT syntax on a table that is not a sequence table.")
@@ -45,7 +45,7 @@ var (
 	VT03020 = errorWithoutState("VT03020", vtrpcpb.Code_INVALID_ARGUMENT, "symbol %s not found in subquery", "The given symbol was not found in the subquery.")
 	VT03021 = errorWithoutState("VT03021", vtrpcpb.Code_INVALID_ARGUMENT, "ambiguous symbol reference: %v", "The given symbol is ambiguous. You can use a table qualifier to make it unambiguous.")
 	VT03022 = errorWithoutState("VT03022", vtrpcpb.Code_INVALID_ARGUMENT, "column %v not found in %v", "The given column cannot be found.")
-	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", "INSERTs are not supported with key range targets.")
+	VT03023 = errorWithoutState("VT03023", vtrpcpb.Code_INVALID_ARGUMENT, "INSERT not supported when targeting a key range: %s", "When targeting a range of shards, Vitess does not know which shard to send the INSERT to.")
 
 	VT05001 = errorWithState("VT05001", vtrpcpb.Code_NOT_FOUND, DbDropExists, "cannot drop database '%s'; database does not exists", "The given database does not exist; Vitess cannot drop it.")
 	VT05002 = errorWithState("VT05002", vtrpcpb.Code_NOT_FOUND, BadDb, "cannot alter database '%s'; unknown database", "The given database does not exist; Vitess cannot alter it.")
