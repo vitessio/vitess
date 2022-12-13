@@ -333,8 +333,8 @@ func TestSysInfo(t *testing.T) {
 	assert.Equal(t, `VARCHAR("NO")`, qr.Rows[1][8].String())
 
 	// table_name
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[0][10].String())
-	assert.Equal(t, `VARCHAR("a")`, qr.Rows[1][10].String())
+	assert.Equal(t, `VARBINARY("a")`, qr.Rows[0][10].String())
+	assert.Equal(t, `VARBINARY("a")`, qr.Rows[1][10].String())
 
 	assert.EqualValues(t, sqltypes.Uint64, qr.Fields[4].Type)
 	assert.EqualValues(t, querypb.Type_UINT64, qr.Rows[0][4].Type())
