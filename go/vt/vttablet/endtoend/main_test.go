@@ -325,7 +325,7 @@ var tableACLConfig = `{
     },
     {
       "name": "vitess_views",
-      "table_names_or_prefixes": ["views"],
+      "table_names_or_prefixes": ["views", "vitess_view1", "vitess_view2", "vitess_view3"],
       "readers": ["dev"],
       "writers": ["dev"],
       "admins": ["dev"]

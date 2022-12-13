@@ -299,6 +299,8 @@ func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Resul
 		return qre.execCreateViewDDL(conn, stmt)
 	case *sqlparser.AlterView:
 		return qre.execAlterViewDDL(conn, stmt)
+	case *sqlparser.DropView:
+		return qre.execDropViewDDL(conn, stmt)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected view DDL type: %T", qre.plan.FullStmt)
 }
@@ -346,6 +348,73 @@ func (qre *QueryExecutor) execAlterViewDDL(conn *StatefulConnection, stmt *sqlpa
 		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "View '%s' does not exist", stmt.ViewName.Name.String())
 	}
 	return qr, nil
+}
+
+func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlparser.DropView) (*sqltypes.Result, error) {
+	viewsMap := make(map[string]int)
+	var viewNames []string
+	for pos, view := range stmt.FromTables {
+		viewName := view.Name.String()
+		if _, exists := viewsMap[viewName]; exists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Not unique view: '%s'", viewName)
+		}
+		viewNames = append(viewNames, viewName)
+		viewsMap[viewName] = pos
+	}
+	viewNamesBV, err := sqltypes.BuildBindVariable(viewNames)
+	if err != nil {
+		return nil, err
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"TABLE_NAME": viewNamesBV,
+	}
+
+	existErr := qre.checkViewExists(conn, stmt, bindVars, viewsMap, viewNames)
+
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	if err != nil {
+		return nil, err
+	}
+	if existErr != nil {
+		return nil, existErr
+	}
+	return qr, nil
+}
+
+func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlparser.DropView, bindVars map[string]*querypb.BindVariable, viewsMap map[string]int, viewNames []string) error {
+	if stmt.IfExists {
+		return nil
+	}
+	// run the select to know which views exist.
+	sel, err := sqlparser.Parse(mysql.SelectFromViewsTable)
+	if err != nil {
+		return err
+	}
+	sql, _, err := qre.generateFinalSQL(p.GenerateFullQuery(sel), bindVars)
+	if err != nil {
+		return err
+	}
+
+	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	if err != nil {
+		return err
+	}
+	if len(qr.Rows) != len(viewNames) {
+		// If the number of rows returned by the select is not equal to the number of views
+		// that we are trying to drop, then we would return the error.
+		for _, row := range qr.Rows {
+			viewName := row[0].ToString()
+			if pos, exists := viewsMap[viewName]; exists {
+				viewNames = append(viewNames[:pos], viewNames[pos+1:]...)
+			}
+		}
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "Unknown view '%s'", strings.Join(viewNames, ","))
+	}
+	return nil
 }
 
 // Stream performs a streaming query execution.

@@ -78,7 +78,7 @@ func TestAlterViewDDL(t *testing.T) {
 
 	defer client.Execute("delete from _vt.views", nil)
 
-	// view does not exist, show FAIL
+	// view does not exist, should FAIL
 	_, err := client.Execute("alter view vitess_view as select * from vitess_a", nil)
 	require.ErrorContains(t, err, "View 'vitess_view' does not exist")
 
@@ -96,4 +96,56 @@ func TestAlterViewDDL(t *testing.T) {
 	require.Equal(t,
 		`[[VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
+}
+
+// Test will validate drop view ddls.
+func TestDropViewDDL(t *testing.T) {
+	client := framework.NewClient()
+
+	client.UpdateContext(callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	defer client.Execute("delete from _vt.views", nil)
+
+	// view does not exist, should FAIL
+	_, err := client.Execute("drop view vitess_view", nil)
+	require.ErrorContains(t, err, "Unknown view 'vitess_view'")
+
+	// view does not exist, using if exists clause, should PASS
+	_, err = client.Execute("drop view if exists vitess_view", nil)
+	require.NoError(t, err)
+
+	// create two views.
+	_, err = client.Execute("create view vitess_view1 as select * from vitess_a", nil)
+	require.NoError(t, err)
+	_, err = client.Execute("create view vitess_view2 as select * from vitess_a", nil)
+	require.NoError(t, err)
+
+	// drop vitess_view1, should PASS
+	_, err = client.Execute("drop view vitess_view1", nil)
+	require.NoError(t, err)
+
+	// drop three views, only vitess_view2 exists. This should FAIL but drops the existing view.
+	_, err = client.Execute("drop view vitess_view1, vitess_view2, vitess_view3", nil)
+	require.ErrorContains(t, err, "Unknown view 'vitess_view1,vitess_view3'")
+
+	// validate ZERO rows in _vt.views.
+	qr, err := client.Execute("select * from _vt.views", nil)
+	require.NoError(t, err)
+	require.Zero(t, qr.Rows)
+
+	// create a view.
+	_, err = client.Execute("create view vitess_view1 as select * from vitess_a", nil)
+	require.NoError(t, err)
+
+	// drop three views with if exists clause, only vitess_view1 exists. This should PASS but drops the existing view.
+	_, err = client.Execute("drop view if exists vitess_view1, vitess_view2, vitess_view3", nil)
+	require.NoError(t, err)
+
+	// validate ZERO rows in _vt.views.
+	qr, err = client.Execute("select * from _vt.views", nil)
+	require.NoError(t, err)
+	require.Zero(t, qr.Rows)
 }

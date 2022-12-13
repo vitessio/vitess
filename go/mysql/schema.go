@@ -120,8 +120,12 @@ order by table_name, ordinal_position`
 	CREATE_STATEMENT) VALUES (:TABLE_NAME, :VIEW_DEFINITION, :CREATE_STATEMENT)`
 
 	UpdateViewsTable = `UPDATE _vt.views 
-	set VIEW_DEFINITION = :VIEW_DEFINITION, CREATE_STATEMENT = :CREATE_STATEMENT 
-	where TABLE_NAME = :TABLE_NAME`
+	SET VIEW_DEFINITION = :VIEW_DEFINITION, CREATE_STATEMENT = :CREATE_STATEMENT 
+	WHERE TABLE_NAME = :TABLE_NAME`
+
+	DeleteFromViewsTable = `DELETE FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
+
+	SelectFromViewsTable = `SELECT TABLE_NAME FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to

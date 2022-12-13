@@ -235,14 +235,18 @@ func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 			return nil, err
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
-	case *sqlparser.DropView:
-
 	case *sqlparser.AlterView:
 		update, err := sqlparser.Parse(mysql.UpdateViewsTable)
 		if err != nil {
 			return nil, err
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
+	case *sqlparser.DropView:
+		del, err := sqlparser.Parse(mysql.DeleteFromViewsTable)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(del), FullStmt: viewDDL}, nil
 	}
-	return nil, nil
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown view DDL type: %T", stmt)
 }
