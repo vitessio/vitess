@@ -68,7 +68,7 @@ Global flags:
       --mysqlctl_client_protocol string                 the protocol to use to talk to the mysqlctl server (default "grpc")
       --mysqlctl_mycnf_template string                  template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                          socket file to use for remote mysqlctl actions (empty for local actions)
-      --onclose_timeout duration                        wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onclose_timeout duration                        wait no more than this for OnClose handlers before stopping (default 1s)
       --onterm_timeout duration                         wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid_file string                                 If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --pool_hostname_resolve_interval duration         if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)

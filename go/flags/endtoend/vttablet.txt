@@ -193,7 +193,7 @@ Usage of vttablet:
       --mysql_server_version string                                      MySQL server version to advertise.
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
-      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb_uri string                                              URI of opentsdb /api/put method
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.

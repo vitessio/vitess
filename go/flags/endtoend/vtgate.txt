@@ -120,7 +120,7 @@ Usage of vtgate:
       --mysql_tcp_version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
       --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize_queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)
-      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb_uri string                                              URI of opentsdb /api/put method
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
