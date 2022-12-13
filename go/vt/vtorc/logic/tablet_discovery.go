@@ -202,21 +202,21 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
-	latestInstances := make(map[inst.InstanceKey]bool)
+	latestInstances := make(map[string]bool)
 	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		if tablet.MysqlHostname == "" {
+		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			continue
 		}
-		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
+		latestInstances[topoproto.TabletAliasString(tablet.Alias)] = true
+		if tablet.MysqlHostname == "" {
 			continue
 		}
 		instanceKey := inst.InstanceKey{
 			Hostname: tablet.MysqlHostname,
 			Port:     int(tablet.MysqlPort),
 		}
-		latestInstances[instanceKey] = true
 		old, err := inst.ReadTablet(instanceKey)
 		if err != nil && err != inst.ErrTabletAliasNil {
 			log.Error(err)
@@ -245,12 +245,12 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 			Hostname: row.GetString("hostname"),
 			Port:     row.GetInt("port"),
 		}
-		if !latestInstances[curKey] {
-			tablet := &topodatapb.Tablet{}
-			if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
-				log.Error(err)
-				return nil
-			}
+		tablet := &topodatapb.Tablet{}
+		if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
+			log.Error(err)
+			return nil
+		}
+		if !latestInstances[topoproto.TabletAliasString(tablet.Alias)] {
 			toForget[curKey] = tablet
 		}
 		return nil

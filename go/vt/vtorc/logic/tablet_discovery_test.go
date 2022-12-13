@@ -138,10 +138,33 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		verifyRefreshTabletsInKeyspaceShard(t, true, 3, tablets)
 	})
 
+	t.Run("tablet shutdown removes mysql hostname and port. We shouldn't forget the tablet", func(t *testing.T) {
+		defer func() {
+			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.MysqlHostname = hostname
+				tablet.MysqlPort = 100
+				return nil
+			})
+		}()
+		// Let's assume tab100 shutdown. This would clear its tablet hostname and port
+		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+			tablet.MysqlHostname = ""
+			tablet.MysqlPort = 0
+			return nil
+		})
+		require.NoError(t, err)
+		// We expect no tablets to be refreshed. Also, tab100 shouldn't be forgotten
+		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets)
+	})
+
 	t.Run("change a tablet and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
 		startTimeInitially := tab100.PrimaryTermStartTime.Seconds
 		defer func() {
 			tab100.PrimaryTermStartTime.Seconds = startTimeInitially
+			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.PrimaryTermStartTime.Seconds = startTimeInitially
+				return nil
+			})
 		}()
 		tab100.PrimaryTermStartTime.Seconds = 1000
 		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
@@ -151,24 +174,6 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		require.NoError(t, err)
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
 		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets)
-	})
-
-	t.Run("tablet shutdown removes mysql hostname and port. We shouldn't forget the tablet", func(t *testing.T) {
-		defer func() {
-			tab100.MysqlHostname = hostname
-			tab100.MysqlPort = 100
-		}()
-		// Let's assume tab100 shutdown. This would clear its tablet hostname and port
-		tab100.MysqlHostname = ""
-		tab100.MysqlPort = 0
-		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
-			tablet.MysqlHostname = ""
-			tablet.MysqlPort = 0
-			return nil
-		})
-		require.NoError(t, err)
-		// We expect no tablets to be refreshed. Also, tab100 shouldn't be forgotten
-		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets)
 	})
 }
 
