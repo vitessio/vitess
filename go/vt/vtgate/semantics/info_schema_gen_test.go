@@ -30,15 +30,15 @@ import (
 )
 
 func TestGenerateInfoSchemaMap(t *testing.T) {
-	t.Skip("run manually to re-create the content of the getInfoSchema functions")
+	// t.Skip("run manually to re-create the content of the getInfoSchema functions")
 	b := new(strings.Builder)
 
-	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:3307)/test")
+	db, err := sql.Open("mysql", "root@tcp(127.0.0.1:3306)/test")
 	require.NoError(t, err)
 	defer db.Close()
 
-	for _, tbl := range informationSchemaTables57 {
-		b.WriteString("cols = map[string]query.Type{}\n")
+	for _, tbl := range informationSchemaTables80 {
+		b.WriteString("cols = []vindexes.Column{}\n")
 		result, err := db.Query(fmt.Sprintf("show columns from information_schema.`%s`", tbl))
 		require.NoError(t, err)
 		defer result.Close()
@@ -61,7 +61,7 @@ func TestGenerateInfoSchemaMap(t *testing.T) {
 			if int(i2) == 0 {
 				t.Fatalf("%s %s", tbl, r.Field)
 			}
-			b.WriteString(fmt.Sprintf("cols[\"%s\"] = query.Type(%d)\n", r.Field, int(i2)))
+			b.WriteString(fmt.Sprintf("cols = append(cols, createCol(\"%s\", %d))\n", r.Field, int(i2)))
 		}
 		b.WriteString(fmt.Sprintf("infSchema[\"%s\"] = cols\n", tbl))
 	}
