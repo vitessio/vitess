@@ -66,7 +66,7 @@ func buildSelectPlan(query string) stmtPlanner {
 			return nil, err
 		}
 
-		if shouldRetryWithCNFRewriting(plan) {
+		if shouldRetryAfterPredicateRewriting(plan) {
 			// by transforming the predicates to CNF, the planner will sometimes find better plans
 			primitive := rewriteToCNFAndReplan(stmt, getPlan)
 			if primitive != nil {
@@ -89,12 +89,12 @@ func buildSelectPlan(query string) stmtPlanner {
 }
 
 func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser.Select) (logicalPlan, error)) engine.Primitive {
-	rewritten := sqlparser.RewriteToCNF(stmt)
+	rewritten := sqlparser.RewritePredicate(stmt)
 	sel2, isSelect := rewritten.(*sqlparser.Select)
 	if isSelect {
 		log.Infof("retrying plan after cnf: %s", sqlparser.String(sel2))
 		plan2, err := getPlan(sel2)
-		if err == nil && !shouldRetryWithCNFRewriting(plan2) {
+		if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
 			// we only use this new plan if it's better than the old one we got
 			return plan2.Primitive()
 		}
@@ -102,7 +102,7 @@ func rewriteToCNFAndReplan(stmt sqlparser.Statement, getPlan func(sel *sqlparser
 	return nil
 }
 
-func shouldRetryWithCNFRewriting(plan logicalPlan) bool {
+func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 	// if we have a I_S query, but have not found table_schema or table_name, let's try CNF
 	var opcode engine.Opcode
 	var sysTableTableName map[string]evalengine.Expr
@@ -177,7 +177,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
-			plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, pb.vschema, planSelectV3)
+			plan, _, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, pb.vschema, planSelectV3)
 			if err != nil {
 				return err
 			}
@@ -283,16 +283,16 @@ func buildSQLCalcFoundRowsPlan(
 	sel *sqlparser.Select,
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
-	planSelect func(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error),
-) (logicalPlan, error) {
-	ljt, limitPlan, err := planSelect(reservedVars, vschema, sel)
+	planSelect func(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, []string, error),
+) (logicalPlan, []string, error) {
+	ljt, limitPlan, _, err := planSelect(reservedVars, vschema, sel)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	statement2, reserved2, err := sqlparser.Parse2(originalQuery)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	sel2 := statement2.(*sqlparser.Select)
 
@@ -325,18 +325,18 @@ func buildSQLCalcFoundRowsPlan(
 
 	reservedVars2 := sqlparser.NewReservedVars("vtg", reserved2)
 
-	cjt, countPlan, err := planSelect(reservedVars2, vschema, sel2)
+	cjt, countPlan, tablesUsed, err := planSelect(reservedVars2, vschema, sel2)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan, ljt: ljt, cjt: cjt}, nil
+	return &sqlCalcFoundRows{LimitQuery: limitPlan, CountQuery: countPlan, ljt: ljt, cjt: cjt}, tablesUsed, nil
 }
 
-func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
+func planSelectV3(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, []string, error) {
 	ljt := newJointab(reservedVars)
 	frpb := newPrimitiveBuilder(vschema, ljt)
 	err := frpb.processSelect(sel, reservedVars, nil, "")
-	return ljt, frpb.plan, err
+	return ljt, frpb.plan, nil, err
 }
 
 func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engine.Primitive, error) {

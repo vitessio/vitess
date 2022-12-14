@@ -61,7 +61,7 @@ func (e *Executor) newExecute(
 	}
 
 	// 2: Create a plan for the query
-	plan, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
+	plan, stmt, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
 	execStart := e.logPlanningFinished(logStats, plan)
 
 	if err != nil {
@@ -78,7 +78,7 @@ func (e *Executor) newExecute(
 		safeSession.RecordWarning(warning)
 	}
 
-	result, err := e.handleTransactions(ctx, safeSession, plan, logStats, vcursor)
+	result, err := e.handleTransactions(ctx, safeSession, plan, logStats, vcursor, stmt)
 	if err != nil {
 		return err
 	}
@@ -104,12 +104,19 @@ func (e *Executor) newExecute(
 }
 
 // handleTransactions deals with transactional queries: begin, commit, rollback and savepoint management
-func (e *Executor) handleTransactions(ctx context.Context, safeSession *SafeSession, plan *engine.Plan, logStats *logstats.LogStats, vcursor *vcursorImpl) (*sqltypes.Result, error) {
+func (e *Executor) handleTransactions(
+	ctx context.Context,
+	safeSession *SafeSession,
+	plan *engine.Plan,
+	logStats *logstats.LogStats,
+	vcursor *vcursorImpl,
+	stmt sqlparser.Statement,
+) (*sqltypes.Result, error) {
 	// We need to explicitly handle errors, and begin/commit/rollback, since these control transactions. Everything else
 	// will fall through and be handled through planning
 	switch plan.Type {
 	case sqlparser.StmtBegin:
-		qr, err := e.handleBegin(ctx, safeSession, logStats)
+		qr, err := e.handleBegin(ctx, safeSession, logStats, stmt)
 		return qr, err
 	case sqlparser.StmtCommit:
 		qr, err := e.handleCommit(ctx, safeSession, logStats)
@@ -141,7 +148,7 @@ func (e *Executor) handleTransactions(ctx context.Context, safeSession *SafeSess
 
 func (e *Executor) startTxIfNecessary(ctx context.Context, safeSession *SafeSession) error {
 	if !safeSession.Autocommit && !safeSession.InTransaction() {
-		if err := e.txConn.Begin(ctx, safeSession); err != nil {
+		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return err
 		}
 	}
@@ -152,7 +159,7 @@ func (e *Executor) insideTransaction(ctx context.Context, safeSession *SafeSessi
 	mustCommit := false
 	if safeSession.Autocommit && !safeSession.InTransaction() {
 		mustCommit = true
-		if err := e.txConn.Begin(ctx, safeSession); err != nil {
+		if err := e.txConn.Begin(ctx, safeSession, nil); err != nil {
 			return err
 		}
 		// The defer acts as a failsafe. If commit was successful,

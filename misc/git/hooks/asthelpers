@@ -15,4 +15,4 @@
 
 # this script, which should run before committing code, makes sure that the visitor is re-generated when the ast changes
 
-go run ./go/tools/asthelpergen/main --in ./go/vt/sqlparser --verify=true --iface vitess.io/vitess/go/vt/sqlparser.SQLNode --except "*ColName"
+go run ./go/tools/asthelpergen/main --in ./go/vt/sqlparser --verify=true --iface vitess.io/vitess/go/vt/sqlparser.SQLNode --clone_exclude "*ColName" --equals_custom "*ColName"

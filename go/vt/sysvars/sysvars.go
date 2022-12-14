@@ -16,6 +16,8 @@ limitations under the License.
 
 package sysvars
 
+import "sync"
+
 // This information lives here, because it's needed from the vtgate planbuilder, the vtgate engine,
 // and the AST rewriter, that happens to live in sqlparser.
 
@@ -271,4 +273,18 @@ func GetInterestingVariables() []string {
 		}
 	}
 	return res
+}
+
+var vitessAwareVariableNames map[string]struct{}
+var vitessAwareInit sync.Once
+
+func IsVitessAware(sysv string) bool {
+	vitessAwareInit.Do(func() {
+		vitessAwareVariableNames = make(map[string]struct{}, len(VitessAware))
+		for _, v := range VitessAware {
+			vitessAwareVariableNames[v.Name] = struct{}{}
+		}
+	})
+	_, found := vitessAwareVariableNames[sysv]
+	return found
 }

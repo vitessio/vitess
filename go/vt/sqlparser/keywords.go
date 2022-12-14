@@ -179,6 +179,7 @@ var keywords = []keyword{
 	{"compression", COMPRESSION},
 	{"condition", UNUSED},
 	{"connection", CONNECTION},
+	{"consistent", CONSISTENT},
 	{"constraint", CONSTRAINT},
 	{"continue", UNUSED},
 	{"convert", CONVERT},
@@ -562,6 +563,7 @@ var keywords = []keyword{
 	{"simple", SIMPLE},
 	{"slow", SLOW},
 	{"smallint", SMALLINT},
+	{"snapshot", SNAPSHOT},
 	{"spatial", SPATIAL},
 	{"specific", UNUSED},
 	{"sql", SQL},
@@ -663,6 +665,7 @@ var keywords = []keyword{
 	{"vitess_tablets", VITESS_TABLETS},
 	{"vitess_target", VITESS_TARGET},
 	{"vitess_throttled_apps", VITESS_THROTTLED_APPS},
+	{"vitess_throttler", VITESS_THROTTLER},
 	{"vschema", VSCHEMA},
 	{"vstream", VSTREAM},
 	{"vtexplain", VTEXPLAIN},
@@ -687,6 +690,7 @@ var keywords = []keyword{
 
 // keywordStrings contains the reverse mapping of token to keyword strings
 var keywordStrings = map[int]string{}
+var keywordVals = map[string]int{}
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
@@ -735,6 +739,7 @@ func init() {
 			panic(fmt.Sprintf("keyword %q must be lowercase in table", kw.name))
 		}
 		keywordStrings[kw.id] = kw.name
+		keywordVals[kw.name] = kw.id
 	}
 
 	keywordLookupTable = buildCaseInsensitiveTable(keywords)

@@ -446,6 +446,11 @@ func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *ShowThrottlerStatus) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_throttler status")
+}
+
+// formatFast formats the node.
 func (node *OptLike) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("like ")
 	node.LikeTable.formatFast(buf)
@@ -1275,7 +1280,21 @@ func (node *Commit) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Begin) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("begin")
+	if node.TxAccessModes == nil {
+		buf.WriteString("begin")
+		return
+	}
+	buf.WriteString("start transaction")
+	for idx, accessMode := range node.TxAccessModes {
+		if idx == 0 {
+			buf.WriteByte(' ')
+			buf.WriteString(accessMode.ToString())
+			continue
+		}
+		buf.WriteString(", ")
+		buf.WriteString(accessMode.ToString())
+	}
+
 }
 
 // formatFast formats the node.

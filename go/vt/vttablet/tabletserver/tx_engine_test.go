@@ -489,15 +489,15 @@ func TestWithInnerTests(outerT *testing.T) {
 				// nothing to do
 			case WriteAccepted:
 				require.NoError(t,
-					startTransaction(te, true))
+					startTx(te, true))
 			case ReadOnlyAccepted:
 				require.NoError(t,
-					startTransaction(te, false))
+					startTx(te, false))
 			case WriteRejected:
-				err := startTransaction(te, true)
+				err := startTx(te, true)
 				require.Error(t, err)
 			case ReadOnlyRejected:
-				err := startTransaction(te, false)
+				err := startTx(te, false)
 				require.Error(t, err)
 			default:
 				t.Fatalf("don't know how to [%v]", test.tx)
@@ -544,7 +544,7 @@ func assertEndStateIs(expected txEngineState) func(actual txEngineState) error {
 	}
 }
 
-func startTransaction(te *TxEngine, writeTransaction bool) error {
+func startTx(te *TxEngine, writeTransaction bool) error {
 	options := &querypb.ExecuteOptions{}
 	if writeTransaction {
 		options.TransactionIsolation = querypb.ExecuteOptions_DEFAULT

@@ -2,8 +2,9 @@
 bootstrap.sh @ajm188 @deepthi @frouioui @vmg
 go.mod @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
 go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @frouioui
+/.github/ @deepthi @mattlord @rohit-nayak-ps @frouioui
 /.github/ISSUE_TEMPLATE/ @deepthi @frouioui @mattlord
-/.github/workflows/ @deepthi @frouioui @mattlord
+/.github/workflows/ @deepthi @frouioui @mattlord @rohit-nayak-ps
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
 /doc/ @deepthi @frouioui @GuptaManan100 @rsajwani
 /docker/ @deepthi @derekperkins @dkhenry @mattlord
@@ -35,10 +36,10 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/vt/schema @mattlord @shlomi-noach
 /go/vt/servenv @deepthi @ajm188
 /go/vt/sqlparser @harshit-gangal @systay @GuptaManan100
-/go/vt/srvtopo @deepthi @rafael @mattlord
+/go/vt/srvtopo @deepthi @mattlord
 /go/vt/sysvars @harshit-gangal @systay
-/go/vt/topo @deepthi @rafael @mattlord @rsajwani
-/go/vt/topotools @deepthi @rafael @mattlord @rsajwani
+/go/vt/topo @deepthi @mattlord @rsajwani
+/go/vt/topotools @deepthi @mattlord @rsajwani
 /go/vt/vitessdriver @harshit-gangal
 /go/vt/vtadmin @ajm188 @notfelineit @rohit-nayak-ps
 /go/vt/vtctl @ajm188 @deepthi @rohit-nayak-ps
@@ -51,6 +52,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/vt/vterrors @harshit-gangal @systay
 /go/vt/vtexplain @systay @harshit-gangal
 /go/vt/vtgate @harshit-gangal @systay @frouioui @GuptaManan100
+/go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @GuptaManan100 @arthurschreiber
 /go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
 /go/vt/vttablet/*conn* @harshit-gangal @systay
 /go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay
@@ -73,4 +75,5 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /test/ @GuptaManan100 @frouioui @rohit-nayak-ps @deepthi @mattlord @harshit-gangal
 /tools/ @frouioui @rohit-nayak-ps
 /web/vtadmin @ajm188 @notfelineit
+/web/vtadmin/src/proto @deepthi @harshit-gangal @mattlord
 /web/vtctld2 @notfelineit @rohit-nayak-ps

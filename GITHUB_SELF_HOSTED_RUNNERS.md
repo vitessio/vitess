@@ -71,3 +71,21 @@ The logs will be stored in the `savedRuns` directory and can be copied locally v
 
 A cronjob is already setup to empty the `savedRuns` directory every week so please download the runs
 before they are deleted.
+
+## Running out of disk space in Self-hosted runners
+
+If the loads on the self-hosted runners increases due to multiple tests being moved to them or some other reason, 
+they sometimes end up running out of disk space. This causes the runner to stop working all together.
+
+In order to fix this issue follow the following steps -
+1. `ssh` into the self-hosted runner by finding its address from the equinix dashboard.
+2. Clear out the disk by running `docker system prune -f --volumes --all`. This is the same command that we run on a cron on the server.
+3. Switch to the `github-runner` user
+   1. `su github-runner`
+4. Resume an existing `screen`
+   1. `screen -r`
+5. Start the runner again.
+   1. `./run.sh`
+6. Verify that the runner has started accepting jobs again. Detach the screen and close the `ssh` connection.
+
+

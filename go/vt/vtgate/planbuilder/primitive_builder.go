@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
@@ -29,6 +30,15 @@ type primitiveBuilder struct {
 	jt      *jointab
 	plan    logicalPlan
 	st      *symtab
+	stmt    sqlparser.Statement
+}
+
+func newStmtAwarePrimitiveBuilder(vschema plancontext.VSchema, jt *jointab, stmt sqlparser.Statement) *primitiveBuilder {
+	return &primitiveBuilder{
+		vschema: vschema,
+		jt:      jt,
+		stmt:    stmt,
+	}
 }
 
 func newPrimitiveBuilder(vschema plancontext.VSchema, jt *jointab) *primitiveBuilder {

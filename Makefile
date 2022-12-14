@@ -177,27 +177,22 @@ parser:
 demo:
 	go install ./examples/demo/demo.go
 
-codegen: asthelpergen sizegen parser astfmtgen
+codegen: asthelpergen sizegen parser
 
 visitor: asthelpergen
 	echo "make visitor has been replaced by make asthelpergen"
 
 asthelpergen:
-	go run ./go/tools/asthelpergen/main \
-		--in ./go/vt/sqlparser \
-		--iface vitess.io/vitess/go/vt/sqlparser.SQLNode \
-		--except "*ColName"
+	go generate ./go/vt/sqlparser/...
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
 		--in ./go/... \
 		--gen vitess.io/vitess/go/pools.Setting \
+		--gen vitess.io/vitess/go/vt/schema.DDLStrategySetting \
 		--gen vitess.io/vitess/go/vt/vtgate/engine.Plan \
 		--gen vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan \
 		--gen vitess.io/vitess/go/sqltypes.Result
-
-astfmtgen:
-	go run ./go/tools/astfmtgen/main.go vitess.io/vitess/go/vt/sqlparser/...
 
 # To pass extra flags, run test.go manually.
 # For example: go run test.go -docker=false -- --extra-flag
@@ -292,7 +287,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mariadb mariadb103 mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=13
+BOOTSTRAP_VERSION=14
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go

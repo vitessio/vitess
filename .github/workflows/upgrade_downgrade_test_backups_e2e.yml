@@ -26,7 +26,7 @@ jobs:
         run: |
           previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
           echo $previous_release_ref
-          echo "::set-output name=previous_release_ref::${previous_release_ref}"
+          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
 
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60
@@ -52,7 +52,7 @@ jobs:
         skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -71,7 +71,8 @@ jobs:
             - 'test.go'
             - 'Makefile'
             - 'build.env'
-            - 'go.[sumod]'
+            - 'go.sum'
+            - 'go.mod'
             - 'proto/*.proto'
             - 'tools/**'
             - 'config/**'
@@ -82,7 +83,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.3
+        go-version: 1.19.4
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'

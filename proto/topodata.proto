@@ -395,6 +395,23 @@ message SrvKeyspace {
 
   // OBSOLETE int32 split_shard_count = 5;
   reserved 5;
+
+  message ThrottlerConfig {
+    // Enabled indicates that the throttler is actually checking state for requests. When disabled, it automatically returns 200 OK for all checks
+    bool enabled = 1;
+
+    // Threshold is the threshold for either the default check (heartbeat lag) or custom check
+    double threshold = 2;
+
+    // CustomQuery is an optional query that overrides the default check query
+    string custom_query = 3;
+
+    // CheckAsCheckSelf indicates whether a throttler /check request should behave like a /check-self
+    bool check_as_check_self = 4;
+  }
+
+  // ThrottlerConfig has the configuration for the tablet server's lag throttler, and applies to the entire keyspace, across all shards and tablets
+  ThrottlerConfig throttler_config = 6;
 }
 
 // CellInfo contains information about a cell. CellInfo objects are

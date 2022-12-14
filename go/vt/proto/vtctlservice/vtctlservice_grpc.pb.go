@@ -235,6 +235,8 @@ type VtctldClient interface {
 	// GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
 	// cells.
 	GetSrvKeyspaces(ctx context.Context, in *vtctldata.GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspacesResponse, error)
+	// UpdateThrottlerConfig updates the tablet throttler configuration
+	UpdateThrottlerConfig(ctx context.Context, in *vtctldata.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateThrottlerConfigResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for a cell.
 	GetSrvVSchema(ctx context.Context, in *vtctldata.GetSrvVSchemaRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvVSchemaResponse, error)
 	// GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
@@ -770,6 +772,15 @@ func (c *vtctldClient) GetSrvKeyspaceNames(ctx context.Context, in *vtctldata.Ge
 func (c *vtctldClient) GetSrvKeyspaces(ctx context.Context, in *vtctldata.GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspacesResponse, error) {
 	out := new(vtctldata.GetSrvKeyspacesResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/GetSrvKeyspaces", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vtctldClient) UpdateThrottlerConfig(ctx context.Context, in *vtctldata.UpdateThrottlerConfigRequest, opts ...grpc.CallOption) (*vtctldata.UpdateThrottlerConfigResponse, error) {
+	out := new(vtctldata.UpdateThrottlerConfigResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/UpdateThrottlerConfig", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -1325,6 +1336,8 @@ type VtctldServer interface {
 	// GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
 	// cells.
 	GetSrvKeyspaces(context.Context, *vtctldata.GetSrvKeyspacesRequest) (*vtctldata.GetSrvKeyspacesResponse, error)
+	// UpdateThrottlerConfig updates the tablet throttler configuration
+	UpdateThrottlerConfig(context.Context, *vtctldata.UpdateThrottlerConfigRequest) (*vtctldata.UpdateThrottlerConfigResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for a cell.
 	GetSrvVSchema(context.Context, *vtctldata.GetSrvVSchemaRequest) (*vtctldata.GetSrvVSchemaResponse, error)
 	// GetSrvVSchemas returns a mapping from cell name to SrvVSchema for all cells,
@@ -1600,6 +1613,9 @@ func (UnimplementedVtctldServer) GetSrvKeyspaceNames(context.Context, *vtctldata
 }
 func (UnimplementedVtctldServer) GetSrvKeyspaces(context.Context, *vtctldata.GetSrvKeyspacesRequest) (*vtctldata.GetSrvKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspaces not implemented")
+}
+func (UnimplementedVtctldServer) UpdateThrottlerConfig(context.Context, *vtctldata.UpdateThrottlerConfigRequest) (*vtctldata.UpdateThrottlerConfigResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateThrottlerConfig not implemented")
 }
 func (UnimplementedVtctldServer) GetSrvVSchema(context.Context, *vtctldata.GetSrvVSchemaRequest) (*vtctldata.GetSrvVSchemaResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvVSchema not implemented")
@@ -2405,6 +2421,24 @@ func _Vtctld_GetSrvKeyspaces_Handler(srv interface{}, ctx context.Context, dec f
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VtctldServer).GetSrvKeyspaces(ctx, req.(*vtctldata.GetSrvKeyspacesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _Vtctld_UpdateThrottlerConfig_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.UpdateThrottlerConfigRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).UpdateThrottlerConfig(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/UpdateThrottlerConfig",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).UpdateThrottlerConfig(ctx, req.(*vtctldata.UpdateThrottlerConfigRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -3400,6 +3434,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetSrvKeyspaces",
 			Handler:    _Vtctld_GetSrvKeyspaces_Handler,
+		},
+		{
+			MethodName: "UpdateThrottlerConfig",
+			Handler:    _Vtctld_UpdateThrottlerConfig_Handler,
 		},
 		{
 			MethodName: "GetSrvVSchema",

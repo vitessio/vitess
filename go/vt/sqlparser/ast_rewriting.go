@@ -53,8 +53,12 @@ type ReservedVars struct {
 	sqNext       int64
 }
 
+type VSchemaViews interface {
+	FindView(name TableName) SelectStatement
+}
+
 // ReserveAll tries to reserve all the given variable names. If they're all available,
-// they are reserved and the function returns true. Otherwise the function returns false.
+// they are reserved and the function returns true. Otherwise, the function returns false.
 func (r *ReservedVars) ReserveAll(names ...string) bool {
 	for _, name := range names {
 		if _, ok := r.reserved[name]; ok {
@@ -203,6 +207,7 @@ func PrepareAST(
 	selectLimit int,
 	setVarComment string,
 	sysVars map[string]string,
+	views VSchemaViews,
 ) (*RewriteASTResult, error) {
 	if parameterize {
 		err := Normalize(in, reservedVars, bindVars)
@@ -210,13 +215,20 @@ func PrepareAST(
 			return nil, err
 		}
 	}
-	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars)
+	return RewriteAST(in, keyspace, selectLimit, setVarComment, sysVars, views)
 }
 
 // RewriteAST rewrites the whole AST, replacing function calls and adding column aliases to queries.
 // SET_VAR comments are also added to the AST if required.
-func RewriteAST(in Statement, keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) (*RewriteASTResult, error) {
-	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars)
+func RewriteAST(
+	in Statement,
+	keyspace string,
+	selectLimit int,
+	setVarComment string,
+	sysVars map[string]string,
+	views VSchemaViews,
+) (*RewriteASTResult, error) {
+	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, views)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
 	result := Rewrite(in, er.rewrite, nil)
 
@@ -263,15 +275,17 @@ type astRewriter struct {
 	selectLimit   int
 	setVarComment string
 	sysVars       map[string]string
+	views         VSchemaViews
 }
 
-func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string) *astRewriter {
+func newASTRewriter(keyspace string, selectLimit int, setVarComment string, sysVars map[string]string, views VSchemaViews) *astRewriter {
 	return &astRewriter{
 		bindVars:      &BindVarNeeds{},
 		keyspace:      keyspace,
 		selectLimit:   selectLimit,
 		setVarComment: setVarComment,
 		sysVars:       sysVars,
+		views:         views,
 	}
 }
 
@@ -293,7 +307,7 @@ const (
 )
 
 func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
-	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars)
+	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, er.views)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
 	tmp := Rewrite(node.Expr, inner.rewrite, nil)
 	newExpr, ok := tmp.(Expr)
@@ -316,7 +330,6 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	}
 
 	switch node := cursor.Node().(type) {
-	// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 	case *Select:
 		for _, col := range node.SelectExprs {
 			_, hasStar := col.(*StarExpr)
@@ -328,6 +341,7 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 			if ok && aliasedExpr.As.IsEmpty() {
 				buf := NewTrackedBuffer(nil)
 				aliasedExpr.Expr.Format(buf)
+				// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
 				innerBindVarNeeds, err := er.rewriteAliasedExpr(aliasedExpr)
 				if err != nil {
 					er.err = err
@@ -386,21 +400,36 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 			cursor.Replace(inner)
 		}
 	case *AliasedTableExpr:
-		if !SystemSchema(er.keyspace) {
-			break
-		}
 		aliasTableName, ok := node.Expr.(TableName)
 		if !ok {
-			return true
-		}
-		// Qualifier should not be added to dual table
-		if aliasTableName.Name.String() == "dual" {
 			break
 		}
-		if er.keyspace != "" && aliasTableName.Qualifier.IsEmpty() {
-			aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
-			node.Expr = aliasTableName
-			cursor.Replace(node)
+		// Qualifier should not be added to dual table
+		tblName := aliasTableName.Name.String()
+		if tblName == "dual" {
+			break
+		}
+		if SystemSchema(er.keyspace) {
+			if aliasTableName.Qualifier.IsEmpty() {
+				aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
+				node.Expr = aliasTableName
+				cursor.Replace(node)
+			}
+			break
+		}
+		if er.views == nil {
+			break
+		}
+		view := er.views.FindView(aliasTableName)
+		if view == nil {
+			break
+		}
+
+		node.Expr = &DerivedTable{
+			Select: CloneSelectStatement(view),
+		}
+		if node.As.IsEmpty() {
+			node.As = NewIdentifierCS(tblName)
 		}
 	case *ShowBasic:
 		if node.Command == VariableGlobal || node.Command == VariableSession {
@@ -472,9 +501,7 @@ func (er *astRewriter) sysVarRewrite(cursor *Cursor, node *Variable) {
 		sysvars.Version.Name,
 		sysvars.VersionComment.Name,
 		sysvars.QueryTimeout.Name,
-		sysvars.Workload.Name,
-		sysvars.TransactionIsolation.Name,
-		sysvars.TxIsolation.Name:
+		sysvars.Workload.Name:
 		found = true
 	}
 
@@ -614,189 +641,4 @@ func SystemSchema(schema string) bool {
 		strings.EqualFold(schema, "performance_schema") ||
 		strings.EqualFold(schema, "sys") ||
 		strings.EqualFold(schema, "mysql")
-}
-
-// RewriteToCNF walks the input AST and rewrites any boolean logic into CNF
-// Note: In order to re-plan, we need to empty the accumulated metadata in the AST,
-// so ColName.Metadata will be nil:ed out as part of this rewrite
-func RewriteToCNF(ast SQLNode) SQLNode {
-	for {
-		finishedRewrite := true
-		ast = Rewrite(ast, func(cursor *Cursor) bool {
-			if e, isExpr := cursor.node.(Expr); isExpr {
-				rewritten, didRewrite := rewriteToCNFExpr(e)
-				if didRewrite {
-					finishedRewrite = false
-					cursor.Replace(rewritten)
-				}
-			}
-			if col, isCol := cursor.node.(*ColName); isCol {
-				col.Metadata = nil
-			}
-			return true
-		}, nil)
-
-		if finishedRewrite {
-			return ast
-		}
-	}
-}
-
-func distinctOr(in *OrExpr) (Expr, bool) {
-	todo := []*OrExpr{in}
-	var leaves []Expr
-	for len(todo) > 0 {
-		curr := todo[0]
-		todo = todo[1:]
-		addAnd := func(in Expr) {
-			and, ok := in.(*OrExpr)
-			if ok {
-				todo = append(todo, and)
-			} else {
-				leaves = append(leaves, in)
-			}
-		}
-		addAnd(curr.Left)
-		addAnd(curr.Right)
-	}
-	original := len(leaves)
-	var predicates []Expr
-
-outer1:
-	for len(leaves) > 0 {
-		curr := leaves[0]
-		leaves = leaves[1:]
-		for _, alreadyIn := range predicates {
-			if EqualsExpr(alreadyIn, curr) {
-				continue outer1
-			}
-		}
-		predicates = append(predicates, curr)
-	}
-	if original == len(predicates) {
-		return in, false
-	}
-	var result Expr
-	for i, curr := range predicates {
-		if i == 0 {
-			result = curr
-			continue
-		}
-		result = &OrExpr{Left: result, Right: curr}
-	}
-	return result, true
-}
-func distinctAnd(in *AndExpr) (Expr, bool) {
-	todo := []*AndExpr{in}
-	var leaves []Expr
-	for len(todo) > 0 {
-		curr := todo[0]
-		todo = todo[1:]
-		addAnd := func(in Expr) {
-			and, ok := in.(*AndExpr)
-			if ok {
-				todo = append(todo, and)
-			} else {
-				leaves = append(leaves, in)
-			}
-		}
-		addAnd(curr.Left)
-		addAnd(curr.Right)
-	}
-	original := len(leaves)
-	var predicates []Expr
-
-outer1:
-	for len(leaves) > 0 {
-		curr := leaves[0]
-		leaves = leaves[1:]
-		for _, alreadyIn := range predicates {
-			if EqualsExpr(alreadyIn, curr) {
-				continue outer1
-			}
-		}
-		predicates = append(predicates, curr)
-	}
-	if original == len(predicates) {
-		return in, false
-	}
-	var result Expr
-	for i, curr := range predicates {
-		if i == 0 {
-			result = curr
-			continue
-		}
-		result = &AndExpr{Left: result, Right: curr}
-	}
-	return result, true
-}
-
-func rewriteToCNFExpr(expr Expr) (Expr, bool) {
-	switch expr := expr.(type) {
-	case *NotExpr:
-		switch child := expr.Expr.(type) {
-		case *NotExpr:
-			// NOT NOT A => A
-			return child.Expr, true
-		case *OrExpr:
-			// DeMorgan Rewriter
-			// NOT (A OR B) => NOT A AND NOT B
-			return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
-		case *AndExpr:
-			// DeMorgan Rewriter
-			// NOT (A AND B) => NOT A OR NOT B
-			return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, true
-		}
-	case *OrExpr:
-		or := expr
-		if and, ok := or.Left.(*AndExpr); ok {
-			// Simplification
-			// (A AND B) OR A => A
-			if EqualsExpr(or.Right, and.Left) || EqualsExpr(or.Right, and.Right) {
-				return or.Right, true
-			}
-			// Distribution Law
-			// (A AND B) OR C => (A OR C) AND (B OR C)
-			return &AndExpr{Left: &OrExpr{Left: and.Left, Right: or.Right}, Right: &OrExpr{Left: and.Right, Right: or.Right}}, true
-		}
-		if and, ok := or.Right.(*AndExpr); ok {
-			// Simplification
-			// A OR (A AND B) => A
-			if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Left, and.Right) {
-				return or.Left, true
-			}
-			// Distribution Law
-			// C OR (A AND B) => (C OR A) AND (C OR B)
-			return &AndExpr{Left: &OrExpr{Left: or.Left, Right: and.Left}, Right: &OrExpr{Left: or.Left, Right: and.Right}}, true
-		}
-		// Try to make distinct
-		return distinctOr(expr)
-
-	case *XorExpr:
-		// DeMorgan Rewriter
-		// (A XOR B) => (A OR B) AND NOT (A AND B)
-		return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, true
-	case *AndExpr:
-		res, rewritten := distinctAnd(expr)
-		if rewritten {
-			return res, rewritten
-		}
-		and := expr
-		if or, ok := and.Left.(*OrExpr); ok {
-			// Simplification
-			// (A OR B) AND A => A
-			if EqualsExpr(or.Left, and.Right) || EqualsExpr(or.Right, and.Right) {
-				return and.Right, true
-			}
-		}
-		if or, ok := and.Right.(*OrExpr); ok {
-			// Simplification
-			// A OR (A AND B) => A
-			if EqualsExpr(or.Left, and.Left) || EqualsExpr(or.Right, and.Left) {
-				return or.Left, true
-			}
-		}
-
-	}
-	return expr, false
 }

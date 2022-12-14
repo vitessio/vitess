@@ -17,6 +17,8 @@ limitations under the License.
 package semantics
 
 import (
+	"strings"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -55,7 +57,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				vTbl.tables.MergeInPlace(table.getTableSet(org))
+				vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
 			}
 		}
 	}
@@ -66,7 +68,7 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 func (dt *DerivedTable) dependencies(colName string, org originable) (dependencies, error) {
 	directDeps := org.tableSetFor(dt.ASTNode)
 	for i, name := range dt.columnNames {
-		if name != colName {
+		if !strings.EqualFold(name, colName) {
 			continue
 		}
 		_, recursiveDeps, qt := org.depsForExpr(dt.cols[i])
@@ -119,7 +121,7 @@ func (dt *DerivedTable) getColumns() []ColumnInfo {
 }
 
 func (dt *DerivedTable) hasStar() bool {
-	return dt.tables.NumberOfTables() > 0
+	return dt.tables.NonEmpty()
 }
 
 // GetTables implements the TableInfo interface

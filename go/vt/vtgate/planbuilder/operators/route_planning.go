@@ -135,7 +135,7 @@ func optimizeQueryGraph(ctx *plancontext.PlanningContext, op *QueryGraph) (resul
 	if len(unresolved) > 0 {
 		// if we have any predicates that none of the joins or tables took care of,
 		// we add a single filter on top, so we don't lose it. This is used for sub-query planning
-		result = newFilter(result, sqlparser.AndExpressions(unresolved...))
+		result = newFilter(result, ctx.SemTable.AndExpressions(unresolved...))
 	}
 
 	return
@@ -146,6 +146,14 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 	opCode := engine.Unsharded
 	if vindexTable.Keyspace.Sharded {
 		opCode = engine.Scatter
+	}
+
+	if vindexTable.Source != nil {
+		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		vindexTable = sourceTable
 	}
 
 	var dest key.Destination
@@ -270,71 +278,6 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 		plans[i] = plan
 	}
 	return plans, nil
-}
-
-func tryRewriteOrToIn(expr sqlparser.Expr) sqlparser.Expr {
-	rewrote := false
-	newPred := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
-		_, ok := cursor.Node().(*sqlparser.OrExpr)
-		return ok
-	}, func(cursor *sqlparser.Cursor) bool {
-		// we are looking for the pattern WHERE c = 1 or c = 2
-		switch or := cursor.Node().(type) {
-		case *sqlparser.OrExpr:
-			lftCmp, ok := or.Left.(*sqlparser.ComparisonExpr)
-			if !ok {
-				return true
-			}
-			rgtCmp, ok := or.Right.(*sqlparser.ComparisonExpr)
-			if !ok {
-				return true
-			}
-
-			col, ok := lftCmp.Left.(*sqlparser.ColName)
-			if !ok || !sqlparser.EqualsExpr(lftCmp.Left, rgtCmp.Left) {
-				return true
-			}
-
-			var tuple sqlparser.ValTuple
-			switch lftCmp.Operator {
-			case sqlparser.EqualOp:
-				tuple = sqlparser.ValTuple{lftCmp.Right}
-			case sqlparser.InOp:
-				lft, ok := lftCmp.Right.(sqlparser.ValTuple)
-				if !ok {
-					return true
-				}
-				tuple = lft
-			default:
-				return true
-			}
-
-			switch rgtCmp.Operator {
-			case sqlparser.EqualOp:
-				tuple = append(tuple, rgtCmp.Right)
-			case sqlparser.InOp:
-				lft, ok := rgtCmp.Right.(sqlparser.ValTuple)
-				if !ok {
-					return true
-				}
-				tuple = append(tuple, lft...)
-			default:
-				return true
-			}
-
-			rewrote = true
-			cursor.Replace(&sqlparser.ComparisonExpr{
-				Operator: sqlparser.InOp,
-				Left:     col,
-				Right:    tuple,
-			})
-		}
-		return true
-	})
-	if rewrote {
-		return newPred.(sqlparser.Expr)
-	}
-	return nil
 }
 
 func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (*Route, error) {
@@ -483,7 +426,7 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, error) {
 	merger := func(a, b *Route) (*Route, error) {
-		return createRouteOperatorForJoin(a, b, joinPredicates, inner)
+		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
 	}
 
 	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
@@ -508,7 +451,7 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
+func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
 	// append system table names from both the routes.
 	sysTableName := aRoute.SysTableTableName
 	if sysTableName == nil {
@@ -519,7 +462,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		}
 	}
 
-	join := NewApplyJoin(aRoute.Source, bRoute.Source, sqlparser.AndExpressions(joinPredicates...), !inner)
+	join := NewApplyJoin(aRoute.Source, bRoute.Source, ctx.SemTable.AndExpressions(joinPredicates...), !inner)
 	r := &Route{
 		RouteOpCode:         aRoute.RouteOpCode,
 		Keyspace:            aRoute.Keyspace,
@@ -528,6 +471,7 @@ func createRouteOperatorForJoin(aRoute, bRoute *Route, joinPredicates []sqlparse
 		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
 		Source:              join,
+		MergedWith:          []*Route{bRoute},
 	}
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
@@ -563,6 +507,16 @@ func tryMerge(
 	}
 
 	sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
+
+	if !sameKeyspace {
+		if altARoute := aRoute.AlternateInKeyspace(bRoute.Keyspace); altARoute != nil {
+			aRoute = altARoute
+			sameKeyspace = true
+		} else if altBRoute := bRoute.AlternateInKeyspace(aRoute.Keyspace); altBRoute != nil {
+			bRoute = altBRoute
+			sameKeyspace = true
+		}
+	}
 
 	if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
 		tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)

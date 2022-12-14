@@ -137,7 +137,7 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 	}
 	a.RHS = rhs
 
-	a.Predicate = sqlparser.AndExpressions(expr, a.Predicate)
+	a.Predicate = ctx.SemTable.AndExpressions(expr, a.Predicate)
 	return nil
 }
 

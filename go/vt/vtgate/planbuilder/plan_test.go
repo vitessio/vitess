@@ -32,6 +32,8 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/test/utils"
@@ -242,6 +244,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "use_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "set_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "union_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "large_union_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "transaction_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "lock_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "large_cases.json", testOutputTempDir, vschemaWrapper, false)
@@ -249,7 +252,17 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "systemtables_cases80.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+func TestSystemTables57(t *testing.T) {
+	// first we move everything to use 5.7 logic
+	servenv.SetMySQLServerVersionForTest("5.7")
+	defer servenv.SetMySQLServerVersionForTest("")
+	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "systemtables_cases57.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -496,6 +509,15 @@ func loadSchema(t testing.TB, filename string, setCollation bool) *vindexes.VSch
 			t.Fatal(ks.Error)
 		}
 
+		// adding view in user keyspace
+		if ks.Keyspace.Name == "user" {
+			if err = vschema.AddView(ks.Keyspace.Name,
+				"user_details_view",
+				"select user.id, user_extra.col from user join user_extra on user.id = user_extra.user_id"); err != nil {
+				t.Fatal(err)
+			}
+		}
+
 		// setting a default value to all the text columns in the tables of this keyspace
 		// so that we can "simulate" a real case scenario where the vschema is aware of
 		// columns' collations.
@@ -546,7 +568,7 @@ func (vw *vschemaWrapper) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vw *vschemaWrapper) ConnCollation() collations.ID {
-	return collations.Unknown
+	return collations.CollationUtf8ID
 }
 
 func (vw *vschemaWrapper) PlannerWarning(_ string) {
@@ -635,6 +657,14 @@ func (vw *vschemaWrapper) FindTable(tab sqlparser.TableName) (*vindexes.Table, s
 		return nil, destKeyspace, destTabletType, destTarget, err
 	}
 	return table, destKeyspace, destTabletType, destTarget, nil
+}
+
+func (vw *vschemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStatement {
+	destKeyspace, _, _, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
+	if err != nil {
+		return nil
+	}
+	return vw.v.FindView(destKeyspace, tab.Name.String())
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {

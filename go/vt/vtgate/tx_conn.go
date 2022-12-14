@@ -17,22 +17,21 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"fmt"
 	"sync"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-
-	"vitess.io/vitess/go/vt/vttablet/queryservice"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dtids"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vttablet/queryservice"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // TxConn is used for executing transactional requests.
@@ -49,12 +48,28 @@ func NewTxConn(gw *TabletGateway, txMode vtgatepb.TransactionMode) *TxConn {
 	}
 }
 
+var txAccessModeToEOTxAccessMode = map[sqlparser.TxAccessMode]querypb.ExecuteOptions_TransactionAccessMode{
+	sqlparser.WithConsistentSnapshot: querypb.ExecuteOptions_CONSISTENT_SNAPSHOT,
+	sqlparser.ReadWrite:              querypb.ExecuteOptions_READ_WRITE,
+	sqlparser.ReadOnly:               querypb.ExecuteOptions_READ_ONLY,
+}
+
 // Begin begins a new transaction. If one is already in progress, it commits it
 // and starts a new one.
-func (txc *TxConn) Begin(ctx context.Context, session *SafeSession) error {
+func (txc *TxConn) Begin(ctx context.Context, session *SafeSession, txAccessModes []sqlparser.TxAccessMode) error {
 	if session.InTransaction() {
 		if err := txc.Commit(ctx, session); err != nil {
 			return err
+		}
+	}
+	if len(txAccessModes) > 0 {
+		options := session.GetOrCreateOptions()
+		for _, txAccessMode := range txAccessModes {
+			accessMode, ok := txAccessModeToEOTxAccessMode[txAccessMode]
+			if !ok {
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] invalid transaction characteristic: %s", txAccessMode.ToString())
+			}
+			options.TransactionAccessMode = append(options.TransactionAccessMode, accessMode)
 		}
 	}
 	session.Session.InTransaction = true
