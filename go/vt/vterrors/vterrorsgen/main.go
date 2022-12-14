@@ -28,8 +28,7 @@ import (
 )
 
 const (
-	tmpl = `## Errors
-
+	tmpl = `
 | ID | Description | Error | MySQL Error Code | SQL State |
 | --- | --- | --- | --- | --- |
 {{- range $err := . }}
