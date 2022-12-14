@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"encoding/json"
-	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -124,53 +123,4 @@ func buildVExplainLoggingPlan(explain *sqlparser.VExplainStmt, reservedVars *sql
 	}
 
 	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
-}
-
-func extractQuery(m map[string]any) string {
-	queryObj, ok := m["Query"]
-	if !ok {
-		return ""
-	}
-	query, ok := queryObj.(string)
-	if !ok {
-		return ""
-	}
-
-	return query
-}
-
-type description struct {
-	header string
-	descr  engine.PrimitiveDescription
-}
-
-func treeLines(root engine.PrimitiveDescription) []description {
-	l := len(root.Inputs) - 1
-	output := []description{{
-		header: "",
-		descr:  root,
-	}}
-	for i, child := range root.Inputs {
-		childLines := treeLines(child)
-		var header string
-		var lastHdr string
-		if i == l {
-			header = "└─" + " "
-			lastHdr = strings.Repeat(" ", 3)
-		} else {
-			header = "├─" + " "
-			lastHdr = "│" + strings.Repeat(" ", 2)
-		}
-
-		for x, childLine := range childLines {
-			if x == 0 {
-				childLine.header = header + childLine.header
-			} else {
-				childLine.header = lastHdr + childLine.header
-			}
-
-			output = append(output, childLine)
-		}
-	}
-	return output
 }

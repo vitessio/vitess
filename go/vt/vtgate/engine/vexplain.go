@@ -207,7 +207,7 @@ func (v *VExplain) Inputs() []Primitive {
 
 func (v *VExplain) description() PrimitiveDescription {
 	return PrimitiveDescription{
-		OperatorType: "VTEXPLAIN",
+		OperatorType: "VEXPLAIN",
 		Other:        map[string]any{"Type": v.Type.ToString()},
 	}
 }

@@ -85,54 +85,5 @@
         "SingleShardOnly": true
       }
     }
-  },
-  {
-    "comment": "explain format=vtexplain select * from user",
-    "query": "explain format=vtexplain select * from user",
-    "v3-plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "explain format=vtexplain select * from user",
-      "Instructions": {
-        "OperatorType": "VTEXPLAIN",
-        "Type": "queries",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "explain format=vtexplain select * from user",
-      "Instructions": {
-        "OperatorType": "VTEXPLAIN",
-        "Type": "queries",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "main.user"
-      ]
-    }
   }
 ]
