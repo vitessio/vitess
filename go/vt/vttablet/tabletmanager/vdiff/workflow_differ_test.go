@@ -604,9 +604,3 @@ func TestBuildPlanFailure(t *testing.T) {
 
 func TestDiffTableAggregates(t *testing.T) {
 }
-
-func TestDiffUnsharded(t *testing.T) {
-}
-
-func TestDiffSharded(t *testing.T) {
-}

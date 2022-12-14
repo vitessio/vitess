@@ -127,7 +127,7 @@ func TestEngineOpen(t *testing.T) {
 	}
 }
 
-// Test the full set of VDiff queries on a tablet
+// Test the full set of VDiff queries on a tablet.
 func TestVDiff(t *testing.T) {
 	vdenv := newTestVDiffEnv(t)
 	defer vdenv.close()

@@ -48,7 +48,7 @@ func TestVDiff2Unsharded(t *testing.T) {
 	}
 	starttime := time.Now().UTC().Format(vdiff.TimestampFormat)
 	comptime := time.Now().Add(1 * time.Second).UTC().Format(vdiff.TimestampFormat)
-	reportfmt := `{
+	goodReportfmt := `{
 	"Workflow": "vdiffTest",
 	"Keyspace": "target",
 	"State": "completed",
@@ -62,259 +62,198 @@ func TestVDiff2Unsharded(t *testing.T) {
 
 `
 
+	badReportfmt := `{
+	"Workflow": "vdiffTest",
+	"Keyspace": "target",
+	"State": "completed",
+	"UUID": "%s",
+	"RowsCompared": %d,
+	"HasMismatch": %t,
+	"Shards": "0",
+	"StartedAt": "%s",
+	"CompletedAt": "%s",
+	"TableSummary": {
+		"t1": {
+			"TableName": "t1",
+			"State": "completed",
+			"RowsCompared": %d,
+			"MatchingRows": %d,
+			"MismatchedRows": %d,
+			"ExtraRowsSource": %d,
+			"ExtraRowsTarget": %d
+		}
+	},
+	"Reports": {
+		"t1": {
+			"0": {
+				"TableName": "t1",
+				"ProcessedRows": %d,
+				"MatchingRows": %d,
+				"MismatchedRows": %d,
+				"ExtraRowsSource": %d,
+				"ExtraRowsTarget": %d,
+				%s
+			}
+		}
+	}
+}
+
+`
+
 	testcases := []struct {
-		id      string
-		result  *sqltypes.Result
-		report  string
-		onlyPks bool
-		debug   bool
+		id     string
+		result *sqltypes.Result
+		report string
+		dr     string
 	}{{
 		id: "1",
 		result: sqltypes.MakeTestResult(fields,
-			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+`|0|{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, "ExtraRowsTarget": 0}`),
-		report: fmt.Sprintf(reportfmt,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|0|"+
+				`{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0}`),
+		report: fmt.Sprintf(goodReportfmt,
 			UUID, 3, false, starttime, comptime,
 		),
-	},
-	/*
-		{
-			id: "1",
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"2|4",
-				"---",
-				"3|1",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			dr: &DiffReport{
-				ProcessedRows: 3,
-				MatchingRows:  3,
-				TableName:     "t1",
-			},
-		}, {
-			id: "2",
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			dr: &DiffReport{
-				ProcessedRows:   3,
-				MatchingRows:    1,
-				ExtraRowsTarget: 2,
-				TableName:       "t1",
-				ExtraRowsTargetDiffs: []*RowDiff{
+	}, {
+		id: "2",
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 2, "ExtraRowsTargetSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+		report: fmt.Sprintf(badReportfmt,
+			UUID, 3, true, starttime, comptime, 3, 1, 0, 0, 2, 3, 1, 0, 0, 2,
+			`"ExtraRowsTargetSample": [
 					{
-						Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(4),
-						},
-						Query: "",
-					},
-				},
-			},
-		}, {
-			id: "3",
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-			),
-			dr: &DiffReport{
-				ProcessedRows:   3,
-				MatchingRows:    1,
-				ExtraRowsSource: 2,
-				TableName:       "t1",
-				ExtraRowsSourceDiffs: []*RowDiff{
+						"Row": {
+							"c1": "2",
+							"c2": "4"
+						}
+					}
+				]`),
+	}, {
+		id: "3",
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 1, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 2, `+
+				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+		report: fmt.Sprintf(badReportfmt,
+			UUID, 3, true, starttime, comptime, 3, 1, 0, 2, 0, 3, 1, 0, 2, 0,
+			`"ExtraRowsSourceSample": [
 					{
-						Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(4),
-						},
-						Query: "",
-					},
-				},
-			},
-		}, {
-			id: "4",
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"3|1",
-			),
-			dr: &DiffReport{
-				ProcessedRows:   3,
-				MatchingRows:    2,
-				ExtraRowsSource: 1,
-				TableName:       "t1",
-				ExtraRowsSourceDiffs: []*RowDiff{
+						"Row": {
+							"c1": "2",
+							"c2": "4"
+						}
+					}
+				]`),
+	}, {
+		id: "4",
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
+				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+		report: fmt.Sprintf(badReportfmt,
+			UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
+			`"ExtraRowsSourceSample": [
 					{
-						Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(4),
-						},
-						Query: "",
-					},
-				},
-			},
-		}, {
-			id: "5",
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"3|1",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			dr: &DiffReport{
-				ProcessedRows:   3,
-				MatchingRows:    2,
-				ExtraRowsTarget: 1,
-				TableName:       "t1",
-				ExtraRowsTargetDiffs: []*RowDiff{
+						"Row": {
+							"c1": "2",
+							"c2": "4"
+						}
+					}
+				]`),
+	}, {
+		id: "5",
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 1, `+
+				`"ExtraRowsTarget": 0, "ExtraRowsSourceSample": [{"Row": {"c1": "2", "c2": "4"}}]}`),
+		report: fmt.Sprintf(badReportfmt,
+			UUID, 3, true, starttime, comptime, 3, 2, 0, 1, 0, 3, 2, 0, 1, 0,
+			`"ExtraRowsSourceSample": [
 					{
-						Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(4),
-						},
-						Query: "",
-					},
-				},
-			},
-		}, {
-			id: "6",
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|3",
-				"3|1",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			dr: &DiffReport{
-				ProcessedRows:  3,
-				MatchingRows:   2,
-				MismatchedRows: 1,
-				TableName:      "t1",
-				MismatchedRowsSample: []*DiffMismatch{
+						"Row": {
+							"c1": "2",
+							"c2": "4"
+						}
+					}
+				]`),
+	}, {
+		id: "6",
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}}, `+
+				`"Target": {"Row": {"c1": "2", "c2": "4"}}}]}`),
+		report: fmt.Sprintf(badReportfmt,
+			UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+			`"MismatchedRowsSample": [
 					{
-						Source: &RowDiff{Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(3),
+						"Source": {
+							"Row": {
+								"c1": "2",
+								"c2": "3"
+							}
 						},
-							Query: "",
-						},
-						Target: &RowDiff{Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(4),
-						},
-							Query: "",
-						},
-					},
-				},
-			},
-		}, {
-			id:      "7",
-			onlyPks: true,
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|3",
-				"3|1",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			dr: &DiffReport{
-				ProcessedRows:  3,
-				MatchingRows:   2,
-				MismatchedRows: 1,
-				TableName:      "t1",
-				MismatchedRowsSample: []*DiffMismatch{
+						"Target": {
+							"Row": {
+								"c1": "2",
+								"c2": "4"
+							}
+						}
+					}
+				]`),
+	}, {
+		id: "7", // only_pks
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2"}}, `+
+				`"Target": {"Row": {"c1": "2"}}}]}`),
+		report: fmt.Sprintf(badReportfmt,
+			UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+			`"MismatchedRowsSample": [
 					{
-						Source: &RowDiff{Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
+						"Source": {
+							"Row": {
+								"c1": "2"
+							}
 						},
-							Query: "",
-						},
-						Target: &RowDiff{Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-						},
-							Query: "",
-						},
-					},
-				},
-			},
-		}, {
-			id:    "8",
-			debug: true,
-			source: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|3",
-				"3|1",
-			),
-			target: sqltypes.MakeTestStreamingResults(fields,
-				"1|3",
-				"---",
-				"2|4",
-				"3|1",
-			),
-			dr: &DiffReport{
-				ProcessedRows:  3,
-				MatchingRows:   2,
-				MismatchedRows: 1,
-				TableName:      "t1",
-				MismatchedRowsSample: []*DiffMismatch{
+						"Target": {
+							"Row": {
+								"c1": "2"
+							}
+						}
+					}
+				]`),
+	}, {
+		id: "8",
+		result: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
+				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0, "MismatchedRowsSample": [{"Source": {"Row": {"c1": "2", "c2": "3"}, "Query": "select c1, c2 from t1 where c1=2;"}, `+
+				`"Target": {"Row": {"c1": "2", "c2": "4"}, "Query": "select c1, c2 from t1 where c1=2;"}}]}`),
+		report: fmt.Sprintf(badReportfmt,
+			UUID, 3, true, starttime, comptime, 3, 2, 1, 0, 0, 3, 2, 1, 0, 0,
+			`"MismatchedRowsSample": [
 					{
-						Source: &RowDiff{Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(3),
+						"Source": {
+							"Row": {
+								"c1": "2",
+								"c2": "3"
+							},
+							"Query": "select c1, c2 from t1 where c1=2;"
 						},
-							Query: "select c1, c2 from t1 where c1=2;",
-						},
-						Target: &RowDiff{Row: map[string]sqltypes.Value{
-							"c1": sqltypes.NewInt64(2),
-							"c2": sqltypes.NewInt64(4),
-						},
-							Query: "select c1, c2 from t1 where c1=2;",
-						},
-					},
-				},
-			},
-		}
-	*/
-	}
+						"Target": {
+							"Row": {
+								"c1": "2",
+								"c2": "4"
+							},
+							"Query": "select c1, c2 from t1 where c1=2;"
+						}
+					}
+				]`),
+	}}
 
 	for _, tcase := range testcases {
 		t.Run(tcase.id, func(t *testing.T) {
@@ -335,6 +274,81 @@ func TestVDiff2Unsharded(t *testing.T) {
 		})
 	}
 }
+
+/*
+func TestVDiffSharded(t *testing.T) {
+	// Also test that highest position ""MariaDB/5-456-892" will be used
+	// if lower positions are found.
+	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
+		"-40-80": "MariaDB/5-456-890",
+		"40-80-": "MariaDB/5-456-891",
+	})
+	defer env.close()
+
+	schm := &tabletmanagerdatapb.SchemaDefinition{
+		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
+			Name:              "t1",
+			Columns:           []string{"c1", "c2"},
+			PrimaryKeyColumns: []string{"c1"},
+			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
+		},
+			{
+				Name:              "_t1_gho",
+				Columns:           []string{"c1", "c2", "c3"},
+				PrimaryKeyColumns: []string{"c2"},
+				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
+			}},
+	}
+
+	env.tmc.schema = schm
+
+	query := "select c1, c2 from t1 order by c1 asc"
+	fields := sqltypes.MakeTestFields(
+		"c1|c2",
+		"int64|int64",
+	)
+
+	env.tablets[101].setResults(
+		query,
+		vdiffSourceGtid,
+		sqltypes.MakeTestStreamingResults(fields,
+			"1|3",
+			"2|4",
+		),
+	)
+	env.tablets[111].setResults(
+		query,
+		vdiffSourceGtid,
+		sqltypes.MakeTestStreamingResults(fields,
+			"3|4",
+		),
+	)
+	env.tablets[201].setResults(
+		query,
+		vdiffTargetPrimaryPosition,
+		sqltypes.MakeTestStreamingResults(fields,
+			"1|3",
+		),
+	)
+	env.tablets[211].setResults(
+		query,
+		vdiffTargetPrimaryPosition,
+		sqltypes.MakeTestStreamingResults(fields,
+			"2|4",
+			"3|4",
+		),
+	)
+
+	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false, false, 100)
+	require.NoError(t, err)
+	wantdr := &DiffReport{
+		ProcessedRows: 3,
+		MatchingRows:  3,
+		TableName:     "t1",
+	}
+	assert.Equal(t, wantdr, dr["t1"])
+}
+*/
 
 func TestGetStructNames(t *testing.T) {
 	type s struct {

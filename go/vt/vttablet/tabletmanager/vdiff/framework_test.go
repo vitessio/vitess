@@ -522,7 +522,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 		}
 	})
 
-	vdiffenv.vre = vreplication.NewTestEngine(tstenv.TopoServ, tstenv.Cells[0], tstenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffDBName, nil)
+	vdiffenv.vre = vreplication.NewSimpleTestEngine(tstenv.TopoServ, tstenv.Cells[0], tstenv.Mysqld, realDBClientFactory, realDBClientFactory, vdiffDBName, nil)
 	vdiffenv.vre.Open(context.Background())
 
 	vdiffenv.tmc.schema = testSchema
