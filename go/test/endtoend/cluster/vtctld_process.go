@@ -105,6 +105,8 @@ func (vtctld *VtctldProcess) Setup(cell string, extraArgs ...string) (err error)
 }
 
 func createDirectory(dirName string, mode os.FileMode) error {
+	log.Infof("creating directory : %s", dirName)
+	fmt.Printf("creating directory : %s", dirName)
 	if _, err := os.Stat(dirName); os.IsNotExist(err) {
 		return os.Mkdir(dirName, mode)
 	}

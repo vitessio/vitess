@@ -137,7 +137,7 @@ func verifyWeightString(t *testing.T, local collations.Collation, remote *remote
 }
 
 func exec(t *testing.T, conn *mysql.Conn, query string) *sqltypes.Result {
-	res, err := conn.ExecuteFetch(query, -1, true)
+	res, err := conn.ExecuteFetchWithSuperReadOnlyHandling(query, -1, true)
 	require.NoError(t, err, "failed to execute %q: %v", query, err)
 
 	return res
