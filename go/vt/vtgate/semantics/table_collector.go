@@ -84,19 +84,16 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
 		var vindex vindexes.Vindex
-		var isInfSchema bool
-		if sqlparser.SystemSchema(t.Qualifier.String()) {
-			isInfSchema = true
-		} else {
-			var err error
-			tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
-			if err != nil {
-				return err
-			}
-			if tbl == nil && vindex != nil {
-				tbl = newVindexTable(t.Name)
-			}
+		isInfSchema := sqlparser.SystemSchema(t.Qualifier.String())
+		var err error
+		tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
+		if err != nil {
+			return err
 		}
+		if tbl == nil && vindex != nil {
+			tbl = newVindexTable(t.Name)
+		}
+
 		scope := tc.scoper.currentScope()
 		tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
 

@@ -660,6 +660,7 @@
         ]
       },
       "TablesUsed": [
+        "information_schema.a",
         "main.unsharded"
       ]
     }
@@ -739,6 +740,7 @@
         ]
       },
       "TablesUsed": [
+        "information_schema.a",
         "main.unsharded"
       ]
     }
@@ -2286,6 +2288,7 @@
     "plan": "can't do ORDER BY on top of UNION"
   },
   {
+    "comment": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "query": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "v3-plan": "unsupported: expression on results of a cross-shard subquery",
     "gen4-plan": {

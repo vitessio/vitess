@@ -4381,7 +4381,7 @@
   {
     "comment": "SelectDBA with uncorrelated subqueries",
     "query": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
-    "plan": {
+    "v3-plan": {
       "QueryType": "SELECT",
       "Original": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
       "Instructions": {
@@ -4395,6 +4395,25 @@
         "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.column_name from information_schema.`columns` as c)",
         "Table": "information_schema.`tables`"
       }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+        "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.column_name from information_schema.`columns` as c)",
+        "Table": "information_schema.`tables`"
+      },
+      "TablesUsed": [
+        "information_schema.columns",
+        "information_schema.tables"
+      ]
     }
   },
   {

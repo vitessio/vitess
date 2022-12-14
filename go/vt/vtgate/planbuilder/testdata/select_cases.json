@@ -2535,6 +2535,7 @@
     }
   },
   {
+    "comment": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "query": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3295,6 +3296,7 @@
     "plan": "syntax error at position 41 near 'into'"
   },
   {
+    "comment": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "query": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3416,6 +3418,7 @@
     }
   },
   {
+    "comment": "((((select 1))))",
     "query": "((((select 1))))",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3585,6 +3588,7 @@
     }
   },
   {
+    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3716,6 +3720,7 @@
     }
   },
   {
+    "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3860,6 +3865,7 @@
     }
   },
   {
+    "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
     "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
     "plan": "unsupported: cross-shard correlated subquery"
   },
@@ -4462,6 +4468,7 @@
     }
   },
   {
+    "comment": "select user.id, trim(leading 'x' from user.name) from user",
     "query": "select user.id, trim(leading 'x' from user.name) from user",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -4571,6 +4578,7 @@
         "Table": "dual"
       },
       "TablesUsed": [
+        "information_schema.TABLES",
         "main.dual"
       ]
     }
@@ -4613,6 +4621,7 @@
     }
   },
   {
+    "comment": "select (select id from user order by id limit 1) from user_extra",
     "query": "select (select id from user order by id limit 1) from user_extra",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -7687,6 +7696,7 @@
     }
   },
   {
+    "comment": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "query": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "v3-plan": "unsupported: filtering on results of cross-shard subquery",
     "gen4-plan": {
@@ -7765,6 +7775,7 @@
     "gen4-plan": "unsupported: JOIN not supported between derived tables"
   },
   {
+    "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
     "query": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
     "v3-plan": {
       "QueryType": "SELECT",
