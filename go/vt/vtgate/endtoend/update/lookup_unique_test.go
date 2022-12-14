@@ -18,12 +18,13 @@ package endtoend
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	_flag "vitess.io/vitess/go/internal/flag"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -131,7 +132,7 @@ create table t2_id_idx(
 )
 
 func TestMain(m *testing.M) {
-	flag.Parse()
+	_flag.ParseFlagsForTest()
 
 	exitCode := func() int {
 		var cfg vttest.Config
