@@ -65,8 +65,9 @@ If your application is searching for specific errors, you might need to update y
 ### New command line flags and behavior
 
 #### VTGate: Support query timeout --query-timeout
+
 `--query-timeout` allows you to specify a timeout for queries. This timeout is applied to all queries.
-It can be overridden by setting the `query_timeout` session variable. 
+It can be overridden by setting the `query_timeout` session variable.
 Setting it as command line directive with `QUERY_TIMEOUT_MS` will override other values.
 
 #### VTTablet: VReplication parallel insert workers --vreplication-parallel-insert-workers
@@ -213,3 +214,22 @@ transaction_characteristic: {
 }
 ```
 This will allow users to start a transaction with these characteristics.
+
+#### Support for views
+
+Vitess now supports views in sharded keyspace. Views are not created on the underlying database but are logically stored
+in vschema.
+Any query using view will get re-rewritten as derived table during query planning.
+VSchema Example
+
+```json
+{
+  "sharded": true,
+  "vindexes": {},
+  "tables": {},
+  "views": {
+    "view1": "select * from t1",
+    "view2": "select * from t2",
+  }
+}
+```

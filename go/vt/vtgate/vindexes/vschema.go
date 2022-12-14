@@ -59,7 +59,11 @@ const (
 // VSchema represents the denormalized version of SrvVSchema,
 // used for building routing plans.
 type VSchema struct {
-	RoutingRules      map[string]*RoutingRule `json:"routing_rules"`
+	RoutingRules map[string]*RoutingRule `json:"routing_rules"`
+
+	// uniqueTables contains the name of all tables in all keyspaces. if the table is uniquely named, the value will
+	// be the name of the keyspace where this table exists. if multiple keyspaces have a table with the same name, the
+	// value will be a `nil` value
 	globalTables      map[string]*Table
 	uniqueVindexes    map[string]Vindex
 	Keyspaces         map[string]*KeyspaceSchema `json:"keyspaces"`
@@ -167,6 +171,7 @@ type KeyspaceSchema struct {
 	Keyspace *Keyspace
 	Tables   map[string]*Table
 	Vindexes map[string]Vindex
+	Views    map[string]sqlparser.SelectStatement
 	Error    error
 }
 
@@ -268,6 +273,33 @@ func buildKeyspaces(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
+func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
+	ks, ok := vschema.Keyspaces[ksname]
+	if !ok {
+		return fmt.Errorf("keyspace %s not found in vschema", ksname)
+	}
+	ast, err := sqlparser.Parse(query)
+	if err != nil {
+		return err
+	}
+	selectStmt, ok := ast.(sqlparser.SelectStatement)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected SELECT or UNION query, got %T", ast)
+	}
+	if ks.Views == nil {
+		ks.Views = make(map[string]sqlparser.SelectStatement)
+	}
+	ks.Views[viewName] = selectStmt
+	t := &Table{
+		Type:                    "View",
+		Name:                    sqlparser.NewIdentifierCS(viewName),
+		Keyspace:                ks.Keyspace,
+		ColumnListAuthoritative: true,
+	}
+	vschema.addTableName(t)
+	return nil
+}
+
 func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
@@ -276,11 +308,11 @@ func buildGlobalTables(source *vschemapb.SrvVSchema, vschema *VSchema) {
 		if ks.RequireExplicitRouting {
 			continue
 		}
-		buildKeyspaceGlobalTables(ks, vschema, ksvschema)
+		buildKeyspaceGlobalTables(vschema, ksvschema)
 	}
 }
 
-func buildKeyspaceGlobalTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSchema) {
+func buildKeyspaceGlobalTables(vschema *VSchema, ksvschema *KeyspaceSchema) {
 	for tname, t := range ksvschema.Tables {
 		if gt, ok := vschema.globalTables[tname]; ok {
 			// There is already an entry table stored in global tables
@@ -306,19 +338,15 @@ func buildKeyspaceGlobalTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvsche
 }
 
 func buildReferences(source *vschemapb.SrvVSchema, vschema *VSchema) {
-	for ksname, ks := range source.Keyspaces {
+	for ksname := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
-		if err := buildKeyspaceReferences(ks, vschema, ksvschema); err != nil && ksvschema.Error == nil {
+		if err := buildKeyspaceReferences(vschema, ksvschema); err != nil && ksvschema.Error == nil {
 			ksvschema.Error = err
 		}
 	}
 }
 
-func buildKeyspaceReferences(
-	ks *vschemapb.Keyspace,
-	vschema *VSchema,
-	ksvschema *KeyspaceSchema,
-) error {
+func buildKeyspaceReferences(vschema *VSchema, ksvschema *KeyspaceSchema) error {
 	keyspace := ksvschema.Keyspace
 	for tname, t := range ksvschema.Tables {
 		source := t.Source
@@ -602,6 +630,15 @@ func buildTables(ks *vschemapb.Keyspace, vschema *VSchema, ksvschema *KeyspaceSc
 	return nil
 }
 
+func (vschema *VSchema) addTableName(t *Table) {
+	tname := t.Name.String()
+	if _, ok := vschema.globalTables[tname]; ok {
+		vschema.globalTables[tname] = nil
+	} else {
+		vschema.globalTables[tname] = t
+	}
+}
+
 func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	for ksname, ks := range source.Keyspaces {
 		ksvschema := vschema.Keyspaces[ksname]
@@ -806,8 +843,8 @@ func (vschema *VSchema) FindTable(keyspace, tablename string) (*Table, error) {
 // findTable is like FindTable, but does not return an error if a table is not found.
 func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	if keyspace == "" {
-		table, ok := vschema.globalTables[tablename]
-		if table == nil {
+		t, ok := vschema.globalTables[tablename]
+		if t == nil {
 			if ok {
 				return nil, vterrors.Errorf(
 					vtrpcpb.Code_FAILED_PRECONDITION,
@@ -826,7 +863,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 				return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}, nil
 			}
 		}
-		return table, nil
+		keyspace = t.Keyspace.Name
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
@@ -887,6 +924,48 @@ func (vschema *VSchema) FindTableOrVindex(keyspace, name string, tabletType topo
 		return nil, v, nil
 	}
 	return nil, nil, NotFoundError{TableName: name}
+}
+
+func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatement {
+	if keyspace == "" {
+		switch {
+		case len(vschema.Keyspaces) == 1:
+			for _, schema := range vschema.Keyspaces {
+				keyspace = schema.Keyspace.Name
+				break
+			}
+		default:
+			t, ok := vschema.globalTables[name]
+			if !ok {
+				return nil
+			}
+			if ok && t == nil {
+				return nil
+			}
+			keyspace = t.Keyspace.Name
+		}
+	}
+
+	ks := vschema.Keyspaces[keyspace]
+	if ks == nil {
+		return nil
+	}
+
+	statement, ok := ks.Views[name]
+	if !ok {
+		return nil
+	}
+
+	// We do this to make sure there is no shared state between uses of this AST
+	statement = sqlparser.CloneSelectStatement(statement)
+	sqlparser.Rewrite(statement, func(cursor *sqlparser.Cursor) bool {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if ok {
+			cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), col.Qualifier))
+		}
+		return true
+	}, nil)
+	return statement
 }
 
 func (vschema *VSchema) findKeyspaceAndTableBySource(source *Source) (*Keyspace, *Table, error) {
