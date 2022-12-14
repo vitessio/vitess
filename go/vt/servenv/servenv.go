@@ -79,7 +79,7 @@ var (
 var (
 	lameduckPeriod = 50 * time.Millisecond
 	onTermTimeout  = 10 * time.Second
-	onCloseTimeout = time.Second
+	onCloseTimeout = 10 * time.Second
 	catchSigpipe   bool
 	maxStackSize   = 64 * 1024 * 1024
 )
