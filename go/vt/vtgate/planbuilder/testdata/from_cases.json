@@ -6227,7 +6227,7 @@
         "Table": "`user`, user_extra"
       }
     },
-    "gen4-plan":   {
+    "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select * from user.user_details_view",
       "Instructions": {
@@ -6248,9 +6248,9 @@
     }
   },
   {
-    "comment" : "use a view without qualifying the keyspace",
+    "comment": "use a view without qualifying the keyspace",
     "query": "select * from user_details_view",
-    "v3-plan":   {
+    "v3-plan": {
       "QueryType": "SELECT",
       "Original": "select * from user_details_view",
       "Instructions": {
@@ -6265,7 +6265,7 @@
         "Table": "`user`, user_extra"
       }
     },
-    "gen4-plan":   {
+    "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select * from user_details_view",
       "Instructions": {

@@ -74,7 +74,7 @@
   {
     "comment": "information schema join",
     "query": "select tables.TABLE_SCHEMA, files.`STATUS` from information_schema.tables join information_schema.files",
-    "v3-plan": "symbol `tables`.TABLE_SCHEMA not found",
+    "v3-plan": "VT03019: symbol `tables`.TABLE_SCHEMA not found",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select tables.TABLE_SCHEMA, files.`STATUS` from information_schema.tables join information_schema.files",
@@ -768,7 +768,7 @@
   {
     "comment": "subquery of information_schema with itself",
     "query": "select TABLES.CHECKSUM from information_schema.`TABLES` where `TABLE_NAME` in (select `TABLE_NAME` from information_schema.`COLUMNS`)",
-    "v3-plan": "symbol `TABLES`.`CHECKSUM` not found",
+    "v3-plan": "VT03019: symbol `TABLES`.`CHECKSUM` not found",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select TABLES.CHECKSUM from information_schema.`TABLES` where `TABLE_NAME` in (select `TABLE_NAME` from information_schema.`COLUMNS`)",
