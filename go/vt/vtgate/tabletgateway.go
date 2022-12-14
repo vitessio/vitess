@@ -21,10 +21,12 @@ import (
 	"fmt"
 	"math/rand"
 	"sort"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/cespare/xxhash/v2"
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -243,7 +245,7 @@ func (gw *TabletGateway) CacheStatus() TabletCacheStatusList {
 // withRetry also adds shard information to errors returned from the inner QueryService, so
 // withShardError should not be combined with withRetry.
 func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, _ queryservice.QueryService,
-	_ string, inTransaction bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, inTransaction bool, sessionUUID string, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	// for transactions, we connect to a specific tablet instead of letting gateway choose one
 	if inTransaction && target.TabletType != topodatapb.TabletType_PRIMARY {
 		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "tabletGateway's query service can only be used for non-transactional queries on replicas")
@@ -311,16 +313,16 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
 		}
-		gw.shuffleTablets(gw.localCell, tablets)
 
 		var th *discovery.TabletHealth
-		// skip tablets we tried before
-		for _, t := range tablets {
-			if _, ok := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !ok {
-				th = t
-				break
-			}
+
+		// Old tablet selection implementation
+		if sessionUUID == "" {
+			th = gw.selectRandomTablet(tablets, invalidTablets)
+		} else {
+			th = gw.selectConsistentTablet(sessionUUID, tablets, invalidTablets)
 		}
+
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
@@ -354,7 +356,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 
 // withShardError adds shard information to errors returned from the inner QueryService.
 func (gw *TabletGateway) withShardError(ctx context.Context, target *querypb.Target, conn queryservice.QueryService,
-	_ string, _ bool, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
+	_ string, _ bool, sessionUUID string, inner func(ctx context.Context, target *querypb.Target, conn queryservice.QueryService) (bool, error)) error {
 	_, err := inner(ctx, target, conn)
 	return NewShardError(err, target)
 }
@@ -379,6 +381,109 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 	aggr = NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, key)
 	gw.statusAggregators[key] = aggr
 	return aggr
+}
+
+// Select a random tablet out of the list of given tablets.
+//
+// Prefers tablets local to the TabletGateway's cell over tablets external to it.
+func (gw *TabletGateway) selectRandomTablet(tablets []*discovery.TabletHealth, invalidTablets map[string]bool) *discovery.TabletHealth {
+	gw.shuffleTablets(gw.localCell, tablets)
+
+	// skip tablets we tried before
+	for _, t := range tablets {
+		if _, skip := invalidTablets[topoproto.TabletAliasString(t.Tablet.Alias)]; !skip {
+			return t
+		}
+	}
+
+	return nil
+}
+
+func NewConsistentHash() *ConsistentHash {
+	return &ConsistentHash{
+		replicas: 10,
+		hashMap:  make(map[uint64]*discovery.TabletHealth),
+	}
+}
+
+type ConsistentHash struct {
+	nodes    []uint64
+	replicas int
+	hashMap  map[uint64]*discovery.TabletHealth
+}
+
+func (ch *ConsistentHash) Add(tabletHealth *discovery.TabletHealth) {
+	for i := 0; i < ch.replicas; i++ {
+		hash := xxhash.Sum64String(topoproto.TabletAliasString(tabletHealth.Tablet.Alias) + "-" + strconv.Itoa(i))
+		ch.nodes = append(ch.nodes, hash)
+		ch.hashMap[hash] = tabletHealth
+	}
+}
+
+func (ch *ConsistentHash) Sort() {
+	sort.SliceStable(ch.nodes, func(i, j int) bool { return ch.nodes[i] < ch.nodes[j] })
+}
+
+func (ch *ConsistentHash) Get(sessionUUID string) *discovery.TabletHealth {
+	hash := xxhash.Sum64String(sessionUUID)
+
+	i := sort.Search(len(ch.nodes), func(i int) bool {
+		return ch.nodes[i] >= hash
+	})
+
+	if i == len(ch.nodes) {
+		i = 0
+	}
+
+	return ch.hashMap[ch.nodes[i]]
+}
+
+// Select a random tablet out of the list of given tablets, consistently selecting the same tablet for the same session UUID.
+//
+// If the list of passed in tablets, or the list of invalid tablets changes, tablet selection will change accordingly (but stay consistent
+// barring any further changes to these two lists).
+//
+// Prefers tablets local to the TabletGateway's cell over tablets external to it.
+func (gw *TabletGateway) selectConsistentTablet(sessionUUID string, tablets []*discovery.TabletHealth, invalidTablets map[string]bool) *discovery.TabletHealth {
+	var localTablets []*discovery.TabletHealth
+	var externalTablets []*discovery.TabletHealth
+
+	for _, tablet := range tablets {
+		// Skip tablets we've tried already
+		if _, skip := invalidTablets[topoproto.TabletAliasString(tablet.Tablet.Alias)]; skip {
+			continue
+		}
+
+		if tablet.Tablet.Alias.GetCell() == gw.localCell {
+			localTablets = append(localTablets, tablet)
+		} else {
+			externalTablets = append(externalTablets, tablet)
+		}
+	}
+
+	if len(localTablets) > 0 {
+		hash := NewConsistentHash()
+
+		for _, tablet := range localTablets {
+			hash.Add(tablet)
+		}
+		hash.Sort()
+
+		return hash.Get(sessionUUID)
+	}
+
+	if len(externalTablets) > 0 {
+		hash := NewConsistentHash()
+
+		for _, tablet := range externalTablets {
+			hash.Add(tablet)
+		}
+		hash.Sort()
+
+		return hash.Get(sessionUUID)
+	}
+
+	return nil
 }
 
 func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {

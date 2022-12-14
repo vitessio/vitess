@@ -71,7 +71,7 @@ message EventToken {
 // Flags sent from the MySQL C API
 enum MySqlFlag {
   option allow_alias = true;
-  
+
   EMPTY = 0;
   NOT_NULL_FLAG = 1;
   PRI_KEY_FLAG = 2;
@@ -277,7 +277,7 @@ message ExecuteOptions {
   // query timeouts are shorter.
   // OLAP: DMLS not allowed, no limit on row count, timeouts
   // can be as high as desired.
-  // DBA: no limit on rowcount or timeout, all queries allowed 
+  // DBA: no limit on rowcount or timeout, all queries allowed
   // but intended for long DMLs and DDLs.
   Workload workload = 6;
 
@@ -316,8 +316,8 @@ message ExecuteOptions {
     Gen4WithFallback = 5;
     Gen4CompareV3 = 6;
   }
-  
-  // PlannerVersion specifies which planner to use. 
+
+  // PlannerVersion specifies which planner to use.
   // If DEFAULT is chosen, whatever vtgate was started with will be used
   PlannerVersion planner_version = 11;
 
@@ -344,6 +344,8 @@ message ExecuteOptions {
   // TransactionAccessMode specifies the access modes to be used while starting the transaction i.e. READ WRITE/READ ONLY/WITH CONSISTENT SNAPSHOT
   // If not specified, the transaction will be started with the default access mode on the connection.
   repeated TransactionAccessMode transaction_access_mode = 14;
+
+  string SessionUUID = 15;
 }
 
 // Field describes a single column returned by a query

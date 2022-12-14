@@ -31,6 +31,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -84,7 +85,7 @@ func TestTabletGatewayBeginExecute(t *testing.T) {
 
 func TestTabletGatewayShuffleTablets(t *testing.T) {
 	hc := discovery.NewFakeHealthCheck(nil)
-	tg := NewTabletGateway(context.Background(), hc, nil, "local")
+	tg := NewTabletGateway(context.Background(), hc, nil, "cell1")
 
 	ts1 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell1", "host1"),
@@ -108,7 +109,7 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 	}
 
 	ts4 := &discovery.TabletHealth{
-		Tablet:  topo.NewTablet(4, "cell2", "host4"),
+		Tablet:  topo.NewTablet(4, "cell3", "host4"),
 		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
@@ -137,6 +138,107 @@ func TestTabletGatewayShuffleTablets(t *testing.T) {
 
 		assert.Contains(t, mixedTablets[2:4], ts3, "should have diff cell tablets in the rear, got %+v", mixedTablets)
 		assert.Contains(t, mixedTablets[2:4], ts4, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+
+		tg.shuffleTablets("cell2", mixedTablets)
+		assert.Len(t, mixedTablets, 4, "should have 4 tablets, got %+v", mixedTablets)
+
+		assert.Contains(t, mixedTablets[0:1], ts3, "should have same cell tablets in the front, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[1:4], ts1, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[1:4], ts2, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[1:4], ts4, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+
+		tg.shuffleTablets("cell3", mixedTablets)
+		assert.Len(t, mixedTablets, 4, "should have 4 tablets, got %+v", mixedTablets)
+
+		assert.Contains(t, mixedTablets[0:1], ts4, "should have same cell tablets in the front, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[1:4], ts1, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[1:4], ts2, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[1:4], ts3, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+	}
+}
+
+func TestTabletGatewaySelectConsistentTablet(t *testing.T) {
+	hc := discovery.NewFakeHealthCheck(nil)
+	tg := NewTabletGateway(context.Background(), hc, nil, "cell1")
+
+	ts1 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(1, "cell1", "host1"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts2 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(2, "cell1", "host2"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts3 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(3, "cell2", "host3"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts4 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(4, "cell3", "host4"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	tablets := []*discovery.TabletHealth{ts1, ts2, ts3, ts4}
+
+	var tablet *discovery.TabletHealth
+
+	// Test that connections try to re-use the same tablets
+	for i := 0; i < 10; i++ {
+		tablet = tg.selectConsistentTablet("ae3750e4-c011-43f3-bb24-162f4c89ee79", tablets, make(map[string]bool))
+		assert.Equal(t, "host1", tablet.Tablet.Hostname)
+
+		tablet = tg.selectConsistentTablet("445ae551-a78f-4287-9b61-9d6a5192acfd", tablets, make(map[string]bool))
+		assert.Equal(t, "host2", tablet.Tablet.Hostname)
+	}
+
+	// Marking host1 as failed moves queries from host1 to host2
+	tablet = tg.selectConsistentTablet("ae3750e4-c011-43f3-bb24-162f4c89ee79", tablets, map[string]bool{
+		topoproto.TabletAliasString(ts1.Tablet.Alias): true,
+	})
+	assert.Equal(t, "host2", tablet.Tablet.Hostname)
+
+	// Marking host2 as failed doesn't affect queries to host1
+	tablet = tg.selectConsistentTablet("ae3750e4-c011-43f3-bb24-162f4c89ee79", tablets, map[string]bool{
+		topoproto.TabletAliasString(ts2.Tablet.Alias): true,
+	})
+	assert.Equal(t, "host1", tablet.Tablet.Hostname)
+
+	// Marking host2 as failed moves queries from host2 to host1
+	tablet = tg.selectConsistentTablet("445ae551-a78f-4287-9b61-9d6a5192acfd", tablets, map[string]bool{
+		topoproto.TabletAliasString(ts2.Tablet.Alias): true,
+	})
+	assert.Equal(t, "host1", tablet.Tablet.Hostname)
+
+	// Marking host2 as failed doesn't affect queries to host2
+	tablet = tg.selectConsistentTablet("445ae551-a78f-4287-9b61-9d6a5192acfd", tablets, map[string]bool{
+		topoproto.TabletAliasString(ts1.Tablet.Alias): true,
+	})
+	assert.Equal(t, "host2", tablet.Tablet.Hostname)
+
+	// Mark all local cell tablets as failed
+	for i := 0; i < 10; i++ {
+		tablet = tg.selectConsistentTablet("ae3750e4-c011-43f3-bb24-162f4c89ee79", tablets, map[string]bool{
+			topoproto.TabletAliasString(ts1.Tablet.Alias): true,
+			topoproto.TabletAliasString(ts2.Tablet.Alias): true,
+		})
+		assert.Equal(t, "host3", tablet.Tablet.Hostname)
+
+		tablet = tg.selectConsistentTablet("445ae551-a78f-4287-9b61-9d6a5192acfd", tablets, map[string]bool{
+			topoproto.TabletAliasString(ts1.Tablet.Alias): true,
+			topoproto.TabletAliasString(ts2.Tablet.Alias): true,
+		})
+		assert.Equal(t, "host4", tablet.Tablet.Hostname)
 	}
 }
 
