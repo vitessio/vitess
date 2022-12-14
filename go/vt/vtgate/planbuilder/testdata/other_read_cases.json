@@ -24,7 +24,11 @@
       "QueryType": "EXPLAIN",
       "Original": "explain format=vitess select * from user",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "JSON": "VARCHAR"
+        },
+        "RowCount": 1
       }
     }
   },
@@ -83,12 +87,14 @@
     }
   },
   {
+    "comment": "explain format=vtexplain select * from user",
     "query": "explain format=vtexplain select * from user",
     "v3-plan": {
       "QueryType": "EXPLAIN",
       "Original": "explain format=vtexplain select * from user",
       "Instructions": {
         "OperatorType": "VTEXPLAIN",
+        "Type": "queries",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -109,6 +115,7 @@
       "Original": "explain format=vtexplain select * from user",
       "Instructions": {
         "OperatorType": "VTEXPLAIN",
+        "Type": "queries",
         "Inputs": [
           {
             "OperatorType": "Route",

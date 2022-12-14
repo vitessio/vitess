@@ -3807,6 +3807,7 @@
     "plan": "Unknown table 'user' in MULTI DELETE"
   },
   {
+    "comment": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
     "query": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
     "v3-plan": {
       "QueryType": "INSERT",
@@ -5994,7 +5995,7 @@
   {
     "comment": "explain dml without any directive should fail",
     "query": "explain format=vtexplain delete from user",
-    "plan": "explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
+    "plan": "vexplain queries will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries delete from t1`"
   },
   {
     "comment": "explain dml with actually_run_query directive",
@@ -6004,6 +6005,7 @@
       "Original": "explain /*vt+ execute_dml_queries */ format=vtexplain delete from user",
       "Instructions": {
         "OperatorType": "VTEXPLAIN",
+        "Type": "queries",
         "Inputs": [
           {
             "OperatorType": "Delete",
@@ -6020,8 +6022,7 @@
             "Query": "delete from `user`",
             "Table": "user"
           }
-        ],
-        "Type": "queries"
+        ]
       },
       "TablesUsed": [
         "user.user"
@@ -6036,6 +6037,7 @@
       "Original": "explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user",
       "Instructions": {
         "OperatorType": "VTEXPLAIN",
+        "Type": "queries",
         "Inputs": [
           {
             "OperatorType": "Delete",
@@ -6052,8 +6054,7 @@
             "Query": "delete from `user`",
             "Table": "user"
           }
-        ],
-        "Type": "queries"
+        ]
       },
       "TablesUsed": [
         "user.user"

@@ -251,7 +251,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 	case sqlparser.Explain:
 		return buildExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.VExplainStmt:
-		return buildVTExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:

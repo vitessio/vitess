@@ -39,12 +39,11 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	case *sqlparser.ExplainStmt:
 		switch explain.Type {
 		case sqlparser.VitessType:
-			vschema.PlannerWarning("EXPLAIN FORMAT = VITESS is deprecated, please use VTEXPLAIN FORMAT = TABLE instead.")
-			// TODO
-			//return buildVitessTypePlan(&sqlparser.VExplainStmt{Type: sqlparser.TableVtExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			vschema.PlannerWarning("EXPLAIN FORMAT = VITESS is deprecated, please use VEXPLAIN PLAN instead.")
+			return buildVExplainVtgatePlan(explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		case sqlparser.VTExplainType:
-			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VTEXPLAIN FORMAT = QUERIES instead.")
-			return buildVTExplainTypePlan(&sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VEXPLAIN QUERIES instead.")
+			return buildVExplainQueriesPlan(&sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		default:
 			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
@@ -52,17 +51,16 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
 }
 
-func buildVTExplainPlan(vtexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	switch vtexplainStmt.Type {
+func buildVExplainPlan(vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	switch vexplainStmt.Type {
 	case sqlparser.QueriesVExplainType:
-		return buildVTExplainTypePlan(vtexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainQueriesPlan(vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.PlanVExplainType:
-		return buildVitessTypePlan(vtexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+		return buildVExplainVtgatePlan(vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.AllVExplainType:
 		// TODO
-		return nil, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vtexplainStmt.Type.ToString())
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
 }
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
@@ -92,67 +90,28 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 	}, singleTable(keyspace.Name, explain.Table.Name.String())), nil
 }
 
-func buildVitessTypePlan(explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
-	innerInstruction, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+func buildVExplainVtgatePlan(explainStatement sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+	innerInstruction, err := createInstructionFor(sqlparser.String(explainStatement), explainStatement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
 	}
-	switch explain.Type {
-	case sqlparser.PlanVExplainType:
-		description := engine.PrimitiveToPlanDescription(innerInstruction.primitive)
-		output, err := json.MarshalIndent(description, "", "\t")
-		if err != nil {
-			return nil, err
-		}
-		fields := []*querypb.Field{
-			{Name: "JSON", Type: querypb.Type_VARCHAR},
-		}
-		rows := []sqltypes.Row{
-			{
-				sqltypes.NewVarChar(string(output)),
-			},
-		}
-		return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
+	description := engine.PrimitiveToPlanDescription(innerInstruction.primitive)
+	output, err := json.MarshalIndent(description, "", "\t")
+	if err != nil {
+		return nil, err
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unreachable code: buildVitessTypePlan got invalid type")
-}
-
-func tableTypeVitessExplain(innerInstruction *planResult) *planResult {
-	descriptions := treeLines(engine.PrimitiveToPlanDescription(innerInstruction.primitive))
-
-	var rows [][]sqltypes.Value
-	for _, line := range descriptions {
-		var targetDest string
-		if line.descr.TargetDestination != nil {
-			targetDest = line.descr.TargetDestination.String()
-		}
-		keyspaceName := ""
-		if line.descr.Keyspace != nil {
-			keyspaceName = line.descr.Keyspace.Name
-		}
-
-		rows = append(rows, []sqltypes.Value{
-			sqltypes.NewVarChar(line.header + line.descr.OperatorType), // operator
-			sqltypes.NewVarChar(line.descr.Variant),                    // variant
-			sqltypes.NewVarChar(keyspaceName),                          // keyspace
-			sqltypes.NewVarChar(targetDest),                            // destination
-			sqltypes.NewVarChar(line.descr.TargetTabletType.String()),  // tabletType
-			sqltypes.NewVarChar(extractQuery(line.descr.Other)),        // query
-		})
-	}
-
 	fields := []*querypb.Field{
-		{Name: "operator", Type: querypb.Type_VARCHAR},
-		{Name: "variant", Type: querypb.Type_VARCHAR},
-		{Name: "keyspace", Type: querypb.Type_VARCHAR},
-		{Name: "destination", Type: querypb.Type_VARCHAR},
-		{Name: "tabletType", Type: querypb.Type_VARCHAR},
-		{Name: "query", Type: querypb.Type_VARCHAR},
+		{Name: "JSON", Type: querypb.Type_VARCHAR},
 	}
-	return newPlanResult(engine.NewRowsPrimitive(rows, fields))
+	rows := []sqltypes.Row{
+		{
+			sqltypes.NewVarChar(string(output)),
+		},
+	}
+	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
 }
 
-func buildVTExplainTypePlan(explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildVExplainQueriesPlan(explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	input, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
@@ -163,7 +122,7 @@ func buildVTExplainTypePlan(explain *sqlparser.VExplainStmt, reservedVars *sqlpa
 		if directives.IsSet(sqlparser.DirectiveVtexplainRunDMLQueries) {
 			break
 		}
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "explain format = vtexplain will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ %s */ format = vtexplain delete from t1`", sqlparser.DirectiveVtexplainRunDMLQueries, sqlparser.DirectiveVtexplainRunDMLQueries)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vexplain queries will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `vexplain /*vt+ %s */ queries delete from t1`", sqlparser.DirectiveVtexplainRunDMLQueries, sqlparser.DirectiveVtexplainRunDMLQueries)
 	}
 
 	return &planResult{primitive: &engine.VTExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
