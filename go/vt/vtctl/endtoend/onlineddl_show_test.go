@@ -2,16 +2,13 @@ package endtoend
 
 import (
 	"context"
-	"errors"
 	"testing"
 
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver/testutil"
@@ -121,11 +118,6 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	logger := logutil.NewMemoryLogger()
 	wr := wrangler.New(logger, fakeTopo, &tmc)
 
-	wr.VExecFunc = func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
-		assert.Equal(t, query, expectedQuery)
-		return nil, errors.New("I failed in the test")
-	}
-
 	err := vtctl.RunCommand(ctx, wr, args)
-	assert.ErrorContains(t, err, "I failed in the test")
+	assert.ErrorContains(t, err, "no ExecuteFetchAsDba results on fake TabletManagerClient")
 }
