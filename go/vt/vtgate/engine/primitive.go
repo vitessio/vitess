@@ -171,12 +171,12 @@ type (
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
 
-		// VtExplainLogging enables logging of all interactions to the tablets so
-		// EXPLAIN `format=vtexplain` can report what's being done
-		VtExplainLogging()
+		// VExplainLogging enables logging of all interactions to the tablets so
+		// VEXPLAIN QUERIES/ALL can report what's being done
+		VExplainLogging()
 
-		// GetVTExplainLogs retrieves the vttablet interaction logs
-		GetVTExplainLogs() []ExecuteEntry
+		// GetVExplainLogs retrieves the vttablet interaction logs
+		GetVExplainLogs() []ExecuteEntry
 
 		// SetCommitOrder sets the commit order for the shard session in respect of the type of vindex lookup.
 		// This is used to select the right shard session to perform the vindex lookup query.

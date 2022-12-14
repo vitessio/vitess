@@ -18,82 +18,148 @@ package engine
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type (
 	ExecuteEntry struct {
-		ID         int
-		Keyspace   string
-		Shard      string
-		TabletType topodatapb.TabletType
-		Cell       string
-		Query      string
-		FiredFrom  Primitive
+		ID        int
+		Target    *querypb.Target
+		Gateway   srvtopo.Gateway
+		Query     string
+		FiredFrom Primitive
 	}
 
-	VTExplain struct {
+	VExplain struct {
 		Input Primitive
 		Type  sqlparser.VExplainType
 	}
 )
 
-var _ Primitive = (*VTExplain)(nil)
+var _ Primitive = (*VExplain)(nil)
 
 // RouteType implements the Primitive interface
-func (v *VTExplain) RouteType() string {
+func (v *VExplain) RouteType() string {
 	return v.Input.RouteType()
 }
 
 // GetKeyspaceName implements the Primitive interface
-func (v *VTExplain) GetKeyspaceName() string {
+func (v *VExplain) GetKeyspaceName() string {
 	return v.Input.GetKeyspaceName()
 }
 
 // GetTableName implements the Primitive interface
-func (v *VTExplain) GetTableName() string {
+func (v *VExplain) GetTableName() string {
 	return v.Input.GetTableName()
 }
 
 // GetFields implements the Primitive interface
-func (v *VTExplain) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (v *VExplain) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
 	return v.Input.GetFields(ctx, vcursor, bindVars)
 }
 
 // NeedsTransaction implements the Primitive interface
-func (v *VTExplain) NeedsTransaction() bool {
+func (v *VExplain) NeedsTransaction() bool {
 	return v.Input.NeedsTransaction()
 }
 
 // TryExecute implements the Primitive interface
-func (v *VTExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	vcursor.Session().VtExplainLogging()
+func (v *VExplain) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	vcursor.Session().VExplainLogging()
 	_, err := vcursor.ExecutePrimitive(ctx, v.Input, bindVars, wantfields)
 	if err != nil {
 		return nil, err
 	}
-	result := convertToVTExplainResult(vcursor.Session().GetVTExplainLogs())
-	return result, nil
+	return v.convertToResult(ctx, vcursor)
 }
 
 // TryStreamExecute implements the Primitive interface
-func (v *VTExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	vcursor.Session().VtExplainLogging()
+func (v *VExplain) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
+	vcursor.Session().VExplainLogging()
 	err := vcursor.StreamExecutePrimitive(ctx, v.Input, bindVars, wantfields, func(result *sqltypes.Result) error {
 		return nil
 	})
 	if err != nil {
 		return err
 	}
-	result := convertToVTExplainResult(vcursor.Session().GetVTExplainLogs())
+	result, err := v.convertToResult(ctx, vcursor)
+	if err != nil {
+		return err
+	}
 	return callback(result)
 }
 
-func convertToVTExplainResult(logs []ExecuteEntry) *sqltypes.Result {
+func (v *VExplain) convertToResult(ctx context.Context, vcursor VCursor) (*sqltypes.Result, error) {
+	switch v.Type {
+	case sqlparser.QueriesVExplainType:
+		result := convertToVExplainQueriesResult(vcursor.Session().GetVExplainLogs())
+		return result, nil
+	case sqlparser.AllVExplainType:
+		return v.convertToVExplainAllResult(ctx, vcursor)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Unknown type of VExplain plan")
+	}
+}
+
+func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCursor) (*sqltypes.Result, error) {
+	logEntries := vcursor.Session().GetVExplainLogs()
+	explainResults := make(map[Primitive]*sqltypes.Result)
+	for _, entry := range logEntries {
+		if entry.Target == nil || entry.Gateway == nil || entry.FiredFrom == nil {
+			continue
+		}
+		if explainResults[entry.FiredFrom] != nil {
+			continue
+		}
+		res, err := vcursor.ExecuteStandalone(ctx, nil, fmt.Sprintf("explain format = json %v", entry.Query), nil, &srvtopo.ResolvedShard{
+			Target:  entry.Target,
+			Gateway: entry.Gateway,
+		})
+		// TODO: remove un-explainable commands and exit on error
+		if err != nil {
+			continue
+		}
+		explainResults[entry.FiredFrom] = res
+	}
+
+	planDescription := PrimitiveToPlanDescription(v.Input)
+	resultBytes, err := json.MarshalIndent(planDescription, "", "\t")
+	if err != nil {
+		return nil, err
+	}
+
+	// TODO: interleave mysql plan with the vtgate plan instead of appending them
+	result := string(resultBytes)
+	for _, res := range explainResults {
+		result = result + "\n" + res.Rows[0][0].ToString()
+	}
+
+	fields := []*querypb.Field{
+		{
+			Name: "VExplain", Type: sqltypes.VarChar,
+		},
+	}
+	rows := []sqltypes.Row{
+		{
+			sqltypes.NewVarChar(result),
+		},
+	}
+	qr := &sqltypes.Result{
+		Fields: fields,
+		Rows:   rows,
+	}
+	return qr, nil
+}
+
+func convertToVExplainQueriesResult(logs []ExecuteEntry) *sqltypes.Result {
 	fields := []*querypb.Field{{
 		Name: "#", Type: sqltypes.Int32,
 	}, {
@@ -109,8 +175,8 @@ func convertToVTExplainResult(logs []ExecuteEntry) *sqltypes.Result {
 	for _, line := range logs {
 		qr.Rows = append(qr.Rows, sqltypes.Row{
 			sqltypes.NewInt32(int32(line.ID)),
-			sqltypes.NewVarChar(line.Keyspace),
-			sqltypes.NewVarChar(line.Shard),
+			sqltypes.NewVarChar(line.Target.Keyspace),
+			sqltypes.NewVarChar(line.Target.Shard),
 			sqltypes.NewVarChar(line.Query),
 		})
 	}
@@ -118,11 +184,11 @@ func convertToVTExplainResult(logs []ExecuteEntry) *sqltypes.Result {
 }
 
 // Inputs implements the Primitive interface
-func (v *VTExplain) Inputs() []Primitive {
+func (v *VExplain) Inputs() []Primitive {
 	return []Primitive{v.Input}
 }
 
-func (v *VTExplain) description() PrimitiveDescription {
+func (v *VExplain) description() PrimitiveDescription {
 	return PrimitiveDescription{
 		OperatorType: "VTEXPLAIN",
 		Other:        map[string]any{"Type": v.Type.ToString()},

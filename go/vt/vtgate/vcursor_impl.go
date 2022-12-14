@@ -1075,11 +1075,11 @@ func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 	}
 }
 
-func (vc *vcursorImpl) VtExplainLogging() {
+func (vc *vcursorImpl) VExplainLogging() {
 	vc.safeSession.EnableLogging()
 }
 
-func (vc *vcursorImpl) GetVTExplainLogs() []engine.ExecuteEntry {
+func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
 	return vc.safeSession.logging.GetLogs()
 }
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {

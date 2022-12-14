@@ -43,7 +43,7 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 			return buildVExplainVtgatePlan(explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		case sqlparser.VTExplainType:
 			vschema.PlannerWarning("EXPLAIN FORMAT = VTEXPLAIN is deprecated, please use VEXPLAIN QUERIES instead.")
-			return buildVExplainQueriesPlan(&sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+			return buildVExplainLoggingPlan(&sqlparser.VExplainStmt{Type: sqlparser.QueriesVExplainType, Statement: explain.Statement, Comments: explain.Comments}, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 		default:
 			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
@@ -53,12 +53,10 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 
 func buildVExplainPlan(vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	switch vexplainStmt.Type {
-	case sqlparser.QueriesVExplainType:
-		return buildVExplainQueriesPlan(vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case sqlparser.QueriesVExplainType, sqlparser.AllVExplainType:
+		return buildVExplainLoggingPlan(vexplainStmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case sqlparser.PlanVExplainType:
 		return buildVExplainVtgatePlan(vexplainStmt.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
-	case sqlparser.AllVExplainType:
-		// TODO
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected vtexplain type: %s", vexplainStmt.Type.ToString())
 }
@@ -111,7 +109,7 @@ func buildVExplainVtgatePlan(explainStatement sqlparser.Statement, reservedVars 
 	return newPlanResult(engine.NewRowsPrimitive(rows, fields)), nil
 }
 
-func buildVExplainQueriesPlan(explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
+func buildVExplainLoggingPlan(explain *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
 	input, err := createInstructionFor(sqlparser.String(explain.Statement), explain.Statement, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, err
@@ -119,13 +117,13 @@ func buildVExplainQueriesPlan(explain *sqlparser.VExplainStmt, reservedVars *sql
 	switch input.primitive.(type) {
 	case *engine.Insert, *engine.Delete, *engine.Update:
 		directives := explain.GetParsedComments().Directives()
-		if directives.IsSet(sqlparser.DirectiveVtexplainRunDMLQueries) {
+		if directives.IsSet(sqlparser.DirectiveVExplainRunDMLQueries) {
 			break
 		}
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vexplain queries will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `vexplain /*vt+ %s */ queries delete from t1`", sqlparser.DirectiveVtexplainRunDMLQueries, sqlparser.DirectiveVtexplainRunDMLQueries)
+		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vexplain queries/all will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `vexplain /*vt+ %s */ queries delete from t1`", sqlparser.DirectiveVExplainRunDMLQueries, sqlparser.DirectiveVExplainRunDMLQueries)
 	}
 
-	return &planResult{primitive: &engine.VTExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
+	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
 }
 
 func extractQuery(m map[string]any) string {

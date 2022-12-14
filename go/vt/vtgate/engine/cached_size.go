@@ -1179,7 +1179,7 @@ func (cached *VStream) CachedSize(alloc bool) int64 {
 	size += hack.RuntimeAllocSize(int64(len(cached.Position)))
 	return size
 }
-func (cached *VTExplain) CachedSize(alloc bool) int64 {
+func (cached *VExplain) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}

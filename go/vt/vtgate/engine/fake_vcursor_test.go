@@ -711,9 +711,9 @@ func (f *loggingVCursor) CanUseSetVar() bool {
 	return useSetVar
 }
 
-func (t *noopVCursor) VtExplainLogging() {}
-func (t *noopVCursor) DisableLogging()   {}
-func (t *noopVCursor) GetVTExplainLogs() []ExecuteEntry {
+func (t *noopVCursor) VExplainLogging() {}
+func (t *noopVCursor) DisableLogging()  {}
+func (t *noopVCursor) GetVExplainLogs() []ExecuteEntry {
 	return nil
 }
 func (t *noopVCursor) GetLogs() ([]ExecuteEntry, error) {
