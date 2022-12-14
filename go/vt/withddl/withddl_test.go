@@ -42,6 +42,8 @@ func TestExec(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	_, err = conn.ExecuteUnSetSuperReadOnly()
+	require.NoError(t, err)
 	_, err = conn.ExecuteFetch("create database t", 10000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop database t", 10000, true) // nolint:errcheck
@@ -207,6 +209,8 @@ func TestExecIgnore(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	_, err = conn.ExecuteUnSetSuperReadOnly()
+	require.NoError(t, err)
 	_, err = conn.ExecuteFetch("create database t", 10000, true)
 	require.NoError(t, err)
 	defer conn.ExecuteFetch("drop database t", 10000, true) // nolint:errcheck
@@ -239,6 +243,9 @@ func TestDifferentExecFunctions(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &connParams)
 	require.NoError(t, err)
 	defer conn.Close()
+	_, err = conn.ExecuteUnSetSuperReadOnly()
+	require.NoError(t, err)
+
 	defer conn.ExecuteFetch("drop database t", 10000, true) // nolint:errcheck
 
 	execconn, err := mysql.Connect(ctx, &connParams)
