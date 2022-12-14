@@ -22,7 +22,7 @@ require (
 	github.com/fsnotify/fsnotify v1.4.9
 	github.com/go-martini/martini v0.0.0-20170121215854-22fa46961aab
 	github.com/go-sql-driver/mysql v1.6.0
-	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
+	github.com/golang/glog v1.0.0
 	github.com/golang/mock v1.5.0
 	github.com/golang/protobuf v1.5.2
 	github.com/golang/snappy v0.0.3
@@ -119,6 +119,9 @@ require (
 	github.com/bndr/gotabulate v1.1.2
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
+	github.com/planetscale/log v0.0.0-20221118170849-fb599bc35c50
+	github.com/slok/noglog v0.2.0
+	go.uber.org/zap v1.19.1
 	golang.org/x/exp v0.0.0-20221023144134-a1e5550cf13e
 )
 
@@ -175,7 +178,6 @@ require (
 	go.opencensus.io v0.23.0 // indirect
 	go.uber.org/atomic v1.7.0 // indirect
 	go.uber.org/multierr v1.6.0 // indirect
-	go.uber.org/zap v1.17.0 // indirect
 	golang.org/x/xerrors v0.0.0-20200804184101-5ec99f83aff1 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
@@ -190,3 +192,5 @@ require (
 	k8s.io/utils v0.0.0-20201110183641-67b214c5f920 // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.0.3 // indirect
 )
+
+replace github.com/google/glog => github.com/planetscale/noglog v0.2.1-0.20210421230640-bea75fcd2e8e

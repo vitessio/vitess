@@ -17,8 +17,19 @@ limitations under the License.
 package logutil
 
 import (
+	"bytes"
+	"encoding/json"
+	"net/url"
 	"testing"
 	"time"
+
+	vtlog "vitess.io/vitess/go/vt/log"
+
+	pslog "github.com/planetscale/log"
+	"github.com/stretchr/testify/assert"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 
 	"vitess.io/vitess/go/race"
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -178,5 +189,132 @@ func TestTeeLogger(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+func TestPSLogger(t *testing.T) {
+	t.Run("PlanetScale logger", func(t *testing.T) {
+		// Given
+		SetPlanetScaleLogger(nil)
+		observedZapCore, observedLogs := observer.New(zap.InfoLevel)
+		observedLoggerSugared := zap.New(observedZapCore).Sugar()
+		logLevels := [3]zapcore.Level{zap.InfoLevel, zap.WarnLevel, zap.ErrorLevel}
+
+		// When
+		observedLoggerSugared.Infof("testing log")
+		observedLoggerSugared.Warnf("testing log")
+		observedLoggerSugared.Errorf("testing log")
+
+		// Then
+		for idx, level := range logLevels {
+			expectLog := observer.LoggedEntry{
+				Entry: zapcore.Entry{
+					Level:   level,
+					Message: "testing log",
+				},
+				Context: nil,
+			}
+			actualLog := observedLogs.All()[idx]
+
+			assert.Equal(t, expectLog.Level, actualLog.Level)
+			assert.Equal(t, expectLog.Message, actualLog.Message)
+
+		}
+
+	})
+}
+
+// MemorySink implements zap.Sink by writing all messages to a buffer.
+type MemorySink struct {
+	*bytes.Buffer
+}
+
+// Implement Close and Sync as no-ops to satisfy the interface. The Write
+// method is provided by the embedded buffer.
+
+func (s *MemorySink) Close() error { return nil }
+func (s *MemorySink) Sync() error  { return nil }
+
+func TestPSLogger_Replacing_glog(t *testing.T) {
+	type logMsg struct {
+		Level string `json:"level"`
+		Msg   string `json:"msg"`
+	}
+
+	type testCase struct {
+		name     string
+		logLevel zapcore.Level
+	}
+
+	// Given
+	dummyLogMessage := "testing log"
+
+	testCases := []testCase{
+		{"log info", zapcore.InfoLevel},
+		{"log warn", zapcore.WarnLevel},
+		{"log error", zapcore.ErrorLevel},
+	}
+
+	// Create a sink instance, and register it with zap for the "memory"
+	// protocol.
+	sink := &MemorySink{new(bytes.Buffer)}
+	err := zap.RegisterSink("memory", func(*url.URL) (zap.Sink, error) {
+		return sink, nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	testLoggerConf := pslog.NewPlanetScaleConfig(pslog.DetectEncoding(), pslog.InfoLevel)
+	testLoggerConf.OutputPaths = []string{"memory://", "stderr", "stdout"}
+	testLoggerConf.ErrorOutputPaths = []string{"memory://", "stderr", "stdout"}
+	SetPlanetScaleLogger(&testLoggerConf)
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// When
+			var loggingFunc func(format string, args ...interface{})
+			var expectedLevel string
+
+			switch tc.logLevel {
+			case zapcore.InfoLevel:
+				{
+					loggingFunc = vtlog.Infof
+					expectedLevel = "info"
+				}
+			case zapcore.ErrorLevel:
+				{
+					loggingFunc = vtlog.Errorf
+					expectedLevel = "error"
+				}
+			case zapcore.WarnLevel:
+				{
+					loggingFunc = vtlog.Warningf
+					expectedLevel = "warn"
+				}
+			}
+
+			loggingFunc(dummyLogMessage)
+			vtlog.Flush()
+			output := sink.String()
+
+			if output == "" {
+				t.Error("output value is empty")
+				t.Fail()
+				return
+			}
+
+			actualLog := logMsg{}
+
+			err := json.Unmarshal([]byte(output), &actualLog)
+			if err != nil {
+				t.Error(err)
+			}
+
+			// Then
+			assert.Equal(t, expectedLevel, actualLog.Level)
+			assert.Equal(t, dummyLogMessage, actualLog.Msg)
+
+		})
 	}
 }
