@@ -3021,11 +3021,13 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 
 		tabletResults := map[string]*sqltypes.Result{}
 		for _, tablet := range resp.Tablets {
+			tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+
 			qrproto, err := wr.ExecuteFetchAsDba(ctx, tablet.Alias, executeFetchQuery, 10000, false, false)
 			if err != nil {
 				return err
 			}
-			tabletResults[tablet.Alias.String()] = sqltypes.Proto3ToResult(qrproto)
+			tabletResults[tabletAlias] = sqltypes.Proto3ToResult(qrproto)
 		}
 		// combine results. This loses sorting if there's more then 1 tablet
 		combinedResults := queryResultForTabletResults(tabletResults)
