@@ -129,7 +129,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		"--disable_active_reparents")
+		"--disable-replication-manager")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
