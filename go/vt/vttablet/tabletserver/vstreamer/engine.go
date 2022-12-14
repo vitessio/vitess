@@ -379,8 +379,6 @@ func (vse *Engine) setWatch() {
 }
 
 func (vse *Engine) getStreamersActive() int64 {
-	vse.mu.Lock()
-	defer vse.mu.Unlock()
 	return int64(len(vse.streamers))
 }
 
