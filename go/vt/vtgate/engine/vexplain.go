@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -111,12 +112,12 @@ func (v *VExplain) convertToResult(ctx context.Context, vcursor VCursor) (*sqlty
 
 func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCursor) (*sqltypes.Result, error) {
 	logEntries := vcursor.Session().GetVExplainLogs()
-	explainResults := make(map[Primitive]*sqltypes.Result)
+	explainResults := make(map[Primitive]string)
 	for _, entry := range logEntries {
 		if entry.Target == nil || entry.Gateway == nil || entry.FiredFrom == nil {
 			continue
 		}
-		if explainResults[entry.FiredFrom] != nil {
+		if explainResults[entry.FiredFrom] != "" || strings.Contains(entry.Query, "where 1 != 1") {
 			continue
 		}
 		res, err := vcursor.ExecuteStandalone(ctx, nil, fmt.Sprintf("explain format = json %v", entry.Query), nil, &srvtopo.ResolvedShard{
@@ -127,10 +128,10 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		if err != nil {
 			continue
 		}
-		explainResults[entry.FiredFrom] = res
+		explainResults[entry.FiredFrom] = res.Rows[0][0].ToString()
 	}
 
-	planDescription := PrimitiveToPlanDescription(v.Input)
+	planDescription := primitiveToPlanDescriptionWithSQLResults(v.Input, explainResults)
 	resultBytes, err := json.MarshalIndent(planDescription, "", "\t")
 	if err != nil {
 		return nil, err
@@ -138,10 +139,6 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 
 	// TODO: interleave mysql plan with the vtgate plan instead of appending them
 	result := string(resultBytes)
-	for _, res := range explainResults {
-		result = result + "\n" + res.Rows[0][0].ToString()
-	}
-
 	fields := []*querypb.Field{
 		{
 			Name: "VExplain", Type: sqltypes.VarChar,
@@ -157,6 +154,26 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		Rows:   rows,
 	}
 	return qr, nil
+}
+
+// primitiveToPlanDescriptionWithSQLResults transforms a primitive tree into a corresponding PlanDescription tree
+// and adds the given res ...
+func primitiveToPlanDescriptionWithSQLResults(in Primitive, res map[Primitive]string) PrimitiveDescription {
+	this := in.description()
+
+	if v, found := res[in]; found {
+		this.Other["mysql_explain_json"] = json.RawMessage(v)
+	}
+
+	for _, input := range in.Inputs() {
+		this.Inputs = append(this.Inputs, primitiveToPlanDescriptionWithSQLResults(input, res))
+	}
+
+	if len(in.Inputs()) == 0 {
+		this.Inputs = []PrimitiveDescription{}
+	}
+
+	return this
 }
 
 func convertToVExplainQueriesResult(logs []ExecuteEntry) *sqltypes.Result {
