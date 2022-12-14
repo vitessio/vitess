@@ -2,6 +2,7 @@ package endtoend
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	"github.com/google/uuid"
@@ -121,5 +122,15 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	err := vtctl.RunCommand(ctx, wr, args)
 	assert.Error(t, err)
 	assert.NotEmpty(t, err.Error())
-	assert.Contains(t, []string{"unable to get shard names for keyspace", "no ExecuteFetchAsDba results on fake TabletManagerClient"}, err.Error())
+	containsExpectedError := false
+	expectedErrors := []string{
+		"unable to get shard names for keyspace",
+		"no ExecuteFetchAsDba results on fake TabletManagerClient",
+	}
+	for _, expect := range expectedErrors {
+		if strings.Contains(err.Error(), expect) {
+			containsExpectedError = true
+		}
+	}
+	assert.Truef(t, containsExpectedError, "expecting error <%v> to contain either of: %v", err.Error(), expectedErrors)
 }
