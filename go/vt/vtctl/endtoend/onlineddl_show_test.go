@@ -119,5 +119,7 @@ func onlineDDLTest(t *testing.T, args []string, expectedQuery string) {
 	wr := wrangler.New(logger, fakeTopo, &tmc)
 
 	err := vtctl.RunCommand(ctx, wr, args)
-	assert.ErrorContains(t, err, "unable to get shard names for keyspace")
+	assert.Error(t, err)
+	assert.NotEmpty(t, err.Error())
+	assert.Contains(t, []string{"unable to get shard names for keyspace", "no ExecuteFetchAsDba results on fake TabletManagerClient"}, err.Error())
 }
