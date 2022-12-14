@@ -38,7 +38,7 @@ type (
 
 	VTExplain struct {
 		Input Primitive
-		Type  sqlparser.VtExplainType
+		Type  sqlparser.VExplainType
 	}
 )
 

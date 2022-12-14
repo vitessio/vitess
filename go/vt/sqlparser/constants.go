@@ -251,9 +251,9 @@ const (
 	TraditionalStr = "traditional"
 	AnalyzeStr     = "analyze"
 	VTExplainStr   = "vtexplain"
-	TableStr       = "table"
 	QueriesStr     = "queries"
-	ExhaustiveStr  = "exhaustive"
+	AllVExplainStr = "all"
+	PlanStr        = "plan"
 
 	// Lock Types
 	ReadStr             = "read"
@@ -718,12 +718,11 @@ const (
 	AnalyzeType
 )
 
-// Constant for Enum Type - VtExplainType
+// Constant for Enum Type - VExplainType
 const (
-	QueriesVtExplainType VtExplainType = iota
-	TableVtExplainType
-	JSONVtExplainType
-	ExhaustiveVtExplainType
+	QueriesVExplainType VExplainType = iota
+	PlanVExplainType
+	AllVExplainType
 )
 
 // Constant for Enum Type - SelectIntoType

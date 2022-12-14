@@ -627,12 +627,12 @@ type (
 		Comments  *ParsedComments
 	}
 
-	// VtExplainType is an enum for VtExplainStmt.Type
-	VtExplainType int8
+	// VExplainType is an enum for VExplainStmt.Type
+	VExplainType int8
 
-	// VtExplainStmt represents an VtExplain statement
-	VtExplainStmt struct {
-		Type      VtExplainType
+	// VExplainStmt represents an VtExplain statement
+	VExplainStmt struct {
+		Type      VExplainType
 		Statement Statement
 		Comments  *ParsedComments
 	}
@@ -734,7 +734,7 @@ func (*TruncateTable) iStatement()       {}
 func (*RenameTable) iStatement()         {}
 func (*CallProc) iStatement()            {}
 func (*ExplainStmt) iStatement()         {}
-func (*VtExplainStmt) iStatement()       {}
+func (*VExplainStmt) iStatement()        {}
 func (*ExplainTab) iStatement()          {}
 func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
@@ -1281,7 +1281,7 @@ func (node *ExplainStmt) SetComments(comments Comments) {
 }
 
 // SetComments implements Commented interface.
-func (node *VtExplainStmt) SetComments(comments Comments) {
+func (node *VExplainStmt) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
@@ -1363,7 +1363,7 @@ func (node *ExplainStmt) GetParsedComments() *ParsedComments {
 }
 
 // GetParsedComments implements Commented interface.
-func (node *VtExplainStmt) GetParsedComments() *ParsedComments {
+func (node *VExplainStmt) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 

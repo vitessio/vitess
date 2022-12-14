@@ -1676,18 +1676,16 @@ func (ty ExplainType) ToString() string {
 }
 
 // ToString returns the type as a string
-func (ty VtExplainType) ToString() string {
+func (ty VExplainType) ToString() string {
 	switch ty {
-	case TableVtExplainType:
-		return TableStr
-	case JSONVtExplainType:
-		return JSONStr
-	case QueriesVtExplainType:
+	case PlanVExplainType:
+		return PlanStr
+	case QueriesVExplainType:
 		return QueriesStr
-	case ExhaustiveVtExplainType:
-		return ExhaustiveStr
+	case AllVExplainType:
+		return AllVExplainStr
 	default:
-		return "Unknown VtExplainType"
+		return "Unknown VExplainType"
 	}
 }
 

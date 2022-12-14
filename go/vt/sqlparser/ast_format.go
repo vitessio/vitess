@@ -1012,9 +1012,8 @@ func (node *ExplainStmt) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *VtExplainStmt) Format(buf *TrackedBuffer) {
-	format := "format = " + node.Type.ToString() + " "
-	buf.astPrintf(node, "vtexplain %v%s%v", node.Comments, format, node.Statement)
+func (node *VExplainStmt) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "vexplain %v%s %v", node.Comments, node.Type.ToString(), node.Statement)
 }
 
 // Format formats the node.

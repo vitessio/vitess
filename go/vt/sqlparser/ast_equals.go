@@ -1370,6 +1370,12 @@ func EqualsSQLNode(inA, inB SQLNode, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfUse(a, b, f)
+	case *VExplainStmt:
+		b, ok := inB.(*VExplainStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVExplainStmt(a, b, f)
 	case *VStream:
 		b, ok := inB.(*VStream)
 		if !ok {
@@ -1436,12 +1442,6 @@ func EqualsSQLNode(inA, inB SQLNode, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfVindexSpec(a, b, f)
-	case *VtExplainStmt:
-		b, ok := inB.(*VtExplainStmt)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfVtExplainStmt(a, b, f)
 	case *WeightStringFuncExpr:
 		b, ok := inB.(*WeightStringFuncExpr)
 		if !ok {
@@ -4263,6 +4263,19 @@ func EqualsRefOfUse(a, b *Use, f ASTComparison) bool {
 	return EqualsIdentifierCS(a.DBName, b.DBName, f)
 }
 
+// EqualsRefOfVExplainStmt does deep equals between the two objects.
+func EqualsRefOfVExplainStmt(a, b *VExplainStmt, f ASTComparison) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		EqualsStatement(a.Statement, b.Statement, f) &&
+		EqualsRefOfParsedComments(a.Comments, b.Comments, f)
+}
+
 // EqualsRefOfVStream does deep equals between the two objects.
 func EqualsRefOfVStream(a, b *VStream, f ASTComparison) bool {
 	if a == b {
@@ -4388,19 +4401,6 @@ func EqualsRefOfVindexSpec(a, b *VindexSpec, f ASTComparison) bool {
 	return EqualsIdentifierCI(a.Name, b.Name, f) &&
 		EqualsIdentifierCI(a.Type, b.Type, f) &&
 		EqualsSliceOfVindexParam(a.Params, b.Params, f)
-}
-
-// EqualsRefOfVtExplainStmt does deep equals between the two objects.
-func EqualsRefOfVtExplainStmt(a, b *VtExplainStmt, f ASTComparison) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return a.Type == b.Type &&
-		EqualsStatement(a.Statement, b.Statement, f) &&
-		EqualsRefOfParsedComments(a.Comments, b.Comments, f)
 }
 
 // EqualsRefOfWeightStringFuncExpr does deep equals between the two objects.
@@ -6323,18 +6323,18 @@ func EqualsStatement(inA, inB Statement, f ASTComparison) bool {
 			return false
 		}
 		return EqualsRefOfUse(a, b, f)
+	case *VExplainStmt:
+		b, ok := inB.(*VExplainStmt)
+		if !ok {
+			return false
+		}
+		return EqualsRefOfVExplainStmt(a, b, f)
 	case *VStream:
 		b, ok := inB.(*VStream)
 		if !ok {
 			return false
 		}
 		return EqualsRefOfVStream(a, b, f)
-	case *VtExplainStmt:
-		b, ok := inB.(*VtExplainStmt)
-		if !ok {
-			return false
-		}
-		return EqualsRefOfVtExplainStmt(a, b, f)
 	default:
 		// this should never happen
 		return false

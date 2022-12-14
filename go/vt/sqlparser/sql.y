@@ -184,7 +184,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
-  vtexplainType 	  VtExplainType
+  vexplainType 	  VExplainType
   intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
@@ -382,7 +382,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN
+%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN VEXPLAIN PLAN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -406,7 +406,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
 %type <statement> prepare_statement
-%type <statement> vtexplain_statement
+%type <statement> vexplain_statement
 %type <statement> execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
@@ -431,7 +431,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
-%type <vtexplainType> vtexplain_format_opt
+%type <vexplainType> vexplain_type_opt
 %type <trimType> trim_type
 %type <frameUnitType> frame_units
 %type <argumentLessWindowExprType> argument_less_window_expr_type
@@ -641,7 +641,7 @@ command:
 | savepoint_statement
 | release_statement
 | explain_statement
-| vtexplain_statement
+| vexplain_statement
 | other_statement
 | flush_statement
 | do_statement
@@ -4378,25 +4378,21 @@ explain_format_opt:
     $$ = AnalyzeType
   }
 
-vtexplain_format_opt:
+vexplain_type_opt:
   {
-    $$ = QueriesVtExplainType
+    $$ = PlanVExplainType
   }
-| FORMAT '=' JSON
+| PLAN
   {
-    $$ = JSONVtExplainType
+    $$ = PlanVExplainType
   }
-| FORMAT '=' TABLE
+| ALL
   {
-    $$ = TableVtExplainType
+    $$ = AllVExplainType
   }
-| FORMAT '=' QUERIES
+| QUERIES
   {
-    $$ = QueriesVtExplainType
-  }
-| FORMAT '=' EXHAUSTIVE
-  {
-    $$ = ExhaustiveVtExplainType
+    $$ = QueriesVExplainType
   }
 
 explain_synonyms:
@@ -4454,10 +4450,10 @@ explain_statement:
     $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
   }
 
-vtexplain_statement:
-  VTEXPLAIN comment_opt vtexplain_format_opt explainable_statement
+vexplain_statement:
+  VEXPLAIN comment_opt vexplain_type_opt explainable_statement
   {
-    $$ = &VtExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
+    $$ = &VExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
   }
 
 other_statement:
@@ -7757,6 +7753,7 @@ non_reserved_keyword:
 | PATH
 | PERSIST
 | PERSIST_ONLY
+| PLAN
 | PRECEDING
 | PREPARE
 | PRIVILEGE_CHECKS_USER
@@ -7853,6 +7850,7 @@ non_reserved_keyword:
 | TINYBLOB
 | TINYINT
 | TINYTEXT
+| TRADITIONAL
 | TRANSACTION
 | TREE
 | TRIGGER
@@ -7878,6 +7876,7 @@ non_reserved_keyword:
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
+| VEXPLAIN
 | VGTID_EXECUTED
 | VIEW
 | VINDEX
@@ -7895,6 +7894,7 @@ non_reserved_keyword:
 | VITESS_THROTTLED_APPS
 | VITESS_THROTTLER
 | VSCHEMA
+| VTEXPLAIN
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS

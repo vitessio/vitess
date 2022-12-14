@@ -471,6 +471,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfUpdateXMLExpr(in)
 	case *Use:
 		return CloneRefOfUse(in)
+	case *VExplainStmt:
+		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
 	case ValTuple:
@@ -493,8 +495,6 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneVindexParam(in)
 	case *VindexSpec:
 		return CloneRefOfVindexSpec(in)
-	case *VtExplainStmt:
-		return CloneRefOfVtExplainStmt(in)
 	case *WeightStringFuncExpr:
 		return CloneRefOfWeightStringFuncExpr(in)
 	case *When:
@@ -2901,6 +2901,17 @@ func CloneRefOfUse(n *Use) *Use {
 	return &out
 }
 
+// CloneRefOfVExplainStmt creates a deep clone of the input.
+func CloneRefOfVExplainStmt(n *VExplainStmt) *VExplainStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statement = CloneStatement(n.Statement)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
 // CloneRefOfVStream creates a deep clone of the input.
 func CloneRefOfVStream(n *VStream) *VStream {
 	if n == nil {
@@ -3012,17 +3023,6 @@ func CloneRefOfVindexSpec(n *VindexSpec) *VindexSpec {
 	out.Name = CloneIdentifierCI(n.Name)
 	out.Type = CloneIdentifierCI(n.Type)
 	out.Params = CloneSliceOfVindexParam(n.Params)
-	return &out
-}
-
-// CloneRefOfVtExplainStmt creates a deep clone of the input.
-func CloneRefOfVtExplainStmt(n *VtExplainStmt) *VtExplainStmt {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Statement = CloneStatement(n.Statement)
-	out.Comments = CloneRefOfParsedComments(n.Comments)
 	return &out
 }
 
@@ -3823,10 +3823,10 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfUpdate(in)
 	case *Use:
 		return CloneRefOfUse(in)
+	case *VExplainStmt:
+		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
-	case *VtExplainStmt:
-		return CloneRefOfVtExplainStmt(in)
 	default:
 		// this should never happen
 		return nil

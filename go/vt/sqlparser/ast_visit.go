@@ -470,6 +470,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUpdateXMLExpr(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
+	case *VExplainStmt:
+		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
 	case ValTuple:
@@ -492,8 +494,6 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitVindexParam(in, f)
 	case *VindexSpec:
 		return VisitRefOfVindexSpec(in, f)
-	case *VtExplainStmt:
-		return VisitRefOfVtExplainStmt(in, f)
 	case *WeightStringFuncExpr:
 		return VisitRefOfWeightStringFuncExpr(in, f)
 	case *When:
@@ -3719,6 +3719,21 @@ func VisitRefOfUse(in *Use, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfVExplainStmt(in *VExplainStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfVStream(in *VStream, f Visit) error {
 	if in == nil {
 		return nil
@@ -3866,21 +3881,6 @@ func VisitRefOfVindexSpec(in *VindexSpec, f Visit) error {
 		if err := VisitVindexParam(el, f); err != nil {
 			return err
 		}
-	}
-	return nil
-}
-func VisitRefOfVtExplainStmt(in *VtExplainStmt, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitStatement(in.Statement, f); err != nil {
-		return err
-	}
-	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
-		return err
 	}
 	return nil
 }
@@ -4684,10 +4684,10 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfUpdate(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
+	case *VExplainStmt:
+		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
-	case *VtExplainStmt:
-		return VisitRefOfVtExplainStmt(in, f)
 	default:
 		// this should never happen
 		return nil
