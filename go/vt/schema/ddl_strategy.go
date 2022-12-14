@@ -39,6 +39,7 @@ const (
 	preferInstantDDL       = "prefer-instant-ddl"
 	fastRangeRotationFlag  = "fast-range-rotation"
 	vreplicationTestSuite  = "vreplication-test-suite"
+	allowForeignKeysFlag   = "unsafe-allow-foreign-keys"
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -173,6 +174,11 @@ func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
 }
 
+// IsAllowForeignKeysFlag checks if strategy options include -unsafe-allow-foreign-keys
+func (setting *DDLStrategySetting) IsAllowForeignKeysFlag() bool {
+	return setting.hasFlag(allowForeignKeysFlag)
+}
+
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
 func (setting *DDLStrategySetting) RuntimeOptions() []string {
 	opts, _ := shlex.Split(setting.Options)
@@ -190,6 +196,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, preferInstantDDL):
 		case isFlag(opt, fastRangeRotationFlag):
 		case isFlag(opt, vreplicationTestSuite):
+		case isFlag(opt, allowForeignKeysFlag):
 		default:
 			validOpts = append(validOpts, opt)
 		}
