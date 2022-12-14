@@ -75,6 +75,17 @@ func TestBindingSingleTablePositive(t *testing.T) {
 	}
 }
 
+func TestInformationSchemaColumnInfo(t *testing.T) {
+	stmt, semTable := parseAndAnalyze(t, "select table_comment, file_name from information_schema.`TABLES`, information_schema.`FILES`", "d")
+
+	sel, _ := stmt.(*sqlparser.Select)
+	tables := SingleTableSet(0)
+	files := SingleTableSet(1)
+
+	assert.Equal(t, tables, semTable.RecursiveDeps(extract(sel, 0)))
+	assert.Equal(t, files, semTable.DirectDeps(extract(sel, 1)))
+}
+
 func TestBindingSingleAliasedTablePositive(t *testing.T) {
 	queries := []string{
 		"select col from tabl as X",
