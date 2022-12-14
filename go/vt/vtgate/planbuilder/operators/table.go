@@ -79,6 +79,13 @@ func (to *Table) AddCol(col *sqlparser.ColName) {
 	to.Columns = append(to.Columns, col)
 }
 
+func (to *Table) TablesUsed() []string {
+	if sqlparser.SystemSchema(to.QTable.Table.Qualifier.String()) {
+		return nil
+	}
+	return SingleQualifiedIdentifier(to.VTable.Keyspace, to.VTable.Name)
+}
+
 func addColumn(op ColNameColumns, e sqlparser.Expr) (int, error) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {

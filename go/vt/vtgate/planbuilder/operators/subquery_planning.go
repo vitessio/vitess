@@ -88,7 +88,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
 	preds := UnresolvedPredicates(op, ctx.SemTable)
 	if filter, ok := op.(*Filter); ok {
-		if sqlparser.EqualsExprs(preds, filter.Predicates, ctx.SemTable.ASTComparison()) {
+		if ctx.SemTable.ASTEquals().Exprs(preds, filter.Predicates) {
 			// if we are seeing a single filter with only these predicates,
 			// we can throw away the filter and just use the source
 			return preds, filter.Source
@@ -141,6 +141,8 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 			outer.setSelectNoneOpcode()
 		}
 	}
+
+	outer.MergedWith = append(outer.MergedWith, inner)
 
 	return outer, nil
 }
@@ -243,6 +245,9 @@ func tryMergeSubqueryWithRoute(
 	// Special case: Inner query won't return any results / is not routable.
 	if subqueryRoute.RouteOpCode == engine.None {
 		merged, err := merger(outerOp, subqueryRoute)
+		if err != nil {
+			return nil, err
+		}
 		return merged, err
 	}
 

@@ -129,3 +129,9 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	}
 	return v, nil
 }
+
+// TablesUsed implements the Operator interface.
+// It is not keyspace-qualified.
+func (v *Vindex) TablesUsed() []string {
+	return []string{v.Table.Table.Name.String()}
+}

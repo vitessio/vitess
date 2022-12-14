@@ -28,19 +28,17 @@ import (
 )
 
 func main() {
-	var (
-		patterns         []string
-		generate, except string
-		verify           bool
-	)
+	var options asthelpergen.Options
+	var verify bool
 
-	pflag.StringSliceVar(&patterns, "in", nil, "Go packages to load the generator")
-	pflag.StringVar(&generate, "iface", "", "Root interface generate rewriter for")
+	pflag.StringSliceVar(&options.Packages, "in", nil, "Go packages to load the generator")
+	pflag.StringVar(&options.RootInterface, "iface", "", "Root interface generate rewriter for")
+	pflag.StringSliceVar(&options.Clone.Exclude, "clone_exclude", nil, "don't deep clone these types")
+	pflag.StringSliceVar(&options.Equals.AllowCustom, "equals_custom", nil, "generate custom comparators for these types")
 	pflag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
-	pflag.StringVar(&except, "except", "", "don't deep clone these types")
 	pflag.Parse()
 
-	result, err := asthelpergen.GenerateASTHelpers(patterns, generate, except)
+	result, err := asthelpergen.GenerateASTHelpers(&options)
 	if err != nil {
 		log.Fatal(err)
 	}

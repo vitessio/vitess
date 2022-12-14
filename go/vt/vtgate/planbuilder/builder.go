@@ -83,7 +83,7 @@ func tablesFromSemantics(semTable *semantics.SemTable) []string {
 		if vindexTable == nil {
 			continue
 		}
-		tables[vindexTable.ToString()] = nil
+		tables[vindexTable.String()] = nil
 	}
 
 	names := make([]string, 0, len(tables))
@@ -101,7 +101,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema)
 	if err != nil {
 		return nil, err
 	}
