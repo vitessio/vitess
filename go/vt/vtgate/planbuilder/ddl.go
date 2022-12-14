@@ -151,8 +151,6 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 			Keyspace:          keyspace,
 			TargetDestination: destination,
 			Query:             query,
-			IsDML:             false,
-			SingleShardOnly:   false,
 		}, &engine.OnlineDDL{
 			Keyspace:          keyspace,
 			TargetDestination: destination,
@@ -198,11 +196,6 @@ func findTableDestinationAndKeyspace(vschema plancontext.VSchema, ddlStatement s
 }
 
 func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reservedVars *sqlparser.ReservedVars, enableOnlineDDL, enableDirectDDL bool) (key.Destination, *vindexes.Keyspace, error) {
-	if vschema.IsViewsEnabled() {
-		// TODO: validates that everything points to the same destination and keyspace, and that the view exists.
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "TODO: validates that everything points to the same destination and keyspace, and that the view exists.")
-	}
-
 	// For Alter View, we require that the view exist and the select query can be satisfied within the keyspace itself
 	// We should remove the keyspace name from the table name, as the database name in MySQL might be different than the keyspace name
 	destination, keyspace, err := findTableDestinationAndKeyspace(vschema, ddl)
@@ -213,6 +206,12 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 	selectPlan, err := createInstructionFor(sqlparser.String(ddl.Select), ddl.Select, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	if err != nil {
 		return nil, nil, err
+	}
+	if vschema.IsViewsEnabled() {
+		if keyspace == nil {
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected")
+		}
+		return destination, keyspace, nil
 	}
 	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
@@ -251,10 +250,7 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	}
 	if vschema.IsViewsEnabled() {
 		if keyspace == nil {
-			keyspace, err = vschema.DefaultKeyspace()
-			if err != nil {
-				return nil, nil, err
-			}
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected")
 		}
 		return destination, keyspace, nil
 	}
@@ -281,11 +277,31 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 }
 
 func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
-	if vschema.IsViewsEnabled() {
-		// TODO: validates that everything points to the same destination and keyspace, and that the view exists.
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "TODO: validates that everything points to the same destination and keyspace, and that the view exists.")
+	if !vschema.IsViewsEnabled() {
+		return buildDropTable(vschema, ddlStatement)
 	}
-	return buildDropTable(vschema, ddlStatement)
+	var ks *vindexes.Keyspace
+	viewMap := make(map[string]any)
+	for _, tbl := range ddlStatement.GetFromTables() {
+		_, ksForView, _, err := vschema.TargetDestination(tbl.Qualifier.String())
+		if err != nil {
+			return nil, nil, err
+		}
+		if ksForView == nil {
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected")
+		}
+		if ks == nil {
+			ks = ksForView
+		} else if ks.Name != ksForView.Name {
+			return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot drop views from multiple keyspace in a single statement")
+		}
+		if _, exists := viewMap[tbl.Name.String()]; exists {
+			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique view: '%s'", tbl.Name.String())
+		}
+		viewMap[tbl.Name.String()] = nil
+		tbl.Qualifier = sqlparser.NewIdentifierCS("")
+	}
+	return key.DestinationAllShards{}, ks, nil
 }
 
 func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
