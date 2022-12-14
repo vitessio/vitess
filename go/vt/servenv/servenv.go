@@ -78,7 +78,7 @@ var (
 var (
 	lameduckPeriod = 50 * time.Millisecond
 	onTermTimeout  = 10 * time.Second
-	onCloseTimeout = time.Nanosecond
+	onCloseTimeout = 10 * time.Second
 	catchSigpipe   bool
 )
 
