@@ -48,4 +48,3 @@ RUN make build
 # Fix permissions
 RUN chown -R vitess:vitess /vt
 USER vitess
-
