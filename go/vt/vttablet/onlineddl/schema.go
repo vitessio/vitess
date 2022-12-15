@@ -83,6 +83,8 @@ const (
 	alterSchemaMigrationsTablePostponeLaunch           = "ALTER TABLE _vt.schema_migrations add column postpone_launch tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsStage                         = "ALTER TABLE _vt.schema_migrations add column stage text not null"
 	alterSchemaMigrationsCutoverAttempts               = "ALTER TABLE _vt.schema_migrations add column cutover_attempts int unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsTableImmediateOperation       = "ALTER TABLE _vt.schema_migrations add column is_immediate_operation tinyint unsigned NOT NULL DEFAULT 0"
+	alterSchemaMigrationsReviewedTimestamp             = "ALTER TABLE _vt.schema_migrations add column reviewed_timestamp timestamp NULL DEFAULT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -111,6 +113,8 @@ const (
 	sqlSelectQueuedMigrations = `SELECT
 			migration_uuid,
 			ddl_action,
+			is_view,
+			is_immediate_operation,
 			postpone_launch,
 			postpone_completion,
 			ready_to_complete
@@ -150,6 +154,11 @@ const (
 	`
 	sqlUpdateMigrationIsView = `UPDATE _vt.schema_migrations
 			SET is_view=%a
+		WHERE
+			migration_uuid=%a
+	`
+	sqlUpdateMigrationSetImmediateOperation = `UPDATE _vt.schema_migrations
+			SET is_immediate_operation=1
 		WHERE
 			migration_uuid=%a
 	`
@@ -381,12 +390,12 @@ const (
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
 	`
-	sqlSelectQueuedRevertMigrations = `SELECT
+	sqlSelectQueuedUnreviewedMigrations = `SELECT
 			migration_uuid
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='queued'
-			AND ddl_action='revert'
+			AND reviewed_timestamp IS NULL
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
@@ -669,4 +678,6 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsTablePostponeLaunch,
 	alterSchemaMigrationsStage,
 	alterSchemaMigrationsCutoverAttempts,
+	alterSchemaMigrationsTableImmediateOperation,
+	alterSchemaMigrationsReviewedTimestamp,
 }

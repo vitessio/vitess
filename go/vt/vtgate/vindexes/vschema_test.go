@@ -247,9 +247,7 @@ func TestUnshardedVSchemaValid(t *testing.T) {
 		Vindexes: make(map[string]*vschemapb.Vindex),
 		Tables:   make(map[string]*vschemapb.Table),
 	})
-	if err != nil {
-		t.Errorf("TestUnshardedVSchemaValid:\n%v", err)
-	}
+	require.NoError(t, err)
 }
 
 func TestUnshardedVSchema(t *testing.T) {
@@ -257,47 +255,22 @@ func TestUnshardedVSchema(t *testing.T) {
 		Keyspaces: map[string]*vschemapb.Keyspace{
 			"unsharded": {
 				Tables: map[string]*vschemapb.Table{
-					"t1": {},
-				},
-			},
-		},
-	}
+					"t1": {}}}}}
+
 	got := BuildVSchema(&good)
-	err := got.Keyspaces["unsharded"].Error
+	require.NoError(t, got.Keyspaces["unsharded"].Error)
+
+	table, err := got.FindTable("unsharded", "t1")
 	require.NoError(t, err)
-	ks := &Keyspace{
-		Name: "unsharded",
-	}
-	t1 := &Table{
-		Name:     sqlparser.NewIdentifierCS("t1"),
-		Keyspace: ks,
-	}
-	dual := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     TypeReference,
-	}
-	want := &VSchema{
-		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
-			"t1":   t1,
-			"dual": dual,
-		},
-		uniqueVindexes: map[string]Vindex{},
-		Keyspaces: map[string]*KeyspaceSchema{
-			"unsharded": {
-				Keyspace: ks,
-				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual,
-				},
-				Vindexes: map[string]Vindex{},
-			},
-		},
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("BuildVSchema:\n%v, want\n%v", got, want)
-	}
+	assert.NotNil(t, table)
+
+	table, err = got.FindTable("", "t1")
+	require.NoError(t, err)
+	assert.NotNil(t, table)
+
+	table, err = got.FindTable("", "dual")
+	require.NoError(t, err)
+	assert.Equal(t, TypeReference, table.Type)
 }
 
 func TestVSchemaColumns(t *testing.T) {
@@ -307,61 +280,49 @@ func TestVSchemaColumns(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						Columns: []*vschemapb.Column{{
+							Name: "c1"}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}}}}
+
+	got := BuildVSchema(&good)
+	require.NoError(t, got.Keyspaces["unsharded"].Error)
+
+	t1, err := got.FindTable("unsharded", "t1")
+	require.NoError(t, err)
+	assertColumn(t, t1.Columns[0], "c1", sqltypes.Null)
+	assertColumn(t, t1.Columns[1], "c2", sqltypes.VarChar)
+}
+
+func TestVSchemaViews(t *testing.T) {
+	good := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
 							Name: "c1",
 						}, {
 							Name: "c2",
-							Type: sqltypes.VarChar,
-						}},
-					},
-				},
-			},
-		},
-	}
-	got := BuildVSchema(&good)
-	err := got.Keyspaces["unsharded"].Error
-	require.NoError(t, err)
-	ks := &Keyspace{
-		Name: "unsharded",
-	}
-	t1 := &Table{
-		Name:     sqlparser.NewIdentifierCS("t1"),
-		Keyspace: ks,
-		Columns: []Column{{
-			Name: sqlparser.NewIdentifierCI("c1"),
-			Type: sqltypes.Null,
-		}, {
-			Name: sqlparser.NewIdentifierCI("c2"),
-			Type: sqltypes.VarChar,
-		}},
-	}
-	dual := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     TypeReference,
-	}
-	want := &VSchema{
-		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
-			"t1":   t1,
-			"dual": dual,
-		},
-		uniqueVindexes: map[string]Vindex{},
-		Keyspaces: map[string]*KeyspaceSchema{
-			"unsharded": {
-				Keyspace: ks,
-				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual,
-				},
-				Vindexes: map[string]Vindex{},
-			},
-		},
-	}
-	if !reflect.DeepEqual(got, want) {
-		gotb, _ := json.Marshal(got)
-		wantb, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
-	}
+							Type: sqltypes.VarChar}}}}},
+			"main": {
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Columns: []*vschemapb.Column{{
+							Name: "c1",
+						}, {
+							Name: "c2",
+							Type: sqltypes.VarChar}}}}}}}
+	vschema := BuildVSchema(&good)
+	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
+
+	// add view to unsharded keyspace.
+	vschema.AddView("unsharded", "v1", "SELECT c1+c2 AS added FROM t1")
+
+	view := vschema.FindView("unsharded", "v1")
+	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
+
+	view = vschema.FindView("", "v1")
+	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
 }
 
 func TestVSchemaColumnListAuthoritative(t *testing.T) {
@@ -371,61 +332,18 @@ func TestVSchemaColumnListAuthoritative(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						Columns: []*vschemapb.Column{{
-							Name: "c1",
-						}, {
+							Name: "c1"}, {
 							Name: "c2",
-							Type: sqltypes.VarChar,
-						}},
-						ColumnListAuthoritative: true,
-					},
-				},
-			},
-		},
-	}
+							Type: sqltypes.VarChar}},
+						ColumnListAuthoritative: true}}}}}
+
 	got := BuildVSchema(&good)
-	ks := &Keyspace{
-		Name: "unsharded",
-	}
-	t1 := &Table{
-		Name:     sqlparser.NewIdentifierCS("t1"),
-		Keyspace: ks,
-		Columns: []Column{{
-			Name: sqlparser.NewIdentifierCI("c1"),
-			Type: sqltypes.Null,
-		}, {
-			Name: sqlparser.NewIdentifierCI("c2"),
-			Type: sqltypes.VarChar,
-		}},
-		ColumnListAuthoritative: true,
-	}
-	dual := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     TypeReference,
-	}
-	want := &VSchema{
-		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
-			"t1":   t1,
-			"dual": dual,
-		},
-		uniqueVindexes: map[string]Vindex{},
-		Keyspaces: map[string]*KeyspaceSchema{
-			"unsharded": {
-				Keyspace: ks,
-				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual,
-				},
-				Vindexes: map[string]Vindex{},
-			},
-		},
-	}
-	if !reflect.DeepEqual(got, want) {
-		gotb, _ := json.Marshal(got)
-		wantb, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:\n%s, want\n%s", gotb, wantb)
-	}
+
+	t1, err := got.FindTable("unsharded", "t1")
+	require.NoError(t, err)
+	assert.True(t, t1.ColumnListAuthoritative)
+	assertColumn(t, t1.Columns[0], "c1", sqltypes.Null)
+	assertColumn(t, t1.Columns[1], "c2", sqltypes.VarChar)
 }
 
 func TestVSchemaColumnsFail(t *testing.T) {
@@ -435,21 +353,11 @@ func TestVSchemaColumnsFail(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						Columns: []*vschemapb.Column{{
-							Name: "c1",
-						}, {
-							Name: "c1",
-						}},
-					},
-				},
-			},
-		},
-	}
+							Name: "c1"}, {
+							Name: "c1"}}}}}}}
+
 	got := BuildVSchema(&good)
-	want := "duplicate column name 'c1' for table: t1"
-	err := got.Keyspaces["unsharded"].Error
-	if err == nil || err.Error() != want {
-		t.Errorf("BuildVSchema(dup col): %v, want %v", err, want)
-	}
+	require.EqualError(t, got.Keyspaces["unsharded"].Error, "duplicate column name 'c1' for table: t1")
 }
 
 func TestVSchemaPinned(t *testing.T) {
@@ -459,52 +367,16 @@ func TestVSchemaPinned(t *testing.T) {
 				Sharded: true,
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Pinned: "80",
-					},
-				},
-			},
-		},
-	}
+						Pinned: "80"}}}}}
+
 	got := BuildVSchema(&good)
+
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
-	ks := &Keyspace{
-		Name:    "sharded",
-		Sharded: true,
-	}
-	t1 := &Table{
-		Name:     sqlparser.NewIdentifierCS("t1"),
-		Keyspace: ks,
-		Pinned:   []byte{0x80},
-	}
-	dual := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     TypeReference,
-	}
-	want := &VSchema{
-		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
-			"t1":   t1,
-			"dual": dual,
-		},
-		uniqueVindexes: map[string]Vindex{},
-		Keyspaces: map[string]*KeyspaceSchema{
-			"sharded": {
-				Keyspace: ks,
-				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual,
-				},
-				Vindexes: map[string]Vindex{},
-			},
-		},
-	}
-	if !reflect.DeepEqual(got, want) {
-		gotjson, _ := json.Marshal(got)
-		wantjson, _ := json.Marshal(want)
-		t.Errorf("BuildVSchema:\n%s, want\n%s", gotjson, wantjson)
-	}
+
+	t1, err := got.FindTable("sharded", "t1")
+	require.NoError(t, err)
+	assert.Equal(t, "\x80", string(t1.Pinned))
 }
 
 func TestShardedVSchemaOwned(t *testing.T) {
@@ -516,103 +388,37 @@ func TestShardedVSchemaOwned(t *testing.T) {
 					"stfu1": {
 						Type: "stfu",
 						Params: map[string]string{
-							"stfu1": "1",
-						},
-						Owner: "t1",
-					},
+							"stfu1": "1"},
+						Owner: "t1"},
 					"stln1": {
 						Type:  "stln",
-						Owner: "t1",
-					},
-				},
+						Owner: "t1"}},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{
 							{
 								Column: "c1",
-								Name:   "stfu1",
-							}, {
+								Name:   "stfu1"}, {
 								Column: "c2",
-								Name:   "stln1",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+								Name:   "stln1"}}}}}}}
+
 	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
-	ks := &Keyspace{
-		Name:    "sharded",
-		Sharded: true,
-	}
+
+	t1, err := got.FindTable("sharded", "t1")
+	require.NoError(t, err)
+
 	vindex1 := &stFU{
 		name: "stfu1",
 		Params: map[string]string{
-			"stfu1": "1",
-		},
-	}
+			"stfu1": "1"}}
+	assertVindexMatches(t, t1.ColumnVindexes[0], vindex1, "stfu1", false)
+
 	vindex2 := &stLN{name: "stln1"}
-	t1 := &Table{
-		Name:     sqlparser.NewIdentifierCS("t1"),
-		Keyspace: ks,
-		ColumnVindexes: []*ColumnVindex{
-			{
-				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c1")},
-				Type:     "stfu",
-				Name:     "stfu1",
-				Vindex:   vindex1,
-				isUnique: vindex1.IsUnique(),
-				cost:     vindex1.Cost(),
-			},
-			{
-				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c2")},
-				Type:     "stln",
-				Name:     "stln1",
-				Owned:    true,
-				Vindex:   vindex2,
-				isUnique: vindex2.IsUnique(),
-				cost:     vindex2.Cost(),
-			},
-		},
-	}
-	t1.Ordered = []*ColumnVindex{
-		t1.ColumnVindexes[1],
-		t1.ColumnVindexes[0],
-	}
-	t1.Owned = t1.ColumnVindexes[1:]
-	dual := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     TypeReference,
-	}
-	want := &VSchema{
-		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
-			"t1":   t1,
-			"dual": dual,
-		},
-		uniqueVindexes: map[string]Vindex{
-			"stfu1": vindex1,
-			"stln1": vindex2,
-		},
-		Keyspaces: map[string]*KeyspaceSchema{
-			"sharded": {
-				Keyspace: ks,
-				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual,
-				},
-				Vindexes: map[string]Vindex{
-					"stfu1": vindex1,
-					"stln1": vindex2,
-				},
-			},
-		},
-	}
-	utils.MustMatch(t, want, got)
+	assertVindexMatches(t, t1.ColumnVindexes[1], vindex2, "stln1", true)
+
+	assert.Equal(t, []string{"stln1", "stfu1"}, vindexNames(t1.Ordered))
 }
 
 func TestShardedVSchemaOwnerInfo(t *testing.T) {
@@ -827,7 +633,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("invalid table name: t1.t2.t3, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"unqualified": {
-				Error: errors.New("table t1 must be qualified"),
+				Error: errors.New("invalid table name: t1, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"badkeyspace": {
 				Error: errors.New("Unknown database 'ks3' in vschema"),
@@ -836,7 +642,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("table t2 not found"),
 			},
 		},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"t2":   t2,
 			"dual": dual1,
@@ -986,64 +792,43 @@ func TestFindBestColVindex(t *testing.T) {
 				Sharded: true,
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stfu": {
-						Type: "stfu",
-					},
+						Type: "stfu"},
 					"stfn": {
-						Type: "stfn",
-					},
+						Type: "stfn"},
 					"stlu": {
-						Type: "stlu",
-					},
+						Type: "stlu"},
 					"stln": {
-						Type: "stln",
-					},
+						Type: "stln"},
 					"cheap": {
-						Type: "cheap",
-					},
+						Type: "cheap"},
 				},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stfu",
-							Columns: []string{"id"},
-						}},
-					},
+							Columns: []string{"id"}}}},
 					"nogoodvindex": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stlu",
-							Columns: []string{"id"},
-						}},
-					},
+							Columns: []string{"id"}}}},
 					"thirdvindexgood": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stlu",
-							Columns: []string{"id"},
-						}, {
+							Columns: []string{"id"}}, {
 							Name:    "stfn",
-							Columns: []string{"id"},
-						}, {
+							Columns: []string{"id"}}, {
 							Name:    "stfu",
-							Columns: []string{"id"},
-						}},
-					},
+							Columns: []string{"id"}}}},
 					"cheapest": {
 						ColumnVindexes: []*vschemapb.ColumnVindex{{
 							Name:    "stfu",
-							Columns: []string{"id"},
-						}, {
+							Columns: []string{"id"}}, {
 							Name:    "cheap",
-							Columns: []string{"id"},
-						}},
-					},
-				},
-			},
+							Columns: []string{"id"}}}}}},
 			"unsharded": {
 				Tables: map[string]*vschemapb.Table{
-					"t2": {},
-				},
-			},
-		},
-	}
+					"t2": {}}}}}
+
 	vs := BuildVSchema(testSrvVSchema)
 
 	testcases := []struct {
@@ -1212,24 +997,14 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 					"stfu1": {
 						Type: "stfu",
 						Params: map[string]string{
-							"stfu1": "1",
-						},
-						Owner: "t1",
-					},
-				},
+							"stfu1": "1"},
+						Owner: "t1"}},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{
-							{
-								Columns: []string{"c1", "c2"},
-								Name:    "stfu1",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Columns: []string{"c1", "c2"},
+							Name:    "stfu1"}}}}}}}
+
 	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
@@ -1267,7 +1042,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
 			"dual": dual,
 		},
@@ -1279,14 +1054,10 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 				Keyspace: ks,
 				Tables: map[string]*Table{
 					"t1":   t1,
-					"dual": dual,
-				},
+					"dual": dual},
 				Vindexes: map[string]Vindex{
-					"stfu1": vindex1,
-				},
-			},
-		},
-	}
+					"stfu1": vindex1},
+			}}}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1302,29 +1073,17 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				Vindexes: map[string]*vschemapb.Vindex{
 					"stlu1": {
 						Type:  "stlu",
-						Owner: "",
-					},
+						Owner: ""},
 					"stfu1": {
 						Type:  "stfu",
-						Owner: "",
-					},
-				},
+						Owner: ""}},
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						ColumnVindexes: []*vschemapb.ColumnVindex{
-							{
-								Column: "c1",
-								Name:   "stlu1",
-							}, {
-								Column: "c2",
-								Name:   "stfu1",
-							},
-						},
-					},
-				},
-			},
-		},
-	}
+						ColumnVindexes: []*vschemapb.ColumnVindex{{
+							Column: "c1",
+							Name:   "stlu1"}, {
+							Column: "c2",
+							Name:   "stfu1"}}}}}}}
 	got := BuildVSchema(&good)
 	err := got.Keyspaces["sharded"].Error
 	require.NoError(t, err)
@@ -1346,51 +1105,39 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 				Vindex:   vindex1,
 				isUnique: vindex1.IsUnique(),
 				cost:     vindex1.Cost(),
-			},
-			{
+			}, {
 				Columns:  []sqlparser.IdentifierCI{sqlparser.NewIdentifierCI("c2")},
 				Type:     "stfu",
 				Name:     "stfu1",
 				Owned:    false,
 				Vindex:   vindex2,
 				isUnique: vindex2.IsUnique(),
-				cost:     vindex2.Cost(),
-			},
-		},
-	}
+				cost:     vindex2.Cost()}}}
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[1],
-		t1.ColumnVindexes[0],
-	}
+		t1.ColumnVindexes[0]}
 	dual := &Table{
 		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ks,
-		Type:     TypeReference,
-	}
+		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   t1,
-			"dual": dual,
-		},
+			"dual": dual},
 		uniqueVindexes: map[string]Vindex{
 			"stlu1": vindex1,
-			"stfu1": vindex2,
-		},
+			"stfu1": vindex2},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
 					"t1":   t1,
-					"dual": dual,
-				},
+					"dual": dual},
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
-					"stfu1": vindex2,
-				},
-			},
-		},
-	}
+					"stfu1": vindex2},
+			}}}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1459,72 +1206,52 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 			"ksa": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Type: "sequence",
-					},
-				},
-			},
+						Type: "sequence"}}},
 			"ksb": {
 				Tables: map[string]*vschemapb.Table{
 					"t1": {
-						Type: "sequence",
-					},
-				},
-			},
-		},
-	}
+						Type: "sequence"}}}}}
 	ksa := &Keyspace{
-		Name: "ksa",
-	}
+		Name: "ksa"}
 	ksb := &Keyspace{
-		Name: "ksb",
-	}
+		Name: "ksb"}
 	got := BuildVSchema(&good)
 	t1a := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksa,
-		Type:     "sequence",
-	}
+		Type:     "sequence"}
 	t1b := &Table{
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
-		Type:     "sequence",
-	}
+		Type:     "sequence"}
 	duala := &Table{
 		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksa,
-		Type:     TypeReference,
-	}
+		Type:     TypeReference}
 	dualb := &Table{
 		Name:     sqlparser.NewIdentifierCS("dual"),
 		Keyspace: ksb,
-		Type:     TypeReference,
-	}
+		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   nil,
-			"dual": duala,
-		},
+			"dual": duala},
 		uniqueVindexes: map[string]Vindex{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
 					"t1":   t1a,
-					"dual": duala,
-				},
+					"dual": duala},
 				Vindexes: map[string]Vindex{},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
 					"t1":   t1b,
-					"dual": dualb,
-				},
-				Vindexes: map[string]Vindex{},
-			},
-		},
-	}
+					"dual": dualb},
+				Vindexes: map[string]Vindex{}}}}
 	if !reflect.DeepEqual(got, want) {
 		gotjson, _ := json.Marshal(got)
 		wantjson, _ := json.Marshal(want)
@@ -1574,7 +1301,7 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -1712,7 +1439,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"t1":   nil,
 			"dual": duala,
 		},
@@ -1905,6 +1632,271 @@ func TestBuildVSchemaPrimaryCannotBeOwned(t *testing.T) {
 	}
 }
 
+func TestBuildVSchemaReferenceTableSourceMustBeQualified(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"invalid source \"src\" for reference table: ref; invalid table name: src, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)")
+}
+
+func TestBuildVSchemaReferenceTableSourceMustBeInDifferentKeyspace(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "binary_md5",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "sharded.src",
+					},
+					"src": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"sharded.src\" may not reference a table in the same keyspace as table: ref")
+}
+
+func TestBuildVSchemaReferenceTableSourceKeyspaceMustExist(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"unsharded.src\" references a non-existent keyspace \"unsharded\"")
+}
+
+func TestBuildVSchemaReferenceTableSourceTableMustExist(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"foo": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"unsharded.src\" references a table \"src\" that is not present in the VSchema of keyspace \"unsharded\"")
+}
+
+func TestBuildVSchemaReferenceTableSourceMayUseShardedKeyspace(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"sharded1": {
+				Sharded: true,
+				Vindexes: map[string]*vschemapb.Vindex{
+					"hash": {
+						Type: "binary_md5",
+					},
+				},
+				Tables: map[string]*vschemapb.Table{
+					"src": {
+						ColumnVindexes: []*vschemapb.ColumnVindex{
+							{
+								Column: "c1",
+								Name:   "hash",
+							},
+						},
+					},
+				},
+			},
+			"sharded2": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "sharded1.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.NoError(t, vschema.Keyspaces["sharded1"].Error)
+	require.NoError(t, vschema.Keyspaces["sharded2"].Error)
+}
+
+func TestBuildVSchemaReferenceTableSourceTableMustBeBasicOrReference(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded1": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src1": {
+						Type: "sequence",
+					},
+				},
+			},
+			"unsharded2": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src2": {
+						Type:   "reference",
+						Source: "unsharded1.src1",
+					},
+				},
+			},
+			"unsharded3": {
+				Tables: map[string]*vschemapb.Table{
+					"src3": {
+						Type: "reference",
+					},
+				},
+			},
+			"sharded1": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref1": {
+						Type:   "reference",
+						Source: "unsharded1.src1",
+					},
+				},
+			},
+			"sharded2": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref2": {
+						Type:   "reference",
+						Source: "unsharded3.src3",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded1"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded1"].Error,
+		"source \"unsharded1.src1\" may not reference a table of type \"sequence\": ref1")
+	require.NoError(t, vschema.Keyspaces["sharded2"].Error)
+}
+
+func TestBuildVSchemaSourceMayBeReferencedAtMostOncePerKeyspace(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref2": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+					"ref1": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["sharded"].Error)
+	require.EqualError(t, vschema.Keyspaces["sharded"].Error,
+		"source \"unsharded.src\" may not be referenced more than once per keyspace: ref1, ref2")
+}
+
+func TestBuildVSchemaMayNotChainReferences(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded1": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   TypeReference,
+						Source: "unsharded2.ref",
+					},
+				},
+			},
+			"unsharded2": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   TypeReference,
+						Source: "unsharded3.ref",
+					},
+				},
+			},
+			"unsharded3": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded1.ref",
+					},
+				},
+			},
+		},
+	}
+	vschema := BuildVSchema(&input)
+	require.Error(t, vschema.Keyspaces["unsharded1"].Error)
+	require.EqualError(t, vschema.Keyspaces["unsharded1"].Error,
+		"reference chaining is not allowed ref => unsharded2.ref => unsharded3.ref: ref")
+}
+
 func TestSequence(t *testing.T) {
 	good := vschemapb.SrvVSchema{
 		Keyspaces: map[string]*vschemapb.Keyspace{
@@ -2033,7 +2025,7 @@ func TestSequence(t *testing.T) {
 	}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
-		uniqueTables: map[string]*Table{
+		globalTables: map[string]*Table{
 			"seq":  seq,
 			"t1":   t1,
 			"t2":   t2,
@@ -2204,6 +2196,7 @@ func TestFindTable(t *testing.T) {
 				Tables: map[string]*vschemapb.Table{
 					"ta": {},
 					"t1": {},
+					"t2": {},
 				},
 			},
 			"ksb": {
@@ -2233,6 +2226,10 @@ func TestFindTable(t *testing.T) {
 							},
 						},
 					},
+					"t2": {
+						Type:   "reference",
+						Source: "ksa.t2",
+					},
 				},
 			},
 		},
@@ -2253,6 +2250,32 @@ func TestFindTable(t *testing.T) {
 	got, err := vschema.FindTable("", "ta")
 	require.NoError(t, err)
 	require.Equal(t, ta, got)
+
+	t2 := &Table{
+		Name: sqlparser.NewIdentifierCS("t2"),
+		Keyspace: &Keyspace{
+			Name: "ksa",
+		},
+		ReferencedBy: map[string]*Table{
+			"ksb": {
+				Type: "reference",
+				Name: sqlparser.NewIdentifierCS("t2"),
+				Keyspace: &Keyspace{
+					Sharded: true,
+					Name:    "ksb",
+				},
+				Source: &Source{
+					sqlparser.TableName{
+						Qualifier: sqlparser.NewIdentifierCS("ksa"),
+						Name:      sqlparser.NewIdentifierCS("t2"),
+					},
+				},
+			},
+		},
+	}
+	got, err = vschema.FindTable("", "t2")
+	require.NoError(t, err)
+	require.Equal(t, t2, got)
 
 	got, _ = vschema.FindTable("ksa", "ta")
 	require.Equal(t, ta, got)
@@ -2792,4 +2815,134 @@ func TestMultiColVindexPartialNotAllowed(t *testing.T) {
 	require.Len(t, table.ColumnVindexes, 1)
 	require.True(t, table.ColumnVindexes[0].IsUnique())
 	require.EqualValues(t, 1, table.ColumnVindexes[0].Cost())
+}
+
+func TestSourceTableHasReferencedBy(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"src": {},
+				},
+			},
+			"sharded1": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+			"sharded2": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"ref": {
+						Type:   "reference",
+						Source: "unsharded.src",
+					},
+				},
+			},
+		},
+	}
+	vs := BuildVSchema(&input)
+	ref1, err := vs.FindTable("sharded1", "ref")
+	require.NoError(t, err)
+	ref2, err := vs.FindTable("sharded2", "ref")
+	require.NoError(t, err)
+	src, err := vs.FindTable("unsharded", "src")
+	require.NoError(t, err)
+	require.Equal(t, src.ReferencedBy, map[string]*Table{
+		"sharded1": ref1,
+		"sharded2": ref2,
+	})
+}
+
+func TestReferenceTableAndSourceAreGloballyRoutable(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type:   "reference",
+						Source: "unsharded.t1",
+					},
+				},
+			},
+		},
+	}
+	vs := BuildVSchema(&input)
+	t1, err := vs.FindTable("unsharded", "t1")
+	require.NoError(t, err)
+	globalT1, err := vs.FindTable("", "t1")
+	require.NoError(t, err)
+	require.Equal(t, t1, globalT1)
+
+	input.Keyspaces["unsharded"].RequireExplicitRouting = true
+	vs = BuildVSchema(&input)
+	t1, err = vs.FindTable("sharded", "t1")
+	require.NoError(t, err)
+	globalT1, err = vs.FindTable("", "t1")
+	require.NoError(t, err)
+	require.Equal(t, t1, globalT1)
+}
+
+func TestOtherTablesMakeReferenceTableAndSourceAmbiguous(t *testing.T) {
+	input := vschemapb.SrvVSchema{
+		Keyspaces: map[string]*vschemapb.Keyspace{
+			"unsharded1": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+				},
+			},
+			"unsharded2": {
+				Sharded: false,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {},
+				},
+			},
+			"sharded": {
+				Sharded: true,
+				Tables: map[string]*vschemapb.Table{
+					"t1": {
+						Type:   "reference",
+						Source: "unsharded1.t1",
+					},
+				},
+			},
+		},
+	}
+	vs := BuildVSchema(&input)
+	_, err := vs.FindTable("", "t1")
+	require.Error(t, err)
+}
+
+func vindexNames(vindexes []*ColumnVindex) (result []string) {
+	for _, vindex := range vindexes {
+		result = append(result, vindex.Name)
+	}
+	return
+}
+
+func assertVindexMatches(t *testing.T, cv *ColumnVindex, v Vindex, name string, owned bool) {
+	utils.MustMatch(t, v, cv.Vindex)
+	assert.Equal(t, name, cv.Name)
+	assert.Equal(t, v.Cost(), cv.Cost(), "cost not correct")
+	assert.Equal(t, v.IsUnique(), cv.IsUnique(), "isUnique not correct")
+	assert.Equal(t, owned, cv.Owned, "owned is not correct")
+}
+
+func assertColumn(t *testing.T, col Column, expectedName string, expectedType querypb.Type) {
+	assert.True(t, col.Name.EqualString(expectedName), "column name does not match")
+	assert.Equal(t, expectedType, col.Type, "column type does not match")
+
 }

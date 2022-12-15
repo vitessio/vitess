@@ -44,15 +44,14 @@ As contributors gain experience and familiarity with the project, their profile 
 
 ## Maintainers
 
-[Maintainers](https://github.com/vitessio/vitess/blob/main/MAINTAINERS.md) are community members who have shown that they are committed to the continued development of the project through ongoing engagement with the community. Maintainer-ship allows contributors to more easily carry on with their project related activities by giving them direct access to the project’s resources. That is, they can make changes directly to project outputs, without having to submit changes via pull requests.
+[Maintainers](https://github.com/vitessio/vitess/blob/main/MAINTAINERS.md) are community members who have shown that they are committed to the continued development of the project through ongoing engagement with the community. Maintainer-ship allows contributors to more easily carry on with their project related activities by giving them direct access to the project’s resources.
 
 This does not mean that a maintainer is free to do what they want. In fact, maintainers have no more authority over the project than contributors. While maintainer-ship indicates a valued member of the community who has demonstrated a healthy respect for the project’s aims and objectives, their work continues to be reviewed by the community before acceptance in an official release.
 
-A maintainer is not allowed to merge their change without approval from another person. However, a small number of maintainers are allowed to sidestep this rule under justifiable circumstances. For example:
+A maintainer is not allowed to merge their change without approval from other maintainers. However, a small number of maintainers are allowed to sidestep this rule under justifiable circumstances. For example:
 
-* If a CI tool is broken, they may override the tool to still submit the change.
-* Minor typos or fixes for broken tests.
-* The change was approved through other means than the standard process.
+* If a CI tool is broken, they may override the tool to merge pull requests.
+* The change is a critical security fix and was approved through other means than the standard process.
 
 Anyone can become a maintainer; there are no special requirements, other than to have shown a willingness and ability to participate in the project as a team player. Typically, a potential maintainer will need to show that they have an understanding of the project, its objectives and its strategy. They will also have provided valuable contributions to the project over a period of time.
 

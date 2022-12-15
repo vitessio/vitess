@@ -508,7 +508,7 @@ func (c *Conn) ReadQueryResult(maxrows int, wantfields bool) (*sqltypes.Result, 
 	for {
 		data, err := c.readEphemeralPacket()
 		if err != nil {
-			return nil, false, 0, err
+			return nil, false, 0, NewSQLError(CRServerLost, SSUnknownSQLState, "%v", err)
 		}
 
 		if c.isEOFPacket(data) {
