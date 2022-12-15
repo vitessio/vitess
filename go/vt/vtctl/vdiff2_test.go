@@ -18,16 +18,12 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
-func TestVDiff2Unsharded(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
-	defer env.close()
-
-	fields := sqltypes.MakeTestFields(
+var (
+	fields = sqltypes.MakeTestFields(
 		"vdiff_state|last_error|table_name|uuid|table_state|table_rows|started_at|rows_compared|completed_at|has_mismatch|report",
 		"varbinary|varbinary|varbinary|varchar|varbinary|int64|timestamp|int64|timestamp|int64|json",
 	)
-	UUID := uuid.New().String()
-	options := &tabletmanagerdatapb.VDiffOptions{
+	options = &tabletmanagerdatapb.VDiffOptions{
 		PickerOptions: &tabletmanagerdatapb.VDiffPickerOptions{
 			TabletTypes: "primary",
 		},
@@ -38,6 +34,13 @@ func TestVDiff2Unsharded(t *testing.T) {
 			Format: "json",
 		},
 	}
+)
+
+func TestVDiff2Unsharded(t *testing.T) {
+	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	defer env.close()
+
+	UUID := uuid.New().String()
 	req := &tabletmanagerdatapb.VDiffRequest{
 		Keyspace:  "target",
 		Workflow:  env.workflow,
@@ -275,80 +278,114 @@ func TestVDiff2Unsharded(t *testing.T) {
 	}
 }
 
-/*
-func TestVDiffSharded(t *testing.T) {
-	// Also test that highest position ""MariaDB/5-456-892" will be used
-	// if lower positions are found.
+func TestVDiff2Sharded(t *testing.T) {
 	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
-		"-40-80": "MariaDB/5-456-890",
-		"40-80-": "MariaDB/5-456-891",
+		"-80": "MySQL56/0e45e704-7cb9-11ed-a1eb-0242ac120002:1-890",
+		"80-": "MySQL56/1497ddb0-7cb9-11ed-a1eb-0242ac120002:1-891",
 	})
 	defer env.close()
 
-	schm := &tabletmanagerdatapb.SchemaDefinition{
-		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
-			Name:              "t1",
-			Columns:           []string{"c1", "c2"},
-			PrimaryKeyColumns: []string{"c1"},
-			Fields:            sqltypes.MakeTestFields("c1|c2", "int64|int64"),
-		},
-			{
-				Name:              "_t1_gho",
-				Columns:           []string{"c1", "c2", "c3"},
-				PrimaryKeyColumns: []string{"c2"},
-				Fields:            sqltypes.MakeTestFields("c1|c2|c3", "int64|int64|int64"),
-			}},
+	UUID := uuid.New().String()
+	req := &tabletmanagerdatapb.VDiffRequest{
+		Keyspace:  "target",
+		Workflow:  env.workflow,
+		Action:    string(vdiff.ShowAction),
+		ActionArg: UUID,
+		VdiffUuid: UUID,
+		Options:   options,
 	}
-
-	env.tmc.schema = schm
-
-	query := "select c1, c2 from t1 order by c1 asc"
-	fields := sqltypes.MakeTestFields(
-		"c1|c2",
-		"int64|int64",
-	)
-
-	env.tablets[101].setResults(
-		query,
-		vdiffSourceGtid,
-		sqltypes.MakeTestStreamingResults(fields,
-			"1|3",
-			"2|4",
-		),
-	)
-	env.tablets[111].setResults(
-		query,
-		vdiffSourceGtid,
-		sqltypes.MakeTestStreamingResults(fields,
-			"3|4",
-		),
-	)
-	env.tablets[201].setResults(
-		query,
-		vdiffTargetPrimaryPosition,
-		sqltypes.MakeTestStreamingResults(fields,
-			"1|3",
-		),
-	)
-	env.tablets[211].setResults(
-		query,
-		vdiffTargetPrimaryPosition,
-		sqltypes.MakeTestStreamingResults(fields,
-			"2|4",
-			"3|4",
-		),
-	)
-
-	dr, err := env.wr.VDiff(context.Background(), "target", env.workflow, env.cell, env.cell, "replica", 30*time.Second, "", 100, "", false, false, 100)
-	require.NoError(t, err)
-	wantdr := &DiffReport{
-		ProcessedRows: 3,
-		MatchingRows:  3,
-		TableName:     "t1",
+	starttime := time.Now().UTC().Format(vdiff.TimestampFormat)
+	comptime := time.Now().Add(1 * time.Second).UTC().Format(vdiff.TimestampFormat)
+	verbosefmt := `{
+	"Workflow": "vdiffTest",
+	"Keyspace": "target",
+	"State": "completed",
+	"UUID": "%s",
+	"RowsCompared": %d,
+	"HasMismatch": %t,
+	"Shards": "-80,80-",
+	"StartedAt": "%s",
+	"CompletedAt": "%s",
+	"TableSummary": {
+		"t1": {
+			"TableName": "t1",
+			"State": "completed",
+			"RowsCompared": %d,
+			"MatchingRows": %d,
+			"MismatchedRows": %d,
+			"ExtraRowsSource": %d,
+			"ExtraRowsTarget": %d
+		}
+	},
+	"Reports": {
+		"t1": {
+			"-80": {
+				"TableName": "t1",
+				"ProcessedRows": %d,
+				"MatchingRows": %d,
+				"MismatchedRows": %d,
+				"ExtraRowsSource": %d,
+				"ExtraRowsTarget": %d
+			},
+			"80-": {
+				"TableName": "t1",
+				"ProcessedRows": %d,
+				"MatchingRows": %d,
+				"MismatchedRows": %d,
+				"ExtraRowsSource": %d,
+				"ExtraRowsTarget": %d
+			}
+		}
 	}
-	assert.Equal(t, wantdr, dr["t1"])
 }
-*/
+
+`
+
+	testcases := []struct {
+		id        string
+		shard1Res *sqltypes.Result
+		shard2Res *sqltypes.Result
+		report    string
+		dr        string
+	}{{
+		id: "1",
+		shard1Res: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|0|"+
+				`{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0}`),
+		shard2Res: sqltypes.MakeTestResult(fields,
+			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|0|"+
+				`{"TableName": "t1", "MatchingRows": 3, "ProcessedRows": 3, "MismatchedRows": 0, "ExtraRowsSource": 0, `+
+				`"ExtraRowsTarget": 0}`),
+		report: fmt.Sprintf(verbosefmt,
+			UUID, 6, false, starttime, comptime, 6, 6, 0, 0, 0, 3, 3, 0, 0, 0, 3, 3, 0, 0, 0,
+		),
+	}}
+
+	for _, tcase := range testcases {
+		t.Run(tcase.id, func(t *testing.T) {
+			shard1Res := &tabletmanagerdatapb.VDiffResponse{
+				Id:     1,
+				Output: sqltypes.ResultToProto3(tcase.shard1Res),
+			}
+			shard2Res := &tabletmanagerdatapb.VDiffResponse{
+				Id:     1,
+				Output: sqltypes.ResultToProto3(tcase.shard2Res),
+			}
+			env.tmc.setVDResults(env.tablets[200].tablet, req, shard1Res)
+			env.tmc.setVDResults(env.tablets[210].tablet, req, shard2Res)
+			ls := logutil.NewMemoryLogger()
+			env.wr = wrangler.NewTestWrangler(ls, env.topoServ, env.tmc)
+			output, err := env.wr.VDiff2(context.Background(), "target", env.workflow, vdiff.ShowAction, UUID, UUID, options)
+			require.NoError(t, err)
+			vds, err := displayVDiff2ShowSingleSummary(env.wr, options.ReportOptions.Format, "target", env.workflow, UUID, output, true /* verbose */)
+			require.NoError(t, err)
+			require.Equal(t, vdiff.CompletedState, vds)
+			logstr := ls.String()
+			assert.Equal(t, tcase.report, logstr)
+		})
+	}
+}
 
 func TestGetStructNames(t *testing.T) {
 	type s struct {

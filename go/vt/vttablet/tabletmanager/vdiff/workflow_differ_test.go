@@ -601,6 +601,3 @@ func TestBuildPlanFailure(t *testing.T) {
 		assert.EqualError(t, err, tcase.err, tcase.input)
 	}
 }
-
-func TestDiffTableAggregates(t *testing.T) {
-}
