@@ -127,8 +127,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 	}
-	vse.vstreamersActive = env.Exporter().NewGaugeFunc("VStreamersActive", "Count of vstreamers active", vse.getStreamersActive)
-
+	env.Exporter().NewGaugeFunc("VStreamerCount", "Current number of vstreamers", vse.getVStreamerCount)
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
 }
@@ -378,7 +377,9 @@ func (vse *Engine) setWatch() {
 	})
 }
 
-func (vse *Engine) getStreamersActive() int64 {
+func (vse *Engine) getVStreamerCount() int64 {
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
 	return int64(len(vse.streamers))
 }
 
