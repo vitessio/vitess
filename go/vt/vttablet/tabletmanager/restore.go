@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
@@ -191,6 +192,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 		Shard:               tablet.Shard,
 		StartTime:           logutil.ProtoToTime(request.BackupTime),
 		DryRun:              request.DryRun,
+		Stats:               backupstats.RestoreStats(),
 	}
 	if request.RestoreToPos != "" {
 		pos, err := mysql.DecodePosition(request.RestoreToPos)

@@ -34,12 +34,15 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -681,6 +684,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}(name, fe.Name)
 
 	bw := newBackupWriter(fe.Name, fi.Size(), wc)
+
 	br := newBackupReader(fe.Name, fi.Size(), source)
 	go br.ReportProgress(builtinBackupProgress, params.Logger)
 
@@ -702,15 +706,35 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	// Create the gzip compression pipe, if necessary.
 	var compressor io.WriteCloser
 	if backupStorageCompress {
+		// Track the duration of the underlying writer, so that we can
+		// calculate the duration of compression by itself.
+		timedWriter := ioutil.NewTimedWriter(writer)
+
 		if ExternalCompressorCmd != "" {
-			compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, writer, params.Logger)
+			compressor, err = newExternalCompressor(ctx, ExternalCompressorCmd, timedWriter, params.Logger)
 		} else {
-			compressor, err = newBuiltinCompressor(CompressionEngineName, writer, params.Logger)
+			compressor, err = newBuiltinCompressor(CompressionEngineName, timedWriter, params.Logger)
 		}
 		if err != nil {
 			return vterrors.Wrap(err, "can't create compressor")
 		}
-		writer = compressor
+
+		// The compression duration includes the time it takes to write
+		// to the underlying writer. By tracking both the durations of the
+		// underlying writer and the compressor+writer, we can calculate the
+		// duration of the compressor alone.
+		timedCompressor := ioutil.NewTimedWriter(compressor)
+
+		// Don't report anything until we're completely done working with this file.
+		// Otherwise we could over-report the amount of time we spent compressing,
+		defer func() {
+			delta := timedCompressor.Duration() - timedWriter.Duration()
+			if delta > 0 {
+				params.Stats.Scope(backupstats.Operation("compress")).TimedIncrement(delta)
+			}
+		}()
+
+		writer = timedCompressor
 	}
 
 	// Copy from the source file to writer (optional gzip,
@@ -934,6 +958,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
 		var deCompressionEngine = bm.CompressionEngine
+
+		// Track the duration of the underlying reader, so that we can
+		// calculate the duration of decompression by itself.
+		timedReader := ioutil.NewTimedReader(reader)
+
 		if deCompressionEngine == "" {
 			// for backward compatibility
 			deCompressionEngine = PgzipCompressor
@@ -941,21 +970,34 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		if ExternalDecompressorCmd != "" {
 			if deCompressionEngine == ExternalCompressor {
 				deCompressionEngine = ExternalDecompressorCmd
-				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, reader, params.Logger)
+				decompressor, err = newExternalDecompressor(ctx, deCompressionEngine, timedReader, params.Logger)
 			} else {
-				decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
+				decompressor, err = newBuiltinDecompressor(deCompressionEngine, timedReader, params.Logger)
 			}
 		} else {
 			if deCompressionEngine == ExternalCompressor {
 				return fmt.Errorf("%w value: %q", errUnsupportedDeCompressionEngine, ExternalCompressor)
 			}
-			decompressor, err = newBuiltinDecompressor(deCompressionEngine, reader, params.Logger)
+			decompressor, err = newBuiltinDecompressor(deCompressionEngine, timedReader, params.Logger)
 		}
 		if err != nil {
 			return vterrors.Wrap(err, "can't create decompressor")
 		}
 
+		// The decompression duration includes the time it takes to read
+		// from the underlying reader. By tracking both the durations of the
+		// underlying reader and the decompressor+reader, we can calculate the
+		// duration of the decompressor alone.
+		timedDecompressor := ioutil.NewTimedReader(decompressor)
+
+		// Wait until we're done with this file before reporting any change in stats.
+		// Otherwise we could over-report how much time we spend decompressing.
 		defer func() {
+			delta := timedDecompressor.Duration() - timedReader.Duration()
+			if delta > 0 {
+				params.Stats.Scope(stats.Operation("decompress")).TimedIncrement(delta)
+			}
+
 			if cerr := decompressor.Close(); cerr != nil {
 				params.Logger.Errorf("failed to close decompressor: %v", cerr)
 				if finalErr != nil {
@@ -966,7 +1008,8 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 				}
 			}
 		}()
-		reader = decompressor
+
+		reader = timedDecompressor
 	}
 
 	// Copy the data. Will also write to the hasher.

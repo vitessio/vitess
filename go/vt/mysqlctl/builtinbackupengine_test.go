@@ -100,7 +100,7 @@ func TestExecuteBackup(t *testing.T) {
 	oldDeadline := setBuiltinBackupMysqldDeadline(time.Second)
 	defer setBuiltinBackupMysqldDeadline(oldDeadline)
 
-	bh := filebackupstorage.FileBackupHandle{}
+	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
@@ -120,7 +120,7 @@ func TestExecuteBackup(t *testing.T) {
 		TopoServer:   ts,
 		Keyspace:     keyspace,
 		Shard:        shard,
-	}, &bh)
+	}, bh)
 
 	require.NoError(t, err)
 	assert.True(t, ok)
@@ -140,7 +140,7 @@ func TestExecuteBackup(t *testing.T) {
 		TopoServer:   ts,
 		Keyspace:     keyspace,
 		Shard:        shard,
-	}, &bh)
+	}, bh)
 
 	assert.Error(t, err)
 	assert.False(t, ok)
