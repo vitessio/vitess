@@ -41,13 +41,13 @@ import (
 const (
 	// vdiffStopPosition is the default stop position for the target vreplication.
 	// It can be overridden with the positons argument to newTestVDiffEnv.
-	vdiffStopPosition = "MariaDB/5-456-892"
+	vdiffStopPosition = "MySQL56/d834e6b8-7cbf-11ed-a1eb-0242ac120002:1-892"
 	// vdiffSourceGtid should be the position reported by the source side VStreamResults.
 	// It's expected to be higher the vdiffStopPosition.
-	vdiffSourceGtid = "MariaDB/5-456-893"
+	vdiffSourceGtid = "MySQL56/d834e6b8-7cbf-11ed-a1eb-0242ac120002:1-893"
 	// vdiffTargetPrimaryPosition is the primary position of the target after
 	// vreplication has been synchronized.
-	vdiffTargetPrimaryPosition = "MariaDB/6-456-892"
+	vdiffTargetPrimaryPosition = "MySQL56/e34d6fb6-7cbf-11ed-a1eb-0242ac120002:1-892"
 )
 
 type testVDiffEnv struct {

@@ -60,7 +60,6 @@ const (
 	vdiffDBName = "vttest"
 
 	// vdiffSourceGtid should be the position reported by the source side VStreamResults.
-	// It's expected to be higher the vdiffStopPosition.
 	vdiffSourceGtid            = "MySQL56/f69ed286-6909-11ed-8342-0a50724f3211:1-110"
 	vdiffTargetPrimaryPosition = vdiffSourceGtid
 )
@@ -154,7 +153,7 @@ func init() {
 		}
 		return nil, fmt.Errorf("tablet %d not found", tablet.Alias.Uid)
 	})
-	// TableDiffer does a default grpc dial just to be sure it can talk to the tablet
+	// TableDiffer does a default grpc dial just to be sure it can talk to the tablet.
 	tabletconn.RegisterDialer("grpc", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		vdiffenv.mu.Lock()
 		defer vdiffenv.mu.Unlock()
@@ -525,7 +524,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 
 	vdiffenv.tmc.schema = testSchema
 	// We need to add t1, which we use for a full VDiff in TestVDiff, to
-	// the schema engine with the PK val
+	// the schema engine with the PK val.
 	st := &schema.Table{
 		Name:      sqlparser.NewIdentifierCS(testSchema.TableDefinitions[tableDefMap["t1"]].Name),
 		Fields:    testSchema.TableDefinitions[tableDefMap["t1"]].Fields,
@@ -552,7 +551,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	)
 
 	// vdiff.stopTargets
-	vdiffenv.tmc.setVRResults(primary.tablet, fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where workflow = '%s' and db_name = '%s'", vdiffenv.workflow, vdiffDBName), &sqltypes.Result{})
+	vdiffenv.tmc.setVRResults(primary.tablet, fmt.Sprintf("update _vt.vreplication set state='Stopped', message='for vdiff' where workflow = '%s' and db_name = '%s'", vdiffenv.workflow, vdiffDBName), singleRowAffected)
 
 	// vdiff.syncTargets (continued)
 	vdiffenv.tmc.vrpos[tabletID] = vdiffSourceGtid
@@ -562,7 +561,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	vdiffenv.tmc.waitpos[tabletID] = vdiffTargetPrimaryPosition
 
 	// vdiff.restartTargets
-	vdiffenv.tmc.setVRResults(primary.tablet, fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name='%s' and workflow='%s'", vdiffDBName, vdiffenv.workflow), noResults)
+	vdiffenv.tmc.setVRResults(primary.tablet, fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name='%s' and workflow='%s'", vdiffDBName, vdiffenv.workflow), singleRowAffected)
 
 	vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state in ('started','pending')", noResults, nil)
 	vdiffenv.vde.Open(context.Background(), vdiffenv.vre)

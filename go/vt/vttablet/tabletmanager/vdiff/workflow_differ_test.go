@@ -250,6 +250,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
+		// multiple pk columns.
 		input: &binlogdatapb.Rule{
 			Match: "multipk",
 		},
@@ -336,7 +337,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// in_keyrange on cascaded AND expression
+		// in_keyrange on cascaded AND expression.
 		// This is currently not a valid construct, but will be supported in the future.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
@@ -357,7 +358,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
-		// in_keyrange parenthesized
+		// in_keyrange parenthesized.
 		// This is currently not a valid construct, but will be supported in the future.
 		input: &binlogdatapb.Rule{
 			Match:  "t1",
@@ -425,6 +426,7 @@ func TestBuildPlanSuccess(t *testing.T) {
 			}},
 		},
 	}, {
+		// date conversion on import.
 		input: &binlogdatapb.Rule{
 			Match: "datze",
 		},

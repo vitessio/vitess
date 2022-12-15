@@ -136,7 +136,7 @@ type Engine struct {
 
 	// This should only be set in Test Engines in order to short
 	// curcuit functions as needed in unit tests. It's automatically
-	// enabled in NewSimpleTestEngine. This SHOULD NOT be used in
+	// enabled in NewSimpleTestEngine. This should NOT be used in
 	// production.
 	shortcircuit bool
 }

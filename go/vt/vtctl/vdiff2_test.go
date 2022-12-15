@@ -107,7 +107,6 @@ func TestVDiff2Unsharded(t *testing.T) {
 		id     string
 		result *sqltypes.Result
 		report string
-		dr     string
 	}{{
 		id: "1",
 		result: sqltypes.MakeTestResult(fields,
@@ -346,7 +345,6 @@ func TestVDiff2Sharded(t *testing.T) {
 		shard1Res *sqltypes.Result
 		shard2Res *sqltypes.Result
 		report    string
-		dr        string
 	}{{
 		id: "1",
 		shard1Res: sqltypes.MakeTestResult(fields,
