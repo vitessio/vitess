@@ -67,6 +67,7 @@ var (
 	// Clusters 10, 25 are executed on docker, using the docker_test_cluster 10, 25 workflows.
 	// Hence, they are not listed in the list below.
 	clusterList = []string{
+		"vtctlbackup_sharded_clustertest_heavy",
 		"12",
 		"13",
 		"ers_prs_newfeatures_heavy",
@@ -129,9 +130,7 @@ var (
 		"vttablet_prscomplex",
 	}
 
-	clusterSelfHostedList = []string{
-		"vtctlbackup_sharded_clustertest_heavy",
-	}
+	clusterSelfHostedList       = []string{}
 	clusterDockerList           = []string{}
 	clustersRequiringXtraBackup = []string{
 		"xb_backup",
