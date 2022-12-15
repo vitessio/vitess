@@ -29,28 +29,28 @@ import (
 
 func TestGetLockTimeout(t *testing.T) {
 	tests := []struct {
-		desription                  string
+		description                 string
 		lockTimeoutValue            string
 		remoteOperationTimeoutValue string
 		expectedLockTimeout         time.Duration
 	}{
 		{
-			desription:                  "no flags specified",
+			description:                 "no flags specified",
 			lockTimeoutValue:            "",
 			remoteOperationTimeoutValue: "",
 			expectedLockTimeout:         45 * time.Second,
 		}, {
-			desription:                  "lock-timeout flag specified",
+			description:                 "lock-timeout flag specified",
 			lockTimeoutValue:            "33s",
 			remoteOperationTimeoutValue: "",
 			expectedLockTimeout:         33 * time.Second,
 		}, {
-			desription:                  "remote operation timeout flag specified",
+			description:                 "remote operation timeout flag specified",
 			lockTimeoutValue:            "",
 			remoteOperationTimeoutValue: "33s",
 			expectedLockTimeout:         33 * time.Second,
 		}, {
-			desription:                  "both flags specified",
+			description:                 "both flags specified",
 			lockTimeoutValue:            "33s",
 			remoteOperationTimeoutValue: "22s",
 			expectedLockTimeout:         33 * time.Second,
@@ -58,7 +58,7 @@ func TestGetLockTimeout(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		t.Run(tt.desription, func(t *testing.T) {
+		t.Run(tt.description, func(t *testing.T) {
 			var args []string
 			if tt.lockTimeoutValue != "" {
 				args = append(args, "--lock-timeout", tt.lockTimeoutValue)

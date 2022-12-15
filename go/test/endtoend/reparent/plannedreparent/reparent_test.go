@@ -384,7 +384,7 @@ func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 
 // TestCrossCellDurability tests 2 things -
 // 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
-// 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any external interference
+// 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any manual intervention
 func TestCrossCellDurability(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "cross_cell")

@@ -902,7 +902,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 
 	// Set primary and start replication.
 	if currentPrimary.Tablet.MysqlHostname == "" {
-		log.Warningf("primary tablet in the shard record doesn't have mysql hostname specified. probably because that tablet shutdown.")
+		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return nil, nil
 	}
 	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, int(currentPrimary.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {

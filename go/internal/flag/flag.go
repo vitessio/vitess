@@ -70,8 +70,8 @@ func Parse(fs *flag.FlagSet) {
 	flag.Parse()
 }
 
-// IsFlagPassed returns if the given flag has been provided by the user explicitly or not
-func IsFlagPassed(name string) bool {
+// IsFlagProvided returns if the given flag has been provided by the user explicitly or not
+func IsFlagProvided(name string) bool {
 	found := false
 	flag.Visit(func(f *flag.Flag) {
 		if f.Name == name {

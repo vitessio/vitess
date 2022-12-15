@@ -479,10 +479,10 @@ func (l *Lock) unlockShard(ctx context.Context, ts *Server, keyspace, shard stri
 // getLockTimeout is shim code used for backward compatibility with v15
 // This code can be removed in v17+ and LockTimeout can be used directly
 func getLockTimeout() time.Duration {
-	if _flag.IsFlagPassed("lock-timeout") {
+	if _flag.IsFlagProvided("lock-timeout") {
 		return LockTimeout
 	}
-	if _flag.IsFlagPassed("remote_operation_timeout") {
+	if _flag.IsFlagProvided("remote_operation_timeout") {
 		return RemoteOperationTimeout
 	}
 	return LockTimeout
