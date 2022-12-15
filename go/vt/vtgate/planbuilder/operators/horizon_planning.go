@@ -17,14 +17,13 @@ limitations under the License.
 package operators
 
 import (
-	"errors"
-
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
-var errNotHorizonPlanned = errors.New("query can't be fully operator planned")
+var errNotHorizonPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
 func planHorizons(in ops.Operator) (ops.Operator, error) {
 	return rewrite.TopDown(in, func(in ops.Operator) (ops.Operator, rewrite.TreeIdentity, rewrite.VisitRule, error) {

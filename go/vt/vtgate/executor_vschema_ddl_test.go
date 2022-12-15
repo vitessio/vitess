@@ -236,7 +236,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 		t.Errorf("want error %v got %v", wantErr, err)
 	}
 
-	//add one vindex that has never been used by the tables
+	// add one vindex that has never been used by the tables
 	stmt = "alter vschema create vindex test_vindex using hash"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 		t.Errorf("updated vschema did not contain test_vindex")
 	}
 
-	//drop an existing vindex that has never been used by the tables
+	// drop an existing vindex that has never been used by the tables
 	stmt = "alter vschema drop vindex TestExecutor.test_vindex"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 		t.Fatalf("test_vindex should not exist after droping it")
 	}
 
-	//drop an existing vindex that is used by at least one table
+	// drop an existing vindex that is used by at least one table
 	stmt = "alter vschema drop vindex TestExecutor.keyspace_id"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	wantErr = "can not drop vindex cause keyspace_id still defined on table ksid_table"
@@ -392,7 +392,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	defer func() {
 		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv() //nolint
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv() // nolint
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -432,7 +432,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	_, _ = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
 	_ = waitForColVindexes(t, ks, "test", []string{}, executor)
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	require.EqualError(t, err, "table 'test' does not exist in keyspace 'TestExecutor'")
+	require.EqualError(t, err, "VT05005: table 'test' does not exist in keyspace 'TestExecutor'")
 
 	// add it again using the same syntax
 	stmt = "alter vschema on test add vindex test_hash (id) using hash "
@@ -601,11 +601,11 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	stmt = "alter vschema on nonexistent drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
-	require.EqualError(t, err, "Unknown database 'InvalidKeyspace' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'InvalidKeyspace' in vschema")
 
 	stmt = "alter vschema on nowhere.nohow drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, "Unknown database 'nowhere' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'nowhere' in vschema")
 
 	stmt = "alter vschema on test drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
@@ -622,7 +622,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 }
 
 func TestPlanExecutorVindexDDLACL(t *testing.T) {
-	//t.Skip("not yet planned")
+	// t.Skip("not yet planned")
 	executor, _, _, _ := createExecutorEnv()
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})

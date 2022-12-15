@@ -1,5 +1,6 @@
 [
   {
+    "comment": "select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y",
     "query": "select user.id from user, user_extra, user_metadata, music, unsharded, unsharded_a, unsharded_b, unsharded_auto, music_extra where user.id = user_extra.user_id and user_metadata.user_id = user_extra.user_id and music.id = music_extra.music_id and unsharded.x = unsharded_a.y",
     "v3-plan": {
       "QueryType": "SELECT",

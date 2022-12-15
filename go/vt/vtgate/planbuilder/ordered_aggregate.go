@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -106,7 +105,7 @@ func (pb *primitiveBuilder) checkAggregates(sel *sqlparser.Select) error {
 	// order by clauses.
 	if !isRoute {
 		if hasAggregates {
-			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+			return vterrors.VT12001("cross-shard query with aggregates")
 		}
 		pb.plan = newDistinctV3(pb.plan)
 		return nil
@@ -270,7 +269,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 	opcode := origOpcode
 	if aggrFunc.GetArgs() != nil &&
 		len(aggrFunc.GetArgs()) != 1 {
-		return nil, 0, fmt.Errorf("unsupported: only one expression allowed inside aggregates: %s", sqlparser.String(expr))
+		return nil, 0, vterrors.VT12001(fmt.Sprintf("only one expression is allowed inside aggregates: %s", sqlparser.String(expr)))
 	}
 
 	handleDistinct, innerAliased, err := oa.needDistinctHandling(pb, expr, opcode)
@@ -279,7 +278,7 @@ func (oa *orderedAggregate) pushAggr(pb *primitiveBuilder, expr *sqlparser.Alias
 	}
 	if handleDistinct {
 		if oa.extraDistinct != nil {
-			return nil, 0, fmt.Errorf("unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr))
+			return nil, 0, vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation allowed in a SELECT: %s", sqlparser.String(expr)))
 		}
 		// Push the expression that's inside the aggregate.
 		// The column will eventually get added to the group by and order by clauses.
@@ -334,7 +333,7 @@ func (oa *orderedAggregate) needDistinctHandling(pb *primitiveBuilder, expr *sql
 	aggr, ok := expr.Expr.(sqlparser.AggrFunc)
 
 	if !ok {
-		return false, nil, fmt.Errorf("syntax error: %s", sqlparser.String(expr))
+		return false, nil, vterrors.VT03012(sqlparser.String(expr))
 	}
 
 	if !aggr.IsDistinct() {

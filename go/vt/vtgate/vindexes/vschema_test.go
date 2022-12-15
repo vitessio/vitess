@@ -636,7 +636,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 				Error: errors.New("invalid table name: t1, it must be of the qualified form <keyspace_name>.<table_name> (dots are not allowed in either name)"),
 			},
 			"badkeyspace": {
-				Error: errors.New("Unknown database 'ks3' in vschema"),
+				Error: errors.New("VT05003: unknown database 'ks3' in vschema"),
 			},
 			"notfound": {
 				Error: errors.New("table t2 not found"),
@@ -2293,7 +2293,7 @@ func TestFindTable(t *testing.T) {
 	require.EqualError(t, err, "table none not found")
 
 	_, err = vschema.FindTable("none", "aa")
-	require.EqualError(t, err, "Unknown database 'none' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'none' in vschema")
 }
 
 func TestFindTableOrVindex(t *testing.T) {

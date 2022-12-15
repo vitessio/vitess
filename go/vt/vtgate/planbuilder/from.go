@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -26,7 +25,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -43,7 +41,7 @@ func (pb *primitiveBuilder) processDMLTable(tableExprs sqlparser.TableExprs, res
 	}
 	rb, ok := pb.plan.(*route)
 	if !ok {
-		return nil, errors.New("unsupported: multi-shard or vindex write statement")
+		return nil, vterrors.VT12001("multi-shard or vindex write statement")
 	}
 	for _, sub := range rb.substitutions {
 		*sub.oldExpr = *sub.newExpr
@@ -81,7 +79,7 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 		if rb, ok := pb.plan.(*route); ok {
 			sel, ok := rb.Select.(*sqlparser.Select)
 			if !ok {
-				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rb.Select))
+				return vterrors.VT13002(sqlparser.String(rb.Select))
 			}
 
 			sel.From = sqlparser.TableExprs{&sqlparser.ParenTableExpr{Exprs: sel.From}}
@@ -90,9 +88,9 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 	case *sqlparser.JoinTableExpr:
 		return pb.processJoin(tableExpr, reservedVars, where)
 	case *sqlparser.JSONTableExpr:
-		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
+		return vterrors.VT12001("JSON_TABLE expressions")
 	}
-	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr)
+	return vterrors.VT13001(fmt.Sprintf("unexpected table expression type: %T", tableExpr))
 }
 
 // processAliasedTable produces a logicalPlan subtree for the given AliasedTableExpr.
@@ -104,14 +102,14 @@ func (pb *primitiveBuilder) processTableExpr(tableExpr sqlparser.TableExpr, rese
 // vindex columns.
 func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTableExpr, reservedVars *sqlparser.ReservedVars) error {
 	if tableExpr.Columns != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: column aliases in derived table")
+		return vterrors.VT12001("column aliases in derived table")
 	}
 	switch expr := tableExpr.Expr.(type) {
 	case sqlparser.TableName:
 		return pb.buildTablePrimitive(tableExpr, expr)
 	case *sqlparser.DerivedTable:
 		if expr.Lateral {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported: lateral derived tables")
+			return vterrors.VT12001("lateral derived tables")
 		}
 		spb := newPrimitiveBuilder(pb.vschema, pb.jt)
 		switch stmt := expr.Select.(type) {
@@ -124,7 +122,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 				return err
 			}
 		default:
-			return fmt.Errorf("BUG: unexpected SELECT type: %T", stmt)
+			return vterrors.VT13001(fmt.Sprintf("unexpected SELECT type: %T", stmt))
 		}
 
 		subroute, ok := spb.plan.(*route)
@@ -176,7 +174,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 			// Dups are not allowed in subqueries in this situation.
 			for _, colVindex := range vschemaTable.ColumnVindexes {
 				if colVindex.Columns[0].Equal(rc.alias) {
-					return fmt.Errorf("duplicate column aliases: %v", rc.alias)
+					return vterrors.VT12001(fmt.Sprintf("duplicate column aliases: %v", rc.alias))
 				}
 			}
 			vschemaTable.ColumnVindexes = append(vschemaTable.ColumnVindexes, &vindexes.ColumnVindex{
@@ -191,7 +189,7 @@ func (pb *primitiveBuilder) processAliasedTable(tableExpr *sqlparser.AliasedTabl
 		pb.plan, pb.st = rb, st
 		return nil
 	}
-	return fmt.Errorf("BUG: unexpected table expression type: %T", tableExpr.Expr)
+	return vterrors.VT13001(fmt.Sprintf("unexpected table expression type: %T", tableExpr.Expr))
 }
 
 // buildTablePrimitive builds a primitive based on the table name.
@@ -225,7 +223,7 @@ func (pb *primitiveBuilder) buildTablePrimitive(tableExpr *sqlparser.AliasedTabl
 	if vindex != nil {
 		single, ok := vindex.(vindexes.SingleColumn)
 		if !ok {
-			return fmt.Errorf("multi-column vindexes not supported")
+			return vterrors.VT12001("multi-column vindexes")
 		}
 		pb.plan, pb.st = newVindexFunc(alias, single)
 		return nil
@@ -307,7 +305,7 @@ func (pb *primitiveBuilder) processJoin(ajoin *sqlparser.JoinTableExpr, reserved
 	case sqlparser.RightJoinType:
 		convertToLeftJoin(ajoin)
 	default:
-		return fmt.Errorf("unsupported: %s", ajoin.Join.ToString())
+		return vterrors.VT12001(ajoin.Join.ToString())
 	}
 	if err := pb.processTableExpr(ajoin.LeftExpr, reservedVars, where); err != nil {
 		return err
@@ -385,12 +383,12 @@ func (pb *primitiveBuilder) join(rpb *primitiveBuilder, ajoin *sqlparser.JoinTab
 	// Merge the AST.
 	sel, ok := lRoute.Select.(*sqlparser.Select)
 	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(lRoute.Select))
+		return vterrors.VT13002(sqlparser.String(lRoute.Select))
 	}
 	if ajoin == nil {
 		rhsSel, ok := rRoute.Select.(*sqlparser.Select)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query: %s", sqlparser.String(rRoute.Select))
+			return vterrors.VT13002(sqlparser.String(rRoute.Select))
 		}
 		sel.From = append(sel.From, rhsSel.From...)
 	} else {

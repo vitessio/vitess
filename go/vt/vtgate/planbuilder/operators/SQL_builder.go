@@ -17,13 +17,13 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/log"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -265,7 +265,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	case *sqlparser.Select:
 		toNode, ok := to.(*sqlparser.Select)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+			return vterrors.VT13001("AST did not match")
 		}
 		toNode.Distinct = node.Distinct
 		toNode.GroupBy = node.GroupBy
@@ -279,7 +279,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+			return vterrors.VT13001("AST did not match")
 		}
 		err = stripDownQuery(node.Left, toNode.Left)
 		if err != nil {
@@ -291,7 +291,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		}
 		toNode.OrderBy = node.OrderBy
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
+		return vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from))
 	}
 	return nil
 }
@@ -378,7 +378,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		return nil
 
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to turn %T into SQL", op)
+		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
 	return nil
 }

@@ -198,7 +198,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set foo = 1",
-		err: "Unknown system variable '@@foo = 1'",
+		err: "VT05006: unknown system variable '@@foo = 1'",
 	}, {
 		in:  "set names utf8",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -291,7 +291,7 @@ func TestExecutorSet(t *testing.T) {
 		out: &vtgatepb.Session{Autocommit: true, EnableSystemSettings: false},
 	}, {
 		in:  "set @@socket = '/tmp/change.sock'",
-		err: "variable 'socket' is a read only variable",
+		err: "VT03010: variable 'socket' is a read only variable",
 	}, {
 		in:  "set @@query_timeout = 50",
 		out: &vtgatepb.Session{Autocommit: true, QueryTimeout: 50},
@@ -331,7 +331,7 @@ func TestExecutorSetOp(t *testing.T) {
 		disallowResConn bool
 		result          *sqltypes.Result
 	}{{
-		in: "set big_tables = 1", //ignore
+		in: "set big_tables = 1", // ignore
 	}, {
 		in:      "set sql_mode = 'STRICT_ALL_TABLES,NO_AUTO_UPDATES'",
 		sysVars: map[string]string{"sql_mode": "'STRICT_ALL_TABLES,NO_AUTO_UPDATES'"},

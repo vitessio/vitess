@@ -36,7 +36,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -75,7 +74,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 
 	err = rewrite.Visit(op, func(op ops.Operator) error {
 		if _, isPhys := op.(ops.PhysicalOperator); !isPhys {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
+			return vterrors.VT13001(fmt.Sprintf("failed to transform %T to a physical operator", op))
 		}
 		return nil
 	})
@@ -167,7 +166,7 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 		}
 		if dest != nil {
 			if typ != topodatapb.TabletType_PRIMARY {
-				return nil, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %v statement with a replica target", dmlType)
+				return nil, 0, nil, vterrors.VT09002(dmlType)
 			}
 			// we are dealing with an explicitly targeted UPDATE
 			opCode = engine.ByDestination
@@ -341,7 +340,7 @@ func mergeRoutes(ctx *plancontext.PlanningContext, qg *QueryGraph, physicalOps [
 			physicalOps = append(physicalOps, bestTree)
 		} else {
 			if crossJoinsOK {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not happen")
+				return nil, vterrors.VT13001("should not happen: we should be able to merge cross joins")
 			}
 			// we will only fail to find a join plan when there are only cross joins left
 			// when that happens, we switch over to allow cross joins as well.
@@ -436,11 +435,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !inner {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: LEFT JOIN not supported for derived tables")
+			return nil, vterrors.VT12001("LEFT JOIN with derived tables")
 		}
 
 		if requiresSwitchingSides(ctx, lhs) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: JOIN not supported between derived tables")
+			return nil, vterrors.VT12001("JOIN between derived tables")
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
@@ -555,7 +554,7 @@ func tryMerge(
 		}
 
 		if !sameKeyspace {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+			return nil, vterrors.VT12001("cross-shard correlated subquery")
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)

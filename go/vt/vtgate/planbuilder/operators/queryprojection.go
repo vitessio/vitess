@@ -18,6 +18,7 @@ package operators
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
@@ -26,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -125,7 +125,7 @@ func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	case *sqlparser.AliasedExpr:
 		return sel.Expr, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T does not have expr", s.Col)
+		return nil, vterrors.VT13001(fmt.Sprintf("%T does not have an expression", s.Col))
 	}
 }
 
@@ -136,9 +136,9 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	case *sqlparser.AliasedExpr:
 		return expr, nil
 	case *sqlparser.StarExpr:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '*' expression in cross-shard query")
+		return nil, vterrors.VT12001("'*' expression in cross-shard query")
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not an aliased expression: %T", expr)
+		return nil, vterrors.VT12001(fmt.Sprintf("not an aliased expression: %T", expr))
 	}
 }
 
@@ -252,7 +252,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			}
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in select list", selExp)
+			return vterrors.VT13001(fmt.Sprintf("%T in select list", selExp))
 		}
 	}
 	return nil
@@ -312,7 +312,7 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
 			if aggrFunc.GetArgs() != nil &&
 				len(aggrFunc.GetArgs()) != 1 {
-				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(node))
+				return false, vterrors.VT03001(sqlparser.String(node))
 			}
 			return true, nil
 		}
@@ -469,12 +469,12 @@ orderBy:
 		}
 		fnc, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
 		if !isAggregate {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
 		opcode, found := engine.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", fnc.AggrName())
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", fnc.AggrName()))
 		}
 
 		if opcode == engine.AggregateCount {
@@ -585,12 +585,12 @@ func (qp *QueryProjection) GetColumnCount() int {
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
-			return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
+			return false, vterrors.VT03005(sqlparser.String(expr))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)
 		arg, isArg := node.(sqlparser.Argument)
 		if isSubQ || (isArg && strings.HasPrefix(string(arg), "__sq")) {
-			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
+			return false, vterrors.VT12001("subqueries in GROUP BY")
 		}
 		return true, nil
 	}, expr)

@@ -324,7 +324,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		if th == nil {
 			// do not override error from last attempt.
 			if err == nil {
-				err = vterrors.New(vtrpcpb.Code_UNAVAILABLE, "no available connection")
+				err = vterrors.VT14002()
 			}
 			break
 		}
@@ -332,7 +332,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 		tabletLastUsed = th.Tablet
 		// execute
 		if th.Conn == nil {
-			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no connection for tablet %v", tabletLastUsed)
+			err = vterrors.VT14003(tabletLastUsed)
 			invalidTablets[topoproto.TabletAliasString(tabletLastUsed.Alias)] = true
 			continue
 		}

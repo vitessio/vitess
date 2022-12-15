@@ -348,7 +348,7 @@ func TestSysvarSocket(t *testing.T) {
 	require.True(t, ok, "not a mysql error: %T", err)
 	assert.Equal(t, mysql.ERIncorrectGlobalLocalVar, sqlErr.Number())
 	assert.Equal(t, mysql.SSUnknownSQLState, sqlErr.SQLState())
-	assert.Equal(t, "variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
+	assert.Equal(t, "VT03010: variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
 }
 
 func TestReservedConnInStreaming(t *testing.T) {

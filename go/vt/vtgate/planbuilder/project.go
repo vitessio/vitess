@@ -17,14 +17,14 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
+	"fmt"
 	"strings"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 )
 
 // planProjection pushes the select expression to the specified
@@ -47,7 +47,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		} else {
 			// Pushing of non-trivial expressions not allowed for RHS of left joins.
 			if _, ok := expr.Expr.(*sqlparser.ColName); !ok && node.ejoin.Opcode == engine.LeftJoin {
-				return nil, nil, 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard left join and column expressions")
+				return nil, nil, 0, vterrors.VT12001("cross-shard LEFT JOIN and column expressions")
 			}
 
 			newRight, col, colNumber, err := planProjection(pb, node.Right, expr, origin)
@@ -85,7 +85,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 
 		// Ensure that there are no aggregates in the expression.
 		if sqlparser.ContainsAggregation(expr.Expr) {
-			return nil, nil, 0, errors.New("unsupported: in scatter query: complex aggregate expression")
+			return nil, nil, 0, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
 		newInput, innerRC, _, err := planProjection(pb, node.input, expr, origin)
@@ -136,7 +136,7 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 	case *simpleProjection:
 		col, ok := expr.Expr.(*sqlparser.ColName)
 		if !ok {
-			return nil, nil, 0, errors.New("unsupported: expression on results of a cross-shard subquery")
+			return nil, nil, 0, vterrors.VT12001("expression on results of a cross-shard subquery")
 		}
 
 		// colNumber should already be set for subquery columns.
@@ -152,11 +152,11 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		// Catch the case where no where clause was specified. If so, the opcode
 		// won't be set.
 		if node.eVindexFunc.Opcode == engine.VindexNone {
-			return nil, nil, 0, errors.New("unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
+			return nil, nil, 0, vterrors.VT12001(operators.VindexUnsupported + " (where clause missing)")
 		}
 		col, ok := expr.Expr.(*sqlparser.ColName)
 		if !ok {
-			return nil, nil, 0, errors.New("unsupported: expression on results of a vindex function")
+			return nil, nil, 0, vterrors.VT12001("expression on results of a vindex function")
 		}
 		rc := newResultColumn(expr, node)
 		node.resultColumns = append(node.resultColumns, rc)
@@ -168,5 +168,5 @@ func planProjection(pb *primitiveBuilder, in logicalPlan, expr *sqlparser.Aliase
 		return node, rc, len(node.resultColumns) - 1, nil
 
 	}
-	return nil, nil, 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] unreachable %T.projection", in)
+	return nil, nil, 0, vterrors.VT13001(fmt.Sprintf("unreachable %T.projection", in))
 }

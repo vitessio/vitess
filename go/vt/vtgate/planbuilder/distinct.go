@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
@@ -67,7 +66,7 @@ func (d *distinct) Primitive() engine.Primitive {
 // Rewrite implements the logicalPlan interface
 func (d *distinct) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "distinct: wrong number of inputs")
+		return vterrors.VT13001("distinct: wrong number of inputs")
 	}
 	d.input = inputs[0]
 	return nil

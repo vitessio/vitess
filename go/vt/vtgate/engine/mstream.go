@@ -22,7 +22,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
@@ -62,7 +61,7 @@ func (m *MStream) GetTableName() string {
 
 // TryExecute implements the Primitive interface
 func (m *MStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for Stream")
+	return nil, vterrors.VT13001("TryExecute is not supported for MStream")
 }
 
 // TryStreamExecute implements the Primitive interface
@@ -76,7 +75,7 @@ func (m *MStream) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVar
 
 // GetFields implements the Primitive interface
 func (m *MStream) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for Stream")
+	return nil, vterrors.VT13001("GetFields is not supported for MStream")
 }
 
 func (m *MStream) description() PrimitiveDescription {

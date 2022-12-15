@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -76,7 +75,7 @@ func (s *SessionPrimitive) TryStreamExecute(ctx context.Context, vcursor VCursor
 
 // GetFields implements the Primitive interface
 func (s *SessionPrimitive) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "not supported for this primitive")
+	return nil, vterrors.VT13001("GetFields is not supported for SessionPrimitive")
 }
 
 // description implements the Primitive interface
