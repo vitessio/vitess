@@ -180,9 +180,13 @@ jobs:
     # Running a test with vtctl at version n-1 and vttablet at version n
     - name: Run reparent tests (vtctl=N-1, vttablet=N)
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      run: |
-        rm -rf /tmp/vtdataroot
-        mkdir -p /tmp/vtdataroot
-
-        source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_reparent
+      uses: nick-fields/retry@v2
+      with:
+        timeout_minutes: 30
+        max_attempts: 3
+        retry_on: error
+        command: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
+          source build.env
+          eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_reparent
