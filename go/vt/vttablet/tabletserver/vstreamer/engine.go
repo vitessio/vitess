@@ -97,7 +97,6 @@ type Engine struct {
 	rowStreamerNumPackets     *stats.Counter
 	rowStreamerWaits          *servenv.TimingsWrapper
 	errorCounts               *stats.CountersWithSingleLabel
-	vstreamersActive          *stats.GaugeFunc
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
 	vstreamerFlushedBinlogs   *stats.Counter
@@ -139,7 +138,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 		vstreamerFlushedBinlogs:   env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
 	}
-	vse.vstreamersActive = env.Exporter().NewGaugeFunc("VStreamersActive", "Current number of active vstreamers", vse.getStreamersActive)
+	env.Exporter().NewGaugeFunc("VStreamerCount", "Current number of vstreamers", vse.getVStreamerCount)
 	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
@@ -385,7 +384,9 @@ func (vse *Engine) setWatch() {
 	})
 }
 
-func (vse *Engine) getStreamersActive() int64 {
+func (vse *Engine) getVStreamerCount() int64 {
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
 	return int64(len(vse.streamers))
 }
 
