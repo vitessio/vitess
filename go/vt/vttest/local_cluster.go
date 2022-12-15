@@ -145,7 +145,7 @@ type Config struct {
 
 	ExternalTopoGlobalRoot string
 
-	TopoTabletRefreshInterval time.Duration
+	VtgateTabletRefreshInterval time.Duration
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single

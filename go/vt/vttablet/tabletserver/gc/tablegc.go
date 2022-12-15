@@ -67,7 +67,7 @@ func registerGCFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&purgeReentranceInterval, "gc_purge_check_interval", purgeReentranceInterval, "Interval between purge discovery checks")
 	// gcLifecycle is the sequence of steps the table goes through in the process of getting dropped
 	fs.StringVar(&gcLifecycle, "table_gc_lifecycle", gcLifecycle, "States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included)")
-	fs.DurationVar(&leaderCheckInterval, "leader_check_interval", leaderCheckInterval, "Interval between transition to primary is check.")
+	fs.DurationVar(&leaderCheckInterval, "tablegc_leader_check_interval", leaderCheckInterval, "Interval at which TableGC checks if it has transitioned to `Primary`")
 }
 
 var (

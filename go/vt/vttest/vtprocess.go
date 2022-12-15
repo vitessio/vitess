@@ -223,7 +223,7 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
 		"--planner-version", args.PlannerVersion,
-		fmt.Sprintf("--leader_check_interval=%s", "3s"), // In production this value is 5sec.
+		fmt.Sprintf("--tablegc_leader_check_interval=%s", "3s"), // In production this value is 5sec.
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
@@ -232,10 +232,10 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	// If topo tablet refresh interval is not defined then we will give it default value of 10s. Please note
 	// that in production this value is 1 minute, but we are keeping it low to make vttestserver perform faster
 	// less value might result in high pressure on topo but for testing purpose that should not be a concern.
-	if args.TopoTabletRefreshInterval <= 0 {
+	if args.VtgateTabletRefreshInterval <= 0 {
 		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", 10*time.Second))
 	} else {
-		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", args.TopoTabletRefreshInterval))
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", args.VtgateTabletRefreshInterval))
 	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
