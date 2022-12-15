@@ -52,8 +52,8 @@ import (
 
 var (
 	mysqlServerPort                   = -1
-	mysqlServerBindAddress            = ""
-	mysqlServerSocketPath             = ""
+	mysqlServerBindAddress            string
+	mysqlServerSocketPath             string
 	mysqlTCPVersion                   = "tcp"
 	mysqlAuthServerImpl               = "static"
 	mysqlAllowClearTextWithoutTLS     bool

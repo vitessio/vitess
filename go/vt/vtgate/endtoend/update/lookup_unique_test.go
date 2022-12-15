@@ -24,15 +24,14 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	_flag "vitess.io/vitess/go/internal/flag"
-
+	"vitess.io/vitess/go/internal/flag"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/vttest"
 
-	"vitess.io/vitess/go/mysql"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
-	"vitess.io/vitess/go/vt/vttest"
 )
 
 var (
@@ -132,7 +131,7 @@ create table t2_id_idx(
 )
 
 func TestMain(m *testing.M) {
-	_flag.ParseFlagsForTest()
+	flag.ParseFlagsForTest()
 
 	exitCode := func() int {
 		var cfg vttest.Config
