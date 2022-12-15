@@ -75,8 +75,8 @@ func init() {
 	transactionMode = "MULTI"
 	Init(context.Background(), hcVTGateTest, newSandboxForCells([]string{"aa"}), "aa", nil, querypb.ExecuteOptions_Gen4)
 
-	*mysqlServerPort = 0
-	*mysqlAuthServerImpl = "none"
+	mysqlServerPort = 0
+	mysqlAuthServerImpl = "none"
 	initMySQLProtocol()
 }
 
