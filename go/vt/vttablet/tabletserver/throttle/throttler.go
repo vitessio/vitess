@@ -559,7 +559,7 @@ func (throttler *Throttler) Operate(ctx context.Context) {
 		defer log.Infof("Throttler: Operate terminated, tickers stopped")
 		for _, t := range tickers {
 			defer t.Stop()
-			// since we just started the tickers now, speed up the ticks by forcng an immediate tick
+			// since we just started the tickers now, speed up the ticks by forcing an immediate tick
 			go t.TickNow()
 		}
 
