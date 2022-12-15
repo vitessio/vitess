@@ -5337,7 +5337,7 @@
   {
     "comment": "insert using select with sharding column is not an autoinc and not present in the insert column query",
     "query": "insert into user_extra(pattern) SELECT 1",
-    "plan": "VT09003: INSERT query does not have sharding column 'user_id' in the column list"
+    "plan": "VT09003: INSERT query does not have primary vindex column 'user_id' in the column list"
   },
   {
     "comment": "sharded same keyspace",
