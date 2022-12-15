@@ -867,12 +867,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, vterrors.NewErrorf(
-			vtrpcpb.Code_NOT_FOUND,
-			vterrors.BadDb,
-			"Unknown database '%s' in vschema",
-			keyspace,
-		)
+		return nil, vterrors.VT05003(keyspace)
 	}
 	table := ks.Tables[tablename]
 	if table == nil {
@@ -1027,12 +1022,7 @@ func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, vterrors.NewErrorf(
-			vtrpcpb.Code_NOT_FOUND,
-			vterrors.BadDb,
-			"Unknown database '%s' in vschema",
-			keyspace,
-		)
+		return nil, vterrors.VT05003(keyspace)
 	}
 	return ks.Vindexes[name], nil
 }

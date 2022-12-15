@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"sort"
 	"strconv"
 	"strings"
@@ -35,7 +36,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -86,7 +86,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformHorizon(ctx, op, isRoot)
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown type encountered: %T (transformToLogicalPlan)", op)
+	return nil, vterrors.VT13001(fmt.Sprintf("unknown type encountered: %T (transformToLogicalPlan)", op))
 }
 
 func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, isRoot bool) (logicalPlan, error) {
@@ -392,7 +392,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 		result = src
 	} else {
 		if len(op.Ordering) > 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't do ORDER BY on top of UNION")
+			return nil, vterrors.VT12001("ORDER BY on top of UNION")
 		}
 		result = &concatenateGen4{sources: sources}
 	}
@@ -411,7 +411,7 @@ func transformUnionPlan(ctx *plancontext.PlanningContext, op *operators.Union, i
 func getWeightStringForSelectExpr(selectExpr sqlparser.SelectExpr) (*sqlparser.AliasedExpr, error) {
 	expr, isAliased := selectExpr.(*sqlparser.AliasedExpr)
 	if !isAliased {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot convert select expression to an aliased expression")
+		return nil, vterrors.VT12001("get weight string expression for non-aliased expression")
 	}
 	return &sqlparser.AliasedExpr{Expr: weightStringFor(expr.Expr)}, nil
 }
@@ -469,7 +469,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		expr := node.OutputColumns()[offset]
 		aliasedExpr, isAliased := expr.(*sqlparser.AliasedExpr)
 		if !isAliased {
-			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot convert select expression to an aliased expression")
+			return 0, vterrors.VT13001("cannot convert JOIN output columns to an aliased-expression")
 		}
 		deps := ctx.SemTable.RecursiveDeps(aliasedExpr.Expr)
 		switch {
@@ -480,11 +480,11 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 			offset, err = pushWeightStringForDistinct(ctx, node.Right, offset)
 			node.Cols = append(node.Cols, offset+1)
 		default:
-			return 0, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "cannot push distinct weight string to both sides of the join")
+			return 0, vterrors.VT12001("push DISTINCT WEIGHT_STRING to both sides of the join")
 		}
 		newOffset = len(node.Cols) - 1
 	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "bug: not supported pushWeightStringForDistinct on %T", plan)
+		return 0, vterrors.VT13001(fmt.Sprintf("pushWeightStringForDistinct on %T", plan))
 	}
 	return
 }

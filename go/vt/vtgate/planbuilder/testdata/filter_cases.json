@@ -2916,7 +2916,8 @@
   {
     "comment": "unresolved symbol in inner subquery.",
     "query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)",
-    "plan": "symbol foo.id not found"
+    "v3-plan": "VT03019: symbol foo.id not found",
+    "gen4-plan": "symbol foo.id not found"
   },
   {
     "comment": "outer and inner subquery route by same outermost column value",
@@ -4342,7 +4343,7 @@
   {
     "comment": "correlated subquery with different keyspace tables involved",
     "query": "select id from user where id in (select col from unsharded where col = user.id)",
-    "plan": "unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "correlated subquery with same keyspace",
@@ -6585,7 +6586,7 @@
   {
     "comment": "Like clause evaluated on the vtgate",
     "query": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select a.textcol1 from user a join user b where a.textcol1 = b.textcol2 group by a.textcol1 having repeat(a.textcol1,sum(a.id)) like \"And%res\"",

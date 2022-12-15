@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -24,7 +25,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -45,7 +45,7 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
+	return nil, vterrors.VT13001(fmt.Sprintf("unexpected explain type: %T", stmt))
 }
 
 func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) (*planResult, error) {
@@ -64,7 +64,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 		return nil, err
 	}
 	if keyspace == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Cannot find keyspace for: %s", ks)
+		return nil, vterrors.VT14004(ks)
 	}
 
 	return newPlanResult(&engine.Send{
@@ -126,7 +126,7 @@ func buildVTExplainTypePlan(explain *sqlparser.ExplainStmt, reservedVars *sqlpar
 		if directives.IsSet(sqlparser.DirectiveVtexplainRunDMLQueries) {
 			break
 		}
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "explain format = vtexplain will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ %s */ format = vtexplain delete from t1`", sqlparser.DirectiveVtexplainRunDMLQueries, sqlparser.DirectiveVtexplainRunDMLQueries)
+		return nil, vterrors.VT09008()
 	}
 
 	return &planResult{primitive: &engine.VTExplain{Input: input.primitive}, tables: input.tables}, nil

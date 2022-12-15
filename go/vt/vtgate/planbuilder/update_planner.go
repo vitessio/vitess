@@ -17,6 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -25,8 +27,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // buildUpdatePlan returns a stmtPlanner that builds the instructions for an UPDATE statement.
@@ -34,7 +34,7 @@ func buildUpdatePlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		upd := stmt.(*sqlparser.Update)
 		if upd.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+			return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 		}
 		dml, tables, ksidVindex, err := buildDMLPlan(vschema, "update", stmt, reservedVars, upd.TableExprs, upd.Where, upd.OrderBy, upd.Limit, upd.Comments, upd.Exprs)
 		if err != nil {
@@ -80,7 +80,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 					continue
 				}
 				if found {
-					return nil, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "column has duplicate set values: '%v'", assignment.Name.Name)
+					return nil, "", vterrors.VT03015(assignment.Name.Name)
 				}
 				found = true
 				pv, err := extractValueFromUpdate(assignment)
@@ -102,13 +102,13 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 		}
 
 		if update.Limit != nil && len(update.OrderBy) == 0 {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Need to provide order by clause when using limit. Invalid update on vindex: %v", vindex.Name)
+			return nil, "", vterrors.VT12001(fmt.Sprintf("need to provide ORDER BY clause when using LIMIT; invalid update on vindex: %v", vindex.Name))
 		}
 		if i == 0 {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can't update primary vindex columns. Invalid update on vindex: %v", vindex.Name)
+			return nil, "", vterrors.VT12001(fmt.Sprintf("you cannot update primary vindex columns; invalid update on vindex: %v", vindex.Name))
 		}
 		if _, ok := vindex.Vindex.(vindexes.Lookup); !ok {
-			return nil, "", vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: You can only update lookup vindexes. Invalid update on vindex: %v", vindex.Name)
+			return nil, "", vterrors.VT12001(fmt.Sprintf("you can only update lookup vindexes; invalid update on vindex: %v", vindex.Name))
 		}
 		changedVindexes[vindex.Name] = &engine.VindexValues{
 			PvMap:  vindexValueMap,
@@ -122,7 +122,7 @@ func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table,
 	// generate rest of the owned vindex query.
 	aTblExpr, ok := update.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
-		return nil, "", vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: update on complex table expression")
+		return nil, "", vterrors.VT12001("UPDATE on complex table expression")
 	}
 	tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: table.Name}, As: aTblExpr.As}
 	buf.Myprintf(" from %v%v%v%v for update", tblExpr, update.Where, update.OrderBy, update.Limit)
@@ -155,7 +155,7 @@ func initialQuery(ksidCols []sqlparser.IdentifierCI, table *vindexes.Table) (*sq
 func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) {
 	pv, err := evalengine.Translate(upd.Expr, semantics.EmptySemTable())
 	if err != nil || sqlparser.IsSimpleTuple(upd.Expr) {
-		err := vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: Only values are supported. Invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr))
+		err := vterrors.VT12001(fmt.Sprintf("only values are supported: invalid update on column: `%s` with expr: [%s]", upd.Name.Name.String(), sqlparser.String(upd.Expr)))
 		return nil, err
 	}
 	return pv, nil

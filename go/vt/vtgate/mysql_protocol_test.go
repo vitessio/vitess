@@ -117,7 +117,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 	// No such keyspace this will fail
 	_, err = c.ExecuteFetch("use InvalidKeyspace", 0, false)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unknown database 'InvalidKeyspace' (errno 1049) (sqlstate 42000)")
+	assert.Contains(t, err.Error(), "VT05003: unknown database 'InvalidKeyspace' in vschema (errno 1049) (sqlstate 42000)")
 
 	// That doesn't reset the vitess_target
 	qr, err = c.ExecuteFetch("show vitess_target", 1, false)
@@ -135,7 +135,7 @@ func TestMySQLProtocolExecuteUseStatement(t *testing.T) {
 
 func TestMysqlProtocolInvalidDB(t *testing.T) {
 	_, err := mysqlConnect(&mysql.ConnParams{DbName: "invalidDB"})
-	require.EqualError(t, err, "unknown database 'invalidDB' (errno 1049) (sqlstate 42000)")
+	require.EqualError(t, err, "VT05003: unknown database 'invalidDB' in vschema (errno 1049) (sqlstate 42000)")
 }
 
 func TestMySQLProtocolClientFoundRows(t *testing.T) {

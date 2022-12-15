@@ -17,7 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -37,7 +36,7 @@ func BreakExpressionInLHSandRHS(
 		case *sqlparser.ColName:
 			deps := ctx.SemTable.RecursiveDeps(node)
 			if deps.IsEmpty() {
-				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
+				err = vterrors.VT13001("unknown column. has the AST been copied?")
 				return false
 			}
 			if deps.IsSolvedBy(lhs) {

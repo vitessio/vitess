@@ -675,7 +675,7 @@
   {
     "comment": "Alter View with unknown view",
     "query": "alter view unknown as select* from user",
-    "plan": "keyspace not specified"
+    "plan": "VT03007: keyspace not specified"
   },
   {
     "comment": "drop table with qualifier in one",
@@ -700,12 +700,12 @@
   {
     "comment": "drop table with incompatible tables",
     "query": "drop table user, unsharded_a",
-    "plan": "Tables or Views specified in the query do not belong to the same destination"
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "drop table with unknown table",
     "query": "drop table unknown",
-    "plan": "keyspace not specified"
+    "plan": "VT03007: keyspace not specified"
   },
   {
     "comment": "drop view with 1 view without qualifier",
@@ -730,12 +730,12 @@
   {
     "comment": "drop view with incompatible views",
     "query": "drop view user, unsharded_a",
-    "plan": "Tables or Views specified in the query do not belong to the same destination"
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "drop view with unknown view",
     "query": "drop view unknown",
-    "plan": "keyspace not specified"
+    "plan": "VT03007: keyspace not specified"
   },
   {
     "comment": "Truncate table without qualifier",
@@ -779,11 +779,11 @@
   {
     "comment": "Rename table with different keyspace tables",
     "query": "rename table user_extra to b, main.a to b",
-    "plan": "Tables or Views specified in the query do not belong to the same destination"
+    "plan": "VT12001: unsupported: Tables or Views specified in the query do not belong to the same destination"
   },
   {
     "comment": "Rename table with change in keyspace name",
     "query": "rename table user_extra to main.b",
-    "plan": "Changing schema from 'user' to 'main' is not allowed"
+    "plan": "VT03002: changing schema from 'user' to 'main' is not allowed"
   }
 ]

@@ -39,7 +39,7 @@
   {
     "comment": "ambiguous symbol reference",
     "query": "select user.col1, user_extra.col1 from user join user_extra having col1 = 2",
-    "v3-plan": "ambiguous symbol reference: col1",
+    "v3-plan": "VT03021: ambiguous symbol reference: col1",
     "gen4-plan": "Column 'col1' in field list is ambiguous"
   },
   {
@@ -413,26 +413,26 @@
   {
     "comment": "ORDER BY on select t.*",
     "query": "select t.*, t.col from user t order by t.col",
-    "v3-plan": "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list",
-    "gen4-plan": "unsupported: '*' expression in cross-shard query"
+    "v3-plan": "VT12001: unsupported: in scatter query, cannot ORDER BY a column that comes after `*` expressions in the SELECT list",
+    "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
     "comment": "ORDER BY on select *",
     "query": "select *, col from user order by col",
-    "v3-plan": "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list",
-    "gen4-plan": "unsupported: '*' expression in cross-shard query"
+    "v3-plan": "VT12001: unsupported: in scatter query, cannot ORDER BY a column that comes after `*` expressions in the SELECT list",
+    "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
     "comment": "ORDER BY on select multi t.*",
     "query": "select t.*, t.name, t.*, t.col from user t order by t.col",
-    "v3-plan": "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list",
-    "gen4-plan": "unsupported: '*' expression in cross-shard query"
+    "v3-plan": "VT12001: unsupported: in scatter query, cannot ORDER BY a column that comes after `*` expressions in the SELECT list",
+    "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
     "comment": "ORDER BY on select multi *",
     "query": "select *, name, *, col from user order by col",
-    "v3-plan": "unsupported: in scatter query, can't order by a column that comes after `*` expressions in the SELECT list",
-    "gen4-plan": "unsupported: '*' expression in cross-shard query"
+    "v3-plan": "VT12001: unsupported: in scatter query, cannot ORDER BY a column that comes after `*` expressions in the SELECT list",
+    "gen4-plan": "VT12001: unsupported: '*' expression in cross-shard query"
   },
   {
     "comment": "ORDER BY works for select * from authoritative table",
@@ -641,7 +641,8 @@
   {
     "comment": "ORDER BY invalid col number on scatter",
     "query": "select col from user order by 2",
-    "plan": "Unknown column '2' in 'order clause'"
+    "v3-plan": "VT03014: unknown column '2' in 'order clause'",
+    "gen4-plan": "Unknown column '2' in 'order clause'"
   },
   {
     "comment": "ORDER BY column offset",
@@ -1611,7 +1612,7 @@
   {
     "comment": "Order by, verify outer symtab is searched according to its own context.",
     "query": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
-    "v3-plan": "symbol u.col not found in subquery",
+    "v3-plan": "VT03020: symbol u.col not found in subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u having u.id in (select col2 from user where user.id = u.id order by u.col)",
@@ -1634,17 +1635,20 @@
   {
     "comment": "Order by, qualified '*' expression, name mismatched.",
     "query": "select user.* from user where id = 5 order by e.col",
-    "plan": "symbol e.col not found"
+    "v3-plan": "VT03019: symbol e.col not found",
+    "gen4-plan": "symbol e.col not found"
   },
   {
     "comment": "Order by, invalid column number",
     "query": "select col from user order by 18446744073709551616",
-    "plan": "error parsing column number: 18446744073709551616"
+    "v3-plan": "VT13001: [BUG] error parsing column number: 18446744073709551616",
+    "gen4-plan": "error parsing column number: 18446744073709551616"
   },
   {
     "comment": "Order by, out of range column number",
     "query": "select col from user order by 2",
-    "plan": "Unknown column '2' in 'order clause'"
+    "v3-plan": "VT03014: unknown column '2' in 'order clause'",
+    "gen4-plan": "Unknown column '2' in 'order clause'"
   },
   {
     "comment": "Order by, '*' expression with qualified reference and using collate",
@@ -2779,7 +2783,7 @@
   {
     "comment": "join order by with ambiguous column reference ; valid in MySQL",
     "query": "select name, name from user, music order by name",
-    "v3-plan": "ambiguous symbol reference: `name`",
+    "v3-plan": "VT03021: ambiguous symbol reference: `name`",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select name, name from user, music order by name",
@@ -2823,7 +2827,7 @@
   {
     "comment": "order by with ambiguous column reference ; valid in MySQL",
     "query": "select id, id from user order by id",
-    "v3-plan": "ambiguous symbol reference: id",
+    "v3-plan": "VT03021: ambiguous symbol reference: id",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id, id from user order by id",
@@ -2848,7 +2852,7 @@
   {
     "comment": "Scatter order by and aggregation: order by column must reference column from select list",
     "query": "select col, count(*) from user group by col order by c1",
-    "v3-plan": "unsupported: memory sort: order by must reference a column in the select list: c1 asc",
+    "v3-plan": "VT12001: unsupported: memory sort: ORDER BY must reference a column in the SELECT list: c1 asc",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) from user group by col order by c1",
@@ -3026,7 +3030,7 @@
   {
     "comment": "Distinct with same column",
     "query": "select distinct a, a from user",
-    "v3-plan": "generating order by clause: ambiguous symbol reference: a",
+    "v3-plan": "generating ORDER BY clause: VT03021: ambiguous symbol reference: a",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select distinct a, a from user",
@@ -3058,7 +3062,7 @@
   {
     "comment": "Order by has subqueries",
     "query": "select id from unsharded order by (select id from unsharded)",
-    "v3-plan": "unsupported: subqueries disallowed in GROUP or ORDER BY",
+    "v3-plan": "VT12001: unsupported: subqueries disallowed in sqlparser.OrderBy",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id from unsharded order by (select id from unsharded)",
@@ -3081,7 +3085,7 @@
   {
     "comment": "Equal filter with hexadecimal value",
     "query": "select count(*) a from user having a = 0x01",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a = 0x01",

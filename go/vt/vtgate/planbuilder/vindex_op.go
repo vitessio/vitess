@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -31,7 +30,7 @@ import (
 func transformVindexPlan(ctx *plancontext.PlanningContext, op *operators.Vindex) (logicalPlan, error) {
 	single, ok := op.Vindex.(vindexes.SingleColumn)
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-column vindexes not supported")
+		return nil, vterrors.VT12001("multi-column vindexes not supported")
 	}
 
 	expr, err := evalengine.Translate(op.Value, ctx.SemTable)

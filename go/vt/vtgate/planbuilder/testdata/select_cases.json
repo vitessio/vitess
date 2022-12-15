@@ -639,7 +639,7 @@
   {
     "comment": "test table lookup failure for authoritative code path",
     "query": "select a.* from authoritative",
-    "v3-plan": "table a not found",
+    "v3-plan": "VT05004: table 'a' does not exist",
     "gen4-plan": "Unknown table 'a'"
   },
   {
@@ -796,7 +796,7 @@
   {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
-    "v3-plan": "symbol col not found",
+    "v3-plan": "VT03019: symbol col not found",
     "gen4-plan": "Column 'col' in field list is ambiguous"
   },
   {
@@ -2398,13 +2398,13 @@
   {
     "comment": "duplicate columns not allowed in derived table",
     "query": "select * from (select user.id, user_extra.id from user join user_extra) as t",
-    "v3-plan": "duplicate column names in subquery: id",
+    "v3-plan": "VT12001: unsupported: duplicate column names in subquery: id",
     "gen4-plan": "Duplicate column name 'id'"
   },
   {
     "comment": "non-existent symbol in cross-shard derived table",
     "query": "select t.col from (select user.id from user join user_extra) as t",
-    "v3-plan": "symbol t.col not found in table or subquery",
+    "v3-plan": "VT03019: symbol t.col not found",
     "gen4-plan": "symbol t.col not found"
   },
   {
@@ -2574,6 +2574,7 @@
     }
   },
   {
+    "comment": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "query": "(select id from unsharded) union (select id from unsharded_auto) order by id limit 5",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3200,12 +3201,14 @@
   {
     "comment": "sql_calc_found_rows in sub queries",
     "query": "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
-    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "v3-plan": "VT03008: incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "gen4-plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
   },
   {
     "comment": "sql_calc_found_rows in derived table",
     "query": "select sql_calc_found_rows * from (select sql_calc_found_rows * from music limit 10) t limit 1",
-    "plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
+    "v3-plan": "VT03008: incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+    "gen4-plan": "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'"
   },
   {
     "comment": "select from unsharded keyspace into dumpfile",
@@ -3334,6 +3337,7 @@
     "plan": "syntax error at position 41 near 'into'"
   },
   {
+    "comment": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "query": "select (select u.id from user as u where u.id = 1), a.id from user as a where a.id = 1",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3455,6 +3459,7 @@
     }
   },
   {
+    "comment": "((((select 1))))",
     "query": "((((select 1))))",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3624,6 +3629,7 @@
     }
   },
   {
+    "comment": "select (select col from user limit 1) as a from user join user_extra order by a",
     "query": "select (select col from user limit 1) as a from user join user_extra order by a",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3755,6 +3761,7 @@
     }
   },
   {
+    "comment": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "query": "select t.a from (select (select col from user limit 1) as a from user join user_extra) t",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3899,8 +3906,9 @@
     }
   },
   {
+    "comment": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
     "query": "select (select col from user where user_extra.id = 4 limit 1) as a from user join user_extra",
-    "plan": "unsupported: cross-shard correlated subquery"
+    "plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "plan test for a natural character set string",
@@ -4024,7 +4032,7 @@
   {
     "comment": "correlated subquery in exists clause",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
@@ -4073,7 +4081,7 @@
   {
     "comment": "correlated subquery in exists clause with an order by",
     "query": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by col",
@@ -4123,7 +4131,7 @@
   {
     "comment": "correlated subquery having dependencies on two tables",
     "query": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user u1, user u2 where exists (select 1 from user_extra ue where ue.col = u1.col and ue.col = u2.col)",
@@ -4188,7 +4196,7 @@
   {
     "comment": "correlated subquery using a column twice",
     "query": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from user u where exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
@@ -4233,8 +4241,8 @@
   {
     "comment": "correlated subquery part of an OR clause",
     "query": "select 1 from user u where u.col = 6 or exists (select 1 from user_extra ue where ue.col = u.col and u.col = ue.col2)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
-    "gen4-plan": "exists sub-queries are only supported with AND clause"
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
+    "gen4-plan": "VT12001: unsupported: EXISTS sub-queries are only supported with AND clause"
   },
   {
     "comment": "correlated subquery that is dependent on one side of a join, fully mergeable",
@@ -4501,6 +4509,7 @@
     }
   },
   {
+    "comment": "select user.id, trim(leading 'x' from user.name) from user",
     "query": "select user.id, trim(leading 'x' from user.name) from user",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -4652,6 +4661,7 @@
     }
   },
   {
+    "comment": "select (select id from user order by id limit 1) from user_extra",
     "query": "select (select id from user order by id limit 1) from user_extra",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -6391,7 +6401,7 @@
   {
     "comment": "Unmergeable scatter subquery with `GROUP BY` on-non vindex column",
     "query": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
-    "v3-plan": "unsupported: in scatter query: group by column must reference column in SELECT list",
+    "v3-plan": "VT12001: unsupported: in scatter query: GROUP BY column must reference column in SELECT list",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "SELECT music.id FROM music WHERE music.id IN (SELECT music.id FROM music WHERE music.genre = 'pop' GROUP BY music.genre)",
@@ -7664,7 +7674,7 @@
   {
     "comment": "limit on the vtgate has to be executed on the LHS of a join",
     "query": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id from user join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
@@ -7726,8 +7736,9 @@
     }
   },
   {
+    "comment": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
     "query": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
-    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.a, t.b from user join (select id, count(*) b, req from user_extra group by req, id) as t on user.id = t.id",
@@ -7795,15 +7806,16 @@
   {
     "comment": "cant switch sides for outer joins",
     "query": "select id from user left join (select user_id from user_extra limit 10) ue on user.id = ue.user_id",
-    "plan": "unsupported: LEFT JOIN not supported for derived tables"
+    "plan": "VT12001: unsupported: LEFT JOIN with derived tables"
   },
   {
     "comment": "limit on both sides means that we can't evaluate this at all",
     "query": "select id from (select id from user limit 10) u join (select user_id from user_extra limit 10) ue on u.id = ue.user_id",
-    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": "unsupported: JOIN not supported between derived tables"
+    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": "VT12001: unsupported: JOIN between derived tables"
   },
   {
+    "comment": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
     "query": "SELECT music.id FROM (SELECT MAX(id) as maxt FROM music WHERE music.user_id = 5) other JOIN music ON other.maxt = music.id",
     "v3-plan": {
       "QueryType": "SELECT",

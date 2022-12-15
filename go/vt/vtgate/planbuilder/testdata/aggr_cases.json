@@ -709,8 +709,8 @@
   {
     "comment": "scatter aggregate group by aggregate function",
     "query": "select count(*) b from user group by b",
-    "v3-plan": "Can't group on 'b'",
-    "gen4-plan": "Can't group on 'count(*)'"
+    "v3-plan": "VT03005: cannot group on 'b'",
+    "gen4-plan": "VT03005: cannot group on 'count(*)'"
   },
   {
     "comment": "scatter aggregate multiple group by (columns)",
@@ -939,7 +939,8 @@
   {
     "comment": "scatter aggregate group by invalid column number",
     "query": "select col from user group by 2",
-    "plan": "Unknown column '2' in 'group statement'"
+    "v3-plan": "VT03014: unknown column '2' in 'group statement'",
+    "gen4-plan": "Unknown column '2' in 'group statement'"
   },
   {
     "comment": "scatter aggregate order by null",
@@ -1280,7 +1281,8 @@
   {
     "comment": "invalid order by column numner for scatter",
     "query": "select col, count(*) from user group by col order by 5 limit 10",
-    "plan": "Unknown column '5' in 'order clause'"
+    "v3-plan": "VT03014: unknown column '5' in 'order clause'",
+    "gen4-plan": "Unknown column '5' in 'order clause'"
   },
   {
     "comment": "aggregate with limit",
@@ -1606,7 +1608,7 @@
   {
     "comment": "Group by invalid column number (code is duplicated from symab).",
     "query": "select id from user group by 1.1",
-    "v3-plan": "column number is not an int",
+    "v3-plan": "VT13001: [BUG] column number is not an INT",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id from user group by 1.1",
@@ -1639,12 +1641,13 @@
   {
     "comment": "Group by out of range column number (code is duplicated from symab).",
     "query": "select id from user group by 2",
-    "plan": "Unknown column '2' in 'group statement'"
+    "v3-plan": "VT03014: unknown column '2' in 'group statement'",
+    "gen4-plan": "Unknown column '2' in 'group statement'"
   },
   {
     "comment": "here it is safe to remove the order by on the derived table since it will not influence the output of the count(*)",
     "query": "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a",
@@ -1723,7 +1726,7 @@
   {
     "comment": "here we keep the order since the column is visible on the outside, and used by the orderedAggregate",
     "query": "select col, count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a group by col",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) from (select user.col, user_extra.extra from user join user_extra on user.id = user_extra.user_id order by user_extra.extra) a group by col",
@@ -1867,7 +1870,7 @@
   {
     "comment": "Grouping on join",
     "query": "select user.a from user join user_extra group by user.a",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.a from user join user_extra group by user.a",
@@ -1928,12 +1931,13 @@
   {
     "comment": "Cannot have more than one aggr(distinct...",
     "query": "select count(distinct a), count(distinct b) from user",
-    "plan": "unsupported: only one distinct aggregation allowed in a select: count(distinct b)"
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: count(distinct b)",
+    "gen4-plan": "VT12001: unsupported: only one DISTINCT aggregation is allowed in a SELECT: count(distinct b)"
   },
   {
     "comment": "multiple distinct functions with grouping.",
     "query": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
-    "v3-plan": "unsupported: only one distinct aggregation allowed in a select: sum(distinct col2)",
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct col2)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col1, count(distinct col2), sum(distinct col2) from user group by col1",
@@ -1966,7 +1970,7 @@
   {
     "comment": "aggregate query with order by aggregate column along with NULL",
     "query": "select col, count(*) k from user group by col order by null, k",
-    "v3-plan": "unsupported: in scatter query: complex order by expression: null",
+    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: null",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) k from user group by col order by null, k",
@@ -2060,7 +2064,7 @@
   {
     "comment": "join query on sharding key with group by a unique vindex with having clause.",
     "query": "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) > 10",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.id, count(*) c from user, user_extra where user.id = user_extra.user_id group by user.id having max(user.col) > 10",
@@ -2340,7 +2344,7 @@
   {
     "comment": "correlated subquery in exists clause with an ordering",
     "query": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
@@ -2390,7 +2394,7 @@
   {
     "comment": "Column and Literal equality filter on scatter aggregates",
     "query": "select count(*) a from user having a = 10",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a = 10",
@@ -2426,7 +2430,7 @@
   {
     "comment": "Equality filtering with column and string literal on scatter aggregates",
     "query": "select count(*) a from user having a = '1'",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a = '1'",
@@ -2462,7 +2466,7 @@
   {
     "comment": "Column and Literal not equal filter on scatter aggregates",
     "query": "select count(*) a from user having a != 10",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a != 10",
@@ -2498,7 +2502,7 @@
   {
     "comment": "Not equal filter with column and string literal on scatter aggregates",
     "query": "select count(*) a from user having a != '1'",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a != '1'",
@@ -2534,7 +2538,7 @@
   {
     "comment": "Greater than filter on scatter aggregates",
     "query": "select count(*) a from user having a > 10",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a > 10",
@@ -2570,7 +2574,7 @@
   {
     "comment": "Greater Equal filter on scatter aggregates",
     "query": "select count(*) a from user having a >= 10",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a >= 10",
@@ -2606,7 +2610,7 @@
   {
     "comment": "Less than filter on scatter aggregates",
     "query": "select count(*) a from user having a < 10",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a < 10",
@@ -2642,7 +2646,7 @@
   {
     "comment": "Less Equal filter on scatter aggregates",
     "query": "select count(*) a from user having a <= 10",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) a from user having a <= 10",
@@ -2678,7 +2682,7 @@
   {
     "comment": "Less Equal filter on scatter with grouping",
     "query": "select col, count(*) a from user group by col having a <= 10",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col, count(*) a from user group by col having a <= 10",
@@ -2716,7 +2720,7 @@
   {
     "comment": "We should be able to find grouping keys on ordered aggregates",
     "query": "select count(*) as a, val1 from user group by val1 having a = 1.00",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) as a, val1 from user group by val1 having a = 1.00",
@@ -2910,7 +2914,7 @@
   {
     "comment": "Aggregates and joins",
     "query": "select count(*) from user join user_extra",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user join user_extra",
@@ -3026,7 +3030,7 @@
   {
     "comment": "Aggregate on join",
     "query": "select user.a, count(*) from user join user_extra group by user.a",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.a, count(*) from user join user_extra group by user.a",
@@ -3089,7 +3093,7 @@
   {
     "comment": "Aggregate on other table in join",
     "query": "select user.a, count(user_extra.a) from user join user_extra group by user.a",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.a, count(user_extra.a) from user join user_extra group by user.a",
@@ -3152,7 +3156,7 @@
   {
     "comment": "aggregation spread out across three routes",
     "query": "select count(u.textcol1), count(ue.foo), us.bar from user u join user_extra ue on u.foo = ue.bar join unsharded us on ue.bar = us.baz group by us.bar",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(u.textcol1), count(ue.foo), us.bar from user u join user_extra ue on u.foo = ue.bar join unsharded us on ue.bar = us.baz group by us.bar",
@@ -3305,7 +3309,7 @@
   {
     "comment": "aggregation on top of semijoin",
     "query": "select count(*) from user where exists (select 0 from user_extra where user.apa = user_extra.bar)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from user where exists (select 0 from user_extra where user.apa = user_extra.bar)",
@@ -3478,7 +3482,7 @@
   {
     "comment": "multiple distinct aggregations on the same column is allowed",
     "query": "select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1",
-    "v3-plan": "unsupported: only one distinct aggregation allowed in a select: sum(distinct tcol2)",
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct tcol2)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select tcol1, count(distinct tcol2), sum(distinct tcol2) from user group by tcol1",
@@ -3511,7 +3515,7 @@
   {
     "comment": "multiple distinct aggregations on the same column in different positions",
     "query": "select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1",
-    "v3-plan": "unsupported: only one distinct aggregation allowed in a select: sum(distinct tcol2)",
+    "v3-plan": "VT12001: unsupported: only one DISTINCT aggregation allowed in a SELECT: sum(distinct tcol2)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(distinct tcol2), tcol1, count(*), sum(distinct tcol2) from user group by tcol1",
@@ -3544,7 +3548,7 @@
   {
     "comment": "distinct aggregation will 3 table join query",
     "query": "select u.textcol1, count(distinct u.val2) from user u join user u2 on u.val2 = u2.id join music m on u2.val2 = m.id group by u.textcol1",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.textcol1, count(distinct u.val2) from user u join user u2 on u.val2 = u2.id join music m on u2.val2 = m.id group by u.textcol1",
@@ -3640,7 +3644,7 @@
   {
     "comment": "interleaving grouping, aggregation and join",
     "query": "select user.col, min(user_extra.foo), user.bar, max(user_extra.bar) from user join user_extra on user.col = user_extra.bar group by user.col, user.bar",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.col, min(user_extra.foo), user.bar, max(user_extra.bar) from user join user_extra on user.col = user_extra.bar group by user.col, user.bar",
@@ -3743,6 +3747,7 @@
     }
   },
   {
+    "comment": "select count(distinct user_id, name) from unsharded",
     "query": "select count(distinct user_id, name) from unsharded",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -3779,13 +3784,15 @@
     }
   },
   {
+    "comment": "select count(distinct user_id, name) from user",
     "query": "select count(distinct user_id, name) from user",
-    "v3-plan": "unsupported: only one expression allowed inside aggregates: count(distinct user_id, `name`)",
-    "gen4-plan": "aggregate functions take a single argument 'count(distinct user_id, `name`)'"
+    "v3-plan": "VT12001: unsupported: only one expression is allowed inside aggregates: count(distinct user_id, `name`)",
+    "gen4-plan": "VT03001: aggregate functions take a single argument 'count(distinct user_id, `name`)'"
   },
   {
+    "comment": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
     "query": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select sum(col) from (select user.col as col, 32 from user join user_extra) t",
@@ -3843,7 +3850,7 @@
   {
     "comment": "find aggregation expression and use column offset in filter",
     "query": "select foo, count(*) from user group by foo having count(*) = 3",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select foo, count(*) from user group by foo having count(*) = 3",
@@ -3890,7 +3897,7 @@
   {
     "comment": "find aggregation expression and use column offset in filter times two",
     "query": "select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select foo, sum(foo), sum(bar) from user group by foo having sum(foo)+sum(bar) = 42",
@@ -3938,7 +3945,7 @@
   {
     "comment": "find aggregation expression and use column offset in filter times three",
     "query": "select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select foo, sum(foo) as fooSum, sum(bar) as barSum from user group by foo having fooSum+sum(bar) = 42",
@@ -3986,7 +3993,7 @@
   {
     "comment": "having should be able to add new aggregation expressions in having",
     "query": "select foo from user group by foo having count(*) = 3",
-    "v3-plan": "unsupported: filtering on results of aggregates",
+    "v3-plan": "VT12001: unsupported: filtering on results of aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select foo from user group by foo having count(*) = 3",
@@ -4030,8 +4037,9 @@
     }
   },
   {
+    "comment": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
     "query": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(u.name) = 3",
@@ -4118,6 +4126,7 @@
     }
   },
   {
+    "comment": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
     "query": "select u.id from user u join user_extra ue on ue.user_id = u.id group by u.id having count(u.name) = 3",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -4157,7 +4166,7 @@
   {
     "comment": "only extract the aggregation once, even if used twice",
     "query": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) < 3 and count(*) > 5",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.id from user u join user_extra ue on ue.id = u.id group by u.id having count(*) < 3 and count(*) > 5",
@@ -4244,8 +4253,9 @@
     }
   },
   {
+    "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-    "v3-plan": "symbol ue.col not found in subquery",
+    "v3-plan": "VT03020: symbol ue.col not found in subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
@@ -4310,7 +4320,7 @@
   {
     "comment": "group by and ',' joins with condition",
     "query": "select user.col from user join user_extra on user_extra.col = user.col group by user.id",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.col from user join user_extra on user_extra.col = user.col group by user.id",
@@ -4376,7 +4386,7 @@
   {
     "comment": "scatter aggregate symtab lookup error",
     "query": "select id, b as id, count(*) from user order by id",
-    "v3-plan": "ambiguous symbol reference: id",
+    "v3-plan": "VT03021: ambiguous symbol reference: id",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id, b as id, count(*) from user order by id",
@@ -4459,7 +4469,7 @@
   {
     "comment": "group by and ',' joins",
     "query": "select user.id from user, user_extra group by id",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select user.id from user, user_extra group by id",
@@ -4520,7 +4530,7 @@
   {
     "comment": "count on column from LIMIT",
     "query": "select count(city) from (select phone, id, city from user where id > 12 limit 10) as x",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(city) from (select phone, id, city from user where id > 12 limit 10) as x",
@@ -4564,7 +4574,7 @@
   {
     "comment": "count(*) on column from LIMIT",
     "query": "select count(*) from (select phone, id, city from user where id > 12 limit 10) as x",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select count(*) from (select phone, id, city from user where id > 12 limit 10) as x",
@@ -4674,7 +4684,7 @@
   {
     "comment": "grouping on data from derived table",
     "query": "select val1, count(*)  from (select id, val1 from user where val2 < 4 order by val1 limit 2) as x group by val1",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select val1, count(*)  from (select id, val1 from user where val2 < 4 order by val1 limit 2) as x group by val1",
@@ -4781,7 +4791,7 @@
   {
     "comment": "Group By X Order By X",
     "query": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
-    "v3-plan": "unsupported: in scatter query: complex order by expression: count(`user`.intcol)",
+    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: count(`user`.intcol)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "SELECT user.intcol FROM user GROUP BY user.intcol ORDER BY COUNT(user.intcol)",
@@ -4821,7 +4831,7 @@
   {
     "comment": "AggregateRandom in non full group by query",
     "query": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",
-    "v3-plan": "unsupported: cross-shard query with aggregates",
+    "v3-plan": "VT12001: unsupported: cross-shard query with aggregates",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.id, u.name, count(m.predef1) from user.user as u join user.user_extra as m on u.id = m.order group by u.id",

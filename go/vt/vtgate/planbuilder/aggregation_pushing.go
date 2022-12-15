@@ -17,9 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"strconv"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -83,7 +83,7 @@ func (hp *horizonPlanning) pushAggregation(
 			var offset int
 			aggrExpr, ok := aggr.Original.Expr.(sqlparser.AggrFunc)
 			if !ok {
-				return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggr.Original)
+				return nil, nil, nil, false, vterrors.VT13001(fmt.Sprintf("unexpected expression: %v", aggr.Original))
 			}
 
 			switch aggrExpr.(type) {
@@ -91,7 +91,7 @@ func (hp *horizonPlanning) pushAggregation(
 				offset = 0
 			default:
 				if len(aggrExpr.GetArgs()) != 1 {
-					return nil, nil, nil, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: unexpected expression: %v", aggrExpr)
+					return nil, nil, nil, false, vterrors.VT13001(fmt.Sprintf("unexpected expression: %v", aggrExpr))
 				}
 				offset, _, err = pushProjection(ctx, &sqlparser.AliasedExpr{Expr: aggrExpr.GetArg() /*As: expr.As*/}, plan.input, true, true, false)
 			}
@@ -105,7 +105,7 @@ func (hp *horizonPlanning) pushAggregation(
 
 		return
 	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "using aggregation on top of a %T plan is not yet supported", plan)
+		err = vterrors.VT12001(fmt.Sprintf("using aggregation on top of a %T plan", plan))
 		return
 	}
 }
@@ -125,7 +125,7 @@ func pushAggrOnRoute(
 	columnOrderMatters := !ignoreOutputOrder
 	sel, isSel := plan.Select.(*sqlparser.Select)
 	if !isSel {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't plan aggregation on union")
+		return nil, nil, nil, vterrors.VT12001("plan aggregation on union")
 	}
 
 	var groupingCols []int
@@ -459,7 +459,7 @@ func splitAggregationsToLeftAndRight(
 				rhsAggrs = append(rhsAggrs, &newAggr)
 				lhsAggrs = append(lhsAggrs, other)
 			default:
-				return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "aggregation on columns from different sources not supported yet")
+				return nil, nil, vterrors.VT12001("aggregation on columns from different sources")
 			}
 		}
 	}
@@ -488,7 +488,7 @@ func splitGroupingsToLeftAndRight(
 			groupingOffsets = append(groupingOffsets, len(rhsGrouping)+1)
 			rhsGrouping = append(rhsGrouping, groupBy)
 		default:
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "grouping on columns from different sources not supported yet")
+			return nil, nil, nil, vterrors.VT12001("grouping on columns from different sources")
 		}
 	}
 	return lhsGrouping, rhsGrouping, groupingOffsets, nil

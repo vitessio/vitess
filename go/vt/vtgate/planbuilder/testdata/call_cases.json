@@ -36,7 +36,7 @@
   {
     "comment": "CALL not allowed on sharded keyspaces",
     "query": "call user.proc()",
-    "plan": "CALL is not supported for sharded database"
+    "plan": "CALL is not supported for sharded keyspace"
   },
   {
     "comment": "CALL with expressions and parameters",

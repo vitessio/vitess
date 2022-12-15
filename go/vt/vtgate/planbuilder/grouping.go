@@ -17,7 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -57,7 +58,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 			case *sqlparser.ColName:
 				c := e.Metadata.(*column)
 				if c.Origin() == node {
-					return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(e))
+					return nil, vterrors.VT03005(sqlparser.String(e))
 				}
 				for i, rc := range node.resultColumns {
 					if rc.column == c {
@@ -66,7 +67,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 					}
 				}
 				if colNumber == -1 {
-					return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: group by column must reference column in SELECT list")
+					return nil, vterrors.VT12001("in scatter query: GROUP BY column must reference column in SELECT list")
 				}
 			case *sqlparser.Literal:
 				num, err := ResultFromNumber(node.resultColumns, e, "group statement")
@@ -75,7 +76,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 				}
 				colNumber = num
 			default:
-				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: only simple references allowed")
+				return nil, vterrors.VT12001("in scatter query: only simple references are allowed")
 			}
 			node.groupByKeys = append(node.groupByKeys, &engine.GroupByParams{KeyCol: colNumber, WeightStringCol: -1, FromGroupBy: true})
 		}
@@ -92,7 +93,7 @@ func planGroupBy(pb *primitiveBuilder, input logicalPlan, groupBy sqlparser.Grou
 
 		return node, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.groupBy: ", input)
+	return nil, vterrors.VT13001(fmt.Sprintf("unreachable %T.groupBy: ", input))
 }
 
 // planDistinct makes the output distinct
@@ -123,5 +124,5 @@ func planDistinct(input logicalPlan) (logicalPlan, error) {
 		return input, nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.distinct", input)
+	return nil, vterrors.VT13001(fmt.Sprintf("unreachable %T.distinct", input))
 }

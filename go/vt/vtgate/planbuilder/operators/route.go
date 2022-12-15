@@ -19,7 +19,6 @@ package operators
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/key"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -748,7 +747,7 @@ func findVSchemaTableAndCreateRoute(
 ) (*Route, error) {
 	vschemaTable, _, _, _, target, err := ctx.VSchema.FindTableOrVindex(tableName)
 	if target != nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: SELECT with a target destination")
+		return nil, vterrors.VT12001("SELECT with a target destination")
 	}
 	if err != nil {
 		return nil, err
@@ -778,7 +777,7 @@ func createRouteFromVSchemaTable(
 		queryTable.Table.Name = vschemaTable.Name
 		astTable, ok := queryTable.Alias.Expr.(sqlparser.TableName)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] a derived table should never be a routed table")
+			return nil, vterrors.VT13001("a derived table should never be a routed table")
 		}
 		realTableName := sqlparser.NewIdentifierCS(vschemaTable.Name.String())
 		astTable.Name = realTableName
