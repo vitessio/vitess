@@ -11,8 +11,8 @@ type PSLogger pslog.SugaredLogger
 
 // SetPlanetScaleLogger in-place noglog replacement with PlanetScales' logger.
 func SetPlanetScaleLogger(conf *pslog.Config) (psLogger *pslog.SugaredLogger) {
-
-	if conf == nil {
+	// Use the passed configuration instead of the default configuration
+	if conf != nil {
 		configLogger, _ := conf.Build()
 		psLogger = configLogger.Sugar()
 	} else {
