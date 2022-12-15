@@ -11,7 +11,6 @@ import (
 	pslog "github.com/planetscale/log"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
-	"go.uber.org/zap/zaptest/observer"
 
 	vtlog "vitess.io/vitess/go/vt/log"
 )
@@ -60,9 +59,9 @@ func TestPSLogger_Replacing_glog(t *testing.T) {
 	// Given
 	dummyLogMessage := "testing log"
 	testCases := []testCase{
-		{"log info", zapcore.InfoLevel},
-		{"log warn", zapcore.WarnLevel},
-		{"log error", zapcore.ErrorLevel},
+		{"log info", pslog.InfoLevel},
+		{"log warn", pslog.WarnLevel},
+		{"log error", pslog.ErrorLevel},
 	}
 
 	sink, err := SetupLoggerWithMemSink()
@@ -95,14 +94,14 @@ func TestPSLogger_Replacing_glog(t *testing.T) {
 			}
 
 			loggingFunc(dummyLogMessage)
-			output := sink.String()
-			sink.Reset()
-
+			// Unmarshal the captured log. This means we're getting a struct log.
 			actualLog := logMsg{}
-			err := json.Unmarshal([]byte(output), &actualLog)
+			err = json.Unmarshal(sink.Bytes(), &actualLog)
 			if err != nil {
 				t.Error(err)
 			}
+			// Reset the sink so that it'll contain one log per test case.
+			sink.Reset()
 
 			// Then
 			assert.Equal(t, expectedLevel, actualLog.Level)
@@ -110,36 +109,4 @@ func TestPSLogger_Replacing_glog(t *testing.T) {
 
 		})
 	}
-}
-
-func TestPSLogger(t *testing.T) {
-	t.Run("PlanetScale logger", func(t *testing.T) {
-		// Given
-		SetPlanetScaleLogger(nil)
-		observedZapCore, observedLogs := observer.New(zap.InfoLevel)
-		observedLoggerSugared := zap.New(observedZapCore).Sugar()
-		logLevels := [3]zapcore.Level{zap.InfoLevel, zap.WarnLevel, zap.ErrorLevel}
-
-		// When
-		observedLoggerSugared.Infof("testing log")
-		observedLoggerSugared.Warnf("testing log")
-		observedLoggerSugared.Errorf("testing log")
-
-		// Then
-		for idx, level := range logLevels {
-			expectLog := observer.LoggedEntry{
-				Entry: zapcore.Entry{
-					Level:   level,
-					Message: "testing log",
-				},
-				Context: nil,
-			}
-			actualLog := observedLogs.All()[idx]
-
-			assert.Equal(t, expectLog.Level, actualLog.Level)
-			assert.Equal(t, expectLog.Message, actualLog.Message)
-
-		}
-
-	})
 }
