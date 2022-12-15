@@ -191,9 +191,9 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 			return err
 		}
 		defer dbaConn.Close()
-		if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
-			return err
-		}
+		//if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
+		//	return err
+		//}
 		conn.Close()
 		return nil
 	}

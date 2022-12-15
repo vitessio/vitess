@@ -439,8 +439,6 @@ func primaryBackup(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "--", "--backup_timestamp", firstBackupTimestamp, primary.Alias)
 	require.Nil(t, err)
 
-	time.Sleep(10 * time.Second)
-
 	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
 	err = localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
 	require.Nil(t, err)
@@ -854,7 +852,6 @@ func restoreWaitForBackup(t *testing.T, tabletType string, cDetails *Compression
 	replica2.VttabletProcess.ServingStatus = ""
 	err := replica2.VttabletProcess.Setup()
 	require.Nil(t, err)
-	time.Sleep(5 * time.Second)
 }
 
 func RemoveBackup(t *testing.T, backupName string) {
