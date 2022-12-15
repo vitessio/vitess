@@ -88,7 +88,6 @@ type Engine struct {
 	rowStreamerNumRows        *stats.Counter
 	rowStreamerNumPackets     *stats.Counter
 	errorCounts               *stats.CountersWithSingleLabel
-	vstreamersActive          *stats.GaugeFunc
 	vstreamersCreated         *stats.Counter
 	vstreamersEndedWithErrors *stats.Counter
 
