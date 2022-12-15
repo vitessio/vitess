@@ -204,7 +204,7 @@ func TestVDiff2Unsharded(t *testing.T) {
 					}
 				]`),
 	}, {
-		id: "7", // only_pks
+		id: "7", // --only_pks
 		result: sqltypes.MakeTestResult(fields,
 			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
 				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+
@@ -227,7 +227,7 @@ func TestVDiff2Unsharded(t *testing.T) {
 					}
 				]`),
 	}, {
-		id: "8",
+		id: "8", // --debug_query
 		result: sqltypes.MakeTestResult(fields,
 			"completed||t1|"+UUID+"|completed|3|"+starttime+"|3|"+comptime+"|1|"+
 				`{"TableName": "t1", "MatchingRows": 2, "ProcessedRows": 3, "MismatchedRows": 1, "ExtraRowsSource": 0, `+

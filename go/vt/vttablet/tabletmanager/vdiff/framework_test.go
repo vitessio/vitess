@@ -124,6 +124,7 @@ type testVDiffEnv struct {
 	opts            *tabletmanagerdatapb.VDiffOptions
 	dbClient        *binlogplayer.MockDBClient
 	dbClientFactory func() binlogplayer.DBClient
+	tmClientFactory func() tmclient.TabletManagerClient
 
 	mu      sync.Mutex
 	tablets map[int]*fakeTabletConn
@@ -493,6 +494,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 		se:              schema.NewEngineForTests(),
 		dbClient:        binlogplayer.NewMockDBClient(t),
 		dbClientFactory: func() binlogplayer.DBClient { return vdiffenv.dbClient },
+		tmClientFactory: func() tmclient.TabletManagerClient { return vdiffenv.tmc },
 	}
 
 	tstenv.KeyspaceName = vdiffDBName
@@ -510,10 +512,6 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 		// use the real DB started by vttestserver
 		ddls = append(ddls, fmt.Sprintf("create database if not exists %s", vdiffDBName))
 		ddls = append(ddls, fmt.Sprintf("create table if not exists %s.t1 (c1 bigint primary key, c2 bigint)", vdiffDBName))
-
-		// This is needed for the vrepl engine which uses also uses the real DB
-		ddls = append(ddls, fmt.Sprintf("insert into _vt.vreplication (id, source, pos, db_name, workflow, max_tps, max_replication_lag, time_updated, transaction_timestamp, state) values (1, '%s', '%s', '%s', '%s', 99, 99, now(), now(), 'Running')",
-			vreplSource, vdiffSourceGtid, vdiffDBName, vdiffenv.workflow))
 
 		for _, ddl := range ddls {
 			if err := tstenv.Mysqld.ExecuteSuperQuery(context.Background(), ddl); err != nil {
@@ -538,15 +536,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	tabletID := 100
 	primary := vdiffenv.addTablet(tabletID, tstenv.KeyspaceName, tstenv.ShardName, topodatapb.TabletType_PRIMARY)
 
-	vdiffenv.vde = &Engine{
-		controllers:             make(map[int64]*controller),
-		ts:                      tstenv.TopoServ,
-		thisTablet:              primary.tablet,
-		tmClientFactory:         func() tmclient.TabletManagerClient { return vdiffenv.tmc },
-		dbClientFactoryFiltered: vdiffenv.dbClientFactory,
-		dbClientFactoryDba:      vdiffenv.dbClientFactory,
-		dbName:                  vdiffDBName,
-	}
+	vdiffenv.vde = NewTestEngine(tstenv.TopoServ, primary.tablet, vdiffDBName, vdiffenv.dbClientFactory, vdiffenv.tmClientFactory)
 	require.False(t, vdiffenv.vde.IsOpen())
 
 	vdiffenv.opts = &tabletmanagerdatapb.VDiffOptions{
