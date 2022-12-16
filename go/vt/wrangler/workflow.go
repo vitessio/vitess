@@ -737,9 +737,13 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 				tablet.Alias.String())
 			return
 		}
-		defer wr.sem.Release()
 	}
 	go func() {
+		defer func() {
+			if wr.sem != nil {
+				wr.sem.Release()
+			}
+		}()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
 		sqlOptimizeTable := "optimize table _vt.copy_state"
