@@ -27,6 +27,10 @@ import (
 	"vitess.io/vitess/go/internal/flag"
 )
 
+// TestGetLockTimeout tests the behaviour of
+// getLockTimeout function in different situations where
+// the two flags `remote_operation_timeout` and `lock-timeout` are
+// provided or not.
 func TestGetLockTimeout(t *testing.T) {
 	tests := []struct {
 		description                 string

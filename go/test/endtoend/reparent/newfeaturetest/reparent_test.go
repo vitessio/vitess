@@ -25,6 +25,11 @@ import (
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 )
 
+// TestRecoverWithMultipleVttabletFailures tests that ERS succeeds with the default values
+// even when there are multiple vttablet failures. In this test we use the semi_sync policy
+// to allow multiple failures to happen and still be recoverable.
+// The test takes down the vttablets of the primary and a rdonly tablet and runs ERS with the
+// default values of remote_operation_timeout, lock-timeout flags and wait_replicas_timeout subflag.
 func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
