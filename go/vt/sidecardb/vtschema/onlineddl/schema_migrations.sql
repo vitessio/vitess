@@ -52,6 +52,8 @@ CREATE TABLE _vt.schema_migrations
     `postpone_launch`                 tinyint unsigned NOT NULL DEFAULT '0',
     `stage`                           text             NOT NULL,
     `cutover_attempts`                int unsigned     NOT NULL DEFAULT '0',
+    `is_immediate_operation`          tinyint unsigned NOT NULL DEFAULT '0',
+    `reviewed_timestamp`              timestamp        NULL DEFAULT NULL,
     PRIMARY KEY (`id`),
     UNIQUE KEY `uuid_idx` (`migration_uuid`),
     KEY `keyspace_shard_idx` (`keyspace`(64), `shard`(64)),
