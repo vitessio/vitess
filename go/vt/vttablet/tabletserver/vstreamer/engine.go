@@ -126,6 +126,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vstreamersEndedWithErrors: env.Exporter().NewCounter("VStreamersEndedWithErrors", "Count of vstreamers that ended with errors"),
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 	}
+	env.Exporter().NewGaugeFunc("VStreamerCount", "Current number of vstreamers", vse.getVStreamerCount)
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
 	return vse
 }
@@ -373,6 +374,12 @@ func (vse *Engine) setWatch() {
 		vse.vschemaUpdates.Add(1)
 		return true
 	})
+}
+
+func (vse *Engine) getVStreamerCount() int64 {
+	vse.mu.Lock()
+	defer vse.mu.Unlock()
+	return int64(len(vse.streamers))
 }
 
 func getPacketSize() int64 {
