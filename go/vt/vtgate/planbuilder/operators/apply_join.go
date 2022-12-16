@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -185,7 +184,7 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 		}
 		a.Columns = append(a.Columns, offset+1)
 	default:
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not try to push this predicate here")
+		return 0, vterrors.VT13002(sqlparser.String(expr))
 	}
 
 	// the expression wasn't already there - let's add it

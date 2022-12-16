@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -29,6 +28,8 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -42,46 +43,62 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttls"
 
+	"github.com/google/uuid"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-
-	"github.com/google/uuid"
 )
 
 var (
-	mysqlServerPort               = flag.Int("mysql_server_port", -1, "If set, also listen for MySQL binary protocol connections on this port.")
-	mysqlServerBindAddress        = flag.String("mysql_server_bind_address", "", "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
-	mysqlServerSocketPath         = flag.String("mysql_server_socket_path", "", "This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket")
-	mysqlTCPVersion               = flag.String("mysql_tcp_version", "tcp", "Select tcp, tcp4, or tcp6 to control the socket type.")
-	mysqlAuthServerImpl           = flag.String("mysql_auth_server_impl", "static", "Which auth server implementation to use. Options: none, ldap, clientcert, static, vault.")
-	mysqlAllowClearTextWithoutTLS = flag.Bool("mysql_allow_clear_text_without_tls", false, "If set, the server will allow the use of a clear text password over non-SSL connections.")
-	mysqlProxyProtocol            = flag.Bool("proxy_protocol", false, "Enable HAProxy PROXY protocol on MySQL listener socket")
+	mysqlServerPort                   = -1
+	mysqlServerBindAddress            string
+	mysqlServerSocketPath             string
+	mysqlTCPVersion                   = "tcp"
+	mysqlAuthServerImpl               = "static"
+	mysqlAllowClearTextWithoutTLS     bool
+	mysqlProxyProtocol                bool
+	mysqlServerRequireSecureTransport bool
+	mysqlSslCert                      string
+	mysqlSslKey                       string
+	mysqlSslCa                        string
+	mysqlSslCrl                       string
+	mysqlSslServerCA                  string
+	mysqlTLSMinVersion                string
 
-	mysqlServerRequireSecureTransport = flag.Bool("mysql_server_require_secure_transport", false, "Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided")
+	mysqlConnReadTimeout          time.Duration
+	mysqlConnWriteTimeout         time.Duration
+	mysqlQueryTimeout             time.Duration
+	mysqlSlowConnectWarnThreshold time.Duration
+	mysqlConnBufferPooling        bool
 
-	mysqlSslCert = flag.String("mysql_server_ssl_cert", "", "Path to the ssl cert for mysql server plugin SSL")
-	mysqlSslKey  = flag.String("mysql_server_ssl_key", "", "Path to ssl key for mysql server plugin SSL")
-	mysqlSslCa   = flag.String("mysql_server_ssl_ca", "", "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
-	mysqlSslCrl  = flag.String("mysql_server_ssl_crl", "", "Path to ssl CRL for mysql server plugin SSL")
-
-	mysqlTLSMinVersion = flag.String("mysql_server_tls_min_version", "", "Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.")
-
-	mysqlSslServerCA = flag.String("mysql_server_ssl_server_ca", "", "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
-
-	mysqlSlowConnectWarnThreshold = flag.Duration("mysql_slow_connect_warn_threshold", 0, "Warn if it takes more than the given threshold for a mysql connection to establish")
-
-	mysqlConnReadTimeout  = flag.Duration("mysql_server_read_timeout", 0, "connection read timeout")
-	mysqlConnWriteTimeout = flag.Duration("mysql_server_write_timeout", 0, "connection write timeout")
-	mysqlQueryTimeout     = flag.Duration("mysql_server_query_timeout", 0, "mysql query timeout")
-
-	mysqlConnBufferPooling = flag.Bool("mysql-server-pool-conn-read-buffers", false, "If set, the server will pool incoming connection read buffers")
-
-	mysqlDefaultWorkloadName = flag.String("mysql_default_workload", "OLTP", "Default session workload (OLTP, OLAP, DBA)")
+	mysqlDefaultWorkloadName = "OLTP"
 	mysqlDefaultWorkload     int32
 
 	busyConnections int32
 )
+
+func registerPluginFlags(fs *pflag.FlagSet) {
+	fs.IntVar(&mysqlServerPort, "mysql_server_port", mysqlServerPort, "If set, also listen for MySQL binary protocol connections on this port.")
+	fs.StringVar(&mysqlServerBindAddress, "mysql_server_bind_address", mysqlServerBindAddress, "Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.")
+	fs.StringVar(&mysqlServerSocketPath, "mysql_server_socket_path", mysqlServerSocketPath, "This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket")
+	fs.StringVar(&mysqlTCPVersion, "mysql_tcp_version", mysqlTCPVersion, "Select tcp, tcp4, or tcp6 to control the socket type.")
+	fs.StringVar(&mysqlAuthServerImpl, "mysql_auth_server_impl", mysqlAuthServerImpl, "Which auth server implementation to use. Options: none, ldap, clientcert, static, vault.")
+	fs.BoolVar(&mysqlAllowClearTextWithoutTLS, "mysql_allow_clear_text_without_tls", mysqlAllowClearTextWithoutTLS, "If set, the server will allow the use of a clear text password over non-SSL connections.")
+	fs.BoolVar(&mysqlProxyProtocol, "proxy_protocol", mysqlProxyProtocol, "Enable HAProxy PROXY protocol on MySQL listener socket")
+	fs.BoolVar(&mysqlServerRequireSecureTransport, "mysql_server_require_secure_transport", mysqlServerRequireSecureTransport, "Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided")
+	fs.StringVar(&mysqlSslCert, "mysql_server_ssl_cert", mysqlSslCert, "Path to the ssl cert for mysql server plugin SSL")
+	fs.StringVar(&mysqlSslKey, "mysql_server_ssl_key", mysqlSslKey, "Path to ssl key for mysql server plugin SSL")
+	fs.StringVar(&mysqlSslCa, "mysql_server_ssl_ca", mysqlSslCa, "Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.")
+	fs.StringVar(&mysqlSslCrl, "mysql_server_ssl_crl", mysqlSslCrl, "Path to ssl CRL for mysql server plugin SSL")
+	fs.StringVar(&mysqlTLSMinVersion, "mysql_server_tls_min_version", mysqlTLSMinVersion, "Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.")
+	fs.StringVar(&mysqlSslServerCA, "mysql_server_ssl_server_ca", mysqlSslServerCA, "path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients")
+	fs.DurationVar(&mysqlSlowConnectWarnThreshold, "mysql_slow_connect_warn_threshold", mysqlSlowConnectWarnThreshold, "Warn if it takes more than the given threshold for a mysql connection to establish")
+	fs.DurationVar(&mysqlConnReadTimeout, "mysql_server_read_timeout", mysqlConnReadTimeout, "connection read timeout")
+	fs.DurationVar(&mysqlConnWriteTimeout, "mysql_server_write_timeout", mysqlConnWriteTimeout, "connection write timeout")
+	fs.DurationVar(&mysqlQueryTimeout, "mysql_server_query_timeout", mysqlQueryTimeout, "mysql query timeout")
+	fs.BoolVar(&mysqlConnBufferPooling, "mysql-server-pool-conn-read-buffers", mysqlConnBufferPooling, "If set, the server will pool incoming connection read buffers")
+	fs.StringVar(&mysqlDefaultWorkloadName, "mysql_default_workload", mysqlDefaultWorkloadName, "Default session workload (OLTP, OLAP, DBA)")
+}
 
 // vtgateHandler implements the Listener interface.
 // It stores the Session in the ClientData of a Connection.
@@ -134,8 +151,8 @@ func (vh *vtgateHandler) ConnectionClosed(c *mysql.Conn) {
 
 	var ctx context.Context
 	var cancel context.CancelFunc
-	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+	if mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), mysqlQueryTimeout)
 		defer cancel()
 	} else {
 		ctx = context.Background()
@@ -184,8 +201,8 @@ func startSpan(ctx context.Context, query, label string) (trace.Span, context.Co
 func (vh *vtgateHandler) ComQuery(c *mysql.Conn, query string, callback func(*sqltypes.Result) error) error {
 	ctx := context.Background()
 	var cancel context.CancelFunc
-	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(ctx, *mysqlQueryTimeout)
+	if mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(ctx, mysqlQueryTimeout)
 		defer cancel()
 	}
 
@@ -249,8 +266,8 @@ func fillInTxStatusFlags(c *mysql.Conn, session *vtgatepb.Session) {
 func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[string]*querypb.BindVariable) ([]*querypb.Field, error) {
 	var ctx context.Context
 	var cancel context.CancelFunc
-	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+	if mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), mysqlQueryTimeout)
 		defer cancel()
 	} else {
 		ctx = context.Background()
@@ -291,8 +308,8 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[st
 func (vh *vtgateHandler) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback func(*sqltypes.Result) error) error {
 	var ctx context.Context
 	var cancel context.CancelFunc
-	if *mysqlQueryTimeout != 0 {
-		ctx, cancel = context.WithTimeout(context.Background(), *mysqlQueryTimeout)
+	if mysqlQueryTimeout != 0 {
+		ctx, cancel = context.WithTimeout(context.Background(), mysqlQueryTimeout)
 		defer cancel()
 	} else {
 		ctx = context.Background()
@@ -342,7 +359,7 @@ func (vh *vtgateHandler) WarningCount(c *mysql.Conn) uint16 {
 
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
 func (vh *vtgateHandler) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
-	return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "ComBinlogDumpGTID")
+	return vterrors.VT12001("ComBinlogDumpGTID for the VTGate handler")
 }
 
 func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
@@ -403,7 +420,7 @@ func initTLSConfig(mysqlListener *mysql.Listener, mysqlSslCert, mysqlSslKey, mys
 // It should be called only once in a process.
 func initMySQLProtocol() {
 	// Flag is not set, just return.
-	if *mysqlServerPort < 0 && *mysqlServerSocketPath == "" {
+	if mysqlServerPort < 0 && mysqlServerSocketPath == "" {
 		return
 	}
 
@@ -416,15 +433,15 @@ func initMySQLProtocol() {
 	for _, initFn := range pluginInitializers {
 		initFn()
 	}
-	authServer := mysql.GetAuthServer(*mysqlAuthServerImpl)
+	authServer := mysql.GetAuthServer(mysqlAuthServerImpl)
 
 	// Check mysql_default_workload
 	var ok bool
-	if mysqlDefaultWorkload, ok = querypb.ExecuteOptions_Workload_value[strings.ToUpper(*mysqlDefaultWorkloadName)]; !ok {
+	if mysqlDefaultWorkload, ok = querypb.ExecuteOptions_Workload_value[strings.ToUpper(mysqlDefaultWorkloadName)]; !ok {
 		log.Exitf("-mysql_default_workload must be one of [OLTP, OLAP, DBA, UNSPECIFIED]")
 	}
 
-	switch *mysqlTCPVersion {
+	switch mysqlTCPVersion {
 	case "tcp", "tcp4", "tcp6":
 		// Valid flag value.
 	default:
@@ -434,16 +451,16 @@ func initMySQLProtocol() {
 	// Create a Listener.
 	var err error
 	vtgateHandle = newVtgateHandler(rpcVTGate)
-	if *mysqlServerPort >= 0 {
+	if mysqlServerPort >= 0 {
 		mysqlListener, err = mysql.NewListener(
-			*mysqlTCPVersion,
-			net.JoinHostPort(*mysqlServerBindAddress, fmt.Sprintf("%v", *mysqlServerPort)),
+			mysqlTCPVersion,
+			net.JoinHostPort(mysqlServerBindAddress, fmt.Sprintf("%v", mysqlServerPort)),
 			authServer,
 			vtgateHandle,
-			*mysqlConnReadTimeout,
-			*mysqlConnWriteTimeout,
-			*mysqlProxyProtocol,
-			*mysqlConnBufferPooling,
+			mysqlConnReadTimeout,
+			mysqlConnWriteTimeout,
+			mysqlProxyProtocol,
+			mysqlConnBufferPooling,
 		)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -451,29 +468,29 @@ func initMySQLProtocol() {
 		if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
 			mysqlListener.ServerVersion = mySQLVersion
 		}
-		if *mysqlSslCert != "" && *mysqlSslKey != "" {
-			tlsVersion, err := vttls.TLSVersionToNumber(*mysqlTLSMinVersion)
+		if mysqlSslCert != "" && mysqlSslKey != "" {
+			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
 				log.Exitf("mysql.NewListener failed: %v", err)
 			}
 
-			_ = initTLSConfig(mysqlListener, *mysqlSslCert, *mysqlSslKey, *mysqlSslCa, *mysqlSslCrl, *mysqlSslServerCA, *mysqlServerRequireSecureTransport, tlsVersion)
+			_ = initTLSConfig(mysqlListener, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlServerRequireSecureTransport, tlsVersion)
 		}
-		mysqlListener.AllowClearTextWithoutTLS.Set(*mysqlAllowClearTextWithoutTLS)
+		mysqlListener.AllowClearTextWithoutTLS.Set(mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
-		if *mysqlSlowConnectWarnThreshold != 0 {
+		if mysqlSlowConnectWarnThreshold != 0 {
 			log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
-			mysqlListener.SlowConnectWarnThreshold.Set(*mysqlSlowConnectWarnThreshold)
+			mysqlListener.SlowConnectWarnThreshold.Set(mysqlSlowConnectWarnThreshold)
 		}
 		// Start listening for tcp
 		go mysqlListener.Accept()
 	}
 
-	if *mysqlServerSocketPath != "" {
+	if mysqlServerSocketPath != "" {
 		// Let's create this unix socket with permissions to all users. In this way,
 		// clients can connect to vtgate mysql server without being vtgate user
 		oldMask := syscall.Umask(000)
-		mysqlUnixListener, err = newMysqlUnixSocket(*mysqlServerSocketPath, authServer, vtgateHandle)
+		mysqlUnixListener, err = newMysqlUnixSocket(mysqlServerSocketPath, authServer, vtgateHandle)
 		_ = syscall.Umask(oldMask)
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
@@ -492,10 +509,10 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 		address,
 		authServer,
 		handler,
-		*mysqlConnReadTimeout,
-		*mysqlConnWriteTimeout,
+		mysqlConnReadTimeout,
+		mysqlConnWriteTimeout,
 		false,
-		*mysqlConnBufferPooling,
+		mysqlConnBufferPooling,
 	)
 
 	switch err := err.(type) {
@@ -523,10 +540,10 @@ func newMysqlUnixSocket(address string, authServer mysql.AuthServer, handler mys
 			address,
 			authServer,
 			handler,
-			*mysqlConnReadTimeout,
-			*mysqlConnWriteTimeout,
+			mysqlConnReadTimeout,
+			mysqlConnWriteTimeout,
 			false,
-			*mysqlConnBufferPooling,
+			mysqlConnBufferPooling,
 		)
 		return listener, listenerErr
 	default:
@@ -597,13 +614,16 @@ func rollbackAtShutdown() {
 }
 
 func mysqlSocketPath() string {
-	if mysqlServerSocketPath == nil {
+	if mysqlServerSocketPath == "" {
 		return ""
 	}
-	return *mysqlServerSocketPath
+	return mysqlServerSocketPath
 }
 
 func init() {
+	servenv.OnParseFor("vtgate", registerPluginFlags)
+	servenv.OnParseFor("vtcombo", registerPluginFlags)
+
 	servenv.OnRun(initMySQLProtocol)
 	servenv.OnTermSync(shutdownMysqlProtocolAndDrain)
 	servenv.OnClose(rollbackAtShutdown)

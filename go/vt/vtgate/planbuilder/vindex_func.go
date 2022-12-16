@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -147,12 +146,12 @@ func (vf *vindexFunc) SupplyCol(col *sqlparser.ColName) (rc *resultColumn, colNu
 func (vf *vindexFunc) SupplyProjection(expr *sqlparser.AliasedExpr, reuse bool) (int, error) {
 	colName, isColName := expr.Expr.(*sqlparser.ColName)
 	if !isColName {
-		return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "unsupported: expression on results of a vindex function")
+		return 0, vterrors.VT12001("expression on results of a vindex function")
 	}
 
 	enum := vindexColumnToIndex(colName)
 	if enum == -1 {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown vindex column: %s", colName.Name.String())
+		return 0, vterrors.VT03016(colName.Name.String())
 	}
 
 	if reuse {
@@ -189,7 +188,7 @@ func (vf *vindexFunc) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (
 // Rewrite implements the logicalPlan interface
 func (vf *vindexFunc) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 0 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "vindexFunc: wrong number of inputs")
+		return vterrors.VT13001("vindexFunc: wrong number of inputs")
 	}
 	return nil
 }

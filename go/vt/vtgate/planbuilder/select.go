@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/log"
@@ -26,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/key"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -39,7 +37,7 @@ func buildSelectPlan(query string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		sel := stmt.(*sqlparser.Select)
 		if sel.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			return nil, vterrors.VT12001("WITH expression in SELECT statement")
 		}
 
 		p, err := handleDualSelects(sel, vschema)
@@ -126,9 +124,6 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 		len(sysTableTableSchema) == 0
 }
 
-var errSQLCalcFoundRows = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
-var errInto = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
-
 // processSelect builds a primitive tree for the given query or subquery.
 // The tree built by this function has the following general structure:
 //
@@ -168,12 +163,12 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 	// Check and error if there is any locking function present in select expression.
 	for _, expr := range sel.SelectExprs {
 		if aExpr, ok := expr.(*sqlparser.AliasedExpr); ok && sqlparser.IsLockingFunc(aExpr.Expr) {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(aExpr))
+			return vterrors.VT12001(fmt.Sprintf("%v is allowed only with dual", sqlparser.String(aExpr)))
 		}
 	}
 	if sel.SQLCalcFoundRows {
 		if outer != nil || query == "" {
-			return errSQLCalcFoundRows
+			return vterrors.VT03008("SQL_CALC_FOUND_ROWS")
 		}
 		sel.SQLCalcFoundRows = false
 		if sel.Limit != nil {
@@ -188,7 +183,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 
 	// Into is not supported in subquery.
 	if sel.Into != nil && (outer != nil || query == "") {
-		return errInto
+		return vterrors.VT03008("INTO")
 	}
 
 	var where sqlparser.Expr
@@ -204,7 +199,7 @@ func (pb *primitiveBuilder) processSelect(sel *sqlparser.Select, reservedVars *s
 		directives := sel.Comments.Directives()
 		rb.eroute.QueryTimeout = queryTimeout(directives)
 		if rb.eroute.TargetDestination != nil {
-			return errors.New("unsupported: SELECT with a target destination")
+			return vterrors.VT12001("SELECT with a target destination")
 		}
 		if directives.IsSet(sqlparser.DirectiveScatterErrorsAsWarnings) {
 			rb.eroute.ScatterErrorsAsWarnings = true
@@ -271,7 +266,7 @@ func copyCommentsAndLocks(statement sqlparser.SelectStatement, sel *sqlparser.Se
 	query.Lock = sel.Lock
 	if sel.Into != nil {
 		if opcode != engine.Unsharded {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "INTO is not supported on sharded keyspace")
+			return vterrors.VT12001("INTO on sharded keyspace")
 		}
 		query.Into = sel.Into
 	}
@@ -367,7 +362,7 @@ func handleDualSelects(sel *sqlparser.Select, vschema plancontext.VSchema) (engi
 			continue
 		}
 		if len(lockFunctions) > 0 {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lock function and other expression in same select query")
+			return nil, vterrors.VT12001(fmt.Sprintf("LOCK function and other expression: [%s] in same select query", sqlparser.String(expr)))
 		}
 		exprs[i], err = evalengine.Translate(expr.Expr, evalengine.LookupDefaultCollation(vschema.ConnCollation()))
 		if err != nil {
@@ -522,7 +517,7 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 			// We'll allow select * for simple routes.
 			rb, ok := pb.plan.(*route)
 			if !ok {
-				return nil, errors.New("unsupported: '*' expression in cross-shard query")
+				return nil, vterrors.VT12001("'*' expression in cross-shard query")
 			}
 			// Validate keyspace reference if any.
 			if !node.TableName.IsEmpty() {
@@ -535,15 +530,15 @@ func (pb *primitiveBuilder) pushSelectRoutes(selectExprs sqlparser.SelectExprs, 
 			rb, ok := pb.plan.(*route)
 			if !ok {
 				// This code is unreachable because the parser doesn't allow joins for next val statements.
-				return nil, errors.New("unsupported: SELECT NEXT query in cross-shard query")
+				return nil, vterrors.VT12001("SELECT NEXT query in cross-shard query")
 			}
 			if rb.eroute.Opcode != engine.Next {
-				return nil, errors.New("NEXT used on a non-sequence table")
+				return nil, vterrors.VT03018()
 			}
 			rb.eroute.Opcode = engine.Next
 			resultColumns = append(resultColumns, rb.PushAnonymous(node))
 		default:
-			return nil, fmt.Errorf("BUG: unexpected select expression type: %T", node)
+			return nil, vterrors.VT13001(fmt.Sprintf("unexpected SELECT expression type: %T", node))
 		}
 	}
 	return resultColumns, nil

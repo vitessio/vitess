@@ -104,7 +104,7 @@ func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 			return v.cols[i], nil
 		}
 	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
+	return nil, vterrors.VT03022(s, "field list")
 }
 
 func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {

@@ -398,11 +398,11 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	// that needs to be stored as shard session.
 	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] unexpected 'autocommitted' state in transaction")
+		return vterrors.VT13001("unexpected 'autocommitted' state in transaction")
 	}
 	if !(session.Session.InTransaction || session.Session.InReservedConn) {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] current session neither in transaction nor in reserved connection")
+		return vterrors.VT13001("current session is neither in transaction nor in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
@@ -746,13 +746,13 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 	for i, session := range sessions {
 		if proto.Equal(session.TabletAlias, tabletAlias) {
 			if session.TransactionId != 0 {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] removing shard session when in transaction")
+				return nil, vterrors.VT13001("removing shard session when in transaction")
 			}
 			idx = i
 		}
 	}
 	if idx == -1 {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to remove missing shard")
+		return nil, vterrors.VT13001("tried to remove missing shard")
 	}
 	return append(sessions[:idx], sessions[idx+1:]...), nil
 }
