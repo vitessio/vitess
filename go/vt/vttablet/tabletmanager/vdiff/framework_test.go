@@ -487,14 +487,14 @@ func (tmc *fakeTMClient) PrimaryPosition(ctx context.Context, tablet *topodatapb
 
 func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	vdiffenv = &testVDiffEnv{
-		workflow:        "testwf",
-		tablets:         make(map[int]*fakeTabletConn),
-		tmc:             newFakeTMClient(),
-		se:              schema.NewEngineForTests(),
-		dbClient:        binlogplayer.NewMockDBClient(t),
-		dbClientFactory: func() binlogplayer.DBClient { return vdiffenv.dbClient },
-		tmClientFactory: func() tmclient.TabletManagerClient { return vdiffenv.tmc },
+		workflow: "testwf",
+		tablets:  make(map[int]*fakeTabletConn),
+		tmc:      newFakeTMClient(),
+		se:       schema.NewEngineForTests(),
+		dbClient: binlogplayer.NewMockDBClient(t),
 	}
+	vdiffenv.dbClientFactory = func() binlogplayer.DBClient { return vdiffenv.dbClient }
+	vdiffenv.tmClientFactory = func() tmclient.TabletManagerClient { return vdiffenv.tmc }
 
 	tstenv.KeyspaceName = vdiffDBName
 
@@ -585,6 +585,7 @@ func (tvde *testVDiffEnv) close() {
 	vdiffenv.vse.Close()
 	vdiffenv.vre.Close()
 	vdiffenv.vde.Close()
+	vdiffenv.dbClient.Close()
 }
 
 func (tvde *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *fakeTabletConn {

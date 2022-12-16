@@ -122,8 +122,6 @@ func TestVDiff(t *testing.T) {
 	),
 		fmt.Sprintf("1|%s|%s|%s|%s|%s|pending|%s|", UUID, vdenv.workflow, tstenv.KeyspaceName, tstenv.ShardName, vdiffDBName, optionsJS),
 	)
-	err := vdenv.vde.addController(controllerQR.Named().Row(), options)
-	require.NoError(t, err)
 
 	vdenv.dbClient.ExpectRequest("select * from _vt.vdiff where id = 1", controllerQR, nil)
 	vdenv.dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where workflow = '%s' and db_name = '%s'", vdiffenv.workflow, vdiffDBName), sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -190,6 +188,11 @@ func TestVDiff(t *testing.T) {
 	vdenv.dbClient.ExpectRequest("select table_name as table_name from _vt.vdiff_table where vdiff_id = 1 and state != 'completed'", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest("update _vt.vdiff set state = 'completed', last_error = '' , completed_at = utc_timestamp() where id = 1", singleRowAffected, nil)
 	vdenv.dbClient.ExpectRequest("insert into _vt.vdiff_log(vdiff_id, message) values (1, 'State changed to: completed')", singleRowAffected, nil)
+
+	vdenv.vde.mu.Lock()
+	err := vdenv.vde.addController(controllerQR.Named().Row(), options)
+	vdenv.vde.mu.Unlock()
+	require.NoError(t, err)
 
 	vdenv.dbClient.Wait()
 }
