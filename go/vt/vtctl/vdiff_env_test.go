@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
@@ -57,6 +58,7 @@ type testVDiffEnv struct {
 	cell       string
 	tabletType topodatapb.TabletType
 	tmc        *testVDiffTMClient
+	cmdlog     *logutil.MemoryLogger
 
 	mu      sync.Mutex
 	tablets map[int]*testVDiffTablet
@@ -88,7 +90,10 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		cell:       "cell",
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestVDiffTMClient(),
+		cmdlog:     logutil.NewMemoryLogger(),
 	}
+	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc)
+
 	tabletID := 100
 	for _, shard := range sourceShards {
 		_ = env.addTablet(tabletID, "source", shard, topodatapb.TabletType_PRIMARY)
@@ -163,7 +168,7 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 
 		tabletID += 10
 	}
-	vdiffEnv = env
+	env.cmdlog.Clear()
 	return env
 }
 
@@ -174,6 +179,9 @@ func (env *testVDiffEnv) close() {
 		env.topoServ.DeleteTablet(context.Background(), t.tablet.Alias)
 	}
 	env.tablets = nil
+	env.cmdlog.Clear()
+	env.topoServ.Close()
+	env.wr = nil
 }
 
 func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testVDiffTablet {

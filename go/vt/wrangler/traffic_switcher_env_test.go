@@ -18,9 +18,11 @@ package wrangler
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -74,6 +76,7 @@ type testMigraterEnv struct {
 	sourceKeyRanges []*topodatapb.KeyRange
 	targetKeyRanges []*topodatapb.KeyRange
 	tmeDB           *fakesqldb.DB
+	mu              sync.Mutex
 }
 
 // testShardMigraterEnv has some convenience functions for adding expected queries.
@@ -105,6 +108,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer("cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
+	tme.wr.sem = sync2.NewSemaphore(1, 1)
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
@@ -267,6 +271,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
+	tme.wr.sem = sync2.NewSemaphore(1, 0)
 
 	tabletID := 10
 	for _, shard := range sourceShards {
@@ -394,6 +399,8 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 }
 
 func (tme *testMigraterEnv) startTablets(t *testing.T) {
+	tme.mu.Lock()
+	defer tme.mu.Unlock()
 	allPrimarys := append(tme.sourcePrimaries, tme.targetPrimaries...)
 	for _, primary := range allPrimarys {
 		primary.StartActionLoop(t, tme.wr)
@@ -428,6 +435,8 @@ func (tme *testMigraterEnv) stopTablets(t *testing.T) {
 }
 
 func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
+	tme.mu.Lock()
+	defer tme.mu.Unlock()
 	for _, primary := range tme.sourcePrimaries {
 		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbSourceClients = append(tme.dbSourceClients, dbclient)
@@ -591,4 +600,20 @@ func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
 	for _, dbclient := range tme.dbSourceClients {
 		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
 	}
+}
+
+func (tme *testMigraterEnv) close(t *testing.T) {
+	tme.mu.Lock()
+	defer tme.mu.Unlock()
+	tme.stopTablets(t)
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.Close()
+	}
+	for _, dbclient := range tme.dbTargetClients {
+		dbclient.Close()
+	}
+	tme.tmeDB.CloseAllConnections()
+	tme.ts.Close()
+	tme.wr.tmc.Close()
+	tme.wr = nil
 }
