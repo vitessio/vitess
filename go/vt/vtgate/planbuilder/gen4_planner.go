@@ -17,10 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
+	"fmt"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -40,7 +39,7 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 		case *sqlparser.Delete:
 			return gen4DeleteStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
+			return nil, vterrors.VT12001(fmt.Sprintf("%T", stmt))
 		}
 	}
 }
@@ -55,11 +54,11 @@ func gen4SelectStmtPlanner(
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			return nil, vterrors.VT12001("WITH expression in SELECT statement")
 		}
 	case *sqlparser.Union:
 		if node.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			return nil, vterrors.VT12001("WITH expression in UNION statement")
 		}
 	}
 
@@ -88,26 +87,26 @@ func gen4SelectStmtPlanner(
 		sel.SQLCalcFoundRows = false
 	}
 
-	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error) {
+	getPlan := func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, []string, error) {
 		return newBuildSelectPlan(selStatement, reservedVars, vschema, plannerVersion)
 	}
 
-	plan, st, err := getPlan(stmt)
+	plan, _, tablesUsed, err := getPlan(stmt)
 	if err != nil {
 		return nil, err
 	}
 
 	if shouldRetryAfterPredicateRewriting(plan) {
 		// by transforming the predicates to CNF, the planner will sometimes find better plans
-		primitive, st := gen4PredicateRewrite(stmt, getPlan)
-		if primitive != nil {
-			return newPlanResult(primitive, tablesFromSemantics(st)...), nil
+		plan2, _, tablesUsed := gen4PredicateRewrite(stmt, getPlan)
+		if plan2 != nil {
+			return newPlanResult(plan2.Primitive(), tablesUsed...), nil
 		}
 	}
 
 	primitive := plan.Primitive()
 	if !isSel {
-		return newPlanResult(primitive, tablesFromSemantics(st)...), nil
+		return newPlanResult(primitive, tablesUsed...), nil
 	}
 
 	// this is done because engine.Route doesn't handle the empty result well
@@ -122,7 +121,7 @@ func gen4SelectStmtPlanner(
 			prim.SendTo.NoRoutesSpecialHandling = true
 		}
 	}
-	return newPlanResult(primitive, tablesFromSemantics(st)...), nil
+	return newPlanResult(primitive, tablesUsed...), nil
 }
 
 func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select, query string, reservedVars *sqlparser.ReservedVars) (*planResult, error) {
@@ -137,33 +136,33 @@ func gen4planSQLCalcFoundRows(vschema plancontext.VSchema, sel *sqlparser.Select
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
 
-	plan, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
+	plan, tablesUsed, err := buildSQLCalcFoundRowsPlan(query, sel, reservedVars, vschema, planSelectGen4)
 	if err != nil {
 		return nil, err
 	}
-	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
+	return newPlanResult(plan.Primitive(), tablesUsed...), nil
 }
 
-func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, error) {
-	plan, _, err := newBuildSelectPlan(sel, reservedVars, vschema, 0)
+func planSelectGen4(reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, sel *sqlparser.Select) (*jointab, logicalPlan, []string, error) {
+	plan, _, tablesUsed, err := newBuildSelectPlan(sel, reservedVars, vschema, 0)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
-	return nil, plan, nil
+	return nil, plan, tablesUsed, nil
 }
 
-func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, error)) (engine.Primitive, *semantics.SemTable) {
+func gen4PredicateRewrite(stmt sqlparser.Statement, getPlan func(selStatement sqlparser.SelectStatement) (logicalPlan, *semantics.SemTable, []string, error)) (logicalPlan, *semantics.SemTable, []string) {
 	rewritten, isSel := sqlparser.RewritePredicate(stmt).(sqlparser.SelectStatement)
 	if !isSel {
 		// Fail-safe code, should never happen
-		return nil, nil
+		return nil, nil, nil
 	}
-	plan2, st, err := getPlan(rewritten)
+	plan2, st, op, err := getPlan(rewritten)
 	if err == nil && !shouldRetryAfterPredicateRewriting(plan2) {
 		// we only use this new plan if it's better than the old one we got
-		return plan2.Primitive(), st
+		return plan2, st, op
 	}
-	return nil, nil
+	return nil, nil, nil
 }
 
 func newBuildSelectPlan(
@@ -171,14 +170,14 @@ func newBuildSelectPlan(
 	reservedVars *sqlparser.ReservedVars,
 	vschema plancontext.VSchema,
 	version querypb.ExecuteOptions_PlannerVersion,
-) (plan logicalPlan, semTable *semantics.SemTable, err error) {
+) (plan logicalPlan, semTable *semantics.SemTable, tablesUsed []string, err error) {
 	ksName := ""
 	if ks, _ := vschema.DefaultKeyspace(); ks != nil {
 		ksName = ks.Name
 	}
 	semTable, err = semantics.Analyze(selStmt, ksName, vschema)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	// record any warning as planner warning.
 	vschema.PlannerWarning(semTable.Warning)
@@ -186,35 +185,35 @@ func newBuildSelectPlan(
 	ctx := plancontext.NewPlanningContext(reservedVars, semTable, vschema, version)
 
 	if ks, _ := semTable.SingleUnshardedKeyspace(); ks != nil {
-		plan, err = unshardedShortcut(ctx, selStmt, ks)
+		plan, tablesUsed, err = unshardedShortcut(ctx, selStmt, ks)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 		plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		return plan, semTable, err
+		return plan, semTable, tablesUsed, err
 	}
 
 	// From this point on, we know it is not an unsharded query and return the NotUnshardedErr if there is any
 	if semTable.NotUnshardedErr != nil {
-		return nil, nil, semTable.NotUnshardedErr
+		return nil, nil, nil, semTable.NotUnshardedErr
 	}
 
 	err = queryRewrite(semTable, reservedVars, selStmt)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	op, err := operators.PlanQuery(ctx, selStmt)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	plan, err = transformToLogicalPlan(ctx, op, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	plan = optimizePlan(plan)
@@ -222,20 +221,20 @@ func newBuildSelectPlan(
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
 		if err = setMiscFunc(plan, sel); err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
 	}
 
 	if err = plan.WireupGen4(ctx); err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
 	plan, err = pushCommentDirectivesOnPlan(plan, selStmt)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	return plan, semTable, nil
+	return plan, semTable, operators.TablesUsed(op), nil
 }
 
 // optimizePlan removes unnecessary simpleProjections that have been created while planning
@@ -267,7 +266,7 @@ func gen4UpdateStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if updStmt.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+		return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 	}
 
 	ksName := ""
@@ -293,7 +292,7 @@ func gen4UpdateStmtPlanner(
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(updStmt)
 		upd := &engine.Update{DML: edml}
-		return newPlanResult(upd, tablesFromSemantics(semTable)...), nil
+		return newPlanResult(upd, operators.QualifiedTables(ks, tables)...), nil
 	}
 
 	if semTable.NotUnshardedErr != nil {
@@ -328,7 +327,7 @@ func gen4UpdateStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
+	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
 func gen4DeleteStmtPlanner(
@@ -338,7 +337,7 @@ func gen4DeleteStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if deleteStmt.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
+		return nil, vterrors.VT12001("WITH expression in DELETE statement")
 	}
 
 	var err error
@@ -372,7 +371,7 @@ func gen4DeleteStmtPlanner(
 		edml.Opcode = engine.Unsharded
 		edml.Query = generateQuery(deleteStmt)
 		del := &engine.Delete{DML: edml}
-		return newPlanResult(del, tablesFromSemantics(semTable)...), nil
+		return newPlanResult(del, operators.QualifiedTables(ks, tables)...), nil
 	}
 
 	if err := checkIfDeleteSupported(deleteStmt, semTable); err != nil {
@@ -406,7 +405,7 @@ func gen4DeleteStmtPlanner(
 		return nil, err
 	}
 
-	return newPlanResult(plan.Primitive(), tablesFromSemantics(semTable)...), nil
+	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
 func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) (err error) {
@@ -563,40 +562,26 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	}
 
 	// Delete is only supported for a single TableExpr which is supposed to be an aliased expression
-	multiShardErr := errors.New("unsupported: multi-shard or vindex write statement")
+	multiShardErr := vterrors.VT12001("multi-shard or vindex write statement")
 	if len(del.TableExprs) != 1 {
 		return multiShardErr
 	}
-	aliasedTableExpr, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	_, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !isAliasedExpr {
 		return multiShardErr
 	}
 
 	if len(del.Targets) > 1 {
-		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
+		return vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
 	}
 
-	// Get the table information and the vindex table from it
-	ti, err := semTable.TableInfoFor(semTable.TableSetFor(aliasedTableExpr))
-	if err != nil {
-		return err
-	}
-	isSharded := false
-	vt := ti.GetVindexTable()
-	if vt != nil && vt.Keyspace != nil {
-		isSharded = vt.Keyspace.Sharded
-	}
-
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
 		case *sqlparser.Subquery, *sqlparser.DerivedTable:
 			// We have a subquery, so we must fail the planning.
 			// If this subquery and the table expression were all belonging to the same unsharded keyspace,
 			// we would have already created a plan for them before doing these checks.
-			if isSharded {
-				return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
-			}
-			return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
+			return false, vterrors.VT12001("subqueries in DML")
 		}
 		return true, nil
 	}, del)

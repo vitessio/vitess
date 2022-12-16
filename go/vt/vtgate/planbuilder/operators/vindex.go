@@ -17,7 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -49,7 +48,7 @@ type (
 	}
 )
 
-const vindexUnsupported = "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...)"
+const VindexUnsupported = "WHERE clause for vindex function must be of the form id = <val> or id in(<val>,...)"
 
 // Introduces implements the Operator interface
 func (v *Vindex) Introduces() semantics.TableSet {
@@ -81,7 +80,7 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 // checkValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)")
+		return vterrors.VT12001(VindexUnsupported + " (where clause missing)")
 	}
 
 	return nil
@@ -91,27 +90,27 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 	for _, e := range sqlparser.SplitAndExpression(nil, expr) {
 		deps := ctx.SemTable.RecursiveDeps(e)
 		if deps.NumberOfTables() > 1 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, vindexUnsupported+" (multiple tables involved)")
+			return nil, vterrors.VT12001(VindexUnsupported + " (multiple tables involved)")
 		}
 		// check if we already have a predicate
 		if v.OpCode != engine.VindexNone {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (multiple filters)")
+			return nil, vterrors.VT12001(VindexUnsupported + " (multiple filters)")
 		}
 
 		// check LHS
 		comparison, ok := e.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not a comparison)")
+			return nil, vterrors.VT12001(VindexUnsupported + " (not a comparison)")
 		}
 		if comparison.Operator != sqlparser.EqualOp && comparison.Operator != sqlparser.InOp {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (not equality)")
+			return nil, vterrors.VT12001(VindexUnsupported + " (not equality)")
 		}
 		colname, ok := comparison.Left.(*sqlparser.ColName)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not a column)")
+			return nil, vterrors.VT12001(VindexUnsupported + " (lhs is not a column)")
 		}
 		if !colname.Name.EqualString("id") {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (lhs is not id)")
+			return nil, vterrors.VT12001(VindexUnsupported + " (lhs is not id)")
 		}
 
 		// check RHS
@@ -119,13 +118,19 @@ func (v *Vindex) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.E
 		if sqlparser.IsValue(comparison.Right) || sqlparser.IsSimpleTuple(comparison.Right) {
 			v.Value = comparison.Right
 		} else {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+" (rhs is not a value)")
+			return nil, vterrors.VT12001(VindexUnsupported + " (rhs is not a value)")
 		}
 		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, vindexUnsupported+": %v", err)
+			return nil, vterrors.VT12001(VindexUnsupported+": %v", err)
 		}
 		v.OpCode = engine.VindexMap
 		v.Table.Predicates = append(v.Table.Predicates, e)
 	}
 	return v, nil
+}
+
+// TablesUsed implements the Operator interface.
+// It is not keyspace-qualified.
+func (v *Vindex) TablesUsed() []string {
+	return []string{v.Table.Table.Name.String()}
 }

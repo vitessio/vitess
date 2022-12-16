@@ -690,6 +690,7 @@ var keywords = []keyword{
 
 // keywordStrings contains the reverse mapping of token to keyword strings
 var keywordStrings = map[int]string{}
+var keywordVals = map[string]int{}
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
@@ -738,6 +739,7 @@ func init() {
 			panic(fmt.Sprintf("keyword %q must be lowercase in table", kw.name))
 		}
 		keywordStrings[kw.id] = kw.name
+		keywordVals[kw.name] = kw.id
 	}
 
 	keywordLookupTable = buildCaseInsensitiveTable(keywords)

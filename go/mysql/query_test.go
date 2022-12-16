@@ -351,6 +351,32 @@ func TestComStmtClose(t *testing.T) {
 
 }
 
+// This test has been added to verify that IO errors in a connection lead to SQL Server lost errors
+// So that we end up closing the connection higher up the stack and not reusing it.
+// This test was added in response to a panic that was run into.
+func TestSQLErrorOnServerClose(t *testing.T) {
+	// Create socket pair for the server and client
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	err := cConn.WriteComQuery("close before rows read")
+	require.NoError(t, err)
+
+	handler := &testRun{t: t}
+	_ = sConn.handleNextCommand(handler)
+
+	// From the server we will receive a field packet which the client will read
+	// At that point, if the server crashes and closes the connection.
+	// We should be getting a Connection lost error.
+	_, _, _, err = cConn.ReadQueryResult(100, true)
+	require.Error(t, err)
+	require.True(t, IsConnLostDuringQuery(err), err.Error())
+}
+
 func TestQueries(t *testing.T) {
 	listener, sConn, cConn := createSocketPair(t)
 	defer func() {

@@ -32548,6 +32548,9 @@ export namespace vschema {
 
         /** Table column_list_authoritative */
         column_list_authoritative?: (boolean|null);
+
+        /** Table source */
+        source?: (string|null);
     }
 
     /** Represents a Table. */
@@ -32576,6 +32579,9 @@ export namespace vschema {
 
         /** Table column_list_authoritative. */
         public column_list_authoritative: boolean;
+
+        /** Table source. */
+        public source: string;
 
         /**
          * Creates a new Table instance using the specified properties.

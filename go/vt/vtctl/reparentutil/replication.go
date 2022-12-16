@@ -214,7 +214,7 @@ func stopReplicationAndBuildStatusMaps(
 	tmc tmclient.TabletManagerClient,
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
-	waitReplicasTimeout time.Duration,
+	stopReplicationTimeout time.Duration,
 	ignoredTablets sets.String,
 	tabletToWaitFor *topodatapb.TabletAlias,
 	durability Durabler,
@@ -233,7 +233,7 @@ func stopReplicationAndBuildStatusMaps(
 		}
 	)
 
-	groupCtx, groupCancel := context.WithTimeout(ctx, waitReplicasTimeout)
+	groupCtx, groupCancel := context.WithTimeout(ctx, stopReplicationTimeout)
 	defer groupCancel()
 
 	fillStatus := func(alias string, tabletInfo *topo.TabletInfo, mustWaitForTablet bool) {

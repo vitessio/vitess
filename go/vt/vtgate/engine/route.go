@@ -51,7 +51,7 @@ type Route struct {
 	// Query specifies the query to be executed.
 	Query string
 
-	// TableName specifies the table to send the query to.
+	// TableName specifies the tables to send the query to.
 	TableName string
 
 	// FieldQuery specifies the query to be executed for a GetFieldInfo request.
@@ -441,7 +441,7 @@ func (route *Route) sort(in *sqltypes.Result) (*sqltypes.Result, error) {
 func (route *Route) description() PrimitiveDescription {
 	other := map[string]any{
 		"Query":      route.Query,
-		"Table":      route.TableName,
+		"Table":      route.GetTableName(),
 		"FieldQuery": route.FieldQuery,
 	}
 	if route.Vindex != nil {

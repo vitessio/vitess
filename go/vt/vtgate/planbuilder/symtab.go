@@ -17,12 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -30,8 +28,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
-
-var errNoTable = errors.New("no table info")
 
 // symtab represents the symbol table for a SELECT statement
 // or a subquery. The symtab evolves over time.
@@ -172,7 +168,7 @@ func (st *symtab) AddTable(t *table) error {
 		st.singleRoute = nil
 	}
 	if _, ok := st.tables[t.alias]; ok {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", t.alias.Name.String())
+		return vterrors.VT03013(t.alias.Name.String())
 	}
 	st.tables[t.alias] = t
 	st.tableNames = append(st.tableNames, t.alias)
@@ -214,7 +210,7 @@ func (st *symtab) AllVschemaTableNames() ([]*vindexes.Table, error) {
 	for _, tname := range st.tableNames {
 		t, ok := st.tables[tname]
 		if !ok {
-			return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
+			return nil, vterrors.VT05004(sqlparser.String(tname))
 		}
 		if t.vschemaTable != nil {
 			tables = append(tables, t.vschemaTable)
@@ -233,11 +229,11 @@ func (st *symtab) FindTable(tname sqlparser.TableName) (*table, error) {
 	if st.tableNames == nil {
 		// Unreachable because current code path checks for this condition
 		// before invoking this function.
-		return nil, errNoTable
+		return nil, vterrors.VT05007()
 	}
 	t, ok := st.tables[tname]
 	if !ok {
-		return nil, fmt.Errorf("table %v not found", sqlparser.String(tname))
+		return nil, vterrors.VT05004(sqlparser.String(tname))
 	}
 	return t, nil
 }
@@ -308,14 +304,14 @@ func (st *symtab) Find(col *sqlparser.ColName) (origin logicalPlan, isLocal bool
 	}
 
 	if st.Outer == nil {
-		return nil, false, fmt.Errorf("symbol %s not found", sqlparser.String(col))
+		return nil, false, vterrors.VT03019(sqlparser.String(col))
 	}
 	// Search is not continued if ResultColumns already has values:
 	// select a ... having ... (select b ... having a...). In this case,
 	// a (in having) should not match the outer-most 'a'. This is to
 	// match MySQL's behavior.
 	if len(st.ResultColumns) != 0 {
-		return nil, false, fmt.Errorf("symbol %s not found in subquery", sqlparser.String(col))
+		return nil, false, vterrors.VT03020(sqlparser.String(col))
 	}
 
 	if origin, _, err = st.Outer.Find(col); err != nil {
@@ -331,7 +327,7 @@ func (st *symtab) searchResultColumn(col *sqlparser.ColName) (c *column, err err
 	for _, rc := range st.ResultColumns {
 		if rc.alias.Equal(col.Name) {
 			if cursym != nil {
-				return nil, fmt.Errorf("ambiguous symbol reference: %v", sqlparser.String(col))
+				return nil, vterrors.VT03021(sqlparser.String(col))
 			}
 			cursym = rc
 		}
@@ -369,7 +365,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 			return &column{origin: st.singleRoute, st: st}, nil
 		default:
 			// If none of the above, the symbol is unresolvable.
-			return nil, fmt.Errorf("symbol %s not found", sqlparser.String(col))
+			return nil, vterrors.VT03019(sqlparser.String(col))
 		}
 	} else {
 		var ok bool
@@ -384,7 +380,7 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 	if !ok {
 		// We know all the column names of a subquery. Might as well return an error if it's not found.
 		if t.isAuthoritative {
-			return nil, fmt.Errorf("symbol %s not found in table or subquery", sqlparser.String(col))
+			return nil, vterrors.VT03019(sqlparser.String(col))
 		}
 		c = &column{
 			origin: t.Origin(),
@@ -399,14 +395,14 @@ func (st *symtab) searchTables(col *sqlparser.ColName) (*column, error) {
 // order expression.
 func ResultFromNumber(rcs []*resultColumn, val *sqlparser.Literal, caller string) (int, error) {
 	if val.Type != sqlparser.IntVal {
-		return 0, errors.New("column number is not an int")
+		return 0, vterrors.VT13001("column number is not an INT")
 	}
-	num, err := strconv.ParseInt(string(val.Val), 0, 64)
+	num, err := strconv.ParseInt(val.Val, 0, 64)
 	if err != nil {
-		return 0, fmt.Errorf("error parsing column number: %s", sqlparser.String(val))
+		return 0, vterrors.VT13001(fmt.Sprintf("error parsing column number: %s", sqlparser.String(val)))
 	}
 	if num < 1 || num > int64(len(rcs)) {
-		return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "Unknown column '%d' in '%s'", num, caller)
+		return 0, vterrors.VT03014(num, caller)
 	}
 	return int(num - 1), nil
 }
@@ -437,14 +433,14 @@ func (st *symtab) Vindex(expr sqlparser.Expr, scope *route) vindexes.SingleColum
 func BuildColName(rcs []*resultColumn, index int) (*sqlparser.ColName, error) {
 	alias := rcs[index].alias
 	if alias.IsEmpty() {
-		return nil, errors.New("cannot reference a complex expression")
+		return nil, vterrors.VT12001("reference a complex expression")
 	}
 	for i, rc := range rcs {
 		if i == index {
 			continue
 		}
 		if rc.alias.Equal(alias) {
-			return nil, fmt.Errorf("ambiguous symbol reference: %v", alias)
+			return nil, vterrors.VT03021(alias)
 		}
 	}
 	return &sqlparser.ColName{
@@ -458,14 +454,14 @@ func BuildColName(rcs []*resultColumn, index int) (*sqlparser.ColName, error) {
 // If a symbol cannot be resolved or if the expression contains
 // a subquery, an error is returned.
 func (st *symtab) ResolveSymbols(node sqlparser.SQLNode) error {
-	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
+	return sqlparser.Walk(func(currNode sqlparser.SQLNode) (kontinue bool, err error) {
+		switch currNode := currNode.(type) {
 		case *sqlparser.ColName:
-			if _, _, err := st.Find(node); err != nil {
+			if _, _, err := st.Find(currNode); err != nil {
 				return false, err
 			}
 		case *sqlparser.Subquery:
-			return false, errors.New("unsupported: subqueries disallowed in GROUP or ORDER BY")
+			return false, vterrors.VT12001(fmt.Sprintf("subqueries disallowed in %T", node))
 		}
 		return true, nil
 	}, node)
@@ -509,7 +505,7 @@ func (t *table) mergeColumn(alias sqlparser.IdentifierCI, c *column) (*column, e
 		return col, nil
 	}
 	if t.isAuthoritative {
-		return nil, fmt.Errorf("column %v not found in %v", sqlparser.String(alias), sqlparser.String(t.alias))
+		return nil, vterrors.VT03022(sqlparser.String(alias), sqlparser.String(t.alias))
 	}
 	c.colNumber = len(t.columnNames)
 	t.columns[lowered] = c
@@ -617,5 +613,5 @@ func GetReturnType(input sqlparser.Expr) (querypb.Type, error) {
 	case *sqlparser.Count, *sqlparser.CountStar:
 		return querypb.Type_INT64, nil
 	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot evaluate return type for %T", input)
+	return 0, vterrors.VT12001(fmt.Sprintf("evaluate return type for %T", input))
 }
