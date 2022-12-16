@@ -1,6 +1,6 @@
 bootstrap.sh @deepthi
 /config/mycnf/ @askdba @shlomi-noach
-/docker/ @derekperkins @dkhenry
+/docker/ @derekperkins @dkhenry @GuptaManan100 @frouioui
 /examples/compose @shlomi-noach
 /examples/demo @sougou
 /examples/legacy_local @deepthi
