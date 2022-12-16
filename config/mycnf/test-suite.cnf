@@ -24,6 +24,3 @@ sql_mode = STRICT_TRANS_TABLES
 # set a short heartbeat interval in order to detect failures quickly
 slave_net_timeout = 4
 
-# In order to protect against any errand GTIDs we will start mysql instance
-# as super-read-only mode.
-super-read-only
