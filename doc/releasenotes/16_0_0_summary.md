@@ -62,7 +62,7 @@ If you have code searching for error strings from Vitess, this is a breaking cha
 Many error strings have been tweaked.
 If your application is searching for specific errors, you might need to update your code.
 
-#### `lock-timeout` and `remote_operation_timeout` Changes
+#### <a id="lock-timeout-introduction"/> `lock-timeout` and `remote_operation_timeout` Changes
 Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced. 
 For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
 The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
@@ -241,3 +241,9 @@ VSchema Example
   }
 }
 ```
+
+### VTOrc
+
+#### Flag Deprecations
+
+The flag `lock-shard-timeout` has been deprecated. Please use the newly introduced `lock-timeout` instead. More detail [here](#lock-timeout-introduction).
