@@ -98,7 +98,7 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 }
 
 // NewTestVtctldServer returns a new VtctldServer for the given topo server
-// for use in tests. This should NOT be used in production.
+// AND tmclient for use in tests. This should NOT be used in production.
 func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
 	return &VtctldServer{
 		ts:  ts,
