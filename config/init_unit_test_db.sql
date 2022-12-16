@@ -11,12 +11,9 @@
 ###############################################################################
 # Equivalent of mysql_secure_installation
 ###############################################################################
-# We need to ensure that super_read_only is disabled so that we can execute
-# these commands. Note that disabling it does NOT disable read_only.
-# We save the current value so that we only re-enable it at the end if it was
-# enabled before.
-SET @original_super_read_only=IF(@@global.super_read_only=1, 'ON', 'OFF');
-SET GLOBAL super_read_only='OFF';
+# We need to ensure that read_only is disabled so that we can execute
+# these commands.
+SET GLOBAL read_only='OFF';
 
 # Changes during the init db should not make it to the binlog.
 # They could potentially create errant transactions on replicas.
