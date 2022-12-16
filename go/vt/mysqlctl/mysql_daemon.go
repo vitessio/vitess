@@ -64,6 +64,9 @@ type MysqlDaemon interface {
 	ResetReplicationParameters(ctx context.Context) error
 	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error)
 	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
+	FlushBinaryLogs(ctx context.Context) (err error)
+	GetBinaryLogs(ctx context.Context) (binaryLogs []string, err error)
+	GetPreviousGTIDs(ctx context.Context, binlog string) (previousGtids string, err error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error

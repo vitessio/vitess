@@ -447,7 +447,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	testcases := []testcase{
 		{
 			input:  []string{},
-			output: [][]string{t1FieldEvent, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, t2FieldEvent, t2Events, {"begin", "lastpk", "commit"}},
+			output: [][]string{t1FieldEvent, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, t2FieldEvent, t2Events, {"begin", "lastpk", "commit"}, {"copy_completed"}},
 		},
 
 		{
@@ -2177,6 +2177,10 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 			case "ddl":
 				if evs[i].Type != binlogdatapb.VEventType_DDL {
 					t.Fatalf("%v (%d): event: %v, want ddl", input, i, evs[i])
+				}
+			case "copy_completed":
+				if evs[i].Type != binlogdatapb.VEventType_COPY_COMPLETED {
+					t.Fatalf("%v (%d): event: %v, want copy_completed", input, i, evs[i])
 				}
 			default:
 				evs[i].Timestamp = 0

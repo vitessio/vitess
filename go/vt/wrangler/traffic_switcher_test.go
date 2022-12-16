@@ -998,7 +998,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"Enable writes on keyspace ks2 tables [t1,t2]",
 		"Switch routing from keyspace ks1 to keyspace ks2",
 		"Routing rules for tables [t1,t2] will be updated",
-		"SwitchWrites completed, freeze and delete vreplication streams on:",
+		"Switch writes completed, freeze and delete vreplication streams on:",
 		"	tablet 20",
 		"	tablet 30",
 		"Mark vreplication streams frozen on:",

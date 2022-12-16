@@ -78,9 +78,9 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
-	`update _vt.schema_migrations set migration_status='val' where mysql_schema='val'`,
-	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val'`,
-	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val' and shard='val'`,
+	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2'`,
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`,
 }
 
 var vexecInsertTemplates = []string{
@@ -98,7 +98,7 @@ var vexecInsertTemplates = []string{
 		migration_context,
 		migration_status
 	) VALUES (
-		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val', 'val'
+		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
 	)`,
 }
 
@@ -2144,7 +2144,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		postponeLaunch := row.AsBool("postpone_launch", false)
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		readyToComplete := row.AsBool("ready_to_complete", false)
-		ddlAction := row["ddl_action"].ToString()
+		isImmediateOperation := row.AsBool("is_immediate_operation", false)
 
 		if postponeLaunch {
 			// We don't even look into this migration until its postpone_launch flag is cleared
@@ -2152,18 +2152,19 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 		}
 
 		if !readyToComplete {
-			// Whether postponsed or not, CREATE and DROP operations are inherently "ready to complete"
-			// because their operation is instantaneous.
-			switch ddlAction {
-			case sqlparser.CreateStr, sqlparser.DropStr:
+			// see if we need to update ready_to_complete
+			if isImmediateOperation {
+				// Whether postponsed or not, CREATE and DROP operations, as well as VIEW operations,
+				// are inherently "ready to complete" because their operation is immediate.
 				if err := e.updateMigrationReadyToComplete(ctx, uuid, true); err != nil {
 					return err
 				}
 			}
 		}
-		if ddlAction == sqlparser.AlterStr || !postponeCompletion {
+
+		if !(isImmediateOperation && postponeCompletion) {
 			// Any non-postponed migration can be scheduled
-			// postponed ALTER can be scheduled
+			// postponed ALTER can be scheduled (because gh-ost or vreplication will postpone the cut-over)
 			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
 				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
@@ -2178,70 +2179,137 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 	return err
 }
 
-// reviewQueuedMigrations iterates queued migrations and sees if any information needs to be updated
+// reviewEmptyTableRevertMigrations reviews a queued REVERT migration. Such a migration has the following SQL:
+// "REVERT VITESS_MIGRATION '...'"
+// There's nothing in this SQL to indicate:
+// - which table is involved?
+// - is this a table or a view?
+// - Are we reverting a CREATE? A DROP? An ALTER?
+// This function fills in the blanks and updates the database row.
+func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineDDL *schema.OnlineDDL) (changesMade bool, err error) {
+	if onlineDDL.Table != "" {
+		return false, nil
+	}
+	// Table name is empty. Let's populate it.
+
+	// Try to update table name and ddl_action
+	// Failure to do so fails the migration
+	revertUUID, err := onlineDDL.GetRevertUUID()
+	if err != nil {
+		return false, e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot analyze revert UUID for revert migration %s: %v", onlineDDL.UUID, err))
+	}
+	revertedMigration, revertedRow, err := e.readMigration(ctx, revertUUID)
+	if err != nil {
+		return false, e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot read migration %s reverted by migration %s: %s", revertUUID, onlineDDL.UUID, err))
+	}
+	revertedActionStr := revertedRow["ddl_action"].ToString()
+
+	mimickedActionStr := ""
+	switch revertedActionStr {
+	case sqlparser.CreateStr:
+		mimickedActionStr = sqlparser.DropStr
+	case sqlparser.DropStr:
+		mimickedActionStr = sqlparser.CreateStr
+	case sqlparser.AlterStr:
+		mimickedActionStr = sqlparser.AlterStr
+	default:
+		return false, e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertedMigration.UUID, revertedActionStr))
+	}
+	if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
+		return false, err
+	}
+	if err := e.updateMigrationIsView(ctx, onlineDDL.UUID, revertedRow.AsBool("is_view", false)); err != nil {
+		return false, err
+	}
+	if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertedMigration.Table); err != nil {
+		return false, err
+	}
+	return true, nil
+}
+
+// reviewImmediateOperations reviews a queued migration and determines whether it is an "immediate operation".
+// Immediate operations are ones that can be performed within a split second, or rather, do not require long
+// running processes. Immediate operations are:
+// - CREATE TABLE
+// - DROP TABLE (which we convert into RENAME)
+// - All VIEW operations
+// - An INSTANT DDL accompanied by relevant ddl strategy flags
+// Non immediate operations are:
+// - A gh-ost migration
+// - A vitess (vreplication) migration
+func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysql.CapableOf, onlineDDL *schema.OnlineDDL, ddlAction string, isView bool) error {
+	isImmediateOperation := false
+	switch ddlAction {
+	case sqlparser.CreateStr, sqlparser.DropStr:
+		isImmediateOperation = true
+	case sqlparser.AlterStr:
+		if isView {
+			isImmediateOperation = true
+		} else {
+			specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
+			if err != nil {
+				return err
+			}
+			if specialPlan != nil {
+				isImmediateOperation = true
+			}
+		}
+	}
+	if isImmediateOperation {
+		if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// reviewQueuedMigrations iterates through queued migrations and sees if any information needs to be updated.
+// The function analyzes the queued migration and fills in some blanks:
+// - If this is a REVERT migration, what table is affected? What's the operation?
+// - Is this migration an "immediate operation"?
 func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
+	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaWithDB())
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	_, capableOf, _ := mysql.GetFlavor(conn.ServerVersion, nil)
+
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	// Review REVERT migrations
-	// These migrations are submitted with some details missing. This is because the statement
-	//   REVERT VITESS_MIGRATION '<uuid>'
-	// doesn't have much detail, we need to extract the info from the reverted migration. Missing details:
-	// - What table is affected?
-	// - What ddl action (CREATE, DROP, ALTER) is being reverted, or what is the counter-operation to be executed?
-
-	r, err := e.execQuery(ctx, sqlSelectQueuedRevertMigrations)
+	r, err := e.execQuery(ctx, sqlSelectQueuedUnreviewedMigrations)
 	if err != nil {
 		return err
 	}
 
-	for _, row := range r.Named().Rows {
-		uuid := row["migration_uuid"].ToString()
-		onlineDDL, _, err := e.readMigration(ctx, uuid)
+	for _, uuidRow := range r.Named().Rows {
+		uuid := uuidRow["migration_uuid"].ToString()
+		onlineDDL, row, err := e.readMigration(ctx, uuid)
 		if err != nil {
 			return err
 		}
-		reviewEmptyTableRevertMigrations := func() error {
-			if onlineDDL.Table != "" {
-				return nil
-			}
-			// Table name is empty. Let's populate it.
-
-			// Try to update table name and ddl_action
-			// Failure to do so fails the migration
-			revertUUID, err := onlineDDL.GetRevertUUID()
+		// handle REVERT migrations: populate table name and update ddl action and is_view:
+		ddlAction := row["ddl_action"].ToString()
+		if ddlAction == schema.RevertActionStr {
+			rowModified, err := e.reviewEmptyTableRevertMigrations(ctx, onlineDDL)
 			if err != nil {
-				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot analyze revert UUID for revert migration %s: %v", onlineDDL.UUID, err))
-			}
-			revertedMigration, row, err := e.readMigration(ctx, revertUUID)
-			if err != nil {
-				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot read migration %s reverted by migration %s: %s", revertUUID, onlineDDL.UUID, err))
-			}
-			revertedActionStr := row["ddl_action"].ToString()
-			mimickedActionStr := ""
-
-			switch revertedActionStr {
-			case sqlparser.CreateStr:
-				mimickedActionStr = sqlparser.DropStr
-			case sqlparser.DropStr:
-				mimickedActionStr = sqlparser.CreateStr
-			case sqlparser.AlterStr:
-				mimickedActionStr = sqlparser.AlterStr
-			default:
-				return e.failMigration(ctx, onlineDDL, fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertedMigration.UUID, revertedActionStr))
-			}
-			if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
 				return err
 			}
-			if err := e.updateMigrationIsView(ctx, onlineDDL.UUID, row.AsBool("is_view", false)); err != nil {
-				return err
+			if rowModified {
+				// re-read migration and entire row
+				onlineDDL, row, err = e.readMigration(ctx, uuid)
+				if err != nil {
+					return err
+				}
+				ddlAction = row["ddl_action"].ToString()
 			}
-			if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertedMigration.Table); err != nil {
-				return err
-			}
-			return nil
 		}
-		if err := reviewEmptyTableRevertMigrations(); err != nil {
+		isView := row.AsBool("is_view", false)
+		if err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isView); err != nil {
+			return err
+		}
+		if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
 			return err
 		}
 	}
@@ -2820,6 +2888,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 	if specialPlan == nil {
 		return false, nil
 	}
+
 	switch specialPlan.operation {
 	case instantDDLSpecialOperation:
 		e.addInstantAlgorithm(specialPlan.alterTable)
@@ -4003,16 +4072,27 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
 	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
-	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
-		sqltypes.StringBindVariable(message),
-		sqltypes.StringBindVariable(uuid),
-	)
-	if err != nil {
+
+	maxlen := 16383
+	update := func(message string) error {
+		if len(message) > maxlen {
+			message = message[0:maxlen]
+		}
+		message = strings.ToValidUTF8(message, "�")
+		query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
+			sqltypes.StringBindVariable(message),
+			sqltypes.StringBindVariable(uuid),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = e.execQuery(ctx, query)
 		return err
 	}
-	_, err = e.execQuery(ctx, query)
+	err := update(message)
 	if err != nil {
-		log.Errorf("FAIL updateMigrationMessage: uuid=%s, message=%s, error=%v", uuid, message, err)
+		// If, for some reason, we're unable to update the error message, let's write a generic message
+		err = update("unable to update with original migration error message")
 	}
 	return err
 }
@@ -4159,6 +4239,17 @@ func (e *Executor) updateVitessLivenessIndicator(ctx context.Context, uuid strin
 func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isView bool) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationIsView,
 		sqltypes.BoolBindVariable(isView),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) updateMigrationSetImmediateOperation(ctx context.Context, uuid string) error {
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationSetImmediateOperation,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {

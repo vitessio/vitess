@@ -48,7 +48,7 @@ type RPCPool struct {
 // will not be called).
 func NewRPCPool(size int, waitTimeout time.Duration, logWait func(time.Time)) *RPCPool {
 	return &RPCPool{
-		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, logWait, nil, 0),
+		rp:          NewResourcePool(rpcResourceFactory, size, size, 0, 0, logWait, nil, 0),
 		waitTimeout: waitTimeout,
 	}
 }
@@ -109,6 +109,10 @@ func (r *_rpc) IsSameSetting(string) bool {
 func (r *_rpc) ResetSetting(context.Context) error {
 	// should be unreachable
 	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: _rpc does not support ResetSetting")
+}
+
+func (r *_rpc) Expired(time.Duration) bool {
+	return false
 }
 
 // we only ever return the same rpc pointer. it's used as a sentinel and is

@@ -304,8 +304,8 @@ func (c *CreateViewEntity) identicalOtherThanName(other *CreateViewEntity) bool 
 		c.Security == other.Security &&
 		c.CheckOption == other.CheckOption &&
 		c.IsReplace == other.IsReplace &&
-		sqlparser.EqualsRefOfDefiner(c.Definer, other.Definer) &&
-		sqlparser.EqualsColumns(c.Columns, other.Columns) &&
-		sqlparser.EqualsSelectStatement(c.Select, other.Select) &&
-		sqlparser.EqualsRefOfParsedComments(c.Comments, other.Comments)
+		sqlparser.Equals.RefOfDefiner(c.Definer, other.Definer) &&
+		sqlparser.Equals.Columns(c.Columns, other.Columns) &&
+		sqlparser.Equals.SelectStatement(c.Select, other.Select) &&
+		sqlparser.Equals.RefOfParsedComments(c.Comments, other.Comments)
 }

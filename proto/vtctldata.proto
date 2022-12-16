@@ -272,6 +272,9 @@ message BackupRequest {
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
   uint64 concurrency = 3;
+  // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
+  // then the backup becomes incremental and applies as of given position.
+  string incremental_from_pos = 4;
 }
 
 message BackupResponse {
@@ -984,6 +987,12 @@ message RestoreFromBackupRequest {
   // BackupTime, if set, will use the backup taken most closely at or before
   // this time. If nil, the latest backup will be restored on the tablet.
   vttime.Time backup_time = 2;
+  // RestoreToPos indicates a position for a point-in-time recovery. The recovery
+  // is expected to utilize one full backup, followed by zero or more incremental backups,
+  // that reach the precise desired position
+  string restore_to_pos = 3;
+  // Dry run does not actually performs the restore, but validates the steps and availability of backups
+  bool dry_run = 4;
 }
 
 message RestoreFromBackupResponse {

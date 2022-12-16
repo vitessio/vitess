@@ -16,6 +16,8 @@ limitations under the License.
 
 package vterrors
 
+import vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+
 // State is error state
 type State int
 
@@ -84,3 +86,13 @@ const (
 	// No state should be added below NumOfStates
 	NumOfStates
 )
+
+// ErrorWithState is used to return the error State is such can be found
+type ErrorWithState interface {
+	ErrorState() State
+}
+
+// ErrorWithCode returns the grpc code
+type ErrorWithCode interface {
+	ErrorCode() vtrpcpb.Code
+}

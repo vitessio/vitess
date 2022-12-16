@@ -382,6 +382,7 @@ func (s *VtctldServer) Backup(req *vtctldatapb.BackupRequest, stream vtctlservic
 	span.Annotate("tablet_alias", topoproto.TabletAliasString(req.TabletAlias))
 	span.Annotate("allow_primary", req.AllowPrimary)
 	span.Annotate("concurrency", req.Concurrency)
+	span.Annotate("incremental_from_pos", req.IncrementalFromPos)
 
 	ti, err := s.ts.GetTablet(ctx, req.TabletAlias)
 	if err != nil {
@@ -456,7 +457,11 @@ func (s *VtctldServer) BackupShard(req *vtctldatapb.BackupShardRequest, stream v
 func (s *VtctldServer) backupTablet(ctx context.Context, tablet *topodatapb.Tablet, req *vtctldatapb.BackupRequest, stream interface {
 	Send(resp *vtctldatapb.BackupResponse) error
 }) error {
-	r := &tabletmanagerdatapb.BackupRequest{Concurrency: int64(req.Concurrency), AllowPrimary: req.AllowPrimary}
+	r := &tabletmanagerdatapb.BackupRequest{
+		Concurrency:        int64(req.Concurrency),
+		AllowPrimary:       req.AllowPrimary,
+		IncrementalFromPos: req.IncrementalFromPos,
+	}
 	logStream, err := s.tmc.Backup(ctx, tablet, r)
 	if err != nil {
 		return err
@@ -2713,7 +2718,12 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 	span.Annotate("keyspace", ti.Keyspace)
 	span.Annotate("shard", ti.Shard)
 
-	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, protoutil.TimeFromProto(req.BackupTime))
+	r := &tabletmanagerdatapb.RestoreFromBackupRequest{
+		BackupTime:   req.BackupTime,
+		RestoreToPos: req.RestoreToPos,
+		DryRun:       req.DryRun,
+	}
+	logStream, err := s.tmc.RestoreFromBackup(ctx, ti.Tablet, r)
 	if err != nil {
 		return err
 	}
@@ -2738,6 +2748,10 @@ func (s *VtctldServer) RestoreFromBackup(req *vtctldatapb.RestoreFromBackupReque
 		case io.EOF:
 			// Do not do anything when active reparenting is disabled.
 			if mysqlctl.DisableActiveReparents {
+				return nil
+			}
+			if req.RestoreToPos != "" && !req.DryRun {
+				// point in time recovery. Do not restore replication
 				return nil
 			}
 

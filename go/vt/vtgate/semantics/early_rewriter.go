@@ -411,7 +411,7 @@ func (r *earlyRewriter) expandTableColumns(
 			ts, found := usingCols[col.Name]
 			if found {
 				for i, ts := range ts.Constituents() {
-					if ts.Equals(currTable) {
+					if ts == currTable {
 						if i == 0 {
 							addColName(col)
 						} else {

@@ -579,6 +579,44 @@ func (mysqld *Mysqld) GetGTIDMode(ctx context.Context) (string, error) {
 	return conn.GetGTIDMode()
 }
 
+// FlushBinaryLogs is part of the MysqlDaemon interface.
+func (mysqld *Mysqld) FlushBinaryLogs(ctx context.Context) (err error) {
+	_, err = mysqld.FetchSuperQuery(ctx, "FLUSH BINARY LOGS")
+	return err
+}
+
+// GetBinaryLogs is part of the MysqlDaemon interface.
+func (mysqld *Mysqld) GetBinaryLogs(ctx context.Context) (binaryLogs []string, err error) {
+	qr, err := mysqld.FetchSuperQuery(ctx, "SHOW BINARY LOGS")
+	if err != nil {
+		return binaryLogs, err
+	}
+	for _, row := range qr.Rows {
+		binaryLogs = append(binaryLogs, row[0].ToString())
+	}
+	return binaryLogs, err
+}
+
+// GetPreviousGTIDs is part of the MysqlDaemon interface.
+func (mysqld *Mysqld) GetPreviousGTIDs(ctx context.Context, binlog string) (previousGtids string, err error) {
+	query := fmt.Sprintf("SHOW BINLOG EVENTS IN '%s' LIMIT 2", binlog)
+	qr, err := mysqld.FetchSuperQuery(ctx, query)
+	if err != nil {
+		return previousGtids, err
+	}
+	previousGtidsFound := false
+	for _, row := range qr.Named().Rows {
+		if row.AsString("Event_type", "") == "Previous_gtids" {
+			previousGtids = row.AsString("Info", "")
+			previousGtidsFound = true
+		}
+	}
+	if !previousGtidsFound {
+		return previousGtids, fmt.Errorf("GetPreviousGTIDs: previous GTIDs not found")
+	}
+	return previousGtids, nil
+}
+
 // SetSemiSyncEnabled enables or disables semi-sync replication for
 // primary and/or replica mode.
 func (mysqld *Mysqld) SetSemiSyncEnabled(primary, replica bool) error {

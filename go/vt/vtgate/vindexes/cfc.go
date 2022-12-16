@@ -87,28 +87,35 @@ import (
 // Specifically, offsets[0] is the byte offset of the first component,
 // offsets[1] is the byte offset of the second component, etc.
 type CFC struct {
-	name         string
-	hash         func([]byte) []byte
-	offsets      []int
-	prefixVindex SingleColumn
+	// CFC is used in all compare expressions other than 'LIKE'.
+	*cfcCommon
+	// prefixCFC is only used in 'LIKE' compare expressions.
+	prefixCFC *prefixCFC
+}
+
+type cfcCommon struct {
+	name    string
+	hash    func([]byte) []byte
+	offsets []int
 }
 
 // NewCFC creates a new CFC vindex
 func NewCFC(name string, params map[string]string) (Vindex, error) {
-	// CFC is used in all compare expressions other than 'LIKE'.
-	ss := &CFC{
+	ss := &cfcCommon{
 		name: name,
 	}
-	// prefixCFC is only used in 'LIKE' compare expressions.
-	ss.prefixVindex = &prefixCFC{CFC: ss}
+	cfc := &CFC{
+		cfcCommon: ss,
+		prefixCFC: &prefixCFC{cfcCommon: ss},
+	}
 
 	if params == nil {
-		return ss, nil
+		return cfc, nil
 	}
 
 	switch h := params["hash"]; h {
 	case "":
-		return ss, nil
+		return cfc, nil
 	case "md5":
 		ss.hash = md5hash
 	case "xxhash64":
@@ -132,7 +139,7 @@ func NewCFC(name string, params map[string]string) (Vindex, error) {
 		prev = off
 	}
 
-	return ss, nil
+	return cfc, nil
 }
 
 func validOffsets(offsets []int) bool {
@@ -173,7 +180,7 @@ func (vind *CFC) NeedsVCursor() bool {
 }
 
 // computeKsid returns the corresponding keyspace id of a key.
-func (vind *CFC) computeKsid(v []byte, prefix bool) ([]byte, error) {
+func (vind *cfcCommon) computeKsid(v []byte, prefix bool) ([]byte, error) {
 
 	if vind.hash == nil {
 		return v, nil
@@ -208,8 +215,7 @@ func (vind *CFC) computeKsid(v []byte, prefix bool) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-// Verify returns true if ids maps to ksids.
-func (vind *CFC) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+func (vind *cfcCommon) verify(ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
 	out := make([]bool, len(ids))
 	for i := range ids {
 		idBytes, err := ids[i].ToBytes()
@@ -225,8 +231,13 @@ func (vind *CFC) Verify(ctx context.Context, vcursor VCursor, ids []sqltypes.Val
 	return out, nil
 }
 
+// Verify returns true if ids maps to ksids.
+func (vind *CFC) Verify(_ context.Context, _ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	return vind.verify(ids, ksids)
+}
+
 // Map can map ids to key.Destination objects.
-func (vind *CFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *CFC) Map(_ context.Context, _ VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
 		idBytes, err := id.ToBytes()
@@ -244,7 +255,7 @@ func (vind *CFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value)
 
 // PrefixVindex switches the vindex to prefix mode
 func (vind *CFC) PrefixVindex() SingleColumn {
-	return vind.prefixVindex
+	return vind.prefixCFC
 }
 
 // NewKeyRangeFromPrefix creates a keyspace range from a prefix of keyspace id.
@@ -284,7 +295,19 @@ func addOne(value []byte) []byte {
 }
 
 type prefixCFC struct {
-	*CFC
+	*cfcCommon
+}
+
+func (vind *prefixCFC) String() string {
+	return vind.name
+}
+
+func (vind *prefixCFC) NeedsVCursor() bool {
+	return false
+}
+
+func (vind *prefixCFC) Verify(_ context.Context, _ VCursor, ids []sqltypes.Value, ksids [][]byte) ([]bool, error) {
+	return vind.verify(ids, ksids)
 }
 
 // In prefix mode, i.e. within a LIKE op, the cost is higher than regular mode.
@@ -302,7 +325,7 @@ func (vind *prefixCFC) IsUnique() bool {
 }
 
 // Map can map ids to key.Destination objects.
-func (vind *prefixCFC) Map(ctx context.Context, vcursor VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
+func (vind *prefixCFC) Map(_ context.Context, _ VCursor, ids []sqltypes.Value) ([]key.Destination, error) {
 	out := make([]key.Destination, len(ids))
 	for i, id := range ids {
 		value, err := id.ToBytes()

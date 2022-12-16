@@ -17,8 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -68,7 +69,7 @@ func getDMLRouting(where *sqlparser.Where, table *vindexes.Table) (
 ) {
 	// Check that we have a primary vindex which is valid
 	if len(table.ColumnVindexes) == 0 || !table.ColumnVindexes[0].IsUnique() {
-		return engine.Scatter, nil, nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.RequiresPrimaryKey, vterrors.PrimaryVindexNotSet, table.Name)
+		return engine.Scatter, nil, nil, nil, vterrors.VT09001(table.Name)
 	}
 	// ksidVindex is the primary vindex
 	ksidVindex := table.ColumnVindexes[0]
@@ -314,7 +315,7 @@ func buildDMLPlan(
 		if subqueryIsUnsharded {
 			vschema.WarnUnshardedOnly("subqueries can't be sharded in DML")
 		} else {
-			return nil, nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
+			return nil, nil, nil, vterrors.VT12001("sharded subqueries in DML")
 		}
 		edml.Opcode = engine.Unsharded
 		// Generate query after all the analysis. Otherwise table name substitutions for
@@ -325,7 +326,7 @@ func buildDMLPlan(
 	}
 
 	if hasSubquery(stmt) {
-		return nil, nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
+		return nil, nil, nil, vterrors.VT12001("sharded subqueries in DML")
 	}
 
 	// Generate query after all the analysis. Otherwise table name substitutions for
@@ -340,7 +341,7 @@ func buildDMLPlan(
 	edml.QueryTimeout = queryTimeout(directives)
 
 	if len(pb.st.tables) != 1 {
-		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table %s statement is not supported in sharded database", dmlType)
+		return nil, nil, nil, vterrors.VT12001(fmt.Sprintf("multi-table %s statement in a sharded keyspace", dmlType))
 	}
 	edmlTable, err := edml.GetSingleTable()
 	if err != nil {
@@ -353,7 +354,7 @@ func buildDMLPlan(
 
 	if rb.eroute.TargetDestination != nil {
 		if rb.eroute.TargetTabletType != topodatapb.TabletType_PRIMARY {
-			return nil, nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %s statement with a replica target", dmlType)
+			return nil, nil, nil, vterrors.VT09002(dmlType)
 		}
 		edml.Opcode = engine.ByDestination
 		edml.TargetDestination = rb.eroute.TargetDestination
@@ -363,7 +364,7 @@ func buildDMLPlan(
 	edml.Opcode = routingType
 	if routingType == engine.Scatter {
 		if limit != nil {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi shard %s with limit is not supported", dmlType)
+			return nil, nil, nil, vterrors.VT12001(fmt.Sprintf("multi-shard %s with LIMIT", dmlType))
 		}
 	} else {
 		edml.Vindex = vindex

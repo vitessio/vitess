@@ -46,6 +46,7 @@ func TestConfigParse(t *testing.T) {
 			IdleTimeoutSeconds: 20,
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
+			MaxLifetimeSeconds: 50,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000,
@@ -78,6 +79,7 @@ olapReadPool: {}
 oltp: {}
 oltpReadPool:
   idleTimeoutSeconds: 20
+  maxLifetimeSeconds: 50
   maxWaiters: 40
   prefillParallelism: 30
   size: 16
@@ -104,6 +106,7 @@ oltpReadPool:
   idleTimeoutSeconds: 20
   prefillParallelism: 30
   maxWaiters: 40
+  maxLifetimeSeconds: 50
 `)
 	gotCfg := cfg
 	gotCfg.DB = cfg.DB.Clone()
@@ -177,6 +180,7 @@ func TestClone(t *testing.T) {
 			IdleTimeoutSeconds: 20,
 			PrefillParallelism: 30,
 			MaxWaiters:         40,
+			MaxLifetimeSeconds: 50,
 		},
 		RowStreamer: RowStreamerConfig{
 			MaxInnoDBTrxHistLen: 1000000,

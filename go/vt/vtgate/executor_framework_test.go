@@ -177,7 +177,10 @@ var executorVSchema = `
 			"params": {
 				"region_bytes": "1"
 			}
-    	}
+    	},
+		"cfc": {
+			"type": "cfc"
+		}
 	},
 	"tables": {
 		"user": {
@@ -373,7 +376,25 @@ var executorVSchema = `
 					"name": "regional_vdx"
 				}
 			]
-    	}
+    	},
+		"tbl_cfc": {
+			"column_vindexes": [
+                {
+                    "column": "c1",
+                    "name": "cfc"
+                }
+			],
+			"columns": [
+				{
+					"name": "c2",
+					"type": "VARCHAR"
+				}
+			]
+    	},
+		"zip_detail": {
+			"type": "reference",
+			"source": "TestUnsharded.zip_detail"
+		}
 	}
 }
 `
@@ -411,7 +432,8 @@ var unshardedVSchema = `
 		"nrl_lu_idx": {},
 		"nv_lu_idx": {},
 		"lu_idx": {},
-		"simple": {}
+		"simple": {},
+		"zip_detail": {}
 	}
 }
 `

@@ -91,6 +91,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"backup_pitr": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/pitr", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "backup_pitr",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "30m"],
@@ -628,6 +637,15 @@
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vtgate_queries_reference": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/reference"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_concurrentdml": {

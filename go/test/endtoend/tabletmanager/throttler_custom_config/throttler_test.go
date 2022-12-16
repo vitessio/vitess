@@ -162,13 +162,15 @@ func TestThrottlerThresholdOK(t *testing.T) {
 
 	t.Run("immediately", func(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 	t.Run("after long wait", func(t *testing.T) {
 		time.Sleep(applyConfigWait)
 		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	})
 }
@@ -192,12 +194,14 @@ func TestThreadsRunning(t *testing.T) {
 		// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
 		{
 			resp, err := throttleCheck(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
 	})
@@ -207,12 +211,14 @@ func TestThreadsRunning(t *testing.T) {
 	t.Run("restored below threshold", func(t *testing.T) {
 		{
 			resp, err := throttleCheck(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
 	})
@@ -223,7 +229,7 @@ func vtgateExec(t *testing.T, query string, expectError string) *sqltypes.Result
 
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	qr, err := conn.ExecuteFetch(query, 1000, true)

@@ -17,8 +17,8 @@ limitations under the License.
 
 package integration
 
-// EqualsAST does deep equals between the two objects.
-func EqualsAST(inA, inB AST) bool {
+// AST does deep equals between the two objects.
+func (cmp *Comparator) AST(inA, inB AST) bool {
 	if inA == nil && inB == nil {
 		return true
 	}
@@ -37,75 +37,75 @@ func EqualsAST(inA, inB AST) bool {
 		if !ok {
 			return false
 		}
-		return EqualsBytes(a, b)
+		return cmp.Bytes(a, b)
 	case InterfaceContainer:
 		b, ok := inB.(InterfaceContainer)
 		if !ok {
 			return false
 		}
-		return EqualsInterfaceContainer(a, b)
+		return cmp.InterfaceContainer(a, b)
 	case InterfaceSlice:
 		b, ok := inB.(InterfaceSlice)
 		if !ok {
 			return false
 		}
-		return EqualsInterfaceSlice(a, b)
+		return cmp.InterfaceSlice(a, b)
 	case *Leaf:
 		b, ok := inB.(*Leaf)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfLeaf(a, b)
+		return cmp.RefOfLeaf(a, b)
 	case LeafSlice:
 		b, ok := inB.(LeafSlice)
 		if !ok {
 			return false
 		}
-		return EqualsLeafSlice(a, b)
+		return cmp.LeafSlice(a, b)
 	case *NoCloneType:
 		b, ok := inB.(*NoCloneType)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfNoCloneType(a, b)
+		return cmp.RefOfNoCloneType(a, b)
 	case *RefContainer:
 		b, ok := inB.(*RefContainer)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfRefContainer(a, b)
+		return cmp.RefOfRefContainer(a, b)
 	case *RefSliceContainer:
 		b, ok := inB.(*RefSliceContainer)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfRefSliceContainer(a, b)
+		return cmp.RefOfRefSliceContainer(a, b)
 	case *SubImpl:
 		b, ok := inB.(*SubImpl)
 		if !ok {
 			return false
 		}
-		return EqualsRefOfSubImpl(a, b)
+		return cmp.RefOfSubImpl(a, b)
 	case ValueContainer:
 		b, ok := inB.(ValueContainer)
 		if !ok {
 			return false
 		}
-		return EqualsValueContainer(a, b)
+		return cmp.ValueContainer(a, b)
 	case ValueSliceContainer:
 		b, ok := inB.(ValueSliceContainer)
 		if !ok {
 			return false
 		}
-		return EqualsValueSliceContainer(a, b)
+		return cmp.ValueSliceContainer(a, b)
 	default:
 		// this should never happen
 		return false
 	}
 }
 
-// EqualsBytes does deep equals between the two objects.
-func EqualsBytes(a, b Bytes) bool {
+// Bytes does deep equals between the two objects.
+func (cmp *Comparator) Bytes(a, b Bytes) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -117,26 +117,26 @@ func EqualsBytes(a, b Bytes) bool {
 	return true
 }
 
-// EqualsInterfaceContainer does deep equals between the two objects.
-func EqualsInterfaceContainer(a, b InterfaceContainer) bool {
+// InterfaceContainer does deep equals between the two objects.
+func (cmp *Comparator) InterfaceContainer(a, b InterfaceContainer) bool {
 	return true
 }
 
-// EqualsInterfaceSlice does deep equals between the two objects.
-func EqualsInterfaceSlice(a, b InterfaceSlice) bool {
+// InterfaceSlice does deep equals between the two objects.
+func (cmp *Comparator) InterfaceSlice(a, b InterfaceSlice) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsAST(a[i], b[i]) {
+		if !cmp.AST(a[i], b[i]) {
 			return false
 		}
 	}
 	return true
 }
 
-// EqualsRefOfLeaf does deep equals between the two objects.
-func EqualsRefOfLeaf(a, b *Leaf) bool {
+// RefOfLeaf does deep equals between the two objects.
+func (cmp *Comparator) RefOfLeaf(a, b *Leaf) bool {
 	if a == b {
 		return true
 	}
@@ -146,21 +146,21 @@ func EqualsRefOfLeaf(a, b *Leaf) bool {
 	return a.v == b.v
 }
 
-// EqualsLeafSlice does deep equals between the two objects.
-func EqualsLeafSlice(a, b LeafSlice) bool {
+// LeafSlice does deep equals between the two objects.
+func (cmp *Comparator) LeafSlice(a, b LeafSlice) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsRefOfLeaf(a[i], b[i]) {
+		if !cmp.RefOfLeaf(a[i], b[i]) {
 			return false
 		}
 	}
 	return true
 }
 
-// EqualsRefOfNoCloneType does deep equals between the two objects.
-func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
+// RefOfNoCloneType does deep equals between the two objects.
+func (cmp *Comparator) RefOfNoCloneType(a, b *NoCloneType) bool {
 	if a == b {
 		return true
 	}
@@ -170,8 +170,8 @@ func EqualsRefOfNoCloneType(a, b *NoCloneType) bool {
 	return a.v == b.v
 }
 
-// EqualsRefOfRefContainer does deep equals between the two objects.
-func EqualsRefOfRefContainer(a, b *RefContainer) bool {
+// RefOfRefContainer does deep equals between the two objects.
+func (cmp *Comparator) RefOfRefContainer(a, b *RefContainer) bool {
 	if a == b {
 		return true
 	}
@@ -179,51 +179,51 @@ func EqualsRefOfRefContainer(a, b *RefContainer) bool {
 		return false
 	}
 	return a.NotASTType == b.NotASTType &&
-		EqualsAST(a.ASTType, b.ASTType) &&
-		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+		cmp.AST(a.ASTType, b.ASTType) &&
+		cmp.RefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
 }
 
-// EqualsRefOfRefSliceContainer does deep equals between the two objects.
-func EqualsRefOfRefSliceContainer(a, b *RefSliceContainer) bool {
+// RefOfRefSliceContainer does deep equals between the two objects.
+func (cmp *Comparator) RefOfRefSliceContainer(a, b *RefSliceContainer) bool {
 	if a == b {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
-		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
+		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
-// EqualsRefOfSubImpl does deep equals between the two objects.
-func EqualsRefOfSubImpl(a, b *SubImpl) bool {
+// RefOfSubImpl does deep equals between the two objects.
+func (cmp *Comparator) RefOfSubImpl(a, b *SubImpl) bool {
 	if a == b {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSubIface(a.inner, b.inner) &&
-		EqualsRefOfBool(a.field, b.field)
+	return cmp.SubIface(a.inner, b.inner) &&
+		cmp.RefOfBool(a.field, b.field)
 }
 
-// EqualsValueContainer does deep equals between the two objects.
-func EqualsValueContainer(a, b ValueContainer) bool {
+// ValueContainer does deep equals between the two objects.
+func (cmp *Comparator) ValueContainer(a, b ValueContainer) bool {
 	return a.NotASTType == b.NotASTType &&
-		EqualsAST(a.ASTType, b.ASTType) &&
-		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+		cmp.AST(a.ASTType, b.ASTType) &&
+		cmp.RefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
 }
 
-// EqualsValueSliceContainer does deep equals between the two objects.
-func EqualsValueSliceContainer(a, b ValueSliceContainer) bool {
-	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
-		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+// ValueSliceContainer does deep equals between the two objects.
+func (cmp *Comparator) ValueSliceContainer(a, b ValueSliceContainer) bool {
+	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
+		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
 
-// EqualsSubIface does deep equals between the two objects.
-func EqualsSubIface(inA, inB SubIface) bool {
+// SubIface does deep equals between the two objects.
+func (cmp *Comparator) SubIface(inA, inB SubIface) bool {
 	if inA == nil && inB == nil {
 		return true
 	}
@@ -236,15 +236,15 @@ func EqualsSubIface(inA, inB SubIface) bool {
 		if !ok {
 			return false
 		}
-		return EqualsRefOfSubImpl(a, b)
+		return cmp.RefOfSubImpl(a, b)
 	default:
 		// this should never happen
 		return false
 	}
 }
 
-// EqualsRefOfInterfaceContainer does deep equals between the two objects.
-func EqualsRefOfInterfaceContainer(a, b *InterfaceContainer) bool {
+// RefOfInterfaceContainer does deep equals between the two objects.
+func (cmp *Comparator) RefOfInterfaceContainer(a, b *InterfaceContainer) bool {
 	if a == b {
 		return true
 	}
@@ -254,21 +254,21 @@ func EqualsRefOfInterfaceContainer(a, b *InterfaceContainer) bool {
 	return true
 }
 
-// EqualsSliceOfAST does deep equals between the two objects.
-func EqualsSliceOfAST(a, b []AST) bool {
+// SliceOfAST does deep equals between the two objects.
+func (cmp *Comparator) SliceOfAST(a, b []AST) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsAST(a[i], b[i]) {
+		if !cmp.AST(a[i], b[i]) {
 			return false
 		}
 	}
 	return true
 }
 
-// EqualsSliceOfInt does deep equals between the two objects.
-func EqualsSliceOfInt(a, b []int) bool {
+// SliceOfInt does deep equals between the two objects.
+func (cmp *Comparator) SliceOfInt(a, b []int) bool {
 	if len(a) != len(b) {
 		return false
 	}
@@ -280,21 +280,21 @@ func EqualsSliceOfInt(a, b []int) bool {
 	return true
 }
 
-// EqualsSliceOfRefOfLeaf does deep equals between the two objects.
-func EqualsSliceOfRefOfLeaf(a, b []*Leaf) bool {
+// SliceOfRefOfLeaf does deep equals between the two objects.
+func (cmp *Comparator) SliceOfRefOfLeaf(a, b []*Leaf) bool {
 	if len(a) != len(b) {
 		return false
 	}
 	for i := 0; i < len(a); i++ {
-		if !EqualsRefOfLeaf(a[i], b[i]) {
+		if !cmp.RefOfLeaf(a[i], b[i]) {
 			return false
 		}
 	}
 	return true
 }
 
-// EqualsRefOfBool does deep equals between the two objects.
-func EqualsRefOfBool(a, b *bool) bool {
+// RefOfBool does deep equals between the two objects.
+func (cmp *Comparator) RefOfBool(a, b *bool) bool {
 	if a == b {
 		return true
 	}
@@ -304,8 +304,8 @@ func EqualsRefOfBool(a, b *bool) bool {
 	return *a == *b
 }
 
-// EqualsRefOfValueContainer does deep equals between the two objects.
-func EqualsRefOfValueContainer(a, b *ValueContainer) bool {
+// RefOfValueContainer does deep equals between the two objects.
+func (cmp *Comparator) RefOfValueContainer(a, b *ValueContainer) bool {
 	if a == b {
 		return true
 	}
@@ -313,19 +313,21 @@ func EqualsRefOfValueContainer(a, b *ValueContainer) bool {
 		return false
 	}
 	return a.NotASTType == b.NotASTType &&
-		EqualsAST(a.ASTType, b.ASTType) &&
-		EqualsRefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
+		cmp.AST(a.ASTType, b.ASTType) &&
+		cmp.RefOfLeaf(a.ASTImplementationType, b.ASTImplementationType)
 }
 
-// EqualsRefOfValueSliceContainer does deep equals between the two objects.
-func EqualsRefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
+// RefOfValueSliceContainer does deep equals between the two objects.
+func (cmp *Comparator) RefOfValueSliceContainer(a, b *ValueSliceContainer) bool {
 	if a == b {
 		return true
 	}
 	if a == nil || b == nil {
 		return false
 	}
-	return EqualsSliceOfAST(a.ASTElements, b.ASTElements) &&
-		EqualsSliceOfInt(a.NotASTElements, b.NotASTElements) &&
-		EqualsSliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
+	return cmp.SliceOfAST(a.ASTElements, b.ASTElements) &&
+		cmp.SliceOfInt(a.NotASTElements, b.NotASTElements) &&
+		cmp.SliceOfRefOfLeaf(a.ASTImplementationElements, b.ASTImplementationElements)
 }
+
+type Comparator struct{}

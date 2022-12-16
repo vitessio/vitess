@@ -17,13 +17,14 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -68,7 +69,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	var err error
-	hp.qp, err = operators.CreateQPFromSelect(hp.sel)
+	hp.qp, err = operators.CreateQPFromSelect(ctx, hp.sel)
 	if err != nil {
 		return nil, err
 	}
@@ -244,7 +245,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 
 	var order []operators.OrderBy
 	if hp.qp.CanPushDownSorting {
-		hp.qp.AlignGroupByAndOrderBy()
+		hp.qp.AlignGroupByAndOrderBy(ctx)
 		// the grouping order might have changed, so we reload the grouping expressions
 		grouping = hp.qp.GetGrouping()
 		order = hp.qp.OrderExprs
@@ -265,14 +266,14 @@ func (hp *horizonPlanning) planAggrUsingOA(
 	}
 
 	if hp.sel.Having != nil {
-		rewriter := hp.qp.AggrRewriter()
+		rewriter := hp.qp.AggrRewriter(ctx)
 		sqlparser.Rewrite(hp.sel.Having.Expr, rewriter.Rewrite(), nil)
 		if rewriter.Err != nil {
 			return nil, rewriter.Err
 		}
 	}
 
-	aggregationExprs, err := hp.qp.AggregationExpressions()
+	aggregationExprs, err := hp.qp.AggregationExpressions(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -500,7 +501,7 @@ func (hp *horizonPlanning) handleDistinctAggr(ctx *plancontext.PlanningContext, 
 			distinctExpr = innerWS
 		} else {
 			if !ctx.SemTable.EqualsExpr(distinctExpr, innerWS) {
-				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: only one distinct aggregation allowed in a select: %s", sqlparser.String(expr.Original))
+				err = vterrors.VT12001(fmt.Sprintf("only one DISTINCT aggregation is allowed in a SELECT: %s", sqlparser.String(expr.Original)))
 				return nil, nil, nil, err
 			}
 		}
@@ -640,7 +641,7 @@ func (hp *horizonPlanning) planOrderBy(ctx *plancontext.PlanningContext, orderEx
 		}
 		return plan, nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "ordering on complex query %T", plan)
+	return nil, vterrors.VT13001(fmt.Sprintf("ORDER BY in complex query %T", plan))
 }
 
 func isSpecialOrderBy(o operators.OrderBy) bool {
@@ -653,7 +654,7 @@ func isSpecialOrderBy(o operators.OrderBy) bool {
 
 func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operators.OrderBy, plan *routeGen4, hasStar bool) (logicalPlan, error) {
 	for _, order := range orderExprs {
-		err := checkOrderExprCanBePlannedInScatter(plan, order, hasStar)
+		err := checkOrderExprCanBePlannedInScatter(ctx, plan, order, hasStar)
 		if err != nil {
 			return nil, err
 		}
@@ -682,7 +683,7 @@ func planOrderByForRoute(ctx *plancontext.PlanningContext, orderExprs []operator
 
 // checkOrderExprCanBePlannedInScatter verifies that the given order by expression can be planned.
 // It checks if the expression exists in the plan's select list when the query is a scatter.
-func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order operators.OrderBy, hasStar bool) error {
+func checkOrderExprCanBePlannedInScatter(ctx *plancontext.PlanningContext, plan *routeGen4, order operators.OrderBy, hasStar bool) error {
 	if !hasStar {
 		return nil
 	}
@@ -690,13 +691,13 @@ func checkOrderExprCanBePlannedInScatter(plan *routeGen4, order operators.OrderB
 	found := false
 	for _, expr := range sel.SelectExprs {
 		aliasedExpr, isAliasedExpr := expr.(*sqlparser.AliasedExpr)
-		if isAliasedExpr && sqlparser.EqualsExpr(aliasedExpr.Expr, order.Inner.Expr) {
+		if isAliasedExpr && ctx.SemTable.EqualsExpr(aliasedExpr.Expr, order.Inner.Expr) {
 			found = true
 			break
 		}
 	}
 	if !found {
-		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: order by must reference a column in the select list: "+sqlparser.String(order.Inner))
+		return vterrors.VT12001(fmt.Sprintf("in scatter query: ORDER BY must reference a column in the SELECT list: %s", sqlparser.String(order.Inner)))
 	}
 	return nil
 }
@@ -719,7 +720,7 @@ func wrapAndPushExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr, weig
 			expr = unary.Expr
 		}
 		if !sqlparser.IsColName(expr) {
-			return 0, 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex order by expression: %s", sqlparser.String(expr))
+			return 0, 0, vterrors.VT13001(fmt.Sprintf("in scatter query: complex ORDER BY expression: %s", sqlparser.String(expr)))
 		}
 	}
 	qt := ctx.SemTable.TypeFor(expr)
@@ -810,9 +811,9 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	}
 
 	for _, order := range orderExprs {
-		offset, woffset, found := findExprInOrderedAggr(plan, order)
+		offset, woffset, found := findExprInOrderedAggr(ctx, plan, order)
 		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected to find the order by expression (%s) in orderedAggregate", sqlparser.String(order.Inner))
+			return nil, vterrors.VT13001(fmt.Sprintf("expected to find ORDER BY expression (%s) in orderedAggregate", sqlparser.String(order.Inner)))
 		}
 
 		collationID := ctx.SemTable.CollationForExpr(order.WeightStrExpr)
@@ -827,16 +828,16 @@ func createMemorySortPlanOnAggregation(ctx *plancontext.PlanningContext, plan *o
 	return ms, nil
 }
 
-func findExprInOrderedAggr(plan *orderedAggregate, order operators.OrderBy) (keyCol int, weightStringCol int, found bool) {
+func findExprInOrderedAggr(ctx *plancontext.PlanningContext, plan *orderedAggregate, order operators.OrderBy) (keyCol int, weightStringCol int, found bool) {
 	for _, key := range plan.groupByKeys {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, key.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, key.Expr) {
+		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, key.Expr) ||
+			ctx.SemTable.EqualsExpr(order.Inner.Expr, key.Expr) {
 			return key.KeyCol, key.WeightStringCol, true
 		}
 	}
 	for _, aggregate := range plan.aggregates {
-		if sqlparser.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
-			sqlparser.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
+		if ctx.SemTable.EqualsExpr(order.WeightStrExpr, aggregate.Original.Expr) ||
+			ctx.SemTable.EqualsExpr(order.Inner.Expr, aggregate.Original.Expr) {
 			return aggregate.Col, -1, true
 		}
 	}
@@ -903,7 +904,7 @@ func (hp *horizonPlanning) planDistinct(ctx *plancontext.PlanningContext, plan l
 	case *orderedAggregate:
 		return hp.planDistinctOA(ctx.SemTable, p)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown plan type for DISTINCT %T", plan)
+		return nil, vterrors.VT13001(fmt.Sprintf("unknown plan type for DISTINCT %T", plan))
 	}
 }
 
@@ -938,7 +939,7 @@ func (hp *horizonPlanning) planDistinctOA(semTable *semantics.SemTable, currPlan
 			}
 		}
 		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unable to plan distinct query as the column is not projected: %s", sqlparser.String(sExpr.Col))
+			return nil, vterrors.VT13001(fmt.Sprintf("unable to plan DISTINCT query as the column is not projected: %s", sqlparser.String(sExpr.Col)))
 		}
 	}
 	return oa, nil
@@ -953,7 +954,7 @@ func (hp *horizonPlanning) addDistinct(ctx *plancontext.PlanningContext, plan lo
 			return nil, err
 		}
 		if isAmbiguousOrderBy(index, aliasExpr.As, hp.qp.SelectExprs) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "generating order by clause: ambiguous symbol reference: %s", sqlparser.String(aliasExpr.As))
+			return nil, vterrors.VT13001(fmt.Sprintf("generating ORDER BY clause: ambiguous symbol reference: %s", sqlparser.String(aliasExpr.As)))
 		}
 		var inner sqlparser.Expr
 		if aliasExpr.As.IsEmpty() {
@@ -1048,11 +1049,11 @@ func pushHaving(ctx *plancontext.PlanningContext, expr sqlparser.Expr, plan logi
 	case *pulloutSubquery:
 		return pushHaving(ctx, expr, node.underlying)
 	case *simpleProjection:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: filtering on results of cross-shard derived table")
+		return nil, vterrors.VT13001("filtering on results of cross-shard derived table")
 	case *orderedAggregate:
 		return newFilter(ctx, plan, expr)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.filtering", plan)
+	return nil, vterrors.VT13001(fmt.Sprintf("unreachable %T.filtering", plan))
 }
 
 func isJoin(plan logicalPlan) bool {
@@ -1120,7 +1121,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	case *sqlparser.Select:
 		toNode, ok := to.(*sqlparser.Select)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+			return vterrors.VT13001("AST did not match")
 		}
 		toNode.Distinct = node.Distinct
 		toNode.GroupBy = node.GroupBy
@@ -1134,7 +1135,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+			return vterrors.VT13001("AST did not match")
 		}
 		err = stripDownQuery(node.Left, toNode.Left)
 		if err != nil {
@@ -1146,7 +1147,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		}
 		toNode.OrderBy = node.OrderBy
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
+		return vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from))
 	}
 	return nil
 }
@@ -1166,9 +1167,9 @@ func planGroupByGen4(ctx *plancontext.PlanningContext, groupExpr operators.Group
 	case *pulloutSubquery:
 		return planGroupByGen4(ctx, groupExpr, node.underlying, wsAdded)
 	case *semiJoin:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by in a query having a correlated subquery")
+		return vterrors.VT13001("GROUP BY in a query having a correlated subquery")
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: group by on: %T", plan)
+		return vterrors.VT13001(fmt.Sprintf("GROUP BY on: %T", plan))
 	}
 }
 

@@ -548,7 +548,12 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 
 func encodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
 	buf.WriteByte('\'')
-	for _, ch := range val {
+	for idx, ch := range val {
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
+			buf.WriteByte(ch)
+			continue
+		}
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
 			buf.WriteByte(ch)
 		} else {
@@ -561,7 +566,12 @@ func encodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
 
 func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 	buf.WriteByte('\'')
-	for _, ch := range val {
+	for idx, ch := range val {
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
+			buf.WriteByte(ch)
+			continue
+		}
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
 			buf.WriteByte(ch)
 		} else {
@@ -575,8 +585,13 @@ func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 // BufEncodeStringSQL encodes the string into a strings.Builder
 func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
-	for _, ch := range val {
+	for idx, ch := range val {
 		if ch > 255 {
+			buf.WriteRune(ch)
+			continue
+		}
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
 			buf.WriteRune(ch)
 			continue
 		}
@@ -616,7 +631,13 @@ func encodeBytesASCII(val []byte, b BinWriter) {
 }
 
 // SQLEncodeMap specifies how to escape binary data with '\'.
-// Complies to http://dev.mysql.com/doc/refman/5.1/en/string-syntax.html
+// Complies to https://dev.mysql.com/doc/refman/5.7/en/string-literals.html
+// Handling escaping of % and _ is different than other characters.
+// When escaped in a like clause, they are supposed to be treated as literals
+// Everywhere else, they evaluate to strings '\%' and '\_' respectively.
+// In Vitess, the way we are choosing to handle this behaviour is to always
+// preserve the escaping of % and _ as is in all the places and handle it like MySQL
+// in our evaluation engine for Like.
 var SQLEncodeMap [256]byte
 
 // SQLDecodeMap is the reverse of SQLEncodeMap

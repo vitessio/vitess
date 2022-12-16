@@ -111,6 +111,7 @@ var (
 	initKeyspace       string
 	initShard          string
 	concurrency        = 4
+	incrementalFromPos string
 	// mysqlctld-like flags
 	mysqlPort        = 3306
 	mysqlSocket      string
@@ -133,6 +134,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initKeyspace, "init_keyspace", initKeyspace, "(init parameter) keyspace to use for this tablet")
 	fs.StringVar(&initShard, "init_shard", initShard, "(init parameter) shard to use for this tablet")
 	fs.IntVar(&concurrency, "concurrency", concurrency, "(init restore parameter) how many concurrent files to restore at once")
+	fs.StringVar(&incrementalFromPos, "incremental_from_pos", incrementalFromPos, "Position of previous backup. Default: empty. If given, then this backup becomes an incremental backup from given position. If value is 'auto', backup taken from last successful backup position")
 	// mysqlctld-like flags
 	fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "mysql port")
 	fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "path to the mysql socket")
@@ -281,15 +283,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 
 	backupParams := mysqlctl.BackupParams{
-		Cnf:          mycnf,
-		Mysqld:       mysqld,
-		Logger:       logutil.NewConsoleLogger(),
-		Concurrency:  concurrency,
-		HookExtraEnv: extraEnv,
-		TopoServer:   topoServer,
-		Keyspace:     initKeyspace,
-		Shard:        initShard,
-		TabletAlias:  topoproto.TabletAliasString(tabletAlias),
+		Cnf:                mycnf,
+		Mysqld:             mysqld,
+		Logger:             logutil.NewConsoleLogger(),
+		Concurrency:        concurrency,
+		IncrementalFromPos: incrementalFromPos,
+		HookExtraEnv:       extraEnv,
+		TopoServer:         topoServer,
+		Keyspace:           initKeyspace,
+		Shard:              initShard,
+		TabletAlias:        topoproto.TabletAliasString(tabletAlias),
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {

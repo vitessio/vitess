@@ -18,12 +18,15 @@ package operators
 
 import (
 	"encoding/json"
+	"fmt"
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
+
 	"vitess.io/vitess/go/vt/vtgate/engine"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -81,6 +84,7 @@ type (
 
 	AggrRewriter struct {
 		qp  *QueryProjection
+		st  *semantics.SemTable
 		Err error
 	}
 )
@@ -121,7 +125,7 @@ func (s SelectExpr) GetExpr() (sqlparser.Expr, error) {
 	case *sqlparser.AliasedExpr:
 		return sel.Expr, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T does not have expr", s.Col)
+		return nil, vterrors.VT13001(fmt.Sprintf("%T does not have an expression", s.Col))
 	}
 }
 
@@ -132,14 +136,14 @@ func (s SelectExpr) GetAliasedExpr() (*sqlparser.AliasedExpr, error) {
 	case *sqlparser.AliasedExpr:
 		return expr, nil
 	case *sqlparser.StarExpr:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: '*' expression in cross-shard query")
+		return nil, vterrors.VT12001("'*' expression in cross-shard query")
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not an aliased expression: %T", expr)
+		return nil, vterrors.VT12001(fmt.Sprintf("not an aliased expression: %T", expr))
 	}
 }
 
 // CreateQPFromSelect creates the QueryProjection for the input *sqlparser.Select
-func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
+func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select) (*QueryProjection, error) {
 	qp := &QueryProjection{
 		Distinct: sel.Distinct,
 	}
@@ -149,7 +153,7 @@ func CreateQPFromSelect(sel *sqlparser.Select) (*QueryProjection, error) {
 		return nil, err
 	}
 	for _, group := range sel.GroupBy {
-		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(group)
+		selectExprIdx, aliasExpr := qp.FindSelectExprIndexForExpr(ctx, group)
 		expr, weightStrExpr, err := qp.GetSimplifiedExpr(group)
 		if err != nil {
 			return nil, err
@@ -195,7 +199,7 @@ func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
 					ar.Err = err
 					return false
 				}
-				if sqlparser.EqualsExpr(ae.Expr, fExp) {
+				if ar.st.EqualsExpr(ae.Expr, fExp) {
 					cursor.Replace(sqlparser.NewOffset(offset, fExp))
 					return false // no need to visit aggregation children
 				}
@@ -217,8 +221,11 @@ func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
 }
 
 // AggrRewriter extracts
-func (qp *QueryProjection) AggrRewriter() *AggrRewriter {
-	return &AggrRewriter{qp: qp}
+func (qp *QueryProjection) AggrRewriter(ctx *plancontext.PlanningContext) *AggrRewriter {
+	return &AggrRewriter{
+		qp: qp,
+		st: ctx.SemTable,
+	}
 }
 
 func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
@@ -245,7 +252,7 @@ func (qp *QueryProjection) addSelectExpressions(sel *sqlparser.Select) error {
 			}
 			qp.SelectExprs = append(qp.SelectExprs, col)
 		default:
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %T in select list", selExp)
+			return vterrors.VT13001(fmt.Sprintf("%T in select list", selExp))
 		}
 	}
 	return nil
@@ -305,7 +312,7 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 		if aggrFunc, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
 			if aggrFunc.GetArgs() != nil &&
 				len(aggrFunc.GetArgs()) != 1 {
-				return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "aggregate functions take a single argument '%s'", sqlparser.String(node))
+				return false, vterrors.VT03001(sqlparser.String(node))
 			}
 			return true, nil
 		}
@@ -314,13 +321,13 @@ func checkForInvalidAggregations(exp *sqlparser.AliasedExpr) error {
 	}, exp.Expr)
 }
 
-func (qp *QueryProjection) isExprInGroupByExprs(expr SelectExpr) bool {
+func (qp *QueryProjection) isExprInGroupByExprs(ctx *plancontext.PlanningContext, expr SelectExpr) bool {
 	for _, groupByExpr := range qp.groupByExprs {
 		exp, err := expr.GetExpr()
 		if err != nil {
 			return false
 		}
-		if sqlparser.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
+		if ctx.SemTable.EqualsExpr(groupByExpr.WeightStrExpr, exp) {
 			return true
 		}
 	}
@@ -421,7 +428,7 @@ func (qp *QueryProjection) NeedsDistinct() bool {
 	return true
 }
 
-func (qp *QueryProjection) AggregationExpressions() (out []Aggr, err error) {
+func (qp *QueryProjection) AggregationExpressions(ctx *plancontext.PlanningContext) (out []Aggr, err error) {
 orderBy:
 	for _, orderExpr := range qp.OrderExprs {
 		orderExpr := orderExpr.WeightStrExpr
@@ -430,7 +437,7 @@ orderBy:
 			if !ok {
 				continue
 			}
-			if sqlparser.EqualsExpr(col.Expr, orderExpr) {
+			if ctx.SemTable.EqualsExpr(col.Expr, orderExpr) {
 				continue orderBy // we found the expression we were looking for!
 			}
 		}
@@ -450,7 +457,7 @@ orderBy:
 		idxCopy := idx
 
 		if !sqlparser.ContainsAggregation(expr.Col) {
-			if !qp.isExprInGroupByExprs(expr) {
+			if !qp.isExprInGroupByExprs(ctx, expr) {
 				out = append(out, Aggr{
 					Original: aliasedExpr,
 					OpCode:   engine.AggregateRandom,
@@ -462,12 +469,12 @@ orderBy:
 		}
 		fnc, isAggregate := aliasedExpr.Expr.(sqlparser.AggrFunc)
 		if !isAggregate {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: complex aggregate expression")
+			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
 		opcode, found := engine.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 		if !found {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: in scatter query: aggregation function '%s'", fnc.AggrName())
+			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", fnc.AggrName()))
 		}
 
 		if opcode == engine.AggregateCount {
@@ -501,7 +508,7 @@ orderBy:
 
 // FindSelectExprIndexForExpr returns the index of the given expression in the select expressions, if it is part of it
 // returns -1 otherwise.
-func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) (*int, *sqlparser.AliasedExpr) {
+func (qp *QueryProjection) FindSelectExprIndexForExpr(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (*int, *sqlparser.AliasedExpr) {
 	colExpr, isCol := expr.(*sqlparser.ColName)
 
 	for idx, selectExpr := range qp.SelectExprs {
@@ -515,7 +522,7 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) (*int
 				return &idx, aliasedExpr
 			}
 		}
-		if sqlparser.EqualsExpr(aliasedExpr.Expr, expr) {
+		if ctx.SemTable.EqualsExpr(aliasedExpr.Expr, expr) {
 			return &idx, aliasedExpr
 		}
 	}
@@ -527,7 +534,7 @@ func (qp *QueryProjection) FindSelectExprIndexForExpr(expr sqlparser.Expr) (*int
 // so we can simply re-arrange the column order
 // We are also free to add more ORDER BY columns than the user asked for which we leverage,
 // so the input is already ordered according to the GROUP BY columns used
-func (qp *QueryProjection) AlignGroupByAndOrderBy() {
+func (qp *QueryProjection) AlignGroupByAndOrderBy(ctx *plancontext.PlanningContext) {
 	// The ORDER BY can be performed before the OA
 
 	var newGrouping []GroupBy
@@ -545,7 +552,7 @@ func (qp *QueryProjection) AlignGroupByAndOrderBy() {
 		used := make([]bool, len(qp.groupByExprs))
 		for _, orderExpr := range qp.OrderExprs {
 			for i, groupingExpr := range qp.groupByExprs {
-				if !used[i] && sqlparser.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
+				if !used[i] && ctx.SemTable.EqualsExpr(groupingExpr.WeightStrExpr, orderExpr.WeightStrExpr) {
 					newGrouping = append(newGrouping, groupingExpr)
 					used[i] = true
 				}
@@ -578,12 +585,12 @@ func (qp *QueryProjection) GetColumnCount() int {
 func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 	return sqlparser.Walk(func(node sqlparser.SQLNode) (bool, error) {
 		if _, isAggregate := node.(sqlparser.AggrFunc); isAggregate {
-			return false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongGroupField, "Can't group on '%s'", sqlparser.String(expr))
+			return false, vterrors.VT03005(sqlparser.String(expr))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)
 		arg, isArg := node.(sqlparser.Argument)
 		if isSubQ || (isArg && strings.HasPrefix(string(arg), "__sq")) {
-			return false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries disallowed in GROUP BY")
+			return false, vterrors.VT12001("subqueries in GROUP BY")
 		}
 		return true, nil
 	}, expr)

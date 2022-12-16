@@ -512,7 +512,7 @@ func (s *server) RestoreFromBackup(request *tabletmanagerdatapb.RestoreFromBacku
 		})
 	})
 
-	return s.tm.RestoreFromBackup(ctx, logger, logutil.ProtoToTime(request.GetBackupTime()))
+	return s.tm.RestoreFromBackup(ctx, logger, request)
 }
 
 // registration glue

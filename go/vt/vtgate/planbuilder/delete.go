@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -29,7 +28,7 @@ func buildDeletePlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		del := stmt.(*sqlparser.Delete)
 		if del.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
+			return nil, vterrors.VT12001("WITH expression in DELETE statement")
 		}
 		var err error
 		if len(del.TableExprs) == 1 && len(del.Targets) == 1 {
@@ -48,7 +47,7 @@ func buildDeletePlan(string) stmtPlanner {
 		}
 
 		if len(del.Targets) > 1 {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
+			return nil, vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
 		}
 
 		edelTable, err := edel.GetSingleTable()
@@ -56,13 +55,13 @@ func buildDeletePlan(string) stmtPlanner {
 			return nil, err
 		}
 		if len(del.Targets) == 1 && del.Targets[0].Name != edelTable.Name {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
+			return nil, vterrors.VT03003(del.Targets[0].Name.String())
 		}
 
 		if len(edelTable.Owned) > 0 {
 			aTblExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 			if !ok {
-				return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: delete on complex table expression")
+				return nil, vterrors.VT12001("deleting from a complex table expression")
 			}
 			tblExpr := &sqlparser.AliasedTableExpr{Expr: sqlparser.TableName{Name: edelTable.Name}, As: aTblExpr.As}
 			edel.OwnedVindexQuery = generateDMLSubquery(tblExpr, del.Where, del.OrderBy, del.Limit, edelTable, ksidVindex.Columns)
@@ -79,19 +78,19 @@ func rewriteSingleTbl(del *sqlparser.Delete) (*sqlparser.Delete, error) {
 	if !ok {
 		return del, nil
 	}
-	if !atExpr.As.IsEmpty() && !sqlparser.EqualsIdentifierCS(del.Targets[0].Name, atExpr.As) {
+	if !atExpr.As.IsEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, atExpr.As) {
 		// Unknown table in MULTI DELETE
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
+		return nil, vterrors.VT03003(del.Targets[0].Name.String())
 	}
 
 	tbl, ok := atExpr.Expr.(sqlparser.TableName)
 	if !ok {
 		// derived table
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the DELETE is not updatable", atExpr.As.String())
+		return nil, vterrors.VT03004(atExpr.As.String())
 	}
-	if atExpr.As.IsEmpty() && !sqlparser.EqualsIdentifierCS(del.Targets[0].Name, tbl.Name) {
+	if atExpr.As.IsEmpty() && !sqlparser.Equals.IdentifierCS(del.Targets[0].Name, tbl.Name) {
 		// Unknown table in MULTI DELETE
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.UnknownTable, "Unknown table '%s' in MULTI DELETE", del.Targets[0].Name.String())
+		return nil, vterrors.VT03003(del.Targets[0].Name.String())
 	}
 
 	del.TableExprs = sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: tbl}}

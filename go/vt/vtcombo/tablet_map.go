@@ -903,7 +903,7 @@ func (itmc *internalTabletManagerClient) Backup(context.Context, *topodatapb.Tab
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *topodatapb.Tablet, time.Time) (logutil.EventStream, error) {
+func (itmc *internalTabletManagerClient) RestoreFromBackup(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.RestoreFromBackupRequest) (logutil.EventStream, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

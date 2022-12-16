@@ -776,6 +776,7 @@ func (vcq *vcopierCopyWorkQueue) open(
 		poolCapacity, /* initial capacity */
 		poolCapacity, /* max capacity */
 		0,            /* idle timeout */
+		0,            /* max lifetime */
 		nil,          /* log wait */
 		nil,          /* refresh check */
 		0,            /* refresh interval */
@@ -995,6 +996,11 @@ func (vbc *vcopierCopyWorker) Close() {
 	if vbc.closeDbClient {
 		vbc.vdbClient.Close()
 	}
+}
+
+// Expired implements pools.Resource.
+func (vbc *vcopierCopyWorker) Expired(time.Duration) bool {
+	return false
 }
 
 // IsSameSetting implements pools.Resource.

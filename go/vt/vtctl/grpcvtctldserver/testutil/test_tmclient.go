@@ -900,7 +900,7 @@ func (stream *backupRestoreStreamAdapter) Send(msg *logutilpb.Event) error {
 }
 
 // RestoreFromBackup is part of the tmclient.TabletManagerClient interface.
-func (fake *TabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, backupTime time.Time) (logutil.EventStream, error) {
+func (fake *TabletManagerClient) RestoreFromBackup(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.RestoreFromBackupRequest) (logutil.EventStream, error) {
 	key := topoproto.TabletAliasString(tablet.Alias)
 	testdata, ok := fake.RestoreFromBackupResults[key]
 	if !ok {

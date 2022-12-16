@@ -89,7 +89,7 @@ func (v *vTableInfo) getColumns() []ColumnInfo {
 }
 
 func (v *vTableInfo) hasStar() bool {
-	return v.tables.NumberOfTables() > 0
+	return v.tables.NonEmpty()
 }
 
 // GetTables implements the TableInfo interface
@@ -104,7 +104,7 @@ func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 			return v.cols[i], nil
 		}
 	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
+	return nil, vterrors.VT03022(s, "field list")
 }
 
 func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
@@ -138,7 +138,7 @@ func selectExprsToInfos(
 			}
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
-				ts.MergeInPlace(table.getTableSet(org))
+				ts = ts.Merge(table.getTableSet(org))
 			}
 		}
 	}

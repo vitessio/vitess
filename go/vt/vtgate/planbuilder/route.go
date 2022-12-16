@@ -17,10 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -321,12 +321,12 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 	rc := rb.resultColumns[colNumber]
 	s, ok := rb.Select.(*sqlparser.Select)
 	if !ok {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query")
+		return 0, vterrors.VT13001("unexpected AST struct for query")
 	}
 
 	aliasExpr, ok := s.SelectExprs[colNumber].(*sqlparser.AliasedExpr)
 	if !ok {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected AST struct for query %T", s.SelectExprs[colNumber])
+		return 0, vterrors.VT13001(fmt.Sprintf("unexpected AST struct for query %T", s.SelectExprs[colNumber]))
 	}
 	weightStringExpr := &sqlparser.FuncExpr{
 		Name: sqlparser.NewIdentifierCI("weight_string"),
@@ -342,7 +342,7 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 	if alsoAddToGroupBy {
 		sel, isSelect := rb.Select.(*sqlparser.Select)
 		if !isSelect {
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "cannot add weight string in %T", rb.Select)
+			return 0, vterrors.VT13001(fmt.Sprintf("cannot add weight string in %T", rb.Select))
 		}
 		sel.AddGroupBy(weightStringExpr)
 	}
@@ -363,7 +363,7 @@ func (rb *route) SupplyWeightString(colNumber int, alsoAddToGroupBy bool) (weigh
 // Rewrite implements the logicalPlan interface
 func (rb *route) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 0 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "route: wrong number of inputs")
+		return vterrors.VT13001("route: wrong number of inputs")
 	}
 	return nil
 }
