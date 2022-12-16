@@ -169,7 +169,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	gconn, conn, mconn, closeConnections := initialize(ctx, t)
 	defer closeConnections()
 
-	_, err := conn.ExecuteFetch("insert into t1(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
+	_, err := conn.ExecuteFetch("insert into t1_copy_basic(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -180,7 +180,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 	qr := sqltypes.ResultToProto3(&lastPK)
 	tablePKs := []*binlogdatapb.TableLastPK{{
-		TableName: "t1",
+		TableName: "t1_copy_basic",
 		Lastpk:    qr,
 	}}
 	var shardGtids []*binlogdatapb.ShardGtid
@@ -200,8 +200,8 @@ func TestVStreamCopyBasic(t *testing.T) {
 	vgtid.ShardGtids = shardGtids
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
-			Match:  "t1",
-			Filter: "select * from t1",
+			Match:  "t1_copy_basic",
+			Filter: "select * from t1_copy_basic",
 		}},
 	}
 	flags := &vtgatepb.VStreamFlags{}
@@ -210,19 +210,44 @@ func TestVStreamCopyBasic(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	numExpectedEvents := 2 /* num shards */ * (7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */)
+	numExpectedEvents := 2 /* num shards */ *(7 /* begin/field/vgtid:pos/2 rowevents avg/vgitd: lastpk/commit) */ +3 /* begin/vgtid/commit for completed table */ +1 /* copy operation completed */) + 1 /* fully copy operation completed */
+	expectedCompletedEvents := []string{
+		`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
+		`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
+		`type:COPY_COMPLETED`,
+	}
 	require.NotNil(t, reader)
 	var evs []*binlogdatapb.VEvent
+	var completedEvs []*binlogdatapb.VEvent
 	for {
 		e, err := reader.Recv()
 		switch err {
 		case nil:
 			evs = append(evs, e...)
+
+			for _, ev := range e {
+				if ev.Type == binlogdatapb.VEventType_COPY_COMPLETED {
+					completedEvs = append(completedEvs, ev)
+				}
+			}
+
+			printEvents(evs) // for debugging ci failures
+
 			if len(evs) == numExpectedEvents {
+				// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
+				// On the other hand, the last event should always be a fully COPY_COMPLETED event.
+				// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
+				sort.Slice(completedEvs[:len(completedEvs)-1], func(i, j int) bool {
+					return completedEvs[i].GetShard() < completedEvs[j].GetShard()
+				})
+				for i, ev := range completedEvs {
+					require.Regexp(t, expectedCompletedEvents[i], ev.String())
+				}
 				t.Logf("TestVStreamCopyBasic was successful")
 				return
+			} else if numExpectedEvents < len(evs) {
+				t.Fatalf("len(events)=%v are not expected\n", len(evs))
 			}
-			printEvents(evs) // for debugging ci failures
 		case io.EOF:
 			log.Infof("stream ended\n")
 			cancel()

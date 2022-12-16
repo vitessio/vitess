@@ -273,7 +273,7 @@ const (
 
 // Error codes for client-side errors.
 // Originally found in include/mysql/errmsg.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-client.html
+// https://dev.mysql.com/doc/mysql-errors/en/client-error-reference.html
 const (
 	// CRUnknownError is CR_UNKNOWN_ERROR
 	CRUnknownError = 2000
@@ -285,6 +285,10 @@ const (
 	// CRConnHostError is CR_CONN_HOST_ERROR
 	// This is returned if a connection via a TCP socket fails.
 	CRConnHostError = 2003
+
+	// CRUnknownHost is CR_UNKNOWN_HOST
+	// This is returned if the host name cannot be resolved.
+	CRUnknownHost = 2005
 
 	// CRServerGone is CR_SERVER_GONE_ERROR.
 	// This is returned if the client tries to send a command but it fails.
@@ -325,7 +329,7 @@ const (
 
 // Error codes for server-side errors.
 // Originally found in include/mysql/mysqld_error.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-server.html
+// https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html
 // The below are in sorted order by value, grouped by vterror code they should be bucketed into.
 // See above reference for more information on each code.
 const (
@@ -543,6 +547,9 @@ const (
 	ERJSONDocumentTooDeep          = 3157
 	ERWrongValue                   = 1525
 
+	// max execution time exceeded
+	ERQueryTimeout = 3024
+
 	ErrCantCreateGeometryObject      = 1416
 	ErrGISDataWrongEndianess         = 3055
 	ErrNotImplementedForCartesianSRS = 3704
@@ -677,8 +684,12 @@ func IsEphemeralError(err error) bool {
 			CRConnHostError,
 			CRMalformedPacket,
 			CRNamedPipeStateError,
+			CRServerHandshakeErr,
+			CRServerGone,
 			CRServerLost,
 			CRSSLConnectionError,
+			CRUnknownError,
+			CRUnknownHost,
 			ERCantCreateThread,
 			ERDiskFull,
 			ERForcingClose,
@@ -689,6 +700,7 @@ func IsEphemeralError(err error) bool {
 			ERInternalError,
 			ERLockDeadlock,
 			ERLockWaitTimeout,
+			ERQueryTimeout,
 			EROutOfMemory,
 			EROutOfResources,
 			EROutOfSortMemory,

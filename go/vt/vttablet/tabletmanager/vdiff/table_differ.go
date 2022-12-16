@@ -671,24 +671,6 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 	return nil
 }
 
-func (td *tableDiffer) updateTableRows(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	query := fmt.Sprintf(sqlGetTableRows, encodeString(td.wd.ct.vde.dbName), encodeString(td.table.Name))
-	qr, err := dbClient.ExecuteFetch(query, 1)
-	if err != nil {
-		return err
-	}
-	if len(qr.Rows) == 0 {
-		return fmt.Errorf("no information_schema status found for table %s on tablet %v",
-			td.table.Name, td.wd.ct.vde.thisTablet.Alias)
-	}
-	row := qr.Named().Row()
-	query = fmt.Sprintf(sqlUpdateTableRows, row.AsInt64("table_rows", 0), td.wd.ct.id, encodeString(td.table.Name))
-	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-		return err
-	}
-	return nil
-}
-
 func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
 	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {

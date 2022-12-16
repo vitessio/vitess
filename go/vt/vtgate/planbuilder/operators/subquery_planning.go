@@ -24,8 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Operator, rewrite.TreeIdentity, error) {
@@ -75,7 +73,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 			continue
 		}
 
-		return nil, rewrite.SameTree, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, rewrite.SameTree, vterrors.VT12001("cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
@@ -88,7 +86,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]sqlparser.Expr, ops.Operator) {
 	preds := UnresolvedPredicates(op, ctx.SemTable)
 	if filter, ok := op.(*Filter); ok {
-		if sqlparser.EqualsExprs(preds, filter.Predicates) {
+		if ctx.SemTable.ASTEquals().Exprs(preds, filter.Predicates) {
 			// if we are seeing a single filter with only these predicates,
 			// we can throw away the filter and just use the source
 			return preds, filter.Source
@@ -116,7 +114,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	// predicates list, so this might be a no-op.
 	subQueryWasPredicate := false
 	for i, predicate := range outer.SeenPredicates {
-		if sqlparser.EqualsExpr(predicate, subq.ExtractedSubquery) {
+		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
 			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
 
 			subQueryWasPredicate = true
@@ -141,6 +139,8 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 			outer.setSelectNoneOpcode()
 		}
 	}
+
+	outer.MergedWith = append(outer.MergedWith, inner)
 
 	return outer, nil
 }
@@ -243,6 +243,9 @@ func tryMergeSubqueryWithRoute(
 	// Special case: Inner query won't return any results / is not routable.
 	if subqueryRoute.RouteOpCode == engine.None {
 		merged, err := merger(outerOp, subqueryRoute)
+		if err != nil {
+			return nil, err
+		}
 		return merged, err
 	}
 
@@ -375,7 +378,7 @@ func createCorrelatedSubqueryOp(
 ) (*CorrelatedSubQueryOp, error) {
 	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
 	if err != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
+		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
 	}
 
 	resultOuterOp := newOuter
@@ -391,7 +394,7 @@ func createCorrelatedSubqueryOp(
 				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
 					// check whether the bindVariable already exists in the map
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
-					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
+					// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
 					for colName, bindVar := range bindVars {
 						if ctx.SemTable.EqualsExpr(node, colName) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))

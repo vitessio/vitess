@@ -456,10 +456,15 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 
+	sm.te = &delayedTxEngine{}
 	sm.qe.(*testQueryEngine).failMySQL = true
 	order.Set(0)
 	sm.checkMySQL()
+	// We know checkMySQL will take atleast 50 milliseconds since txEngine.Close has a sleep in the test code
+	time.Sleep(10 * time.Millisecond)
 	assert.EqualValues(t, 1, sm.isCheckMySQLRunning())
+	// When we are in CheckMySQL state, we should not be accepting any new requests which aren't transactional
+	assert.False(t, sm.IsServing())
 
 	// Rechecking immediately should be a no-op:
 	sm.checkMySQL()
@@ -491,6 +496,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 		time.Sleep(10 * time.Millisecond)
 	}
 
+	assert.True(t, sm.IsServing())
 	assert.Equal(t, topodatapb.TabletType_PRIMARY, sm.Target().TabletType)
 	assert.Equal(t, StateServing, sm.State())
 

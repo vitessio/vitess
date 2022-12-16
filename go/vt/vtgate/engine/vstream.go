@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"io"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -63,7 +62,7 @@ func (v *VStream) GetTableName() string {
 
 // TryExecute implements the Primitive interface
 func (v *VStream) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'Execute' called for VStream")
+	return nil, vterrors.VT13001("TryExecute is not supported for VStream")
 }
 
 // TryStreamExecute implements the Primitive interface
@@ -155,7 +154,7 @@ func addRowChangeIndicatorColumn(change *binlogdatapb.RowChange, eventFields []*
 
 // GetFields implements the Primitive interface
 func (v *VStream) GetFields(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] 'GetFields' called for VStream")
+	return nil, vterrors.VT13001("GetFields is not supported for VStream")
 }
 
 func (v *VStream) description() PrimitiveDescription {

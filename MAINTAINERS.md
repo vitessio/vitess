@@ -4,10 +4,12 @@ The following is the full list, alphabetically ordered.
 
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Andrew Mason ([amason](https://github.com/ajm188)) andrew@planetscale.com
+* Arthur Schreiber ([arthurschreiber](https://github.com/arthurschreiber)) arthurschreiber@github.com
 * Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) dan.kozlowski@gmail.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
+* Frances Thai ([notfelineit](https://github.com/notfelineit)) frances@planetscale.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
 * Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
 * Matt Lord ([mattlord](https://github.com/mattlord)) mlord@planetscale.com
@@ -45,7 +47,7 @@ harshit-gangal
 derekperkins, dkhenry, GuptaManan100, frouioui
 
 ### VTAdmin
-ajm188
+ajm188, notfelineit
 
 ### Messaging
 derekperkins, mattlord

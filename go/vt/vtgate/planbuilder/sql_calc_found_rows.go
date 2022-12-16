@@ -17,7 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -106,7 +107,7 @@ func (s *sqlCalcFoundRows) SupplyWeightString(int, bool) (weightcolNumber int, e
 // Rewrite implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs))
+		return vterrors.VT13001(fmt.Sprintf("wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs)))
 	}
 	s.LimitQuery = inputs[0]
 	s.CountQuery = inputs[1]

@@ -40,6 +40,28 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
 Consider using `VTOrc` instead of `Orchestrator`.
 
+#### Query Serving Errors
+
+In this release, we are introducing a new way to report errors from Vitess through the query interface.
+Errors will now have an error code for each error, which will make it easy to search for more information on the issue.
+For instance, the following error:
+
+```
+aggregate functions take a single argument 'count(user_id, name)'
+```
+
+Will be transformed into:
+
+```
+VT03001: aggregate functions take a single argument 'count(user_id, name)'
+```
+
+The error code `VT03001` can then be used to search or ask for help and report problems.
+
+If you have code searching for error strings from Vitess, this is a breaking change.
+Many error strings have been tweaked.
+If your application is searching for specific errors, you might need to update your code.
+
 #### `lock-timeout` and `remote_operation_timeout` Changes
 Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced. 
 For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
@@ -51,8 +73,9 @@ After the upgrade, they should then alter their configuration to also specify `l
 ### New command line flags and behavior
 
 #### VTGate: Support query timeout --query-timeout
+
 `--query-timeout` allows you to specify a timeout for queries. This timeout is applied to all queries.
-It can be overridden by setting the `query_timeout` session variable. 
+It can be overridden by setting the `query_timeout` session variable.
 Setting it as command line directive with `QUERY_TIMEOUT_MS` will override other values.
 
 #### VTTablet: VReplication parallel insert workers --vreplication-parallel-insert-workers
@@ -152,6 +175,7 @@ The `RestoreFromBackup  --restore_to_pos` ends with:
 - the restored server in intentionally broken replication setup
 - tablet type is `DRAINED`
 
+
 ### Important bug fixes
 
 #### Corrupted results for non-full-group-by queries with JOINs
@@ -198,3 +222,22 @@ transaction_characteristic: {
 }
 ```
 This will allow users to start a transaction with these characteristics.
+
+#### Support for views
+
+Vitess now supports views in sharded keyspace. Views are not created on the underlying database but are logically stored
+in vschema.
+Any query using view will get re-rewritten as derived table during query planning.
+VSchema Example
+
+```json
+{
+  "sharded": true,
+  "vindexes": {},
+  "tables": {},
+  "views": {
+    "view1": "select * from t1",
+    "view2": "select * from t2",
+  }
+}
+```

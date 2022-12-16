@@ -17,7 +17,8 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -58,16 +59,18 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op o
 
 		var keep []sqlparser.Expr
 		for _, e := range sqlparser.SplitAndExpression(nil, op.Predicate) {
-			if !ctx.SemTable.EqualsExpr(expr, e) {
-				keep = append(keep, e)
+			if ctx.SemTable.EqualsExpr(expr, e) {
 				isRemoved = true
+			} else {
+				keep = append(keep, e)
 			}
 		}
-		op.Predicate = sqlparser.AndExpressions(keep...)
 
 		if !isRemoved {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "remove '%s' predicate not supported on cross-shard join query", sqlparser.String(expr))
+			return nil, vterrors.VT12001(fmt.Sprintf("remove '%s' predicate on cross-shard join query", sqlparser.String(expr)))
 		}
+
+		op.Predicate = ctx.SemTable.AndExpressions(keep...)
 		return op, nil
 	case *Filter:
 		idx := -1
@@ -95,6 +98,6 @@ func RemovePredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr, op o
 		return op, nil
 
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "this should not happen - tried to remove predicate from table op")
+		return nil, vterrors.VT13001("this should not happen - tried to remove predicate from the operator table")
 	}
 }

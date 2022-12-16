@@ -17,13 +17,14 @@ limitations under the License.
 package integration
 
 import (
-	"flag"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -32,13 +33,30 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var collationEnv *collations.Environment
+var (
+	collationEnv *collations.Environment
+
+	debugPrintAll        bool
+	debugNormalize       = true
+	debugSimplify        = time.Now().UnixNano()&1 != 0
+	debugCheckTypes      = true
+	debugCheckCollations = true
+)
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&debugPrintAll, "print-all", debugPrintAll, "print all matching tests")
+	fs.BoolVar(&debugNormalize, "normalize", debugNormalize, "normalize comparisons against MySQL values")
+	fs.BoolVar(&debugSimplify, "simplify", debugSimplify, "simplify expressions before evaluating them")
+	fs.BoolVar(&debugCheckTypes, "check-types", debugCheckTypes, "check the TypeOf operator for all queries")
+	fs.BoolVar(&debugCheckCollations, "check-collations", debugCheckCollations, "check the returned collations for all queries")
+}
 
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
 	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
+	servenv.OnParse(registerFlags)
 }
 
 func perm(a []string, f func([]string)) {
@@ -83,18 +101,12 @@ func normalize(v sqltypes.Value, coll collations.ID) string {
 	return fmt.Sprintf("%v(%s)", typ, v.Raw())
 }
 
-var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
-var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
-var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
-var debugCheckTypes = flag.Bool("check-types", true, "check the TypeOf operator for all queries")
-var debugCheckCollations = flag.Bool("check-collations", true, "check the returned collations for all queries")
-
 func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
 	remoteQuery := "SELECT " + expr
-	if *debugCheckCollations {
+	if debugCheckCollations {
 		remoteQuery = fmt.Sprintf("SELECT %s, COLLATION(%s)", expr, expr)
 	}
 
@@ -105,33 +117,33 @@ func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
 		v := local.Value()
-		if *debugCheckCollations {
+		if debugCheckCollations {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID
 			} else {
 				localCollation = local.Collation()
 			}
 		}
-		if *debugNormalize {
+		if debugNormalize {
 			localVal = normalize(v, local.Collation())
 		} else {
 			localVal = v.String()
 		}
-		if *debugCheckTypes {
+		if debugCheckTypes {
 			tt := v.Type()
 			if tt != sqltypes.Null && tt != localType {
 				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
-					tt, localType, localVal, localQuery, *debugSimplify)
+					tt, localType, localVal, localQuery, debugSimplify)
 			}
 		}
 	}
 	if remoteErr == nil {
-		if *debugNormalize {
+		if debugNormalize {
 			remoteVal = normalize(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
 		} else {
 			remoteVal = remote.Rows[0][0].String()
 		}
-		if *debugCheckCollations {
+		if debugCheckCollations {
 			if remote.Rows[0][0].IsNull() {
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
@@ -141,8 +153,8 @@ func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 		}
 	}
 	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation); diff != "" {
-		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)", diff, localQuery, *debugSimplify)
-	} else if *debugPrintAll {
+		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)", diff, localQuery, debugSimplify)
+	} else if debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, localQuery)
 	}
 }
@@ -157,7 +169,6 @@ var comparisonElements = []string{"NULL", "-1", "0", "1",
 
 func TestAllComparisons(t *testing.T) {
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
-
 	var conn = mysqlconn(t)
 	defer conn.Close()
 

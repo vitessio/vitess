@@ -75,6 +75,17 @@ func TestBindingSingleTablePositive(t *testing.T) {
 	}
 }
 
+func TestInformationSchemaColumnInfo(t *testing.T) {
+	stmt, semTable := parseAndAnalyze(t, "select table_comment, file_name from information_schema.`TABLES`, information_schema.`FILES`", "d")
+
+	sel, _ := stmt.(*sqlparser.Select)
+	tables := SingleTableSet(0)
+	files := SingleTableSet(1)
+
+	assert.Equal(t, tables, semTable.RecursiveDeps(extract(sel, 0)))
+	assert.Equal(t, files, semTable.DirectDeps(extract(sel, 1)))
+}
+
 func TestBindingSingleAliasedTablePositive(t *testing.T) {
 	queries := []string{
 		"select col from tabl as X",
@@ -286,7 +297,7 @@ func TestNotUniqueTableName(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
 			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "Not unique table/alias")
+			require.Contains(t, err.Error(), "VT03013: not unique table/alias")
 		})
 	}
 }
@@ -561,13 +572,13 @@ func TestSubqueriesMappingWhereClause(t *testing.T) {
 			}
 
 			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, sel.Where.Expr))
+			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Original, sel.Where.Expr))
 			assert.EqualValues(t, tc.opCode, extractedSubq.OpCode)
 			if tc.otherSideName == "" {
 				assert.Nil(t, extractedSubq.OtherSide)
 			} else {
-				assert.True(t, sqlparser.EqualsExpr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
+				assert.True(t, sqlparser.Equals.Expr(extractedSubq.OtherSide, sqlparser.NewColName(tc.otherSideName)))
 			}
 		})
 	}
@@ -595,8 +606,8 @@ func TestSubqueriesMappingSelectExprs(t *testing.T) {
 
 			subq := sel.SelectExprs[tc.selExprIdx].(*sqlparser.AliasedExpr).Expr.(*sqlparser.Subquery)
 			extractedSubq := semTable.SubqueryRef[subq]
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Subquery, subq))
-			assert.True(t, sqlparser.EqualsExpr(extractedSubq.Original, subq))
+			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
+			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Original, subq))
 			assert.EqualValues(t, engine.PulloutValue, extractedSubq.OpCode)
 		})
 	}
@@ -876,13 +887,13 @@ func TestInvalidQueries(t *testing.T) {
 		err: "The used SELECT statements have a different number of columns",
 	}, {
 		sql: "select id from a union select 3 order by a.id",
-		err: "Table 'a' from one of the SELECTs cannot be used in global ORDER clause",
+		err: "Table a from one of the SELECTs cannot be used in global ORDER clause",
 	}, {
 		sql: "select a.id, b.id from a, b union select 1, 2 order by id",
 		err: "Column 'id' in field list is ambiguous",
 	}, {
 		sql: "select sql_calc_found_rows id from a union select 1 limit 109",
-		err: "SQL_CALC_FOUND_ROWS not supported with union",
+		err: "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union",
 	}, {
 		sql: "select * from (select sql_calc_found_rows id from a) as t",
 		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",

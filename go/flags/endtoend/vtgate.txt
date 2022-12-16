@@ -104,8 +104,8 @@ Usage of vtgate:
       --mysql_server_bind_address string                                 Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
       --mysql_server_flush_delay duration                                Delay after which buffered response will be flushed to the client. (default 100ms)
       --mysql_server_port int                                            If set, also listen for MySQL binary protocol connections on this port. (default -1)
-      --mysql_server_query_timeout duration                              mysql query timeout (default 0s)
-      --mysql_server_read_timeout duration                               connection read timeout (default 0s)
+      --mysql_server_query_timeout duration                              mysql query timeout
+      --mysql_server_read_timeout duration                               connection read timeout
       --mysql_server_require_secure_transport                            Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided
       --mysql_server_socket_path string                                  This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket
       --mysql_server_ssl_ca string                                       Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.
@@ -115,8 +115,8 @@ Usage of vtgate:
       --mysql_server_ssl_server_ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql_server_tls_min_version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
       --mysql_server_version string                                      MySQL server version to advertise.
-      --mysql_server_write_timeout duration                              connection write timeout (default 0s)
-      --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish (default 0s)
+      --mysql_server_write_timeout duration                              connection write timeout
+      --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql_tcp_version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
       --no_scatter                                                       when set to true, the planner will fail instead of producing a plan that includes scatter queries
       --normalize_queries                                                Rewrite queries with bind vars. Turn this off if the app itself sends normalized queries with bind vars. (default true)

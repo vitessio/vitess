@@ -39,7 +39,7 @@ func TestCreateRoutePlanDescription(t *testing.T) {
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]any{
 			"Query":      route.Query,
-			"Table":      route.TableName,
+			"Table":      route.GetTableName(),
 			"FieldQuery": route.FieldQuery,
 			"Vindex":     route.Vindex.String(),
 		},
@@ -97,7 +97,7 @@ func getDescriptionFor(route *Route) PrimitiveDescription {
 		TargetDestination: key.DestinationAllShards{},
 		Other: map[string]any{
 			"Query":      route.Query,
-			"Table":      route.TableName,
+			"Table":      route.GetTableName(),
 			"FieldQuery": route.FieldQuery,
 			"Vindex":     route.Vindex.String(),
 		},

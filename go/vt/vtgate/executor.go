@@ -65,7 +65,7 @@ import (
 )
 
 var (
-	errNoKeyspace     = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+	errNoKeyspace     = vterrors.VT09005()
 	defaultTabletType = topodatapb.TabletType_PRIMARY
 
 	// TODO: @rafael - These two counters should be deprecated in favor of the ByTable ones. They are kept for now for backwards compatibility.
@@ -1007,6 +1007,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 			qo.getSelectLimit(),
 			setVarComment,
 			vcursor.safeSession.SystemVariables,
+			vcursor,
 		)
 		if err != nil {
 			return nil, nil, err
@@ -1019,6 +1020,10 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	logStats.SQL = comments.Leading + query + comments.Trailing
 	logStats.BindVariables = sqltypes.CopyBindVariables(bindVars)
 
+	return e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, stmt, reservedVars, bindVarNeeds)
+}
+
+func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
 	planHash := sha256.New()
 	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
 	_, _ = planHash.Write([]byte{':'})
@@ -1342,6 +1347,7 @@ func (e *Executor) startVStream(ctx context.Context, rss []*srvtopo.ResolvedShar
 		vsm:                vsm,
 		eventCh:            make(chan []*binlogdatapb.VEvent),
 		ts:                 ts,
+		copyCompletedShard: make(map[string]struct{}),
 	}
 	_ = vs.stream(ctx)
 	return nil
