@@ -51,14 +51,14 @@ func TestKill(t *testing.T) {
 
 	errChan := make(chan error)
 	go func() {
-		_, err = conn.ExecuteFetchWithSuperReadOnlyHandling("select sleep(10) from dual", 1000, false)
+		_, err = conn.ExecuteFetch("select sleep(10) from dual", 1000, false)
 		errChan <- err
 		close(errChan)
 	}()
 
 	// Give extra time for the query to start executing.
 	time.Sleep(2 * time.Second)
-	if _, err := killConn.ExecuteFetchWithSuperReadOnlyHandling(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
+	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
 		t.Fatalf("Kill(%v) failed: %v", conn.ConnectionID, err)
 	}
 
@@ -96,14 +96,14 @@ func TestKill2006(t *testing.T) {
 	}
 	defer killConn.Close()
 
-	if _, err := killConn.ExecuteFetchWithSuperReadOnlyHandling(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
+	if _, err := killConn.ExecuteFetch(fmt.Sprintf("kill %v", conn.ConnectionID), 1000, false); err != nil {
 		t.Fatalf("Kill(%v) failed: %v", conn.ConnectionID, err)
 	}
 
 	// Now we should get a CRServerGone.  Since we are using a
 	// unix socket, we will get a broken pipe when the server
 	// closes the connection and we are trying to write the command.
-	_, err = conn.ExecuteFetchWithSuperReadOnlyHandling("select sleep(10) from dual", 1000, false)
+	_, err = conn.ExecuteFetch("select sleep(10) from dual", 1000, false)
 	assertSQLError(t, err, mysql.CRServerGone, mysql.SSUnknownSQLState, "broken pipe", "select sleep(10) from dual")
 }
 
@@ -116,13 +116,13 @@ func TestDupEntry(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetchWithSuperReadOnlyHandling("create table dup_entry(id int, name int, primary key(id), unique index(name))", 0, false); err != nil {
+	if _, err := conn.ExecuteFetch("create table dup_entry(id int, name int, primary key(id), unique index(name))", 0, false); err != nil {
 		t.Fatalf("create table failed: %v", err)
 	}
-	if _, err := conn.ExecuteFetchWithSuperReadOnlyHandling("insert into dup_entry(id, name) values(1, 10)", 0, false); err != nil {
+	if _, err := conn.ExecuteFetch("insert into dup_entry(id, name) values(1, 10)", 0, false); err != nil {
 		t.Fatalf("first insert failed: %v", err)
 	}
-	_, err = conn.ExecuteFetchWithSuperReadOnlyHandling("insert into dup_entry(id, name) values(2, 10)", 0, false)
+	_, err = conn.ExecuteFetch("insert into dup_entry(id, name) values(2, 10)", 0, false)
 	assertSQLError(t, err, mysql.ERDupEntry, mysql.SSConstraintViolation, "Duplicate entry", "insert into dup_entry(id, name) values(2, 10)")
 }
 
@@ -138,17 +138,17 @@ func TestClientFoundRows(t *testing.T) {
 	}
 	defer conn.Close()
 
-	if _, err := conn.ExecuteFetchWithSuperReadOnlyHandling("create table found_rows(id int, val int, primary key(id))", 0, false); err != nil {
+	if _, err := conn.ExecuteFetch("create table found_rows(id int, val int, primary key(id))", 0, false); err != nil {
 		t.Fatalf("create table failed: %v", err)
 	}
-	if _, err := conn.ExecuteFetchWithSuperReadOnlyHandling("insert into found_rows(id, val) values(1, 10)", 0, false); err != nil {
+	if _, err := conn.ExecuteFetch("insert into found_rows(id, val) values(1, 10)", 0, false); err != nil {
 		t.Fatalf("insert failed: %v", err)
 	}
-	qr, err := conn.ExecuteFetchWithSuperReadOnlyHandling("update found_rows set val=11 where id=1", 0, false)
+	qr, err := conn.ExecuteFetch("update found_rows set val=11 where id=1", 0, false)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, qr.RowsAffected, "RowsAffected")
 
-	qr, err = conn.ExecuteFetchWithSuperReadOnlyHandling("update found_rows set val=11 where id=1", 0, false)
+	qr, err = conn.ExecuteFetch("update found_rows set val=11 where id=1", 0, false)
 	require.NoError(t, err)
 	assert.EqualValues(t, 1, qr.RowsAffected, "RowsAffected")
 }
@@ -198,12 +198,12 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	// sends an OK packet unilaterally which is properly parsed. If not, then regardless of the
 	// negotiated version, it can properly send the status flags.
 	//
-	result, err := conn.ExecuteFetchWithSuperReadOnlyHandling("create table a(id int, name varchar(128), primary key(id))", 0, false)
+	result, err := conn.ExecuteFetch("create table a(id int, name varchar(128), primary key(id))", 0, false)
 	require.NoError(t, err)
 	assert.Zero(t, result.RowsAffected, "create table RowsAffected ")
 
 	for i := 0; i < 255; i++ {
-		result, err := conn.ExecuteFetchWithSuperReadOnlyHandling(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
+		result, err := conn.ExecuteFetch(fmt.Sprintf("insert into a(id, name) values(%v, 'nice name %v')", 1000+i, i), 1000, true)
 		require.NoError(t, err)
 		assert.EqualValues(t, 1, result.RowsAffected, "insert into returned RowsAffected")
 	}
@@ -223,7 +223,7 @@ func doTestMultiResult(t *testing.T, disableClientDeprecateEOF bool) {
 	expectFlag(t, "ReadQueryResult(2)", more, false)
 	assert.EqualValues(t, 1, len(qr.Rows), "ReadQueryResult(1)")
 
-	_, err = conn.ExecuteFetchWithSuperReadOnlyHandling("drop table a", 10, true)
+	_, err = conn.ExecuteFetch("drop table a", 10, true)
 	require.NoError(t, err)
 }
 
@@ -265,7 +265,7 @@ func TestTLS(t *testing.T) {
 	}
 	defer conn.Close()
 
-	result, err := conn.ExecuteFetchWithSuperReadOnlyHandling("SHOW STATUS LIKE 'Ssl_cipher'", 10, true)
+	result, err := conn.ExecuteFetch("SHOW STATUS LIKE 'Ssl_cipher'", 10, true)
 	require.NoError(t, err, "SHOW STATUS LIKE 'Ssl_cipher' failed: %v", err)
 
 	if len(result.Rows) != 1 || result.Rows[0][0].ToString() != "Ssl_cipher" ||
@@ -295,15 +295,15 @@ func TestSessionTrackGTIDs(t *testing.T) {
 	conn, err := mysql.Connect(ctx, &params)
 	require.NoError(t, err)
 
-	qr, err := conn.ExecuteFetchWithSuperReadOnlyHandling(`set session session_track_gtids='own_gtid'`, 1000, false)
+	qr, err := conn.ExecuteFetch(`set session session_track_gtids='own_gtid'`, 1000, false)
 	require.NoError(t, err)
 	require.Empty(t, qr.SessionStateChanges)
 
-	qr, err = conn.ExecuteFetchWithSuperReadOnlyHandling(`create table vttest.t1(id bigint primary key)`, 1000, false)
+	qr, err = conn.ExecuteFetch(`create table vttest.t1(id bigint primary key)`, 1000, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, qr.SessionStateChanges)
 
-	qr, err = conn.ExecuteFetchWithSuperReadOnlyHandling(`insert into vttest.t1 values (1)`, 1000, false)
+	qr, err = conn.ExecuteFetch(`insert into vttest.t1 values (1)`, 1000, false)
 	require.NoError(t, err)
 	require.NotEmpty(t, qr.SessionStateChanges)
 }
@@ -317,7 +317,7 @@ func TestCachingSha2Password(t *testing.T) {
 	expectNoError(t, err)
 	defer conn.Close()
 
-	qr, err := conn.ExecuteFetchWithSuperReadOnlyHandling(`select true from information_schema.PLUGINS where PLUGIN_NAME='caching_sha2_password' and PLUGIN_STATUS='ACTIVE'`, 1, false)
+	qr, err := conn.ExecuteFetch(`select true from information_schema.PLUGINS where PLUGIN_NAME='caching_sha2_password' and PLUGIN_STATUS='ACTIVE'`, 1, false)
 	assert.NoError(t, err, "select true from information_schema.PLUGINS failed: %v", err)
 
 	if len(qr.Rows) != 1 {
@@ -325,7 +325,7 @@ func TestCachingSha2Password(t *testing.T) {
 	}
 
 	// create a user using caching_sha2_password password
-	if _, err = conn.ExecuteFetchWithSuperReadOnlyHandling(`create user 'sha2user'@'localhost' identified with caching_sha2_password by 'password';`, 0, false); err != nil {
+	if _, err = conn.ExecuteFetch(`create user 'sha2user'@'localhost' identified with caching_sha2_password by 'password';`, 0, false); err != nil {
 		t.Fatalf("Create user with caching_sha2_password failed: %v", err)
 	}
 	conn.Close()
@@ -338,7 +338,7 @@ func TestCachingSha2Password(t *testing.T) {
 	expectNoError(t, err)
 	defer conn.Close()
 
-	if qr, err = conn.ExecuteFetchWithSuperReadOnlyHandling(`select user()`, 1, true); err != nil {
+	if qr, err = conn.ExecuteFetch(`select user()`, 1, true); err != nil {
 		t.Fatalf("select user() failed: %v", err)
 	}
 
@@ -359,7 +359,7 @@ func TestClientInfo(t *testing.T) {
 	defer conn.Close()
 
 	// This is the simplest query that would return some textual data in the 'info' field
-	result, err := conn.ExecuteFetchWithSuperReadOnlyHandling(`PREPARE stmt1 FROM 'SELECT 1 = 1'`, -1, true)
+	result, err := conn.ExecuteFetch(`PREPARE stmt1 FROM 'SELECT 1 = 1'`, -1, true)
 	require.NoError(t, err, "select failed: %v", err)
 	require.Equal(t, infoPrepared, result.Info, "expected result.Info=%q, got=%q", infoPrepared, result.Info)
 }
@@ -374,7 +374,7 @@ func TestBaseShowTables(t *testing.T) {
 	sql := conn.BaseShowTables()
 	// An improved test would make assertions about the results. This test just
 	// makes sure there aren't any errors.
-	_, err = conn.ExecuteFetchWithSuperReadOnlyHandling(sql, -1, true)
+	_, err = conn.ExecuteFetch(sql, -1, true)
 	require.NoError(t, err)
 }
 
@@ -389,6 +389,6 @@ func TestBaseShowTablesFilePos(t *testing.T) {
 	sql := conn.BaseShowTables()
 	// An improved test would make assertions about the results. This test just
 	// makes sure there aren't any errors.
-	_, err = conn.ExecuteFetchWithSuperReadOnlyHandling(sql, -1, true)
+	_, err = conn.ExecuteFetch(sql, -1, true)
 	require.NoError(t, err)
 }
