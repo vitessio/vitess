@@ -252,7 +252,7 @@ The flag `lock-shard-timeout` has been deprecated. Please use the newly introduc
 
 #### Improvement
 
-Creating a database takes a lot longer in vttestserver. This can be problematic in the test environment where tests-cases do a lot of `create` and `drop` database.
-In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization.
-For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this values might put more stress on Topo Server (since we now read from topo server more often) but for testing purpose 
+Creating a database with vttestserver was taking ~45 seconds. This can be problematic in test environments where testcases do a lot of `create` and `drop` database.
+In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
+For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this values might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
 this shouldn't be a concern.
