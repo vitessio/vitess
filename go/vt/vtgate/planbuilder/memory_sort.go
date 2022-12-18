@@ -17,12 +17,13 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -70,22 +71,22 @@ func newMemorySort(plan logicalPlan, orderBy v3OrderBy) (*memorySort, error) {
 		case *sqlparser.CastExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
+				return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex ORDER BY expression: %s", sqlparser.String(expr)))
 			}
 			colNumber = findColNumber(ms, colName)
 		case *sqlparser.ConvertExpr:
 			colName, ok := expr.Expr.(*sqlparser.ColName)
 			if !ok {
-				return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
+				return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex ORDER BY expression: %s", sqlparser.String(expr)))
 			}
 			colNumber = findColNumber(ms, colName)
 		default:
-			return nil, fmt.Errorf("unsupported: memory sort: complex order by expression: %s", sqlparser.String(expr))
+			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: complex ORDER BY expression: %s", sqlparser.String(expr)))
 		}
 		// If column is not found, then the order by is referencing
 		// a column that's not on the select list.
 		if colNumber == -1 {
-			return nil, fmt.Errorf("unsupported: memory sort: order by must reference a column in the select list: %s", sqlparser.String(order))
+			return nil, vterrors.VT12001(fmt.Sprintf("memory sort: ORDER BY must reference a column in the SELECT list: %s", sqlparser.String(order)))
 		}
 		// TODO(king-11) need to pass in collation here
 		ob := engine.OrderByParams{
@@ -109,7 +110,7 @@ func (ms *memorySort) Primitive() engine.Primitive {
 
 // SetLimit implements the logicalPlan interface
 func (ms *memorySort) SetLimit(limit *sqlparser.Limit) error {
-	return errors.New("memorySort.Limit: unreachable")
+	return vterrors.VT13001("memorySort.Limit: unreachable")
 }
 
 // Wireup implements the logicalPlan interface

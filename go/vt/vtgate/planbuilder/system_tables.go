@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -32,7 +31,7 @@ import (
 type notImplementedSchemaInfoConverter struct{}
 
 func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not yet supported")
+	return 0, vterrors.VT12001("comparing table schema name with a column name")
 }
 
 func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {

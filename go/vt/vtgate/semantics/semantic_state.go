@@ -105,7 +105,7 @@ type (
 		// ExpandedColumns is a map of all the added columns for a given table.
 		ExpandedColumns map[sqlparser.TableName][]*sqlparser.ColName
 
-		comparer *comparer
+		comparator *sqlparser.Comparator
 	}
 
 	columnName struct {
@@ -121,8 +121,8 @@ type (
 )
 
 var (
-	// ErrMultipleTables refers to an error happening when something should be used only for single tables
-	ErrMultipleTables = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+	// ErrNotSingleTable refers to an error happening when something should be used only for single tables
+	ErrNotSingleTable = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 )
 
 // CopyDependencies copies the dependencies from one expression into the other
@@ -174,7 +174,7 @@ func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExp
 func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	offset := id.TableOffset()
 	if offset < 0 {
-		return nil, ErrMultipleTables
+		return nil, ErrNotSingleTable
 	}
 	return st.Tables[offset], nil
 }
@@ -334,7 +334,7 @@ func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser
 // FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
 func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlparser.ExtractedSubquery {
 	for foundSubq, extractedSubquery := range st.SubqueryRef {
-		if sqlparser.EqualsRefOfSubquery(subquery, foundSubq, nil) {
+		if sqlparser.Equals.RefOfSubquery(subquery, foundSubq) {
 			return extractedSubquery
 		}
 	}
@@ -417,7 +417,7 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 // The expression in the select list is not equal to the one in the ORDER BY,
 // but they point to the same column and would be considered equal by this method
 func (st *SemTable) EqualsExpr(a, b sqlparser.Expr) bool {
-	return sqlparser.EqualsExpr(a, b, st.ASTComparison())
+	return st.ASTEquals().Expr(a, b)
 }
 
 func (st *SemTable) ContainsExpr(e sqlparser.Expr, expres []sqlparser.Expr) bool {
@@ -460,26 +460,21 @@ func (st *SemTable) AndExpressions(exprs ...sqlparser.Expr) sqlparser.Expr {
 	}
 }
 
-// ASTComparison returns a struct that implements the interface with the same name in the `sqlparser` package,
-// that overrides how comparisons between two ColNames is performed.
-func (st *SemTable) ASTComparison() sqlparser.ASTComparison {
-	if st.comparer == nil {
-		st.comparer = &comparer{st: st}
+// ASTEquals returns a sqlparser.Comparator that uses the semantic information in this SemTable to
+// explicitly compare column names for equality.
+func (st *SemTable) ASTEquals() *sqlparser.Comparator {
+	if st.comparator == nil {
+		st.comparator = &sqlparser.Comparator{
+			RefOfColName_: func(a, b *sqlparser.ColName) bool {
+				aDeps := st.RecursiveDeps(a)
+				bDeps := st.RecursiveDeps(b)
+				if aDeps != bDeps && (aDeps.IsEmpty() || bDeps.IsEmpty()) {
+					// if we don't know, we don't know
+					return sqlparser.Equals.RefOfColName(a, b)
+				}
+				return a.Name.Equal(b.Name) && aDeps == bDeps
+			},
+		}
 	}
-	return st.comparer
-}
-
-type comparer struct {
-	st *SemTable
-}
-
-// ColNames implements the ASTComparison interface
-func (c comparer) ColNames(a, b *sqlparser.ColName) bool {
-	aDeps := c.st.RecursiveDeps(a)
-	bDeps := c.st.RecursiveDeps(b)
-	if aDeps != bDeps && (aDeps.IsEmpty() || bDeps.IsEmpty()) {
-		// if we don't know, we don't know
-		return sqlparser.EqualsRefOfColName(a, b, nil)
-	}
-	return a.Name.Equal(b.Name) && aDeps == bDeps
+	return st.comparator
 }

@@ -202,20 +202,21 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 	// Discover new tablets.
 	// TODO(sougou): enhance this to work with multi-schema,
 	// where each instanceKey can have multiple tablets.
-	latestInstances := make(map[inst.InstanceKey]bool)
+	latestInstances := make(map[string]bool)
+	var wg sync.WaitGroup
 	for _, tabletInfo := range tablets {
 		tablet := tabletInfo.Tablet
-		if tablet.MysqlHostname == "" {
+		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
 			continue
 		}
-		if tablet.Type != topodatapb.TabletType_PRIMARY && !topo.IsReplicaType(tablet.Type) {
+		latestInstances[topoproto.TabletAliasString(tablet.Alias)] = true
+		if tablet.MysqlHostname == "" {
 			continue
 		}
 		instanceKey := inst.InstanceKey{
 			Hostname: tablet.MysqlHostname,
 			Port:     int(tablet.MysqlPort),
 		}
-		latestInstances[instanceKey] = true
 		old, err := inst.ReadTablet(instanceKey)
 		if err != nil && err != inst.ErrTabletAliasNil {
 			log.Error(err)
@@ -228,9 +229,14 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 			log.Error(err)
 			continue
 		}
-		loader(&instanceKey)
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			loader(&instanceKey)
+		}()
 		log.Infof("Discovered: %v", tablet)
 	}
+	wg.Wait()
 
 	// Forget tablets that were removed.
 	toForget := make(map[inst.InstanceKey]*topodatapb.Tablet)
@@ -239,12 +245,12 @@ func refreshTablets(tablets map[string]*topo.TabletInfo, query string, args []an
 			Hostname: row.GetString("hostname"),
 			Port:     row.GetInt("port"),
 		}
-		if !latestInstances[curKey] {
-			tablet := &topodatapb.Tablet{}
-			if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
-				log.Error(err)
-				return nil
-			}
+		tablet := &topodatapb.Tablet{}
+		if err := prototext.Unmarshal([]byte(row.GetString("info")), tablet); err != nil {
+			log.Error(err)
+			return nil
+		}
+		if !latestInstances[topoproto.TabletAliasString(tablet.Alias)] {
 			toForget[curKey] = tablet
 		}
 		return nil
@@ -286,18 +292,15 @@ func LockShard(ctx context.Context, instanceKey inst.InstanceKey) (context.Conte
 		return nil, nil, err
 	}
 
-	ctx, cancel := context.WithTimeout(ctx, time.Duration(config.Config.LockShardTimeoutSeconds)*time.Second)
 	atomic.AddInt32(&shardsLockCounter, 1)
 	ctx, unlock, err := ts.TryLockShard(ctx, tablet.Keyspace, tablet.Shard, "Orc Recovery")
 	if err != nil {
-		cancel()
 		atomic.AddInt32(&shardsLockCounter, -1)
 		return nil, nil, err
 	}
 	return ctx, func(e *error) {
 		defer atomic.AddInt32(&shardsLockCounter, -1)
 		unlock(e)
-		cancel()
 	}, nil
 }
 

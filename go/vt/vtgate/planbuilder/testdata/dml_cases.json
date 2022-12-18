@@ -574,7 +574,7 @@
   {
     "comment": "update by primary keyspace id, changing same vindex twice",
     "query": "update user_metadata set email = 'a', email = 'b' where user_id = 1",
-    "plan": "column has duplicate set values: 'email'"
+    "plan": "VT03015: column has duplicate set values: 'email'"
   },
   {
     "comment": "update by primary keyspace id, changing multiple vindex columns",
@@ -1725,7 +1725,7 @@
   {
     "comment": "insert with mimatched column list",
     "query": "insert into user(id) values (1, 2)",
-    "plan": "column list doesn't match values"
+    "plan": "VT13001: [BUG] column list does not match values"
   },
   {
     "comment": "insert no column list for sharded authoritative table",
@@ -2253,7 +2253,7 @@
   {
     "comment": "insert into a vindex not allowed",
     "query": "insert into user_index(id) values(1)",
-    "plan": "unsupported: multi-shard or vindex write statement"
+    "plan": "VT12001: unsupported: multi-shard or vindex write statement"
   },
   {
     "comment": "simple replace unsharded",
@@ -3794,19 +3794,20 @@
   {
     "comment": "delete with unknown reference",
     "query": "delete music from user where id = 1",
-    "plan": "Unknown table 'music' in MULTI DELETE"
+    "plan": "VT03003: unknown table 'music' in MULTI DELETE"
   },
   {
     "comment": "delete with derived tables",
     "query": "delete music from (select * from user) music where id = 1",
-    "plan": "The target table music of the DELETE is not updatable"
+    "plan": "VT03004: the target table music of the DELETE is not updatable"
   },
   {
     "comment": "delete with derived tables with unknown table",
     "query": "delete user from (select * from user) music where id = 1",
-    "plan": "Unknown table 'user' in MULTI DELETE"
+    "plan": "VT03003: unknown table 'user' in MULTI DELETE"
   },
   {
+    "comment": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
     "query": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
     "v3-plan": {
       "QueryType": "INSERT",
@@ -3827,7 +3828,26 @@
         "main.user_privacy_consents"
       ]
     },
-    "gen4-plan": "unsupported: unable to split predicates to derived table: not :__sq_has_values1"
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
+        "TableName": "user_privacy_consents"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "main.user_privacy_consents"
+      ]
+    }
   },
   {
     "comment": "Delete on backfilling unique lookup vindex should be a scatter",
@@ -4994,17 +5014,17 @@
   {
     "comment": "insert using select with more columns in insert",
     "query": "insert into music(id, user_id) select 1",
-    "plan": "Column count doesn't match value count at row 1"
+    "plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert using select with more columns in select",
     "query": "insert into music(id, user_id) select id, count(user_id), sum(user_id) from user group by id",
-    "plan": "Column count doesn't match value count at row 1"
+    "plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert using select with more columns in select after accounting for star column",
     "query": "insert into music(id, user_id) select id, *, 2 from user",
-    "plan": "Column count doesn't match value count at row 1"
+    "plan": "VT03006: column count does not match value count at row 1"
   },
   {
     "comment": "insert using select with auto-inc column using vitess sequence, sequence column not present",
@@ -5317,7 +5337,7 @@
   {
     "comment": "insert using select with sharding column is not an autoinc and not present in the insert column query",
     "query": "insert into user_extra(pattern) SELECT 1",
-    "plan": "insert query does not have sharding column 'user_id' in the column list"
+    "plan": "VT09003: INSERT query does not have primary vindex column 'user_id' in the column list"
   },
   {
     "comment": "sharded same keyspace",
@@ -5724,7 +5744,7 @@
   {
     "comment": "unsharded subquery in sharded update, not the same keyspace between outer and inner",
     "query": "update user set col = (select id from unsharded)",
-    "v3-plan": "unsupported: subqueries in sharded DML",
+    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
     "gen4-plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select id from unsharded)",
@@ -5769,7 +5789,7 @@
   {
     "comment": "sharded subquery in unsharded update, not the same keyspace",
     "query": "update unsharded set col = (select id from user)",
-    "v3-plan": "unsupported: sharded subqueries in DML",
+    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
     "gen4-plan": {
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from user)",
@@ -5814,7 +5834,7 @@
   {
     "comment": "sharded join unsharded subqueries in unsharded update",
     "query": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
-    "v3-plan": "unsupported: sharded subqueries in DML",
+    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
     "gen4-plan": {
       "QueryType": "UPDATE",
       "Original": "update unsharded set col = (select id from unsharded join user on unsharded.id = user.id)",
@@ -5885,7 +5905,7 @@
   {
     "comment": "sharded update with sub query where the sources can be merged into a single query",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
-    "v3-plan": "unsupported: subqueries in sharded DML",
+    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
     "gen4-plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = 5) where id = 5",
@@ -5914,7 +5934,7 @@
   {
     "comment": "merge through correlated subquery",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
-    "v3-plan": "unsupported: subqueries in sharded DML",
+    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
     "gen4-plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id = 5",
@@ -5943,7 +5963,7 @@
   {
     "comment": "merge through correlated subquery #2",
     "query": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
-    "v3-plan": "unsupported: subqueries in sharded DML",
+    "v3-plan": "VT12001: unsupported: sharded subqueries in DML",
     "gen4-plan": {
       "QueryType": "UPDATE",
       "Original": "update user set col = (select count(*) from user_extra where user_extra.user_id = user.id) where id > 5",
@@ -5994,7 +6014,7 @@
   {
     "comment": "explain dml without any directive should fail",
     "query": "explain format=vtexplain delete from user",
-    "plan": "explain format = vtexplain will actually run queries. `/*vt+ EXECUTE_DML_QUERIES */` must be set to run DML queries in vtexplain. Example: `explain /*vt+ EXECUTE_DML_QUERIES */ format = vtexplain delete from t1`"
+    "plan": "VT09008: explain format = vtexplain will actually run queries"
   },
   {
     "comment": "explain dml with actually_run_query directive",
@@ -6197,6 +6217,29 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "insert into ref; TODO(maxeng) is this a bug?",
+    "query": "insert into ref(col) values(1)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into ref(col) values(1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Sharded",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into ref(col) values (1)",
+        "TableName": "ref"
+      },
+      "TablesUsed": [
+        "user.ref"
       ]
     }
   }

@@ -21,7 +21,6 @@ package vtctld
 import (
 	"context"
 	"net/http"
-	"strings"
 
 	"github.com/spf13/pflag"
 
@@ -163,7 +162,7 @@ func InitVtctld(ts *topo.Server) error {
 		if err != nil {
 			log.Errorf("Failed to get the list of known cells, failed to instantiate the healthcheck at startup: %v", err)
 		} else {
-			healthCheck = discovery.NewHealthCheck(ctx, *vtctl.HealthcheckRetryDelay, *vtctl.HealthCheckTimeout, ts, localCell, strings.Join(cells, ","))
+			healthCheck = vtctl.NewHealthCheck(ctx, ts, localCell, cells)
 		}
 	}
 

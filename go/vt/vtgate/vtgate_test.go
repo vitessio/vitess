@@ -75,8 +75,8 @@ func init() {
 	transactionMode = "MULTI"
 	Init(context.Background(), hcVTGateTest, newSandboxForCells([]string{"aa"}), "aa", nil, querypb.ExecuteOptions_Gen4)
 
-	*mysqlServerPort = 0
-	*mysqlAuthServerImpl = "none"
+	mysqlServerPort = 0
+	mysqlAuthServerImpl = "none"
 	initMySQLProtocol()
 }
 
@@ -135,7 +135,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want := "Unknown database 'invalid_keyspace' in vschema"
+	want := "VT05003: unknown database 'invalid_keyspace' in vschema"
 	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.

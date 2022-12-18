@@ -40,6 +40,10 @@
       {
         "from_table": "disabled",
         "to_tables": []
+      },
+      {
+        "from_table": "user.rerouted_ref",
+        "to_tables": ["user.ref"]
       }
     ]
   },
@@ -305,6 +309,18 @@
         "ref": {
           "type": "reference"
         },
+        "ambiguous_ref_with_source": {
+          "type": "reference",
+          "source": "main.ambiguous_ref_with_source"
+        },
+        "ref_with_source": {
+          "type": "reference",
+          "source": "main.ref_in_source"
+        },
+        "rerouted_ref": {
+          "type": "reference",
+          "source": "main.rerouted_ref"
+        },
         "pin_test": {
           "pinned": "80"
         },
@@ -461,6 +477,15 @@
           "type": "sequence"
         },
         "unsharded_ref": {
+          "type": "reference"
+        },
+        "ambiguous_ref_with_source": {
+          "type": "reference"
+        },
+        "ref_in_source": {
+          "type": "reference"
+        },
+        "rerouted_ref": {
           "type": "reference"
         }
       }

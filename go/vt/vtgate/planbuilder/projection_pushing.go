@@ -17,7 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -55,7 +56,7 @@ func pushProjection(
 	case *concatenateGen4:
 		return pushProjectionIntoConcatenate(ctx, expr, hasAggregation, node, inner, reuseCol)
 	default:
-		return 0, false, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "[BUG] push projection does not yet support: %T", node)
+		return 0, false, vterrors.VT13001(fmt.Sprintf("push projection does not yet support: %T", node))
 	}
 }
 
@@ -70,14 +71,14 @@ func pushProjectionIntoVindexFunc(node *vindexFunc, expr *sqlparser.AliasedExpr,
 
 func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, hasAggregation bool, node *concatenateGen4, inner bool, reuseCol bool) (int, bool, error) {
 	if hasAggregation {
-		return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: aggregation on unions")
+		return 0, false, vterrors.VT12001("aggregation on UNIONs")
 	}
 	offset, added, err := pushProjection(ctx, expr, node.sources[0], inner, reuseCol, hasAggregation)
 	if err != nil {
 		return 0, false, err
 	}
 	if added && ctx.SemTable.DirectDeps(expr.Expr).NonEmpty() {
-		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
+		return 0, false, vterrors.VT13001(fmt.Sprintf("pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr)))
 	}
 	if added {
 		for _, source := range node.sources[1:] {
@@ -202,7 +203,7 @@ func pushProjectionIntoJoin(
 		// for example an expression like count(*) will have dependencies on both sides, but we should not push it
 		// instead we should return an error
 		if hasAggregation {
-			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
 		// now we break the expression into left and right side dependencies and rewrite the left ones to bind variables
 		bvName, cols, rewrittenExpr, err := operators.BreakExpressionInLHSandRHS(ctx, expr.Expr, lhsSolves)
@@ -276,9 +277,9 @@ func pushProjectionIntoHashJoin(
 		// for example an expression like count(*) will have dependencies on both sides, but we should not push it
 		// instead we should return an error
 		if hasAggregation {
-			return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard query with aggregates")
+			return 0, false, vterrors.VT12001("cross-shard query with aggregates")
 		}
-		return 0, false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: hash join with projection from both sides of the join")
+		return 0, false, vterrors.VT12001("hash join with projection from both sides of the join")
 	}
 	if reuseCol && !appended {
 		for idx, col := range node.Cols {
@@ -302,7 +303,7 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 	expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	sel, isSel := rb.Select.(*sqlparser.Select)
 	if !isSel {
-		return 0, false, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.BadFieldError, "unsupported: pushing projection '%s' on %T", sqlparser.String(expr), rb.Select)
+		return 0, false, vterrors.VT12001(fmt.Sprintf("pushing projection '%s' on %T", sqlparser.String(expr), rb.Select))
 	}
 
 	if ctx.RewriteDerivedExpr {
@@ -322,7 +323,7 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 
 func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
 	ti, err := semTable.TableInfoForExpr(expr.Expr)
-	if err != nil && err != semantics.ErrMultipleTables {
+	if err != nil && err != semantics.ErrNotSingleTable {
 		return err
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
