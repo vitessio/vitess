@@ -154,9 +154,13 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 ### Deprecations and Removals
 
-The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
+- The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
 
-The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
+- The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
+
+- `vtctlclient VExec` command was removed, having been deprecated since v13.
+
+- `vtctlclient OnlineDDL ... [complete|retry|cancel|cancel-all]` returns empty result on success instead of number of shard affected.
 
 ### MySQL Compatibility
 
