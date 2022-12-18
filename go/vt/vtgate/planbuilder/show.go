@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -61,7 +60,7 @@ func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, 
 	case *sqlparser.ShowOther:
 		prim, err = buildShowOtherPlan(sql, vschema)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG]: undefined show type: %T", stmt.Internal)
+		return nil, vterrors.VT13001(fmt.Sprintf("undefined SHOW type: %T", stmt.Internal))
 	}
 	if err != nil {
 		return nil, err
@@ -123,7 +122,7 @@ func buildShowBasicPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 	case sqlparser.VschemaVindexes:
 		return buildVschemaVindexesPlan(show, vschema)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
+	return nil, vterrors.VT13001(fmt.Sprintf("unknown SHOW query type %s", show.Command.ToString()))
 
 }
 
@@ -192,7 +191,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 			return nil, err
 		}
 		if table == nil {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", show.Tbl.Name.String())
+			return nil, vterrors.VT05004(show.Tbl.Name.String())
 		}
 		// Update the table.
 		show.Tbl.Qualifier = sqlparser.NewIdentifierCS("")
@@ -255,11 +254,11 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		return nil, err
 	}
 	if ks == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+		return nil, vterrors.VT09005()
 	}
 
 	if tabletType != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "show vitess_migrations works only on primary tablet")
+		return nil, vterrors.VT09006("SHOW")
 	}
 
 	if dest == nil {
@@ -365,19 +364,19 @@ func generateCharsetRows(showFilter *sqlparser.ShowFilter, colNames []string) ([
 	} else {
 		cmpExp, ok := showFilter.Filter.(*sqlparser.ComparisonExpr)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expect a 'LIKE' or '=' expression")
+			return nil, vterrors.VT12001("expect a 'LIKE' or '=' expression")
 		}
 
 		left, ok := cmpExp.Left.(*sqlparser.ColName)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "expect left side to be 'charset'")
+			return nil, vterrors.VT12001("expect left side to be 'charset'")
 		}
 		leftOk := left.Name.EqualString(charset)
 
 		if leftOk {
 			literal, ok := cmpExp.Right.(*sqlparser.Literal)
 			if !ok {
-				return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "we expect the right side to be a string")
+				return nil, vterrors.VT12001("we expect the right side to be a string")
 			}
 			rightString := literal.Val
 
@@ -449,7 +448,7 @@ func buildShowCreatePlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema
 	case sqlparser.CreateTbl:
 		return buildCreateTblPlan(show, vschema)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown show query type %s", show.Command.ToString())
+	return nil, vterrors.VT13001("unknown SHOW query type %s", show.Command.ToString())
 }
 
 func buildCreateDbPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema) (engine.Primitive, error) {
@@ -496,7 +495,7 @@ func buildCreateTblPlan(show *sqlparser.ShowCreate, vschema plancontext.VSchema)
 			return nil, err
 		}
 		if tbl == nil {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownTable, "Table '%s' doesn't exist", sqlparser.String(show.Op))
+			return nil, vterrors.VT05004(sqlparser.String(show.Op))
 		}
 		ks = tbl.Keyspace
 		if destKs != nil {
@@ -653,7 +652,7 @@ func buildVschemaTablesPlan(vschema plancontext.VSchema) (engine.Primitive, erro
 	}
 	schemaKs, ok := vs.Keyspaces[ks.Name]
 	if !ok {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", ks.Name)
+		return nil, vterrors.VT05003(ks.Name)
 	}
 
 	var tables []string
@@ -688,7 +687,7 @@ func buildVschemaVindexesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 			tableName := show.Tbl.Name.String()
 			schemaTbl, ok := schemaKs.Tables[tableName]
 			if !ok {
-				return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.NoSuchTable, "table '%s' does not exist in keyspace '%s'", tableName, ks.Name)
+				return nil, vterrors.VT05005(tableName, ks.Name)
 			}
 			tbl = schemaTbl
 		}

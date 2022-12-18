@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -44,7 +43,7 @@ func (p *primitiveWrapper) Inputs() []logicalPlan {
 }
 
 func (p *primitiveWrapper) Rewrite(...logicalPlan) error {
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "can't rewrite")
+	return vterrors.VT13001("cannot rewrite")
 }
 
 func (p *primitiveWrapper) ContainsTables() semantics.TableSet {
