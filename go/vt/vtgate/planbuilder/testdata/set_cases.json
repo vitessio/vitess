@@ -373,7 +373,7 @@
   {
     "comment": "set system settings",
     "query": "set @@ndbinfo_max_bytes = 192",
-    "plan": "ndbinfo_max_bytes: system setting is not supported"
+    "plan": "VT12001: unsupported: system setting: ndbinfo_max_bytes"
   },
   {
     "comment": "set autocommit",
@@ -531,7 +531,7 @@
   {
     "comment": "change read only variable",
     "query": "set socket = ''",
-    "plan": "variable 'socket' is a read only variable"
+    "plan": "VT03010: variable 'socket' is a read only variable"
   },
   {
     "comment": "set transaction read only",

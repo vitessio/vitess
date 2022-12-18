@@ -20,7 +20,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -32,6 +31,8 @@ import (
 	"github.com/nsf/jsondiff"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"vitess.io/vitess/go/test/utils"
@@ -41,7 +42,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -250,8 +250,17 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "systemtables_cases80.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
+}
+
+func TestSystemTables57(t *testing.T) {
+	// first we move everything to use 5.7 logic
+	servenv.SetMySQLServerVersionForTest("5.7")
+	defer servenv.SetMySQLServerVersionForTest("")
+	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
+	testOutputTempDir := makeTestOutput(t)
+	testFile(t, "systemtables_cases57.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -569,7 +578,7 @@ func (vw *vschemaWrapper) ForeignKeyMode() string {
 
 func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
-		return nil, errors.New("keyspace not available")
+		return nil, vterrors.VT13001("keyspace not available")
 	}
 	return []*vindexes.Keyspace{vw.keyspace}, nil
 }
@@ -577,7 +586,7 @@ func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 // FindKeyspace implements the VSchema interface
 func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
-		return nil, errors.New("keyspace not available")
+		return nil, vterrors.VT13001("keyspace not available")
 	}
 	if vw.keyspace.Name == keyspace {
 		return vw.keyspace, nil
@@ -618,11 +627,11 @@ func (vw *vschemaWrapper) TargetDestination(qualifier string) (key.Destination, 
 		keyspaceName = qualifier
 	}
 	if keyspaceName == "" {
-		return nil, nil, 0, vterrors.New(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace not specified")
+		return nil, nil, 0, vterrors.VT03007()
 	}
 	keyspace := vw.v.Keyspaces[keyspaceName]
 	if keyspace == nil {
-		return nil, nil, 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspaceName)
+		return nil, nil, 0, vterrors.VT05003(keyspaceName)
 	}
 	return vw.dest, keyspace.Keyspace, vw.tabletType, nil
 
