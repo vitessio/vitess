@@ -34,7 +34,6 @@ import (
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -320,7 +319,7 @@ func sandboxDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (que
 	sand.DialCounter++
 	if sand.DialMustFail > 0 {
 		sand.DialMustFail--
-		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn error")
+		return nil, vterrors.VT14001()
 	}
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	return sbc, nil

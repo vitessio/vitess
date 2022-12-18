@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -76,7 +75,7 @@ func (c *concatenate) Primitive() engine.Primitive {
 // Rewrite implements the logicalPlan interface
 func (c *concatenate) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "concatenate: wrong number of inputs")
+		return vterrors.VT13001("concatenate: wrong number of inputs")
 	}
 	c.lhs = inputs[0]
 	c.rhs = inputs[1]

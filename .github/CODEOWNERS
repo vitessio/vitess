@@ -7,7 +7,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /.github/workflows/ @deepthi @frouioui @mattlord @rohit-nayak-ps
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
 /doc/ @deepthi @frouioui @GuptaManan100 @rsajwani
-/docker/ @deepthi @derekperkins @dkhenry @mattlord
+/docker/ @deepthi @derekperkins @dkhenry @mattlord @GuptaManan100 @frouioui
 /examples/compose @shlomi-noach @GuptaManan100 @frouioui
 /examples/demo @mattlord @rohit-nayak-ps
 /examples/local @rohit-nayak-ps @frouioui @mattlord @GuptaManan100
