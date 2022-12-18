@@ -503,7 +503,7 @@ func (collector *TableGC) purge(ctx context.Context) (tableName string, err erro
 	for {
 		if ctx.Err() != nil {
 			// cancelled
-			return
+			return tableName, err
 		}
 		if !collector.throttlerClient.ThrottleCheckOKOrWait(ctx) {
 			continue
