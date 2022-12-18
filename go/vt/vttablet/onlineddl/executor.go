@@ -1376,8 +1376,10 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	if revertMigration == nil {
 		// Original ALTER TABLE request for vreplication
-		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
-			return err
+		if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
+			if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
+				return err
+			}
 		}
 		if err := e.postInitVreplicationOriginalMigration(ctx, onlineDDL, v, conn); err != nil {
 			return err
