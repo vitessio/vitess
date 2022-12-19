@@ -57,7 +57,7 @@ func TestPrequeries(t *testing.T) {
 		},
 	})
 
-	want := []string{"set @@s1 = 'apa', @@s2 = 42"}
+	want := []string{"set s1 = 'apa', s2 = 42"}
 	preQueries := session.SetPreQueries()
 
 	if !reflect.DeepEqual(want, preQueries) {

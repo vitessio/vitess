@@ -33,6 +33,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+// AssertContains ensures the given query result contains the expected results.
+func AssertContains(t testing.TB, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	assert.Contains(t, got, expected, "Query: %s", query)
+}
+
 // AssertMatches ensures the given query produces the expected results.
 func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	t.Helper()

@@ -191,9 +191,6 @@ type (
 		// InTransaction returns true if the session has already opened transaction or
 		// will start a transaction on the query execution.
 		InTransaction() bool
-
-		// SetTransactionIsolation sets the transaction isolation level for any new transaction on the session.
-		SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation)
 	}
 
 	// Match is used to check if a Primitive matches

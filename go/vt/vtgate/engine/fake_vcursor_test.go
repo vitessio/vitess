@@ -50,11 +50,6 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
-func (t *noopVCursor) SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (t *noopVCursor) InTransaction() bool {
 	return false
 }
