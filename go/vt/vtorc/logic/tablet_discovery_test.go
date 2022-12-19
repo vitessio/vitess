@@ -18,6 +18,7 @@ package logic
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
@@ -137,10 +138,33 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		verifyRefreshTabletsInKeyspaceShard(t, true, 3, tablets)
 	})
 
+	t.Run("tablet shutdown removes mysql hostname and port. We shouldn't forget the tablet", func(t *testing.T) {
+		defer func() {
+			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.MysqlHostname = hostname
+				tablet.MysqlPort = 100
+				return nil
+			})
+		}()
+		// Let's assume tab100 shutdown. This would clear its tablet hostname and port
+		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+			tablet.MysqlHostname = ""
+			tablet.MysqlPort = 0
+			return nil
+		})
+		require.NoError(t, err)
+		// We expect no tablets to be refreshed. Also, tab100 shouldn't be forgotten
+		verifyRefreshTabletsInKeyspaceShard(t, false, 0, tablets)
+	})
+
 	t.Run("change a tablet and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
 		startTimeInitially := tab100.PrimaryTermStartTime.Seconds
 		defer func() {
 			tab100.PrimaryTermStartTime.Seconds = startTimeInitially
+			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.PrimaryTermStartTime.Seconds = startTimeInitially
+				return nil
+			})
 		}()
 		tab100.PrimaryTermStartTime.Seconds = 1000
 		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
@@ -224,17 +248,18 @@ func TestShardPrimary(t *testing.T) {
 // verifyRefreshTabletsInKeyspaceShard calls refreshTabletsInKeyspaceShard with the forceRefresh parameter provided and verifies that
 // the number of instances refreshed matches the parameter and all the tablets match the ones provided
 func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instanceRefreshRequired int, tablets []*topodatapb.Tablet) {
-	instancesRefreshed := 0
+	var instancesRefreshed atomic.Int32
+	instancesRefreshed.Store(0)
 	// call refreshTabletsInKeyspaceShard while counting all the instances that are refreshed
 	refreshTabletsInKeyspaceShard(context.Background(), keyspace, shard, func(instanceKey *inst.InstanceKey) {
-		instancesRefreshed++
+		instancesRefreshed.Add(1)
 	}, forceRefresh)
 	// Verify that all the tablets are present in the database
 	for _, tablet := range tablets {
 		verifyTabletInfo(t, tablet, "")
 	}
 	// Verify that refresh as many tablets as expected
-	assert.EqualValues(t, instanceRefreshRequired, instancesRefreshed)
+	assert.EqualValues(t, instanceRefreshRequired, instancesRefreshed.Load())
 }
 
 // verifyTabletInfo verifies that the tablet information read from the vtorc database

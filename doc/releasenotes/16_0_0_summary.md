@@ -40,6 +40,36 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
 Consider using `VTOrc` instead of `Orchestrator`.
 
+#### Query Serving Errors
+
+In this release, we are introducing a new way to report errors from Vitess through the query interface.
+Errors will now have an error code for each error, which will make it easy to search for more information on the issue.
+For instance, the following error:
+
+```
+aggregate functions take a single argument 'count(user_id, name)'
+```
+
+Will be transformed into:
+
+```
+VT03001: aggregate functions take a single argument 'count(user_id, name)'
+```
+
+The error code `VT03001` can then be used to search or ask for help and report problems.
+
+If you have code searching for error strings from Vitess, this is a breaking change.
+Many error strings have been tweaked.
+If your application is searching for specific errors, you might need to update your code.
+
+#### <a id="lock-timeout-introduction"/> `lock-timeout` and `remote_operation_timeout` Changes
+Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced. 
+For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
+The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
+
+During upgrades, if the users want to preserve the same behaviour as previous releases, then they should provide the `remote_operation_timeout` flag explicitly before upgrading.
+After the upgrade, they should then alter their configuration to also specify `lock-timeout` explicitly.
+
 ### New command line flags and behavior
 
 #### VTGate: Support query timeout --query-timeout
@@ -145,6 +175,7 @@ The `RestoreFromBackup  --restore_to_pos` ends with:
 - the restored server in intentionally broken replication setup
 - tablet type is `DRAINED`
 
+
 ### Important bug fixes
 
 #### Corrupted results for non-full-group-by queries with JOINs
@@ -210,3 +241,9 @@ VSchema Example
   }
 }
 ```
+
+### VTOrc
+
+#### Flag Deprecations
+
+The flag `lock-shard-timeout` has been deprecated. Please use the newly introduced `lock-timeout` instead. More detail [here](#lock-timeout-introduction).
