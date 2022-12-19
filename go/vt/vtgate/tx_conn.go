@@ -87,6 +87,12 @@ func (txc *TxConn) queryService(alias *topodatapb.TabletAlias) (queryservice.Que
 	if qs != nil {
 		return qs, nil
 	}
+
+	// backport to fix https://github.com/vitessio/vitess/issues/11904
+	if alias == nil {
+		return txc.gateway, nil
+	}
+
 	return txc.gateway.QueryServiceByAlias(alias, nil)
 }
 
