@@ -64,6 +64,15 @@ var (
 				CONSTRAINT child_parent_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE
 			)
 		`,
+		`
+			CREATE TABLE child_nofk_table (
+				id INT NOT NULL auto_increment,
+				parent_id INT,
+				child_hint_col INT NOT NULL DEFAULT 0,
+				PRIMARY KEY (id),
+				KEY parent_id_idx (parent_id)
+			)
+		`,
 	}
 	insertStatements = []string{
 		"insert into parent_table (id) values(43)",
@@ -100,6 +109,11 @@ var testCases = []testCase{
 		allowForeignKeys: false,
 	},
 	{
+		name:             "add foreign key to table which wasn't a child before, not allowed",
+		sql:              "alter table child_nofk_table add CONSTRAINT new_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+		allowForeignKeys: false,
+	},
+	{
 		// on vanilla MySQL, this migration ends with the child_table referencing the old, original table, and not to the new table now called parent_table.
 		// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
 		// However, this tests is still valid in the sense that it lets us modify the parent table in the first place.
@@ -131,6 +145,12 @@ var testCases = []testCase{
 		sql:              "alter table child_table add CONSTRAINT another_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
 		allowForeignKeys: true,
 		expectHint:       "another_fk",
+	},
+	{
+		name:             "add foreign key to table which wasn't a child before",
+		sql:              "alter table child_nofk_table add CONSTRAINT new_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+		allowForeignKeys: true,
+		expectHint:       "new_fk",
 	},
 }
 
@@ -239,7 +259,7 @@ func TestSchemaChange(t *testing.T) {
 				}
 			})
 			t.Run("cleanup", func(t *testing.T) {
-				artifacts = append(artifacts, "parent_table", "child_table")
+				artifacts = append(artifacts, "parent_table", "child_table", "child_nofk_table")
 				statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", strings.Join(artifacts, ","))
 				t.Run(statement, func(t *testing.T) {
 					_, _ = testOnlineDDLStatement(t, statement, "direct", "", false)
