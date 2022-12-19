@@ -45,7 +45,7 @@ import (
 )
 
 var (
-	dbServerVersion = "5.7.0"
+	dbServerVersion = "8.0.0"
 	charsetName     = "utf8mb4"
 	dbsvCollID      = collations.NewEnvironment(dbServerVersion).DefaultCollationForCharset(charsetName).ID()
 )
