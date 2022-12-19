@@ -3251,10 +3251,6 @@ replication_statement:
   {
     $$ = &StopReplica{}
   }
-| SHOW REPLICA STATUS
-  {
-    $$ = &ShowReplicaStatus{}
-  }
 
 replication_option_list:
   replication_option
@@ -4415,6 +4411,10 @@ show_statement:
 | SHOW PROCEDURE STATUS like_or_where_opt
   {
     $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
+  }
+| SHOW REPLICA STATUS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {

@@ -3269,18 +3269,6 @@ func (r *StopReplica) Format(buf *TrackedBuffer) {
 	buf.WriteString("stop replica")
 }
 
-// ShowReplicaStatus represents a "SHOW REPLICA STATUS" statement.
-// https://dev.mysql.com/doc/refman/8.0/en/show-replica-status.html
-type ShowReplicaStatus struct{}
-
-var _ Statement = (*ShowReplicaStatus)(nil)
-
-func (*ShowReplicaStatus) iStatement() {}
-
-func (s *ShowReplicaStatus) Format(buf *TrackedBuffer) {
-	buf.WriteString("show replica status")
-}
-
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
 // It should be used only as an indicator. It does not contain
 // the full AST for the statement.
