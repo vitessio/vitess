@@ -691,27 +691,41 @@ func (e *Executor) doesConnectionInfoMatch(ctx context.Context, connID int64, su
 	return len(rs.Rows) == 1, nil
 }
 
-// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
-func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-	// Validate table does not participate in foreign key relationship:
+// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent on a child in at least one foreign key constraint
+func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context, schema string, table string) (bool, error) {
 	for _, fkQuery := range []string{selSelectCountFKParentConstraints, selSelectCountFKChildConstraints} {
 		query, err := sqlparser.ParseAndBind(fkQuery,
-			sqltypes.StringBindVariable(onlineDDL.Schema),
-			sqltypes.StringBindVariable(onlineDDL.Table),
+			sqltypes.StringBindVariable(schema),
+			sqltypes.StringBindVariable(table),
 		)
 		if err != nil {
-			return err
+			return false, err
 		}
 		r, err := e.execQuery(ctx, query)
 		if err != nil {
-			return err
+			return false, err
 		}
 		row := r.Named().Row()
 		if row == nil {
-			return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result from INFORMATION_SCHEMA.KEY_COLUMN_USAGE query: %s", query)
+			return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result from INFORMATION_SCHEMA.KEY_COLUMN_USAGE query: %s", query)
 		}
 		countFKConstraints := row.AsInt64("num_fk_constraints", 0)
 		if countFKConstraints > 0 {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
+func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+	if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
+		// Validate table does not participate in foreign key relationship:
+		participates, err := e.tableParticipatesInForeignKeyRelationship(ctx, onlineDDL.Schema, onlineDDL.Table)
+		if err != nil {
+			return err
+		}
+		if participates {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in FOREIGN KEY constraint. foreign key constraints are not supported in online DDL", onlineDDL.Table)
 		}
 	}
@@ -1404,10 +1418,8 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	}
 	if revertMigration == nil {
 		// Original ALTER TABLE request for vreplication
-		if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
-			if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
-				return err
-			}
+		if err := e.validateTableForAlterAction(ctx, onlineDDL); err != nil {
+			return err
 		}
 		if err := e.postInitVreplicationOriginalMigration(ctx, onlineDDL, v, conn); err != nil {
 			return err
