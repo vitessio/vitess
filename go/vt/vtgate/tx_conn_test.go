@@ -1180,6 +1180,24 @@ func TestTxConnMultiGoTargets(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func TestTxConnQueryService(t *testing.T) {
+	txc := &TxConn{gateway: &DiscoveryGateway{}}
+
+	qs, err := txc.queryService(nil)
+	require.NoError(t, err)
+	assert.NotNil(t, qs.(*DiscoveryGateway))
+
+	qs, err = txc.queryService(&topodatapb.TabletAlias{Cell: "aa", Uid: 123})
+	require.NoError(t, err)
+	assert.NotNil(t, qs.(*DiscoveryGateway))
+
+	txc.gateway = &TabletGateway{}
+
+	qs, err = txc.queryService(nil)
+	require.NoError(t, err)
+	assert.NotNil(t, qs.(*TabletGateway))
+}
+
 func newLegacyTestTxConnEnv(t *testing.T, name string) (sc *ScatterConn, sbc0, sbc1 *sandboxconn.SandboxConn, rss0, rss1, rss01 []*srvtopo.ResolvedShard) {
 	t.Helper()
 	createSandbox(name)
