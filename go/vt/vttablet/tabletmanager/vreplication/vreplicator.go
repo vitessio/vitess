@@ -590,7 +590,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 	if len(secondaryKeys) > 0 {
 		alterDrop := &sqlparser.AlterTable{
 			Table: sqlparser.TableName{
-				Name: sqlparser.NewIdentifierCS(tableName),
+				Qualifier: sqlparser.NewIdentifierCS(vr.dbClient.DBName()),
+				Name:      sqlparser.NewIdentifierCS(tableName),
 			},
 		}
 		alterReAdd := &sqlparser.AlterTable{

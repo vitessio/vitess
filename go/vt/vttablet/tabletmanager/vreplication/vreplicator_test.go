@@ -18,13 +18,20 @@ package vreplication
 
 import (
 	"context"
+	"fmt"
 	"reflect"
+	"regexp"
+	"strings"
 	"testing"
+	"unicode"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
+	"vitess.io/vitess/go/vt/binlog/binlogplayer"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
@@ -76,9 +83,6 @@ func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
 
 func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	ctx := context.Background()
-	testEnv, err := testenv.Init()
-	require.NoError(t, err)
-	defer testEnv.Close()
 	tests := []struct {
 		name    string
 		table   string
@@ -161,8 +165,8 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.NoError(t, testEnv.Mysqld.ExecuteSuperQuery(ctx, tt.ddl))
-			got, err := testEnv.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, testEnv.Dbcfgs.DBName, tt.table)
+			require.NoError(t, env.Mysqld.ExecuteSuperQuery(ctx, tt.ddl))
+			got, err := env.Mysqld.GetPrimaryKeyEquivalentColumns(ctx, env.Dbcfgs.DBName, tt.table)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Mysqld.GetPrimaryKeyEquivalentColumns() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -172,4 +176,183 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestStashSecondaryKeys(t *testing.T) {
+	ctx := context.Background()
+	tablet := addTablet(100)
+	defer deleteTablet(tablet)
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "t1",
+		}},
+	}
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: env.KeyspaceName,
+		Shard:    env.ShardName,
+		Filter:   filter,
+	}
+	id := uint32(1)
+	vsclient := newTabletConnector(tablet)
+	stats := binlogplayer.NewStats()
+	dbClient := playerEngine.dbClientFactoryFiltered()
+	err := dbClient.Connect()
+	require.NoError(t, err)
+	defer dbClient.Close()
+	dbName := dbClient.DBName()
+	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
+	getActionsSQLf := "select action from _vt.copy_table_post where vrepl_id=%d and table_name='%s'"
+
+	tests := []struct {
+		name         string
+		tableName    string
+		initialDDL   string
+		strippedDDL  string
+		actionDDL    string
+		WorkflowType int32
+		wantErr      string
+	}{
+		{
+			name:         "noSK",
+			tableName:    "t1",
+			initialDDL:   "create table %s.t1 (id int not null, primary key(id))",
+			strippedDDL:  "create table t1 (id int not null, primary key(id))",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+		},
+		{
+			name:         "1SK:Materialize",
+			tableName:    "t1",
+			initialDDL:   "create table %s.t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
+			strippedDDL:  "create table    t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Materialize),
+			wantErr:      "temporarily removing secondary keys is only supported for MoveTables and Reshard workflows",
+		},
+		{
+			name:         "1SK",
+			tableName:    "t1",
+			initialDDL:   "create table %s.t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
+			strippedDDL:  "create table    t1 (id int not null, c1 int default null, primary key(id))",
+			actionDDL:    "alter table %s.t1 add key c1 (c1)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
+		},
+		{
+			name:         "2SK",
+			tableName:    "t1",
+			initialDDL:   "create table %s.t1 (id int not null, c1 int default null, c2 int default null, primary key(id), key c1 (c1), key c2 (c2))",
+			strippedDDL:  "create table    t1 (id int not null, c1 int default null, c2 int default null, primary key(id))",
+			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+		},
+		{
+			name:         "t2SK",
+			tableName:    "t1",
+			initialDDL:   "create table %s.t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, primary key(id), key c1_c2 (c1, c2), key c2 (c2))",
+			strippedDDL:  "create table    t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, primary key(id))",
+			actionDDL:    "alter table %s.t1 add key c1_c2 (c1, c2), add key c2 (c2)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+		},
+		{
+			name:         "2FPK2SK",
+			tableName:    "t1",
+			initialDDL:   "create table %s.t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) default null, primary key(id, c1), key c1_c2 (c1, c2), key c2 (c2))",
+			strippedDDL:  "create table    t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) default null, primary key(id, c1))",
+			actionDDL:    "alter table %s.t1 add key c1_c2 (c1, c2), add key c2 (c2)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+		},
+		{
+			name:         "4FPKSK",
+			tableName:    "t1",
+			initialDDL:   "create table %s.t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key(id, c1, c2), key c2 (c2))",
+			strippedDDL:  "create table    t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key(id, c1, c2))",
+			actionDDL:    "alter table %s.t1 add key c2 (c2)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
+		},
+	}
+
+	for _, tcase := range tests {
+		t.Run(tcase.name, func(t *testing.T) {
+			vr.WorkflowType = tcase.WorkflowType
+			_, err := dbClient.ExecuteFetch(fmt.Sprintf(tcase.initialDDL, dbName), 1)
+			require.NoError(t, err)
+			defer func() {
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("drop table %s.%s", dbName, tcase.tableName), 1)
+				require.NoError(t, err)
+				_, err = dbClient.ExecuteFetch("delete from _vt.copy_table_post", 1)
+				require.NoError(t, err)
+			}()
+
+			err = vr.stashSecondaryKeys(ctx, tcase.tableName)
+			if tcase.wantErr != "" {
+				require.EqualError(t, err, tcase.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+
+			req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tcase.tableName}}
+			sd, err := env.Mysqld.GetSchema(ctx, dbName, req)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(sd.TableDefinitions))
+			afterDDL := removeVersionDifferences(sd.TableDefinitions[0].Schema)
+			tcase.strippedDDL = removeVersionDifferences(tcase.strippedDDL)
+			require.True(t, strings.EqualFold(stripCruft(tcase.strippedDDL), stripCruft(afterDDL)),
+				"Expected: %s\nGot: %s", forError(tcase.strippedDDL), forError(afterDDL))
+
+			if tcase.actionDDL != "" {
+				res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tcase.tableName), 1)
+				require.Equal(t, 1, len(res.Rows))
+				require.NoError(t, err)
+				val, err := res.Rows[0][0].ToBytes()
+				require.NoError(t, err)
+				alter, err := jsonparser.GetString(val, "task")
+				require.NoError(t, err)
+				require.True(t, strings.EqualFold(stripCruft(fmt.Sprintf(tcase.actionDDL, dbName)), stripCruft(alter)),
+					"Expected: %s\nGot: %s", forError(fmt.Sprintf(tcase.actionDDL, dbName)), forError(alter))
+			}
+		})
+	}
+}
+
+// stripCruft removes all whitespace unicode chars and backticks.
+func stripCruft(in string) string {
+	out := strings.Builder{}
+	for _, r := range in {
+		if unicode.IsSpace(r) || r == '`' {
+			continue
+		}
+		out.WriteRune(r)
+	}
+	return out.String()
+}
+
+// forError returns a string for humans to easily compare in
+// in error messages.
+func forError(in string) string {
+	mid := strings.ToLower(in)
+	// condense multiple spaces into one.
+	mid = regexp.MustCompile(`\s+`).ReplaceAllString(mid, " ")
+	sr := strings.NewReplacer(
+		"\t", "",
+		"\n", "",
+		"\r", "",
+		"`", "",
+		"( ", "(",
+		" )", ")",
+	)
+	return sr.Replace(mid)
+}
+
+// removeVersionDifferences removes portions of a CREATE TABLE statement
+// that differ between versions:
+//   - 8.0 no longer includes display widths for integer or year types
+//   - MySQL and MariaDB versions differ in what table options they display
+func removeVersionDifferences(in string) string {
+	out := in
+	var re *regexp.Regexp
+	for _, baseType := range []string{"int", "year"} {
+		re = regexp.MustCompile(fmt.Sprintf(`(?i)%s\(([0-9]*)?\)`, baseType))
+		out = re.ReplaceAllString(out, baseType)
+	}
+	re = regexp.MustCompile(`(?i)engine[\s]*=[\s]*innodb.*$`)
+	out = re.ReplaceAllString(out, "")
+	return out
 }
