@@ -43,8 +43,8 @@ var parserPool = sync.Pool{
 // zeroParser is a zero-initialized parser to help reinitialize the parser for pooling.
 var zeroParser yyParserImpl
 
-// MySQLVersion is the version of MySQL that the parser would emulate
-var MySQLVersion = "50709" // default version if nothing else is stated
+// mySQLParserVersion is the version of MySQL that the parser would emulate
+var mySQLParserVersion string
 
 // yyParsePooled is a wrapper around yyParse that pools the parser objects. There isn't a
 // particularly good reason to use yyParse directly, since it immediately discards its parser.
@@ -106,16 +106,26 @@ func Parse2(sql string) (Statement, BindVars, error) {
 }
 
 func checkParserVersionFlag() {
-	if flag.Parsed() {
-		versionFlagSync.Do(func() {
-			convVersion, err := convertMySQLVersionToCommentVersion(servenv.MySQLServerVersion())
-			if err != nil {
-				log.Errorf("unable to parse mysql version: %v", err)
-			} else {
-				MySQLVersion = convVersion
-			}
-		})
+	if !flag.Parsed() {
+		panic("checkParserVersionFlag called too soon")
 	}
+	versionFlagSync.Do(func() {
+		convVersion, err := convertMySQLVersionToCommentVersion(servenv.MySQLServerVersion())
+		if err != nil {
+			log.Fatalf("unable to parse mysql version: %v", err)
+		}
+		mySQLParserVersion = convVersion
+	})
+}
+
+// SetParserVersion sets the mysql parser version
+func SetParserVersion(version string) {
+	mySQLParserVersion = version
+}
+
+// GetParserVersion returns the version of the mysql parser
+func GetParserVersion() string {
+	return mySQLParserVersion
 }
 
 // convertMySQLVersionToCommentVersion converts the MySQL version into comment version format.
@@ -305,5 +315,5 @@ loop:
 }
 
 func IsMySQL80AndAbove() bool {
-	return MySQLVersion >= "80000"
+	return mySQLParserVersion >= "80000"
 }

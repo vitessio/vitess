@@ -563,10 +563,10 @@ func TestSetTable(t *testing.T) {
 				tc.input = &SingleRow{}
 			}
 
-			oldMySQLVersion := sqlparser.MySQLVersion
-			defer func() { sqlparser.MySQLVersion = oldMySQLVersion }()
+			oldMySQLVersion := sqlparser.GetParserVersion()
+			defer func() { sqlparser.SetParserVersion(oldMySQLVersion) }()
 			if tc.mysqlVersion != "" {
-				sqlparser.MySQLVersion = tc.mysqlVersion
+				sqlparser.SetParserVersion(tc.mysqlVersion)
 			}
 
 			set := &Set{

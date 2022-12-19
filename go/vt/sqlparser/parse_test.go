@@ -5657,9 +5657,9 @@ partition by range (id)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
-			oldMySQLVersion := MySQLVersion
-			defer func() { MySQLVersion = oldMySQLVersion }()
-			MySQLVersion = testcase.mysqlVersion
+			oldMySQLVersion := mySQLParserVersion
+			defer func() { mySQLParserVersion = oldMySQLVersion }()
+			mySQLParserVersion = testcase.mysqlVersion
 			tree, err := Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)
