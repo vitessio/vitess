@@ -58,6 +58,8 @@ type scopedStats struct {
 const unscoped = "-"
 
 var (
+	defaultNopStats *nopStats
+
 	labels = []string{"component", "implementation", "operation"}
 
 	registerBackupStats  sync.Once
@@ -117,10 +119,10 @@ func RestoreStats() Stats {
 	return newScopedStats(restoreCount, restoreDurationNs, nil)
 }
 
-// NopStats creates a no-op Stats suitable for tests and for backwards
+// NopStats returns a no-op Stats suitable for tests and for backwards
 // compoatibility.
 func NopStats() Stats {
-	return &nopStats{}
+	return defaultNopStats
 }
 
 func (ns *nopStats) Lock(...ScopeType) Stats        { return ns }

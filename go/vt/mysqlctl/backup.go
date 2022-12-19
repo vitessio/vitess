@@ -129,6 +129,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	defer bs.Close()
 
 	if p, ok := bs.(backupstorage.Parameterizer); ok {
+		// Scope stats to selected storage engine.
 		stats := params.Stats.Scope(
 			stats.Component(stats.BackupStorage),
 			stats.Implementation(backupstorage.BackupStorageImplementation),
@@ -148,12 +149,13 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
-	// Take the backup, and either AbortBackup or EndBackup.
+	// Scope stats to selected backup engine.
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
 		stats.Component(stats.BackupEngine),
 		stats.Implementation(backupEngineImplementation),
 	)
+	// Take the backup, and either AbortBackup or EndBackup.
 	usable, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 	var finishErr error
@@ -317,6 +319,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	defer bs.Close()
 
 	if p, ok := bs.(backupstorage.Parameterizer); ok {
+		// Scope stats to selected storage engine.
 		stats := params.Stats.Scope(
 			stats.Component(backupstats.BackupStorage),
 			stats.Implementation(backupstorage.BackupStorageImplementation),
@@ -375,6 +378,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	if params.DryRun {
 		return nil, nil
 	}
+	// Scope stats to selected backup engine.
 	reParams := params.Copy()
 	reParams.Stats = params.Stats.Scope(
 		stats.Component(backupstats.BackupEngine),
