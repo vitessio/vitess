@@ -259,7 +259,22 @@ func TestSchemaChange(t *testing.T) {
 				}
 			})
 			t.Run("cleanup", func(t *testing.T) {
-				artifacts = append(artifacts, "parent_table", "child_table", "child_nofk_table")
+				artifacts = append(artifacts, "child_table", "child_nofk_table", "parent_table")
+				// brute force drop all tables. In MySQL 8.0 you can do a single `DROP TABLE ... <list of all tables>`
+				// which auto-resovled order. But in 5.7 you can't.
+				droppedTables := map[string]bool{}
+				for range artifacts {
+					for _, artifact := range artifacts {
+						if droppedTables[artifact] {
+							continue
+						}
+						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
+						_, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.VtctlClientParams{DDLStrategy: "direct", SkipPreflight: true})
+						if err == nil {
+							droppedTables[artifact] = true
+						}
+					}
+				}
 				statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", strings.Join(artifacts, ","))
 				t.Run(statement, func(t *testing.T) {
 					_, _ = testOnlineDDLStatement(t, statement, "direct", "", false)
