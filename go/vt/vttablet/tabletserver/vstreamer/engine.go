@@ -88,6 +88,7 @@ type Engine struct {
 
 	// vstreamer metrics
 	vstreamerPhaseTimings     *servenv.TimingsWrapper
+	vstreamerCount            *stats.Gauge
 	vstreamerEventsStreamed   *stats.Counter
 	vstreamerPacketSize       *stats.GaugeFunc
 	vstreamerNumPackets       *stats.Counter
@@ -125,6 +126,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vschemaUpdates: env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 
 		vstreamerPhaseTimings:     env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
+		vstreamerCount:            env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
 		vstreamerEventsStreamed:   env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
 		vstreamerPacketSize:       env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
 		vstreamerNumPackets:       env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),
@@ -138,7 +140,6 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		errorCounts:               env.Exporter().NewCountersWithSingleLabel("VStreamerErrors", "Tracks errors in vstreamer", "type", "Catchup", "Copy", "Send", "TablePlan"),
 		vstreamerFlushedBinlogs:   env.Exporter().NewCounter("VStreamerFlushedBinlogs", "Number of times we've successfully executed a FLUSH BINARY LOGS statement when starting a vstream"),
 	}
-	env.Exporter().NewGaugeFunc("VStreamerCount", "Current number of vstreamers", vse.getVStreamerCount)
 	env.Exporter().NewGaugeFunc("RowStreamerMaxInnoDBTrxHistLen", "", func() int64 { return env.Config().RowStreamer.MaxInnoDBTrxHistLen })
 	env.Exporter().NewGaugeFunc("RowStreamerMaxMySQLReplLagSecs", "", func() int64 { return env.Config().RowStreamer.MaxMySQLReplLagSecs })
 	env.Exporter().HandleFunc("/debug/tablet_vschema", vse.ServeHTTP)
@@ -382,12 +383,6 @@ func (vse *Engine) setWatch() {
 		vse.vschemaUpdates.Add(1)
 		return true
 	})
-}
-
-func (vse *Engine) getVStreamerCount() int64 {
-	vse.mu.Lock()
-	defer vse.mu.Unlock()
-	return int64(len(vse.streamers))
 }
 
 func getPacketSize() int64 {
