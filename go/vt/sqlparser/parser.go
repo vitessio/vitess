@@ -108,13 +108,11 @@ func Parse2(sql string) (Statement, BindVars, error) {
 func checkParserVersionFlag() {
 	if flag.Parsed() {
 		versionFlagSync.Do(func() {
-			if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
-				convVersion, err := convertMySQLVersionToCommentVersion(mySQLVersion)
-				if err != nil {
-					log.Error(err)
-				} else {
-					MySQLVersion = convVersion
-				}
+			convVersion, err := convertMySQLVersionToCommentVersion(servenv.MySQLServerVersion())
+			if err != nil {
+				log.Errorf("unable to parse mysql version: %v", err)
+			} else {
+				MySQLVersion = convVersion
 			}
 		})
 	}
