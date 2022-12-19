@@ -114,11 +114,11 @@
   {
     "comment": "Drop mixed keyspace view",
     "query": "drop view main.a, user.b",
-    "plan": "cannot drop views from multiple keyspace in a single statement"
+    "plan": "VT12001: unsupported: cannot drop views from multiple keyspace in a single statement"
   },
   {
     "comment": "Drop same views",
     "query": "drop view main.a, main.b, main.a",
-    "plan": "Not unique view: 'a'"
+    "plan": "VT03013: not unique table/alias: 'a'"
   }
 ]
