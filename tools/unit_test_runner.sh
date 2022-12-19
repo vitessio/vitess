@@ -52,7 +52,7 @@ esac
 
 # All Go packages with test files.
 # Output per line: <full Go package name> <all _test.go files in the package>*
-packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}' ./go/... | sort)
+packages_with_tests=$(go list -f '{{if len .TestGoFiles}}{{.ImportPath}} {{join .TestGoFiles " "}}{{end}}{{if len .XTestGoFiles}}{{.ImportPath}} {{join .XTestGoFiles " "}}{{end}}' ./go/... | sort)
 
 # Flaky tests have the suffix "_flaky_test.go".
 # Exclude endtoend tests

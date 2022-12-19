@@ -24,7 +24,7 @@ jobs:
           skip='true'
           fi
           echo Skip ${skip}
-          echo "::set-output name=skip-workflow::${skip}"
+          echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
       - uses: actions/checkout@v2
         if: steps.skip-workflow.outputs.skip-workflow == 'false'

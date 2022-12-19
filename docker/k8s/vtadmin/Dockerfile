@@ -43,7 +43,7 @@ COPY --from=k8s /vt/bin/vtadmin /vt/bin/
 COPY --from=k8s /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 
 COPY --chown=nginx --from=node /vt/web/vtadmin/build /var/www/
-COPY --chown=nginx docker/k8s/vtadmin/default.conf /etc/nginx/templates/default.conf.template
+COPY --chown=nginx default.conf /etc/nginx/templates/default.conf.template
 
 # command to run nginx is in the base image
 # https://github.com/nginxinc/docker-nginx-unprivileged/blob/main/stable/alpine/Dockerfile#L150

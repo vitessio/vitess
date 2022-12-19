@@ -1483,12 +1483,9 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
 			length, ok := data.readLenEncInt()
-			if !ok {
-				return fail("invalid OK packet session state change length: %v", data)
-			}
-			// In case we have a zero length string, there's no additional information so
-			// we can return the packet.
-			if length == 0 {
+			if !ok || length == 0 {
+				// In case we have no more data or a zero length string, there's no additional information so
+				// we can return the packet.
 				return packetOK, nil
 			}
 

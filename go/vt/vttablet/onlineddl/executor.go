@@ -78,9 +78,9 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
-	`update _vt.schema_migrations set migration_status='val' where mysql_schema='val'`,
-	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val'`,
-	`update _vt.schema_migrations set migration_status='val' where migration_uuid='val' and mysql_schema='val' and shard='val'`,
+	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2'`,
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`,
 }
 
 var vexecInsertTemplates = []string{
@@ -98,7 +98,7 @@ var vexecInsertTemplates = []string{
 		migration_context,
 		migration_status
 	) VALUES (
-		'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', 'val', FROM_UNIXTIME(0), 'val', 'val'
+		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
 	)`,
 }
 

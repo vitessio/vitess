@@ -24,6 +24,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
@@ -127,6 +128,7 @@ func TestAcquireSameConnID(t *testing.T) {
 	}()
 	time.Sleep(5 * time.Second)
 
+	totalErrCount := 0
 	// run through 100 times to acquire new connection, this might override the original connection id.
 	var conn2 *mysql.Conn
 	for i := 0; i < 100; i++ {
@@ -135,12 +137,19 @@ func TestAcquireSameConnID(t *testing.T) {
 
 		utils.Exec(t, conn2, "set sql_mode=''")
 		// ReserveExecute
-		_ = utils.Exec(t, conn2, "select connection_id()")
-
+		_, err = utils.ExecAllowError(t, conn2, "select connection_id()")
+		if err != nil {
+			totalErrCount++
+		}
 		// Execute
-		_ = utils.Exec(t, conn2, "select connection_id()")
-
+		_, err = utils.ExecAllowError(t, conn2, "select connection_id()")
+		if err != nil {
+			totalErrCount++
+		}
 	}
+
+	// We run the above loop 100 times so we execute 200 queries, off which only some should fail due to MySQL restart.
+	assert.Less(t, totalErrCount, 10, "MySQL restart can cause some errors, but not too many.")
 
 	// prs should happen without any error.
 	text, err := rutils.Prs(t, clusterInstance, clusterInstance.Keyspaces[0].Shards[0].Replica())

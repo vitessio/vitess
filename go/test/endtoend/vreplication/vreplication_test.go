@@ -82,34 +82,36 @@ func init() {
 	defaultReplicas = 1
 }
 
-func throttleResponse(tablet *cluster.VttabletProcess, path string) (resp *http.Response, respBody string, err error) {
+func throttleResponse(tablet *cluster.VttabletProcess, path string) (respBody string, err error) {
 	apiURL := fmt.Sprintf("http://%s:%d/%s", tablet.TabletHostname, tablet.Port, path)
-	resp, err = httpClient.Get(apiURL)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
-		return resp, respBody, err
+		return "", err
 	}
+	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
-	return resp, respBody, err
+	return respBody, err
 }
 
-func throttleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func throttleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/throttle-app?app=%s&duration=1h", app))
 }
 
-func unthrottleApp(tablet *cluster.VttabletProcess, app string) (*http.Response, string, error) {
+func unthrottleApp(tablet *cluster.VttabletProcess, app string) (string, error) {
 	return throttleResponse(tablet, fmt.Sprintf("throttler/unthrottle-app?app=%s", app))
 }
 
-func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (resp *http.Response, respBody string, err error) {
+func throttlerCheckSelf(tablet *cluster.VttabletProcess, app string) (respBody string, err error) {
 	apiURL := fmt.Sprintf("http://%s:%d/throttler/check-self?app=%s", tablet.TabletHostname, tablet.Port, app)
-	resp, err = httpClient.Get(apiURL)
+	resp, err := httpClient.Get(apiURL)
 	if err != nil {
-		return resp, respBody, err
+		return "", err
 	}
+	defer resp.Body.Close()
 	b, err := io.ReadAll(resp.Body)
 	respBody = string(b)
-	return resp, respBody, err
+	return respBody, err
 }
 
 func TestVreplicationCopyThrottling(t *testing.T) {
@@ -979,7 +981,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("throttle-app-product", func(t *testing.T) {
 			// Now, throttle the streamer on source tablets, insert some rows
 			for _, tab := range productTablets {
-				_, body, err := throttleApp(tab, sourceThrottlerAppName)
+				body, err := throttleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 
@@ -997,7 +999,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-product", func(t *testing.T) {
 			// unthrottle on source tablets, and expect the rows to show up
 			for _, tab := range productTablets {
-				_, body, err := unthrottleApp(tab, sourceThrottlerAppName)
+				body, err := unthrottleApp(tab, sourceThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, sourceThrottlerAppName)
 				// give time for unthrottling to take effect and for target to fetch data
@@ -1012,7 +1014,7 @@ func materializeProduct(t *testing.T) {
 			// Now, throttle vreplication (vcopier/vapplier) on target tablets, and
 			// insert some more rows.
 			for _, tab := range customerTablets {
-				_, body, err := throttleApp(tab, targetThrottlerAppName)
+				body, err := throttleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 				// Wait for throttling to take effect (caching will expire by this time):
@@ -1030,7 +1032,7 @@ func materializeProduct(t *testing.T) {
 		t.Run("unthrottle-app-customer", func(t *testing.T) {
 			// unthrottle on target tablets, and expect the rows to show up
 			for _, tab := range customerTablets {
-				_, body, err := unthrottleApp(tab, targetThrottlerAppName)
+				body, err := unthrottleApp(tab, targetThrottlerAppName)
 				assert.NoError(t, err)
 				assert.Contains(t, body, targetThrottlerAppName)
 			}

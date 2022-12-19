@@ -14,7 +14,7 @@ jobs:
           skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -31,7 +31,8 @@ jobs:
             - 'bootstrap.sh'
             - 'tools/**'
             - 'build.env'
-            - 'go.[sumod]'
+            - 'go.sum'
+            - 'go.mod'
             - 'Makefile'
             - 'go/vt/proto/**'
             - 'proto/*.proto'
@@ -42,7 +43,7 @@ jobs:
       uses: actions/setup-go@v2
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
       with:
-        go-version: 1.18.7
+        go-version: 1.18.9
 
     - name: Setup Node
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'

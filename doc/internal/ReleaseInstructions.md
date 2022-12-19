@@ -196,6 +196,10 @@ On the release day, there are several things to do:
   > - Two new Pull Requests have to be created.
   > - One against `main`, it will contain only the new release notes.
   > - And another against the release branch, this one contains the release notes and the release commit. (The commit on which we did `git tag`) 
+- **Build k8s Docker images and publish them**
+  > - The docker image for `base`, `lite`, etc are built automatically by DockerHub. The k8s images however are dependent on these images and are required to be built manually.
+  > - These images should be built after the `base` image has been built and available on DockerHub.
+  > - To build and publish these images, run `./release.sh` from the directory `vitess/docker`.
 
 ### Post-Release
 

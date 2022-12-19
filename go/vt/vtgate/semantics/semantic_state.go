@@ -116,8 +116,8 @@ type (
 )
 
 var (
-	// ErrMultipleTables refers to an error happening when something should be used only for single tables
-	ErrMultipleTables = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
+	// ErrNotSingleTable refers to an error happening when something should be used only for single tables
+	ErrNotSingleTable = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] should only be used for single tables")
 )
 
 // CopyDependencies copies the dependencies from one expression into the other
@@ -142,7 +142,7 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 			return SingleTableSet(idx)
 		}
 	}
-	return TableSet{}
+	return EmptyTableSet()
 }
 
 // ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
@@ -169,7 +169,7 @@ func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExp
 func (st *SemTable) TableInfoFor(id TableSet) (TableInfo, error) {
 	offset := id.TableOffset()
 	if offset < 0 {
-		return nil, ErrMultipleTables
+		return nil, ErrNotSingleTable
 	}
 	return st.Tables[offset], nil
 }
@@ -287,12 +287,12 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 		if extracted, ok := expr.(*sqlparser.ExtractedSubquery); ok {
 			if extracted.OtherSide != nil {
 				set := d.dependencies(extracted.OtherSide)
-				deps.MergeInPlace(set)
+				deps = deps.Merge(set)
 			}
 			return false, nil
 		}
 		set, found := d[expr]
-		deps.MergeInPlace(set)
+		deps = deps.Merge(set)
 
 		// if we found a cached value, there is no need to continue down to visit children
 		return !found, nil

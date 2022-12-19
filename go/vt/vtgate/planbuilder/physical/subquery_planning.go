@@ -84,21 +84,6 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *abstract.SubQuery) (
 
 func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *abstract.SubQueryInner) (*Route, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
-
-	// go over the subquery and add its tables to the one's solved by the route it is merged with
-	// this is needed to so that later when we try to push projections, we get the correct
-	// solved tableID from the route, since it also includes the tables from the subquery after merging
-	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch n := node.(type) {
-		case *sqlparser.AliasedTableExpr:
-			ts := outer.TableID()
-			ts.MergeInPlace(ctx.SemTable.TableSetFor(n))
-		}
-		return true, nil
-	}, subq.ExtractedSubquery.Subquery)
-	if err != nil {
-		return nil, err
-	}
 	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
 	for k, v := range inner.SysTableTableName {
 		if outer.SysTableTableName == nil {
@@ -126,7 +111,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 		}
 	}
 
-	err = outer.resetRoutingSelections(ctx)
+	err := outer.resetRoutingSelections(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -353,11 +338,9 @@ func rewriteColumnsInSubqueryOpForJoin(
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(resultInnerOp.TableID())
-	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(resultInnerOp.TableID())
 	tableSet = ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery]
-	tableSet.RemoveInPlace(resultInnerOp.TableID())
-	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet
+	ctx.SemTable.Recursive[subQueryInner.ExtractedSubquery.Subquery] = tableSet.Remove(resultInnerOp.TableID())
 
 	// return any error while rewriting
 	return resultInnerOp, rewriteError
@@ -388,7 +371,7 @@ func createCorrelatedSubqueryOp(
 					// we do so by checking that the column names are the same and their recursive dependencies are the same
 					// so if the column names user.a and a would also be equal if the latter is also referencing the user table
 					for colName, bindVar := range bindVars {
-						if node.Name.Equal(colName.Name) && ctx.SemTable.RecursiveDeps(node).Equals(ctx.SemTable.RecursiveDeps(colName)) {
+						if node.Name.Equal(colName.Name) && (ctx.SemTable.RecursiveDeps(node) == ctx.SemTable.RecursiveDeps(colName)) {
 							cursor.Replace(sqlparser.NewArgument(bindVar))
 							return false
 						}

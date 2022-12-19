@@ -240,9 +240,10 @@ func testURL(t *testing.T, url string, testCaseName string) {
 
 // getStatusForUrl returns the status code for the URL
 func getStatusForURL(url string) int {
-	resp, _ := http.Get(url)
-	if resp != nil {
-		return resp.StatusCode
+	resp, err := http.Get(url)
+	if err != nil {
+		return 0
 	}
-	return 0
+	defer resp.Body.Close()
+	return resp.StatusCode
 }

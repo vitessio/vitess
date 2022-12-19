@@ -42,6 +42,9 @@ done;
 # Copy remaining files, preserving date/permissions
 # But resolving symlinks
 cp -rpfL examples "${RELEASE_DIR}"
+# copy vtadmin as well
+mkdir -p "${RELEASE_DIR}"/web/vtadmin
+cp -rpfL web/vtadmin "${RELEASE_DIR}"/web
 
 echo "Follow the installation instructions at: https://vitess.io/docs/get-started/local/" > "${RELEASE_DIR}"/examples/README.md
 

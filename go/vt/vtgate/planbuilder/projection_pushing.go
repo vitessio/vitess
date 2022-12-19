@@ -76,7 +76,7 @@ func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlpa
 	if err != nil {
 		return 0, false, err
 	}
-	if added && ctx.SemTable.DirectDeps(expr.Expr).NumberOfTables() > 0 {
+	if added && ctx.SemTable.DirectDeps(expr.Expr).NonEmpty() {
 		return 0, false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr))
 	}
 	if added {
@@ -322,7 +322,7 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 
 func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *semantics.SemTable) error {
 	ti, err := semTable.TableInfoForExpr(expr.Expr)
-	if err != nil && err != semantics.ErrMultipleTables {
+	if err != nil && err != semantics.ErrNotSingleTable {
 		return err
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)

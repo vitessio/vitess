@@ -400,8 +400,7 @@
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
-    "gen4-plan": "unsupported: unable to split predicates to derived table: uu.user_id = uu.id"
+    "plan": "unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# changed to project all the columns from the derived tables.",

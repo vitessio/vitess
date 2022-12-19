@@ -3827,7 +3827,26 @@
         "main.user_privacy_consents"
       ]
     },
-    "gen4-plan": "unsupported: unable to split predicates to derived table: not :__sq_has_values1"
+    "gen4-plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO main.user_privacy_consents (user_id, accepted_at)  SELECT user_id, accepted_at FROM (SELECT 1 as user_id, 1629194864 as accepted_at) AS tmp WHERE NOT EXISTS (SELECT user_id FROM main.user_privacy_consents WHERE user_id = 1)",
+      "Instructions": {
+        "OperatorType": "Insert",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetTabletType": "PRIMARY",
+        "MultiShardAutocommit": false,
+        "Query": "insert into user_privacy_consents(user_id, accepted_at) select user_id, accepted_at from (select 1 as user_id, 1629194864 as accepted_at from dual) as tmp where not exists (select 1 from user_privacy_consents where user_id = 1 limit 1) for update",
+        "TableName": "user_privacy_consents"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "main.user_privacy_consents"
+      ]
+    }
   },
   {
     "comment": "Delete on backfilling unique lookup vindex should be a scatter",

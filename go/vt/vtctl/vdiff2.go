@@ -577,7 +577,7 @@ func buildVDiff2SingleSummary(wr *wrangler.Wrangler, keyspace, workflow, uuid st
 	// on every shard.
 	if shardStateCounts[vdiff.StoppedState] > 0 {
 		summary.State = vdiff.StoppedState
-	} else if tableStateCounts[vdiff.ErrorState] > 0 {
+	} else if shardStateCounts[vdiff.ErrorState] > 0 || tableStateCounts[vdiff.ErrorState] > 0 {
 		summary.State = vdiff.ErrorState
 	} else if tableStateCounts[vdiff.StartedState] > 0 {
 		summary.State = vdiff.StartedState

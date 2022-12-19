@@ -149,6 +149,9 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select 1 from t1 join t5 using (b) having b = 12",
 		expSQL: "select 1 from t1 join t5 where t1.b = t5.b having t1.b = 12",
+	}, {
+		sql:    "select * from (select 12) as t",
+		expSQL: "select t.`12` from (select 12 from dual) as t",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -305,7 +308,7 @@ func TestOrderByGroupByLiteral(t *testing.T) {
 	}
 }
 
-func TestHavingByColumnName(t *testing.T) {
+func TestHavingAndOrderByColumnName(t *testing.T) {
 	schemaInfo := &FakeSI{
 		Tables: map[string]*vindexes.Table{},
 	}
@@ -317,6 +320,12 @@ func TestHavingByColumnName(t *testing.T) {
 	}{{
 		sql:    "select id, sum(foo) as sumOfFoo from t1 having sumOfFoo > 1",
 		expSQL: "select id, sum(foo) as sumOfFoo from t1 having sum(foo) > 1",
+	}, {
+		sql:    "select id, sum(foo) as sumOfFoo from t1 order by sumOfFoo",
+		expSQL: "select id, sum(foo) as sumOfFoo from t1 order by sum(foo) asc",
+	}, {
+		sql:    "select id, sum(foo) as foo from t1 having sum(foo) > 1",
+		expSQL: "select id, sum(foo) as foo from t1 having sum(foo) > 1",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {

@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -162,7 +163,8 @@ func TestThrottlerBeforeMetricsCollected(t *testing.T) {
 	// {"StatusCode":404,"Value":0,"Threshold":0,"Message":"No such metric"}
 	{
 		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	}
 }
@@ -171,8 +173,9 @@ func warmUpHeartbeat(t *testing.T) (respStatus int) {
 	//  because we run with -heartbeat_on_demand_duration=5s, the heartbeat is "cold" right now.
 	// Let's warm it up.
 	resp, err := throttleCheck(primaryTablet)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	time.Sleep(time.Second)
-	assert.NoError(t, err)
 	return resp.StatusCode
 }
 
@@ -188,23 +191,27 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 	time.Sleep(time.Second)
 	{
 		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 	{
 		resp, body, err := throttledApps(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 		assert.Contains(t, body, "always-throttled-app")
 	}
 	{
 		resp, err := throttleCheckSelf(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 	{
 		resp, err := throttleCheckSelf(replicaTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 }
@@ -221,18 +228,21 @@ func TestLag(t *testing.T) {
 		// {"StatusCode":429,"Value":4.864921,"Threshold":1,"Message":"Threshold exceeded"}
 		{
 			resp, err := throttleCheck(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			// self (on primary) is unaffected by replication lag
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(replicaTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
 	}
@@ -248,17 +258,20 @@ func TestLag(t *testing.T) {
 		time.Sleep(time.Second)
 		{
 			resp, err := throttleCheck(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(replicaTablet)
-			assert.NoError(t, err)
+			require.NoError(t, err)
+			defer resp.Body.Close()
 			assert.Equal(t, http.StatusOK, resp.StatusCode)
 		}
 	}
@@ -276,7 +289,8 @@ func TestNoReplicas(t *testing.T) {
 		respStatus := warmUpHeartbeat(t)
 		assert.Equal(t, http.StatusOK, respStatus)
 		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 	{
@@ -288,7 +302,8 @@ func TestNoReplicas(t *testing.T) {
 		respStatus := warmUpHeartbeat(t)
 		assert.NotEqual(t, http.StatusOK, respStatus)
 		resp, err := throttleCheck(primaryTablet)
-		assert.NoError(t, err)
+		require.NoError(t, err)
+		defer resp.Body.Close()
 		assert.Equal(t, http.StatusOK, resp.StatusCode)
 	}
 }

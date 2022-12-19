@@ -592,7 +592,7 @@ func (fra *fakeRPCTM) ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb
 }
 
 var testExecuteFetchQuery = []byte("fetch this invalid utf8 character \x80")
-var testExecuteFetchMaxRows = 100
+var testExecuteFetchMaxRows = uint64(100)
 var testExecuteFetchResult = &querypb.QueryResult{
 	Fields: []*querypb.Field{
 		{
@@ -1190,9 +1190,9 @@ func tmRPCTestReplicaWasRestartedPanic(ctx context.Context, t *testing.T, client
 
 func tmRPCTestStopReplicationAndGetStatus(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
 	rp, err := client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOANDSQLTHREAD)
-	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
+	compareError(t, "StopReplicationAndGetStatus", err, rp, &replicationdatapb.StopReplicationStatus{Before: testReplicationStatus, After: testReplicationStatus})
 	rp, err = client.StopReplicationAndGetStatus(ctx, tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
-	compareError(t, "StopReplicationAndGetStatus", err, rp, testReplicationStatus)
+	compareError(t, "StopReplicationAndGetStatus", err, rp, &replicationdatapb.StopReplicationStatus{Before: testReplicationStatus, After: testReplicationStatus})
 }
 
 func tmRPCTestStopReplicationAndGetStatusPanic(ctx context.Context, t *testing.T, client tmclient.TabletManagerClient, tablet *topodatapb.Tablet) {
@@ -1221,7 +1221,7 @@ func tmRPCTestPromoteReplicaPanic(ctx context.Context, t *testing.T, client tmcl
 // Backup / restore related methods
 //
 
-var testBackupConcurrency = 24
+var testBackupConcurrency = int64(24)
 var testBackupAllowPrimary = false
 var testBackupCalled = false
 var testRestoreFromBackupCalled = false

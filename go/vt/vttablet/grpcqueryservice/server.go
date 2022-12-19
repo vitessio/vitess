@@ -272,16 +272,18 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.BeginStreamExecuteResponse{
+
+	if err != nil && state.TransactionID == 0 {
+		return vterrors.ToGRPC(err)
+	}
+
+	err = stream.Send(&querypb.BeginStreamExecuteResponse{
+		Error:               vterrors.ToVTRPC(err),
 		TransactionId:       state.TransactionID,
 		TabletAlias:         state.TabletAlias,
 		SessionStateChanges: state.SessionStateChanges,
 	})
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
-
-	return vterrors.ToGRPC(errInLastPacket)
+	return vterrors.ToGRPC(err)
 }
 
 // MessageStream is part of the queryservice.QueryServer interface
@@ -399,15 +401,16 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveStreamExecuteResponse{
-		ReservedId:  state.ReservedID,
-		TabletAlias: state.TabletAlias,
-	})
-	if err != nil {
+	if err != nil && state.ReservedID == 0 {
 		return vterrors.ToGRPC(err)
 	}
 
-	return vterrors.ToGRPC(errInLastPacket)
+	err = stream.Send(&querypb.ReserveStreamExecuteResponse{
+		Error:       vterrors.ToVTRPC(err),
+		ReservedId:  state.ReservedID,
+		TabletAlias: state.TabletAlias,
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // ReserveBeginExecute implements the QueryServer interface
@@ -452,17 +455,18 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+	if err != nil && state.ReservedID == 0 && state.TransactionID == 0 {
+		return vterrors.ToGRPC(err)
+	}
+
+	err = stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+		Error:               vterrors.ToVTRPC(err),
 		ReservedId:          state.ReservedID,
 		TransactionId:       state.TransactionID,
 		TabletAlias:         state.TabletAlias,
 		SessionStateChanges: state.SessionStateChanges,
 	})
-	if err != nil {
-		return vterrors.ToGRPC(err)
-	}
-
-	return vterrors.ToGRPC(errInLastPacket)
+	return vterrors.ToGRPC(err)
 }
 
 // Release implements the QueryServer interface

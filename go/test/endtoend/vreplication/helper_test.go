@@ -98,10 +98,8 @@ func execVtgateQuery(t *testing.T, conn *mysql.Conn, database string, query stri
 func checkHealth(t *testing.T, url string) bool {
 	resp, err := http.Get(url)
 	require.NoError(t, err)
-	if err != nil || resp.StatusCode != 200 {
-		return false
-	}
-	return true
+	defer resp.Body.Close()
+	return resp.StatusCode == 200
 }
 
 func waitForQueryResult(t *testing.T, conn *mysql.Conn, database string, query string, want string) {
@@ -130,9 +128,9 @@ func waitForTabletThrottlingStatus(t *testing.T, tablet *cluster.VttabletProcess
 	timer := time.NewTimer(defaultTimeout)
 	defer timer.Stop()
 	for {
-		_, output, err := throttlerCheckSelf(tablet, appName)
+		output, err := throttlerCheckSelf(tablet, appName)
 		require.NoError(t, err)
-		require.NotNil(t, output)
+
 		gotCode, err = jsonparser.GetInt([]byte(output), "StatusCode")
 		require.NoError(t, err)
 		if wantCode == gotCode {

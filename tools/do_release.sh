@@ -113,6 +113,12 @@ function updateVitessExamples () {
   rm -f $(find -E $ROOT/examples/compose/**/* -regex ".*.(go|yml).bak")
 }
 
+# First argument is the Release Version the docker release script should be set to (for instance: v15.0.0)
+function updateDockerReleaseScript () {
+  sed -i.bak -E "s/vt_base_version=.*/vt_base_version='$1'/g" $ROOT/docker/release.sh
+  rm -f $ROOT/docker/release.sh.bak
+}
+
 # Preparing and tagging the release
 function doRelease () {
   checkoutNewBranch "tag"
@@ -131,6 +137,7 @@ function doRelease () {
   # Preparing the release commit
   updateVitessExamples $RELEASE_VERSION $VTOP_VERSION
   updateJava $RELEASE_VERSION
+  updateDockerReleaseScript $RELEASE_VERSION
   updateVersionGo $RELEASE_VERSION
 
   ## Create the commit for this release and tag it
@@ -152,6 +159,7 @@ function doBackToDevMode () {
 
   # Preparing the "dev mode" commit
   updateJava $DEV_VERSION
+  updateDockerReleaseScript $DEV_VERSION
   updateVersionGo $DEV_VERSION
 
   git add --all

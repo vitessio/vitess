@@ -40,7 +40,7 @@ func TestVtgateProcess(t *testing.T) {
 	verifyVtgateVariables(t, clusterInstance.VtgateProcess.VerifyURL)
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	utils.Exec(t, conn, "insert into customer(id, email) values(1,'email1')")
@@ -52,41 +52,42 @@ func TestVtgateProcess(t *testing.T) {
 }
 
 func verifyVtgateVariables(t *testing.T, url string) {
-	resp, _ := http.Get(url)
-	if resp != nil && resp.StatusCode == 200 {
-		resultMap := make(map[string]any)
-		respByte, _ := io.ReadAll(resp.Body)
-		err := json.Unmarshal(respByte, &resultMap)
-		require.Nil(t, err)
-		if resultMap["VtgateVSchemaCounts"] == nil {
-			t.Error("Vschema count should be present in variables")
-		}
-		vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
-		if _, present := vschemaCountMap["Reload"]; !present {
-			t.Error("Reload count should be present in vschemacount")
-		} else if object := reflect.ValueOf(vschemaCountMap["Reload"]); object.NumField() <= 0 {
-			t.Error("Reload count should be greater than 0")
-		}
-		if _, present := vschemaCountMap["WatchError"]; present {
-			t.Error("There should not be any WatchError in VschemaCount")
-		}
-		if _, present := vschemaCountMap["Parsing"]; present {
-			t.Error("There should not be any Parsing in VschemaCount")
-		}
+	resp, err := http.Get(url)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 
-		if resultMap["HealthcheckConnections"] == nil {
-			t.Error("HealthcheckConnections count should be present in variables")
-		}
+	require.Equal(t, 200, resp.StatusCode)
+	resultMap := make(map[string]any)
+	respByte, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
+	err = json.Unmarshal(respByte, &resultMap)
+	require.NoError(t, err)
+	if resultMap["VtgateVSchemaCounts"] == nil {
+		t.Error("Vschema count should be present in variables")
+	}
+	vschemaCountMap := getMapFromJSON(resultMap, "VtgateVSchemaCounts")
+	if _, present := vschemaCountMap["Reload"]; !present {
+		t.Error("Reload count should be present in vschemacount")
+	} else if object := reflect.ValueOf(vschemaCountMap["Reload"]); object.NumField() <= 0 {
+		t.Error("Reload count should be greater than 0")
+	}
+	if _, present := vschemaCountMap["WatchError"]; present {
+		t.Error("There should not be any WatchError in VschemaCount")
+	}
+	if _, present := vschemaCountMap["Parsing"]; present {
+		t.Error("There should not be any Parsing in VschemaCount")
+	}
 
-		healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
-		if len(healthCheckConnection) <= 0 {
-			t.Error("Atleast one healthy tablet needs to be present")
-		}
-		if !isPrimaryTabletPresent(healthCheckConnection) {
-			t.Error("Atleast one PRIMARY tablet needs to be present")
-		}
-	} else {
-		t.Error("Vtgate api url response not found")
+	if resultMap["HealthcheckConnections"] == nil {
+		t.Error("HealthcheckConnections count should be present in variables")
+	}
+
+	healthCheckConnection := getMapFromJSON(resultMap, "HealthcheckConnections")
+	if len(healthCheckConnection) <= 0 {
+		t.Error("Atleast one healthy tablet needs to be present")
+	}
+	if !isPrimaryTabletPresent(healthCheckConnection) {
+		t.Error("Atleast one PRIMARY tablet needs to be present")
 	}
 }
 

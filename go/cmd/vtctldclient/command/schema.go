@@ -293,7 +293,7 @@ func init() {
 	ApplySchema.Flags().DurationVar(&applySchemaOptions.WaitReplicasTimeout, "wait-replicas-timeout", wrangler.DefaultWaitReplicasTimeout, "Amount of time to wait for replicas to receive the schema change via replication.")
 	ApplySchema.Flags().BoolVar(&applySchemaOptions.SkipPreflight, "skip-preflight", false, "Skip pre-apply schema checks, and directly forward schema change query to shards.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.CallerID, "caller-id", "", "Effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used).")
-	ApplySchema.Flags().StringSliceVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
+	ApplySchema.Flags().StringArrayVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.SQLFile, "sql-file", "", "Path to a file containing semicolon-delimited SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 
 	Root.AddCommand(ApplySchema)

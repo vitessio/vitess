@@ -18,6 +18,7 @@
 ## Known Issues
 
 - [VTOrc doesn't discover the tablets](https://github.com/vitessio/vitess/issues/10650) of a keyspace if the durability policy doesn't exist in the topo server when it comes up. This can be resolved by restarting VTOrc.
+- [Corrupted results for non-full-group-by queries with JOINs](https://github.com/vitessio/vitess/issues/11625). This can be resolved by using full-group-by queries.
 
 ## Major Changes
 
