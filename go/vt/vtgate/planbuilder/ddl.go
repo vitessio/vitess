@@ -4,7 +4,6 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/key"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -211,7 +210,7 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 	}
 	if vschema.IsViewsEnabled() {
 		if keyspace == nil {
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected")
+			return nil, nil, vterrors.VT09005()
 		}
 		return destination, keyspace, nil
 	}
@@ -252,7 +251,7 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	}
 	if vschema.IsViewsEnabled() {
 		if keyspace == nil {
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected")
+			return nil, nil, vterrors.VT09005()
 		}
 		return destination, keyspace, nil
 	}
@@ -290,15 +289,15 @@ func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatem
 			return nil, nil, err
 		}
 		if ksForView == nil {
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected")
+			return nil, nil, vterrors.VT09005()
 		}
 		if ks == nil {
 			ks = ksForView
 		} else if ks.Name != ksForView.Name {
-			return nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot drop views from multiple keyspace in a single statement")
+			return nil, nil, vterrors.VT12001("cannot drop views from multiple keyspace in a single statement")
 		}
 		if _, exists := viewMap[tbl.Name.String()]; exists {
-			return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique view: '%s'", tbl.Name.String())
+			return nil, nil, vterrors.VT03013(tbl.Name.String())
 		}
 		viewMap[tbl.Name.String()] = nil
 		tbl.Qualifier = sqlparser.NewIdentifierCS("")
