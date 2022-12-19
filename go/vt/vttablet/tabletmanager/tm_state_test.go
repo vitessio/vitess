@@ -28,7 +28,7 @@ import (
 
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/faketopo"
@@ -105,7 +105,7 @@ func TestStateDenyList(t *testing.T) {
 	tm := newTestTM(t, ts, 1, "ks", "0")
 	defer tm.Stop()
 
-	fmd := tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon)
+	fmd := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fmd.Schema = &tabletmanagerdatapb.SchemaDefinition{
 		TableDefinitions: []*tabletmanagerdatapb.TableDefinition{{
 			Name: "t1",

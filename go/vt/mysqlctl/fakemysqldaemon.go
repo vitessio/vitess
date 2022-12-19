@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fakemysqldaemon
+package mysqlctl
 
 import (
 	"fmt"
@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -190,7 +189,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 }
 
 // Start is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *mysqlctl.Mycnf, mysqldArgs ...string) error {
+func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	if fmd.Running {
 		return fmt.Errorf("fake mysql daemon already running")
 	}
@@ -208,7 +207,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *mysqlctl.Mycnf, mysq
 }
 
 // Shutdown is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *mysqlctl.Mycnf, waitForMysqld bool) error {
+func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error {
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}
@@ -231,17 +230,17 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
 }
 
 // ReinitConfig is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context, cnf *mysqlctl.Mycnf) error {
+func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 
 // RefreshConfig is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *mysqlctl.Mycnf) error {
+func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 
 // Wait is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *mysqlctl.Mycnf) error {
+func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 

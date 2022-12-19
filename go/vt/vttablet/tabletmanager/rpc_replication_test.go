@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
@@ -46,7 +46,7 @@ func TestPromoteReplicaReplicationManagerSuccess(t *testing.T) {
 		numTicksRan++
 	})
 	// Set the promotion lag to a second and then run PromoteReplica
-	tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon).PromoteLag = time.Second
+	tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon).PromoteLag = time.Second
 	_, err := tm.PromoteReplica(ctx, false)
 	require.NoError(t, err)
 	// At the end we expect the replication manager to be stopped.
@@ -68,7 +68,7 @@ func TestPromoteReplicaReplicationManagerFailure(t *testing.T) {
 
 	require.True(t, tm.replManager.ticks.Running())
 	// Set the promotion lag to a second and then run PromoteReplica
-	tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon).PromoteError = fmt.Errorf("promote error")
+	tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon).PromoteError = fmt.Errorf("promote error")
 	_, err := tm.PromoteReplica(ctx, false)
 	require.Error(t, err)
 	// At the end we expect the replication manager to be stopped.

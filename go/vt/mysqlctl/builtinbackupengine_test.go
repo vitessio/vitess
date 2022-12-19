@@ -1,7 +1,20 @@
+/*
+Copyright 2022 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 // Package mysqlctl_test is the blackbox tests for package mysqlctl.
-// Tests that need to use fakemysqldaemon must be written as blackbox tests;
-// since fakemysqldaemon imports mysqlctl, importing fakemysqldaemon in
-// a `package mysqlctl` test would cause a circular import.
 package mysqlctl_test
 
 import (
@@ -19,7 +32,6 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/mysqlctl/filebackupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -104,7 +116,7 @@ func TestExecuteBackup(t *testing.T) {
 
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
-	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(fakesqldb.New(t))
+	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
 	// mysqld.ShutdownTime = time.Minute
 
