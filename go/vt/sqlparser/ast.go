@@ -1192,7 +1192,7 @@ func (oc *CloseCursor) walkSubtree(visit Visit) error {
 
 // FetchCursor represents the FETCH statement
 type FetchCursor struct {
-	Name string
+	Name      string
 	Variables []string
 }
 
@@ -1208,7 +1208,7 @@ func (oc *FetchCursor) walkSubtree(visit Visit) error {
 
 // Loop represents the LOOP statement
 type Loop struct {
-	Label string
+	Label      string
 	Statements Statements
 }
 
@@ -3214,6 +3214,71 @@ func (node *Flush) Format(buf *TrackedBuffer) {
 	} else {
 		buf.Myprintf(" %s", strings.ToLower(node.Option.Name))
 	}
+}
+
+// ChangeReplicationSource represents a "CHANGE REPLICATION SOURCE TO" statement.
+// https://dev.mysql.com/doc/refman/8.0/en/change-replication-source-to.html
+type ChangeReplicationSource struct {
+	Options []*ReplicationOption
+}
+
+var _ Statement = (*ChangeReplicationSource)(nil)
+
+func (*ChangeReplicationSource) iStatement() {}
+
+func (s *ChangeReplicationSource) Format(buf *TrackedBuffer) {
+	buf.WriteString("change replication source to ")
+	for i, option := range s.Options {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(option.Name)
+		buf.WriteString(" = ")
+		buf.WriteString(option.Value)
+	}
+}
+
+// ReplicationOption represents a single replication option name and value.
+// See https://dev.mysql.com/doc/refman/8.0/en/change-replication-source-to.html for available options.
+type ReplicationOption struct {
+	Name  string
+	Value string
+}
+
+// StartReplica represents a "START REPLICA" statement.
+// https://dev.mysql.com/doc/refman/8.0/en/start-replica.html
+type StartReplica struct{}
+
+var _ Statement = (*StartReplica)(nil)
+
+func (*StartReplica) iStatement() {}
+
+func (r *StartReplica) Format(buf *TrackedBuffer) {
+	buf.WriteString("start replica")
+}
+
+// StopReplica represents a "STOP REPLICA" statement.
+// https://dev.mysql.com/doc/refman/8.0/en/stop-replica.html
+type StopReplica struct{}
+
+var _ Statement = (*StopReplica)(nil)
+
+func (*StopReplica) iStatement() {}
+
+func (r *StopReplica) Format(buf *TrackedBuffer) {
+	buf.WriteString("stop replica")
+}
+
+// ShowReplicaStatus represents a "SHOW REPLICA STATUS" statement.
+// https://dev.mysql.com/doc/refman/8.0/en/show-replica-status.html
+type ShowReplicaStatus struct{}
+
+var _ Statement = (*ShowReplicaStatus)(nil)
+
+func (*ShowReplicaStatus) iStatement() {}
+
+func (s *ShowReplicaStatus) Format(buf *TrackedBuffer) {
+	buf.WriteString("show replica status")
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.

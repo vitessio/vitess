@@ -40,6 +40,23 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input: "start replica",
+		},
+		{
+			input: "stop replica",
+		},
+		{
+			input: "show replica status",
+		},
+		{
+			input:  "change replication source to SOURCE_HOST = 'host'",
+			output: "change replication source to SOURCE_HOST = host",
+		},
+		{
+			input:  "change replication source to SOURCE_HOST = 'host', SOURCE_PASSWORD='password', SOURCE_PORT=12345",
+			output: "change replication source to SOURCE_HOST = host, SOURCE_PASSWORD = password, SOURCE_PORT = 12345",
+		},
+		{
 			input:  "create database `db1` charset 'utf8mb4' collate 'utf8_bin';",
 			output: "create database db1 charset utf8mb4 collate utf8_bin",
 		},
@@ -2874,7 +2891,7 @@ END`,
 			output: "with a (j) as (select 1) (with c (k) as (select 3) select (select k from c union select 6 limit 1) as b) union select k from c",
 		},
 		{
-			input:  `CREATE PROCEDURE testproc() BEGIN
+			input: `CREATE PROCEDURE testproc() BEGIN
   DECLARE done INT DEFAULT FALSE;
   DECLARE a CHAR(16);
   DECLARE b, c INT;
@@ -2900,7 +2917,7 @@ END`,
 declare done INT default false;
 declare a CHAR(16);
 declare b, c INT;
-declare cur1 cursor for select id, `+"`data`"+` from test.t1;
+declare cur1 cursor for select id, ` + "`data`" + ` from test.t1;
 declare cur2 cursor for select i from test.t2;
 declare continue handler for not found set done = true;
 open cur1;
@@ -2915,7 +2932,7 @@ close cur2;
 end`,
 		},
 		{
-			input:  `CREATE PROCEDURE testproc() BEGIN
+			input: `CREATE PROCEDURE testproc() BEGIN
   DECLARE done INT DEFAULT FALSE;
   DECLARE a CHAR(16);
   DECLARE b INT;
@@ -2953,7 +2970,7 @@ END`,
 declare done INT default false;
 declare a CHAR(16);
 declare b INT;
-declare cur1 cursor for select id, `+"`data`"+` from test.t1;
+declare cur1 cursor for select id, ` + "`data`" + ` from test.t1;
 declare continue handler for not found set done = true;
 open cur1;
 read_loop: loop
