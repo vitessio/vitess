@@ -114,6 +114,7 @@ func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTab
 		config.TwoPCEnable = true
 	}
 	config.EnableOnlineDDL = false
+	config.EnableTableGC = false
 
 	// XXX much of this is cloned from the tabletserver tests
 	tsv := tabletserver.NewTabletServer(topoproto.TabletAliasString(t.Alias), config, memorytopo.NewServer(""), t.Alias)

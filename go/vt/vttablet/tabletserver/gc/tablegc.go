@@ -163,6 +163,10 @@ func (collector *TableGC) Open() (err error) {
 		// already open
 		return nil
 	}
+	if !collector.env.Config().EnableTableGC {
+		return nil
+	}
+
 	collector.lifecycleStates, err = schema.ParseGCLifecycle(gcLifecycle)
 	if err != nil {
 		return fmt.Errorf("Error parsing --table_gc_lifecycle flag: %+v", err)
@@ -192,7 +196,7 @@ func (collector *TableGC) Open() (err error) {
 
 	ctx := context.Background()
 	ctx, collector.cancelOperation = context.WithCancel(ctx)
-	go collector.Operate(ctx)
+	go collector.operate(ctx)
 
 	return nil
 }
@@ -219,8 +223,8 @@ func (collector *TableGC) Close() {
 	log.Infof("TableGC - finished execution of Close")
 }
 
-// Operate is the main entry point for the table garbage collector operation and logic.
-func (collector *TableGC) Operate(ctx context.Context) {
+// operate is the main entry point for the table garbage collector operation and logic.
+func (collector *TableGC) operate(ctx context.Context) {
 
 	dropTablesChan := make(chan string)
 	purgeRequestsChan := make(chan bool)
