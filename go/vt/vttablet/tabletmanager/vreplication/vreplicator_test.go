@@ -234,7 +234,15 @@ func TestStashSecondaryKeys(t *testing.T) {
 			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
 			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Materialize),
-			wantErr:      "temporarily removing secondary keys is only supported for MoveTables and Reshard workflows",
+			wantErr:      "temporarily removing secondary keys is only supported for MoveTables, Migrate, and Reshard workflows",
+		},
+		{
+			name:         "1SK:OnlineDDL",
+			tableName:    "t1",
+			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
+			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL),
+			wantErr:      "temporarily removing secondary keys is only supported for MoveTables, Migrate, and Reshard workflows",
 		},
 		{
 			name:         "1SK",
