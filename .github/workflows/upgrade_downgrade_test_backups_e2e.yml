@@ -163,8 +163,6 @@ jobs:
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
-        vtbackup --version  
-        vttablet --version
         eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
     # Swap binaries, use this release's VTTablet (N)
@@ -175,7 +173,6 @@ jobs:
 
         rm -f $PWD/bin/vttablet
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
-        vtbackup --version  
         vttablet --version
         eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
