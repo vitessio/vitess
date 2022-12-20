@@ -178,7 +178,7 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	}
 }
 
-func TestStashSecondaryKeys(t *testing.T) {
+func TestDeferSecondaryKeys(t *testing.T) {
 	ctx := context.Background()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
@@ -222,7 +222,7 @@ func TestStashSecondaryKeys(t *testing.T) {
 		wantErr      string
 	}{
 		{
-			name:         "noSK",
+			name:         "0SK",
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, primary key(id))",
 			strippedDDL:  "create table t1 (id int not null, primary key(id))",
@@ -261,7 +261,7 @@ func TestStashSecondaryKeys(t *testing.T) {
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
-			name:         "t2SK",
+			name:         "2tSK",
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, primary key (id), key c1_c2 (c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, primary key (id))",
@@ -277,7 +277,7 @@ func TestStashSecondaryKeys(t *testing.T) {
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
-			name:         "4FPKSK",
+			name:         "3FPK1SK",
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2))",
@@ -285,7 +285,7 @@ func TestStashSecondaryKeys(t *testing.T) {
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
 		},
 		{
-			name:         "0FKt2SK",
+			name:         "0FK2tSK",
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, key c1_c2 (c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null)",
