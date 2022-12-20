@@ -1,4 +1,4 @@
-CREATE TABLE _vt.reparent_journal
+CREATE TABLE IF NOT EXISTS _vt.reparent_journal
 (
     `time_created_ns`      bigint(20) unsigned NOT NULL,
     `action_name`          varbinary(250)      NOT NULL,
