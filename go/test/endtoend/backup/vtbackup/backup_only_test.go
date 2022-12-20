@@ -62,13 +62,21 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	// Restore the Tablets
+	_, err := getVTTabletVersion()
+	require.NoError(t, err)
+	//if ver > 15 {
+	//_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	//require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	//_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	//require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	//}
 
-	restore(t, primary, "replica", "NOT_SERVING")
-	err := localCluster.VtctlclientProcess.ExecuteCommand(
+	// Restore the Tablets
+	restore(t, primary, "replica", "NOT_SERVING", true)
+	err = localCluster.VtctlclientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
 	require.Nil(t, err)
-	restore(t, replica1, "replica", "SERVING")
+	restore(t, replica1, "replica", "SERVING", false)
 
 	// Run the entire backup test
 	firstBackupTest(t, "replica")
@@ -146,7 +154,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	// now bring up the other replica, letting it restore from backup.
 	err = localCluster.VtctlclientProcess.InitTablet(replica2, cell, keyspaceName, hostname, shardName)
 	require.Nil(t, err)
-	restore(t, replica2, "replica", "SERVING")
+	restore(t, replica2, "replica", "SERVING", false)
 	// Replica2 takes time to serve. Sleeping for 5 sec.
 	time.Sleep(5 * time.Second)
 	//check the new replica has the data
@@ -262,21 +270,26 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 	}
 }
 
-func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
+func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string, disableReparentShard bool) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
 
 	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
 
-	//err := tablet.VttabletProcess.CreateDB(keyspaceName)
-	//require.Nil(t, err)
+	err := tablet.VttabletProcess.CreateDBWithSuperReadOnly(keyspaceName)
+	require.Nil(t, err)
 
 	// Start tablets
 	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
+	/*if disableReparentShard {
+		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--disable_active_reparents=%t", true))
+	} else {
+		tablet.VttabletProcess.ExtraArgs = append(tablet.VttabletProcess.ExtraArgs, fmt.Sprintf("--use_super_read_only=%t", true))
+	}*/
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true
-	err := tablet.VttabletProcess.Setup()
+	err = tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 }
 
@@ -376,4 +389,15 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			require.Fail(t, "Failed to verify disable/enable redo log.")
 		}
 	}
+}
+
+// insert should not work for any of the replicas and primary
+func getVTTabletVersion() (int, error) {
+	vtTabletVersion := 0
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	if err != nil {
+		return 0, err
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	return vtTabletVersion, nil
 }

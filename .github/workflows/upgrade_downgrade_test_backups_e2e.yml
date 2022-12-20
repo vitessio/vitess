@@ -114,7 +114,26 @@ jobs:
         sudo apt-get update
         sudo apt-get install percona-xtrabackup-24
 
-    # Checkout to the last release of Vitess
+    # Checkout to this build's commit (N)
+    - name: Check out this commit's code
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      uses: actions/checkout@v3
+
+    - name: Get dependencies for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        go mod download
+
+    - name: Building the binaries for this commit
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      timeout-minutes: 10
+      run: |
+        source build.env
+        make build
+        mkdir -p /tmp/vitess-build-current/
+        cp -R bin /tmp/vitess-build-current/    
+
+    # Checkout to the last release of Vitess (N-1)
     - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/checkout@v3
@@ -136,43 +155,28 @@ jobs:
         cp -R bin /tmp/vitess-build-other/
         rm -Rf bin/*
 
-    # Checkout to this build's commit
-    - name: Check out commit's code
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v3
-
-    - name: Get dependencies for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        go mod download
-
-    - name: Building the binaries for this commit
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 10
-      run: |
-        source build.env
-        make build
-        mkdir -p /tmp/vitess-build-current/
-        cp -R bin /tmp/vitess-build-current/
-
-    # Swap binaries, use last release's VTTablet
-    - name: Use last release's VTTablet
-      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      run: |
-        source build.env
-
-        rm -f $PWD/bin/vttablet
-        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
-        vttablet --version
-
-    # Run test with VTTablet at version N-1 and VTBackup at version N
-    - name: Run backups tests (vttablet=N-1, vtbackup=N)
+    # Run test with VTTablet at version N-1 and VTBackup at version N-1
+    - name: Run backups tests (vttablet=N-1, vtbackup=N-1)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
+        vtbackup --version  
+        vttablet --version
+        eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
+
+    # Swap binaries, use this release's VTTablet (N)
+    - name: Use this release's VTTablet
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+      run: |
+        source build.env
+
+        rm -f $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        vtbackup --version  
+        vttablet --version
         eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
     # Swap binaries again, use current version's VTTablet, and last release's VTBackup
@@ -188,7 +192,7 @@ jobs:
         vttablet --version
 
     # Run test again with VTTablet at version N, and VTBackup at version N-1
-    - name: Run backups tests (vttablet=N, vtbackup=N-1)
+    - name: Run backups tests (vttablet=N-1, vtbackup=N)
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         rm -rf /tmp/vtdataroot

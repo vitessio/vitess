@@ -65,6 +65,7 @@ func ConfigureTabletHook(hk *hook.Hook, tabletAlias *topodatapb.TabletAlias) {
 //
 // If successful, the updated tablet record is returned.
 func ChangeType(ctx context.Context, ts *topo.Server, tabletAlias *topodatapb.TabletAlias, newType topodatapb.TabletType, PrimaryTermStartTime *vttime.Time) (*topodatapb.Tablet, error) {
+	log.Infof("inside topotools change type...")
 	var result *topodatapb.Tablet
 	// Always clear out the primary timestamp if not primary.
 	if newType != topodatapb.TabletType_PRIMARY {

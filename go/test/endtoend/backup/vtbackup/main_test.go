@@ -132,24 +132,20 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
-		vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+
+		ver, err := getVTTabletVersion()
 		if err != nil {
 			return 1, err
 		}
-		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
-		if vtTabletVersion <= 15 {
-			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+
+		if ver <= 15 {
+			// Create database
+			for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
+				if err := tablet.VttabletProcess.CreateDBWithSuperReadOnly(keyspaceName); err != nil {
 					return 1, err
 				}
 			}
 		}
-		// Create database
-		/*for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-			if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-				return 1, err
-			}
-		}*/
 
 		return m.Run(), nil
 	}()

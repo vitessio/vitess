@@ -128,7 +128,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
-func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn *dbconnpool.DBConnection) error {
+func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn *dbconnpool.DBConnection, isPrimary bool) error {
 	log.Infof("In syncVTDatabase")
 	defer func(start time.Time) {
 		// we will leave this log
@@ -160,13 +160,15 @@ func syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnection, dbaConn 
 			res, _, _, err := dbaConn.ReadQueryResult(1, false)
 			if err == nil && len(res.Rows) == 1 {
 				sro := res.Rows[0][0].ToString()
+				var needsReset = false
 				if sro == "1" || sro == "ON" {
-					log.Infof("setting super read only to false...")
-					if _, err = dbaConn.ExecuteFetch("SET GLOBAL read_only='OFF'", 1, false); err != nil {
-						return false, err
-					}
-					return true, nil
+					needsReset = true
 				}
+				needsReset = needsReset && !isPrimary
+				if _, err = dbaConn.ExecuteFetch("SET GLOBAL read_only='OFF'", 1, false); err != nil {
+					return false, err
+				}
+				return needsReset, nil
 			}
 		}
 		return false, nil
@@ -202,7 +204,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 		if tabletType == topodatapb.TabletType_PRIMARY {
 			// FIXME: without the --read-only check below many tests fail. Need to verify if the check needs to
 			// be permanent or if the tests need to change
-			if err := syncVTDatabase(ctx, conn, dbaConn); err != nil && !strings.Contains(err.Error(), "--read-only") {
+			if err := syncVTDatabase(ctx, conn, dbaConn, true); err != nil && !strings.Contains(err.Error(), "--read-only") {
 				return err
 			}
 		}
@@ -249,7 +251,7 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
 	// creates _vt schema, the first time the database is created
-	if err := syncVTDatabase(ctx, conn, dbaConn); err != nil {
+	if err := syncVTDatabase(ctx, conn, dbaConn, tabletType == topodatapb.TabletType_PRIMARY); err != nil {
 		return err
 	}
 	return nil
