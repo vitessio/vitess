@@ -124,8 +124,10 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
 		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
-	case *sqlparser.DropView, *sqlparser.DropTable:
-		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
+	case *sqlparser.DropView:
+		destination, keyspace, err = buildDropView(vschema, ddlStatement)
+	case *sqlparser.DropTable:
+		destination, keyspace, err = buildDropTable(vschema, ddlStatement)
 	case *sqlparser.RenameTable:
 		destination, keyspace, err = buildRenameTable(vschema, ddl)
 	default:
@@ -150,8 +152,6 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 			Keyspace:          keyspace,
 			TargetDestination: destination,
 			Query:             query,
-			IsDML:             false,
-			SingleShardOnly:   false,
 		}, &engine.OnlineDDL{
 			Keyspace:          keyspace,
 			TargetDestination: destination,
@@ -208,6 +208,12 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 	if err != nil {
 		return nil, nil, err
 	}
+	if vschema.IsViewsEnabled() {
+		if keyspace == nil {
+			return nil, nil, vterrors.VT09005()
+		}
+		return destination, keyspace, nil
+	}
 	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.VT12001(ViewComplex)
@@ -243,6 +249,12 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if err != nil {
 		return nil, nil, err
 	}
+	if vschema.IsViewsEnabled() {
+		if keyspace == nil {
+			return nil, nil, vterrors.VT09005()
+		}
+		return destination, keyspace, nil
+	}
 	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.VT12001(ViewComplex)
@@ -265,7 +277,35 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	return destination, keyspace, nil
 }
 
-func buildDropViewOrTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+	if !vschema.IsViewsEnabled() {
+		return buildDropTable(vschema, ddlStatement)
+	}
+	var ks *vindexes.Keyspace
+	viewMap := make(map[string]any)
+	for _, tbl := range ddlStatement.GetFromTables() {
+		_, ksForView, _, err := vschema.TargetDestination(tbl.Qualifier.String())
+		if err != nil {
+			return nil, nil, err
+		}
+		if ksForView == nil {
+			return nil, nil, vterrors.VT09005()
+		}
+		if ks == nil {
+			ks = ksForView
+		} else if ks.Name != ksForView.Name {
+			return nil, nil, vterrors.VT12001("cannot drop views from multiple keyspace in a single statement")
+		}
+		if _, exists := viewMap[tbl.Name.String()]; exists {
+			return nil, nil, vterrors.VT03013(tbl.Name.String())
+		}
+		viewMap[tbl.Name.String()] = nil
+		tbl.Qualifier = sqlparser.NewIdentifierCS("")
+	}
+	return key.DestinationAllShards{}, ks, nil
+}
+
+func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	for i, tab := range ddlStatement.GetFromTables() {
