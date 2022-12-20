@@ -131,7 +131,8 @@ jobs:
         source build.env
         make build
         mkdir -p /tmp/vitess-build-current/
-        cp -R bin /tmp/vitess-build-current/    
+        cp -R bin /tmp/vitess-build-current/
+        rm -Rf bin/*
 
     # Checkout to the last release of Vitess (N-1)
     - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
@@ -153,7 +154,6 @@ jobs:
         make build
         mkdir -p /tmp/vitess-build-other/
         cp -R bin /tmp/vitess-build-other/
-        rm -Rf bin/*
 
     # Run test with VTTablet at version N-1 and VTBackup at version N-1
     - name: Run backups tests (vttablet=N-1, vtbackup=N-1)
@@ -163,16 +163,21 @@ jobs:
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
+        vtbackup --version
+        vttablet --version
         eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
     # Swap binaries, use this release's VTTablet (N)
     - name: Use this release's VTTablet
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
+        rm -rf /tmp/vtdataroot
+        mkdir -p /tmp/vtdataroot
+        set -x
         source build.env
-
         rm -f $PWD/bin/vttablet
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        vtbackup --version
         vttablet --version
         eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
 
@@ -181,12 +186,9 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
         source build.env
-
         rm -f $PWD/bin/vtbackup $PWD/bin/vttablet
         cp /tmp/vitess-build-current/bin/vtbackup $PWD/bin/vtbackup
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
-        vtbackup --version
-        vttablet --version
 
     # Run test again with VTTablet at version N, and VTBackup at version N-1
     - name: Run backups tests (vttablet=N-1, vtbackup=N)
@@ -196,4 +198,6 @@ jobs:
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
+        vtbackup --version
+        vttablet --version
         eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups
