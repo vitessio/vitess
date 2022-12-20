@@ -71,11 +71,22 @@ const (
 	maxQueryBufferDuration = 10 * time.Second
 )
 
-var streamResultPool = sync.Pool{New: func() any {
-	return &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+var (
+	streamResultPool = sync.Pool{New: func() any {
+		return &sqltypes.Result{
+			Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+		}
+	}}
+	sequenceFields = []*querypb.Field{
+		{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		},
 	}
-}}
+	withDDL = withddl.New([]string{
+		mysql.CreateViewsTable,
+	})
+)
 
 func returnStreamResult(result *sqltypes.Result) error {
 	// only return large results slices to the pool
@@ -90,13 +101,6 @@ func returnStreamResult(result *sqltypes.Result) error {
 
 func allocStreamResult() *sqltypes.Result {
 	return streamResultPool.Get().(*sqltypes.Result)
-}
-
-var sequenceFields = []*querypb.Field{
-	{
-		Name: "nextval",
-		Type: sqltypes.Int64,
-	},
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
@@ -311,7 +315,7 @@ func (qre *QueryExecutor) execCreateViewDDL(conn *StatefulConnection, stmt *sqlp
 	if err != nil {
 		return nil, err
 	}
-	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
 	if err != nil {
 		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 		// If it is a MySQL error and its code is of duplicate entry,
@@ -340,7 +344,7 @@ func (qre *QueryExecutor) execAlterViewDDL(conn *StatefulConnection, stmt *sqlpa
 	if err != nil {
 		return nil, err
 	}
-	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -375,7 +379,7 @@ func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlpar
 	if err != nil {
 		return nil, err
 	}
-	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
 	if err != nil {
 		return nil, err
 	}
@@ -383,6 +387,10 @@ func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlpar
 		return nil, existErr
 	}
 	return qr, nil
+}
+
+func execWithDDLView(ctx context.Context, conn *StatefulConnection, sql string) (*sqltypes.Result, error) {
+	return withDDL.Exec(ctx, sql, conn.Exec, conn.Exec)
 }
 
 func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlparser.DropView, bindVars map[string]*querypb.BindVariable, viewsMap map[string]int, viewNames []string) error {
@@ -399,7 +407,7 @@ func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlpar
 		return err
 	}
 
-	qr, err := withddl.New([]string{mysql.CreateViewsTable}).Exec(qre.ctx, sql, conn.Exec, conn.Exec)
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
 	if err != nil {
 		return err
 	}
