@@ -100,7 +100,7 @@ func RegisterFlags() {
 		// pid_file.go
 		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
 		// Logging
-		fs.BoolVar(&usePSLogger, "structure_logging", usePSLogger, "whether to use structure logging (Planet Scale Log) logger or the original (glog) logger")
+		fs.BoolVar(&usePSLogger, "structured-logging", usePSLogger, "whether to use structured logging (PlanetScale Log) logger or the original (glog) logger")
 	})
 }
 
