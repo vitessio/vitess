@@ -327,7 +327,10 @@ func ParseFlags(cmd string) {
 
 	if usePSLogger {
 		// Replace glog logger with PlanetScale logger
-		logutil.SetPlanetScaleLogger(nil)
+		_, err := logutil.SetPlanetScaleLogger(nil)
+		if err != nil {
+			log.Exitf("error while setting the PlanetScale logger: %s", err)
+		}
 	}
 
 	args := fs.Args()

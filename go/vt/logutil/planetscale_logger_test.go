@@ -40,7 +40,10 @@ func SetupLoggerWithMemSink() (sink *MemorySink, err error) {
 	testLoggerConf := pslog.NewPlanetScaleConfig(pslog.DetectEncoding(), pslog.InfoLevel)
 	testLoggerConf.OutputPaths = []string{"memory://"}
 	testLoggerConf.ErrorOutputPaths = []string{"memory://"}
-	SetPlanetScaleLogger(&testLoggerConf)
+	_, err = SetPlanetScaleLogger(&testLoggerConf)
+	if err != nil {
+		return nil, err
+	}
 
 	return
 }
@@ -56,7 +59,6 @@ func TestPSLogger_Replacing_glog(t *testing.T) {
 		logLevel zapcore.Level
 	}
 
-	// Given
 	dummyLogMessage := "testing log"
 	testCases := []testCase{
 		{"log info", pslog.InfoLevel},
@@ -65,11 +67,8 @@ func TestPSLogger_Replacing_glog(t *testing.T) {
 	}
 
 	sink, err := SetupLoggerWithMemSink()
-	if err != nil {
-		t.Fatal(err)
-	}
+	assert.NoError(t, err)
 
-	// When
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			var loggingFunc func(format string, args ...interface{})
@@ -77,33 +76,25 @@ func TestPSLogger_Replacing_glog(t *testing.T) {
 
 			switch tc.logLevel {
 			case zapcore.InfoLevel:
-				{
-					loggingFunc = vtlog.Infof
-					expectedLevel = "info"
-				}
+				loggingFunc = vtlog.Infof
+				expectedLevel = "info"
 			case zapcore.ErrorLevel:
-				{
-					loggingFunc = vtlog.Errorf
-					expectedLevel = "error"
-				}
+				loggingFunc = vtlog.Errorf
+				expectedLevel = "error"
 			case zapcore.WarnLevel:
-				{
-					loggingFunc = vtlog.Warningf
-					expectedLevel = "warn"
-				}
+				loggingFunc = vtlog.Warningf
+				expectedLevel = "warn"
 			}
 
 			loggingFunc(dummyLogMessage)
+
 			// Unmarshal the captured log. This means we're getting a struct log.
 			actualLog := logMsg{}
 			err = json.Unmarshal(sink.Bytes(), &actualLog)
-			if err != nil {
-				t.Error(err)
-			}
+			assert.NoError(t, err)
 			// Reset the sink so that it'll contain one log per test case.
 			sink.Reset()
 
-			// Then
 			assert.Equal(t, expectedLevel, actualLog.Level)
 			assert.Equal(t, dummyLogMessage, actualLog.Msg)
 
