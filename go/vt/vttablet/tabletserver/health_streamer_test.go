@@ -173,6 +173,7 @@ func TestReloadSchema(t *testing.T) {
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
 	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
+	db.AddQuery(mysql.CreateViewsTable, &sqltypes.Result{})
 	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -286,6 +287,7 @@ func TestInitialReloadSchema(t *testing.T) {
 
 	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
 	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
+	db.AddQuery(mysql.CreateViewsTable, &sqltypes.Result{})
 	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
