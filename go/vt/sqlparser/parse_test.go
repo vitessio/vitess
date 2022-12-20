@@ -49,12 +49,12 @@ var (
 			input: "show replica status",
 		},
 		{
-			input:  "change replication source to SOURCE_HOST = 'host'",
-			output: "change replication source to SOURCE_HOST = host",
+			input:  "change replication source to SOURCE_HOST = 'Host'",
+			output: "change replication source to source_host = Host",
 		},
 		{
-			input:  "change replication source to SOURCE_HOST = 'host', SOURCE_PASSWORD='password', SOURCE_PORT=12345",
-			output: "change replication source to SOURCE_HOST = host, SOURCE_PASSWORD = password, SOURCE_PORT = 12345",
+			input:  "change replication source to SOURCE_HOST = 'host', SOURCE_PASSWORD='PaSSword', SOURCE_PORT=12345, source_user='root'",
+			output: "change replication source to source_host = host, source_password = PaSSword, source_port = 12345, source_user = root",
 		},
 		{
 			input:  "create database `db1` charset 'utf8mb4' collate 'utf8_bin';",
@@ -3613,6 +3613,9 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
+		input: "CHANGE REPLICATION SOURCE TO",
+		err:   "syntax error",
+	}, {
 		input: "select a from (select * from tbl)",
 		err:   "Every derived table must have its own alias",
 	}, {

@@ -271,7 +271,6 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // Replication Tokens
 %token <bytes> REPLICA SOURCE STOP SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT
 
-
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
 

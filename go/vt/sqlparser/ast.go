@@ -3232,7 +3232,7 @@ func (s *ChangeReplicationSource) Format(buf *TrackedBuffer) {
 		if i > 0 {
 			buf.WriteString(", ")
 		}
-		buf.WriteString(option.Name)
+		buf.WriteString(strings.ToLower(option.Name))
 		buf.WriteString(" = ")
 		buf.WriteString(option.Value)
 	}
