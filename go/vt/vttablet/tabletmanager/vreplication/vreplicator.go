@@ -571,9 +571,8 @@ func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos 
 // stashes an ALTER TABLE statement that can be used to recreate them after
 // the copy is complete.
 func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string) error {
-	if vr.WorkflowType != int32(binlogdatapb.VReplicationWorkflowType_MoveTables) &&
-		vr.WorkflowType != int32(binlogdatapb.VReplicationWorkflowType_Reshard) {
-		return fmt.Errorf("temporarily removing secondary keys is only supported for MoveTables and Reshard workflows")
+	if !vr.supportsDeferredSecondaryKeys() {
+		return fmt.Errorf("temporarily removing secondary keys is only supported for MoveTables, Migrate, and Reshard workflows")
 	}
 	var secondaryKeys []*sqlparser.IndexDefinition
 	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
@@ -734,4 +733,13 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 
 	return nil
+}
+
+// supportsDeferredSecondaryKeys tells you if related work should be done
+// for the workflow. Deferring secondary index generation is only supported
+// with MoveTables, Migrate, and Reshard.
+func (vr *vreplicator) supportsDeferredSecondaryKeys() bool {
+	return vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) ||
+		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Migrate) ||
+		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard)
 }

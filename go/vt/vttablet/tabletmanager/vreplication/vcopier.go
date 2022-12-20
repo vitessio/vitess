@@ -244,10 +244,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 			return err
 		}
 
-		// Deferring secondary index generation is only supported with MoveTables
-		// and Reshard.
-		if vc.vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) ||
-			vc.vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard) {
+		if vc.vr.supportsDeferredSecondaryKeys() {
 			settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
 			if err != nil {
 				return err
