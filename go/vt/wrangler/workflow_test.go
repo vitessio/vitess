@@ -561,8 +561,8 @@ func TestReshardV2Cancel(t *testing.T) {
 func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
 
 	sourceQueries := []string{
-		"select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
-		"select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'",
+		"select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
+		"select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'",
 	}
 	noResult := &sqltypes.Result{}
 	for _, dbclient := range tme.dbSourceClients {
@@ -581,7 +581,7 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
 	}
 
 	targetQueries := []string{
-		"select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
+		"select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
 	}
 
 	for _, dbclient := range tme.dbTargetClients {

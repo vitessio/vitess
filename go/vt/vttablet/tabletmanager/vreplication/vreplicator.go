@@ -74,8 +74,10 @@ const (
 
 	sqlCreatePostCopyAction = `insert into _vt.copy_table_post(vrepl_id, table_name, action)
 	values(%a, %a, convert(%a using utf8mb4))`
-	sqlGetPostCopyActions = `select action from _vt.copy_table_post where vrepl_id=%a and
+	sqlGetPostCopyActions = `select id, action from _vt.copy_table_post where vrepl_id=%a and
 	table_name=%a`
+	sqlDeletePostCopyAction = `delete from _vt.copy_table_post where vrepl_id=%a and
+	table_name=%a and id=%a`
 )
 
 type ComponentName string
@@ -701,10 +703,29 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 			return err
 		}
 
+		select {
+		case <-ctx.Done():
+			log.Infof("Copy of %v stopped when performing copy post operation: %+v", tableName, action)
+			return nil
+		default:
+		}
+
 		switch action.Type {
 		case PostCopyActionSQL:
 			log.Infof("Executing VReplication MoveTables post copy SQL action for table %q: %s", tableName, action.Task)
 			if _, err := dbClient.ExecuteFetch(action.Task, -1); err != nil {
+				return err
+			}
+			id, err := row["id"].ToInt64()
+			if err != nil {
+				return err
+			}
+			delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Uint32BindVariable(vr.id),
+				sqltypes.StringBindVariable(tableName), sqltypes.Int64BindVariable(id))
+			if err != nil {
+				return err
+			}
+			if _, err := dbClient.ExecuteFetch(delq, 1); err != nil {
 				return err
 			}
 		default:

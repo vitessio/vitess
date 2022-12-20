@@ -248,9 +248,15 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 		// and Reshard.
 		if vc.vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) ||
 			vc.vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard) {
-			for name := range plan.TargetTables {
-				if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
-					return err
+			settings, err := binlogplayer.ReadVRSettings(vc.vr.dbClient, vc.vr.id)
+			if err != nil {
+				return err
+			}
+			if settings.DeferSecondaryKeys {
+				for name := range plan.TargetTables {
+					if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
+						return err
+					}
 				}
 			}
 		}

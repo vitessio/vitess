@@ -66,6 +66,9 @@ type VReplicationWorkflowParams struct {
 	SkipSchemaCopy             bool
 	AutoStart, StopAfterCopy   bool
 
+	// MoveTables/Migrate and Reshard specific
+	DeferSecondaryKeys bool
+
 	// Migrate specific
 	ExternalCluster string
 }
@@ -430,14 +433,14 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
 		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
-		vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards)
+		vrw.params.DeferSecondaryKeys, vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
 	log.Infof("In VReplicationWorkflow.initReshard() for %+v", vrw)
 	return vrw.wr.Reshard(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.SourceShards,
 		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes,
-		vrw.params.OnDDL, vrw.params.AutoStart, vrw.params.StopAfterCopy)
+		vrw.params.OnDDL, vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.DeferSecondaryKeys)
 }
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {

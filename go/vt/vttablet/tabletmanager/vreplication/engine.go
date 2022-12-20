@@ -70,10 +70,12 @@ const (
   add key (vrepl_id, table_name)`
 
 	createCopyTablePost = `create table if not exists _vt.copy_table_post(
+  id bigint not null auto_increment,
   vrepl_id int,
   table_name varbinary(128),
   action JSON,
-  primary key (vrepl_id, table_name))`
+  unique key (vrepl_id, table_name),
+  primary key(id))`
 )
 
 var withDDL *withddl.WithDDL
@@ -668,8 +670,9 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 64)
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 64)
+		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType, workflowSubType)
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType, workflowSubType, deferSecondaryKeys)
 		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
