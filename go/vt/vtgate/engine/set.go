@@ -324,7 +324,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false, false)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
@@ -336,7 +336,7 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false, false)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
