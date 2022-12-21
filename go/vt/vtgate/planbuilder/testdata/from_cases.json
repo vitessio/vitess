@@ -2935,15 +2935,15 @@
   },
   {
     "comment": "join of information_schema with normal table",
-    "query": "select unsharded.foo from information_schema.a join unsharded",
+    "query": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from information_schema.a join unsharded",
+      "Original": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "R:0",
-        "TableName": "information_schema.a_unsharded",
+        "TableName": "information_schema.CHARACTER_SETS_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2952,9 +2952,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           },
           {
             "OperatorType": "Route",
@@ -2972,12 +2972,12 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from information_schema.a join unsharded",
+      "Original": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "R:0",
-        "TableName": "information_schema.a_unsharded",
+        "TableName": "information_schema.CHARACTER_SETS_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2986,9 +2986,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           },
           {
             "OperatorType": "Route",
@@ -3010,15 +3010,15 @@
   },
   {
     "comment": "join of normal table with information_schema",
-    "query": "select unsharded.foo from unsharded join information_schema.a",
+    "query": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from unsharded join information_schema.a",
+      "Original": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "unsharded_information_schema.a",
+        "TableName": "unsharded_information_schema.CHARACTER_SETS",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3038,21 +3038,21 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           }
         ]
       }
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from unsharded join information_schema.a",
+      "Original": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "unsharded_information_schema.a",
+        "TableName": "unsharded_information_schema.CHARACTER_SETS",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3072,9 +3072,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           }
         ]
       },
@@ -6165,7 +6165,7 @@
     }
   },
   {
-    "comment": "select * from (select bar as push_it from (select foo as bar from (select id as foo from user) as t1) as t2) as t3 where push_it = 12",
+    "comment": "derived table inside derived table with a where clause depending on columns from the derived table",
     "query": "select * from (select bar as push_it from (select foo as bar from (select id as foo from user) as t1) as t2) as t3 where push_it = 12",
     "v3-plan": {
       "QueryType": "SELECT",
