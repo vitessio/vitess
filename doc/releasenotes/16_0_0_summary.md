@@ -266,3 +266,30 @@ Creating a database with vttestserver was taking ~45 seconds. This can be proble
 In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
 For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this values might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
 this shouldn't be a concern.
+
+## Minor changes
+
+### Backup compression benchmarks
+
+Compression benchmarks have been added to the `mysqlctl` package.
+
+Here are sample results from compressing a 20 GB chunk of Wikipedia articles on a 2020-era Mac M1 with 16 GB of memory:
+
+```
+$ go test -bench=BenchmarkCompress ./go/vt/mysqlctl -run=NONE -timeout=2h -benchtime=300s 
+goos: darwin
+goarch: arm64
+pkg: vitess.io/vitess/go/vt/mysqlctl
+BenchmarkCompressLz4Builtin-8                  7        59521566387 ns/op
+BenchmarkCompressPargzipBuiltin-8              3        131137483444 ns/op
+BenchmarkCompressPgzipBuiltin-8                6        61871191048 ns/op
+BenchmarkCompressZstdBuiltin-8                 4        80345240271 ns/op
+BenchmarkCompressZstdExternal-8                6        50756806348 ns/op
+BenchmarkCompressZstdExternalFast4-8           8        39936071110 ns/op
+BenchmarkCompressZstdExternalT0-8             15        24292118122 ns/op
+BenchmarkCompressZstdExternalT4-8             12        27094172323 ns/op
+PASS
+ok      vitess.io/vitess/go/vt/mysqlctl 3780.882s
+```
+
+See [here](https://github.com/vitessio/vitess/pull/11994) for more details on this sample and how to run the benchmarks yourself.
