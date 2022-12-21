@@ -129,6 +129,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
   indexOption   *IndexOption
   indexOptions  []*IndexOption
   flushOption   *FlushOption
+  replicationOption *ReplicationOption
+  replicationOptions []*ReplicationOption
   indexColumn   *IndexColumn
   indexColumns  []*IndexColumn
   constraintDefinition *ConstraintDefinition
@@ -266,6 +268,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
+// Replication Tokens
+%token <bytes> REPLICA SOURCE STOP SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT
+
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
 
@@ -366,7 +371,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> begin_end_block declare_statement resignal_statement open_statement close_statement fetch_statement
 %type <statement> loop_statement leave_statement iterate_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
-%type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement
+%type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement replication_statement
 %type <statements> statement_list
 %type <caseStatementCases> case_statement_case_list
 %type <caseStatementCase> case_statement_case
@@ -507,6 +512,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
 %type <flushOption> flush_option
+%type <replicationOptions> replication_option_list
+%type <replicationOption> replication_option
 %type <str> relay_logs_attribute
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
@@ -601,6 +608,7 @@ command:
 | kill_statement
 | grant_statement
 | revoke_statement
+| replication_statement
 | flush_statement
 | /*empty*/
 {
@@ -3229,6 +3237,48 @@ flush_type_opt:
 | flush_type
   { $$ = $1 }
 
+replication_statement:
+  CHANGE REPLICATION SOURCE TO replication_option_list
+  {
+    $$ = &ChangeReplicationSource{Options: $5}
+  }
+| START REPLICA
+  {
+    $$ = &StartReplica{}
+  }
+| STOP REPLICA
+  {
+    $$ = &StopReplica{}
+  }
+
+replication_option_list:
+  replication_option
+  {
+    $$ = []*ReplicationOption{$1}
+  }
+| replication_option_list ',' replication_option
+ {
+   $$ = append($$, $3)
+ }
+
+replication_option:
+  SOURCE_HOST '=' STRING
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+| SOURCE_USER '=' STRING
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+| SOURCE_PASSWORD '=' STRING
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+| SOURCE_PORT '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+
 index_definition:
   index_info '(' index_column_list ')' index_option_list
   {
@@ -4360,6 +4410,10 @@ show_statement:
 | SHOW PROCEDURE STATUS like_or_where_opt
   {
     $$ = &Show{Type: string($2) + " " + string($3), Filter: $4}
+  }
+| SHOW REPLICA STATUS
+  {
+    $$ = &Show{Type: string($2) + " " + string($3)}
   }
 | SHOW FUNCTION STATUS like_or_where_opt
   {
@@ -7971,6 +8025,7 @@ non_reserved_keyword:
 | REORGANIZE
 | REPAIR
 | REPEATABLE
+| REPLICA
 | REPLICATION
 | REQUIRE_ROW_FORMAT
 | RESOURCE
@@ -7998,12 +8053,18 @@ non_reserved_keyword:
 | SKIP
 | SLAVE
 | SLOW
+| SOURCE
+| SOURCE_HOST
+| SOURCE_PASSWORD
+| SOURCE_PORT
+| SOURCE_USER
 | SRID
 | START
 | STATUS
 | STATS_AUTO_RECALC
 | STATS_PERSISTENT
 | STATS_SAMPLE_PAGES
+| STOP
 | STORAGE
 | STREAM
 | SUBCLASS_ORIGIN
