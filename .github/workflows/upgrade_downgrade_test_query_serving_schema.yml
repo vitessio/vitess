@@ -209,9 +209,11 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtgate $PWD/bin/vttablet
+        rm -f $PWD/bin/vtgate $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vtgate $PWD/bin/vtgate
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vtgate --version
         vttablet --version
 

@@ -164,8 +164,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Run test with VTTablet at version N+1 and VTBackup at version N
@@ -184,9 +186,11 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vtbackup $PWD/bin/vttablet
-        cp /tmp/vitess-build-current/bin/vtbackup $PWD/bin/vtbackup
-        cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        rm -f $PWD/bin/vtbackup $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
+        cp /tmp/vitess-build-other/bin/vtbackup $PWD/bin/vtbackup
+        cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-current/bin/mysqlctld $PWD/bin/mysqlctld
         vtbackup --version
         vttablet --version
 

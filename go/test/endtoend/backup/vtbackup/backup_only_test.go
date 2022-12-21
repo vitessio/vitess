@@ -62,12 +62,21 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
+	_, err := getVTExecVersion("vttablet")
+	require.NoError(t, err)
+	//if ver > 15 {
+	//_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	//require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	//_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+	//require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	//}
+
 	// Restore the Tablets
 
 	restore(t, primary, "replica", "NOT_SERVING")
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
-	err := localCluster.VtctlclientProcess.ExecuteCommand(
+	err = localCluster.VtctlclientProcess.ExecuteCommand(
 		"SetReadWrite", primary.Alias)
 	require.Nil(t, err)
 	err = localCluster.VtctlclientProcess.ExecuteCommand(
@@ -143,7 +152,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
-	// even though we change the value of compression it won't effect
+	// even though we change the value of compression it won't affect
 	// decompression since it gets its value from MANIFEST file, created
 	// as part of backup.
 	mysqlctl.CompressionEngineName = "lz4"
@@ -175,15 +184,21 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
+	ver, err := getVTExecVersion("vtbackup")
+	require.NoError(t, err)
 	if disableRedoLog {
-		extraArgs = append(extraArgs, "--disable-redo-log")
+		if ver > 15 {
+			extraArgs = append(extraArgs, "--disable-redo-log")
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if !initialBackup && disableRedoLog {
-		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+		if ver > 15 {
+			go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+		}
 	}
 
 	log.Infof("starting backup tablet %s", time.Now())
@@ -366,4 +381,15 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			require.Fail(t, "Failed to verify disable/enable redo log.")
 		}
 	}
+}
+
+// insert should not work for any of the replicas and primary
+func getVTExecVersion(binaryName string) (int, error) {
+	vtTabletVersion := 0
+	vtTabletVersion, err := cluster.GetMajorVersion(binaryName)
+	if err != nil {
+		return 0, err
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	return vtTabletVersion, nil
 }
