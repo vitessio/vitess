@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -117,16 +116,23 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		if entry.Target == nil || entry.Gateway == nil || entry.FiredFrom == nil {
 			continue
 		}
-		if explainResults[entry.FiredFrom] != "" || strings.Contains(entry.Query, "where 1 != 1") {
+		if explainResults[entry.FiredFrom] != "" {
 			continue
 		}
-		res, err := vcursor.ExecuteStandalone(ctx, nil, fmt.Sprintf("explain format = json %v", entry.Query), nil, &srvtopo.ResolvedShard{
+		explainQuery := fmt.Sprintf("explain format = json %v", entry.Query)
+		// We rely on the parser to see if the query we have is explainable or not
+		// If we get an error in parsing then we can't execute explain on the given query, and we skip it
+		_, err := sqlparser.Parse(explainQuery)
+		if err != nil {
+			continue
+		}
+		// Explain statement should now succeed
+		res, err := vcursor.ExecuteStandalone(ctx, nil, explainQuery, nil, &srvtopo.ResolvedShard{
 			Target:  entry.Target,
 			Gateway: entry.Gateway,
 		})
-		// TODO: remove un-explainable commands and exit on error
 		if err != nil {
-			continue
+			return nil, err
 		}
 		explainResults[entry.FiredFrom] = res.Rows[0][0].ToString()
 	}
@@ -137,7 +143,6 @@ func (v *VExplain) convertToVExplainAllResult(ctx context.Context, vcursor VCurs
 		return nil, err
 	}
 
-	// TODO: interleave mysql plan with the vtgate plan instead of appending them
 	result := string(resultBytes)
 	fields := []*querypb.Field{
 		{

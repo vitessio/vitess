@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"vitess.io/vitess/go/mysql"
@@ -59,7 +60,7 @@ func TestVtGateVExplain(t *testing.T) {
 		"vexplain queries/all will actually run queries")
 
 	expected := `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 1, '\x16k@\xb4J\xbaK\xd6'), ('apa', 2, '\x06\xe7\xea\\\"Βp\x8f') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
+		` [INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 1, '\x16k@\xb4J\xbaK\xd6') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
 		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
 		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 3, 'N\xb1\x90ɢ\xfa\x16\x9c') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
 		` [INT32(2) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
@@ -67,14 +68,17 @@ func TestVtGateVExplain(t *testing.T) {
 		` [INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
 		` [INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('monkey', 'N\xb1\x90ɢ\xfa\x16\x9c')")]` +
 		` [INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('apa', '\x16k@\xb4J\xbaK\xd6'), ('bandar', '\x06\xe7\xea\\\"Βp\x8f')")]` +
+		` [INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('apa', '\x16k@\xb4J\xbaK\xd6')")]` +
 		` [INT32(6) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]` +
 		` [INT32(7) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
 		` [INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
 		` [INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (3, 'monkey', 'monkey')")]` +
 		` [INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa'), (2, 'apa', 'bandar')")]]`
-	utils.AssertMatchesNoOrder(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(2,'apa','bandar'),(3,'monkey','monkey')`, expected)
+		` [INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa')")]]`
+	utils.AssertMatchesNoOrder(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(3,'monkey','monkey')`, expected)
+
+	// Assert that the output of vexplain all doesn't have begin queries because they aren't explainable
+	utils.AssertMatchesNotContains(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ all insert into user (id,lookup,lookup_unique) values (2,'apa','bandar')`, `begin`)
 
 	expected = `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("select lookup, keyspace_id from lookup where lookup in ('apa')")]` +
 		` [INT32(1) VARCHAR("ks") VARCHAR("-40") VARCHAR("select id from ` + "`user`" + ` where lookup = 'apa'")]]`
