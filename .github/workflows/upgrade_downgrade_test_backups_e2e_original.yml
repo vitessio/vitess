@@ -1,0 +1,202 @@
+name: Upgrade Downgrade Testing - Backups - E2E - Original
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: format('{0}-{1}', ${{ github.ref }}, 'Upgrade Downgrade Testing - Backups - E2E - Original')
+  cancel-in-progress: true
+
+jobs:
+  get_previous_release:
+    if: always()
+    name: Get latest release
+    runs-on: ubuntu-latest
+    outputs:
+      previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
+
+    steps:
+      - name: Check out to HEAD
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Set output with latest release branch
+        id: output-previous-release-ref
+        run: |
+          previous_release_ref=$(./tools/get_previous_release.sh ${{github.base_ref}} ${{github.ref}})
+          echo $previous_release_ref
+          echo "previous_release_ref=${previous_release_ref}" >> $GITHUB_OUTPUT
+
+  upgrade_downgrade_test_e2e:
+    timeout-minutes: 60
+    if: always() && needs.get_previous_release.result == 'success'
+    name: Run Upgrade Downgrade Test
+    runs-on: ubuntu-20.04
+    needs:
+      - get_previous_release
+
+    steps:
+      - name: Skip CI
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+            echo "skipping CI due to the 'Skip CI' label"
+            exit 1
+          fi
+
+      - name: Check if workflow needs to be skipped
+        id: skip-workflow
+        run: |
+          skip='false'
+          if [[ "${{github.event.pull_request}}" ==  "" ]] && [[ "${{github.ref}}" != "refs/heads/main" ]] && [[ ! "${{github.ref}}" =~ ^refs/heads/release-[0-9]+\.[0-9]$ ]] && [[ ! "${{github.ref}}" =~ "refs/tags/.*" ]]; then
+          skip='true'
+          fi
+          echo Skip ${skip}
+          echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
+
+      - name: Check out commit's code
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        uses: actions/checkout@v3
+
+      - name: Check for changes in relevant files
+        if: steps.skip-workflow.outputs.skip-workflow == 'false'
+        uses: frouioui/paths-filter@main
+        id: changes
+        with:
+          token: ''
+          filters: |
+            end_to_end:
+              - 'go/**'
+              - 'go/**/*.go'
+              - 'test.go'
+              - 'Makefile'
+              - 'build.env'
+              - 'go.sum'
+              - 'go.mod'
+              - 'proto/*.proto'
+              - 'tools/**'
+              - 'config/**'
+              - 'bootstrap.sh'
+              - '.github/workflows/upgrade_downgrade_test_backups_e2e.yml'
+
+      - name: Set up Go
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-go@v3
+        with:
+          go-version: 1.19.4
+
+      - name: Set up python
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        uses: actions/setup-python@v4
+
+      - name: Tune the OS
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
+
+      - name: Get base dependencies
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+          sudo service mysql stop
+          sudo service etcd stop
+          sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
+          sudo apparmor_parser -R /etc/apparmor.d/usr.sbin.mysqld
+          go mod download
+          
+          # install JUnit report formatter
+          go install github.com/vitessio/go-junit-report@HEAD
+          
+          wget https://repo.percona.com/apt/percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo apt-get install -y gnupg2
+          sudo dpkg -i percona-release_latest.$(lsb_release -sc)_all.deb
+          sudo apt-get update
+          sudo apt-get install percona-xtrabackup-24
+
+      # Checkout to the last release of Vitess
+      - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ needs.get_previous_release.outputs.previous_release }}
+
+      - name: Get dependencies for the last release
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          go mod download
+
+      - name: Building last release's binaries
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 10
+        run: |
+          source build.env
+          make build
+          mkdir -p /tmp/vitess-build-other/
+          cp -R bin /tmp/vitess-build-other/
+          rm -Rf bin/*
+
+      # Checkout to this build's commit
+      - name: Check out commit's code
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        uses: actions/checkout@v3
+
+      - name: Get dependencies for this commit
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          go mod download
+
+      - name: Building the binaries for this commit
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        timeout-minutes: 10
+        run: |
+          source build.env
+          make build
+          mkdir -p /tmp/vitess-build-current/
+          cp -R bin /tmp/vitess-build-current/
+
+      # Swap binaries, use last release's VTTablet
+      - name: Use last release's VTTablet
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          source build.env
+          
+          rm -f $PWD/bin/vttablet
+          cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+          cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+          cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
+          vttablet --version
+
+      # Run test with VTTablet at version N-1 and VTBackup at version N
+      - name: Run backups tests (vttablet=N-1, vtbackup=N)
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
+          set -x
+          source build.env
+          eatmydata -- go run test.go -skip-build -docker=false -print-log -follow -tag upgrade_downgrade_backups
+
+      # Swap binaries again, use current version's VTTablet, and last release's VTBackup
+      - name: Use current version VTTablet, and other version VTBackup
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          source build.env
+          
+          rm -f $PWD/bin/vtbackup $PWD/bin/vttablet
+          cp /tmp/vitess-build-current/bin/vtbackup $PWD/bin/vtbackup
+          cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+          cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+          cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
+          vtbackup --version
+          vttablet --version
+
+      # Run test again with VTTablet at version N, and VTBackup at version N-1
+      - name: Run backups tests (vttablet=N, vtbackup=N-1)
+        if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
+        run: |
+          rm -rf /tmp/vtdataroot
+          mkdir -p /tmp/vtdataroot
+          set -x
+          source build.env
+          eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups
