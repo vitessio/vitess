@@ -1012,6 +1012,11 @@ func (node *ExplainStmt) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *VExplainStmt) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "vexplain %v%s %v", node.Comments, node.Type.ToString(), node.Statement)
+}
+
+// Format formats the node.
 func (node *ExplainTab) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "explain %v", node.Table)
 	if node.Wild != "" {
