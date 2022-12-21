@@ -175,6 +175,16 @@ The `RestoreFromBackup  --restore_to_pos` ends with:
 - the restored server in intentionally broken replication setup
 - tablet type is `DRAINED`
 
+#### New `vexplain` command
+A new `vexplain` command has been introduced with the following syntax -
+```
+VEXPLAIN [ALL|QUERIES|PLAN] explainable_stmt
+```
+
+This command will help the users look at the plan that vtgate comes up with for the given query (`PLAN` type), see all the queries that are executed on all the MySQL instances (`QUERIES` type), 
+and see the vtgate plan along with the MySQL explain output for the executed queries (`ALL` type).
+
+The formats `VTEXPLAIN` and `VITESS` for `EXPLAIN` queries are deprecated, and these newly introduced commands should be used instead.
 
 ### Important bug fixes
 

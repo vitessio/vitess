@@ -1370,6 +1370,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfUse(a, b)
+	case *VExplainStmt:
+		b, ok := inB.(*VExplainStmt)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfVExplainStmt(a, b)
 	case *VStream:
 		b, ok := inB.(*VStream)
 		if !ok {
@@ -4257,6 +4263,19 @@ func (cmp *Comparator) RefOfUse(a, b *Use) bool {
 	return cmp.IdentifierCS(a.DBName, b.DBName)
 }
 
+// RefOfVExplainStmt does deep equals between the two objects.
+func (cmp *Comparator) RefOfVExplainStmt(a, b *VExplainStmt) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		cmp.Statement(a.Statement, b.Statement) &&
+		cmp.RefOfParsedComments(a.Comments, b.Comments)
+}
+
 // RefOfVStream does deep equals between the two objects.
 func (cmp *Comparator) RefOfVStream(a, b *VStream) bool {
 	if a == b {
@@ -6304,6 +6323,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfUse(a, b)
+	case *VExplainStmt:
+		b, ok := inB.(*VExplainStmt)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfVExplainStmt(a, b)
 	case *VStream:
 		b, ok := inB.(*VStream)
 		if !ok {

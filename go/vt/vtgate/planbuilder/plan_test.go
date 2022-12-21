@@ -252,6 +252,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "systemtables_cases80.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSystemTables57(t *testing.T) {
