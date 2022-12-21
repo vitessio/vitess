@@ -252,7 +252,7 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 		"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict, constraint f20 foreign key (i) references t20(id) on delete restrict)",
 		"create table t15(id int, primary key(id))",
 		"create view v09 as select * from v13, t17",
-		"create table t20 (id int primary key, i int, constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t20 (id int primary key, i int, key ix (i), constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create view v13 as select * from t20",
 		"create table t12 (id int primary key, i int, constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create table t17 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",

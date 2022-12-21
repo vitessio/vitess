@@ -509,6 +509,22 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 }
 
 func (c *CreateTableEntity) normalizeKeys() {
+	// let's ensure all foreign key constraints are covered by local keys, or else add such keys.
+	// We add the keys unnamed, and the followup code will name them properly.
+	for _, cs := range c.CreateTable.TableSpec.Constraints {
+		fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+		if !ok {
+			continue
+		}
+		if !c.columnsCoveredByInOrderIndex(fk.Source) {
+			index := &sqlparser.IndexDefinition{Info: &sqlparser.IndexInfo{Name: sqlparser.NewIdentifierCI(""), Type: "KEY"}}
+			for _, col := range fk.Source {
+				index.Columns = append(index.Columns, &sqlparser.IndexColumn{Column: col})
+			}
+			c.CreateTable.TableSpec.Indexes = append(c.CreateTable.TableSpec.Indexes, index)
+		}
+	}
+
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
@@ -569,7 +585,7 @@ func (c *CreateTableEntity) normalizeKeys() {
 }
 
 func (c *CreateTableEntity) normalizeUnnamedConstraints() {
-	// let's ensure all keys have names
+	// let's ensure all constraints have names
 	constraintNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
 	for _, constraint := range c.CreateTable.TableSpec.Constraints {
@@ -1670,6 +1686,21 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if !found {
 				return &ApplyKeyNotFoundError{Table: c.Name(), Key: opt.Name.String()}
 			}
+
+			// Now, if this is a normal key being dropped, let's validate it does not leave any foreign key constraint uncovered
+			switch opt.Type {
+			case sqlparser.PrimaryKeyType, sqlparser.NormalKeyType:
+				for _, cs := range c.CreateTable.TableSpec.Constraints {
+					fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						continue
+					}
+					if !c.columnsCoveredByInOrderIndex(fk.Source) {
+						return &IndexNeededByForeignKeyError{Table: c.Name(), Key: opt.Name.String()}
+					}
+				}
+			}
+
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
 			keyName := opt.IndexDefinition.Info.Name.String()
@@ -1878,6 +1909,7 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 //   - edit or remove keys if referenced columns are dropped
 //   - drop check constraints for a single specific column if that column
 //     is the only referenced column in that check constraint.
+//   - add implicit keys for foreign key constraint, if needed
 func (c *CreateTableEntity) postApplyNormalize() error {
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize
@@ -1939,6 +1971,8 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	}
 	c.CreateTable.TableSpec.Constraints = keptConstraints
 
+	c.normalizeKeys()
+
 	return nil
 }
 
@@ -1969,6 +2003,44 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 	return colNames
 }
 
+// indexCoversColumnsInOrder checks if the given index covers the given columns in order and in prefix.
+// the index must either covers the exact list of columns or continue to cover additional columns beyond.
+// Used for validating indexes covering foreign keys.
+func indexCoversColumnsInOrder(index *sqlparser.IndexDefinition, columns sqlparser.Columns) bool {
+	if len(columns) == 0 {
+		return false
+	}
+	if len(index.Columns) < len(columns) {
+		// obviously the index doesn't cover the required columns
+		return false
+	}
+	for i, col := range columns {
+		// the index must cover same columns, in order, wih possibly more columns covered than requested.
+		indexCol := index.Columns[i]
+		if col.String() != indexCol.Column.String() {
+			return false
+		}
+	}
+	return true
+}
+
+// indexesCoveringForeignKeyColumns returns a list of indexes that cover a given list of coumns, in-oder and in prefix.
+// Used for validating indexes covering foreign keys.
+func (c *CreateTableEntity) indexesCoveringForeignKeyColumns(columns sqlparser.Columns) (indexes []*sqlparser.IndexDefinition) {
+	for _, index := range c.CreateTable.TableSpec.Indexes {
+		if indexCoversColumnsInOrder(index, columns) {
+			indexes = append(indexes, index)
+		}
+	}
+	return indexes
+}
+
+// columnsCoveredByInOrderIndex returns 'true' when there is at least one index that covers the given
+// list of columns in-order and in-prefix.
+func (c *CreateTableEntity) columnsCoveredByInOrderIndex(columns sqlparser.Columns) bool {
+	return len(c.indexesCoveringForeignKeyColumns(columns)) > 0
+}
+
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
@@ -1979,6 +2051,25 @@ func (c *CreateTableEntity) validate() error {
 			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
 		}
 		columnExists[colName] = true
+	}
+	// validate all columns used by foreign key constraints do in fact exist,
+	// and that there exists an index over those columns
+	for _, cs := range c.CreateTable.TableSpec.Constraints {
+		fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+		if !ok {
+			continue
+		}
+		if len(fk.Source) != len(fk.ReferenceDefinition.ReferencedColumns) {
+			return &MismatchingForeignKeyColumnCountError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(fk.Source), ReferencedTable: fk.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(fk.ReferenceDefinition.ReferencedColumns)}
+		}
+		for _, col := range fk.Source {
+			if !columnExists[col.Lowered()] {
+				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
+			}
+		}
+		if !c.columnsCoveredByInOrderIndex(fk.Source) {
+			return &MissingForeignKeyIndexError{Table: c.Name(), Constraint: cs.Name.String()}
+		}
 	}
 	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
@@ -2029,23 +2120,6 @@ func (c *CreateTableEntity) validate() error {
 				}
 			}
 		}
-	}
-	// validate all columns used by foreign key constraints do in fact exist,
-	// and that there exists an index over those columns
-	for _, cs := range c.CreateTable.TableSpec.Constraints {
-		check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
-		if !ok {
-			continue
-		}
-		if len(check.Source) != len(check.ReferenceDefinition.ReferencedColumns) {
-			return &MismatchingForeignKeyColumnCountError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(check.Source), ReferencedTable: check.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(check.ReferenceDefinition.ReferencedColumns)}
-		}
-		for _, col := range check.Source {
-			if !columnExists[col.Lowered()] {
-				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
-			}
-		}
-		// TODO(shlomi): find a valid index
 	}
 	// validate all columns referenced by constraint checks do in fact exist
 	for _, cs := range c.CreateTable.TableSpec.Constraints {

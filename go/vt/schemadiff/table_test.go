@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -588,8 +589,8 @@ func TestCreateTableDiff(t *testing.T) {
 		// foreign keys
 		{
 			name:  "drop foreign key",
-			from:  "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
-			to:    "create table t2 (id int primary key, i int)",
+			from:  "create table t1 (id int primary key, i int, key i_idex (i), constraint f foreign key (i) references parent(id))",
+			to:    "create table t2 (id int primary key, i int, key i_idex (i))",
 			diff:  "alter table t1 drop foreign key f",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f`",
 		},
@@ -597,8 +598,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "add foreign key",
 			from:  "create table t1 (id int primary key, i int)",
 			to:    "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
-			diff:  "alter table t1 add constraint f foreign key (i) references parent (id)",
-			cdiff: "ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			diff:  "alter table t1 add key i (i), add constraint f foreign key (i) references parent (id)",
+			cdiff: "ALTER TABLE `t1` ADD KEY `i` (`i`), ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
 		},
 		{
 			name: "identical foreign key",
@@ -1490,6 +1491,36 @@ func TestValidate(t *testing.T) {
 			alter: "ALTER TABLE `Machine` MODIFY COLUMN `id` bigint primary key",
 			to:    "CREATE TABLE `Machine` (id bigint primary key, `a` int, `B` int, PRIMARY KEY (`id`), CONSTRAINT `chk` CHECK (`B` >= `a`))",
 		},
+		{
+			name:  "add foreign key, implicitly add index",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add constraint f foreign key (i) references parent(id)",
+			to:    "create table t (id int primary key, i int, key i (i), constraint f foreign key (i) references parent(id))",
+		},
+		{
+			name:      "fail drop key leaving unindexed foreign key constraint",
+			from:      "create table t (id int primary key, i int, key i (i), constraint f foreign key (i) references parent(id))",
+			alter:     "alter table t drop key `i`",
+			expectErr: &IndexNeededByForeignKeyError{Table: "t", Key: "i"},
+		},
+		{
+			name:  "drop key with alternative key for foreign key constraint, 1",
+			from:  "create table t (id int primary key, i int, key i (i), key i2 (i, id), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i`",
+			to:    "create table t (id int primary key, i int, key i2 (i, id), constraint f foreign key (i) references parent(id))",
+		},
+		{
+			name:  "drop key with alternative key for foreign key constraint, 2",
+			from:  "create table t (id int primary key, i int, key i (i), key i2 (i, id), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i2`",
+			to:    "create table t (id int primary key, i int, key i (i), constraint f foreign key (i) references parent(id))",
+		},
+		{
+			name:  "drop key with alternative key for foreign key constraint, 3",
+			from:  "create table t (id int primary key, i int, key i (i), key i2 (i), constraint f foreign key (i) references parent(id))",
+			alter: "alter table t drop key `i`",
+			to:    "create table t (id int primary key, i int, key i2 (i), constraint f foreign key (i) references parent(id))",
+		},
 	}
 	hints := DiffHints{}
 	for _, ts := range tt {
@@ -1702,8 +1733,8 @@ func TestNormalize(t *testing.T) {
 		},
 		{
 			name: "generates a name for foreign key constraints",
-			from: "create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
-			to:   "CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`i` int,\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
+			from: "create table t1 (id int primary key, i int, key i_idx (i), foreign key (i) references parent(id))",
+			to:   "CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`i` int,\n\tKEY `i_idx` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
 			name: "uses KEY for indexes",
@@ -1740,6 +1771,11 @@ func TestNormalize(t *testing.T) {
 			from: "create table t (id int primary key, i1 int invisible)",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int INVISIBLE\n)",
 		},
+		{
+			name: "implicitly add foreign key indexes",
+			from: "create table t (id int primary key, i1 int, constraint f foreign key (i1) references parent(id))",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1` (`i1`),\n\tCONSTRAINT `f` FOREIGN KEY (`i1`) REFERENCES `parent` (`id`)\n)",
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
@@ -1751,6 +1787,109 @@ func TestNormalize(t *testing.T) {
 			from, err := NewCreateTableEntity(fromCreateTable)
 			require.NoError(t, err)
 			assert.Equal(t, ts.to, sqlparser.CanonicalString(from))
+		})
+	}
+}
+
+func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
+	sql := `
+		create table t (
+			id int,
+			a int,
+			b int,
+			c int,
+			d int,
+			e int,
+			z int,
+			primary key (id),
+			key ax (a),
+			key abx (a, b),
+			key bx (b),
+			key bax (b, a),
+			key abcdx (a, b, c, d),
+			key dex (d, e)
+		)
+	`
+	tt := []struct {
+		columns []string
+		indexes []string
+	}{
+		{},
+		{
+			columns: []string{"a"},
+			indexes: []string{"ax", "abx", "abcdx"},
+		},
+		{
+			columns: []string{"b"},
+			indexes: []string{"bx", "bax"},
+		},
+		{
+			columns: []string{"c"},
+		},
+		{
+			columns: []string{"d"},
+			indexes: []string{"dex"},
+		},
+		{
+			columns: []string{"e"},
+		},
+		{
+			columns: []string{"z"},
+		},
+		{
+			columns: []string{"a", "b"},
+			indexes: []string{"abx", "abcdx"},
+		},
+		{
+			columns: []string{"a", "b", "c"},
+			indexes: []string{"abcdx"},
+		},
+		{
+			columns: []string{"a", "b", "c", "d"},
+			indexes: []string{"abcdx"},
+		},
+		{
+			columns: []string{"a", "b", "c", "d", "e"},
+		},
+		{
+			columns: []string{"b", "a"},
+			indexes: []string{"bax"},
+		},
+		{
+			columns: []string{"d", "e"},
+			indexes: []string{"dex"},
+		},
+		{
+			columns: []string{"a", "e"},
+		},
+	}
+
+	stmt, err := sqlparser.ParseStrictDDL(sql)
+	require.NoError(t, err)
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	require.True(t, ok)
+	c, err := NewCreateTableEntity(createTable)
+	require.NoError(t, err)
+	tableColumns := map[string]sqlparser.IdentifierCI{}
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		tableColumns[col.Name.String()] = col.Name
+	}
+	for _, ts := range tt {
+		name := strings.Join(ts.columns, ",")
+		t.Run(name, func(t *testing.T) {
+			columns := sqlparser.Columns{}
+			for _, colName := range ts.columns {
+				col, ok := tableColumns[colName]
+				require.True(t, ok)
+				columns = append(columns, col)
+			}
+
+			indexes := c.indexesCoveringForeignKeyColumns(columns)
+			var indexesNames []string
+			for _, index := range indexes {
+				indexesNames = append(indexesNames, index.Info.Name.String())
+			}
+			assert.Equal(t, ts.indexes, indexesNames)
 		})
 	}
 }
