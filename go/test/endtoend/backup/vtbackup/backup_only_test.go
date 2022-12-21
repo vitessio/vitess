@@ -62,7 +62,7 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	_, err := getVTTabletVersion()
+	_, err := getVTExecVersion("vttablet")
 	require.NoError(t, err)
 	//if ver > 15 {
 	//_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
@@ -146,7 +146,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
-	// eventhough we change the value of compression it won't effect
+	// even though we change the value of compression it won't affect
 	// decompression since it gets its value from MANIFEST file, created
 	// as part of backup.
 	mysqlctl.CompressionEngineName = "lz4"
@@ -192,15 +192,21 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
+	ver, err := getVTExecVersion("vtbackup")
+	require.NoError(t, err)
 	if disableRedoLog {
-		extraArgs = append(extraArgs, "--disable-redo-log")
+		if ver > 15 {
+			extraArgs = append(extraArgs, "--disable-redo-log")
+		}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if !initialBackup && disableRedoLog {
-		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+		if ver > 15 {
+			go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
+		}
 	}
 
 	log.Infof("starting backup tablet %s", time.Now())
@@ -392,9 +398,9 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 }
 
 // insert should not work for any of the replicas and primary
-func getVTTabletVersion() (int, error) {
+func getVTExecVersion(binaryName string) (int, error) {
 	vtTabletVersion := 0
-	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	vtTabletVersion, err := cluster.GetMajorVersion(binaryName)
 	if err != nil {
 		return 0, err
 	}

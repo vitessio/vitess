@@ -251,8 +251,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again, they will automatically start restoring the last backup.
@@ -307,8 +309,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-current/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again and restoring the next backup.

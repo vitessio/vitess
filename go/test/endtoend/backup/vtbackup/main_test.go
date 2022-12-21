@@ -133,7 +133,7 @@ func TestMain(m *testing.M) {
 			}
 		}
 
-		ver, err := getVTTabletVersion()
+		ver, err := getVTExecVersion("vttablet")
 		if err != nil {
 			return 1, err
 		}
