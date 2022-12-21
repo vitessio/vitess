@@ -32,6 +32,12 @@ ARG CGO_ENABLED=0
 # Allows docker builds to set the BUILD_NUMBER
 ARG BUILD_NUMBER
 
+# Allows docker builds to set the BUILD_GIT_BRANCH
+ARG BUILD_GIT_BRANCH
+
+# Allows docker builds to set the BUILD_GIT_REV
+ARG BUILD_GIT_REV
+
 # Re-copy sources from working tree
 USER root
 COPY . /vt/src/vitess.io/vitess
