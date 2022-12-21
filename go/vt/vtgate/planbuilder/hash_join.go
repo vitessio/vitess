@@ -17,9 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -80,7 +81,7 @@ func (hj *hashJoin) Inputs() []logicalPlan {
 // Rewrite implements the logicalPlan interface
 func (hj *hashJoin) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "wrong number of children")
+		return vterrors.VT13001(fmt.Sprintf("wrong number of children in hashJoin rewrite: %d; should be exactly 2", len(inputs)))
 	}
 	hj.Left = inputs[0]
 	hj.Right = inputs[1]

@@ -293,7 +293,7 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	}
 	ks, ok := vc.vschema.Keyspaces[vc.keyspace]
 	if !ok {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", vc.keyspace)
+		return nil, vterrors.VT05003(vc.keyspace)
 	}
 	return ks.Keyspace, nil
 }
@@ -649,7 +649,7 @@ func (vc *vcursorImpl) SetTarget(target string) error {
 		return err
 	}
 	if _, ok := vc.vschema.Keyspaces[keyspace]; !ignoreKeyspace(keyspace) && !ok {
-		return vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "unknown database '%s'", keyspace)
+		return vterrors.VT05003(keyspace)
 	}
 
 	if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
@@ -735,7 +735,7 @@ func (vc *vcursorImpl) TargetDestination(qualifier string) (key.Destination, *vi
 	}
 	keyspace := vc.vschema.Keyspaces[keyspaceName]
 	if keyspace == nil {
-		return nil, nil, 0, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Unknown database '%s' in vschema", keyspaceName)
+		return nil, nil, 0, vterrors.VT05003(keyspaceName)
 	}
 	return vc.destination, keyspace.Keyspace, vc.tabletType, nil
 }
@@ -1095,4 +1095,8 @@ func (vc *vcursorImpl) GetVExplainLogs() []engine.ExecuteEntry {
 }
 func (vc *vcursorImpl) FindRoutedShard(keyspace, shard string) (keyspaceName string, err error) {
 	return vc.vschema.FindRoutedShard(keyspace, shard)
+}
+
+func (vc *vcursorImpl) IsViewsEnabled() bool {
+	return enableViews
 }

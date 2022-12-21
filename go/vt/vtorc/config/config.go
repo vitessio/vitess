@@ -64,7 +64,6 @@ var (
 	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
 	recoveryPeriodBlockDuration    = 30 * time.Second
 	preventCrossCellFailover       = false
-	lockShardTimeout               = 30 * time.Second
 	waitReplicasTimeout            = 30 * time.Second
 	topoInformationRefreshDuration = 15 * time.Second
 	recoveryPollDuration           = 1 * time.Second
@@ -82,7 +81,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&auditPurgeDuration, "audit-purge-duration", auditPurgeDuration, "Duration for which audit logs are held before being purged. Should be in multiples of days")
 	fs.DurationVar(&recoveryPeriodBlockDuration, "recovery-period-block-duration", recoveryPeriodBlockDuration, "Duration for which a new recovery is blocked on an instance after running a recovery")
 	fs.BoolVar(&preventCrossCellFailover, "prevent-cross-cell-failover", preventCrossCellFailover, "Prevent VTOrc from promoting a primary in a different cell than the current primary in case of a failover")
-	fs.DurationVar(&lockShardTimeout, "lock-shard-timeout", lockShardTimeout, "Duration for which a shard lock is held when running a recovery")
+	fs.Duration("lock-shard-timeout", 30*time.Second, "Duration for which a shard lock is held when running a recovery")
+	_ = fs.MarkDeprecated("lock-shard-timeout", "Please use lock-timeout instead.")
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
@@ -103,8 +103,7 @@ type Configuration struct {
 	AuditPurgeDays                        uint   // Days after which audit entries are purged from the database
 	RecoveryPeriodBlockSeconds            int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
 	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	LockShardTimeoutSeconds               int    // Timeout on context used to lock shard. Should be a small value because we should fail-fast
-	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockShardTimeoutSeconds since that is the total time we use for an ERS.
+	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
 	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
 	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
 }
@@ -133,7 +132,6 @@ func UpdateConfigValuesFromFlags() {
 	Config.AuditPurgeDays = uint(auditPurgeDuration / (time.Hour * 24))
 	Config.RecoveryPeriodBlockSeconds = int(recoveryPeriodBlockDuration / time.Second)
 	Config.PreventCrossDataCenterPrimaryFailover = preventCrossCellFailover
-	Config.LockShardTimeoutSeconds = int(lockShardTimeout / time.Second)
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
 	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
@@ -157,7 +155,6 @@ func newConfiguration() *Configuration {
 		AuditPurgeDays:                        7,
 		RecoveryPeriodBlockSeconds:            30,
 		PreventCrossDataCenterPrimaryFailover: false,
-		LockShardTimeoutSeconds:               30,
 		WaitReplicasTimeoutSeconds:            30,
 		TopoInformationRefreshSeconds:         15,
 		RecoveryPollSeconds:                   1,

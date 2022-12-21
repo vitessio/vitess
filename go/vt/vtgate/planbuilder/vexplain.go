@@ -18,6 +18,7 @@ package planbuilder
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -47,7 +48,7 @@ func buildExplainPlan(stmt sqlparser.Explain, reservedVars *sqlparser.ReservedVa
 			return buildOtherReadAndAdmin(sqlparser.String(explain), vschema)
 		}
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected explain type: %T", stmt)
+	return nil, vterrors.VT13001(fmt.Sprintf("unexpected explain type: %T", stmt))
 }
 
 func buildVExplainPlan(vexplainStmt *sqlparser.VExplainStmt, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema, enableOnlineDDL, enableDirectDDL bool) (*planResult, error) {
@@ -76,7 +77,7 @@ func explainTabPlan(explain *sqlparser.ExplainTab, vschema plancontext.VSchema) 
 		return nil, err
 	}
 	if keyspace == nil {
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "Cannot find keyspace for: %s", ks)
+		return nil, vterrors.VT14004(ks)
 	}
 
 	return newPlanResult(&engine.Send{
@@ -119,7 +120,7 @@ func buildVExplainLoggingPlan(explain *sqlparser.VExplainStmt, reservedVars *sql
 		if directives.IsSet(sqlparser.DirectiveVExplainRunDMLQueries) {
 			break
 		}
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "vexplain queries/all will actually run queries. `/*vt+ %s */` must be set to run DML queries in vtexplain. Example: `vexplain /*vt+ %s */ queries delete from t1`", sqlparser.DirectiveVExplainRunDMLQueries, sqlparser.DirectiveVExplainRunDMLQueries)
+		return nil, vterrors.VT09008()
 	}
 
 	return &planResult{primitive: &engine.VExplain{Input: input.primitive, Type: explain.Type}, tables: input.tables}, nil
