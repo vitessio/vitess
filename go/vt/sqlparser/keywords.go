@@ -253,7 +253,6 @@ var keywords = []keyword{
 	{"escape", ESCAPE},
 	{"escaped", ESCAPED},
 	{"event", EVENT},
-	{"exhaustive", EXHAUSTIVE},
 	{"exchange", EXCHANGE},
 	{"exclusive", EXCLUSIVE},
 	{"execute", EXECUTE},
