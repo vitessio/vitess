@@ -87,12 +87,26 @@ func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool
 	return isDbNameCol(col), isTableNameCol(col)
 }
 
+var schemaColumns = map[string]any{
+	"table_schema":            nil,
+	"constraint_schema":       nil,
+	"schema_name":             nil,
+	"routine_schema":          nil,
+	"specific_schema":         nil,
+	"event_schema":            nil,
+	"referenced_table_schema": nil,
+	"index_schema":            nil,
+	"trigger_schema":          nil,
+	"event_object_schema":     nil,
+}
+
 func isDbNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name") || col.Name.EqualString("routine_schema")
+	_, found := schemaColumns[col.Name.Lowered()]
+	return found
 }
 
 func isTableNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_name")
+	return col.Name.EqualString("table_name") || col.Name.EqualString("referenced_table_name")
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
