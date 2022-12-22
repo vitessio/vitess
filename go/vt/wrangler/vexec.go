@@ -374,7 +374,7 @@ type ReplicationStatusResult struct {
 	TargetTimeZone string
 	// OnDDL specifies the action to be taken when a DDL is encountered.
 	OnDDL string `json:"OnDDL,omitempty"`
-	// DeferSecondaryKeys specifies whether to defer secondary keys creation.
+	// DeferSecondaryKeys specifies whether to defer the creation of secondary keys.
 	DeferSecondaryKeys bool `json:"DeferSecondaryKeys,omitempty"`
 }
 

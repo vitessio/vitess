@@ -238,7 +238,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			return nil, err
 		}
 
-		deferSecondaryKeys, err := row["workflow_sub_type"].ToBool()
+		deferSecondaryKeys, err := row["defer_secondary_keys"].ToBool()
 		if err != nil {
 			return nil, err
 		}

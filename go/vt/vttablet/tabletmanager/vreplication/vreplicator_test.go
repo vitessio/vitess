@@ -234,7 +234,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
 			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Materialize),
-			wantErr:      "temporarily removing secondary keys is only supported for MoveTables, Migrate, and Reshard workflows",
+			wantErr:      "deferring secondary key creation is not supported for Materialize workflows",
 		},
 		{
 			name:         "1SK:OnlineDDL",
@@ -242,7 +242,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
 			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL),
-			wantErr:      "temporarily removing secondary keys is only supported for MoveTables, Migrate, and Reshard workflows",
+			wantErr:      "deferring secondary key creation is not supported for OnlineDDL workflows",
 		},
 		{
 			name:         "1SK",

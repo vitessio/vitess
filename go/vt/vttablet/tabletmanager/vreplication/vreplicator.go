@@ -567,12 +567,13 @@ func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos 
 	return pkColInfos
 }
 
-// stashSecondaryKeys temporarily DROPs all secondary keys from the table and
-// stashes an ALTER TABLE statement that can be used to recreate them after
-// the copy is complete.
+// stashSecondaryKeys temporarily DROPs all secondary keys from the table schema
+// and stashes an ALTER TABLE statement that will be used to recreate them at the
+// end of the copy phase.
 func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string) error {
 	if !vr.supportsDeferredSecondaryKeys() {
-		return fmt.Errorf("temporarily removing secondary keys is only supported for MoveTables, Migrate, and Reshard workflows")
+		return fmt.Errorf("deferring secondary key creation is not supported for %s workflows",
+			binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType])
 	}
 	var secondaryKeys []*sqlparser.IndexDefinition
 	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
@@ -632,9 +633,12 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		}
 		// Use a new DB client to avoid interfering with open transactions
 		// in the shared client as DDL includes an implied commit.
+		// We're also NOT using a DBA connection here because we want to
+		// be sure that the commit fails if the instance is somehow in
+		// READ-ONLY mode.
 		dbClient := vr.vre.dbClientFactoryFiltered()
 		if err := dbClient.Connect(); err != nil {
-			log.Errorf("unable to connect to the database when stashing secondary keys: %v", err)
+			log.Errorf("unable to connect to the database when saving secondary keys for deferred creation: %v", err)
 			return err
 		}
 		defer dbClient.Close()
@@ -651,7 +655,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 
 func (vr *vreplicator) getTableSecondaryKeys(ddl string) ([]*sqlparser.IndexDefinition, error) {
 	var secondaryKeys []*sqlparser.IndexDefinition
-	createTableDDL, err := sqlparser.ParseStrictDDL(ddl)
+	parsedDDL, err := sqlparser.ParseStrictDDL(ddl)
+	var foundCreateTable bool
 	if err != nil {
 		return secondaryKeys, err
 	}
@@ -659,6 +664,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ddl string) ([]*sqlparser.IndexDefi
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case sqlparser.DDLStatement:
+			foundCreateTable = true
 			if node.GetTableSpec() != nil {
 				for _, index := range node.GetTableSpec().Indexes {
 					if !index.Info.Primary {
@@ -668,17 +674,49 @@ func (vr *vreplicator) getTableSecondaryKeys(ddl string) ([]*sqlparser.IndexDefi
 			}
 		}
 		return true, nil
-	}, createTableDDL)
+	}, parsedDDL)
+
+	if !foundCreateTable {
+		return nil, fmt.Errorf("could not find expected CREATE TABLE statement in DDL: %s", ddl)
+	}
 
 	return secondaryKeys, err
 }
 
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
+	// Use a new DB client to avoid interfering with open transactions
+	// in the shared client as DDL includes an implied commit.
+	// We're also NOT using a DBA connection here because we want to be
+	// sure that the commit fails if the instance is somehow in READ-ONLY
+	// mode.
 	dbClient := vr.vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return fmt.Errorf("unable to connect to the database when executing post copy actions: %v", err)
 	}
 	defer dbClient.Close()
+
+	// This could take hours so we start a monitoring goroutine to
+	// regularly check to see if the context has been cancelled, which
+	// would indicate that the controller is stopping due to engine
+	// shutdown (tablet shutdown or transition).
+	// If we don't do this then we could e.g. cause a PRS to fail.
+	// A failed ALTER will be tried again when the copy phase starts
+	// up again on the (new) PRIMARY.
+	var action PostCopyAction
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			log.Infof("Copy of %q table stopped when performing post copy action: %+v", tableName, action)
+			// Cause the ExecuteFetch running the ALTER to fail with an error.
+			dbClient.Close()
+			return
+		case <-done:
+			// We're done, so no longer need to check for cancellation.
+			return
+		}
+	}()
 
 	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Uint32BindVariable(vr.id),
 		sqltypes.StringBindVariable(tableName))
@@ -693,20 +731,13 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		return nil
 	}
 	for _, row := range qr.Named().Rows {
-		var action PostCopyAction
+		action = PostCopyAction{}
 		acv, err := row["action"].ToBytes()
 		if err != nil {
 			return err
 		}
 		if err := json.Unmarshal(acv, &action); err != nil {
 			return err
-		}
-
-		select {
-		case <-ctx.Done():
-			log.Infof("Copy of %v stopped when performing copy post operation: %+v", tableName, action)
-			return nil
-		default:
 		}
 
 		switch action.Type {
