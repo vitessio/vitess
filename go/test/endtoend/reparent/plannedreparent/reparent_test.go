@@ -363,6 +363,33 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	utils.CheckDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
 }
 
+func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
+	//FIXME: need to rewrite this test: how?
+	t.Skip("since the new schema init approach will automatically heal mismatched schemas, the approach in this test doesn't work now")
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+
+	// Change the schema of the _vt.reparent_journal table, so that
+	// inserts into it will fail. That will make the primary fail.
+	_, err := tablets[0].VttabletProcess.QueryTabletWithDB(
+		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
+	require.NoError(t, err)
+
+	// Perform a planned reparent operation, the primary will fail the
+	// insert.  The replicas should then abort right away.
+	ver, err := getVTExecVersion("vttablet")
+	require.NoError(t, err)
+	out, err := utils.Prs(t, clusterInstance, tablets[1])
+	if ver <= 15 {
+		require.Error(t, err)
+		assert.Contains(t, out, "primary failed to PopulateReparentJournal")
+	} else {
+		require.NoError(t, err, "PRS should not fail.")
+	}
+}
+
 // TestCrossCellDurability tests 2 things -
 // 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
 // 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any manual intervention
@@ -531,4 +558,15 @@ func rowNumberFromPosition(pos string) int {
 	rowNumStr := pos[len(pos)-4:]
 	rowNum, _ := strconv.Atoi(rowNumStr)
 	return rowNum
+}
+
+// insert should not work for any of the replicas and primary
+func getVTExecVersion(binaryName string) (int, error) {
+	vtTabletVersion := 0
+	vtTabletVersion, err := cluster.GetMajorVersion(binaryName)
+	if err != nil {
+		return 0, err
+	}
+	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+	return vtTabletVersion, nil
 }
