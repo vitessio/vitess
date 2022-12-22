@@ -515,7 +515,7 @@ func TestCreateDBAndTable(t *testing.T) {
 			"create table if not exists _vt.resharding_journal.*",
 			"create table if not exists _vt.copy_state.*",
 			"alter table _vt.copy_state.*",
-			"create table if not exists _vt.copy_table_post.*",
+			"create table if not exists _vt.post_copy_action.*",
 		}
 		for _, ddl := range ddls {
 			dbClient.ExpectRequestRE(ddl, &sqltypes.Result{}, nil)

@@ -72,11 +72,11 @@ const (
 	StrictSQLMode    = "STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO"
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
 
-	sqlCreatePostCopyAction = `insert into _vt.copy_table_post(vrepl_id, table_name, action)
+	sqlCreatePostCopyAction = `insert into _vt.post_copy_action(vrepl_id, table_name, action)
 	values(%a, %a, convert(%a using utf8mb4))`
-	sqlGetPostCopyActions = `select id, action from _vt.copy_table_post where vrepl_id=%a and
+	sqlGetPostCopyActions = `select id, action from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a`
-	sqlDeletePostCopyAction = `delete from _vt.copy_table_post where vrepl_id=%a and
+	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
 )
 

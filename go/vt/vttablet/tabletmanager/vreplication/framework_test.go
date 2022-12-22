@@ -167,7 +167,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createCopyTablePost); err != nil {
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createPostCopyAction); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}

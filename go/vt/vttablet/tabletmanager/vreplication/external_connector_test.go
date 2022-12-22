@@ -67,7 +67,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"insert into tab1(id,val) values (1,'a'), (2,'b')",
 		"/insert into _vt.copy_state",
 		"commit",
-		"/delete cs, ctp from _vt.copy_state as cs left join _vt.copy_table_post as ctp on cs.vrepl_id=ctp.vrepl_id and cs.table_name=ctp.table_name",
+		"/delete cs, ctp from _vt.copy_state as cs left join _vt.post_copy_action as ctp on cs.vrepl_id=ctp.vrepl_id and cs.table_name=ctp.table_name",
 		"/update _vt.vreplication set state='Running'",
 	}, "")
 	execStatements(t, []string{"insert into tab1 values(3, 'c')"})
@@ -99,7 +99,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"insert into tab2(id,val) values (1,'a'), (2,'b')",
 		"/insert into _vt.copy_state",
 		"commit",
-		"/delete cs, ctp from _vt.copy_state as cs left join _vt.copy_table_post as ctp on cs.vrepl_id=ctp.vrepl_id and cs.table_name=ctp.table_name",
+		"/delete cs, ctp from _vt.copy_state as cs left join _vt.post_copy_action as ctp on cs.vrepl_id=ctp.vrepl_id and cs.table_name=ctp.table_name",
 		"/update _vt.vreplication set state='Running'",
 	}, "")
 	cancel2()
@@ -124,7 +124,7 @@ func TestExternalConnectorCopy(t *testing.T) {
 		"insert into tab3(id,val) values (1,'a'), (2,'b')",
 		"/insert into _vt.copy_state",
 		"commit",
-		"/delete cs, ctp from _vt.copy_state as cs left join _vt.copy_table_post as ctp on cs.vrepl_id=ctp.vrepl_id and cs.table_name=ctp.table_name",
+		"/delete cs, ctp from _vt.copy_state as cs left join _vt.post_copy_action as ctp on cs.vrepl_id=ctp.vrepl_id and cs.table_name=ctp.table_name",
 		"/update _vt.vreplication set state='Running'",
 	}, "")
 	cancel3()

@@ -49,7 +49,7 @@ const (
 	reshardingJournalTableName = "_vt.resharding_journal"
 	vreplicationTableName      = "_vt.vreplication"
 	copyStateTableName         = "_vt.copy_state"
-	copyTablePostTableName     = "_vt.copy_table_post"
+	postCopyActionTableName    = "_vt.post_copy_action"
 
 	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
   id bigint,
@@ -69,7 +69,7 @@ const (
   drop primary key, add primary key(id),
   add key (vrepl_id, table_name)`
 
-	createCopyTablePost = `create table if not exists _vt.copy_table_post(
+	createPostCopyAction = `create table if not exists _vt.post_copy_action(
   id bigint not null auto_increment,
   vrepl_id int,
   table_name varbinary(128),
@@ -94,7 +94,7 @@ func init() {
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
 	allddls = append(allddls, alterCopyState)
-	allddls = append(allddls, createCopyTablePost)
+	allddls = append(allddls, createPostCopyAction)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)

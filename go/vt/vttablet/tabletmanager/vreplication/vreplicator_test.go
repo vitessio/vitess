@@ -201,7 +201,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 	defer dbClient.Close()
 	dbName := dbClient.DBName()
 	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
-	getActionsSQLf := "select action from _vt.copy_table_post where vrepl_id=%d and table_name='%s'"
+	getActionsSQLf := "select action from _vt.post_copy_action where vrepl_id=%d and table_name='%s'"
 	getCurrentDDL := func(tableName string) string {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
 		sd, err := env.Mysqld.GetSchema(ctx, dbName, req)
@@ -306,7 +306,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			defer func() {
 				_, err = dbClient.ExecuteFetch(fmt.Sprintf("drop table %s.%s", dbName, tcase.tableName), 1)
 				require.NoError(t, err)
-				_, err = dbClient.ExecuteFetch("delete from _vt.copy_table_post", 1)
+				_, err = dbClient.ExecuteFetch("delete from _vt.post_copy_action", 1)
 				require.NoError(t, err)
 			}()
 
