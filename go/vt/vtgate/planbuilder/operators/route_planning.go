@@ -269,7 +269,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source, err = plan.Source.AddPredicate(ctx, qg.NoDeps)
+			plan, err = plan.AddPredicate(ctx, qg.NoDeps)
 			if err != nil {
 				return nil, err
 			}
@@ -279,22 +279,21 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 	return plans, nil
 }
 
-func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (*Route, error) {
+func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
-	var src ops.Operator = &Table{
-		QTable: table,
-		VTable: &vindexes.Table{
-			Name:     table.Table.Name,
-			Keyspace: ks,
-		},
-	}
 	r := &Route{
 		RouteOpCode: engine.DBA,
-		Source:      src,
-		Keyspace:    ks,
+		Source: &Table{
+			QTable: table,
+			VTable: &vindexes.Table{
+				Name:     table.Table.Name,
+				Keyspace: ks,
+			},
+		},
+		Keyspace: ks,
 	}
 	for _, pred := range table.Predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, ctx.ReservedVars)
