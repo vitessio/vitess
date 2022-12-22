@@ -1337,6 +1337,15 @@ func (node *ExplainStmt) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *VExplainStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("vexplain ")
+	node.Comments.formatFast(buf)
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte(' ')
+	node.Statement.formatFast(buf)
+}
+
+// formatFast formats the node.
 func (node *ExplainTab) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("explain ")
 	node.Table.formatFast(buf)

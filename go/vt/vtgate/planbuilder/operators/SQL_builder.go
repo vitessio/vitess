@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -74,10 +73,7 @@ func (qb *queryBuilder) addTableExpr(
 		Hints:      hints,
 		Columns:    columnAliases,
 	}
-	err := qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
-	if err != nil {
-		log.Warningf("error in replacing table expression in semtable: %v", err)
-	}
+	qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
 	sel.From = append(sel.From, elems)
 	qb.sel = sel
 	qb.tableNames = append(qb.tableNames, tableName)

@@ -27,6 +27,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -143,6 +144,8 @@ type Config struct {
 	ExternalTopoGlobalServerAddress string
 
 	ExternalTopoGlobalRoot string
+
+	VtgateTabletRefreshInterval time.Duration
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
