@@ -1600,6 +1600,31 @@ func TestNormalize(t *testing.T) {
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
 		},
 		{
+			name: "removes float size with correct type",
+			from: "create table t (id int primary key, f float(24) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` float\n)",
+		},
+		{
+			name: "removes float size with correct type",
+			from: "create table t (id int primary key, f float(25) default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+		},
+		{
+			name: "normalizes real type to double",
+			from: "create table t (id int primary key, f real default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+		},
+		{
+			name: "normalizes float4 type to float",
+			from: "create table t (id int primary key, f float4 default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` float\n)",
+		},
+		{
+			name: "normalizes float8 type to double",
+			from: "create table t (id int primary key, f float8 default null)",
+			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+		},
+		{
 			name: "removes matching charset",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4) charset utf8mb4",
 			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4",
