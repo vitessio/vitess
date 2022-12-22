@@ -2215,20 +2215,14 @@ double_length_opt:
   }
 
 float_length_opt:
+double_length_opt
   {
-    $$ = LengthScaleOption{}
+    $$ = $1
   }
 | '(' INTEGRAL ')'
   {
     $$ = LengthScaleOption{
         Length: NewIntLiteral($2),
-    }
-  }
-| '(' INTEGRAL ',' INTEGRAL ')'
-  {
-    $$ = LengthScaleOption{
-        Length: NewIntLiteral($2),
-        Scale: NewIntLiteral($4),
     }
   }
 
