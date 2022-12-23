@@ -731,7 +731,7 @@ func createRoute(
 	solves semantics.TableSet,
 ) (ops.Operator, error) {
 	if queryTable.IsInfSchema {
-		return createInfSchemaRoute(ctx, queryTable)
+		return createInfSchemaPhysOp(ctx, queryTable)
 	}
 	return findVSchemaTableAndCreateRoute(ctx, queryTable, queryTable.Table, solves, true /*planAlternates*/)
 }

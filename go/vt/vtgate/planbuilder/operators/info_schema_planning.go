@@ -31,6 +31,27 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+func createInfSchemaPhysOp(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
+	ks, err := ctx.VSchema.AnyKeyspace()
+	if err != nil {
+		return nil, err
+	}
+	schemaNameExprs, tableNameExprs, err := findApplicablePredicates(ctx, table.Predicates)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(schemaNameExprs) > 0 {
+		return sendToSingleKS(table, ks, tableNameExprs, schemaNameExprs)
+	}
+
+	nameFor := schemaColNameFor(table.Table.Name.String())
+	if nameFor == "" {
+		return sendToArbitraryKeyspace(ctx, table)
+	}
+	return createInfSchemaUnion(ctx, table, nameFor, schemaNameExprs, tableNameExprs)
+}
+
 func (r *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, reservedVars *sqlparser.ReservedVars) error {
 	for _, pred := range predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
@@ -104,17 +125,15 @@ func isTableOrSchemaRouteable(cmp *sqlparser.ComparisonExpr) (
 	return false, nil
 }
 
-func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
-	ks, err := ctx.VSchema.AnyKeyspace()
-	if err != nil {
-		return nil, err
-	}
-	var schemaNameExprs []evalengine.Expr
-	var tableNameExprs map[string]evalengine.Expr
-	for _, pred := range table.Predicates {
+func findApplicablePredicates(
+	ctx *plancontext.PlanningContext,
+	predicates []sqlparser.Expr,
+) (schemaNameExprs []evalengine.Expr, tableNameExprs map[string]evalengine.Expr, err error) {
+	tableNameExprs = map[string]evalengine.Expr{}
+	for _, pred := range predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, ctx.ReservedVars)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		if out == nil {
 			// we didn't find a predicate to use for routing, continue to look for next predicate
@@ -124,33 +143,27 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (
 		if isTableSchema {
 			schemaNameExprs = append(schemaNameExprs, out)
 		} else {
-			if tableNameExprs == nil {
-				tableNameExprs = map[string]evalengine.Expr{}
-			}
 			tableNameExprs[bvName] = out
 		}
 	}
+	return
+}
 
-	if len(schemaNameExprs) > 0 {
-		return sendToSingleKS(table, ks, tableNameExprs, schemaNameExprs)
-	}
-
-	/*
-			We don't have enough info to send the query to a single keyspace, so we have to create a UNION.
-			We're basically changing a query like this:
-			Original: SELECT TABLE_NAME from information_schema.tables
-			Plan:
-			vtgate-union:
-		 		KS0: SELECT TABLE_NAME from information_schema.tables
-			    KS1: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
-				KS2: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
-	*/
-
-	nameFor := schemaColNameFor(table.Table.Name.String())
-	if nameFor == "" {
-		return sendToArbitraryKeyspace(ctx, table)
-	}
-
+func createInfSchemaUnion(
+	ctx *plancontext.PlanningContext,
+	table *QueryTable,
+	nameFor string,
+	schemaNameExprs []evalengine.Expr,
+	tableNameExprs map[string]evalengine.Expr,
+) (ops.Operator, error) {
+	// We don't have enough info to send the query to a single keyspace, so we have to create a UNION.
+	// We're basically changing a query like this:
+	// Original: SELECT TABLE_NAME from information_schema.tables
+	// Plan:
+	// vtgate-union:
+	// 	 KS0: SELECT TABLE_NAME from information_schema.tables
+	//   KS1: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
+	// 	 KS2: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
 	keyspaces, err := ctx.VSchema.AllKeyspace()
 	if err != nil {
 		return nil, err
