@@ -160,8 +160,7 @@ func deployStatements(db *sql.DB, queries []string) error {
 func initVTOrcDB(db *sql.DB) error {
 	log.Info("Initializing vtorc")
 	log.Info("Migrating database schema")
-	_ = deployStatements(db, generateSQLBase)
-	_ = deployStatements(db, generateSQLPatches)
+	_ = deployStatements(db, vtorcBackend)
 	_ = registerVTOrcDeployment(db)
 
 	if IsSQLite() {
