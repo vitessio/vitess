@@ -444,7 +444,7 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 		allSelects := sqlparser.GetAllSelects(node.Select)
 		for _, sel := range allSelects {
 			if offset >= len(sel.SelectExprs) {
-				return 0, fmt.Errorf("ajabaja")
+				return 0, vterrors.VT13001("no such expression found")
 			}
 			expr, err := getWeightStringForSelectExpr(sel.SelectExprs[offset])
 			if err != nil {
