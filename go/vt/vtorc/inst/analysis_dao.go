@@ -98,10 +98,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			)
 		) AS is_stale_binlog_coordinates,
 		MIN(
-			IFNULL(
-				cluster_domain_name.domain_name,
-				primary_instance.cluster_name
-			)
+			primary_instance.cluster_name
 		) AS cluster_domain,
 		MIN(
 			primary_instance.last_checked <= primary_instance.last_seen
@@ -331,9 +328,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			replica_instance.hostname = replica_downtime.hostname
 			AND replica_instance.port = replica_downtime.port
 			AND replica_downtime.downtime_active = 1
-		)
-		LEFT JOIN cluster_domain_name ON (
-			cluster_domain_name.cluster_name = primary_instance.cluster_name
 		)
 	WHERE
 		database_instance_maintenance.database_instance_maintenance_id IS NULL

@@ -395,7 +395,6 @@ func ContinuousDiscovery() {
 					go inst.ExpireMaintenance()
 					go inst.ExpireCandidateInstances()
 					go inst.ExpireHostnameUnresolve()
-					go inst.ExpireClusterDomainName()
 					go inst.ExpireAudit()
 					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()

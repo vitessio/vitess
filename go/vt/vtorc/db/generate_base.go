@@ -459,19 +459,6 @@ CREATE INDEX hostname_idx_hostname_unresolve_history ON hostname_unresolve_histo
 CREATE INDEX last_registered_idx_hostname_unresolve_history ON hostname_unresolve_history (last_registered)
 	`,
 	`
-DROP TABLE IF EXISTS cluster_domain_name
-`,
-	`
-CREATE TABLE cluster_domain_name (
-	cluster_name varchar(128) NOT NULL,
-	domain_name varchar(128) NOT NULL,
-	last_registered timestamp not null default (''),
-	PRIMARY KEY (cluster_name)
-)`,
-	`
-CREATE INDEX domain_name_idx_cluster_domain_name ON cluster_domain_name (domain_name)
-	`,
-	`
 DROP TABLE IF EXISTS primary_position_equivalence
 `,
 	`
@@ -842,9 +829,6 @@ CREATE INDEX cluster_name_in_active_idx_topology_recovery on topology_recovery (
 	`,
 	`
 CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recovery)
-	`,
-	`
-CREATE INDEX last_registered_idx_cluster_domain_name on cluster_domain_name (last_registered)
 	`,
 	`
 CREATE INDEX acknowledged_idx_topology_recovery on topology_recovery (acknowledged, acknowledged_at)
