@@ -44,7 +44,57 @@ CREATE TABLE database_instance (
 	exec_source_log_pos bigint NOT NULL,
 	replication_lag_seconds bigint DEFAULT NULL,
 	replica_lag_seconds bigint DEFAULT NULL,
-	cluster_name varchar(128) NOT NULL, read_only TINYint not null default 0, last_sql_error TEXT not null default '', last_io_error TEXT not null default '', oracle_gtid TINYint not null default 0, mariadb_gtid TINYint not null default 0, relay_log_file varchar(128) not null default '', relay_log_pos bigint not null default 0, pseudo_gtid TINYint not null default 0, replication_depth TINYint not null default 0, has_replication_filters TINYint not null default 0, data_center varchar(32) not null default '', physical_environment varchar(32) not null default '', is_co_primary TINYint not null default 0, sql_delay int not null default 0, binlog_server TINYint not null default 0, supports_oracle_gtid TINYint not null default 0, executed_gtid_set text not null default '', server_uuid varchar(64) not null default '', last_attempted_check TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00', gtid_purged text not null default '', has_replication_credentials TINYint not null default 0, allow_tls TINYint not null default 0, semi_sync_enforced TINYint not null default 0, instance_alias varchar(128) not null default '', version_comment varchar(128) NOT NULL DEFAULT '', major_version varchar(16) not null default '', binlog_row_image varchar(16) not null default '', last_discovery_latency bigint not null default 0, semi_sync_primary_enabled TINYint not null default 0, semi_sync_replica_enabled TINYint not null default 0, gtid_mode varchar(32) not null default '', last_check_partial_success tinyint not null default 0, source_uuid varchar(64) not null default '', gtid_errant text not null default '', ancestry_uuid text not null default '', replication_sql_thread_state tinyint signed not null default 0, replication_io_thread_state tinyint signed not null default 0, region varchar(32) not null default '', semi_sync_primary_timeout int NOT NULL DEFAULT 0, semi_sync_primary_wait_for_replica_count int NOT NULL DEFAULT 0, semi_sync_primary_status TINYint NOT NULL DEFAULT 0, semi_sync_replica_status TINYint NOT NULL DEFAULT 0, semi_sync_primary_clients int NOT NULL DEFAULT 0, replication_group_name VARCHAR(64) NOT NULL DEFAULT '', replication_group_is_single_primary_mode TINYint NOT NULL DEFAULT 1, replication_group_member_state VARCHAR(16) NOT NULL DEFAULT '', replication_group_member_role VARCHAR(16) NOT NULL DEFAULT '', replication_group_members text not null default '', replication_group_primary_host varchar(128) NOT NULL DEFAULT '', replication_group_primary_port smallint NOT NULL DEFAULT 0,
+	cluster_name varchar(128) NOT NULL,
+	read_only TINYint not null default 0,
+	last_sql_error TEXT not null default '',
+	last_io_error TEXT not null default '',
+	oracle_gtid TINYint not null default 0,
+	mariadb_gtid TINYint not null default 0,
+	relay_log_file varchar(128) not null default '',
+	relay_log_pos bigint not null default 0,
+	pseudo_gtid TINYint not null default 0,
+	replication_depth TINYint not null default 0,
+	has_replication_filters TINYint not null default 0,
+	data_center varchar(32) not null default '',
+	physical_environment varchar(32) not null default '',
+	is_co_primary TINYint not null default 0,
+	sql_delay int not null default 0,
+	binlog_server TINYint not null default 0,
+	supports_oracle_gtid TINYint not null default 0,
+	executed_gtid_set text not null default '',
+	server_uuid varchar(64) not null default '',
+	last_attempted_check TIMESTAMP NOT NULL DEFAULT '1971-01-01 00:00:00',
+	gtid_purged text not null default '',
+	has_replication_credentials TINYint not null default 0,
+	allow_tls TINYint not null default 0,
+	semi_sync_enforced TINYint not null default 0,
+	instance_alias varchar(128) not null default '',
+	version_comment varchar(128) NOT NULL DEFAULT '',
+	major_version varchar(16) not null default '',
+	binlog_row_image varchar(16) not null default '',
+	last_discovery_latency bigint not null default 0,
+	semi_sync_primary_enabled TINYint not null default 0,
+	semi_sync_replica_enabled TINYint not null default 0,
+	gtid_mode varchar(32) not null default '',
+	last_check_partial_success tinyint not null default 0,
+	source_uuid varchar(64) not null default '',
+	gtid_errant text not null default '',
+	ancestry_uuid text not null default '',
+	replication_sql_thread_state tinyint signed not null default 0,
+	replication_io_thread_state tinyint signed not null default 0,
+	region varchar(32) not null default '',
+	semi_sync_primary_timeout int NOT NULL DEFAULT 0,
+	semi_sync_primary_wait_for_replica_count int NOT NULL DEFAULT 0,
+	semi_sync_primary_status TINYint NOT NULL DEFAULT 0,
+	semi_sync_replica_status TINYint NOT NULL DEFAULT 0,
+	semi_sync_primary_clients int NOT NULL DEFAULT 0,
+	replication_group_name VARCHAR(64) NOT NULL DEFAULT '',
+	replication_group_is_single_primary_mode TINYint NOT NULL DEFAULT 1,
+	replication_group_member_state VARCHAR(16) NOT NULL DEFAULT '',
+	replication_group_member_role VARCHAR(16) NOT NULL DEFAULT '',
+	replication_group_members text not null default '',
+	replication_group_primary_host varchar(128) NOT NULL DEFAULT '',
+	replication_group_primary_port smallint NOT NULL DEFAULT 0,
 	PRIMARY KEY (hostname,port)
 )`,
 	`
@@ -68,7 +118,10 @@ CREATE TABLE database_instance_maintenance (
 	begin_timestamp timestamp NULL DEFAULT NULL,
 	end_timestamp timestamp NULL DEFAULT NULL,
 	owner varchar(128) NOT NULL,
-	reason text NOT NULL, processing_node_hostname varchar(128) not null default '', processing_node_token varchar(128) not null default '', explicitly_bounded TINYint not null default 0,
+	reason text NOT NULL,
+	processing_node_hostname varchar(128) not null default '',
+	processing_node_token varchar(128) not null default '',
+	explicitly_bounded TINYint not null default 0,
 	PRIMARY KEY (database_instance_maintenance_id)
 )`,
 	`
@@ -105,7 +158,8 @@ CREATE TABLE audit (
 	audit_type varchar(128) NOT NULL,
 	hostname varchar(128) NOT NULL DEFAULT '',
 	port smallint NOT NULL,
-	message text NOT NULL, cluster_name varchar(128) NOT NULL DEFAULT '',
+	message text NOT NULL,
+	cluster_name varchar(128) NOT NULL DEFAULT '',
 	PRIMARY KEY (audit_id)
 )`,
 	`
@@ -230,7 +284,8 @@ CREATE TABLE active_node (
 	anchor tinyint NOT NULL,
 	hostname varchar(128) NOT NULL,
 	token varchar(128) NOT NULL,
-	last_seen_active timestamp not null default (''), first_seen_active timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
+	last_seen_active timestamp not null default (''),
+	first_seen_active timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
 	PRIMARY KEY (anchor)
 )`,
 	`
@@ -240,7 +295,13 @@ DROP TABLE IF EXISTS node_health
 CREATE TABLE node_health (
 	hostname varchar(128) NOT NULL,
 	token varchar(128) NOT NULL,
-	last_seen_active timestamp not null default (''), extra_info varchar(128) not null default '', command varchar(128) not null default '', app_version varchar(64) NOT NULL DEFAULT "", first_seen_active timestamp NOT NULL DEFAULT '1971-01-01 00:00:00', db_backend varchar(255) NOT NULL DEFAULT "", incrementing_indicator bigint not null default 0,
+	last_seen_active timestamp not null default (''),
+	extra_info varchar(128) not null default '',
+	command varchar(128) not null default '',
+	app_version varchar(64) NOT NULL DEFAULT "",
+	first_seen_active timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
+	db_backend varchar(255) NOT NULL DEFAULT "",
+	incrementing_indicator bigint not null default 0,
 	PRIMARY KEY (hostname, token)
 )`,
 	`
@@ -258,7 +319,21 @@ CREATE TABLE topology_recovery (
 	processing_node_hostname varchar(128) NOT NULL,
 	processcing_node_token varchar(128) NOT NULL,
 	successor_hostname varchar(128) DEFAULT NULL,
-	successor_port smallint DEFAULT NULL, analysis              varchar(128) not null default '', cluster_name          varchar(128) not null default '', count_affected_replicas int not null default 0, is_successful TINYint NOT NULL DEFAULT 0, acknowledged TINYint NOT NULL DEFAULT 0, acknowledged_by varchar(128) not null default '', acknowledge_comment text not null default '', participating_instances text not null default '', lost_replicas text not null default '', all_errors text not null default '', acknowledged_at TIMESTAMP NULL, last_detection_id bigint not null default 0, successor_alias varchar(128) DEFAULT NULL, uid varchar(128) not null default '',
+	successor_port smallint DEFAULT NULL,
+	analysis varchar(128) not null default '',
+	cluster_name varchar(128) not null default '',
+	count_affected_replicas int not null default 0,
+	is_successful TINYint NOT NULL DEFAULT 0,
+	acknowledged TINYint NOT NULL DEFAULT 0,
+	acknowledged_by varchar(128) not null default '',
+	acknowledge_comment text not null default '',
+	participating_instances text not null default '',
+	lost_replicas text not null default '',
+	all_errors text not null default '',
+	acknowledged_at TIMESTAMP NULL,
+	last_detection_id bigint not null default 0,
+	successor_alias varchar(128) DEFAULT NULL,
+	uid varchar(128) not null default '',
 	PRIMARY KEY (recovery_id)
 )`,
 	`
@@ -276,7 +351,8 @@ DROP TABLE IF EXISTS hostname_unresolve
 	`
 CREATE TABLE hostname_unresolve (
 	hostname varchar(128) NOT NULL,
-	unresolved_hostname varchar(128) NOT NULL, last_registered timestamp not null default (''),
+	unresolved_hostname varchar(128) NOT NULL,
+	last_registered timestamp not null default (''),
 	PRIMARY KEY (hostname)
 )`,
 	`
@@ -292,7 +368,8 @@ CREATE TABLE database_instance_topology_history (
 	port smallint NOT NULL,
 	source_host varchar(128) NOT NULL,
 	source_port smallint NOT NULL,
-	cluster_name tinytext NOT NULL, version varchar(128) not null default '',
+	cluster_name tinytext NOT NULL,
+	version varchar(128) not null default '',
 	PRIMARY KEY (snapshot_unix_timestamp, hostname, port)
 )`,
 	`
@@ -305,7 +382,9 @@ DROP TABLE IF EXISTS candidate_database_instance
 CREATE TABLE candidate_database_instance (
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
-	last_suggested timestamp not null default (''), priority TINYINT SIGNED NOT NULL DEFAULT 1, promotion_rule text check(promotion_rule in ('must', 'prefer', 'neutral', 'prefer_not', 'must_not')) NOT NULL DEFAULT 'neutral',
+	last_suggested timestamp not null default (''),
+	priority TINYINT SIGNED NOT NULL DEFAULT 1,
+	promotion_rule text check(promotion_rule in ('must', 'prefer', 'neutral', 'prefer_not', 'must_not')) NOT NULL DEFAULT 'neutral',
 	PRIMARY KEY (hostname, port)
 )`,
 	`
@@ -340,7 +419,8 @@ CREATE TABLE topology_failure_detection (
 	processcing_node_token varchar(128) NOT NULL,
 	analysis varchar(128) NOT NULL,
 	cluster_name varchar(128) NOT NULL,
-	count_affected_replicas int NOT NULL, is_actionable tinyint not null default 0,
+	count_affected_replicas int NOT NULL,
+	is_actionable tinyint not null default 0,
 	PRIMARY KEY (detection_id)
 )`,
 	`
@@ -384,7 +464,8 @@ DROP TABLE IF EXISTS cluster_domain_name
 	`
 CREATE TABLE cluster_domain_name (
 	cluster_name varchar(128) NOT NULL,
-	domain_name varchar(128) NOT NULL, last_registered timestamp not null default (''),
+	domain_name varchar(128) NOT NULL,
+	last_registered timestamp not null default (''),
 	PRIMARY KEY (cluster_name)
 )`,
 	`
@@ -494,7 +575,9 @@ CREATE TABLE node_health_history (
 	hostname varchar(128) NOT NULL,
 	token varchar(128) NOT NULL,
 	first_seen_active timestamp NOT NULL,
-	extra_info varchar(128) NOT NULL, command varchar(128) not null default '', app_version varchar(64) NOT NULL DEFAULT "",
+	extra_info varchar(128) NOT NULL,
+	command varchar(128) not null default '',
+	app_version varchar(64) NOT NULL DEFAULT "",
 	PRIMARY KEY (history_id)
 )`,
 	`
@@ -515,7 +598,8 @@ CREATE TABLE database_instance_coordinates_history (
 	binary_log_file varchar(128) NOT NULL,
 	binary_log_pos bigint NOT NULL,
 	relay_log_file varchar(128) NOT NULL,
-	relay_log_pos bigint NOT NULL, last_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
+	relay_log_pos bigint NOT NULL,
+	last_seen timestamp NOT NULL DEFAULT '1971-01-01 00:00:00',
 	PRIMARY KEY (history_id)
 )`,
 	`
@@ -631,7 +715,8 @@ DROP TABLE IF EXISTS raft_snapshot
 CREATE TABLE raft_snapshot (
 	snapshot_id integer,
 	snapshot_name varchar(128) NOT NULL,
-	snapshot_meta varchar(4096) NOT NULL, created_at timestamp not null default (''),
+	snapshot_meta varchar(4096) NOT NULL,
+	created_at timestamp not null default (''),
 	PRIMARY KEY (snapshot_id)
 )`,
 	`
