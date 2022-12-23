@@ -42,13 +42,18 @@ func createInfSchemaPhysOp(ctx *plancontext.PlanningContext, table *QueryTable) 
 	}
 
 	if len(schemaNameExprs) > 0 {
+		// we have at least one predicate that we can use to send the query to the correct KS
 		return sendToSingleKS(table, ks, tableNameExprs, schemaNameExprs)
 	}
 
 	nameFor := schemaColNameFor(table.Table.Name.String())
 	if nameFor == "" {
+		// This table doesn't have a column that contains the schema/keyspace name.
+		// we can send the query to any keyspace, and it will hopefully return something useful
 		return sendToArbitraryKeyspace(ctx, table)
 	}
+
+	// we have to concatenate results from all keyspaces
 	return createInfSchemaUnion(ctx, table, nameFor, schemaNameExprs, tableNameExprs)
 }
 
