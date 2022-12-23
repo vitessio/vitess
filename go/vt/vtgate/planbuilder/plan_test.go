@@ -25,6 +25,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"sort"
 	"strings"
 	"testing"
 
@@ -589,7 +590,14 @@ func (vw *vschemaWrapper) ForeignKeyMode() string {
 
 func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
-		return nil, vterrors.VT13001("keyspace not available")
+		var ks []*vindexes.Keyspace
+		for _, schema := range vw.v.Keyspaces {
+			ks = append(ks, schema.Keyspace)
+		}
+		sort.Slice(ks, func(i, j int) bool {
+			return ks[i].Name < ks[j].Name
+		})
+		return ks, nil
 	}
 	return []*vindexes.Keyspace{vw.keyspace}, nil
 }

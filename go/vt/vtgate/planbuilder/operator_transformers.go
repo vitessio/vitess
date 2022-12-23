@@ -443,6 +443,9 @@ func pushWeightStringForDistinct(ctx *plancontext.PlanningContext, plan logicalP
 	case *routeGen4:
 		allSelects := sqlparser.GetAllSelects(node.Select)
 		for _, sel := range allSelects {
+			if offset >= len(sel.SelectExprs) {
+				return 0, fmt.Errorf("ajabaja")
+			}
 			expr, err := getWeightStringForSelectExpr(sel.SelectExprs[offset])
 			if err != nil {
 				return 0, err

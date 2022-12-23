@@ -4386,7 +4386,7 @@
   {
     "comment": "SelectDBA with uncorrelated subqueries",
     "query": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
-    "plan": {
+    "v3-plan": {
       "QueryType": "SELECT",
       "Original": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
       "Instructions": {
@@ -4399,6 +4399,140 @@
         "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
         "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.column_name from information_schema.`columns` as c)",
         "Table": "information_schema.`tables`"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
+      "Instructions": {
+        "OperatorType": "Subquery",
+        "Variant": "PulloutIn",
+        "PulloutVars": [
+          "__sq_has_values1",
+          "__sq1"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
+                "Query": "select c.column_name from information_schema.`columns` as c",
+                "Table": "information_schema.`columns`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main_2",
+                  "Sharded": false
+                },
+                "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
+                "Query": "select c.column_name from information_schema.`columns` as c where TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`columns`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "second_user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
+                "Query": "select c.column_name from information_schema.`columns` as c where TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`columns`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
+                "Query": "select c.column_name from information_schema.`columns` as c where TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`columns`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "zlookup_unique",
+                  "Sharded": true
+                },
+                "FieldQuery": "select c.column_name from information_schema.`columns` as c where 1 != 1",
+                "Query": "select c.column_name from information_schema.`columns` as c where TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`columns`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Concatenate",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+                "Query": "select t.table_schema from information_schema.`tables` as t where :__sq_has_values1 = 1 and t.table_schema in ::__sq1",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main_2",
+                  "Sharded": false
+                },
+                "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+                "Query": "select t.table_schema from information_schema.`tables` as t where :__sq_has_values1 = 1 and t.table_schema in ::__sq1 and TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "second_user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+                "Query": "select t.table_schema from information_schema.`tables` as t where :__sq_has_values1 = 1 and t.table_schema in ::__sq1 and TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+                "Query": "select t.table_schema from information_schema.`tables` as t where :__sq_has_values1 = 1 and t.table_schema in ::__sq1 and TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`tables`"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "zlookup_unique",
+                  "Sharded": true
+                },
+                "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+                "Query": "select t.table_schema from information_schema.`tables` as t where :__sq_has_values1 = 1 and t.table_schema in ::__sq1 and TABLE_SCHEMA = :__vtschemaname",
+                "Table": "information_schema.`tables`"
+              }
+            ]
+          }
+        ]
       }
     }
   },

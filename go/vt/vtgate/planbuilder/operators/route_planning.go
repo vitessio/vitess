@@ -29,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -63,6 +62,28 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			return optimizeSubQuery(ctx, op)
 		case *Filter:
 			return optimizeFilter(op)
+		case *Horizon:
+			union, ok := op.Source.(*Union)
+			if !ok {
+				return op, rewrite.SameTree, nil
+			}
+
+			var newSrcs []ops.Operator
+			for _, src := range union.Sources {
+				_, ok = src.(*Route)
+				if !ok {
+					return op, rewrite.SameTree, nil
+				}
+
+				// if we got here we are dealing with a UNION created for an info_schema table
+				newSrcs = append(newSrcs, &Horizon{
+					Source: src,
+					Select: op.Select,
+				})
+			}
+
+			union.Sources = newSrcs
+			return union, rewrite.NewTree, nil
 		default:
 			return operator, rewrite.SameTree, nil
 		}
@@ -277,44 +298,6 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 		plans[i] = plan
 	}
 	return plans, nil
-}
-
-func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
-	ks, err := ctx.VSchema.AnyKeyspace()
-	if err != nil {
-		return nil, err
-	}
-	r := &Route{
-		RouteOpCode: engine.DBA,
-		Source: &Table{
-			QTable: table,
-			VTable: &vindexes.Table{
-				Name:     table.Table.Name,
-				Keyspace: ks,
-			},
-		},
-		Keyspace: ks,
-	}
-	for _, pred := range table.Predicates {
-		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, ctx.ReservedVars)
-		if err != nil {
-			return nil, err
-		}
-		if out == nil {
-			// we didn't find a predicate to use for routing, continue to look for next predicate
-			continue
-		}
-
-		if isTableSchema {
-			r.SysTableTableSchema = append(r.SysTableTableSchema, out)
-		} else {
-			if r.SysTableTableName == nil {
-				r.SysTableTableName = map[string]evalengine.Expr{}
-			}
-			r.SysTableTableName[bvName] = out
-		}
-	}
-	return r, nil
 }
 
 func mergeRoutes(ctx *plancontext.PlanningContext, qg *QueryGraph, physicalOps []ops.Operator, planCache opCacheMap, crossJoinsOK bool) (ops.Operator, error) {

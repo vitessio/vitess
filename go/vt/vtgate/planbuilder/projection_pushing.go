@@ -77,17 +77,19 @@ func pushProjectionIntoConcatenate(ctx *plancontext.PlanningContext, expr *sqlpa
 	if err != nil {
 		return 0, false, err
 	}
-	if added && ctx.SemTable.DirectDeps(expr.Expr).NonEmpty() {
-		return 0, false, vterrors.VT13001(fmt.Sprintf("pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr)))
-	}
+
 	if added {
 		for _, source := range node.sources[1:] {
-			_, _, err := pushProjection(ctx, expr, source, inner, reuseCol, hasAggregation)
+			thisOffset, _, err := pushProjection(ctx, expr, source, inner, reuseCol, hasAggregation)
 			if err != nil {
 				return 0, false, err
 			}
+			if offset != thisOffset {
+				return 0, false, vterrors.VT13001(fmt.Sprintf("pushing projection %v on concatenate should reference an existing column", sqlparser.String(expr)))
+			}
 		}
 	}
+
 	return offset, added, nil
 }
 
