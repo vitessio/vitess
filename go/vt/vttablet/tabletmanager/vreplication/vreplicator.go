@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -695,29 +696,6 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	defer dbClient.Close()
 
-	// This could take hours so we start a monitoring goroutine to
-	// regularly check to see if the context has been cancelled, which
-	// would indicate that the controller is stopping due to engine
-	// shutdown (tablet shutdown or transition).
-	// If we don't do this then we could e.g. cause a PRS to fail.
-	// A failed ALTER will be tried again when the copy phase starts
-	// up again on the (new) PRIMARY.
-	var action PostCopyAction
-	done := make(chan struct{})
-	defer close(done)
-	go func() {
-		select {
-		case <-ctx.Done():
-			log.Infof("Copy of %q table stopped when performing post copy action: %+v", tableName, action)
-			// Cause the ExecuteFetch running the ALTER to fail with an error.
-			dbClient.Close()
-			return
-		case <-done:
-			// We're done, so no longer need to check for cancellation.
-			return
-		}
-	}()
-
 	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Uint32BindVariable(vr.id),
 		sqltypes.StringBindVariable(tableName))
 	if err != nil {
@@ -730,6 +708,59 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	if qr == nil || len(qr.Rows) == 0 {
 		return nil
 	}
+
+	// This could take hours so we start a monitoring goroutine to
+	// regularly check to see if the context has been cancelled, which
+	// would indicate that the controller is stopping due to engine
+	// shutdown (tablet shutdown or transition). If that happens we
+	// attempt to kill the running ALTER statement using a DB
+	// connection.
+	// If we don't do this then we could e.g. cause a PRS to fail as
+	// the running ALTER will block setting [super_]read_only.
+	// A failed ALTER will be tried again when the copy phase starts
+	// up again on the (new) PRIMARY.
+	var action PostCopyAction
+	done := make(chan struct{})
+	defer close(done)
+	killAlterStmt := func(alterStmt string) error {
+		getID := fmt.Sprintf("select ID from information_schema.PROCESSLIST where USER='%s' and INFO='%s'",
+			dbconfigs.GlobalDBConfigs.Filtered.User, alterStmt)
+		killdbc := vr.vre.dbClientFactoryDba()
+		if err := killdbc.Connect(); err != nil {
+			return fmt.Errorf("unable to connect to the database when attempting to kill %s: %v", alterStmt, err)
+		}
+		defer killdbc.Close()
+		res, err := killdbc.ExecuteFetch(getID, 1)
+		if err != nil {
+			return err
+		}
+		if len(res.Rows) == 0 {
+			return nil // Not running
+		}
+		if len(res.Rows) > 1 {
+			return fmt.Errorf("unexpected number of rows returned (%d) when attempting to kill %s", len(res.Rows), alterStmt)
+		}
+		id, err := res.Rows[0][0].ToInt64()
+		if err != nil {
+			return fmt.Errorf("unexpected connection ID value returned (%+v) when attempting to kill %s", res.Rows[0][0], alterStmt)
+		}
+		_, err = killdbc.ExecuteFetch(fmt.Sprintf("kill %d", id), 1)
+		return err
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			log.Infof("Copy of %q table stopped when performing post copy action: %+v", tableName, action)
+			if err := killAlterStmt(action.Task); err != nil {
+				log.Errorf("Failed to kill ALTER when stopping VReplication copy table operation: %v", err)
+			}
+			return
+		case <-done:
+			// We're done, so no longer need to check for cancellation.
+			return
+		}
+	}()
+
 	for _, row := range qr.Named().Rows {
 		action = PostCopyAction{}
 		acv, err := row["action"].ToBytes()
