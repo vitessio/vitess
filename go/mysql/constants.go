@@ -421,6 +421,7 @@ const (
 	ERInnodbReadOnly                = 1874
 	ERMasterFatalReadingBinlog      = 1236
 	ERNoDefaultForField             = 1364
+	ERDupIndex                      = 1831
 
 	// already exists
 	ERTableExists    = 1050
