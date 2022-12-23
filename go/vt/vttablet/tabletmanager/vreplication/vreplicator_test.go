@@ -22,7 +22,9 @@ import (
 	"reflect"
 	"regexp"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 	"unicode"
 
 	"github.com/buger/jsonparser"
@@ -31,6 +33,7 @@ import (
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
@@ -353,6 +356,16 @@ func TestDeferSecondaryKeys(t *testing.T) {
 }
 
 func TestCancelledDeferSecondaryKeys(t *testing.T) {
+	// Skip the test for MariaDB as it does not have
+	// performance_schema enabled by default.
+	version, err := mysqlctl.GetVersionString()
+	require.NoError(t, err)
+	flavor, _, err := mysqlctl.ParseVersionString(version)
+	require.NoError(t, err)
+	if flavor == mysqlctl.FlavorMariaDB {
+		t.Skipf("Skipping test as it's not supported with %s", flavor)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
@@ -373,7 +386,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
 	dbaconn := playerEngine.dbClientFactoryDba()
-	err := dbaconn.Connect()
+	err = dbaconn.Connect()
 	require.NoError(t, err)
 	defer dbaconn.Close()
 	dbClient := playerEngine.dbClientFactoryFiltered()
@@ -396,11 +409,11 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	withoutPKs := "create table t1 (id int not null, c1 int default null, c2 int default null, primary key(id))"
 	alter := fmt.Sprintf("alter table %s.t1 add key c1 (c1), add key c2 (c2)", dbName)
 
-	// Create the table
+	// Create the table.
 	_, err = dbClient.ExecuteFetch(ddl, 1)
 	require.NoError(t, err)
 
-	// Setup the ALTER work
+	// Setup the ALTER work.
 	err = vr.stashSecondaryKeys(ctx, tableName)
 	require.NoError(t, err)
 
@@ -410,34 +423,38 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	require.NoError(t, err)
 
 	// The ALTER should block on the table lock.
+	wg := sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
-		vr.execPostCopyActions(ctx, tableName)
+		defer wg.Done()
+		err := vr.execPostCopyActions(ctx, tableName)
+		assert.True(t, strings.EqualFold(err.Error(), fmt.Sprintf("EOF (errno 2013) (sqlstate HY000) during query: %s", alter)))
 	}()
 
 	// Confirm that the expected ALTER query is being attempted.
 	query := fmt.Sprintf("select count(*) from performance_schema.events_statements_current where sql_text = '%s'", alter)
-	res, err := dbaconn.ExecuteFetch(query, 1)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows))
-	require.Equal(t, "1", res.Rows[0][0].ToString())
+	waitForQueryResult(t, dbaconn, query, "1")
 
-	// Cancel the context while the ALTER is running/blocked.
+	// Cancel the context while the ALTER is running/blocked
+	// and wait for it to be KILLed off.
 	cancel()
+	wg.Wait()
+
 	_, err = dbaconn.ExecuteFetch("unlock tables", 1)
-	require.NoError(t, err)
+	assert.NoError(t, err)
 
 	// Confirm that the ALTER to re-add the secondary keys
 	// did not succeed.
 	currentDDL := getCurrentDDL(tableName)
-	require.True(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
+	assert.True(t, strings.EqualFold(stripCruft(withoutPKs), stripCruft(currentDDL)),
 		"Expected: %s\n     Got: %s", forError(withoutPKs), forError(currentDDL))
 
 	// Confirm that we successfully attempted to kill it.
 	query = "select count(*) from performance_schema.events_statements_history where digest_text = 'KILL ?' and errors = 0"
-	res, err = dbaconn.ExecuteFetch(query, 1)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(res.Rows))
-	// TODO: figure out why in the KILL never shows up...
+	res, err := dbaconn.ExecuteFetch(query, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, 1, len(res.Rows))
+	// TODO: figure out why the KILL never shows up...
 	//require.Equal(t, "1", res.Rows[0][0].ToString())
 }
 
@@ -484,4 +501,23 @@ func removeVersionDifferences(in string) string {
 	re = regexp.MustCompile(`(?i)engine[\s]*=[\s]*innodb.*$`)
 	out = re.ReplaceAllString(out, "")
 	return out
+}
+
+func waitForQueryResult(t *testing.T, dbc binlogplayer.DBClient, query, val string) {
+	tmr := time.NewTimer(1 * time.Second)
+	defer tmr.Stop()
+	for {
+		res, err := dbc.ExecuteFetch(query, 1)
+		assert.NoError(t, err)
+		assert.Equal(t, 1, len(res.Rows))
+		if res.Rows[0][0].ToString() == val {
+			return
+		}
+		select {
+		case <-tmr.C:
+			t.Fatalf("query %s did not return expected value of %s", query, val)
+		default:
+			time.Sleep(50 * time.Millisecond)
+		}
+	}
 }
