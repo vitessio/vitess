@@ -254,7 +254,7 @@ func TestTableForeignKeyOrdering(t *testing.T) {
 		"create view v09 as select * from v13, t17",
 		"create table t20 (id int primary key, i int, key ix (i), constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create view v13 as select * from t20",
-		"create table t12 (id int primary key, i int, constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t12 (id int, i int, constraint f15 foreign key (i) references t15(id) on delete restrict, primary key (id))",
 		"create table t17 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create table t16 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create table t14 (id int primary key, i int, constraint f14 foreign key (i) references t14(id) on delete restrict)",
@@ -315,6 +315,10 @@ func TestInvalidSchema(t *testing.T) {
 		{
 			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i int, constraint f10 foreign key (i) references t10(x) on delete restrict)",
 			expectErr: &InvalidReferencedColumnInForeignKeyConstraintError{Table: "t11", Constraint: "f10", ReferencedTable: "t10", ReferencedColumn: "x"},
+		},
+		{
+			schema:    "create table t10(id int primary key, i int); create table t11 (id int primary key, i int, constraint f10 foreign key (i) references t10(i) on delete restrict)",
+			expectErr: &MissingForeignKeyReferencedIndexError{Table: "t11", Constraint: "f10", ReferencedTable: "t10"},
 		},
 		{
 			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i int unsigned, constraint f10 foreign key (i) references t10(id) on delete restrict)",

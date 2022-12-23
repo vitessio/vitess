@@ -509,6 +509,11 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 }
 
 func (c *CreateTableEntity) normalizeKeys() {
+	// formalize PRIMARY KEY:
+	// `create table t (id int primary key)`
+	// should turn into:
+	// `create table t (id int, primary key (id))`
+
 	// let's ensure all foreign key constraints are covered by local keys, or else add such keys.
 	// We add the keys unnamed, and the followup code will name them properly.
 	for _, cs := range c.CreateTable.TableSpec.Constraints {
@@ -1971,6 +1976,7 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	}
 	c.CreateTable.TableSpec.Constraints = keptConstraints
 
+	// ensures all foreign keys have indexes
 	c.normalizeKeys()
 
 	return nil
