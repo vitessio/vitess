@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"reflect"
 	"sort"
 	"strconv"
 	"strings"
@@ -578,18 +579,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		return fmt.Errorf("deferring secondary key creation is not supported for %s workflows",
 			binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType])
 	}
-	var secondaryKeys []*sqlparser.IndexDefinition
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
-	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	secondaryKeys, err := vr.getTableSecondaryKeys(ctx, tableName)
 	if err != nil {
-		return err
-	}
-	if len(schema.TableDefinitions) != 1 {
-		return fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
-			tableName, len(schema.TableDefinitions))
-	}
-	ddl := schema.TableDefinitions[0].Schema
-	if secondaryKeys, err = vr.getTableSecondaryKeys(ddl); err != nil {
 		return err
 	}
 	if len(secondaryKeys) > 0 {
@@ -656,7 +647,17 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 	return nil
 }
 
-func (vr *vreplicator) getTableSecondaryKeys(ddl string) ([]*sqlparser.IndexDefinition, error) {
+func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName string) ([]*sqlparser.IndexDefinition, error) {
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	if err != nil {
+		return nil, err
+	}
+	if len(schema.TableDefinitions) != 1 {
+		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
+			tableName, len(schema.TableDefinitions))
+	}
+	ddl := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
 	parsedDDL, err := sqlparser.ParseStrictDDL(ddl)
 	var foundCreateTable bool
@@ -788,7 +789,53 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 			// This will return an io.EOF / MySQL CRServerLost (errno 2013)
 			// error if it is killed by the monitoring goroutine.
 			if _, err := dbClient.ExecuteFetch(action.Task, -1); err != nil {
-				return err
+				failedAlterErr := err
+				// It's possible that we previously executed the ALTER but
+				// the subsequent DELETE of the post_copy_action record failed.
+				// For example, the context could be cancelled in-between.
+				// It's also possible that the user has modified the schema on
+				// the target side.
+				// If we get a duplicate key/index error then let's see if the
+				// index definitions that we would have added already exist in
+				// the table schema and if so move forward and delete the
+				// post_copy_action record.
+				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERDupKeyName {
+					stmt, err := sqlparser.ParseStrictDDL(action.Task)
+					if err != nil {
+						return failedAlterErr
+					}
+					alterStmt, ok := stmt.(*sqlparser.AlterTable)
+					if !ok {
+						return failedAlterErr
+					}
+					currentSKs, err := vr.getTableSecondaryKeys(ctx, tableName)
+					if err != nil {
+						return failedAlterErr
+					}
+					if len(currentSKs) < len(alterStmt.AlterOptions) {
+						return failedAlterErr
+					}
+					for _, alterOption := range alterStmt.AlterOptions {
+						addKey, ok := alterOption.(*sqlparser.AddIndexDefinition)
+						if !ok {
+							return failedAlterErr
+						}
+						found := false
+						for _, currentSK := range currentSKs {
+							if reflect.DeepEqual(addKey.IndexDefinition, currentSK) {
+								found = true
+								break
+							}
+						}
+						if !found {
+							return failedAlterErr
+						}
+					}
+					// All of the keys we wanted to add in the ALTER already
+					// exist in the live table schema.
+				} else {
+					return failedAlterErr
+				}
 			}
 			id, err := row["id"].ToInt64()
 			if err != nil {

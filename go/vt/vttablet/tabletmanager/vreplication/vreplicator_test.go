@@ -36,6 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 func TestRecalculatePKColsInfoByColumnNames(t *testing.T) {
@@ -215,52 +216,57 @@ func TestDeferSecondaryKeys(t *testing.T) {
 	}
 	_, err = dbClient.ExecuteFetch("use "+dbName, 1)
 	require.NoError(t, err)
+	diffHints := &schemadiff.DiffHints{
+		StrictIndexOrdering: false,
+	}
 
 	tests := []struct {
-		name         string
-		tableName    string
-		initialDDL   string
-		strippedDDL  string
-		actionDDL    string
-		WorkflowType int32
-		wantErr      string
+		name            string
+		tableName       string
+		initialDDL      string
+		strippedDDL     string
+		intermediateDDL string
+		actionDDL       string
+		WorkflowType    int32
+		wantStashErr    string
+		wantExecErr     string
 	}{
 		{
 			name:         "0SK",
 			tableName:    "t1",
-			initialDDL:   "create table t1 (id int not null, primary key(id))",
-			strippedDDL:  "create table t1 (id int not null, primary key(id))",
+			initialDDL:   "create table t1 (id int not null, primary key (id))",
+			strippedDDL:  "create table t1 (id int not null, primary key (id))",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
 			name:         "1SK:Materialize",
 			tableName:    "t1",
-			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
-			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
+			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
+			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Materialize),
-			wantErr:      "deferring secondary key creation is not supported for Materialize workflows",
+			wantStashErr: "deferring secondary key creation is not supported for Materialize workflows",
 		},
 		{
 			name:         "1SK:OnlineDDL",
 			tableName:    "t1",
-			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
-			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
+			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
+			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL),
-			wantErr:      "deferring secondary key creation is not supported for OnlineDDL workflows",
+			wantStashErr: "deferring secondary key creation is not supported for OnlineDDL workflows",
 		},
 		{
 			name:         "1SK",
 			tableName:    "t1",
-			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key(id), key c1 (c1))",
-			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key(id))",
+			initialDDL:   "create table t1 (id int not null, c1 int default null, primary key (id), key c1 (c1))",
+			strippedDDL:  "create table t1 (id int not null, c1 int default null, primary key (id))",
 			actionDDL:    "alter table %s.t1 add key c1 (c1)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
 		},
 		{
 			name:         "2SK",
 			tableName:    "t1",
-			initialDDL:   "create table t1 (id int not null, c1 int default null, c2 int default null, primary key(id), key c1 (c1), key c2 (c2))",
-			strippedDDL:  "create table t1 (id int not null, c1 int default null, c2 int default null, primary key(id))",
+			initialDDL:   "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
+			strippedDDL:  "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
 			actionDDL:    "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
@@ -289,12 +295,50 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
 		},
 		{
-			name:         "0FK2tSK",
+			name:         "0FPK2tSK",
 			tableName:    "t1",
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null, key c1_c2 (c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) default null, c2 varchar(10) default null)",
 			actionDDL:    "alter table %s.t1 add key c1_c2 (c1, c2), add key c2 (c2)",
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+		},
+		{
+			name:            "2SKRetryNoErr",
+			tableName:       "t1",
+			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
+			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
+			intermediateDDL: "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+		},
+		{
+			name:            "2SKRetryNoErr2",
+			tableName:       "t1",
+			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
+			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
+			intermediateDDL: "alter table %s.t1 add key c2 (c2), add key c1 (c1)",
+			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+		},
+		{
+			name:            "2SKRetryErr",
+			tableName:       "t1",
+			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
+			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
+			intermediateDDL: "alter table %s.t1 add key c2 (c2)",
+			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			wantExecErr:     "Duplicate key name 'c2' (errno 1061) (sqlstate 42000)",
+		},
+		{
+			name:            "2SKRetryErr2",
+			tableName:       "t1",
+			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
+			strippedDDL:     "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
+			intermediateDDL: "alter table %s.t1 add key c1 (c1)",
+			actionDDL:       "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			wantExecErr:     "Duplicate key name 'c1' (errno 1061) (sqlstate 42000)",
 		},
 	}
 
@@ -318,8 +362,8 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			// store an ALTER TABLE statement to re-add them after
 			// the table is copied.
 			err = vr.stashSecondaryKeys(ctx, tcase.tableName)
-			if tcase.wantErr != "" {
-				require.EqualError(t, err, tcase.wantErr)
+			if tcase.wantStashErr != "" {
+				require.EqualError(t, err, tcase.wantStashErr)
 			} else {
 				require.NoError(t, err)
 			}
@@ -344,13 +388,24 @@ func TestDeferSecondaryKeys(t *testing.T) {
 					"Expected: %s\n     Got: %s", forError(fmt.Sprintf(tcase.actionDDL, dbName)), forError(alter))
 			}
 
-			// Confirm that the final DDL matches the initial DDL.
-			err = vr.execPostCopyActions(ctx, tcase.tableName)
-			require.NoError(t, err)
-			currentDDL = getCurrentDDL(tcase.tableName)
-			require.True(t, strings.EqualFold(stripCruft(tcase.initialDDL), stripCruft(currentDDL)),
-				"Expected: %s\n     Got: %s", forError(tcase.initialDDL), forError(currentDDL))
+			if tcase.intermediateDDL != "" {
+				_, err := dbClient.ExecuteFetch(fmt.Sprintf(tcase.intermediateDDL, dbName), 1)
+				require.NoError(t, err)
+			}
 
+			err = vr.execPostCopyActions(ctx, tcase.tableName)
+			if tcase.wantExecErr != "" {
+				require.Contains(t, err.Error(), tcase.wantExecErr)
+			} else {
+				require.NoError(t, err)
+				// Confirm that the final DDL logically matches the initial DDL.
+				// We do not require that the index definitions are in the same
+				// order in the table schema.
+				currentDDL := getCurrentDDL(tcase.tableName)
+				sdiff, err := schemadiff.DiffCreateTablesQueries(tcase.initialDDL, currentDDL, diffHints)
+				require.NoError(t, err)
+				require.Nil(t, sdiff)
+			}
 		})
 	}
 }
