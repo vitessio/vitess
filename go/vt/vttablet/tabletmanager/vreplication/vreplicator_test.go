@@ -221,15 +221,16 @@ func TestDeferSecondaryKeys(t *testing.T) {
 	}
 
 	tests := []struct {
-		name            string
-		tableName       string
-		initialDDL      string
-		strippedDDL     string
-		intermediateDDL string
-		actionDDL       string
-		WorkflowType    int32
-		wantStashErr    string
-		wantExecErr     string
+		name                  string
+		tableName             string
+		initialDDL            string
+		strippedDDL           string
+		intermediateDDL       string
+		actionDDL             string
+		WorkflowType          int32
+		wantStashErr          string
+		wantExecErr           string
+		expectFinalSchemaDiff bool
 	}{
 		{
 			name:         "0SK",
@@ -321,6 +322,16 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			WorkflowType:    int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
 		},
 		{
+			name:                  "SKSuperSetNoErr", // a superset of the original keys is allowed
+			tableName:             "t1",
+			initialDDL:            "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
+			strippedDDL:           "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id))",
+			intermediateDDL:       "alter table %s.t1 add unique key c1_c2 (c1,c2), add key c2 (c2), add key c1 (c1)",
+			actionDDL:             "alter table %s.t1 add key c1 (c1), add key c2 (c2)",
+			WorkflowType:          int32(binlogdatapb.VReplicationWorkflowType_MoveTables),
+			expectFinalSchemaDiff: true,
+		},
+		{
 			name:            "2SKRetryErr",
 			tableName:       "t1",
 			initialDDL:      "create table t1 (id int not null, c1 int default null, c2 int default null, primary key (id), key c1 (c1), key c2 (c2))",
@@ -394,18 +405,29 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			}
 
 			err = vr.execPostCopyActions(ctx, tcase.tableName)
+			expectedPostCopyActionRecs := 0
 			if tcase.wantExecErr != "" {
 				require.Contains(t, err.Error(), tcase.wantExecErr)
+				expectedPostCopyActionRecs = 1
 			} else {
 				require.NoError(t, err)
 				// Confirm that the final DDL logically matches the initial DDL.
 				// We do not require that the index definitions are in the same
 				// order in the table schema.
-				currentDDL := getCurrentDDL(tcase.tableName)
-				sdiff, err := schemadiff.DiffCreateTablesQueries(tcase.initialDDL, currentDDL, diffHints)
-				require.NoError(t, err)
-				require.Nil(t, sdiff)
+				if !tcase.expectFinalSchemaDiff {
+					currentDDL := getCurrentDDL(tcase.tableName)
+					sdiff, err := schemadiff.DiffCreateTablesQueries(tcase.initialDDL, currentDDL, diffHints)
+					require.NoError(t, err)
+					require.Nil(t, sdiff)
+				}
 			}
+
+			// Confirm that the post copy action record is deleted when there's
+			// no exec error or conversely that it still exists when there was
+			// one.
+			res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tcase.tableName), 1)
+			require.NoError(t, err)
+			require.Equal(t, expectedPostCopyActionRecs, len(res.Rows))
 		})
 	}
 }
@@ -458,6 +480,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 		require.Equal(t, 1, len(sd.TableDefinitions))
 		return removeVersionDifferences(sd.TableDefinitions[0].Schema)
 	}
+	getActionsSQLf := "select action from _vt.post_copy_action where vrepl_id=%d and table_name='%s'"
 
 	tableName := "t1"
 	ddl := fmt.Sprintf("create table %s.t1 (id int not null, c1 int default null, c2 int default null, primary key(id), key c1 (c1), key c2 (c2))", dbName)
@@ -511,6 +534,12 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	assert.Equal(t, 1, len(res.Rows))
 	// TODO: figure out why the KILL never shows up...
 	//require.Equal(t, "1", res.Rows[0][0].ToString())
+
+	// Confirm that the post copy action record still exists
+	// so it will later be retried.
+	res, err = dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tableName), 1)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(res.Rows))
 }
 
 // stripCruft removes all whitespace unicode chars and backticks.
