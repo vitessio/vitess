@@ -258,7 +258,6 @@ func (collector *TableGC) operate(ctx context.Context) {
 			}
 		case <-purgeReentranceTicker.C:
 			{
-				log.Info("TableGC: purgeReentranceTicker")
 				// relay the request
 				go func() { purgeRequestsChan <- true }()
 			}
