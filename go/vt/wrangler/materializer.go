@@ -1312,7 +1312,8 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes,
 			int64(mz.ms.MaterializationIntent),
 			int64(workflowSubType),
-			mz.ms.DeferSecondaryKeys)
+			mz.ms.DeferSecondaryKeys,
+		)
 	}
 	return ig.String(), nil
 }

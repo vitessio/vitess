@@ -76,17 +76,18 @@ const (
   action JSON,
   unique key (vrepl_id, table_name),
   primary key(id))`
-)
 
-var withDDL *withddl.WithDDL
-var withDDLInitialQueries []string
+	throttlerVReplicationAppName = "vreplication"
+	throttlerOnlineDDLAppName    = "online-ddl"
+)
 
 const (
 	PostCopyActionNone PostCopyActionType = iota
 	PostCopyActionSQL
-	throttlerVReplicationAppName = "vreplication"
-	throttlerOnlineDDLAppName    = "online-ddl"
 )
+
+var withDDL *withddl.WithDDL
+var withDDLInitialQueries []string
 
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)

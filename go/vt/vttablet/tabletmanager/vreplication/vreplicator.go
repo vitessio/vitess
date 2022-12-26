@@ -20,14 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
-	"reflect"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/timer"
-	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -597,8 +595,16 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			},
 		}
 		for _, secondaryKey := range secondaryKeys {
-			// should never happen
-			if secondaryKey.Info.Primary {
+			// Primary should never happen. Fulltext keys are
+			// not supported for deferral and retained during
+			// the copy phase as they have some unique
+			// behaviors and constraints:
+			// - Adding a fulltext key requires a full table
+			//   rebuild to add the internal FTS_DOC_ID field
+			//   to each record.
+			// - You can not add/remove multiple fulltext keys
+			//   in a single ALTER statement.
+			if secondaryKey.Info.Primary || secondaryKey.Info.Fulltext {
 				continue
 			}
 			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
@@ -699,15 +705,31 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	defer dbClient.Close()
 
+	// Save our connection ID so we can use it to easily KILL any
+	// running SQL action we may perform later if needed.
+	qr, err := dbClient.ExecuteFetch("select connection_id()", 1)
+	if err != nil {
+		return err
+	}
+	// qr should never be nil, but check anyway to be extra safe.
+	if qr == nil || len(qr.Rows) != 1 {
+		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(qr.Rows))
+	}
+	connID, err := qr.Rows[0][0].ToUint64()
+	if err != nil || connID == 0 {
+		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
+	}
+
 	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Uint32BindVariable(vr.id),
 		sqltypes.StringBindVariable(tableName))
 	if err != nil {
 		return err
 	}
-	qr, err := dbClient.ExecuteFetch(query, -1)
+	qr, err = dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
+	// qr should never be nil, but check anyway to be extra safe.
 	if qr == nil || len(qr.Rows) == 0 {
 		return nil
 	}
@@ -715,7 +737,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	// This could take hours so we start a monitoring goroutine to
 	// listen for context cancellation, which would indicate that
 	// the controller is stopping due to engine shutdown (tablet
-	// shutdown or transition). If that happens we attempt to kill
+	// shutdown or transition). If that happens we attempt to KILL
 	// the running ALTER statement using a DBA connection.
 	// If we don't do this then we could e.g. cause a PRS to fail as
 	// the running ALTER will block setting [super_]read_only.
@@ -724,41 +746,31 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	var action PostCopyAction
 	done := make(chan struct{})
 	defer close(done)
-	killAlterStmt := func(alterStmt string) error {
-		getID, err := sqlparser.ParseAndBind("select ID from information_schema.PROCESSLIST where USER=%a and INFO=%a",
-			sqltypes.StringBindVariable(dbconfigs.GlobalDBConfigs.Filtered.User), sqltypes.StringBindVariable(alterStmt))
-		if err != nil {
+	killAction := func(ak PostCopyAction) error {
+		// If we're using an SQL query then KILL the connection
+		// being used to execute it.
+		if ak.Type == PostCopyActionSQL {
+			if connID < 1 {
+				return fmt.Errorf("invalid connection ID found (%d) when attempting to kill %q", connID, err)
+			}
+			killdbc := vr.vre.dbClientFactoryDba()
+			if err := killdbc.Connect(); err != nil {
+				return fmt.Errorf("unable to connect to the database when attempting to kill %q: %v", ak.Task, err)
+			}
+			defer killdbc.Close()
+			_, err = killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1)
 			return err
 		}
-		killdbc := vr.vre.dbClientFactoryDba()
-		if err := killdbc.Connect(); err != nil {
-			return fmt.Errorf("unable to connect to the database when attempting to kill %q: %v", alterStmt, err)
-		}
-		defer killdbc.Close()
-		res, err := killdbc.ExecuteFetch(getID, 100)
-		if err != nil {
-			return err
-		}
-		if len(res.Rows) == 0 {
-			return nil // Not running
-		}
-		if len(res.Rows) > 1 {
-			return fmt.Errorf("unexpected number of rows returned (%d) when attempting to kill %q", len(res.Rows), alterStmt)
-		}
-		id, err := res.Rows[0][0].ToInt64()
-		if err != nil {
-			return fmt.Errorf("unexpected connection ID value returned (%+v) when attempting to kill %q", res.Rows[0][0], alterStmt)
-		}
-		_, err = killdbc.ExecuteFetch(fmt.Sprintf("kill %d", id), 1)
-		return err
+		// We may support non-SQL actions in the future.
+		return nil
 	}
 	go func() {
 		select {
 		case <-ctx.Done():
 			log.Infof("Copy of %q table stopped when performing the following post copy action for the %q VReplication workflow: %+v",
 				tableName, vr.WorkflowName, action)
-			if err := killAlterStmt(action.Task); err != nil {
-				log.Errorf("Failed to kill post copy ALTER statement for the %q VReplication workflow: %v", vr.WorkflowName, err)
+			if err := killAction(action); err != nil {
+				log.Errorf("Failed to kill post copy action for the %q VReplication workflow: %v", vr.WorkflowName, err)
 			}
 			return
 		case <-done:
@@ -822,7 +834,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 						}
 						found := false
 						for _, currentSK := range currentSKs {
-							if reflect.DeepEqual(addKey.IndexDefinition, currentSK) {
+							if sqlparser.Equals.RefOfIndexDefinition(addKey.IndexDefinition, currentSK) {
 								found = true
 								break
 							}
