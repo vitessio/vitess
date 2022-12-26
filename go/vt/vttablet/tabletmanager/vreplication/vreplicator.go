@@ -659,7 +659,8 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	if err != nil {
 		return nil, err
 	}
-	if len(schema.TableDefinitions) != 1 {
+	// schema should never be nil, but check to be extra safe.
+	if schema == nil || len(schema.TableDefinitions) != 1 {
 		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
 			tableName, len(schema.TableDefinitions))
 	}
@@ -671,7 +672,7 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 	}
 	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
 	// createTable or createTable.TableSpec should never be nil
-	// if there was NOT an error, but check to be extra safe.
+	// if it was a valid cast, but check to be extra safe.
 	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
 		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
 	}
