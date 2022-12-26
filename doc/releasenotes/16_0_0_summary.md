@@ -175,6 +175,16 @@ The `RestoreFromBackup  --restore_to_pos` ends with:
 - the restored server in intentionally broken replication setup
 - tablet type is `DRAINED`
 
+#### New `vexplain` command
+A new `vexplain` command has been introduced with the following syntax -
+```
+VEXPLAIN [ALL|QUERIES|PLAN] explainable_stmt
+```
+
+This command will help the users look at the plan that vtgate comes up with for the given query (`PLAN` type), see all the queries that are executed on all the MySQL instances (`QUERIES` type), 
+and see the vtgate plan along with the MySQL explain output for the executed queries (`ALL` type).
+
+The formats `VTEXPLAIN` and `VITESS` for `EXPLAIN` queries are deprecated, and these newly introduced commands should be used instead.
 
 ### Important bug fixes
 
@@ -247,3 +257,12 @@ VSchema Example
 #### Flag Deprecations
 
 The flag `lock-shard-timeout` has been deprecated. Please use the newly introduced `lock-timeout` instead. More detail [here](#lock-timeout-introduction).
+
+### VTTestServer
+
+#### Improvement
+
+Creating a database with vttestserver was taking ~45 seconds. This can be problematic in test environments where testcases do a lot of `create` and `drop` database.
+In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
+For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this values might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
+this shouldn't be a concern.
