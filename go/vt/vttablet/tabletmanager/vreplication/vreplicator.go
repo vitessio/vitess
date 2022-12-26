@@ -747,11 +747,11 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	done := make(chan struct{})
 	defer close(done)
 	killAction := func(ak PostCopyAction) error {
-		// If we're using an SQL query then KILL the connection
-		// being used to execute it.
+		// If we're executing an SQL query then KILL the
+		// connection being used to execute it.
 		if ak.Type == PostCopyActionSQL {
 			if connID < 1 {
-				return fmt.Errorf("invalid connection ID found (%d) when attempting to kill %q", connID, err)
+				return fmt.Errorf("invalid connection ID found (%d) when attempting to kill %q", connID, ak.Task)
 			}
 			killdbc := vr.vre.dbClientFactoryDba()
 			if err := killdbc.Connect(); err != nil {
