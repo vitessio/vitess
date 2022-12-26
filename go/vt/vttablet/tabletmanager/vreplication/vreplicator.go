@@ -663,33 +663,24 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
 			tableName, len(schema.TableDefinitions))
 	}
-	ddl := schema.TableDefinitions[0].Schema
+	tableSchema := schema.TableDefinitions[0].Schema
 	var secondaryKeys []*sqlparser.IndexDefinition
-	parsedDDL, err := sqlparser.ParseStrictDDL(ddl)
-	var foundCreateTable bool
+	parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
 	if err != nil {
 		return secondaryKeys, err
 	}
-
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
-		switch node := node.(type) {
-		case sqlparser.DDLStatement:
-			foundCreateTable = true
-			if node.GetTableSpec() != nil {
-				for _, index := range node.GetTableSpec().Indexes {
-					if !index.Info.Primary {
-						secondaryKeys = append(secondaryKeys, index)
-					}
-				}
-			}
-		}
-		return true, nil
-	}, parsedDDL)
-
-	if !foundCreateTable {
-		return nil, fmt.Errorf("could not find expected CREATE TABLE statement in DDL: %s", ddl)
+	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+	// createTable or createTable.TableSpec should never be nil
+	// if there was NOT an error, but check to be extra safe.
+	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
+		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
 	}
 
+	for _, index := range createTable.GetTableSpec().Indexes {
+		if !index.Info.Primary {
+			secondaryKeys = append(secondaryKeys, index)
+		}
+	}
 	return secondaryKeys, err
 }
 
