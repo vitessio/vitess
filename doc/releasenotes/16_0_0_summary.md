@@ -273,23 +273,29 @@ this shouldn't be a concern.
 
 Compression benchmarks have been added to the `mysqlctl` package.
 
-Here are sample results from compressing a 20 GB chunk of Wikipedia articles on a 2020-era Mac M1 with 16 GB of memory:
+The benchmarks fetch and compress a ~60GB InnoDB file using different built-in and external compressors. Here are sample results from a 2020-era Mac M1 with 16GB of memory:
 
 ```
-$ go test -bench=BenchmarkCompress ./go/vt/mysqlctl -run=NONE -timeout=2h -benchtime=300s 
+$ go test -bench=BenchmarkCompress ./go/vt/mysqlctl -run=NONE -timeout=12h
 goos: darwin
 goarch: arm64
 pkg: vitess.io/vitess/go/vt/mysqlctl
-BenchmarkCompressLz4Builtin-8                  7        59521566387 ns/op
-BenchmarkCompressPargzipBuiltin-8              3        131137483444 ns/op
-BenchmarkCompressPgzipBuiltin-8                6        61871191048 ns/op
-BenchmarkCompressZstdBuiltin-8                 4        80345240271 ns/op
-BenchmarkCompressZstdExternal-8                6        50756806348 ns/op
-BenchmarkCompressZstdExternalFast4-8           8        39936071110 ns/op
-BenchmarkCompressZstdExternalT0-8             15        24292118122 ns/op
-BenchmarkCompressZstdExternalT4-8             12        27094172323 ns/op
+BenchmarkCompressLz4Builtin
+BenchmarkCompressLz4Builtin-8                  1        59562955167 ns/op       1121.27 MB/s             3.101 compression-ratio/op
+BenchmarkCompressPargzipBuiltin
+BenchmarkCompressPargzipBuiltin-8              1        207188453500 ns/op       322.34 MB/s             2.937 compression-ratio/op
+BenchmarkCompressPgzipBuiltin
+BenchmarkCompressPgzipBuiltin-8                1        90866210375 ns/op        734.99 MB/s             2.985 compression-ratio/op
+BenchmarkCompressZstdBuiltin
+BenchmarkCompressZstdBuiltin-8                 1        119344223833 ns/op       559.61 MB/s             3.221 compression-ratio/op
+BenchmarkCompressZstdExternal
+BenchmarkCompressZstdExternal-8                1        69447584292 ns/op        961.67 MB/s             3.251 compression-ratio/op
+BenchmarkCompressZstdExternalFast4
+BenchmarkCompressZstdExternalFast4-8           1        44269130042 ns/op       1508.63 MB/s             3.118 compression-ratio/op
+BenchmarkCompressZstdExternalT0
+BenchmarkCompressZstdExternalT0-8              1        46315237875 ns/op       1441.99 MB/s             3.251 compression-ratio/op
+BenchmarkCompressZstdExternalT4
+BenchmarkCompressZstdExternalT4-8              1        47368026583 ns/op       1409.94 MB/s             3.251 compression-ratio/op
 PASS
-ok      vitess.io/vitess/go/vt/mysqlctl 3780.882s
+ok      vitess.io/vitess/go/vt/mysqlctl 684.655s
 ```
-
-See [here](https://github.com/vitessio/vitess/pull/11994) for more details on this sample and how to run the benchmarks yourself.
