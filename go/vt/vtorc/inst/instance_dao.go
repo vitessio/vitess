@@ -219,7 +219,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 	if err != nil {
 		goto Cleanup
 	}
-	instance.ClusterName = GetClusterNameFromKeyspaceAndShard(tablet.Keyspace, tablet.Shard)
 
 	fullStatus, err = FullStatus(*instanceKey)
 	if err != nil {
@@ -605,7 +604,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
-	instance.ClusterName = m.GetString("cluster_name")
 	instance.DataCenter = m.GetString("data_center")
 	instance.Region = m.GetString("region")
 	instance.PhysicalEnvironment = m.GetString("physical_environment")
