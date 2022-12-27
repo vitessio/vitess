@@ -237,30 +237,6 @@ CREATE TABLE agent_seed_state (
 CREATE INDEX agent_seed_idx_agent_seed_state ON agent_seed_state (agent_seed_id, state_timestamp)
 	`,
 	`
-DROP TABLE IF EXISTS host_attributes
-`,
-	`
-CREATE TABLE host_attributes (
-	hostname varchar(128) NOT NULL,
-	attribute_name varchar(128) NOT NULL,
-	attribute_value varchar(128) NOT NULL,
-	submit_timestamp timestamp not null default (''),
-	expire_timestamp timestamp NULL DEFAULT NULL,
-	PRIMARY KEY (hostname,attribute_name)
-)`,
-	`
-CREATE INDEX attribute_name_idx_host_attributes ON host_attributes (attribute_name)
-	`,
-	`
-CREATE INDEX attribute_value_idx_host_attributes ON host_attributes (attribute_value)
-	`,
-	`
-CREATE INDEX submit_timestamp_idx_host_attributes ON host_attributes (submit_timestamp)
-	`,
-	`
-CREATE INDEX expire_timestamp_idx_host_attributes ON host_attributes (expire_timestamp)
-	`,
-	`
 DROP TABLE IF EXISTS hostname_resolve
 `,
 	`

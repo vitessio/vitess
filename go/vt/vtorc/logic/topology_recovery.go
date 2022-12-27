@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-	"vitess.io/vitess/go/vt/vtorc/attributes"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/util"
@@ -327,8 +326,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 	if promotedReplica != nil {
 		// Success!
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: successfully promoted %+v", promotedReplica.Key))
-
-		_ = attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 	}
 }
 
@@ -820,7 +817,6 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 	if promotedReplica != nil {
 		// Success!
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.Key))
-		_ = attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 	}
 }
 
