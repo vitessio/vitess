@@ -19,7 +19,6 @@ package inst
 // ClusterInfo makes for a cluster status/info summary
 type ClusterInfo struct {
 	ClusterName                             string
-	ClusterDomain                           string // CNAME/VIP/A-record/whatever of the primary of this cluster
 	CountInstances                          uint
 	HeuristicLag                            int64
 	HasAutomatedPrimaryRecovery             bool

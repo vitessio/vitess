@@ -98,9 +98,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			)
 		) AS is_stale_binlog_coordinates,
 		MIN(
-			primary_instance.cluster_name
-		) AS cluster_domain,
-		MIN(
 			primary_instance.last_checked <= primary_instance.last_seen
 			and primary_instance.last_attempted_check <= primary_instance.last_seen + interval ? second
 		) = 1 AS is_last_check_valid,
@@ -387,7 +384,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
 		a.ClusterDetails.ClusterName = m.GetString("cluster_name")
-		a.ClusterDetails.ClusterDomain = m.GetString("cluster_domain")
 		a.GTIDMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
