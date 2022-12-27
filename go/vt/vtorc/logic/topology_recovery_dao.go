@@ -39,7 +39,8 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 		process.ThisHostname,
 		util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
-		analysisEntry.ClusterDetails.ClusterName,
+		analysisEntry.ClusterDetails.Keyspace,
+		analysisEntry.ClusterDetails.Shard,
 		analysisEntry.CountReplicas,
 		analysisEntry.IsActionableRecovery,
 	)
@@ -59,7 +60,8 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					processing_node_hostname,
 					processcing_node_token,
 					analysis,
-					cluster_name,
+					keyspace,
+					shard,
 					count_affected_replicas,
 					is_actionable,
 					start_active_period
@@ -68,6 +70,7 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					?,
 					1,
 					0,
+					?,
 					?,
 					?,
 					?,
