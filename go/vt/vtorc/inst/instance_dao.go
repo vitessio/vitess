@@ -859,46 +859,6 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 	return res, nil
 }
 
-// InjectSeed: intented to be used to inject an instance upon startup, assuming it's not already known to vtorc.
-func InjectSeed(instanceKey *InstanceKey) error {
-	if instanceKey == nil {
-		return fmt.Errorf("InjectSeed: nil instanceKey")
-	}
-	clusterName := instanceKey.StringCode()
-	// minimal details:
-	instance := &Instance{Key: *instanceKey, Version: "Unknown", ClusterName: clusterName}
-	instance.SetSeed()
-	err := WriteInstance(instance, false, nil)
-	log.Infof("InjectSeed: %+v, %+v", *instanceKey, err)
-	_ = AuditOperation("inject-seed", instanceKey, "injected")
-	return err
-}
-
-// InjectUnseenPrimaries will review primaries of instances that are known to be replicating, yet which are not listed
-// in database_instance. Since their replicas are listed as replicating, we can assume that such primaries actually do
-// exist: we shall therefore inject them with minimal details into the database_instance table.
-func InjectUnseenPrimaries() error {
-
-	unseenPrimaryKeys, err := readUnseenPrimaryKeys()
-	if err != nil {
-		return err
-	}
-
-	operations := 0
-	for _, primaryKey := range unseenPrimaryKeys {
-		primaryKey := primaryKey
-		clusterName := primaryKey.StringCode()
-		// minimal details:
-		instance := Instance{Key: primaryKey, Version: "Unknown", ClusterName: clusterName}
-		if err := WriteInstance(&instance, false, nil); err == nil {
-			operations++
-		}
-	}
-
-	_ = AuditOperation("inject-unseen-primaries", nil, fmt.Sprintf("Operations: %d", operations))
-	return err
-}
-
 // ForgetUnseenInstancesDifferentlyResolved will purge instances which are invalid, and whose hostname
 // appears on the hostname_resolved table; this means some time in the past their hostname was unresovled, and now
 // resovled to a different value; the old hostname is never accessed anymore and the old entry should be removed.
