@@ -385,7 +385,6 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
 		a.ClusterDetails.Keyspace = m.GetString("keyspace")
 		a.ClusterDetails.Shard = m.GetString("shard")
-		a.ClusterDetails.ClusterName = GetClusterNameFromKeyspaceAndShard(a.ClusterDetails.Keyspace, a.ClusterDetails.Shard)
 		a.GTIDMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
@@ -440,7 +439,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 				log.Infof(analysisMessage)
 			}
 		}
-		keyspaceShard := a.ClusterDetails.ClusterName
+		keyspaceShard := getKeyspaceShardName(a.ClusterDetails.Keyspace, a.ClusterDetails.Shard)
 		if clusters[keyspaceShard] == nil {
 			clusters[keyspaceShard] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_PRIMARY {

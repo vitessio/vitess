@@ -47,7 +47,6 @@ type InfoForRecoveryAnalysis struct {
 	LogFile                                   string
 	LogPos                                    int64
 	IsStaleBinlogCoordinates                  int
-	ClusterName                               string
 	GTIDMode                                  string
 	LastCheckValid                            int
 	LastCheckPartialSuccess                   int
@@ -160,5 +159,4 @@ func (info *InfoForRecoveryAnalysis) SetValuesFromTabletInfo() {
 	info.DataCenter = info.TabletInfo.Alias.Cell
 	info.Keyspace = info.TabletInfo.Keyspace
 	info.Shard = info.TabletInfo.Shard
-	info.ClusterName = fmt.Sprintf("%v:%v", info.TabletInfo.Keyspace, info.TabletInfo.Shard)
 }

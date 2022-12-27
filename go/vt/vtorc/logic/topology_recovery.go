@@ -99,7 +99,6 @@ type RecoveryAcknowledgement struct {
 	Comment   string
 
 	Key           inst.InstanceKey
-	ClusterName   string
 	ID            int64
 	UID           string
 	AllRecoveries bool
@@ -108,7 +107,6 @@ type RecoveryAcknowledgement struct {
 // BlockedTopologyRecovery represents an entry in the blocked_topology_recovery table
 type BlockedTopologyRecovery struct {
 	FailedInstanceKey    inst.InstanceKey
-	ClusterName          string
 	Analysis             inst.AnalysisCode
 	LastBlockedTimestamp string
 	BlockingRecoveryID   int64

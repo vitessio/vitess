@@ -454,8 +454,8 @@ Cleanup:
 	return nil, err
 }
 
-// GetClusterNameFromKeyspaceAndShard returns the cluster name from keyspace and shard
-func GetClusterNameFromKeyspaceAndShard(keyspace, shard string) string {
+// getKeyspaceShardName returns a single string having both the keyspace and shard
+func getKeyspaceShardName(keyspace, shard string) string {
 	return fmt.Sprintf("%v:%v", keyspace, shard)
 }
 
