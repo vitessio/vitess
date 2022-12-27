@@ -1454,6 +1454,18 @@ var (
 		input:  "create table a (\n\ta float not null default -2.1\n)",
 		output: "create table a (\n\ta float not null default -2.1\n)",
 	}, {
+		input:  "create table a (\n\ta float(24) not null default -1\n)",
+		output: "create table a (\n\ta float(24) not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float(24,10) not null default -1\n)",
+		output: "create table a (\n\ta float(24,10) not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float4 not null default -1\n)",
+		output: "create table a (\n\ta float4 not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float8 not null default -1\n)",
+		output: "create table a (\n\ta float8 not null default -1\n)",
+	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
 		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
 	}, {

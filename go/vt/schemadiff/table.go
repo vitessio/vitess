@@ -435,6 +435,30 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
+		if _, ok := floatTypes[col.Type.Type]; ok {
+			// First, normalize the actual type
+			switch col.Type.Type {
+			case "float4":
+				col.Type.Type = "float"
+			case "float8", "real":
+				col.Type.Type = "double"
+			}
+
+			if col.Type.Length != nil && col.Type.Scale == nil && col.Type.Length.Type == sqlparser.IntVal {
+				if l, err := strconv.ParseInt(col.Type.Length.Val, 10, 64); err == nil {
+					// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
+					// subtly wrong. We use a float for a precision of 24, not a double as the documentation
+					// mentioned. Validated against the actual behavior of MySQL.
+					if l <= 24 {
+						col.Type.Type = "float"
+					} else {
+						col.Type.Type = "double"
+					}
+				}
+				col.Type.Length = nil
+			}
+		}
+
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
