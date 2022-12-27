@@ -507,7 +507,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var primaryOrGroupPrimaryExecutedGtidSet string
 	primaryOrGroupPrimaryDataFound := false
 
-	// Read the cluster_name of the _primary_ or _group_primary_ of our instance, derive it from there.
 	query := `
 			select
 					replication_depth,

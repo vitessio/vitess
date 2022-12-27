@@ -63,11 +63,11 @@ type clusterAnalysis struct {
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
-func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
+func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
 	result := []ReplicationAnalysis{}
 
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
-	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, clusterName)
+	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
 	query := `
 	SELECT
 		vitess_tablet.info AS tablet_info,
@@ -85,7 +85,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		MIN(primary_instance.physical_environment) AS physical_environment,
 		MIN(primary_instance.source_host) AS source_host,
 		MIN(primary_instance.source_port) AS source_port,
-		MIN(primary_instance.cluster_name) AS cluster_name,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
 		MIN(primary_tablet.info) AS primary_tablet_info,
@@ -328,7 +327,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		)
 	WHERE
 		database_instance_maintenance.database_instance_maintenance_id IS NULL
-		AND ? IN ('', primary_instance.cluster_name)
+		AND ? IN ('', vitess_keyspace.keyspace)
+		AND ? IN ('', vitess_tablet.shard)
 	GROUP BY
 		vitess_tablet.hostname,
 		vitess_tablet.port

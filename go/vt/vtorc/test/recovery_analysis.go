@@ -89,7 +89,6 @@ func (info *InfoForRecoveryAnalysis) ConvertToRowMap() sqlutils.RowMap {
 	rowMap := make(sqlutils.RowMap)
 	rowMap["binary_log_file"] = sqlutils.CellData{String: info.LogFile, Valid: true}
 	rowMap["binary_log_pos"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.LogPos), Valid: true}
-	rowMap["cluster_name"] = sqlutils.CellData{String: info.ClusterName, Valid: true}
 	rowMap["count_binlog_server_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_co_primary_replicas"] = sqlutils.CellData{Valid: false}
 	rowMap["count_delayed_replicas"] = sqlutils.CellData{String: fmt.Sprintf("%v", info.CountDelayedReplicas), Valid: true}

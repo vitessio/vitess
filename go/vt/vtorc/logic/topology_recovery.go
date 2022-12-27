@@ -747,7 +747,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
 func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
-	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.ClusterName, &inst.ReplicationAnalysisHints{})
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		return false, err
 	}
@@ -766,7 +766,7 @@ func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
 // CheckAndRecover is the main entry point for the recovery mechanism
 func CheckAndRecover(specificInstance *inst.InstanceKey, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplicaKey *inst.InstanceKey, err error) {
 	// Allow the analysis to run even if we don't want to recover
-	replicationAnalysis, err := inst.GetReplicationAnalysis("", &inst.ReplicationAnalysisHints{IncludeDowntimed: true, AuditAnalysis: true})
+	replicationAnalysis, err := inst.GetReplicationAnalysis("", "", &inst.ReplicationAnalysisHints{IncludeDowntimed: true, AuditAnalysis: true})
 	if err != nil {
 		log.Error(err)
 		return false, nil, err
