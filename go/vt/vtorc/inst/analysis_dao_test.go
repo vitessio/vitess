@@ -519,6 +519,45 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			keyspaceWanted: "ks",
 			shardWanted:    "0",
 			codeWanted:     NoProblem,
+		}, {
+			// If the database_instance table for a tablet is empty (discovery of MySQL information hasn't happened yet or failed)
+			// then we shouldn't run a failure fix on it until the discovery succeeds
+			name: "Empty database_instance table",
+			info: []*test.InfoForRecoveryAnalysis{{
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 101},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_PRIMARY,
+					MysqlHostname: "localhost",
+					MysqlPort:     6708,
+				},
+				DurabilityPolicy:              "semi_sync",
+				LastCheckValid:                1,
+				CountReplicas:                 4,
+				CountValidReplicas:            4,
+				CountValidReplicatingReplicas: 3,
+				CountValidOracleGTIDReplicas:  4,
+				CountLoggingReplicas:          2,
+				IsPrimary:                     1,
+				SemiSyncPrimaryEnabled:        1,
+			}, {
+				TabletInfo: &topodatapb.Tablet{
+					Alias:         &topodatapb.TabletAlias{Cell: "zon1", Uid: 100},
+					Hostname:      "localhost",
+					Keyspace:      "ks",
+					Shard:         "0",
+					Type:          topodatapb.TabletType_REPLICA,
+					MysqlHostname: "localhost",
+					MysqlPort:     6709,
+				},
+				IsInvalid:        1,
+				DurabilityPolicy: "semi_sync",
+			}},
+			keyspaceWanted: "ks",
+			shardWanted:    "0",
+			codeWanted:     NoProblem,
 		},
 	}
 	for _, tt := range tests {
