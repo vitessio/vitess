@@ -107,6 +107,11 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
 
+		// Verify that filtering by keyspace also works in the API as intended
+		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks")
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"Port": %d`, replica.MySQLPort))
+
 		// Check that filtering using keyspace and shard works
 		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
 		assert.Equal(t, 200, status, resp)
@@ -147,6 +152,11 @@ func TestProblemsAPI(t *testing.T) {
 
 		// Check that filtering using keyspace and shard works
 		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=0")
+		assert.Equal(t, 200, status, resp)
+		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
+
+		// Check that filtering using keyspace works
+		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks")
 		assert.Equal(t, 200, status, resp)
 		assert.Contains(t, resp, fmt.Sprintf(`"InstanceAlias": "%v"`, replica.Alias))
 
