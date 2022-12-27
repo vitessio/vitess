@@ -775,7 +775,7 @@ func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey *InstanceKe
 func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) {
 	condition := `
 			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
-			shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 			and (
 				(last_seen < last_checked)
 				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
