@@ -773,9 +773,10 @@ func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey *InstanceKe
 }
 
 // ReadProblemInstances reads all instances with problems
-func ReadProblemInstances(clusterName string) ([](*Instance), error) {
+func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) {
 	condition := `
-			cluster_name LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 			and (
 				(last_seen < last_checked)
 				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
@@ -788,7 +789,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 			)
 		`
 
-	args := sqlutils.Args(clusterName, clusterName, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
 	instances, err := readInstancesByCondition(condition, args, "")
 	if err != nil {
 		return instances, err
@@ -808,15 +809,16 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 
 // ReadLostInRecoveryInstances returns all instances (potentially filtered by cluster)
 // which are currently indicated as downtimed due to being lost during a topology recovery.
-func ReadLostInRecoveryInstances(clusterName string) ([](*Instance), error) {
+func ReadLostInRecoveryInstances(keyspace string, shard string) ([](*Instance), error) {
 	condition := `
 		ifnull(
 			database_instance_downtime.downtime_active = 1
 			and database_instance_downtime.end_timestamp > now()
 			and database_instance_downtime.reason = ?, 0)
-		and ? IN ('', cluster_name)
+		and ? IN ('', keyspace)
+		and ? IN ('', shard)
 	`
-	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, clusterName), "cluster_name asc, replication_depth asc")
+	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, keyspace, shard), "keyspace asc, shard asc, replication_depth asc")
 }
 
 // readUnseenPrimaryKeys will read list of primaries that have never been seen, and yet whose replicas
