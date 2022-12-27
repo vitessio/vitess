@@ -251,7 +251,8 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 				into blocked_topology_recovery (
 					hostname,
 					port,
-					cluster_name,
+					keyspace,
+					shard,
 					analysis,
 					last_blocked_timestamp,
 					blocking_recovery_id
@@ -264,13 +265,15 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 					?
 				)
 				on duplicate key update
-					cluster_name=values(cluster_name),
+					keyspace=values(keyspace),
+					shard=values(shard),
 					analysis=values(analysis),
 					last_blocked_timestamp=values(last_blocked_timestamp),
 					blocking_recovery_id=values(blocking_recovery_id)
 			`, analysisEntry.AnalyzedInstanceKey.Hostname,
 			analysisEntry.AnalyzedInstanceKey.Port,
-			analysisEntry.ClusterDetails.ClusterName,
+			analysisEntry.ClusterDetails.Keyspace,
+			analysisEntry.ClusterDetails.Shard,
 			string(analysisEntry.Analysis),
 			recovery.ID,
 		)
