@@ -30,6 +30,16 @@ type (
 		dataLocalPath string
 		dataURL       string
 	}
+
+	countingReader struct {
+		count int64
+		r     io.Reader
+	}
+
+	countingWriter struct {
+		count int64
+		w     io.Writer
+	}
 )
 
 const (
@@ -56,35 +66,58 @@ func setupBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv 
 }
 
 func (bce *benchmarkCompressEnv) benchmark() {
+	var numUncompressedBytes, numCompressedBytes int64
+
 	bce.b.StopTimer()
 	bce.b.ResetTimer()
 
 	for i := 0; i < bce.b.N; i++ {
+		// Create compressor.
 		logger := logutil.NewMemoryLogger()
-		compressor := bce.compressor(logger)
+		cWriter := &countingWriter{w: io.Discard}
+		compressor := bce.compressor(logger, cWriter)
+
 		reader, err := bce.reader()
 		require.Nil(bce.b, err, "Failed to get data reader.")
+		cReader := &countingReader{r: reader}
 
 		// Only time the part we care about.
 		bce.b.StartTimer()
-		_, err = io.Copy(compressor, reader)
+		_, err = io.Copy(compressor, cReader)
 		bce.b.StopTimer()
 
 		// Don't defer closing, otherwise we can exhaust open file limit.
 		reader.Close()
 		compressor.Close()
 		require.Nil(bce.b, err, logger.Events)
+
+		// Report how many bytes we've compressed.
+		bce.b.SetBytes(cReader.count)
+
+		// Record how many bytes compressed so we can report these later.
+		numCompressedBytes += cWriter.count
+		numUncompressedBytes += cReader.count
 	}
+
+	// Report the average compression ratio (= <uncompressed>:<compressed>) achieved per-operation.
+	//
+	// Must report this outside of b.N loop because b.ReportMetric overrides
+	// any previously reported value for the same unit.
+	bce.b.ReportMetric(
+		float64(numUncompressedBytes)/float64(numCompressedBytes),
+		// By convention, units should end in /op.
+		"compression-ratio/op",
+	)
 }
 
-func (bce *benchmarkCompressEnv) compressor(logger logutil.Logger) io.WriteCloser {
+func (bce *benchmarkCompressEnv) compressor(logger logutil.Logger, writer io.Writer) io.WriteCloser {
 	var compressor io.WriteCloser
 	var err error
 
 	if bce.builtin != "" {
-		compressor, err = newBuiltinCompressor(bce.builtin, io.Discard, logger)
+		compressor, err = newBuiltinCompressor(bce.builtin, writer, logger)
 	} else if bce.external != "" {
-		compressor, err = newExternalCompressor(context.Background(), bce.external, io.Discard, logger)
+		compressor, err = newExternalCompressor(context.Background(), bce.external, writer, logger)
 	}
 
 	require.Nil(bce.b, err, "Failed to create compressor.")
@@ -155,6 +188,18 @@ func (bce *benchmarkCompressEnv) validate() {
 	if bce.builtin == "" && bce.external == "" {
 		require.Fail(bce.b, "Either builtin or external compressor must be specified.")
 	}
+}
+
+func (cr *countingReader) Read(p []byte) (nbytes int, err error) {
+	nbytes, err = cr.r.Read(p)
+	cr.count += int64(nbytes)
+	return
+}
+
+func (cr *countingWriter) Write(p []byte) (nbytes int, err error) {
+	nbytes, err = cr.w.Write(p)
+	cr.count += int64(nbytes)
+	return
 }
 
 func BenchmarkCompressLz4Builtin(b *testing.B) {
