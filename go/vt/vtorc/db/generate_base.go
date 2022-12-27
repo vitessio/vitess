@@ -44,7 +44,6 @@ CREATE TABLE database_instance (
 	exec_source_log_pos bigint NOT NULL,
 	replication_lag_seconds bigint DEFAULT NULL,
 	replica_lag_seconds bigint DEFAULT NULL,
-	cluster_name varchar(128) NOT NULL,
 	read_only TINYint not null default 0,
 	last_sql_error TEXT not null default '',
 	last_io_error TEXT not null default '',
@@ -97,9 +96,6 @@ CREATE TABLE database_instance (
 	replication_group_primary_port smallint NOT NULL DEFAULT 0,
 	PRIMARY KEY (hostname,port)
 )`,
-	`
-CREATE INDEX cluster_name_idx_database_instance ON database_instance(cluster_name)
-	`,
 	`
 CREATE INDEX last_checked_idx_database_instance ON database_instance(last_checked)
 	`,
@@ -159,7 +155,8 @@ CREATE TABLE audit (
 	hostname varchar(128) NOT NULL DEFAULT '',
 	port smallint NOT NULL,
 	message text NOT NULL,
-	cluster_name varchar(128) NOT NULL DEFAULT '',
+	keyspace varchar(128) NOT NULL,
+	shard varchar(128) NOT NULL,
 	PRIMARY KEY (audit_id)
 )`,
 	`
@@ -321,7 +318,8 @@ CREATE TABLE topology_recovery (
 	successor_hostname varchar(128) DEFAULT NULL,
 	successor_port smallint DEFAULT NULL,
 	analysis varchar(128) not null default '',
-	cluster_name varchar(128) not null default '',
+	keyspace varchar(128) NOT NULL,
+	shard varchar(128) NOT NULL,
 	count_affected_replicas int not null default 0,
 	is_successful TINYint NOT NULL DEFAULT 0,
 	acknowledged TINYint NOT NULL DEFAULT 0,
@@ -368,12 +366,13 @@ CREATE TABLE database_instance_topology_history (
 	port smallint NOT NULL,
 	source_host varchar(128) NOT NULL,
 	source_port smallint NOT NULL,
-	cluster_name tinytext NOT NULL,
+	keyspace varchar(128) NOT NULL,
+	shard varchar(128) NOT NULL,
 	version varchar(128) not null default '',
 	PRIMARY KEY (snapshot_unix_timestamp, hostname, port)
 )`,
 	`
-CREATE INDEX cluster_name_idx_database_instance_topology_history ON database_instance_topology_history (snapshot_unix_timestamp, cluster_name)
+CREATE INDEX keyspace_shard_idx_database_instance_topology_history ON database_instance_topology_history (snapshot_unix_timestamp, keyspace, shard)
 	`,
 	`
 DROP TABLE IF EXISTS candidate_database_instance
@@ -418,7 +417,8 @@ CREATE TABLE topology_failure_detection (
 	processing_node_hostname varchar(128) NOT NULL,
 	processcing_node_token varchar(128) NOT NULL,
 	analysis varchar(128) NOT NULL,
-	cluster_name varchar(128) NOT NULL,
+	keyspace varchar(128) NOT NULL,
+	shard varchar(128) NOT NULL,
 	count_affected_replicas int NOT NULL,
 	is_actionable tinyint not null default 0,
 	PRIMARY KEY (detection_id)
@@ -515,14 +515,15 @@ DROP TABLE IF EXISTS blocked_topology_recovery
 CREATE TABLE blocked_topology_recovery (
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
-	cluster_name varchar(128) NOT NULL,
+	keyspace varchar(128) NOT NULL,
+	shard varchar(128) NOT NULL,
 	analysis varchar(128) NOT NULL,
 	last_blocked_timestamp timestamp not null default (''),
 	blocking_recovery_id bigint,
 	PRIMARY KEY (hostname, port)
 )`,
 	`
-CREATE INDEX cluster_blocked_idx_blocked_topology_recovery ON blocked_topology_recovery (cluster_name, last_blocked_timestamp)
+CREATE INDEX keyspace_shard_blocked_idx_blocked_topology_recovery ON blocked_topology_recovery (keyspace, shard, last_blocked_timestamp)
 	`,
 	`
 DROP TABLE IF EXISTS database_instance_last_analysis
@@ -732,15 +733,6 @@ CREATE TABLE database_instance_tls (
 	PRIMARY KEY (hostname,port)
 )`,
 	`
-DROP TABLE IF EXISTS cluster_injected_pseudo_gtid
-`,
-	`
-CREATE TABLE cluster_injected_pseudo_gtid (
-	cluster_name varchar(128) NOT NULL,
-	time_injected timestamp not null default (''),
-	PRIMARY KEY (cluster_name)
-)`,
-	`
 DROP TABLE IF EXISTS hostname_ips
 `,
 	`
@@ -825,7 +817,7 @@ CREATE INDEX active_end_timestamp_idx_database_instance_maintenance on database_
 CREATE INDEX last_registered_idx_hostname_unresolve on hostname_unresolve (last_registered)
 	`,
 	`
-CREATE INDEX cluster_name_in_active_idx_topology_recovery on topology_recovery (cluster_name, in_active_period)
+CREATE INDEX keyspace_shard_in_active_idx_topology_recovery on topology_recovery (keyspace, shard, in_active_period)
 	`,
 	`
 CREATE INDEX end_recovery_idx_topology_recovery on topology_recovery (end_recovery)
