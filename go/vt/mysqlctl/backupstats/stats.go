@@ -47,7 +47,7 @@ type Stats interface {
 	TimedIncrement(time.Duration)
 }
 
-type nopStats struct{}
+type noStats struct{}
 
 type scopedStats struct {
 	count       *vtstats.CountersWithMultiLabels
@@ -58,7 +58,7 @@ type scopedStats struct {
 const unscoped = "-"
 
 var (
-	defaultNopStats *nopStats
+	defaultNoStats *noStats
 
 	labels = []string{"component", "implementation", "operation"}
 
@@ -119,15 +119,15 @@ func RestoreStats() Stats {
 	return newScopedStats(restoreCount, restoreDurationNs, nil)
 }
 
-// NopStats returns a no-op Stats suitable for tests and for backwards
+// NoStats returns a no-op Stats suitable for tests and for backwards
 // compoatibility.
-func NopStats() Stats {
-	return defaultNopStats
+func NoStats() Stats {
+	return defaultNoStats
 }
 
-func (ns *nopStats) Lock(...ScopeType) Stats        { return ns }
-func (ns *nopStats) Scope(...Scope) Stats           { return ns }
-func (ns *nopStats) TimedIncrement(d time.Duration) {}
+func (ns *noStats) Lock(...ScopeType) Stats        { return ns }
+func (ns *noStats) Scope(...Scope) Stats           { return ns }
+func (ns *noStats) TimedIncrement(d time.Duration) {}
 
 func newScopedStats(
 	count *stats.CountersWithMultiLabels,
@@ -144,22 +144,28 @@ func newScopedStats(
 	return &scopedStats{count, durationNs, labelValues}
 }
 
+// Scope returns a new Stats narrowed by the provided scopes. If a provided
+// scope is already set in this Stats, the new Stats uses that scope, and the
+// provided scope is ignored.
 func (s *scopedStats) Scope(scopes ...Scope) Stats {
 	copyOfLabelValues := make([]string, len(s.labelValues))
 	copy(copyOfLabelValues, s.labelValues)
 	for _, scope := range scopes {
+		typeIdx := int(scope.Type)
+
 		// Ignore this scope if the ScopeType is invalid.
-		if scope.Type.Index() > len(copyOfLabelValues)-1 {
+		if typeIdx > len(copyOfLabelValues)-1 {
 			continue
 		}
 		// Ignore this scope if it is already been set in this Stats' label values.
-		if copyOfLabelValues[scope.Type.Index()] == unscoped {
-			copyOfLabelValues[scope.Type.Index()] = scope.Value
+		if copyOfLabelValues[typeIdx] == unscoped {
+			copyOfLabelValues[typeIdx] = scope.Value
 		}
 	}
 	return newScopedStats(s.count, s.durationNs, copyOfLabelValues)
 }
 
+// TimedIncrement increments the count and duration of the current scope.
 func (s *scopedStats) TimedIncrement(d time.Duration) {
 	s.count.Add(s.labelValues, 1)
 	s.durationNs.Add(s.labelValues, int64(d.Nanoseconds()))

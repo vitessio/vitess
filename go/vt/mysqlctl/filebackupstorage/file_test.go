@@ -35,7 +35,7 @@ import (
 // returns a FileBackupStorage based on it
 func setupFileBackupStorage(t *testing.T) backupstorage.BackupStorage {
 	FileBackupStorageRoot = t.TempDir()
-	return newFileBackupStorage(backupstorage.NopParams())
+	return newFileBackupStorage(backupstorage.NoParams())
 }
 
 func TestListBackups(t *testing.T) {

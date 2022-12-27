@@ -39,7 +39,7 @@ var (
 	// Exported for test purposes.
 	FileBackupStorageRoot string
 
-	defaultFileBackupStorage = newFileBackupStorage(backupstorage.NopParams())
+	defaultFileBackupStorage = newFileBackupStorage(backupstorage.NoParams())
 )
 
 func registerFlags(fs *pflag.FlagSet) {

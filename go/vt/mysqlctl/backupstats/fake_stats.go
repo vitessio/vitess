@@ -19,6 +19,9 @@ func NewFakeStats(scopes ...Scope) *FakeStats {
 	}
 }
 
+// Scope returns a new FakeStats with scopes merged from the current FakeStats'
+// scopes and provided scopes. It also records the return value in
+// ScopeReturns, for use in unit test assertions.
 func (fs *FakeStats) Scope(scopes ...Scope) Stats {
 	fs.ScopeCalls = append(fs.ScopeCalls, scopes)
 	newScopeV := map[ScopeType]ScopeValue{}
@@ -39,6 +42,8 @@ func (fs *FakeStats) Scope(scopes ...Scope) Stats {
 	return sfs
 }
 
+// TimedIncrement does nothing except record calls made to this function in
+// TimedIncrementCalls, for use in unit test assertions.
 func (fs *FakeStats) TimedIncrement(d time.Duration) {
 	fs.TimedIncrementCalls = append(fs.TimedIncrementCalls, d)
 }

@@ -56,7 +56,3 @@ func Implementation(v ScopeValue) Scope {
 func Operation(v ScopeValue) Scope {
 	return Scope{ScopeOperation, v}
 }
-
-func (t ScopeType) Index() int {
-	return int(t)
-}

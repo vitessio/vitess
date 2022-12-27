@@ -72,7 +72,7 @@ func TestBackupNoStats(t *testing.T) {
 
 	// It parameterizes the backup storage with nop stats.
 	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
-	require.Equal(t, backupstats.NopStats(), env.backupStorage.WithParamsCalls[0].Stats)
+	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
 // TestBackupParameterizesBackupStorageWithScopedStats tests that Backup passes
@@ -380,7 +380,7 @@ func TestRestoreNoStats(t *testing.T) {
 
 	// It parameterizes the backup storage with nop stats.
 	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
-	require.Equal(t, backupstats.NopStats(), env.backupStorage.WithParamsCalls[0].Stats)
+	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
 }
 
 // TestRestoreParameterizesBackupStorageWithScopedStats tests that Restore passes

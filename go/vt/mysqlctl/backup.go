@@ -115,7 +115,7 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, params BackupParams) error {
 	if params.Stats == nil {
-		params.Stats = stats.NopStats()
+		params.Stats = stats.NoStats()
 	}
 
 	startTs := time.Now()
@@ -306,7 +306,7 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
 	if params.Stats == nil {
-		params.Stats = stats.NopStats()
+		params.Stats = stats.NoStats()
 	}
 
 	startTs := time.Now()

@@ -124,7 +124,7 @@ var (
 	disableRedoLog   = false
 	durationByPhase  = stats.NewGaugesWithSingleLabel(
 		"duration_seconds",
-		"How long it took vtbackup to perform a each phase of operation (in seconds).",
+		"How long it took vtbackup to perform each phase (in seconds).",
 		"phase",
 	)
 )

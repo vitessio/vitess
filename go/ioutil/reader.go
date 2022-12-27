@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+This file contains TimedReadCloser and TimedReader, which are, respectively,
+time-keeping wrappers around ReadCloser and Reader.
+*/
+
 package ioutil
 
 import (
@@ -37,46 +42,38 @@ type TimedReader interface {
 
 type timedReadCloser struct {
 	io.ReadCloser
-	fs    []func(delta time.Duration)
-	total time.Duration
+	*timer
 }
 
 type timedReader struct {
 	io.Reader
-	fs    []func(delta time.Duration)
-	total time.Duration
+	*timer
 }
 
 // NewTimedReadCloser creates a TimedReadCloser which tracks the amount of time
 // spent on Read calls to the provided inner ReadCloser. Optional callbacks
 // will be called with the time spent on each Read call.
 func NewTimedReadCloser(rc io.ReadCloser, fns ...func(delta time.Duration)) TimedReadCloser {
-	return &timedReadCloser{rc, fns, 0}
-}
-
-// Duration reports the total time spend on Read calls so far.
-func (trc *timedReadCloser) Duration() time.Duration {
-	return trc.total
+	return &timedReadCloser{
+		ReadCloser: rc,
+		timer:      &timer{fns, 0},
+	}
 }
 
 // Read calls the inner ReadCloser, increments the total Duration, and calls
 // any registered callbacks with the amount of time spent on this Read call.
 func (trc *timedReadCloser) Read(p []byte) (n int, err error) {
-	t := time.Now()
-	n, err = trc.ReadCloser.Read(p)
-	delta := time.Since(t)
-	trc.total = trc.total + delta
-	for _, f := range trc.fs {
-		f(delta)
-	}
-	return n, err
+	return trc.timer.time(trc.ReadCloser.Read, p)
 }
 
 // NewTimedReader creates a TimedReader which tracks the amount of time spent
 // on Read calls to the provided inner Reader. Optional callbacks will be
 // called with the time spent on each Read call.
 func NewTimedReader(r io.Reader, fns ...func(delta time.Duration)) TimedReader {
-	return &timedReader{r, fns, 0}
+	return &timedReader{
+		Reader: r,
+		timer:  &timer{fns, 0},
+	}
 }
 
 // Duration reports the total time spend on Read calls so far.
@@ -86,13 +83,6 @@ func (tr *timedReader) Duration() time.Duration {
 
 // Read calls the inner Reader, increments the total Duration, and calls
 // any registered callbacks with the amount of time spent on this Read call.
-func (tr *timedReader) Read(p []byte) (n int, err error) {
-	t := time.Now()
-	n, err = tr.Reader.Read(p)
-	delta := time.Since(t)
-	tr.total = tr.total + delta
-	for _, f := range tr.fs {
-		f(delta)
-	}
-	return n, err
+func (tr *timedReader) Read(p []byte) (int, error) {
+	return tr.time(tr.Reader.Read, p)
 }

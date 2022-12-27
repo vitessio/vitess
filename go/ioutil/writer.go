@@ -14,6 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
+/*
+This file contains TimedWriteCloser and TimedWriter, which are, respectively,
+time-keeping wrappers around WriteCloser and Writer.
+*/
+
 package ioutil
 
 import (
@@ -37,62 +42,42 @@ type TimedWriter interface {
 
 type timedWriteCloser struct {
 	io.WriteCloser
-	fs    []func(delta time.Duration)
-	total time.Duration
+	*timer
 }
 
 type timedWriter struct {
 	io.Writer
-	fs    []func(delta time.Duration)
-	total time.Duration
+	*timer
 }
 
 // NewTimedWriteCloser creates a TimedWriteCloser which tracks the amount of
 // time spent on Write calls to the provided inner WriteCloser. Optional
 // callbacks will be called with the time spent on each Write call.
 func NewTimedWriteCloser(wc io.WriteCloser, fns ...func(delta time.Duration)) TimedWriteCloser {
-	return &timedWriteCloser{wc, fns, 0}
-}
-
-// Duration reports the total time spend on Write calls so far.
-func (twc *timedWriteCloser) Duration() time.Duration {
-	return twc.total
+	return &timedWriteCloser{
+		WriteCloser: wc,
+		timer:       &timer{fns, 0},
+	}
 }
 
 // Write calls the inner WriteCloser, increments the total Duration, and calls
 // any registered callbacks with the amount of time spent on this Write call.
-func (twc *timedWriteCloser) Write(p []byte) (n int, err error) {
-	t := time.Now()
-	n, err = twc.WriteCloser.Write(p)
-	delta := time.Since(t)
-	twc.total = twc.total + delta
-	for _, f := range twc.fs {
-		f(delta)
-	}
-	return n, err
+func (twc *timedWriteCloser) Write(p []byte) (int, error) {
+	return twc.timer.time(twc.WriteCloser.Write, p)
 }
 
 // NewTimedWriter creates a TimedWriter which tracks the amount of time spent
 // on Write calls to the provided inner Writer. Optional callbacks will be
 // called with the time spent on each Write call.
 func NewTimedWriter(tw io.Writer, fns ...func(delta time.Duration)) TimedWriter {
-	return &timedWriter{tw, fns, 0}
-}
-
-// Duration reports the total time spend on Write calls so far.
-func (tw *timedWriter) Duration() time.Duration {
-	return tw.total
+	return &timedWriter{
+		Writer: tw,
+		timer:  &timer{fns, 0},
+	}
 }
 
 // Write calls the inner Writer, increments the total Duration, and calls
 // any registered callbacks with the amount of time spent on this Write call.
-func (tw *timedWriter) Write(p []byte) (n int, err error) {
-	t := time.Now()
-	n, err = tw.Writer.Write(p)
-	delta := time.Since(t)
-	tw.total = tw.total + delta
-	for _, f := range tw.fs {
-		f(delta)
-	}
-	return n, err
+func (tw *timedWriter) Write(p []byte) (int, error) {
+	return tw.timer.time(tw.Writer.Write, p)
 }

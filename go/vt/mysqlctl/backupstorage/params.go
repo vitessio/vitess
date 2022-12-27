@@ -37,11 +37,11 @@ type Parameterizer interface {
 	WithParams(Params) BackupStorage
 }
 
-// NopParams gives BackupStorage components way to log and generate stats
+// NoParams gives BackupStorage components way to log and generate stats
 // without doing nil checking.
-func NopParams() Params {
+func NoParams() Params {
 	return Params{
 		Logger: logutil.NewCallbackLogger(func(*logutilpb.Event) {}),
-		Stats:  backupstats.NopStats(),
+		Stats:  backupstats.NoStats(),
 	}
 }
