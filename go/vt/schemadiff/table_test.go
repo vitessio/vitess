@@ -1688,27 +1688,27 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "removes float size with correct type",
 			from: "create table t (id int primary key, f float(24) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` float\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` float,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes float size with correct type",
 			from: "create table t (id int primary key, f float(25) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` double,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "normalizes real type to double",
 			from: "create table t (id int primary key, f real default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` double,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "normalizes float4 type to float",
 			from: "create table t (id int primary key, f float4 default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` float\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` float,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "normalizes float8 type to double",
 			from: "create table t (id int primary key, f float8 default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` double,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes matching charset",
