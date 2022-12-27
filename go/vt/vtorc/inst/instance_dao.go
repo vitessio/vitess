@@ -1172,7 +1172,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_lag_seconds",
 		"replica_lag_seconds",
 		"sql_delay",
-		"cluster_name",
 		"data_center",
 		"region",
 		"physical_environment",
@@ -1259,7 +1258,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SecondsBehindPrimary)
 		args = append(args, instance.ReplicationLagSeconds)
 		args = append(args, instance.SQLDelay)
-		args = append(args, instance.ClusterName)
 		args = append(args, instance.DataCenter)
 		args = append(args, instance.Region)
 		args = append(args, instance.PhysicalEnvironment)
