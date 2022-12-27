@@ -1447,10 +1447,10 @@ func SnapshotTopologies() error {
 		_, err := db.ExecVTOrc(`
         	insert ignore into
         		database_instance_topology_history (snapshot_unix_timestamp,
-        			hostname, port, source_host, source_port, cluster_name, version)
+        			hostname, port, source_host, source_port, version)
         	select
         		UNIX_TIMESTAMP(NOW()),
-        		hostname, port, source_host, source_port, cluster_name, version
+        		hostname, port, source_host, source_port, version
 			from
 				database_instance
 				`,
