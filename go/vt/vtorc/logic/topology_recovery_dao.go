@@ -128,7 +128,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					processing_node_hostname,
 					processcing_node_token,
 					analysis,
-					cluster_name,
+					keyspace,
+					shard,
 					count_affected_replicas,
 					last_detection_id
 				) values (
@@ -144,6 +145,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
+					?,
 					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
 				)
 			`,
@@ -152,7 +154,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 		process.ThisHostname, util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
-		analysisEntry.ClusterDetails.ClusterName,
+		analysisEntry.ClusterDetails.Keyspace,
+		analysisEntry.ClusterDetails.Shard,
 		analysisEntry.CountReplicas,
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 	)
@@ -194,7 +197,7 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 	if failIfClusterInActiveRecovery {
 		// Let's check if this cluster has just experienced a failover and is still in active period.
 		// If so, we reject recovery registration to avoid flapping.
-		recoveries, err := ReadInActivePeriodClusterRecovery(analysisEntry.ClusterDetails.ClusterName)
+		recoveries, err := ReadInActivePeriodClusterRecovery(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
 		if err != nil {
 			log.Error(err)
 			return nil, err
@@ -452,7 +455,8 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
       ifnull(successor_port, 0) as successor_port,
       ifnull(successor_alias, '') as successor_alias,
       analysis,
-      cluster_name,
+      keyspace,
+	  shard,
       count_affected_replicas,
       participating_instances,
       lost_replicas,
@@ -484,7 +488,8 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceKey.Hostname = m.GetString("hostname")
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceKey.Port = m.GetInt("port")
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
-		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
+		topologyRecovery.AnalysisEntry.ClusterDetails.Keyspace = m.GetString("keyspace")
+		topologyRecovery.AnalysisEntry.ClusterDetails.Shard = m.GetString("shard")
 		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
 
 		topologyRecovery.SuccessorKey = &inst.InstanceKey{}
@@ -517,12 +522,13 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 
 // ReadInActivePeriodClusterRecovery reads recoveries (possibly complete!) that are in active period.
 // (may be used to block further recoveries on this cluster)
-func ReadInActivePeriodClusterRecovery(clusterName string) ([]*TopologyRecovery, error) {
+func ReadInActivePeriodClusterRecovery(keyspace string, shard string) ([]*TopologyRecovery, error) {
 	whereClause := `
 		where
 			in_active_period=1
-			and cluster_name=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(clusterName))
+			and keyspace=?
+			and shard=?`
+	return readRecoveries(whereClause, ``, sqlutils.Args(keyspace, shard))
 }
 
 // ReadInActivePeriodSuccessorInstanceRecovery reads completed recoveries for a given instance, where said instance
@@ -537,16 +543,12 @@ func ReadInActivePeriodSuccessorInstanceRecovery(instanceKey *inst.InstanceKey) 
 }
 
 // ReadRecentRecoveries reads latest recovery entries from topology_recovery
-func ReadRecentRecoveries(clusterName string, unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
+func ReadRecentRecoveries(unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
 	whereConditions := []string{}
 	whereClause := ""
 	args := sqlutils.Args()
 	if unacknowledgedOnly {
 		whereConditions = append(whereConditions, `acknowledged=0`)
-	}
-	if clusterName != "" {
-		whereConditions = append(whereConditions, `cluster_name=?`)
-		args = append(args, clusterName)
 	}
 	if len(whereConditions) > 0 {
 		whereClause = fmt.Sprintf("where %s", strings.Join(whereConditions, " and "))
