@@ -106,13 +106,13 @@ type TableOption struct {
 type ColumnKeyOption int
 
 const (
-	colKeyNone ColumnKeyOption = iota
-	colKeyPrimary
-	colKeySpatialKey
-	colKeyFulltextKey
-	colKeyUnique
-	colKeyUniqueKey
-	colKey
+	ColKeyNone ColumnKeyOption = iota
+	ColKeyPrimary
+	ColKeySpatialKey
+	ColKeyFulltextKey
+	ColKeyUnique
+	ColKeyUniqueKey
+	ColKey
 )
 
 // ReferenceAction indicates the action takes by a referential constraint e.g.
