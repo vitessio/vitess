@@ -19,6 +19,8 @@ package inst
 // ClusterInfo makes for a cluster status/info summary
 type ClusterInfo struct {
 	ClusterName                             string
+	Keyspace                                string
+	Shard                                   string
 	CountInstances                          uint
 	HeuristicLag                            int64
 	HasAutomatedPrimaryRecovery             bool
