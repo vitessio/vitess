@@ -8,6 +8,9 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/vtorc/db"
 )
 
 var (
@@ -114,4 +117,41 @@ func fmtArgs(args []any) string {
 		fmt.Fprint(b, ", ")
 	}
 	return b.String()
+}
+
+func TestGetKeyspaceShardName(t *testing.T) {
+	orcDb, err := db.OpenVTOrc()
+	require.NoError(t, err)
+	defer func() {
+		_, err = orcDb.Exec("delete from vitess_tablet")
+		require.NoError(t, err)
+	}()
+
+	ks := "ks"
+	shard := "0"
+	hostname := "localhost"
+	var port int32 = 100
+	tab100 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "zone-1",
+			Uid:  100,
+		},
+		Hostname:      hostname,
+		Keyspace:      ks,
+		Shard:         shard,
+		Type:          topodatapb.TabletType_PRIMARY,
+		MysqlHostname: hostname,
+		MysqlPort:     port,
+	}
+
+	err = SaveTablet(tab100)
+	require.NoError(t, err)
+
+	keyspaceRead, shardRead, err := GetKeyspaceShardName(&InstanceKey{
+		Hostname: hostname,
+		Port:     int(port),
+	})
+	require.NoError(t, err)
+	require.Equal(t, ks, keyspaceRead)
+	require.Equal(t, shard, shardRead)
 }

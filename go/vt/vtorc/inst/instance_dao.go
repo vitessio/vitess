@@ -69,8 +69,6 @@ const (
 	GroupReplicationMemberStateError       = "ERROR"
 )
 
-// instanceKeyInformativeClusterName is a non-authoritative cache; used for auditing or general purpose.
-var instanceKeyInformativeClusterName *cache.Cache
 var forgetInstanceKeys *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
@@ -95,7 +93,6 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.InstancePollSeconds/2)*time.Second, time.Second)
 	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
 }
 
@@ -998,28 +995,27 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 	return err
 }
 
-func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
-	if clusterName, found := instanceKeyInformativeClusterName.Get(instanceKey.StringCode()); found {
-		return clusterName.(string), nil
-	}
+// GetKeyspaceShardName gets the keyspace shard name for the given instance key
+func GetKeyspaceShardName(instanceKey *InstanceKey) (keyspace string, shard string, err error) {
 	query := `
 		select
-			ifnull(max(cluster_name), '') as cluster_name
+			keyspace,
+			shard
 		from
-			database_instance
+			vitess_tablet
 		where
 			hostname = ?
 			and port = ?
 			`
 	err = db.QueryVTOrc(query, sqlutils.Args(instanceKey.Hostname, instanceKey.Port), func(m sqlutils.RowMap) error {
-		clusterName = m.GetString("cluster_name")
-		instanceKeyInformativeClusterName.Set(instanceKey.StringCode(), clusterName, cache.DefaultExpiration)
+		keyspace = m.GetString("keyspace")
+		shard = m.GetString("shard")
 		return nil
 	})
 	if err != nil {
 		log.Error(err)
 	}
-	return clusterName, err
+	return keyspace, shard, err
 }
 
 // ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.

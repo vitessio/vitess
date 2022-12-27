@@ -57,7 +57,8 @@ func AuditOperation(auditType string, instanceKey *InstanceKey, message string) 
 	}
 	clusterName := ""
 	if instanceKey.Hostname != "" {
-		clusterName, _ = GetClusterName(instanceKey)
+		keyspace, shard, _ := GetKeyspaceShardName(instanceKey)
+		clusterName = GetClusterNameFromKeyspaceAndShard(keyspace, shard)
 	}
 
 	auditWrittenToFile := false
