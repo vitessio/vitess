@@ -34,6 +34,51 @@ import "vtrpc.proto";
 // Data structures
 //
 
+message OnlineDDL {
+  string keyspace = 1;
+  string table = 2;
+  string schema = 3;
+  string sql = 4;
+  string uuid = 5;
+  Strategy strategy = 6;
+  string options = 7;
+  vttime.Time request_time = 8;
+  string migration_context = 9;
+  Status status = 10;
+  topodata.TabletAlias tablet_alias = 11;
+  int64 retries = 12;
+  bool ready_to_complete = 13;
+
+  enum Strategy {
+    option allow_alias = true;
+    // OnlineDDL_VITESS uses vreplication to run the OnlineDDL migration. It is
+    // the default strategy for OnlineDDL requests.option
+    //
+    // OnlineDDL_VITESS was also formerly called "ONLINE".
+    VITESS = 0;
+    ONLINE = 0;
+    GHOST = 1;
+    PTOSC = 2;
+    // OnlineDDL_DIRECT runs the migration directly against MySQL (e.g. `ALTER TABLE ...`),
+    // meaning it is not actually an "online" DDL migration.
+    DIRECT = 3;
+    // OnlineDDL_MYSQL is a managed migration (queued and executed by the
+    // scheduler) but runs through a MySQL `ALTER TABLE`.
+	  MYSQL = 4;
+  }
+
+  enum Status {
+    UNKNOWN = 0;
+    REQUESTED = 1;
+    CANCELLED = 2;
+    QUEUED = 3;
+    READY = 4;
+    RUNNING = 5;
+    COMPLETE = 6;
+    FAILED = 7;
+  }
+}
+
 // This structure allows us to manage tablet selection preferences
 // which are eventually passed to a TabletPicker.
 enum TabletSelectionPreference {

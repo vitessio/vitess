@@ -16921,6 +16921,200 @@ export namespace topodata {
 /** Namespace tabletmanagerdata. */
 export namespace tabletmanagerdata {
 
+    /** Properties of an OnlineDDL. */
+    interface IOnlineDDL {
+
+        /** OnlineDDL keyspace */
+        keyspace?: (string|null);
+
+        /** OnlineDDL table */
+        table?: (string|null);
+
+        /** OnlineDDL schema */
+        schema?: (string|null);
+
+        /** OnlineDDL sql */
+        sql?: (string|null);
+
+        /** OnlineDDL uuid */
+        uuid?: (string|null);
+
+        /** OnlineDDL strategy */
+        strategy?: (tabletmanagerdata.OnlineDDL.Strategy|null);
+
+        /** OnlineDDL options */
+        options?: (string|null);
+
+        /** OnlineDDL request_time */
+        request_time?: (vttime.ITime|null);
+
+        /** OnlineDDL migration_context */
+        migration_context?: (string|null);
+
+        /** OnlineDDL status */
+        status?: (tabletmanagerdata.OnlineDDL.Status|null);
+
+        /** OnlineDDL tablet_alias */
+        tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** OnlineDDL retries */
+        retries?: (number|Long|null);
+
+        /** OnlineDDL ready_to_complete */
+        ready_to_complete?: (boolean|null);
+    }
+
+    /** Represents an OnlineDDL. */
+    class OnlineDDL implements IOnlineDDL {
+
+        /**
+         * Constructs a new OnlineDDL.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: tabletmanagerdata.IOnlineDDL);
+
+        /** OnlineDDL keyspace. */
+        public keyspace: string;
+
+        /** OnlineDDL table. */
+        public table: string;
+
+        /** OnlineDDL schema. */
+        public schema: string;
+
+        /** OnlineDDL sql. */
+        public sql: string;
+
+        /** OnlineDDL uuid. */
+        public uuid: string;
+
+        /** OnlineDDL strategy. */
+        public strategy: tabletmanagerdata.OnlineDDL.Strategy;
+
+        /** OnlineDDL options. */
+        public options: string;
+
+        /** OnlineDDL request_time. */
+        public request_time?: (vttime.ITime|null);
+
+        /** OnlineDDL migration_context. */
+        public migration_context: string;
+
+        /** OnlineDDL status. */
+        public status: tabletmanagerdata.OnlineDDL.Status;
+
+        /** OnlineDDL tablet_alias. */
+        public tablet_alias?: (topodata.ITabletAlias|null);
+
+        /** OnlineDDL retries. */
+        public retries: (number|Long);
+
+        /** OnlineDDL ready_to_complete. */
+        public ready_to_complete: boolean;
+
+        /**
+         * Creates a new OnlineDDL instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns OnlineDDL instance
+         */
+        public static create(properties?: tabletmanagerdata.IOnlineDDL): tabletmanagerdata.OnlineDDL;
+
+        /**
+         * Encodes the specified OnlineDDL message. Does not implicitly {@link tabletmanagerdata.OnlineDDL.verify|verify} messages.
+         * @param message OnlineDDL message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: tabletmanagerdata.IOnlineDDL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified OnlineDDL message, length delimited. Does not implicitly {@link tabletmanagerdata.OnlineDDL.verify|verify} messages.
+         * @param message OnlineDDL message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: tabletmanagerdata.IOnlineDDL, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes an OnlineDDL message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns OnlineDDL
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): tabletmanagerdata.OnlineDDL;
+
+        /**
+         * Decodes an OnlineDDL message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns OnlineDDL
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): tabletmanagerdata.OnlineDDL;
+
+        /**
+         * Verifies an OnlineDDL message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates an OnlineDDL message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns OnlineDDL
+         */
+        public static fromObject(object: { [k: string]: any }): tabletmanagerdata.OnlineDDL;
+
+        /**
+         * Creates a plain object from an OnlineDDL message. Also converts values to other types if specified.
+         * @param message OnlineDDL
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: tabletmanagerdata.OnlineDDL, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this OnlineDDL to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+
+        /**
+         * Gets the default type url for OnlineDDL
+         * @param [typeUrlPrefix] your custom typeUrlPrefix(default "type.googleapis.com")
+         * @returns The default type url
+         */
+        public static getTypeUrl(typeUrlPrefix?: string): string;
+    }
+
+    namespace OnlineDDL {
+
+        /** Strategy enum. */
+        enum Strategy {
+            VITESS = 0,
+            ONLINE = 0,
+            GHOST = 1,
+            PTOSC = 2,
+            DIRECT = 3,
+            MYSQL = 4
+        }
+
+        /** Status enum. */
+        enum Status {
+            UNKNOWN = 0,
+            REQUESTED = 1,
+            CANCELLED = 2,
+            QUEUED = 3,
+            READY = 4,
+            RUNNING = 5,
+            COMPLETE = 6,
+            FAILED = 7
+        }
+    }
+
     /** TabletSelectionPreference enum. */
     enum TabletSelectionPreference {
         ANY = 0,
