@@ -617,7 +617,7 @@ func (e *Executor) parseAlterOptions(ctx context.Context, onlineDDL *schema.Onli
 	// and because we don't want gh-ost to know about WITH_GHOST and WITH_PT syntax,
 	// we resort to regexp-based parsing of the query.
 	// TODO(shlomi): generate _alter options_ via sqlparser when it full supports ALTER TABLE syntax.
-	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.SQL)
+	_, _, alterOptions := schema.ParseAlterTableOptions(onlineDDL.Sql)
 	return alterOptions
 }
 
@@ -636,7 +636,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 	}
 
 	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.UUID, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
-	_, err = conn.ExecuteFetch(onlineDDL.SQL, 0, false)
+	_, err = conn.ExecuteFetch(onlineDDL.Sql, 0, false)
 
 	if err != nil {
 		// let's see if this error is actually acceptable
@@ -1296,7 +1296,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 		return nil, err
 	}
 	{
-		stmt, err := sqlparser.ParseStrictDDL(onlineDDL.SQL)
+		stmt, err := sqlparser.ParseStrictDDL(onlineDDL.Sql)
 		if err != nil {
 			return nil, err
 		}
@@ -1318,7 +1318,7 @@ func (e *Executor) initVreplicationOriginalMigration(ctx context.Context, online
 			}
 		}
 	}
-	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.SQL, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
+	v = NewVRepl(onlineDDL.UUID, e.keyspace, e.shard, e.dbName, onlineDDL.Table, vreplTableName, onlineDDL.Sql, onlineDDL.StrategySetting().IsAnalyzeTableFlag())
 	return v, nil
 }
 
@@ -1937,8 +1937,8 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 			Keyspace: row["keyspace"].ToString(),
 			Table:    row["mysql_table"].ToString(),
 			Schema:   row["mysql_schema"].ToString(),
+			Sql:      row["migration_statement"].ToString(),
 		},
-		SQL:              row["migration_statement"].ToString(),
 		UUID:             row["migration_uuid"].ToString(),
 		Strategy:         schema.DDLStrategy(row["strategy"].ToString()),
 		Options:          row["options"].ToString(),
@@ -2494,7 +2494,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
 					return err
 				}
-				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, revertMigration.Table, artifactTable).Query
+				onlineDDL.Sql = sqlparser.BuildParsedQuery(sqlRenameTable, revertMigration.Table, artifactTable).Query
 				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
@@ -2519,7 +2519,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 				if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
 					return err
 				}
-				onlineDDL.SQL = sqlparser.BuildParsedQuery(sqlRenameTable, artifactTable, revertMigration.Table).Query
+				onlineDDL.Sql = sqlparser.BuildParsedQuery(sqlRenameTable, artifactTable, revertMigration.Table).Query
 				if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 					return err
 				}
@@ -2540,7 +2540,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 					if err := e.updateArtifacts(ctx, onlineDDL.UUID, artifactTable); err != nil {
 						return err
 					}
-					onlineDDL.SQL, _, err = e.generateSwapTablesStatement(ctx, onlineDDL.Table, artifactTable)
+					onlineDDL.Sql, _, err = e.generateSwapTablesStatement(ctx, onlineDDL.Table, artifactTable)
 					if err != nil {
 						return err
 					}
@@ -2568,7 +2568,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schema.OnlineDDL) (diff schemadiff.EntityDiff, err error) {
 
 	// Modify the CREATE TABLE statement to indicate a different, made up table name, known as the "comparison table"
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 	if err != nil {
 		return nil, err
 	}
@@ -2629,7 +2629,7 @@ func (e *Executor) evaluateDeclarativeDiff(ctx context.Context, onlineDDL *schem
 	case *sqlparser.CreateView:
 		diff, err = schemadiff.DiffCreateViewsQueries(existingShowCreateTable, newShowCreateTable, hints)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected CREATE TABLE or CREATE VIEW in online DDL statement: %v", onlineDDL.SQL)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "expected CREATE TABLE or CREATE VIEW in online DDL statement: %v", onlineDDL.Sql)
 	}
 	if err != nil {
 		return nil, err
@@ -2647,7 +2647,7 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 	query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsByContextAndSQL,
 		sqltypes.StringBindVariable(e.keyspace),
 		sqltypes.StringBindVariable(onlineDDL.MigrationContext),
-		sqltypes.StringBindVariable(onlineDDL.SQL),
+		sqltypes.StringBindVariable(onlineDDL.Sql),
 	)
 	if err != nil {
 		return "", err
@@ -2693,13 +2693,13 @@ func (e *Executor) executeDropDDLActionMigration(ctx context.Context, onlineDDL 
 
 	// We transform a DROP TABLE into a RENAME TABLE statement, so as to remove the table safely and asynchronously.
 
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 	if err != nil {
 		return failMigration(err)
 	}
 
 	var toTableName string
-	onlineDDL.SQL, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), newGCTableRetainTime())
+	onlineDDL.Sql, toTableName, err = schema.GenerateRenameStatementWithUUID(onlineDDL.Table, schema.HoldTableGCState, onlineDDL.GetGCUUID(), newGCTableRetainTime())
 	if err != nil {
 		return failMigration(err)
 	}
@@ -2732,7 +2732,7 @@ func (e *Executor) executeCreateDDLActionMigration(ctx context.Context, onlineDD
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 	if err != nil {
 		return failMigration(err)
 	}
@@ -2834,7 +2834,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	if err != nil {
 		return err
 	}
-	stmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	stmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 	if err != nil {
 		return err
 	}
@@ -2935,7 +2935,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 	switch specialPlan.operation {
 	case instantDDLSpecialOperation:
 		e.addInstantAlgorithm(specialPlan.alterTable)
-		onlineDDL.SQL = sqlparser.CanonicalString(specialPlan.alterTable)
+		onlineDDL.Sql = sqlparser.CanonicalString(specialPlan.alterTable)
 		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 			return false, err
 		}
@@ -2993,7 +2993,7 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 	failMigration := func(err error) error {
 		return e.failMigration(ctx, onlineDDL, err)
 	}
-	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+	ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 	if err != nil {
 		return failMigration(err)
 	}
@@ -3100,7 +3100,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// - Implicitly do nothing, if the table does not exist
 			{
 				// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
-				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+				ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 				if err != nil {
 					return failMigration(err)
 				}
@@ -3127,7 +3127,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 			// - Implicitly do nothing, if the table exists and is identical to CREATE statement
 
 			// Sanity: reject IF NOT EXISTS statements, because they don't make sense (or are ambiguous) in declarative mode
-			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+			ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 			if err != nil {
 				return failMigration(err)
 			}
@@ -3161,11 +3161,11 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 					// Rewrite as CREATE OR REPLACE
 					// this will be handled later on.
 					createViewStmt.IsReplace = true
-					onlineDDL.SQL = sqlparser.String(createViewStmt)
+					onlineDDL.Sql = sqlparser.String(createViewStmt)
 				} else {
 					// a TABLE
 					ddlAction = sqlparser.AlterDDLAction
-					onlineDDL.SQL = diff.CanonicalStatementString()
+					onlineDDL.Sql = diff.CanonicalStatementString()
 				}
 				_ = e.updateMigrationMessage(ctx, onlineDDL.UUID, diff.CanonicalStatementString())
 			} else {
@@ -3268,10 +3268,10 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 	}
 	{
 		// We strip out any VT query comments because our simplified parser doesn't work well with comments
-		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.SQL)
+		ddlStmt, _, err := schema.ParseOnlineDDLStatement(onlineDDL.Sql)
 		if err == nil {
 			ddlStmt.SetComments(sqlparser.Comments{})
-			onlineDDL.SQL = sqlparser.String(ddlStmt)
+			onlineDDL.Sql = sqlparser.String(ddlStmt)
 		}
 	}
 	log.Infof("Executor.runNextMigration: migration %s is non conflicting and will be executed next", onlineDDL.UUID)
@@ -4674,7 +4674,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(e.shard),
 		sqltypes.StringBindVariable(e.dbName),
 		sqltypes.StringBindVariable(onlineDDL.Table),
-		sqltypes.StringBindVariable(onlineDDL.SQL),
+		sqltypes.StringBindVariable(onlineDDL.Sql),
 		sqltypes.StringBindVariable(string(onlineDDL.Strategy)),
 		sqltypes.StringBindVariable(onlineDDL.Options),
 		sqltypes.StringBindVariable(actionStr),

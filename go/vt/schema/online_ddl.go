@@ -93,7 +93,6 @@ type OnlineDDL struct {
 	m sync.Mutex
 	*tabletmanagerdatapb.OnlineDDL
 
-	SQL         string      `json:"sql,omitempty"`
 	UUID        string      `json:"uuid,omitempty"`
 	Strategy    DDLStrategy `json:"strategy,omitempty"`
 	Options     string      `json:"options,omitempty"`
@@ -254,8 +253,8 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
 			Keyspace: keyspace,
 			Table:    table,
+			Sql:      sql,
 		},
-		SQL:              sql,
 		UUID:             onlineDDLUUID,
 		Strategy:         ddlStrategySetting.Strategy,
 		Options:          ddlStrategySetting.Options,
@@ -305,8 +304,9 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	stmt.Format(buf)
 
 	onlineDDL = &OnlineDDL{
-		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{},
-		SQL:       buf.String(),
+		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+			Sql: buf.String(),
+		},
 	}
 	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
 		return nil, err
@@ -345,7 +345,7 @@ func (onlineDDL *OnlineDDL) ToJSON() ([]byte, error) {
 
 // sqlWithoutComments returns the SQL statement without comment directives. Useful for tests
 func (onlineDDL *OnlineDDL) sqlWithoutComments() (sql string, err error) {
-	sql = onlineDDL.SQL
+	sql = onlineDDL.Sql
 	stmt, err := sqlparser.Parse(sql)
 	if err != nil {
 		// query validation and rebuilding
@@ -375,13 +375,13 @@ func (onlineDDL *OnlineDDL) GetAction() (action sqlparser.DDLAction, err error) 
 		return sqlparser.RevertDDLAction, nil
 	}
 
-	_, action, err = ParseOnlineDDLStatement(onlineDDL.SQL)
+	_, action, err = ParseOnlineDDLStatement(onlineDDL.Sql)
 	return action, err
 }
 
 // IsView returns 'true' when the statement affects a VIEW
 func (onlineDDL *OnlineDDL) IsView() bool {
-	stmt, _, err := ParseOnlineDDLStatement(onlineDDL.SQL)
+	stmt, _, err := ParseOnlineDDLStatement(onlineDDL.Sql)
 	if err != nil {
 		return false
 	}
@@ -408,27 +408,27 @@ func (onlineDDL *OnlineDDL) GetActionStr() (action sqlparser.DDLAction, actionSt
 	case sqlparser.DropDDLAction:
 		return action, sqlparser.DropStr, nil
 	}
-	return action, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported online DDL action. SQL=%s", onlineDDL.SQL)
+	return action, "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported online DDL action. SQL=%s", onlineDDL.Sql)
 }
 
 // GetRevertUUID works when this migration is a revert for another migration. It returns the UUID
 // fo the reverted migration.
 // The function returns error when this is not a revert migration.
 func (onlineDDL *OnlineDDL) GetRevertUUID() (uuid string, err error) {
-	if uuid, err := legacyParseRevertUUID(onlineDDL.SQL); err == nil {
+	if uuid, err := legacyParseRevertUUID(onlineDDL.Sql); err == nil {
 		return uuid, nil
 	}
-	if stmt, err := sqlparser.Parse(onlineDDL.SQL); err == nil {
+	if stmt, err := sqlparser.Parse(onlineDDL.Sql); err == nil {
 		if revert, ok := stmt.(*sqlparser.RevertMigration); ok {
 			return revert.UUID, nil
 		}
 	}
-	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "not a Revert DDL: '%s'", onlineDDL.SQL)
+	return "", vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "not a Revert DDL: '%s'", onlineDDL.Sql)
 }
 
 // ToString returns a simple string representation of this instance
 func (onlineDDL *OnlineDDL) ToString() string {
-	return fmt.Sprintf("OnlineDDL: keyspace=%s, table=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.Table, onlineDDL.SQL)
+	return fmt.Sprintf("OnlineDDL: keyspace=%s, table=%s, sql=%s", onlineDDL.Keyspace, onlineDDL.Table, onlineDDL.Sql)
 }
 
 // GetGCUUID gets this OnlineDDL UUID in GC UUID format

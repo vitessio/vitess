@@ -197,7 +197,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 				return false, err
 			}
 			for _, onlineDDL := range onlineDDLs {
-				exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+				exec.executeOnAllTablets(ctx, execResult, onlineDDL.Sql, true)
 				if len(execResult.SuccessShards) > 0 {
 					execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
 					exec.logger.Printf("%s\n", onlineDDL.UUID)
@@ -212,7 +212,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 			execResult.ExecutorErr = err.Error()
 			return false, err
 		}
-		exec.executeOnAllTablets(ctx, execResult, onlineDDL.SQL, true)
+		exec.executeOnAllTablets(ctx, execResult, onlineDDL.Sql, true)
 		execResult.UUIDs = append(execResult.UUIDs, onlineDDL.UUID)
 		exec.logger.Printf("%s\n", onlineDDL.UUID)
 		return true, nil

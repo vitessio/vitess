@@ -26,6 +26,8 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestCreateUUID(t *testing.T) {
@@ -88,7 +90,11 @@ func TestGetActionStr(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.statement, func(t *testing.T) {
-			onlineDDL := &OnlineDDL{SQL: ts.statement}
+			onlineDDL := &OnlineDDL{
+				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+					Sql: ts.statement,
+				},
+			}
 			_, actionStr, err := onlineDDL.GetActionStr()
 			if ts.isError {
 				assert.Error(t, err)
@@ -149,7 +155,11 @@ func TestGetRevertUUID(t *testing.T) {
 	}
 	for _, ts := range tt {
 		t.Run(ts.statement, func(t *testing.T) {
-			onlineDDL := &OnlineDDL{SQL: ts.statement}
+			onlineDDL := &OnlineDDL{
+				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+					Sql: ts.statement,
+				},
+			}
 			uuid, err := onlineDDL.GetRevertUUID()
 			if ts.isError {
 				assert.Error(t, err)
@@ -220,9 +230,9 @@ func TestNewOnlineDDL(t *testing.T) {
 					}
 					assert.NoError(t, err)
 					// onlineDDL.SQL enriched with /*vt+ ... */ comment
-					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(onlineDDL.UUID)))
-					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(migrationContext)))
-					assert.Contains(t, onlineDDL.SQL, hex.EncodeToString([]byte(string(stgy.Strategy))))
+					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(onlineDDL.UUID)))
+					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(migrationContext)))
+					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(string(stgy.Strategy))))
 				})
 			}
 		})
@@ -386,7 +396,7 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 			o1, err := NewOnlineDDL("ks", "t", query, strategySetting, migrationContext, "")
 			require.NoError(t, err)
 
-			stmt, err := sqlparser.Parse(o1.SQL)
+			stmt, err := sqlparser.Parse(o1.Sql)
 			require.NoError(t, err)
 
 			o2, err := OnlineDDLFromCommentedStatement(stmt)

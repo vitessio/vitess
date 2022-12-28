@@ -95,7 +95,7 @@ func (v *OnlineDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars ma
 		s := Send{
 			Keyspace:          v.Keyspace,
 			TargetDestination: v.TargetDestination,
-			Query:             onlineDDL.SQL,
+			Query:             onlineDDL.Sql,
 			IsDML:             false,
 			SingleShardOnly:   false,
 		}
