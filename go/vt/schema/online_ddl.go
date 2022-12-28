@@ -24,10 +24,13 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var (
@@ -83,13 +86,21 @@ const (
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace string      `json:"keyspace,omitempty"`
-	Table    string      `json:"table,omitempty"`
-	Schema   string      `json:"schema,omitempty"`
-	SQL      string      `json:"sql,omitempty"`
-	UUID     string      `json:"uuid,omitempty"`
-	Strategy DDLStrategy `json:"strategy,omitempty"`
-	Options  string      `json:"options,omitempty"`
+	// m is used to provide concurrent access to ReadyToComplete logic. Callers
+	// should use the IsReadyToComplete and MarkReadyToComplete methods to
+	// safely modify the value of that field rather than accessing it through
+	// the embedded protobuf message directly.
+	m sync.Mutex
+	*tabletmanagerdatapb.OnlineDDL
+
+	Keyspace    string      `json:"keyspace,omitempty"`
+	Table       string      `json:"table,omitempty"`
+	Schema      string      `json:"schema,omitempty"`
+	SQL         string      `json:"sql,omitempty"`
+	UUID        string      `json:"uuid,omitempty"`
+	Strategy    DDLStrategy `json:"strategy,omitempty"`
+	Options     string      `json:"options,omitempty"`
+	RequestTime int64       `json:"time_created,omitempty"`
 	// Stateful fields:
 	MigrationContext   string          `json:"context,omitempty"`
 	Status             OnlineDDLStatus `json:"status,omitempty"`
