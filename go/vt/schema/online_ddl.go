@@ -93,9 +93,6 @@ type OnlineDDL struct {
 	m sync.Mutex
 	*tabletmanagerdatapb.OnlineDDL
 
-	Keyspace    string      `json:"keyspace,omitempty"`
-	Table       string      `json:"table,omitempty"`
-	Schema      string      `json:"schema,omitempty"`
 	SQL         string      `json:"sql,omitempty"`
 	UUID        string      `json:"uuid,omitempty"`
 	Strategy    DDLStrategy `json:"strategy,omitempty"`
@@ -254,8 +251,10 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 	}
 
 	return &OnlineDDL{
-		Keyspace:         keyspace,
-		Table:            table,
+		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+			Keyspace: keyspace,
+			Table:    table,
+		},
 		SQL:              sql,
 		UUID:             onlineDDLUUID,
 		Strategy:         ddlStrategySetting.Strategy,
@@ -306,7 +305,8 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 	stmt.Format(buf)
 
 	onlineDDL = &OnlineDDL{
-		SQL: buf.String(),
+		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{},
+		SQL:       buf.String(),
 	}
 	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
 		return nil, err

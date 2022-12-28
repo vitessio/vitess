@@ -48,10 +48,6 @@ import (
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
@@ -65,6 +61,12 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 var (
@@ -1931,19 +1933,20 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		return nil, nil, ErrMigrationNotFound
 	}
 	onlineDDL = &schema.OnlineDDL{
-		Keyspace:           row["keyspace"].ToString(),
-		Table:              row["mysql_table"].ToString(),
-		Schema:             row["mysql_schema"].ToString(),
-		SQL:                row["migration_statement"].ToString(),
-		UUID:               row["migration_uuid"].ToString(),
-		Strategy:           schema.DDLStrategy(row["strategy"].ToString()),
-		Options:            row["options"].ToString(),
-		Status:             schema.OnlineDDLStatus(row["migration_status"].ToString()),
-		Retries:            row.AsInt64("retries", 0),
-		ReadyToComplete:    row.AsInt64("ready_to_complete", 0),
-		WasReadyToComplete: row.AsInt64("was_ready_to_complete", 0),
-		TabletAlias:        row["tablet"].ToString(),
-		MigrationContext:   row["migration_context"].ToString(),
+		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+			Keyspace: row["keyspace"].ToString(),
+			Table:    row["mysql_table"].ToString(),
+			Schema:   row["mysql_schema"].ToString(),
+		},
+		SQL:              row["migration_statement"].ToString(),
+		UUID:             row["migration_uuid"].ToString(),
+		Strategy:         schema.DDLStrategy(row["strategy"].ToString()),
+		Options:          row["options"].ToString(),
+		Status:           schema.OnlineDDLStatus(row["migration_status"].ToString()),
+		Retries:          row.AsInt64("retries", 0),
+		ReadyToComplete:  row.AsInt64("ready_to_complete", 0),
+		TabletAlias:      row["tablet"].ToString(),
+		MigrationContext: row["migration_context"].ToString(),
 	}
 	return onlineDDL, row, nil
 }

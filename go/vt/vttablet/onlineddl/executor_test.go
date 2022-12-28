@@ -29,6 +29,8 @@ import (
 
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestGetConstraintType(t *testing.T) {
@@ -131,7 +133,13 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test", Options: tc.strategyOptions}
+			onlineDDL := &schema.OnlineDDL{
+				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+					Table: "onlineddl_test",
+				},
+				Options: tc.strategyOptions,
+				UUID:    "a5a563da_dc1a_11ec_a416_0a43f95f28a3",
+			}
 			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
 			if tc.expectError != "" {
 				require.Error(t, err)
@@ -217,7 +225,13 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			m := map[string]string{}
-			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
+			onlineDDL := &schema.OnlineDDL{
+				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+					Table: "t",
+				},
+				Options: "--unsafe-allow-foreign-keys",
+				UUID:    "a5a563da_dc1a_11ec_a416_0a43f95f28a3",
+			}
 			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
 			assert.NoError(t, err)
 			altersStrings := []string{}
