@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtexplain"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/spf13/pflag"
@@ -44,7 +45,7 @@ var (
 	ksShardMapFileFlag string
 	normalize          bool
 	dbName             string
-	plannerVersionStr  string
+	plannerVersionStr  = planbuilder.Gen4.String()
 
 	numShards       = 2
 	replicationMode = "ROW"
