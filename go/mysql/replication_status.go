@@ -179,6 +179,11 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 // provided as a list of ReplicationStatus's. This method only works if the flavor for all retrieved ReplicationStatus's is MySQL.
 // The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
 func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationStatus) (Mysql56GTIDSet, error) {
+	if len(otherReplicaStatuses) == 0 {
+		// If there is nothing to compare this replica against, then we must assume that its GTID set is the correct one.
+		return nil, nil
+	}
+
 	relayLogSet, ok := s.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
 		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")
