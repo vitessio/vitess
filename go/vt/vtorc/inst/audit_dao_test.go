@@ -106,7 +106,9 @@ func TestAuditOperation(t *testing.T) {
 		err = AuditOperation(auditType, instance100, message)
 		require.NoError(t, err)
 
-		// Give a little time for the write to succeed and be emptied from the write buffer.
+		// Give a little time for the write to succeed since it happens in a separate go-routine
+		// There is no way to wait for that write to complete. This sleep is required to prevent this test from
+		// becoming flaky wherein we sometimes read the file before the contents are written.
 		time.Sleep(100 * time.Millisecond)
 		fileContent, err := os.ReadFile(file.Name())
 		require.NoError(t, err)
