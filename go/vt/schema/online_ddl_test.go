@@ -410,3 +410,49 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 		})
 	}
 }
+
+func TestFromJSON(t *testing.T) {
+	tests := []struct {
+		json      string
+		expected  *OnlineDDL
+		shouldErr bool
+	}{
+		{
+			json:     "{}",
+			expected: &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}},
+		},
+		{
+			// (andrew) TODO: expand this test case to contain all the struct
+			// fields.
+			json: `{
+				"keyspace": "ks",
+				"table": "t1",
+				"schema": "CREATE TABLE t1 (id int(11) NOT NULL PRIMARY KEY)",
+				"sql": "ALTER TABLE t1 ADD COLUMN i INT"
+			}`,
+			expected: &OnlineDDL{
+				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+					Keyspace: "ks",
+					Table:    "t1",
+					Schema:   "CREATE TABLE t1 (id int(11) NOT NULL PRIMARY KEY)",
+					Sql:      "ALTER TABLE t1 ADD COLUMN i INT",
+				},
+			},
+		},
+	}
+
+	for _, test := range tests {
+		test := test
+
+		t.Run("", func(t *testing.T) {
+			actual, err := FromJSON([]byte(test.json))
+			if test.shouldErr {
+				assert.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			assert.Equal(t, test.expected, actual)
+		})
+	}
+}

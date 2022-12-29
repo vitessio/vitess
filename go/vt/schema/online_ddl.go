@@ -108,7 +108,7 @@ type OnlineDDL struct {
 
 // FromJSON creates an OnlineDDL from json
 func FromJSON(bytes []byte) (*OnlineDDL, error) {
-	onlineDDL := &OnlineDDL{}
+	onlineDDL := &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}}
 	err := json.Unmarshal(bytes, onlineDDL)
 	return onlineDDL, err
 }
