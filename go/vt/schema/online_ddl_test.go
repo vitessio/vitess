@@ -230,7 +230,7 @@ func TestNewOnlineDDL(t *testing.T) {
 					}
 					assert.NoError(t, err)
 					// onlineDDL.SQL enriched with /*vt+ ... */ comment
-					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(onlineDDL.UUID)))
+					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(onlineDDL.Uuid)))
 					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(migrationContext)))
 					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(string(stgy.Strategy))))
 				})
@@ -244,14 +244,14 @@ func TestNewOnlineDDL(t *testing.T) {
 
 		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
 		assert.NoError(t, err)
-		assert.True(t, IsOnlineDDLUUID(onlineDDL.UUID))
+		assert.True(t, IsOnlineDDLUUID(onlineDDL.Uuid))
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc")
 		assert.Error(t, err)
 
 		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.NoError(t, err)
-		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.UUID)
+		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.Uuid)
 
 		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.Error(t, err)
@@ -401,8 +401,8 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 
 			o2, err := OnlineDDLFromCommentedStatement(stmt)
 			require.NoError(t, err)
-			assert.True(t, IsOnlineDDLUUID(o2.UUID))
-			assert.Equal(t, o1.UUID, o2.UUID)
+			assert.True(t, IsOnlineDDLUUID(o2.Uuid))
+			assert.Equal(t, o1.Uuid, o2.Uuid)
 			assert.Equal(t, migrationContext, o2.MigrationContext)
 			assert.Equal(t, "t", o2.Table)
 			assert.Equal(t, strategySetting.Strategy, o2.Strategy)
@@ -412,6 +412,9 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 }
 
 func TestFromJSON(t *testing.T) {
+	uuid, err := CreateUUIDWithDelimiter("_")
+	require.NoError(t, err, "failed to create UUID for tests")
+
 	tests := []struct {
 		json      string
 		expected  *OnlineDDL
@@ -424,18 +427,20 @@ func TestFromJSON(t *testing.T) {
 		{
 			// (andrew) TODO: expand this test case to contain all the struct
 			// fields.
-			json: `{
+			json: fmt.Sprintf(`{
 				"keyspace": "ks",
 				"table": "t1",
 				"schema": "CREATE TABLE t1 (id int(11) NOT NULL PRIMARY KEY)",
-				"sql": "ALTER TABLE t1 ADD COLUMN i INT"
-			}`,
+				"sql": "ALTER TABLE t1 ADD COLUMN i INT",
+				"uuid": "%s"
+			}`, uuid),
 			expected: &OnlineDDL{
 				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
 					Keyspace: "ks",
 					Table:    "t1",
 					Schema:   "CREATE TABLE t1 (id int(11) NOT NULL PRIMARY KEY)",
 					Sql:      "ALTER TABLE t1 ADD COLUMN i INT",
+					Uuid:     uuid,
 				},
 			},
 		},

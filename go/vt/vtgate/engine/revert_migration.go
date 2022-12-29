@@ -104,7 +104,7 @@ func (v *RevertMigration) TryExecute(ctx context.Context, vcursor VCursor, bindV
 		return result, err
 	}
 	result.Rows = append(result.Rows, []sqltypes.Value{
-		sqltypes.NewVarChar(onlineDDL.UUID),
+		sqltypes.NewVarChar(onlineDDL.Uuid),
 	})
 	return result, err
 }

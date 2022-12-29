@@ -360,7 +360,7 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 
 	createTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "in Executor.analyzeSpecialAlterPlan(), uuid=%v, table=%v", onlineDDL.UUID, onlineDDL.Table)
+		return nil, vterrors.Wrapf(err, "in Executor.analyzeSpecialAlterPlan(), uuid=%v, table=%v", onlineDDL.Uuid, onlineDDL.Table)
 	}
 
 	// special plans which support reverts are trivially desired:

@@ -93,7 +93,6 @@ type OnlineDDL struct {
 	m sync.Mutex
 	*tabletmanagerdatapb.OnlineDDL
 
-	UUID        string      `json:"uuid,omitempty"`
 	Strategy    DDLStrategy `json:"strategy,omitempty"`
 	Options     string      `json:"options,omitempty"`
 	RequestTime int64       `json:"time_created,omitempty"`
@@ -254,8 +253,8 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			Keyspace: keyspace,
 			Table:    table,
 			Sql:      sql,
+			Uuid:     onlineDDLUUID,
 		},
-		UUID:             onlineDDLUUID,
 		Strategy:         ddlStrategySetting.Strategy,
 		Options:          ddlStrategySetting.Options,
 		MigrationContext: migrationContext,
@@ -308,10 +307,10 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 			Sql: buf.String(),
 		},
 	}
-	if onlineDDL.UUID, err = decodeDirective("uuid"); err != nil {
+	if onlineDDL.Uuid, err = decodeDirective("uuid"); err != nil {
 		return nil, err
 	}
-	if !IsOnlineDDLUUID(onlineDDL.UUID) {
+	if !IsOnlineDDLUUID(onlineDDL.Uuid) {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid UUID read from statement %s", sqlparser.String(stmt))
 	}
 	if onlineDDL.Table, err = decodeDirective("table"); err != nil {
@@ -433,7 +432,7 @@ func (onlineDDL *OnlineDDL) ToString() string {
 
 // GetGCUUID gets this OnlineDDL UUID in GC UUID format
 func (onlineDDL *OnlineDDL) GetGCUUID() string {
-	return OnlineDDLToGCUUID(onlineDDL.UUID)
+	return OnlineDDLToGCUUID(onlineDDL.Uuid)
 }
 
 // CreateOnlineDDLUUID creates a UUID in OnlineDDL format, e.g.:
