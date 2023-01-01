@@ -133,6 +133,12 @@ type Engine struct {
 	ec        *externalConnector
 
 	throttlerClient *throttle.Client
+
+	// This should only be set in Test Engines in order to short
+	// curcuit functions as needed in unit tests. It's automatically
+	// enabled in NewSimpleTestEngine. This should NOT be used in
+	// production.
+	shortcircuit bool
 }
 
 type journalEvent struct {
@@ -184,6 +190,24 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(externalConfig),
+	}
+	return vre
+}
+
+// NewSimpleTestEngine creates a new Engine for testing that can
+// also short curcuit functions as needed.
+func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	vre := &Engine{
+		controllers:             make(map[int]*controller),
+		ts:                      ts,
+		cell:                    cell,
+		mysqld:                  mysqld,
+		dbClientFactoryFiltered: dbClientFactoryFiltered,
+		dbClientFactoryDba:      dbClientFactoryDba,
+		dbName:                  dbname,
+		journaler:               make(map[string]*journalEvent),
+		ec:                      newExternalConnector(externalConfig),
+		shortcircuit:            true,
 	}
 	return vre
 }
@@ -720,6 +744,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		return err
 	}
 	defer vre.wg.Done()
+
+	if vre.shortcircuit {
+		return nil
+	}
 
 	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {

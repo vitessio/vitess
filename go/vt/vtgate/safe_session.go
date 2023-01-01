@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -888,7 +889,7 @@ func (session *SafeSession) EnableLogging() {
 	session.logging = &executeLogger{}
 }
 
-func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv map[string]*querypb.BindVariable) {
+func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return
 	}
@@ -898,12 +899,11 @@ func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv
 	l.lastID++
 	if begin {
 		l.entries = append(l.entries, engine.ExecuteEntry{
-			ID:         id,
-			Keyspace:   target.Keyspace,
-			Shard:      target.Shard,
-			TabletType: target.TabletType,
-			Cell:       target.Cell,
-			Query:      "begin",
+			ID:        id,
+			Target:    target,
+			Gateway:   gateway,
+			Query:     "begin",
+			FiredFrom: primitive,
 		})
 	}
 	ast, err := sqlparser.Parse(query)
@@ -920,12 +920,11 @@ func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv
 	}
 
 	l.entries = append(l.entries, engine.ExecuteEntry{
-		ID:         id,
-		Keyspace:   target.Keyspace,
-		Shard:      target.Shard,
-		TabletType: target.TabletType,
-		Cell:       target.Cell,
-		Query:      q,
+		ID:        id,
+		Target:    target,
+		Gateway:   gateway,
+		Query:     q,
+		FiredFrom: primitive,
 	})
 }
 

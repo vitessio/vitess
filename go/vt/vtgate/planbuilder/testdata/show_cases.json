@@ -160,7 +160,14 @@
       "QueryType": "SHOW",
       "Original": "show charset",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Charset": "VARCHAR",
+          "Default collation": "VARCHAR",
+          "Description": "VARCHAR",
+          "Maxlen": "INT32"
+        },
+        "RowCount": 2
       }
     }
   },
@@ -271,7 +278,11 @@
       "QueryType": "SHOW",
       "Original": "show databases",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Database": "VARCHAR"
+        },
+        "RowCount": 5
       }
     }
   },
@@ -625,7 +636,15 @@
       "QueryType": "SHOW",
       "Original": "show plugins",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Library": "VARCHAR",
+          "License": "VARCHAR",
+          "Name": "VARCHAR",
+          "Status": "VARCHAR",
+          "Type": "VARCHAR"
+        },
+        "RowCount": 1
       }
     }
   },
@@ -636,7 +655,16 @@
       "QueryType": "SHOW",
       "Original": "show engines",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Comment": "VARCHAR",
+          "Engine": "VARCHAR",
+          "Savepoints": "VARCHAR",
+          "Support": "VARCHAR",
+          "Transactions": "VARCHAR",
+          "XA": "VARCHAR"
+        },
+        "RowCount": 1
       }
     }
   },
@@ -684,7 +712,11 @@
       "QueryType": "SHOW",
       "Original": "show vschema tables",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Tables": "VARCHAR"
+        },
+        "RowCount": 11
       }
     }
   },
@@ -695,7 +727,14 @@
       "QueryType": "SHOW",
       "Original": "show vschema vindexes",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Keyspace": "VARCHAR",
+          "Name": "VARCHAR",
+          "Owner": "VARCHAR",
+          "Params": "VARCHAR",
+          "Type": "VARCHAR"
+        }
       }
     }
   },
@@ -706,7 +745,14 @@
       "QueryType": "SHOW",
       "Original": "show vschema vindexes on user.user",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Columns": "VARCHAR",
+          "Name": "VARCHAR",
+          "Owner": "VARCHAR",
+          "Params": "VARCHAR",
+          "Type": "VARCHAR"
+        }
       }
     }
   },
@@ -717,7 +763,11 @@
       "QueryType": "SHOW",
       "Original": "show vitess_target",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "Target": "VARCHAR"
+        },
+        "RowCount": 1
       }
     }
   },

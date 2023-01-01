@@ -731,8 +731,21 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 // account to be sure that we don't execute the writes if READ_ONLY is set on
 // the MySQL instance.
 func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
+	if wr.sem != nil {
+		if !wr.sem.TryAcquire() {
+			log.Warningf("Deferring work to optimize the copy_state table on %q due to hitting the maximum concurrent background job limit.",
+				tablet.Alias.String())
+			return
+		}
+	}
 	go func() {
-		ctx := context.Background()
+		defer func() {
+			if wr.sem != nil {
+				wr.sem.Release()
+			}
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
 		sqlOptimizeTable := "optimize table _vt.copy_state"
 		if _, err := wr.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
 			Query:   []byte(sqlOptimizeTable),

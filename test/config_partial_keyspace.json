@@ -143,15 +143,6 @@
       "Shard": "vtgate_partial_keyspace",
       "RetryMax": 2,
       "Tags": []
-    },
-    "vtgate_queries_vtexplain_partial_keyspace": {
-      "File": "unused.go",
-      "Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vtexplain"],
-      "Command": [],
-      "Manual": false,
-      "Shard": "vtgate_partial_keyspace",
-      "RetryMax": 2,
-      "Tags": []
     }
   }
 }

@@ -103,6 +103,9 @@ var (
 	schemaChangeUser         string
 	queryTimeout             int
 
+	// vtgate views flags
+	enableViews bool
+
 	// queryLogToFile controls whether query logs are sent to a file
 	queryLogToFile string
 	// queryLogBufferSize controls how many query logs will be buffered before dropping them if logging is not fast enough
@@ -142,6 +145,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&queryLogToFile, "log_queries_to_file", queryLogToFile, "Enable query logging to the specified file")
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
+	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)

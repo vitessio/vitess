@@ -121,6 +121,7 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status='queued'
+			AND reviewed_timestamp IS NOT NULL
 	`
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a

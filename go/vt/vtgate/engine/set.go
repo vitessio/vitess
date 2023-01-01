@@ -260,7 +260,7 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
-	result, err := execShard(ctx, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	result, err := execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
@@ -324,7 +324,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
@@ -336,7 +336,7 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
@@ -349,7 +349,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if err != nil {
 		return false, err
 	}
-	qr, err := execShard(ctx, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	qr, err := execShard(ctx, nil, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return false, err
 	}
