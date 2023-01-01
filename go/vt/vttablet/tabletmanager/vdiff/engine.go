@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
@@ -50,6 +51,7 @@ type Engine struct {
 	cancelRetry context.CancelFunc
 
 	ts                      *topo.Server
+	tmClientFactory         func() tmclient.TabletManagerClient
 	dbClientFactoryFiltered func() binlogplayer.DBClient
 	dbClientFactoryDba      func() binlogplayer.DBClient
 	dbName                  string
@@ -64,20 +66,43 @@ type Engine struct {
 	snapshotMu sync.Mutex
 
 	vdiffSchemaCreateOnce sync.Once
+
+	// This should only be set when the engine is being used in tests. It then provides
+	// modified behavior for that env, e.g. not starting the retry goroutine. This should
+	// NOT be set in production.
+	fortests bool
 }
 
 func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet) *Engine {
 	vde := &Engine{
-		controllers: make(map[int64]*controller),
-		ts:          ts,
-		thisTablet:  tablet,
+		controllers:     make(map[int64]*controller),
+		ts:              ts,
+		thisTablet:      tablet,
+		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
+	}
+	return vde
+}
+
+// NewTestEngine creates an Engine for use in tests. It uses the custom db client factory and
+// tablet manager client factory, while setting the fortests field to true to modify any engine
+// behavior when used in tests (e.g. not starting the retry goroutine).
+func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf func() binlogplayer.DBClient, tmcf func() tmclient.TabletManagerClient) *Engine {
+	vde := &Engine{
+		controllers:             make(map[int64]*controller),
+		ts:                      ts,
+		thisTablet:              tablet,
+		dbName:                  dbn,
+		dbClientFactoryFiltered: dbcf,
+		dbClientFactoryDba:      dbcf,
+		tmClientFactory:         tmcf,
+		fortests:                true,
 	}
 	return vde
 }
 
 func (vde *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	// If we're already initilized, it's a test engine. Ignore the call.
-	if vde.dbClientFactoryFiltered != nil && vde.dbClientFactoryDba != nil {
+	// If it's a test engine and we're already initilized then do nothing.
+	if vde.fortests && vde.dbClientFactoryFiltered != nil && vde.dbClientFactoryDba != nil {
 		return
 	}
 	vde.dbClientFactoryFiltered = func() binlogplayer.DBClient {
@@ -132,7 +157,14 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 
 	// At this point we've fully and succesfully opened so begin
 	// retrying error'd VDiffs until the engine is closed.
-	go vde.retryErroredVDiffs()
+	vde.wg.Add(1)
+	go func() {
+		defer vde.wg.Done()
+		if vde.fortests {
+			return
+		}
+		vde.retryErroredVDiffs()
+	}()
 
 	return nil
 }
