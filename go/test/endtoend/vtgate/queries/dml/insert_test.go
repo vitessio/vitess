@@ -71,8 +71,8 @@ func TestFailureInsertSelect(t *testing.T) {
 			// lookup key same (does not fail on MySQL as there is no lookup, and we have not put unique contrains on num column)
 			utils.AssertContainsError(t, mcmp.VtConn, "insert into s_tbl(id, num) select id*20, num from s_tbl where id = 1", `lookup.Create: Code: ALREADY_EXISTS`)
 			// mismatch column count
-			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `Column count doesn't match value count at row 1`)
-			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `Column count doesn't match value count at row 1`)
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100,200,300", `column count does not match value count at row 1`)
+			mcmp.AssertContainsError("insert into s_tbl(id, num) select 100", `column count does not match value count at row 1`)
 		})
 	}
 }
@@ -323,8 +323,8 @@ func TestIgnoreInsertSelect(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, "select oid, cust_no from order_tbl order by oid", `[[INT64(1) INT64(100)] [INT64(2) INT64(200)] [INT64(3) INT64(300)] [INT64(4) INT64(401)]]`)
 
 	// inserting on dup trying to update vindex throws error.
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update region_id = region_id + 1", `unsupported: DML cannot change vindex column`)
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update oid = oid + 100", `unsupported: DML cannot change vindex column`)
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update region_id = region_id + 1", `unsupported: DML cannot update vindex column`)
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update oid = oid + 100", `unsupported: DML cannot update vindex column`)
 }
 
 func TestIgnoreInsertSelectOlapMode(t *testing.T) {
@@ -361,8 +361,8 @@ func TestIgnoreInsertSelectOlapMode(t *testing.T) {
 	utils.AssertMatches(t, mcmp.VtConn, "select oid, cust_no from order_tbl order by oid", `[[INT64(1) INT64(100)] [INT64(2) INT64(200)] [INT64(3) INT64(300)] [INT64(4) INT64(401)]]`)
 
 	// inserting on dup trying to update vindex throws error.
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update region_id = region_id + 1", `unsupported: DML cannot change vindex column`)
-	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update oid = oid + 100", `unsupported: DML cannot change vindex column`)
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update region_id = region_id + 1", `unsupported: DML cannot update vindex column`)
+	utils.AssertContainsError(t, mcmp.VtConn, "insert into order_tbl(region_id, oid, cust_no) select 1, 10, 1000 on duplicate key update oid = oid + 100", `unsupported: DML cannot update vindex column`)
 }
 
 func TestInsertSelectUnshardedUsingSharded(t *testing.T) {

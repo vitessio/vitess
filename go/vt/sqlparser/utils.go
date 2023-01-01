@@ -44,7 +44,7 @@ func QueryMatchesTemplates(query string, queryTemplates []string) (match bool, e
 		if err != nil {
 			return "", err
 		}
-		normalized := String(stmt)
+		normalized := CanonicalString(stmt)
 		return normalized, nil
 	}
 

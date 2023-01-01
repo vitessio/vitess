@@ -2237,30 +2237,26 @@ func (e *Executor) reviewEmptyTableRevertMigrations(ctx context.Context, onlineD
 // Non immediate operations are:
 // - A gh-ost migration
 // - A vitess (vreplication) migration
-func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysql.CapableOf, onlineDDL *schema.OnlineDDL, ddlAction string, isView bool) error {
-	isImmediateOperation := false
+func (e *Executor) reviewImmediateOperations(ctx context.Context, capableOf mysql.CapableOf, onlineDDL *schema.OnlineDDL, ddlAction string, isRevert bool, isView bool) (bool, error) {
 	switch ddlAction {
 	case sqlparser.CreateStr, sqlparser.DropStr:
-		isImmediateOperation = true
+		return true, nil
 	case sqlparser.AlterStr:
-		if isView {
-			isImmediateOperation = true
-		} else {
+		switch {
+		case isView:
+			return true, nil
+		case isRevert:
+			// REVERT for a true ALTER TABLE. not an immediate operation
+			return false, nil
+		default:
 			specialPlan, err := e.analyzeSpecialAlterPlan(ctx, onlineDDL, capableOf)
 			if err != nil {
-				return err
+				return false, err
 			}
-			if specialPlan != nil {
-				isImmediateOperation = true
-			}
+			return (specialPlan != nil), nil
 		}
 	}
-	if isImmediateOperation {
-		if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
-			return err
-		}
-	}
-	return nil
+	return false, nil
 }
 
 // reviewQueuedMigrations iterates through queued migrations and sees if any information needs to be updated.
@@ -2291,7 +2287,9 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 		}
 		// handle REVERT migrations: populate table name and update ddl action and is_view:
 		ddlAction := row["ddl_action"].ToString()
+		isRevert := false
 		if ddlAction == schema.RevertActionStr {
+			isRevert = true
 			rowModified, err := e.reviewEmptyTableRevertMigrations(ctx, onlineDDL)
 			if err != nil {
 				return err
@@ -2306,9 +2304,18 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 			}
 		}
 		isView := row.AsBool("is_view", false)
-		if err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isView); err != nil {
+		isImmediate, err := e.reviewImmediateOperations(ctx, capableOf, onlineDDL, ddlAction, isRevert, isView)
+		if err != nil {
 			return err
 		}
+		if isImmediate {
+			if err := e.updateMigrationSetImmediateOperation(ctx, onlineDDL.UUID); err != nil {
+				return err
+			}
+		}
+		// The review is complete. We've backfilled details on the migration row. We mark
+		// the migration as having been reviewed. The function scheduleNextMigration() will then
+		// have access to this row.
 		if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
 			return err
 		}
@@ -4072,16 +4079,27 @@ func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr s
 
 func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, message string) error {
 	log.Infof("updateMigrationMessage: uuid=%s, message=%s", uuid, message)
-	query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
-		sqltypes.StringBindVariable(message),
-		sqltypes.StringBindVariable(uuid),
-	)
-	if err != nil {
+
+	maxlen := 16383
+	update := func(message string) error {
+		if len(message) > maxlen {
+			message = message[0:maxlen]
+		}
+		message = strings.ToValidUTF8(message, "�")
+		query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
+			sqltypes.StringBindVariable(message),
+			sqltypes.StringBindVariable(uuid),
+		)
+		if err != nil {
+			return err
+		}
+		_, err = e.execQuery(ctx, query)
 		return err
 	}
-	_, err = e.execQuery(ctx, query)
+	err := update(message)
 	if err != nil {
-		log.Errorf("FAIL updateMigrationMessage: uuid=%s, message=%s, error=%v", uuid, message, err)
+		// If, for some reason, we're unable to update the error message, let's write a generic message
+		err = update("unable to update with original migration error message")
 	}
 	return err
 }

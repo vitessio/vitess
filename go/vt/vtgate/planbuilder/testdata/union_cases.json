@@ -904,7 +904,7 @@
         ]
       }
     },
-    "gen4-plan": "nesting of unions at the right-hand side is not yet supported"
+    "gen4-plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
   },
   {
     "comment": "multi-shard union",
@@ -966,7 +966,7 @@
         ]
       }
     },
-    "gen4-plan": "nesting of unions at the right-hand side is not yet supported"
+    "gen4-plan": "VT12001: unsupported: nesting of UNIONs on the right-hand side"
   },
   {
     "comment": "union with the same target shard because of vindex",
@@ -1782,7 +1782,7 @@
   {
     "comment": "gen4 optimises away ORDER BY when it's safe to do",
     "query": "(select id from user union select id from music order by id) union select 1 from unsharded",
-    "v3-plan": "can't do ORDER BY on top of UNION",
+    "v3-plan": "VT12001: unsupported: ORDER BY on top of UNION",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "(select id from user union select id from music order by id) union select 1 from unsharded",
@@ -2277,18 +2277,18 @@
   {
     "comment": "union with invalid order by clause with table qualifier",
     "query": "select id from user union select 3 order by user.id",
-    "v3-plan": "can't do ORDER BY on top of UNION",
-    "gen4-plan": "Table 'user' from one of the SELECTs cannot be used in global ORDER clause"
+    "v3-plan": "VT12001: unsupported: ORDER BY on top of UNION",
+    "gen4-plan": "Table `user` from one of the SELECTs cannot be used in global ORDER clause"
   },
   {
     "comment": "union with invalid order by clause with table qualifier",
     "query": "select id from user union select 3 order by id",
-    "plan": "can't do ORDER BY on top of UNION"
+    "plan": "VT12001: unsupported: ORDER BY on top of UNION"
   },
   {
     "comment": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
     "query": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
-    "v3-plan": "unsupported: expression on results of a cross-shard subquery",
+    "v3-plan": "VT12001: unsupported: expression on results of a cross-shard subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select 1 from (select id+42 as foo from user union select 1+id as foo from unsharded) as t",
@@ -2343,11 +2343,11 @@
   },
   {
     "comment": "systable union query in derived table with constraint on outside (without star projection)",
-    "query": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
-    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "query": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
+    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
+      "Original": "select * from (select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select kcu.`COLUMN_NAME` from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `COLUMN_NAME` = 'primary'",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "DBA",
@@ -2355,8 +2355,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select id from (select id from information_schema.key_column_usage as kcu where 1 != 1 union select id from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
-        "Query": "select id from (select id from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and id = 'primary' union select id from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and id = 'primary') as kcu",
+        "FieldQuery": "select kcu.COLUMN_NAME from (select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1 union select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
+        "Query": "select kcu.COLUMN_NAME from (select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and kcu.COLUMN_NAME = 'primary' union select kcu.COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and kcu.COLUMN_NAME = 'primary') as kcu",
         "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
         "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
         "Table": "information_schema.key_column_usage"
@@ -2366,7 +2366,7 @@
   {
     "comment": "pushes predicate on both sides of UNION",
     "query": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
-    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "v3-plan": "VT12001: unsupported: filtering on results of cross-shard subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select * from (select name, id as foo from user union select 'extra', user_id from user_extra) X where X.foo = 3",
@@ -2389,6 +2389,28 @@
         "user.user",
         "user.user_extra"
       ]
+    }
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (star projection)",
+    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+    "v3-plan": "VT03019: symbol constraint_name not found",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from (select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1 union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where 1 != 1) as kcu where 1 != 1",
+        "Query": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from (select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name and kcu.CONSTRAINT_NAME = 'primary' union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1 and kcu.CONSTRAINT_NAME = 'primary') as kcu",
+        "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
+        "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
+        "Table": "information_schema.key_column_usage"
+      }
     }
   }
 ]

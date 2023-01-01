@@ -17,7 +17,8 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -238,7 +239,7 @@ func (bc *logicalPlanCommon) SupplyWeightString(colNumber int, alsoAddToGroupBy 
 // Rewrite implements the logicalPlan interface
 func (bc *logicalPlanCommon) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "builderCommon: wrong number of inputs")
+		return vterrors.VT13001(fmt.Sprintf("builderCommon: wrong number of inputs, got: %d, expect: 1", len(inputs)))
 	}
 	bc.input = inputs[0]
 	return nil

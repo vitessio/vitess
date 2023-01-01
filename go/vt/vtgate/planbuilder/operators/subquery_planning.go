@@ -24,8 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Operator, rewrite.TreeIdentity, error) {
@@ -75,7 +73,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 			continue
 		}
 
-		return nil, rewrite.SameTree, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, rewrite.SameTree, vterrors.VT12001("cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
@@ -380,7 +378,7 @@ func createCorrelatedSubqueryOp(
 ) (*CorrelatedSubQueryOp, error) {
 	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
 	if err != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
+		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
 	}
 
 	resultOuterOp := newOuter

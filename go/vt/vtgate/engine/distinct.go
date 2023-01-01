@@ -23,7 +23,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
@@ -116,7 +115,7 @@ func (pt *probeTable) hashCodeForRow(inputRow sqltypes.Row) (evalengine.HashCode
 	code := evalengine.HashCode(17)
 	for i, checkCol := range pt.checkCols {
 		if i >= len(inputRow) {
-			return 0, vterrors.New(vtrpcpb.Code_INTERNAL, "distinct check colls is larger than its input row")
+			return 0, vterrors.VT13001("index out of range in row when creating the DISTINCT hash code")
 		}
 		col := inputRow[checkCol.Col]
 		hashcode, err := evalengine.NullsafeHashcode(col, checkCol.Collation, col.Type())

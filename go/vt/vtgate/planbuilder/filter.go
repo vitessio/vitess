@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -49,7 +48,7 @@ func (s *simpleConverterLookup) ColumnLookup(col *sqlparser.ColName) (int, error
 		return 0, err
 	}
 	if added && !s.canPushProjection {
-		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "column should not be pushed to projection while doing a column lookup")
+		return 0, vterrors.VT13001("column should not be pushed to projection while doing a column lookup")
 	}
 	return offset, nil
 }

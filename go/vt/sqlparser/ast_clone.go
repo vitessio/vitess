@@ -471,6 +471,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfUpdateXMLExpr(in)
 	case *Use:
 		return CloneRefOfUse(in)
+	case *VExplainStmt:
+		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
 	case ValTuple:
@@ -2899,6 +2901,17 @@ func CloneRefOfUse(n *Use) *Use {
 	return &out
 }
 
+// CloneRefOfVExplainStmt creates a deep clone of the input.
+func CloneRefOfVExplainStmt(n *VExplainStmt) *VExplainStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statement = CloneStatement(n.Statement)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
 // CloneRefOfVStream creates a deep clone of the input.
 func CloneRefOfVStream(n *VStream) *VStream {
 	if n == nil {
@@ -3810,6 +3823,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfUpdate(in)
 	case *Use:
 		return CloneRefOfUse(in)
+	case *VExplainStmt:
+		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
 	default:

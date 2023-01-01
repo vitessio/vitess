@@ -82,5 +82,16 @@ func (r *Rows) GetFields(context.Context, VCursor, map[string]*querypb.BindVaria
 }
 
 func (r *Rows) description() PrimitiveDescription {
-	return PrimitiveDescription{OperatorType: "Rows"}
+	others := map[string]any{}
+	if len(r.fields) != 0 {
+		fieldsMap := map[string]string{}
+		for _, field := range r.fields {
+			fieldsMap[field.Name] = field.Type.String()
+		}
+		others["Fields"] = fieldsMap
+	}
+	if len(r.rows) != 0 {
+		others["RowCount"] = len(r.rows)
+	}
+	return PrimitiveDescription{OperatorType: "Rows", Other: others}
 }

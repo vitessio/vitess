@@ -630,9 +630,9 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
-		"vtgate_queries_vtexplain": {
+		"vtgate_queries_vexplain": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vtexplain"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vexplain"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
