@@ -1771,6 +1771,27 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 				}
 			}
 			c.TableSpec.Constraints = append(c.TableSpec.Constraints, opt.ConstraintDefinition)
+			if fk, ok := opt.ConstraintDefinition.Details.(*sqlparser.ForeignKeyDefinition); ok {
+				if !c.columnsCoveredByInOrderIndex(fk.Source) {
+					// We add a foreign key, but the local FK columns are not indexed.
+					// MySQL's behavior is to implicitly add an index that covers the foreign key's local columns.
+					// The name of the index is either:
+					// - the same name of the constraint, if such name is provided
+					//   - and error if an index by this name exists
+					// - or, a standard auto-generated index name, if the constraint name is not provided
+					indexDefinition := &sqlparser.IndexDefinition{
+						Info: &sqlparser.IndexInfo{
+							Type: "KEY",
+							Name: opt.ConstraintDefinition.Name, // if name is empty, then the name is later auto populated
+						},
+					}
+					for _, col := range fk.Source {
+						indexColumn := &sqlparser.IndexColumn{Column: col}
+						indexDefinition.Columns = append(indexDefinition.Columns, indexColumn)
+					}
+					c.TableSpec.Indexes = append(c.TableSpec.Indexes, indexDefinition)
+				}
+			}
 		case *sqlparser.AlterCheck:
 			// we expect the constraint to exist
 			found := false

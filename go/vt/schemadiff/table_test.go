@@ -601,10 +601,17 @@ func TestCreateTableDiff(t *testing.T) {
 		},
 		{
 			name:  "add foreign key",
+			from:  "create table t1 (id int primary key, i int, key ix(i))",
+			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id))",
+			diff:  "alter table t1 add constraint f foreign key (i) references parent (id)",
+			cdiff: "ALTER TABLE `t1` ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+		},
+		{
+			name:  "add foreign key and index",
 			from:  "create table t1 (id int primary key, i int)",
-			to:    "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id))",
-			diff:  "alter table t1 add key i (i), add constraint f foreign key (i) references parent (id)",
-			cdiff: "ALTER TABLE `t1` ADD KEY `i` (`i`), ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
+			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id))",
+			diff:  "alter table t1 add key ix (i), add constraint f foreign key (i) references parent (id)",
+			cdiff: "ALTER TABLE `t1` ADD KEY `ix` (`i`), ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)",
 		},
 		{
 			name: "identical foreign key",
@@ -614,15 +621,15 @@ func TestCreateTableDiff(t *testing.T) {
 		},
 		{
 			name:  "modify foreign key",
-			from:  "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
-			to:    "create table t2 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete set null)",
+			from:  "create table t1 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id) on delete cascade)",
+			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id) on delete set null)",
 			diff:  "alter table t1 drop foreign key f, add constraint f foreign key (i) references parent (id) on delete set null",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f`, ADD CONSTRAINT `f` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE SET NULL",
 		},
 		{
 			name:  "drop and add foreign key",
-			from:  "create table t1 (id int primary key, i int, constraint f foreign key (i) references parent(id) on delete cascade)",
-			to:    "create table t2 (id int primary key, i int, constraint f2 foreign key (i) references parent(id) on delete set null)",
+			from:  "create table t1 (id int primary key, i int, key ix(i), constraint f foreign key (i) references parent(id) on delete cascade)",
+			to:    "create table t2 (id int primary key, i int, key ix(i), constraint f2 foreign key (i) references parent(id) on delete set null)",
 			diff:  "alter table t1 drop foreign key f, add constraint f2 foreign key (i) references parent (id) on delete set null",
 			cdiff: "ALTER TABLE `t1` DROP FOREIGN KEY `f`, ADD CONSTRAINT `f2` FOREIGN KEY (`i`) REFERENCES `parent` (`id`) ON DELETE SET NULL",
 		},
@@ -1569,10 +1576,22 @@ func TestValidate(t *testing.T) {
 			to:    "CREATE TABLE `Machine` (id bigint primary key, `a` int, `B` int, CONSTRAINT `chk` CHECK (`B` >= `a`))",
 		},
 		{
+			name:  "add unnamed foreign key, implicitly add index",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add foreign key (i) references parent(id)",
+			to:    "create table t (id int primary key, i int, key i (i), constraint t_ibfk_1 foreign key (i) references parent(id))",
+		},
+		{
 			name:  "add foreign key, implicitly add index",
 			from:  "create table t (id int primary key, i int)",
 			alter: "alter table t add constraint f foreign key (i) references parent(id)",
-			to:    "create table t (id int primary key, i int, key i (i), constraint f foreign key (i) references parent(id))",
+			to:    "create table t (id int primary key, i int, key f (i), constraint f foreign key (i) references parent(id))",
+		},
+		{
+			name:      "add foreign key, implicitly add index, fail duplicate key name",
+			from:      "create table t (id int primary key, i int, key f(id, i))",
+			alter:     "alter table t add constraint f foreign key (i) references parent(id)",
+			expectErr: &ApplyDuplicateKeyError{Table: "t", Key: "f"},
 		},
 		{
 			name:      "fail drop key leaving unindexed foreign key constraint",
@@ -1881,11 +1900,6 @@ func TestNormalize(t *testing.T) {
 			name: "drops non-default column visibility",
 			from: "create table t (id int primary key, i1 int invisible)",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int INVISIBLE,\n\tPRIMARY KEY (`id`)\n)",
-		},
-		{
-			name: "implicitly add foreign key indexes",
-			from: "create table t (id int primary key, i1 int, constraint f foreign key (i1) references parent(id))",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1` (`i1`),\n\tCONSTRAINT `f` FOREIGN KEY (`i1`) REFERENCES `parent` (`id`)\n)",
 		},
 	}
 	for _, ts := range tt {
