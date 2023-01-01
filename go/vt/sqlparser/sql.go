@@ -10167,7 +10167,7 @@ yydefault:
 		var yyLOCAL *ColumnTypeOptions
 //line sql.y:1463
 		{
-			yyLOCAL = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil}
+			yyLOCAL = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: ColKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil}
 		}
 		yyVAL.union = yyLOCAL
 	case 189:
@@ -10953,7 +10953,7 @@ yydefault:
 		var yyLOCAL ColumnKeyOption
 //line sql.y:1952
 		{
-			yyLOCAL = colKeyPrimary
+			yyLOCAL = ColKeyPrimary
 		}
 		yyVAL.union = yyLOCAL
 	case 301:
@@ -10961,7 +10961,7 @@ yydefault:
 		var yyLOCAL ColumnKeyOption
 //line sql.y:1956
 		{
-			yyLOCAL = colKeyUnique
+			yyLOCAL = ColKeyUnique
 		}
 		yyVAL.union = yyLOCAL
 	case 302:
@@ -10969,7 +10969,7 @@ yydefault:
 		var yyLOCAL ColumnKeyOption
 //line sql.y:1960
 		{
-			yyLOCAL = colKeyUniqueKey
+			yyLOCAL = ColKeyUniqueKey
 		}
 		yyVAL.union = yyLOCAL
 	case 303:
@@ -10977,7 +10977,7 @@ yydefault:
 		var yyLOCAL ColumnKeyOption
 //line sql.y:1964
 		{
-			yyLOCAL = colKey
+			yyLOCAL = ColKey
 		}
 		yyVAL.union = yyLOCAL
 	case 304:
