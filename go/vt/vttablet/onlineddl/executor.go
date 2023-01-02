@@ -3021,6 +3021,15 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 				failMigration(err)
 			}
 		}()
+	case schema.DDLStrategyMySQL:
+		go func() {
+			e.migrationMutex.Lock()
+			defer e.migrationMutex.Unlock()
+
+			if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
 	default:
 		{
 			return failMigration(fmt.Errorf("Unsupported strategy: %+v", onlineDDL.Strategy))
