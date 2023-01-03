@@ -67,7 +67,8 @@ func TestSingleReplicaERS(t *testing.T) {
 	clusterInstance := utils.SetupReparentCluster(t, "none")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-	// Confirm that the replication is setup correctly in the beginning
+	// Confirm that the replication is setup correctly in the beginning.
+	// tablets[0] is the primary tablet in the beginning.
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Delete and stop two tablets. We only want to have 2 tablets for this test.
