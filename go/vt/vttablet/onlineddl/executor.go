@@ -723,7 +723,7 @@ func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *s
 		// Validate table does not participate in foreign key relationship:
 		participates, err := e.tableParticipatesInForeignKeyRelationship(ctx, onlineDDL.Schema, onlineDDL.Table)
 		if err != nil {
-			return err
+			return vterrors.Wrapf(err, "error while attempting to validate whether table %s participates in FOREIGN KEY constraint", onlineDDL.Table)
 		}
 		if participates {
 			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in FOREIGN KEY constraint. foreign key constraints are not supported in online DDL", onlineDDL.Table)
