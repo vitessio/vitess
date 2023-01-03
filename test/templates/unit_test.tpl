@@ -12,6 +12,9 @@ env:
 jobs:
   test:
     runs-on: ubuntu-20.04
+    permissions:
+      id-token: write
+      contents: read
 
     steps:
     - name: Skip CI
