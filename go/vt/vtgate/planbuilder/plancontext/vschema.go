@@ -33,7 +33,7 @@ type VSchema interface {
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool
 	KeyspaceExists(keyspace string) bool
-	AllKeyspace() ([]*vindexes.Keyspace, error)
+	AllKeyspaces() ([]*vindexes.Keyspace, error)
 	FindKeyspace(keyspace string) (*vindexes.Keyspace, error)
 	GetSemTable() *semantics.SemTable
 	Planner() PlannerVersion

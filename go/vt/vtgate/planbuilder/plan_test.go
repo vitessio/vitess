@@ -588,7 +588,7 @@ func (vw *vschemaWrapper) ForeignKeyMode() string {
 	return "allow"
 }
 
-func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
+func (vw *vschemaWrapper) AllKeyspaces() ([]*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
 		var ks []*vindexes.Keyspace
 		for _, schema := range vw.v.Keyspaces {

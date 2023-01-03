@@ -118,10 +118,10 @@ func isTableOrSchemaRouteable(cmp *sqlparser.ComparisonExpr) (
 	isSchema bool, // tells if we are dealing with a table or a schema name comparator
 	col *sqlparser.ColName, // which is the colName we are comparing against
 ) {
-	if col, schema, table := isTableSchemaOrName(cmp.Left); schema || table {
+	if col, schema, table := IsTableSchemaOrName(cmp.Left); schema || table {
 		return schema, col
 	}
-	if col, schema, table := isTableSchemaOrName(cmp.Right); schema || table {
+	if col, schema, table := IsTableSchemaOrName(cmp.Right); schema || table {
 		// to make the rest of the code easier, we shuffle these around so the ColName is always on the LHS
 		cmp.Right, cmp.Left = cmp.Left, cmp.Right
 		return schema, col
@@ -169,7 +169,7 @@ func createInfSchemaUnion(
 	// 	 KS0: SELECT TABLE_NAME from information_schema.tables
 	//   KS1: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
 	// 	 KS2: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
-	keyspaces, err := ctx.VSchema.AllKeyspace()
+	keyspaces, err := ctx.VSchema.AllKeyspaces()
 	if err != nil {
 		return nil, err
 	}
@@ -206,55 +206,74 @@ func createInfSchemaUnion(
 	return union, nil
 }
 
-var schemaColName57 = map[string][]string{
-	"COLUMN_PRIVILEGES":       {"TABLE_SCHEMA"},
-	"COLUMNS":                 {"TABLE_SCHEMA"},
-	"EVENTS":                  {"EVENT_SCHEMA"},
-	"FILES":                   {"TABLE_SCHEMA"},
-	"KEY_COLUMN_USAGE":        {"CONSTRAINT_SCHEMA", "TABLE_SCHEMA", "REFERENCED_TABLE_SCHEMA"},
-	"PARAMETERS":              {"SPECIFIC_SCHEMA"},
-	"PARTITIONS":              {"TABLE_SCHEMA"},
-	"REFERENTIAL_CONSTRAINTS": {"CONSTRAINT_SCHEMA", "UNIQUE_CONSTRAINT_SCHEMA"},
-	"ROUTINES":                {"ROUTINE_SCHEMA"},
-	"SCHEMA_PRIVILEGES":       {"TABLE_SCHEMA"},
-	"STATISTICS":              {"TABLE_SCHEMA"},
-	"TABLE_CONSTRAINTS":       {"TABLE_SCHEMA", "CONSTRAINT_SCHEMA"},
-	"TABLE_PRIVILEGES":        {"TABLE_SCHEMA"},
-	"TABLES":                  {"TABLE_SCHEMA"},
-	"TRIGGERS":                {"TRIGGER_SCHEMA", "EVENT_OBJECT_SCHEMA"},
-	"VIEW":                    {"TRIGGER_SCHEMA"},
-}
+var (
+	// these are filled in by the init() function below
+	schemaColumns57 = map[string]any{}
+	schemaColumns80 = map[string]any{}
 
-var schemaColName80 = map[string][]string{
-	"CHECK_CONSTRAINTS":            {"CONSTRAINT_SCHEMA"},
-	"COLUMN_PRIVILEGES":            {"TABLE_SCHEMA"},
-	"COLUMN_STATISTICS":            {"SCHEMA_NAME"},
-	"COLUMNS":                      {"TABLE_SCHEMA"},
-	"COLUMNS_EXTENSIONS":           {"TABLE_SCHEMA"},
-	"EVENTS":                       {"EVENT_SCHEMA"},
-	"FILES":                        {"TABLE_SCHEMA"},
-	"KEY_COLUMN_USAGE":             {"CONSTRAINT_SCHEMA", "TABLE_SCHEMA", "REFERENCED_TABLE_SCHEMA"},
-	"PARAMETERS":                   {"SPECIFIC_SCHEMA"},
-	"PARTITIONS":                   {"TABLE_SCHEMA"},
-	"REFERENTIAL_CONSTRAINTS":      {"CONSTRAINT_SCHEMA", "UNIQUE_CONSTRAINT_SCHEMA"},
-	"ROLE_COLUMN_GRANTS":           {"TABLE_SCHEMA"},
-	"ROLE_ROUTINE_GRANTS":          {"SPECIFIC_SCHEMA", "ROUTINE_SCHEMA"},
-	"ROLE_TABLE_GRANTS":            {"TABLE_SCHEMA"},
-	"ROUTINES":                     {"ROUTINE_SCHEMA"},
-	"SCHEMA_PRIVILEGES":            {"TABLE_SCHEMA"},
-	"SCHEMATA":                     {"SCHEMA_NAME"},
-	"SCHEMATA_EXTENSIONS":          {"SCHEMA_NAME"},
-	"ST_GEOMETRY_COLUMNS":          {"TABLE_SCHEMA"},
-	"STATISTICS":                   {"TABLE_SCHEMA"},
-	"TABLE_CONSTRAINTS":            {"TABLE_SCHEMA", "CONSTRAINT_SCHEMA"},
-	"TABLE_CONSTRAINTS_EXTENSIONS": {"CONSTRAINT_SCHEMA"},
-	"TABLE_PRIVILEGES":             {"TABLE_SCHEMA"},
-	"TABLES":                       {"TABLE_SCHEMA"},
-	"TABLES_EXTENSIONS":            {"TABLE_SCHEMA"},
-	"TRIGGERS":                     {"TRIGGER_SCHEMA", "EVENT_OBJECT_SCHEMA"},
-	"VIEW_ROUTINE_USAGE":           {"TABLE_SCHEMA", "SPECIFIC_SCHEMA"},
-	"VIEW_TABLE_USAGE":             {"TABLE_SCHEMA", "VIEW_SCHEMA"},
-	"VIEWS":                        {"TABLE_SCHEMA"},
+	schemaColName57 = map[string][]string{
+		"COLUMN_PRIVILEGES":       {"TABLE_SCHEMA"},
+		"COLUMNS":                 {"TABLE_SCHEMA"},
+		"EVENTS":                  {"EVENT_SCHEMA"},
+		"FILES":                   {"TABLE_SCHEMA"},
+		"KEY_COLUMN_USAGE":        {"CONSTRAINT_SCHEMA", "TABLE_SCHEMA", "REFERENCED_TABLE_SCHEMA"},
+		"PARAMETERS":              {"SPECIFIC_SCHEMA"},
+		"PARTITIONS":              {"TABLE_SCHEMA"},
+		"REFERENTIAL_CONSTRAINTS": {"CONSTRAINT_SCHEMA", "UNIQUE_CONSTRAINT_SCHEMA"},
+		"ROUTINES":                {"ROUTINE_SCHEMA"},
+		"SCHEMA_PRIVILEGES":       {"TABLE_SCHEMA"},
+		"STATISTICS":              {"TABLE_SCHEMA"},
+		"SCHEMATA":                {"SCHEMA_NAME"},
+		"TABLE_CONSTRAINTS":       {"TABLE_SCHEMA", "CONSTRAINT_SCHEMA"},
+		"TABLE_PRIVILEGES":        {"TABLE_SCHEMA"},
+		"TABLES":                  {"TABLE_SCHEMA"},
+		"TRIGGERS":                {"TRIGGER_SCHEMA", "EVENT_OBJECT_SCHEMA"},
+		"VIEW":                    {"TRIGGER_SCHEMA"},
+	}
+	schemaColName80 = map[string][]string{
+		"CHECK_CONSTRAINTS":            {"CONSTRAINT_SCHEMA"},
+		"COLUMN_PRIVILEGES":            {"TABLE_SCHEMA"},
+		"COLUMN_STATISTICS":            {"SCHEMA_NAME"},
+		"COLUMNS":                      {"TABLE_SCHEMA"},
+		"COLUMNS_EXTENSIONS":           {"TABLE_SCHEMA"},
+		"EVENTS":                       {"EVENT_SCHEMA"},
+		"FILES":                        {"TABLE_SCHEMA"},
+		"KEY_COLUMN_USAGE":             {"CONSTRAINT_SCHEMA", "TABLE_SCHEMA", "REFERENCED_TABLE_SCHEMA"},
+		"PARAMETERS":                   {"SPECIFIC_SCHEMA"},
+		"PARTITIONS":                   {"TABLE_SCHEMA"},
+		"REFERENTIAL_CONSTRAINTS":      {"CONSTRAINT_SCHEMA", "UNIQUE_CONSTRAINT_SCHEMA"},
+		"ROLE_COLUMN_GRANTS":           {"TABLE_SCHEMA"},
+		"ROLE_ROUTINE_GRANTS":          {"SPECIFIC_SCHEMA", "ROUTINE_SCHEMA"},
+		"ROLE_TABLE_GRANTS":            {"TABLE_SCHEMA"},
+		"ROUTINES":                     {"ROUTINE_SCHEMA"},
+		"SCHEMA_PRIVILEGES":            {"TABLE_SCHEMA"},
+		"SCHEMATA":                     {"SCHEMA_NAME"},
+		"SCHEMATA_EXTENSIONS":          {"SCHEMA_NAME"},
+		"ST_GEOMETRY_COLUMNS":          {"TABLE_SCHEMA"},
+		"STATISTICS":                   {"TABLE_SCHEMA"},
+		"TABLE_CONSTRAINTS":            {"TABLE_SCHEMA", "CONSTRAINT_SCHEMA"},
+		"TABLE_CONSTRAINTS_EXTENSIONS": {"CONSTRAINT_SCHEMA"},
+		"TABLE_PRIVILEGES":             {"TABLE_SCHEMA"},
+		"TABLES":                       {"TABLE_SCHEMA"},
+		"TABLES_EXTENSIONS":            {"TABLE_SCHEMA"},
+		"TRIGGERS":                     {"TRIGGER_SCHEMA", "EVENT_OBJECT_SCHEMA"},
+		"VIEW_ROUTINE_USAGE":           {"TABLE_SCHEMA", "SPECIFIC_SCHEMA"},
+		"VIEW_TABLE_USAGE":             {"TABLE_SCHEMA", "VIEW_SCHEMA"},
+		"VIEWS":                        {"TABLE_SCHEMA"},
+	}
+)
+
+func init() {
+	for _, cols := range schemaColName57 {
+		for _, col := range cols {
+			schemaColumns57[strings.ToLower(col)] = nil
+		}
+	}
+	for _, cols := range schemaColName80 {
+		for _, col := range cols {
+			schemaColumns80[strings.ToLower(col)] = nil
+		}
+	}
 }
 
 func shouldRewrite(e sqlparser.Expr) bool {
@@ -266,7 +285,7 @@ func shouldRewrite(e sqlparser.Expr) bool {
 	return true
 }
 
-func isTableSchemaOrName(e sqlparser.Expr) (col *sqlparser.ColName, isTableSchema bool, isTableName bool) {
+func IsTableSchemaOrName(e sqlparser.Expr) (col *sqlparser.ColName, isTableSchema bool, isTableName bool) {
 	col, ok := e.(*sqlparser.ColName)
 	if !ok {
 		return nil, false, false
@@ -275,11 +294,20 @@ func isTableSchemaOrName(e sqlparser.Expr) (col *sqlparser.ColName, isTableSchem
 }
 
 func isDbNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name") || col.Name.EqualString("routine_schema")
+	version := servenv.MySQLServerVersion()
+	var schemaColumns map[string]any
+	if strings.HasPrefix(version, "5.7") {
+		schemaColumns = schemaColumns57
+	} else {
+		schemaColumns = schemaColumns80
+	}
+
+	_, found := schemaColumns[col.Name.Lowered()]
+	return found
 }
 
 func isTableNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_name")
+	return col.Name.EqualString("table_name") || col.Name.EqualString("referenced_table_name")
 }
 
 func schemaColNames() map[string][]string {

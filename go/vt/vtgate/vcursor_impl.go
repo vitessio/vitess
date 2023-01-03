@@ -356,7 +356,7 @@ func (vc *vcursorImpl) KeyspaceExists(ks string) bool {
 }
 
 // AllKeyspace implements the ContextVSchema interface
-func (vc *vcursorImpl) AllKeyspace() ([]*vindexes.Keyspace, error) {
+func (vc *vcursorImpl) AllKeyspaces() ([]*vindexes.Keyspace, error) {
 	if len(vc.vschema.Keyspaces) == 0 {
 		return nil, errNoDbAvailable
 	}

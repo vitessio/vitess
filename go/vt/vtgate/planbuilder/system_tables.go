@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -65,48 +66,18 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 }
 
 func findOtherComparator(cmp *sqlparser.ComparisonExpr) (bool, sqlparser.Expr, sqlparser.Expr, func(arg sqlparser.Argument)) {
-	if schema, table := isTableSchemaOrName(cmp.Left); schema || table {
+	if _, schema, table := operators.IsTableSchemaOrName(cmp.Left); schema || table {
 		return schema, cmp.Left, cmp.Right, func(arg sqlparser.Argument) {
 			cmp.Right = arg
 		}
 	}
-	if schema, table := isTableSchemaOrName(cmp.Right); schema || table {
+	if _, schema, table := operators.IsTableSchemaOrName(cmp.Right); schema || table {
 		return schema, cmp.Right, cmp.Left, func(arg sqlparser.Argument) {
 			cmp.Left = arg
 		}
 	}
 
 	return false, nil, nil, nil
-}
-
-func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool) {
-	col, ok := e.(*sqlparser.ColName)
-	if !ok {
-		return false, false
-	}
-	return isDbNameCol(col), isTableNameCol(col)
-}
-
-var schemaColumns = map[string]any{
-	"table_schema":            nil,
-	"constraint_schema":       nil,
-	"schema_name":             nil,
-	"routine_schema":          nil,
-	"specific_schema":         nil,
-	"event_schema":            nil,
-	"referenced_table_schema": nil,
-	"index_schema":            nil,
-	"trigger_schema":          nil,
-	"event_object_schema":     nil,
-}
-
-func isDbNameCol(col *sqlparser.ColName) bool {
-	_, found := schemaColumns[col.Name.Lowered()]
-	return found
-}
-
-func isTableNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_name") || col.Name.EqualString("referenced_table_name")
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {

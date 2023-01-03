@@ -213,7 +213,7 @@ func buildShowTblPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (e
 }
 
 func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
-	ks, err := vschema.AllKeyspace()
+	ks, err := vschema.AllKeyspaces()
 	if err != nil {
 		return nil, err
 	}
