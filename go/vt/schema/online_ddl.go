@@ -26,6 +26,8 @@ import (
 	"strings"
 	"sync"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -107,7 +109,7 @@ type OnlineDDL struct {
 // FromJSON creates an OnlineDDL from json
 func FromJSON(bytes []byte) (*OnlineDDL, error) {
 	onlineDDL := &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}}
-	err := json.Unmarshal(bytes, onlineDDL)
+	err := protojson.Unmarshal(bytes, onlineDDL)
 	return onlineDDL, err
 }
 

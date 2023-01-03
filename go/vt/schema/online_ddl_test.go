@@ -25,6 +25,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -415,11 +416,12 @@ func TestFromJSON(t *testing.T) {
 	uuid, err := CreateUUIDWithDelimiter("_")
 	require.NoError(t, err, "failed to create UUID for tests")
 
-	tests := []struct {
+	type testcase struct {
 		json      string
 		expected  *OnlineDDL
 		shouldErr bool
-	}{
+	}
+	tests := []testcase{
 		{
 			json:     "{}",
 			expected: &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}},
@@ -432,7 +434,8 @@ func TestFromJSON(t *testing.T) {
 				"table": "t1",
 				"schema": "CREATE TABLE t1 (id int(11) NOT NULL PRIMARY KEY)",
 				"sql": "ALTER TABLE t1 ADD COLUMN i INT",
-				"uuid": "%s"
+				"uuid": "%s",
+				"strategy": "VITESS"
 			}`, uuid),
 			expected: &OnlineDDL{
 				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
@@ -441,6 +444,7 @@ func TestFromJSON(t *testing.T) {
 					Schema:   "CREATE TABLE t1 (id int(11) NOT NULL PRIMARY KEY)",
 					Sql:      "ALTER TABLE t1 ADD COLUMN i INT",
 					Uuid:     uuid,
+					Strategy: tabletmanagerdatapb.OnlineDDL_VITESS,
 				},
 			},
 		},
@@ -457,7 +461,51 @@ func TestFromJSON(t *testing.T) {
 			}
 
 			require.NoError(t, err)
-			assert.Equal(t, test.expected, actual)
+			utils.MustMatch(t, test.expected, actual)
 		})
 	}
+
+	t.Run("strategy parsing", func(t *testing.T) {
+		tests := []testcase{
+			{
+				json:      `{"strategy": "pt-osc"}`,
+				shouldErr: true,
+			},
+			{
+				json: `{"strategy": "GHOST"}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						Strategy: tabletmanagerdatapb.OnlineDDL_GHOST,
+					},
+				},
+			},
+			{
+				json: `{"strategy": 3}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						Strategy: tabletmanagerdatapb.OnlineDDL_DIRECT,
+					},
+				},
+			},
+			{
+				json:      `{"strategy": "not a strategy"}`,
+				shouldErr: true,
+			},
+		}
+
+		for _, test := range tests {
+			test := test
+
+			t.Run("", func(t *testing.T) {
+				actual, err := FromJSON([]byte(test.json))
+				if test.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				utils.MustMatch(t, test.expected, actual)
+			})
+		}
+	})
 }
