@@ -381,6 +381,7 @@ const (
 	PrivilegeType_Event
 	PrivilegeType_Execute
 	PrivilegeType_File
+	PrivilegeType_GrantOption
 	PrivilegeType_Index
 	PrivilegeType_Insert
 	PrivilegeType_LockTables
@@ -488,6 +489,8 @@ func (p *Privilege) String() string {
 		sb.WriteString("execute")
 	case PrivilegeType_File:
 		sb.WriteString("file")
+	case PrivilegeType_GrantOption:
+		sb.WriteString("grant option")
 	case PrivilegeType_Index:
 		sb.WriteString("index")
 	case PrivilegeType_Insert:
