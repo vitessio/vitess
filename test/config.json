@@ -1181,7 +1181,7 @@
 		},
                 "vreplication_mariadb_to_mysql": {
                         "File": "unused.go",
-                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestV2MoveTablesMariaDBToMySQL", "-timeout", "20m"],
+                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "10m"],
                         "Command": [],
                         "Manual": false,
                         "Shard": "vreplication_across_db_versions",

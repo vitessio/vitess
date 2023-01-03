@@ -854,17 +854,9 @@ func (mysqld *Mysqld) getMycnfTemplate() string {
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
 	case FlavorMariaDB:
-		switch mysqld.capabilities.version.Minor {
-		case 0:
-			versionConfig = config.MycnfMariaDB100
-		case 1:
-			versionConfig = config.MycnfMariaDB101
-		case 2:
-			versionConfig = config.MycnfMariaDB102
-		case 3:
-			versionConfig = config.MycnfMariaDB103
-		case 4:
-			versionConfig = config.MycnfMariaDB104
+		switch mysqld.capabilities.version.Major {
+		case 10:
+			versionConfig = config.MycnfMariaDB10
 		default:
 			log.Infof("this version of Vitess does not include built-in support for %v %v", mysqld.capabilities.flavor, mysqld.capabilities.version)
 		}
