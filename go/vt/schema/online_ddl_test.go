@@ -435,7 +435,8 @@ func TestFromJSON(t *testing.T) {
 				"schema": "CREATE TABLE t1 (id int(11) NOT NULL PRIMARY KEY)",
 				"sql": "ALTER TABLE t1 ADD COLUMN i INT",
 				"uuid": "%s",
-				"strategy": "VITESS"
+				"strategy": "VITESS",
+				"options": "--allow-concurrent"
 			}`, uuid),
 			expected: &OnlineDDL{
 				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
@@ -445,6 +446,7 @@ func TestFromJSON(t *testing.T) {
 					Sql:      "ALTER TABLE t1 ADD COLUMN i INT",
 					Uuid:     uuid,
 					Strategy: tabletmanagerdatapb.OnlineDDL_VITESS,
+					Options:  "--allow-concurrent",
 				},
 			},
 		},

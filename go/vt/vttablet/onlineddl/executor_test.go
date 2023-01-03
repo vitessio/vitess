@@ -135,10 +135,10 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 
 			onlineDDL := &schema.OnlineDDL{
 				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
-					Table: "onlineddl_test",
-					Uuid:  "a5a563da_dc1a_11ec_a416_0a43f95f28a3",
+					Table:   "onlineddl_test",
+					Uuid:    "a5a563da_dc1a_11ec_a416_0a43f95f28a3",
+					Options: tc.strategyOptions,
 				},
-				Options: tc.strategyOptions,
 			}
 			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
 			if tc.expectError != "" {
@@ -227,10 +227,10 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			m := map[string]string{}
 			onlineDDL := &schema.OnlineDDL{
 				OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
-					Table: "t",
-					Uuid:  "a5a563da_dc1a_11ec_a416_0a43f95f28a3",
+					Table:   "t",
+					Uuid:    "a5a563da_dc1a_11ec_a416_0a43f95f28a3",
+					Options: "--unsafe-allow-foreign-keys",
 				},
-				Options: "--unsafe-allow-foreign-keys",
 			}
 			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
 			assert.NoError(t, err)

@@ -95,8 +95,7 @@ type OnlineDDL struct {
 	m sync.Mutex
 	*tabletmanagerdatapb.OnlineDDL
 
-	Options     string `json:"options,omitempty"`
-	RequestTime int64  `json:"time_created,omitempty"`
+	RequestTime int64 `json:"time_created,omitempty"`
 	// Stateful fields:
 	MigrationContext   string          `json:"context,omitempty"`
 	Status             OnlineDDLStatus `json:"status,omitempty"`
@@ -256,8 +255,8 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			Sql:      sql,
 			Uuid:     onlineDDLUUID,
 			Strategy: ddlStrategySetting.Strategy,
+			Options:  ddlStrategySetting.Options,
 		},
-		Options:          ddlStrategySetting.Options,
 		MigrationContext: migrationContext,
 		Status:           OnlineDDLStatusRequested,
 	}, nil
