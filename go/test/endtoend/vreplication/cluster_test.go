@@ -225,6 +225,9 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	} else if dbType == "mysql" && majorVersion == "8.0" {
 		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
+	} else if dbType == "mariadb" && majorVersion == "10.10" {
+		versionFile = "mariadb-10.10.2-linux-systemd-x86_64.tar.gz"
+		url = "https://ftp.osuosl.org/pub/mariadb/mariadb-10.10.2/bintar-linux-systemd-x86_64/" + versionFile
 	} else {
 		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
 	}
