@@ -95,7 +95,6 @@ var (
 		"onlineddl_singleton",
 		"onlineddl_scheduler",
 		"onlineddl_revertible",
-		"onlineddl_fk",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_topo",
 		"tabletmanager_throttler_custom_config",

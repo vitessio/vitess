@@ -313,15 +313,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"onlineddl_fk": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/fk"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_fk",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"onlineddl_declarative": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
