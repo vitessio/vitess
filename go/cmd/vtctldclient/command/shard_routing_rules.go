@@ -48,7 +48,7 @@ var (
 
 See the documentation on shard level migrations[1] for more information.
 
-[1]: https://vitess.io/docs/16.0/reference/vreplication/shardlevelmigrations/`,
+[1]: https://vitess.io/docs/reference/vreplication/shardlevelmigrations/`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandGetShardRoutingRules,
