@@ -271,7 +271,7 @@ func TestSchemaChange(t *testing.T) {
 
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), providedUUID, providedMigrationContext, "vtctl", "non_online", "", false)
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, "direct", providedUUID, providedMigrationContext, "vtctl", "non_online", "", false)
 		insertRows(t, 2)
 		testRows(t)
 	})

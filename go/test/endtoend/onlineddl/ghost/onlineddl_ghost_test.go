@@ -221,7 +221,7 @@ func TestSchemaChange(t *testing.T) {
 
 	testWithInitialSchema(t)
 	t.Run("create non_online", func(t *testing.T) {
-		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), "vtctl", "non_online", "")
+		_ = testOnlineDDLStatement(t, alterTableNormalStatement, "direct", "vtctl", "non_online", "")
 	})
 	t.Run("successful online alter, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "gh-ost", "vtgate", "ghost_col", "")

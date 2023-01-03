@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -93,7 +94,7 @@ var (
 	// ddl related flags
 	foreignKeyMode     = "allow"
 	dbDDLPlugin        = "fail"
-	defaultDDLStrategy = string(schema.DDLStrategyDirect)
+	defaultDDLStrategy = strings.ToLower(tabletmanagerdatapb.OnlineDDL_Strategy_name[int32(tabletmanagerdatapb.OnlineDDL_DIRECT)])
 	enableOnlineDDL    = true
 	enableDirectDDL    = true
 

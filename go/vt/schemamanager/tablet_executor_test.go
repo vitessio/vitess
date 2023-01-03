@@ -30,7 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -207,7 +206,7 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 		query       string
 		ddlStrategy string
 		isOnlineDDL bool
-		strategy    schema.DDLStrategy
+		strategy    tabletmanagerdatapb.OnlineDDL_Strategy
 		options     string
 	}{
 		{
@@ -218,19 +217,19 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 			query:       "CREATE TABLE t(id int)",
 			ddlStrategy: "gh-ost",
 			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyGhost,
+			strategy:    tabletmanagerdatapb.OnlineDDL_GHOST,
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
 			ddlStrategy: "online",
 			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyOnline,
+			strategy:    tabletmanagerdatapb.OnlineDDL_ONLINE,
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
 			ddlStrategy: "vitess",
 			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyVitess,
+			strategy:    tabletmanagerdatapb.OnlineDDL_VITESS,
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
@@ -241,13 +240,13 @@ func TestIsOnlineSchemaDDL(t *testing.T) {
 			query:       "ALTER TABLE t ADD COLUMN i INT",
 			ddlStrategy: "gh-ost",
 			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyGhost,
+			strategy:    tabletmanagerdatapb.OnlineDDL_GHOST,
 		},
 		{
 			query:       "ALTER TABLE t ADD COLUMN i INT",
 			ddlStrategy: "gh-ost --max-load=Threads_running=100",
 			isOnlineDDL: true,
-			strategy:    schema.DDLStrategyGhost,
+			strategy:    tabletmanagerdatapb.OnlineDDL_GHOST,
 			options:     "--max-load=Threads_running=100",
 		},
 		{

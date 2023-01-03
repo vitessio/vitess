@@ -53,24 +53,6 @@ const (
 	analyzeTableFlag       = "analyze-table"
 )
 
-// DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
-type DDLStrategy string
-
-const (
-	// DDLStrategyDirect means not an online-ddl migration; unmanaged. Just a normal MySQL `ALTER TABLE`
-	DDLStrategyDirect DDLStrategy = "direct"
-	// DDLStrategyVitess requests vreplication to run the migration; new name for DDLStrategyOnline
-	DDLStrategyVitess DDLStrategy = "vitess"
-	// DDLStrategyOnline requests vreplication to run the migration
-	DDLStrategyOnline DDLStrategy = "online"
-	// DDLStrategyGhost requests gh-ost to run the migration
-	DDLStrategyGhost DDLStrategy = "gh-ost"
-	// DDLStrategyPTOSC requests pt-online-schema-change to run the migration
-	DDLStrategyPTOSC DDLStrategy = "pt-osc"
-	// DDLStrategyMySQL is a managed migration (queued and executed by the scheduler) but runs through a MySQL `ALTER TABLE`
-	DDLStrategyMySQL DDLStrategy = "mysql"
-)
-
 // DDLStrategySetting is a formal breakdown of the @@ddl_strategy variable, into strategy and options
 type DDLStrategySetting struct {
 	Strategy tabletmanagerdatapb.OnlineDDL_Strategy `json:"strategy,omitempty"`

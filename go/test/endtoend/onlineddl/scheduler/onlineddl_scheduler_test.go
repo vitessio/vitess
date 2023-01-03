@@ -37,6 +37,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -1517,7 +1519,7 @@ func testDeclarative(t *testing.T) {
 		return &testRevertMigrationParams{
 			revertUUID:      revertUUID,
 			executeStrategy: "vtctl",
-			ddlStrategy:     string(schema.DDLStrategyOnline),
+			ddlStrategy:     schema.OnlineDDLStrategyName(tabletmanagerdatapb.OnlineDDL_ONLINE),
 		}
 	}
 
