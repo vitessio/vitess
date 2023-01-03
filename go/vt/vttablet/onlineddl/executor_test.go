@@ -68,7 +68,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 		name             string
 		query            string
 		strategyOptions  string
-		expectError      bool
+		expectError      string
 		countConstraints int
 	}{
 		{
@@ -83,7 +83,7 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 					)
 				`,
 			countConstraints: 1,
-			expectError:      true,
+			expectError:      schema.ErrForeignKeyFound.Error(),
 		},
 		{
 			name: "table with FK, allowed",
@@ -153,8 +153,9 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 
 			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test", Options: tc.strategyOptions}
 			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
-			if tc.expectError {
-				assert.Error(t, err)
+			if tc.expectError != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.expectError)
 			} else {
 				assert.NoError(t, err)
 			}
