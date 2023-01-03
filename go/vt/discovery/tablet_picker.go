@@ -160,6 +160,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 				// OK to use ctx here because it is not actually used by the underlying Close implementation
 				_ = conn.Close(ctx)
 				log.Infof("tablet picker found tablet %s", ti.Tablet.String())
+				log.Info("adding random log line")
 				return ti.Tablet, nil
 			}
 			// err found
