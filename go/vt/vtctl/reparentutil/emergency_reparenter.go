@@ -610,9 +610,9 @@ func (erp *EmergencyReparenter) reparentReplicas(
 			return nil, vterrors.Wrapf(rec.Error(), "received more errors (= %d) than replicas (= %d), which should be impossible: %v", errCount, numReplicas, rec.Error())
 		case errCount == numReplicas:
 			if len(tabletMap) <= 2 {
-				// If there are atmost 2 tablets in the tablet map, we shouldn't be failing the promotion if the replica fails to SetReplicationSource.
-				// The failing replica is probably the old primary that is down, so it is okay if if fails. We still log a warning message in the logs.
-				erp.logger.Warningf("The only replica failed to set replication source: %v", rec.Error())
+				// If there are at most 2 tablets in the tablet map, we shouldn't be failing the promotion if the replica fails to SetReplicationSource.
+				// The failing replica is probably the old primary that is down, so it is okay if it fails. We still log a warning message in the logs.
+				erp.logger.Warningf("Failed to set the MySQL replication source during ERS but because there is only one other tablet we assume it is the one that had failed and will progress with the reparent. Error: %v", rec.Error())
 				return nil, nil
 			}
 			return nil, vterrors.Wrapf(rec.Error(), "%d replica(s) failed: %v", numReplicas, rec.Error())
