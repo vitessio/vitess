@@ -532,7 +532,7 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 	// An Online DDL statement is identified by /*vt+ .. */ comment with expected directives, like uuid etc.
 	if onlineDDL, err := schema.OnlineDDLFromCommentedStatement(qre.plan.FullStmt); err == nil {
 		// Parsing is successful.
-		if !onlineDDL.Strategy.IsDirect() {
+		if !schema.NewDDLStrategySetting(onlineDDL.Strategy, onlineDDL.Options).IsDirect() {
 			// This is an online DDL.
 			return qre.tsv.onlineDDLExecutor.SubmitMigration(qre.ctx, qre.plan.FullStmt)
 		}

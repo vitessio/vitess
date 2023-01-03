@@ -2163,7 +2163,7 @@ func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) 
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	if !strategySetting.Strategy.IsDirect() && !params.skipWait && uuid != "" {
+	if !strategySetting.IsDirect() && !params.skipWait && uuid != "" {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}

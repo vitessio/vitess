@@ -168,7 +168,7 @@ func (exec *TabletExecutor) isOnlineSchemaDDL(stmt sqlparser.Statement) (isOnlin
 		if exec.ddlStrategySetting == nil {
 			return false
 		}
-		if exec.ddlStrategySetting.Strategy.IsDirect() {
+		if exec.ddlStrategySetting.IsDirect() {
 			return false
 		}
 		switch stmt.GetAction() {
@@ -206,7 +206,7 @@ func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, provided
 			return true, nil
 		}
 	case *sqlparser.RevertMigration:
-		strategySetting := schema.NewDDLStrategySetting(schema.DDLStrategyOnline, exec.ddlStrategySetting.Options)
+		strategySetting := schema.NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_ONLINE, exec.ddlStrategySetting.Options)
 		onlineDDL, err := schema.NewOnlineDDL(exec.keyspace, "", sqlparser.String(stmt), strategySetting, exec.migrationContext, providedUUID)
 		if err != nil {
 			execResult.ExecutorErr = err.Error()

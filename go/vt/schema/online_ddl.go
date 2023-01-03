@@ -93,9 +93,8 @@ type OnlineDDL struct {
 	m sync.Mutex
 	*tabletmanagerdatapb.OnlineDDL
 
-	Strategy    DDLStrategy `json:"strategy,omitempty"`
-	Options     string      `json:"options,omitempty"`
-	RequestTime int64       `json:"time_created,omitempty"`
+	Options     string `json:"options,omitempty"`
+	RequestTime int64  `json:"time_created,omitempty"`
 	// Stateful fields:
 	MigrationContext   string          `json:"context,omitempty"`
 	Status             OnlineDDLStatus `json:"status,omitempty"`
@@ -214,7 +213,7 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 				encodeDirective(onlineDDLUUID),
 				encodeDirective(migrationContext),
 				encodeDirective(table),
-				encodeDirective(string(ddlStrategySetting.Strategy)),
+				encodeDirective(OnlineDDLStrategyName(ddlStrategySetting.Strategy)),
 				encodeDirective(ddlStrategySetting.Options),
 			)}
 		if uuid, err := legacyParseRevertUUID(sql); err == nil {
@@ -254,8 +253,8 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			Table:    table,
 			Sql:      sql,
 			Uuid:     onlineDDLUUID,
+			Strategy: ddlStrategySetting.Strategy,
 		},
-		Strategy:         ddlStrategySetting.Strategy,
 		Options:          ddlStrategySetting.Options,
 		MigrationContext: migrationContext,
 		Status:           OnlineDDLStatusRequested,
@@ -317,7 +316,11 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 		return nil, err
 	}
 	if strategy, err := decodeDirective("strategy"); err == nil {
-		onlineDDL.Strategy = DDLStrategy(strategy)
+		if strategy, err := ParseDDLStrategyName(strategy); err == nil {
+			onlineDDL.Strategy = strategy
+		} else {
+			return nil, err
+		}
 	} else {
 		return nil, err
 	}

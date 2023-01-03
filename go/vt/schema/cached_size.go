@@ -25,10 +25,8 @@ func (cached *DDLStrategySetting) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(24)
 	}
-	// field Strategy vitess.io/vitess/go/vt/schema.DDLStrategy
-	size += hack.RuntimeAllocSize(int64(len(cached.Strategy)))
 	// field Options string
 	size += hack.RuntimeAllocSize(int64(len(cached.Options)))
 	return size

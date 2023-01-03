@@ -20,9 +20,14 @@ import (
 	"fmt"
 	"regexp"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/google/shlex"
+
+	"vitess.io/vitess/go/vt/log"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var (
@@ -66,24 +71,14 @@ const (
 	DDLStrategyMySQL DDLStrategy = "mysql"
 )
 
-// IsDirect returns true if this strategy is a direct strategy
-// A strategy is direct if it's not explciitly one of the online DDL strategies
-func (s DDLStrategy) IsDirect() bool {
-	switch s {
-	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyMySQL:
-		return false
-	}
-	return true
-}
-
 // DDLStrategySetting is a formal breakdown of the @@ddl_strategy variable, into strategy and options
 type DDLStrategySetting struct {
-	Strategy DDLStrategy `json:"strategy,omitempty"`
-	Options  string      `json:"options,omitempty"`
+	Strategy tabletmanagerdatapb.OnlineDDL_Strategy `json:"strategy,omitempty"`
+	Options  string                                 `json:"options,omitempty"`
 }
 
 // NewDDLStrategySetting instantiates a new setting
-func NewDDLStrategySetting(strategy DDLStrategy, options string) *DDLStrategySetting {
+func NewDDLStrategySetting(strategy tabletmanagerdatapb.OnlineDDL_Strategy, options string) *DDLStrategySetting {
 	return &DDLStrategySetting{
 		Strategy: strategy,
 		Options:  options,
@@ -99,18 +94,54 @@ func ParseDDLStrategy(strategyVariable string) (*DDLStrategySetting, error) {
 		setting.Options = submatch[2]
 	}
 
-	switch strategy := DDLStrategy(strategyName); strategy {
-	case "": // backward compatiblity and to handle unspecified values
-		setting.Strategy = DDLStrategyDirect
-	case DDLStrategyVitess, DDLStrategyOnline, DDLStrategyGhost, DDLStrategyPTOSC, DDLStrategyMySQL, DDLStrategyDirect:
-		setting.Strategy = strategy
-	default:
-		return nil, fmt.Errorf("Unknown online DDL strategy: '%v'", strategy)
+	var err error
+	setting.Strategy, err = ParseDDLStrategyName(strategyName)
+	if err != nil {
+		return nil, err
 	}
 	if _, err := setting.CutOverThreshold(); err != nil {
 		return nil, err
 	}
 	return setting, nil
+}
+
+func ParseDDLStrategyName(name string) (tabletmanagerdatapb.OnlineDDL_Strategy, error) {
+	if name == "" {
+		// backward compatiblity and to handle unspecified values
+		return tabletmanagerdatapb.OnlineDDL_DIRECT, nil
+	}
+
+	lowerName := strings.ToUpper(name)
+	switch lowerName {
+	case "GH-OST", "PT-OSC":
+		// more backward compatibility since the protobuf message names don't
+		// have the dash.
+		lowerName = strings.ReplaceAll(lowerName, "-", "")
+	default:
+	}
+
+	strategy, ok := tabletmanagerdatapb.OnlineDDL_Strategy_value[lowerName]
+	if !ok {
+		return 0, fmt.Errorf("unknown online DDL strategy: '%v'", name)
+	}
+
+	if lowerName != name {
+		// TODO (andrew): Remove special handling for lower/uppercase and
+		// gh-ost=>ghost/pt-osc=>ptosc support. (file issue for this).
+		log.Warningf("detected legacy strategy name syntax; parsed %q as %q. this break in the next version.", lowerName, name)
+	}
+
+	return tabletmanagerdatapb.OnlineDDL_Strategy(strategy), nil
+}
+
+// OnlineDDLStrategyName returns the text-based form of the strategy.
+func OnlineDDLStrategyName(strategy tabletmanagerdatapb.OnlineDDL_Strategy) string {
+	name, ok := tabletmanagerdatapb.OnlineDDL_Strategy_name[int32(strategy)]
+	if !ok {
+		return "unknown"
+	}
+
+	return strings.ToLower(name)
 }
 
 // isFlag return true when the given string is a CLI flag of the given name
@@ -138,6 +169,23 @@ func (setting *DDLStrategySetting) hasFlag(name string) bool {
 // IsDeclarative checks if strategy options include --declarative
 func (setting *DDLStrategySetting) IsDeclarative() bool {
 	return setting.hasFlag(declarativeFlag)
+}
+
+// IsDirect returns true if this strategy is a direct strategy
+// A strategy is direct if it's not explciitly one of the online DDL strategies
+func (setting *DDLStrategySetting) IsDirect() bool {
+	switch setting.Strategy {
+	case tabletmanagerdatapb.OnlineDDL_VITESS,
+		// N.B. duplicate value as OnlineDDL_VITESS; comment left here deliberately
+		// so future readers know it was not omitted by mistake.
+		/* tabletmanagerdatapb.OnlineDDL_ONLINE, */
+		tabletmanagerdatapb.OnlineDDL_GHOST,
+		tabletmanagerdatapb.OnlineDDL_PTOSC,
+		tabletmanagerdatapb.OnlineDDL_MYSQL:
+
+		return false
+	}
+	return true
 }
 
 // IsSingleton checks if strategy options include --singleton

@@ -35,10 +35,8 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-
-	"google.golang.org/protobuf/proto"
-
 	"google.golang.org/protobuf/encoding/prototext"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqlescape"
@@ -414,7 +412,7 @@ func (e *Executor) allowConcurrentMigration(onlineDDL *schema.OnlineDDL) (action
 	case sqlparser.AlterDDLAction:
 		// ALTER is only allowed concurrent execution if this is a Vitess migration
 		strategy := onlineDDL.StrategySetting().Strategy
-		return action, (strategy == schema.DDLStrategyOnline || strategy == schema.DDLStrategyVitess)
+		return action, (strategy == tabletmanagerdatapb.OnlineDDL_ONLINE || strategy == tabletmanagerdatapb.OnlineDDL_VITESS)
 	case sqlparser.RevertDDLAction:
 		// REVERT is allowed to run concurrently.
 		// Reminder that REVERT is supported for CREATE, DROP and for 'vitess' ALTER, but never for
@@ -1932,6 +1930,11 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 		// No results
 		return nil, nil, ErrMigrationNotFound
 	}
+
+	strategy, err := schema.ParseDDLStrategyName(row["strategy"].ToString())
+	if err != nil {
+		return onlineDDL, nil, err
+	}
 	onlineDDL = &schema.OnlineDDL{
 		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
 			Keyspace: row["keyspace"].ToString(),
@@ -1939,8 +1942,8 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 			Schema:   row["mysql_schema"].ToString(),
 			Sql:      row["migration_statement"].ToString(),
 			Uuid:     row["migration_uuid"].ToString(),
+			Strategy: strategy,
 		},
-		Strategy:         schema.DDLStrategy(row["strategy"].ToString()),
 		Options:          row["options"].ToString(),
 		Status:           schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		Retries:          row.AsInt64("retries", 0),
@@ -1973,14 +1976,14 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 	defer e.ownedRunningMigrations.Delete(onlineDDL.Uuid)
 
 	switch onlineDDL.Strategy {
-	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
+	case tabletmanagerdatapb.OnlineDDL_VITESS: // alias: tabletmanagerdatapb.OnlineDDL_ONLINE
 		// migration could have started by a different tablet. We need to actively verify if it is running
 		s, _ := e.readVReplStream(ctx, onlineDDL.Uuid, true)
 		foundRunning = (s != nil && s.isRunning())
 		if err := e.terminateVReplMigration(ctx, onlineDDL.Uuid); err != nil {
 			return foundRunning, fmt.Errorf("Error terminating migration, vreplication exec error: %+v", err)
 		}
-	case schema.DDLStrategyPTOSC:
+	case tabletmanagerdatapb.OnlineDDL_PTOSC:
 		// see if pt-osc is running (could have been executed by this vttablet or one that crashed in the past)
 		if running, pid, _ := e.isPTOSCMigrationRunning(ctx, onlineDDL.Uuid); running {
 			foundRunning = true
@@ -1999,7 +2002,7 @@ func (e *Executor) terminateMigration(ctx context.Context, onlineDDL *schema.Onl
 				return foundRunning, nil
 			}
 		}
-	case schema.DDLStrategyGhost:
+	case tabletmanagerdatapb.OnlineDDL_GHOST:
 		// double check: is the running migration the very same one we wish to cancel?
 		if _, ok := e.ownedRunningMigrations.Load(onlineDDL.Uuid); ok {
 			// assuming all goes well in next steps, we can already report that there has indeed been a migration
@@ -2363,7 +2366,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 		}
 		// Find conditions where the migration cannot take place:
 		switch onlineDDL.Strategy {
-		case schema.DDLStrategyMySQL:
+		case tabletmanagerdatapb.OnlineDDL_MYSQL:
 			strategySetting := onlineDDL.StrategySetting()
 			if strategySetting.IsPostponeCompletion() {
 				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--postpone-completion not supported in 'mysql' strategy"))
@@ -2392,8 +2395,8 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 	}
 	switch action {
 	case sqlparser.AlterDDLAction:
-		if revertMigration.Strategy != schema.DDLStrategyOnline && revertMigration.Strategy != schema.DDLStrategyVitess {
-			return fmt.Errorf("can only revert a %s strategy migration. Migration %s has %s strategy", schema.DDLStrategyOnline, revertMigration.Uuid, revertMigration.Strategy)
+		if revertMigration.Strategy != tabletmanagerdatapb.OnlineDDL_ONLINE && revertMigration.Strategy != tabletmanagerdatapb.OnlineDDL_VITESS {
+			return fmt.Errorf("can only revert a %s strategy migration. Migration %s has %s strategy", tabletmanagerdatapb.OnlineDDL_ONLINE, revertMigration.Uuid, revertMigration.Strategy)
 		}
 	case sqlparser.RevertDDLAction:
 	case sqlparser.CreateDDLAction:
@@ -3030,19 +3033,19 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 
 	// OK, nothing special about this ALTER. Let's go ahead and execute it.
 	switch onlineDDL.Strategy {
-	case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
+	case tabletmanagerdatapb.OnlineDDL_VITESS: // alias: tabletmanagerdatapb.OnlineDDL_ONLINE
 		if err := e.ExecuteWithVReplication(ctx, onlineDDL, nil); err != nil {
 			return failMigration(err)
 		}
-	case schema.DDLStrategyGhost:
+	case tabletmanagerdatapb.OnlineDDL_GHOST:
 		if err := e.ExecuteWithGhost(ctx, onlineDDL); err != nil {
 			return failMigration(err)
 		}
-	case schema.DDLStrategyPTOSC:
+	case tabletmanagerdatapb.OnlineDDL_PTOSC:
 		if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
 			return failMigration(err)
 		}
-	case schema.DDLStrategyMySQL:
+	case tabletmanagerdatapb.OnlineDDL_MYSQL:
 		if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 			return failMigration(err)
 		}
@@ -3506,7 +3509,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 
 		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
 		switch onlineDDL.StrategySetting().Strategy {
-		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
+		case tabletmanagerdatapb.OnlineDDL_VITESS: // alias: tabletmanagerdatapb.OnlineDDL_ONLINE
 			{
 				// We check the _vt.vreplication table
 				s, err := e.readVReplStream(ctx, uuid, true)
@@ -3595,7 +3598,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					}
 				}
 			}
-		case schema.DDLStrategyPTOSC:
+		case tabletmanagerdatapb.OnlineDDL_PTOSC:
 			{
 				// Since pt-osc doesn't have a "liveness" plugin entry point, we do it externally:
 				// if the process is alive, we update the `liveness_timestamp` for this migration.
@@ -3615,7 +3618,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					cancellable = append(cancellable, newCancellableMigration(uuid, message))
 				}
 			}
-		case schema.DDLStrategyGhost:
+		case tabletmanagerdatapb.OnlineDDL_GHOST:
 			{
 				if _, ok := e.ownedRunningMigrations.Load(uuid); !ok {
 					// Ummm, the migration is running but we don't own it. This means the migration

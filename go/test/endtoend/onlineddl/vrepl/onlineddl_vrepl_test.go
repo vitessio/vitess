@@ -939,7 +939,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	if strategySetting.Strategy.IsDirect() {
+	if strategySetting.IsDirect() {
 		skipWait = true
 	}
 	if !skipWait {

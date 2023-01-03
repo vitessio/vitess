@@ -82,7 +82,7 @@ func (ddl *DDL) GetTableName() string {
 func (ddl *DDL) isOnlineSchemaDDL() bool {
 	switch ddl.DDL.GetAction() {
 	case sqlparser.CreateDDLAction, sqlparser.DropDDLAction, sqlparser.AlterDDLAction:
-		return !ddl.OnlineDDL.DDLStrategySetting.Strategy.IsDirect()
+		return !ddl.OnlineDDL.DDLStrategySetting.IsDirect()
 	}
 	return false
 }

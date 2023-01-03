@@ -57,7 +57,7 @@ func TestGetGCUUID(t *testing.T) {
 	uuids := map[string]bool{}
 	count := 20
 	for i := 0; i < count; i++ {
-		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(DDLStrategyDirect, ""), "", "")
+		onlineDDL, err := NewOnlineDDL("ks", "tbl", "alter table t drop column c", NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_DIRECT, ""), "", "")
 		assert.NoError(t, err)
 		gcUUID := onlineDDL.GetGCUUID()
 		assert.True(t, IsGCUUID(gcUUID))
@@ -172,7 +172,7 @@ func TestGetRevertUUID(t *testing.T) {
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	for _, ts := range tt {
 		t.Run(ts.statement, func(t *testing.T) {
-			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.statement, NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "")
+			onlineDDL, err := NewOnlineDDL("test_ks", "t", ts.statement, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_ONLINE, ""), migrationContext, "")
 			assert.NoError(t, err)
 			require.NotNil(t, onlineDDL)
 			uuid, err := onlineDDL.GetRevertUUID()
@@ -214,9 +214,9 @@ func TestNewOnlineDDL(t *testing.T) {
 		},
 	}
 	strategies := []*DDLStrategySetting{
-		NewDDLStrategySetting(DDLStrategyDirect, ""),
-		NewDDLStrategySetting(DDLStrategyVitess, ""),
-		NewDDLStrategySetting(DDLStrategyOnline, "-singleton"),
+		NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_DIRECT, ""),
+		NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_VITESS, ""),
+		NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_ONLINE, "-singleton"),
 	}
 
 	for _, ts := range tt {
@@ -232,7 +232,7 @@ func TestNewOnlineDDL(t *testing.T) {
 					// onlineDDL.SQL enriched with /*vt+ ... */ comment
 					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(onlineDDL.Uuid)))
 					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(migrationContext)))
-					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(string(stgy.Strategy))))
+					assert.Contains(t, onlineDDL.Sql, hex.EncodeToString([]byte(OnlineDDLStrategyName(stgy.Strategy))))
 				})
 			}
 		})
@@ -242,18 +242,18 @@ func TestNewOnlineDDL(t *testing.T) {
 		var err error
 		var onlineDDL *OnlineDDL
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_VITESS, ""), migrationContext, "")
 		assert.NoError(t, err)
 		assert.True(t, IsOnlineDDLUUID(onlineDDL.Uuid))
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyOnline, ""), migrationContext, "abc")
+		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_ONLINE, ""), migrationContext, "abc")
 		assert.Error(t, err)
 
-		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		onlineDDL, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_VITESS, ""), migrationContext, "4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.NoError(t, err)
 		assert.Equal(t, "4e5dcf80_354b_11eb_82cd_f875a4d24e90", onlineDDL.Uuid)
 
-		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
+		_, err = NewOnlineDDL("test_ks", "t", "alter table t engine=innodb", NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_VITESS, ""), migrationContext, " 4e5dcf80_354b_11eb_82cd_f875a4d24e90")
 		assert.Error(t, err)
 	})
 }
@@ -309,7 +309,7 @@ func TestNewOnlineDDLs(t *testing.T) {
 			}
 			assert.True(t, ok)
 
-			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, ""), migrationContext, "")
+			onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_VITESS, ""), migrationContext, "")
 			if expect.isError {
 				assert.Error(t, err)
 				assert.Contains(t, err.Error(), expect.expectErrorText)
@@ -360,7 +360,7 @@ func TestNewOnlineDDLsForeignKeys(t *testing.T) {
 					if allowForeignKeys {
 						flags = "--unsafe-allow-foreign-keys"
 					}
-					onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, flags), migrationContext, "")
+					onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_VITESS, flags), migrationContext, "")
 					if allowForeignKeys {
 						assert.NoError(t, err)
 					} else {
@@ -389,7 +389,7 @@ func TestOnlineDDLFromCommentedStatement(t *testing.T) {
 		`alter view v as select * from t`,
 		`revert vitess_migration '4e5dcf80_354b_11eb_82cd_f875a4d24e90'`,
 	}
-	strategySetting := NewDDLStrategySetting(DDLStrategyGhost, `-singleton -declarative --max-load="Threads_running=5"`)
+	strategySetting := NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_GHOST, `-singleton -declarative --max-load="Threads_running=5"`)
 	migrationContext := "354b-11eb-82cd-f875a4d24e90"
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {

@@ -22,21 +22,40 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 func TestIsDirect(t *testing.T) {
-	assert.True(t, DDLStrategyDirect.IsDirect())
-	assert.False(t, DDLStrategyVitess.IsDirect())
-	assert.False(t, DDLStrategyOnline.IsDirect())
-	assert.False(t, DDLStrategyGhost.IsDirect())
-	assert.False(t, DDLStrategyPTOSC.IsDirect())
-	assert.True(t, DDLStrategy("").IsDirect())
-	assert.False(t, DDLStrategy("vitess").IsDirect())
-	assert.False(t, DDLStrategy("online").IsDirect())
-	assert.False(t, DDLStrategy("gh-ost").IsDirect())
-	assert.False(t, DDLStrategy("pt-osc").IsDirect())
-	assert.False(t, DDLStrategy("mysql").IsDirect())
-	assert.True(t, DDLStrategy("something").IsDirect())
+	assert.True(t, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_DIRECT, "").IsDirect())
+	assert.False(t, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_VITESS, "").IsDirect())
+	assert.False(t, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_ONLINE, "").IsDirect())
+	assert.False(t, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_GHOST, "").IsDirect())
+	assert.False(t, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_PTOSC, "").IsDirect())
+	assert.False(t, NewDDLStrategySetting(tabletmanagerdatapb.OnlineDDL_MYSQL, "").IsDirect())
+
+	for name, direct := range map[string]bool{
+		"":       true,
+		"vitess": false,
+		"online": false,
+		"gh-ost": false,
+		"pt-osc": false,
+		"mysql":  false,
+	} {
+		strategy, err := ParseDDLStrategyName(name)
+		require.NoError(t, err)
+
+		var assertion func(t assert.TestingT, value bool, msgAndArgs ...any) bool
+		switch direct {
+		case true:
+			assertion = assert.True
+		case false:
+			assertion = assert.False
+		}
+
+		assertion(t, NewDDLStrategySetting(strategy, "").IsDirect())
+	}
 }
 
 func TestIsCutOverThresholdFlag(t *testing.T) {
@@ -105,7 +124,7 @@ func TestIsCutOverThresholdFlag(t *testing.T) {
 func TestParseDDLStrategy(t *testing.T) {
 	tt := []struct {
 		strategyVariable     string
-		strategy             DDLStrategy
+		strategy             tabletmanagerdatapb.OnlineDDL_Strategy
 		options              string
 		isDeclarative        bool
 		isSingleton          bool
@@ -123,125 +142,125 @@ func TestParseDDLStrategy(t *testing.T) {
 	}{
 		{
 			strategyVariable: "direct",
-			strategy:         DDLStrategyDirect,
+			strategy:         tabletmanagerdatapb.OnlineDDL_DIRECT,
 		},
 		{
 			strategyVariable: "vitess",
-			strategy:         DDLStrategyVitess,
+			strategy:         tabletmanagerdatapb.OnlineDDL_VITESS,
 		},
 		{
 			strategyVariable: "online",
-			strategy:         DDLStrategyOnline,
+			strategy:         tabletmanagerdatapb.OnlineDDL_ONLINE,
 		},
 		{
 			strategyVariable: "gh-ost",
-			strategy:         DDLStrategyGhost,
+			strategy:         tabletmanagerdatapb.OnlineDDL_GHOST,
 		},
 		{
 			strategyVariable: "pt-osc",
-			strategy:         DDLStrategyPTOSC,
+			strategy:         tabletmanagerdatapb.OnlineDDL_PTOSC,
 		},
 		{
 			strategyVariable: "mysql",
-			strategy:         DDLStrategyMySQL,
+			strategy:         tabletmanagerdatapb.OnlineDDL_MYSQL,
 		},
 		{
-			strategy: DDLStrategyDirect,
+			strategy: tabletmanagerdatapb.OnlineDDL_DIRECT,
 		},
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 --allow-master",
-			strategy:         DDLStrategyGhost,
+			strategy:         tabletmanagerdatapb.OnlineDDL_GHOST,
 			// These are gh-ost options. Nothing we can do until that changes upstream
 			options:        "--max-load=Threads_running=100 --allow-master",
 			runtimeOptions: "--max-load=Threads_running=100 --allow-master",
 		},
 		{
 			strategyVariable: "gh-ost --max-load=Threads_running=100 -declarative",
-			strategy:         DDLStrategyGhost,
+			strategy:         tabletmanagerdatapb.OnlineDDL_GHOST,
 			options:          "--max-load=Threads_running=100 -declarative",
 			runtimeOptions:   "--max-load=Threads_running=100",
 			isDeclarative:    true,
 		},
 		{
 			strategyVariable: "gh-ost --declarative --max-load=Threads_running=100",
-			strategy:         DDLStrategyGhost,
+			strategy:         tabletmanagerdatapb.OnlineDDL_GHOST,
 			options:          "--declarative --max-load=Threads_running=100",
 			runtimeOptions:   "--max-load=Threads_running=100",
 			isDeclarative:    true,
 		},
 		{
 			strategyVariable: "pt-osc -singleton",
-			strategy:         DDLStrategyPTOSC,
+			strategy:         tabletmanagerdatapb.OnlineDDL_PTOSC,
 			options:          "-singleton",
 			runtimeOptions:   "",
 			isSingleton:      true,
 		},
 		{
 			strategyVariable: "online -postpone-launch",
-			strategy:         DDLStrategyOnline,
+			strategy:         tabletmanagerdatapb.OnlineDDL_ONLINE,
 			options:          "-postpone-launch",
 			runtimeOptions:   "",
 			isPostponeLaunch: true,
 		},
 		{
 			strategyVariable:     "online -postpone-completion",
-			strategy:             DDLStrategyOnline,
+			strategy:             tabletmanagerdatapb.OnlineDDL_ONLINE,
 			options:              "-postpone-completion",
 			runtimeOptions:       "",
 			isPostponeCompletion: true,
 		},
 		{
 			strategyVariable:    "online --in-order-completion",
-			strategy:            DDLStrategyOnline,
+			strategy:            tabletmanagerdatapb.OnlineDDL_ONLINE,
 			options:             "--in-order-completion",
 			runtimeOptions:      "",
 			isInOrderCompletion: true,
 		},
 		{
 			strategyVariable:  "online -allow-concurrent",
-			strategy:          DDLStrategyOnline,
+			strategy:          tabletmanagerdatapb.OnlineDDL_ONLINE,
 			options:           "-allow-concurrent",
 			runtimeOptions:    "",
 			isAllowConcurrent: true,
 		},
 		{
 			strategyVariable:  "vitess -allow-concurrent",
-			strategy:          DDLStrategyVitess,
+			strategy:          tabletmanagerdatapb.OnlineDDL_VITESS,
 			options:           "-allow-concurrent",
 			runtimeOptions:    "",
 			isAllowConcurrent: true,
 		},
 		{
 			strategyVariable:   "vitess --prefer-instant-ddl",
-			strategy:           DDLStrategyVitess,
+			strategy:           tabletmanagerdatapb.OnlineDDL_VITESS,
 			options:            "--prefer-instant-ddl",
 			runtimeOptions:     "",
 			fastOverRevertible: true,
 		},
 		{
 			strategyVariable:  "vitess --fast-range-rotation",
-			strategy:          DDLStrategyVitess,
+			strategy:          tabletmanagerdatapb.OnlineDDL_VITESS,
 			options:           "--fast-range-rotation",
 			runtimeOptions:    "",
 			fastRangeRotation: true,
 		},
 		{
 			strategyVariable: "vitess --unsafe-allow-foreign-keys",
-			strategy:         DDLStrategyVitess,
+			strategy:         tabletmanagerdatapb.OnlineDDL_VITESS,
 			options:          "--unsafe-allow-foreign-keys",
 			runtimeOptions:   "",
 			allowForeignKeys: true,
 		},
 		{
 			strategyVariable: "vitess --cut-over-threshold=5m",
-			strategy:         DDLStrategyVitess,
+			strategy:         tabletmanagerdatapb.OnlineDDL_VITESS,
 			options:          "--cut-over-threshold=5m",
 			runtimeOptions:   "",
 			cutOverThreshold: 5 * time.Minute,
 		},
 		{
 			strategyVariable: "vitess --analyze-table",
-			strategy:         DDLStrategyVitess,
+			strategy:         tabletmanagerdatapb.OnlineDDL_VITESS,
 			options:          "--analyze-table",
 			runtimeOptions:   "",
 			analyzeTable:     true,
