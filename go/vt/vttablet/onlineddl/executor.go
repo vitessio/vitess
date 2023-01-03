@@ -691,7 +691,7 @@ func (e *Executor) doesConnectionInfoMatch(ctx context.Context, connID int64, su
 	return len(rs.Rows) == 1, nil
 }
 
-// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent on a child in at least one foreign key constraint
+// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent or a child in at least one foreign key constraint
 func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context, schema string, table string) (bool, error) {
 	for _, fkQuery := range []string{selSelectCountFKParentConstraints, selSelectCountFKChildConstraints} {
 		query, err := sqlparser.ParseAndBind(fkQuery,
