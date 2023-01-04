@@ -89,6 +89,19 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			},
 			expected:  []string{"r1", "r2", "p1"},
 			shouldErr: false,
+		}, {
+			name: "success for single tablet",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expected:         []string{"r1"},
+			shouldErr:        false,
 		},
 		{
 			name: "mixed replication modes",
