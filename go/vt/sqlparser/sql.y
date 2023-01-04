@@ -1352,6 +1352,10 @@ grant_privilege:
   {
     $$ = Privilege{Type: PrivilegeType_File, Columns: $2}
   }
+| GRANT OPTION grant_privilege_columns_opt
+  {
+    $$ = Privilege{Type: PrivilegeType_GrantOption, Columns: $3}
+  }
 | INDEX grant_privilege_columns_opt
   {
     $$ = Privilege{Type: PrivilegeType_Index, Columns: $2}
