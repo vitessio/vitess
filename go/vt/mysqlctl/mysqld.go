@@ -217,7 +217,7 @@ func GetVersionFromEnv() (flavor MySQLFlavor, ver ServerVersion, err error) {
 	env := os.Getenv("MYSQL_FLAVOR")
 	switch env {
 	case "MariaDB":
-		return FlavorMariaDB, ServerVersion{10, 0, 10}, nil
+		return FlavorMariaDB, ServerVersion{10, 6, 11}, nil
 	case "MySQL80":
 		return FlavorMySQL, ServerVersion{8, 0, 11}, nil
 	case "MySQL56":
