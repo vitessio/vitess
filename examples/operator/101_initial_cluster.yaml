@@ -236,8 +236,7 @@ stringData:
       clusters: ["*"]
     - resource: "Shard"
       actions:
-        - "emergency_reparent_shard"
-        - "planned_reparent_shard"
+        - "emergency_failover_shard"
+        - "planned_failover_shard"
       subjects: ["*"]
-      clusters:
-        - "local"
+      clusters: ["*"]
