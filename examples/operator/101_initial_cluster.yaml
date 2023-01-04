@@ -239,5 +239,4 @@ stringData:
         - "emergency_failover_shard"
         - "planned_failover_shard"
       subjects: ["*"]
-      clusters:
-        - "local"
+      clusters: ["*"]
