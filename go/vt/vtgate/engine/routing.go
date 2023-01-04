@@ -119,6 +119,9 @@ type RoutingParameters struct {
 
 	// Values specifies the vindex values to use for routing.
 	Values []evalengine.Expr
+
+	// NeedsKeyspace signals when we need to add the keyspace name to the bindvariables
+	NeedsKeyspace bool
 }
 
 func (code Opcode) IsSingleShard() bool {

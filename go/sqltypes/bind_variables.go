@@ -33,6 +33,9 @@ var (
 	// BvSchemaName is bind variable to be sent down to vttablet for schema name.
 	BvSchemaName = "__vtschemaname"
 
+	// BvKeyspaceName is used when we need to insert the keyspace name into queries
+	BvKeyspaceName = "__vtkeyspacename"
+
 	// BvReplaceSchemaName is bind variable to be sent down to vttablet to replace schema name.
 	BvReplaceSchemaName = "__replacevtschemaname"
 

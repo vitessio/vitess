@@ -22,7 +22,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -33,32 +32,21 @@ import (
 
 type (
 	queryBuilder struct {
-		ctx          *plancontext.PlanningContext
-		sel          sqlparser.SelectStatement
-		tableNames   []string
-		keyspaceName string
+		ctx           *plancontext.PlanningContext
+		sel           sqlparser.SelectStatement
+		tableNames    []string
+		needsKeyspace bool
 	}
 )
 
-func ToSQL(ctx *plancontext.PlanningContext, op *Route) (sqlparser.SelectStatement, error) {
-	keyspaceName := ""
-	if len(op.SysTableTableSchema) != 0 {
-		res, err := evalengine.EmptyExpressionEnv().Evaluate(op.SysTableTableSchema[0])
-		if err != nil {
-			return nil, err
-		}
-		keyspaceName = res.Value().ToString()
-	} else if op.Keyspace != nil {
-		keyspaceName = op.Keyspace.Name
-	}
-
-	q := &queryBuilder{ctx: ctx, keyspaceName: keyspaceName}
-	err := q.buildQuery(op.Source)
+func ToSQL(ctx *plancontext.PlanningContext, op *Route) (sel sqlparser.SelectStatement, needsKeyspace bool, err error) {
+	q := &queryBuilder{ctx: ctx}
+	err = q.buildQuery(op.Source)
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
 	q.sortTables()
-	return q.sel, nil
+	return q.sel, q.needsKeyspace, nil
 }
 
 func (qb *queryBuilder) addTable(db, tableName, alias string, tableID semantics.TableSet, hints sqlparser.IndexHints) {
@@ -285,14 +273,13 @@ func (qb *queryBuilder) convertSchemaColumnToCase(aliasedExpr *sqlparser.Aliased
 			changed = true
 			cursor.Replace(&sqlparser.CaseExpr{
 				Expr: colName,
-				Whens: []*sqlparser.When{
-					{
-						Cond: sqlparser.Argument(sqltypes.BvSchemaName),
-						Val:  sqlparser.NewStrLiteral(qb.keyspaceName),
-					},
-				},
+				Whens: []*sqlparser.When{{
+					Cond: sqlparser.Argument(sqltypes.BvSchemaName),
+					Val:  sqlparser.NewArgument(sqltypes.BvKeyspaceName),
+				}},
 				Else: colName,
 			})
+			qb.needsKeyspace = true
 		}
 		return false
 	})

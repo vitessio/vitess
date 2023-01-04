@@ -153,7 +153,7 @@ func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.Apply
 	}, nil
 }
 
-func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (*engine.Route, error) {
+func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route, needsKS bool) (*engine.Route, error) {
 	tableNames, err := getAllTableNames(op)
 	if err != nil {
 		return nil, err
@@ -173,6 +173,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 			Values:              values,
 			SysTableTableName:   op.SysTableTableName,
 			SysTableTableSchema: op.SysTableTableSchema,
+			NeedsKeyspace:       needsKS,
 		},
 	}, nil
 }
@@ -185,12 +186,12 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		return transformDeletePlan(ctx, op, src)
 	}
 	condition := getVindexPredicate(ctx, op)
-	sel, err := operators.ToSQL(ctx, op)
+	sel, needsKS, err := operators.ToSQL(ctx, op)
 	if err != nil {
 		return nil, err
 	}
 	replaceSubQuery(ctx, sel)
-	eroute, err := routeToEngineRoute(ctx, op)
+	eroute, err := routeToEngineRoute(ctx, op, needsKS)
 	if err != nil {
 		return nil, err
 	}

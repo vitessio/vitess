@@ -484,8 +484,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto'",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto'",
             "Table": "information_schema.`COLUMNS`"
           },
           {
@@ -495,8 +496,9 @@
               "Name": "main_2",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
             "Table": "information_schema.`COLUMNS`"
           },
           {
@@ -506,8 +508,9 @@
               "Name": "second_user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
             "Table": "information_schema.`COLUMNS`"
           },
           {
@@ -517,8 +520,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
             "Table": "information_schema.`COLUMNS`"
           },
           {
@@ -528,8 +532,9 @@
               "Name": "zlookup_unique",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto' and TABLE_SCHEMA = :__vtschemaname",
             "Table": "information_schema.`COLUMNS`"
           }
         ]
@@ -633,8 +638,9 @@
                       "Name": "main",
                       "Sharded": false
                     },
-                    "FieldQuery": "select table_schema from information_schema.`tables` where 1 != 1",
-                    "Query": "select distinct table_schema from information_schema.`tables`",
+                    "FieldQuery": "select case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where 1 != 1",
+                    "KeyspaceNameInBindVars": true,
+                    "Query": "select distinct case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables`",
                     "Table": "information_schema.`tables`"
                   },
                   {
@@ -644,8 +650,9 @@
                       "Name": "main_2",
                       "Sharded": false
                     },
-                    "FieldQuery": "select table_schema from information_schema.`tables` where 1 != 1",
-                    "Query": "select distinct table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
+                    "FieldQuery": "select case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where 1 != 1",
+                    "KeyspaceNameInBindVars": true,
+                    "Query": "select distinct case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
                     "Table": "information_schema.`tables`"
                   },
                   {
@@ -655,8 +662,9 @@
                       "Name": "second_user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select table_schema from information_schema.`tables` where 1 != 1",
-                    "Query": "select distinct table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
+                    "FieldQuery": "select case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where 1 != 1",
+                    "KeyspaceNameInBindVars": true,
+                    "Query": "select distinct case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
                     "Table": "information_schema.`tables`"
                   },
                   {
@@ -666,8 +674,9 @@
                       "Name": "user",
                       "Sharded": true
                     },
-                    "FieldQuery": "select table_schema from information_schema.`tables` where 1 != 1",
-                    "Query": "select distinct table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
+                    "FieldQuery": "select case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where 1 != 1",
+                    "KeyspaceNameInBindVars": true,
+                    "Query": "select distinct case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
                     "Table": "information_schema.`tables`"
                   },
                   {
@@ -677,8 +686,9 @@
                       "Name": "zlookup_unique",
                       "Sharded": true
                     },
-                    "FieldQuery": "select table_schema from information_schema.`tables` where 1 != 1",
-                    "Query": "select distinct table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
+                    "FieldQuery": "select case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where 1 != 1",
+                    "KeyspaceNameInBindVars": true,
+                    "Query": "select distinct case table_schema when :__vtschemaname then :__vtkeyspacename else table_schema end as table_schema from information_schema.`tables` where TABLE_SCHEMA = :__vtschemaname",
                     "Table": "information_schema.`tables`"
                   }
                 ]
@@ -770,8 +780,9 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
-                "Query": "select distinct TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname",
+                "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
+                "KeyspaceNameInBindVars": true,
+                "Query": "select distinct TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname",
                 "SysTableTableSchema": "[VARCHAR(\"user\")]",
                 "Table": "information_schema.`tables`"
               },
@@ -782,8 +793,9 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
-                "Query": "select distinct TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(TABLE_SCHEMA), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname",
+                "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where 1 != 1",
+                "KeyspaceNameInBindVars": true,
+                "Query": "select distinct TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT, weight_string(TABLE_CATALOG), weight_string(case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end), weight_string(TABLE_NAME), weight_string(TABLE_TYPE), weight_string(`ENGINE`), weight_string(`ROW_FORMAT`), weight_string(CREATE_TIME), weight_string(UPDATE_TIME), weight_string(CHECK_TIME), weight_string(TABLE_COLLATION), weight_string(CREATE_OPTIONS), weight_string(TABLE_COMMENT) from information_schema.`tables` where table_schema = :__vtschemaname",
                 "SysTableTableSchema": "[VARCHAR(\"main\")]",
                 "Table": "information_schema.`tables`"
               }
@@ -1125,8 +1137,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select CATALOG_NAME, SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH from information_schema.schemata where 1 != 1",
-        "Query": "select CATALOG_NAME, SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH from information_schema.schemata where schema_name = :__vtschemaname",
+        "FieldQuery": "select CATALOG_NAME, case SCHEMA_NAME when :__vtschemaname then :__vtkeyspacename else SCHEMA_NAME end as SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH from information_schema.schemata where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select CATALOG_NAME, case SCHEMA_NAME when :__vtschemaname then :__vtkeyspacename else SCHEMA_NAME end as SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH from information_schema.schemata where schema_name = :__vtschemaname",
         "SysTableTableSchema": "[VARCHAR(\"user\")]",
         "Table": "information_schema.schemata"
       }
@@ -1281,8 +1294,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select table_name from (select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
-        "Query": "select table_name from (select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery",
+        "FieldQuery": "select table_name from (select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select table_name from (select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname) as _subquery",
         "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
         "Table": "information_schema.`tables`"
       }
@@ -1318,8 +1332,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select table_name from (select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
-        "Query": "select table_name from (select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname and table_type = 'table_type' and table_name = 'table_name') as _subquery",
+        "FieldQuery": "select table_name from (select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where 1 != 1) as _subquery where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select table_name from (select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname and table_type = 'table_type' and table_name = 'table_name') as _subquery",
         "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
         "Table": "information_schema.`tables`"
       }
@@ -1514,8 +1529,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
+        "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
         "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"main\")]",
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }
@@ -1552,8 +1568,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database()",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1563,8 +1580,9 @@
               "Name": "main_2",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1574,8 +1592,9 @@
               "Name": "second_user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1585,8 +1604,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1596,8 +1616,9 @@
               "Name": "zlookup_unique",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = database() and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           }
         ]
@@ -1633,8 +1654,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
+        "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname",
         "SysTableTableSchema": "[VARCHAR(\"ks\")]",
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }
@@ -1670,8 +1692,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_NAME = :TABLE_NAME",
+        "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = :__vtschemaname and TABLE_NAME = :TABLE_NAME",
         "SysTableTableName": "[TABLE_NAME:VARCHAR(\"route1\")]",
         "SysTableTableSchema": "[VARCHAR(\"ks\")]",
         "Table": "INFORMATION_SCHEMA.`TABLES`"
@@ -1730,8 +1753,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value'",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value'",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1741,8 +1765,9 @@
               "Name": "main_2",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1752,8 +1777,9 @@
               "Name": "second_user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1763,8 +1789,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -1774,8 +1801,9 @@
               "Name": "zlookup_unique",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' and DATA_FREE = 42 or TABLE_SCHEMA = 'ks' and `CHECKSUM` = 'value') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           }
         ]
@@ -2876,8 +2904,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -2887,8 +2916,9 @@
               "Name": "main_2",
               "Sharded": false
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -2898,8 +2928,9 @@
               "Name": "second_user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -2909,8 +2940,9 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           },
           {
@@ -2920,8 +2952,9 @@
               "Name": "zlookup_unique",
               "Sharded": true
             },
-            "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
-            "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
+            "FieldQuery": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
+            "KeyspaceNameInBindVars": true,
+            "Query": "select TABLE_CATALOG, case TABLE_SCHEMA when :__vtschemaname then :__vtkeyspacename else TABLE_SCHEMA end as TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where (TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main') and TABLE_SCHEMA = :__vtschemaname",
             "Table": "INFORMATION_SCHEMA.`TABLES`"
           }
         ]

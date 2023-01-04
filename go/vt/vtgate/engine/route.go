@@ -247,6 +247,8 @@ func (route *Route) executeShards(
 		}
 	}
 
+	route.addKeyspaceIfNeeded(rss, bvs)
+
 	queries := getQueries(route.Query, bvs)
 	result, errs := vcursor.ExecuteMultiShard(ctx, route, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 
@@ -338,6 +340,8 @@ func (route *Route) streamExecuteShards(
 		}
 	}
 
+	route.addKeyspaceIfNeeded(rss, bvs)
+
 	if len(route.OrderBy) == 0 {
 		errs := vcursor.StreamExecuteMulti(ctx, route, route.Query, rss, bvs, false /* rollbackOnError */, false /* autocommit */, func(qr *sqltypes.Result) error {
 			return callback(qr.Truncate(route.TruncateColumnCount))
@@ -357,6 +361,14 @@ func (route *Route) streamExecuteShards(
 
 	// There is an order by. We have to merge-sort.
 	return route.mergeSort(ctx, vcursor, bindVars, wantfields, callback, rss, bvs)
+}
+
+func (route *Route) addKeyspaceIfNeeded(rss []*srvtopo.ResolvedShard, bvs []map[string]*querypb.BindVariable) {
+	if route.NeedsKeyspace {
+		for i, shard := range rss {
+			bvs[i][sqltypes.BvKeyspaceName] = sqltypes.StringBindVariable(shard.Target.Keyspace)
+		}
+	}
 }
 
 func (route *Route) mergeSort(
@@ -486,6 +498,9 @@ func (route *Route) description() PrimitiveDescription {
 	}
 	if route.QueryTimeout > 0 {
 		other["QueryTimeout"] = route.QueryTimeout
+	}
+	if route.NeedsKeyspace {
+		other["KeyspaceNameInBindVars"] = true
 	}
 	return PrimitiveDescription{
 		OperatorType:      "Route",

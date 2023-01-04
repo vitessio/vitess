@@ -65,8 +65,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where 1 != 1",
-        "Query": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
+        "FieldQuery": "select case t.table_schema when :__vtschemaname then :__vtkeyspacename else t.table_schema end as table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select case t.table_schema when :__vtschemaname then :__vtkeyspacename else t.table_schema end as table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
         "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
         "Table": "information_schema.`columns`, information_schema.`tables`"
       }
@@ -101,8 +102,9 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) from dual where 1 != 1",
-        "Query": "select (select 1 from information_schema.schemata where schema_name = :__vtschemaname limit 1) from dual",
+        "FieldQuery": "select (select 1 from information_schema.schemata where 1 != 1) as `:__sq1` from dual where 1 != 1",
+        "KeyspaceNameInBindVars": true,
+        "Query": "select (select 1 from information_schema.schemata where case schema_name when :__vtschemaname then :__vtkeyspacename else schema_name end = :__vtschemaname limit 1) as `:__sq1` from dual",
         "SysTableTableSchema": "[VARCHAR(\"MyDatabase\")]",
         "Table": "dual"
       },
