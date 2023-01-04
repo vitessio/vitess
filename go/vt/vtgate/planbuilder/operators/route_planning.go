@@ -465,6 +465,10 @@ func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute
 		MergedWith:          []*Route{bRoute},
 	}
 
+	if aRoute.Routing != nil && bRoute.Routing != nil {
+		r.Routing = aRoute.Routing.Merge(bRoute.Routing)
+	}
+
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
 		r.Selected = aRoute.Selected
 	}

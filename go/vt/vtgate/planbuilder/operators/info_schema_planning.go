@@ -19,6 +19,9 @@ package operators
 import (
 	"strings"
 
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/servenv"
@@ -30,6 +33,40 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
+
+type infoSchemaRouting struct {
+	// The following two fields are used when routing information_schema queries
+	SysTableTableSchema []evalengine.Expr
+	SysTableTableName   map[string]evalengine.Expr
+}
+
+func (isr *infoSchemaRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+	rp.SysTableTableSchema = isr.SysTableTableSchema
+	rp.SysTableTableSchema = isr.SysTableTableSchema
+}
+
+func (isr *infoSchemaRouting) Clone() routing {
+	return &infoSchemaRouting{
+		SysTableTableSchema: slices.Clone(isr.SysTableTableSchema),
+		SysTableTableName:   maps.Clone(isr.SysTableTableName),
+	}
+}
+
+func (isr *infoSchemaRouting) Merge(other routing) routing {
+	otherIsr, isIsr := other.(*infoSchemaRouting)
+	if !isIsr {
+		panic(42)
+	}
+	systableName := maps.Clone(isr.SysTableTableName)
+	for k, v := range otherIsr.SysTableTableName {
+		systableName[k] = v
+	}
+	newIsr := &infoSchemaRouting{
+		SysTableTableSchema: append(slices.Clone(isr.SysTableTableSchema), otherIsr.SysTableTableSchema...),
+		SysTableTableName:   systableName,
+	}
+	return newIsr
+}
 
 func createInfSchemaPhysOp(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
@@ -55,30 +92,6 @@ func createInfSchemaPhysOp(ctx *plancontext.PlanningContext, table *QueryTable) 
 
 	// we have to concatenate results from all keyspaces
 	return createInfSchemaUnion(ctx, table, nameFor, schemaNameExprs, tableNameExprs)
-}
-
-func (r *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, reservedVars *sqlparser.ReservedVars) error {
-	for _, pred := range predicates {
-		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, reservedVars)
-		if err != nil {
-			return err
-		}
-		if out == nil {
-			// we didn't find a predicate to use for routing, continue to look for next predicate
-			continue
-		}
-
-		if r.SysTableTableName == nil {
-			r.SysTableTableName = map[string]evalengine.Expr{}
-		}
-
-		if isTableSchema {
-			r.SysTableTableSchema = append(r.SysTableTableSchema, out)
-		} else {
-			r.SysTableTableName[bvName] = out
-		}
-	}
-	return nil
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {

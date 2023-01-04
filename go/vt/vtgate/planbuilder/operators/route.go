@@ -61,6 +61,18 @@ type (
 
 		// Routes that have been merged into this one.
 		MergedWith []*Route
+
+		Routing routing
+	}
+
+	routing interface {
+		UpdateRoutingParams(rp *engine.RoutingParameters)
+		Merge(other routing) routing
+		Clone() routing
+		//UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+		//AddQueryTablePredicates(ctx *plancontext.PlanningContext, qt *QueryTable) error
+		//OpCode() engine.Opcode
+		//CanMerge(other routing) bool
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
