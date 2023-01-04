@@ -21,6 +21,8 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -31,15 +33,27 @@ import (
 
 type (
 	queryBuilder struct {
-		ctx        *plancontext.PlanningContext
-		sel        sqlparser.SelectStatement
-		tableNames []string
+		ctx          *plancontext.PlanningContext
+		sel          sqlparser.SelectStatement
+		tableNames   []string
+		keyspaceName string
 	}
 )
 
-func ToSQL(ctx *plancontext.PlanningContext, op ops.Operator) (sqlparser.SelectStatement, error) {
-	q := &queryBuilder{ctx: ctx}
-	err := buildQuery(op, q)
+func ToSQL(ctx *plancontext.PlanningContext, op *Route) (sqlparser.SelectStatement, error) {
+	keyspaceName := ""
+	if len(op.SysTableTableSchema) != 0 {
+		res, err := evalengine.EmptyExpressionEnv().Evaluate(op.SysTableTableSchema[0])
+		if err != nil {
+			return nil, err
+		}
+		keyspaceName = res.Value().ToString()
+	} else if op.Keyspace != nil {
+		keyspaceName = op.Keyspace.Name
+	}
+
+	q := &queryBuilder{ctx: ctx, keyspaceName: keyspaceName}
+	err := q.buildQuery(op.Source)
 	if err != nil {
 		return nil, err
 	}
@@ -232,29 +246,62 @@ func (ts *tableSorter) Swap(i, j int) {
 }
 
 func (h *Horizon) toSQL(qb *queryBuilder) error {
-	err := stripDownQuery(h.Select, qb.sel)
+	err := qb.stripDownQuery(h.Select, qb.sel)
 	if err != nil {
 		return err
 	}
 	sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
 		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
-			removeKeyspaceFromSelectExpr(aliasedExpr)
+			qb.removeKeyspaceFromSelectExpr(aliasedExpr)
 		}
 		return true
 	}, nil)
 	return nil
 }
 
-func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
+func (qb *queryBuilder) removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {
 	switch expr := expr.(type) {
 	case *sqlparser.AliasedExpr:
 		sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+		qb.convertSchemaColumnToCase(expr)
 	case *sqlparser.StarExpr:
 		expr.TableName.Qualifier = sqlparser.NewIdentifierCS("")
 	}
 }
 
-func stripDownQuery(from, to sqlparser.SelectStatement) error {
+func (qb *queryBuilder) convertSchemaColumnToCase(aliasedExpr *sqlparser.AliasedExpr) {
+	changed := false
+	alias := aliasedExpr.ColumnName()
+	sqlparser.Rewrite(aliasedExpr, nil, func(cursor *sqlparser.Cursor) bool {
+		colName, isColName := cursor.Node().(*sqlparser.ColName)
+		if !isColName {
+			return true
+		}
+		ti, err := qb.ctx.SemTable.TableInfoForExpr(colName)
+		if err != nil || !ti.IsInfSchema() {
+			return false
+		}
+		if isDbNameCol(colName) {
+			changed = true
+			cursor.Replace(&sqlparser.CaseExpr{
+				Expr: colName,
+				Whens: []*sqlparser.When{
+					{
+						Cond: sqlparser.Argument(sqltypes.BvSchemaName),
+						Val:  sqlparser.NewStrLiteral(qb.keyspaceName),
+					},
+				},
+				Else: colName,
+			})
+		}
+		return false
+	})
+	if changed && aliasedExpr.As.IsEmpty() {
+		aliasedExpr.As = sqlparser.NewIdentifierCI(alias)
+	}
+}
+
+func (qb *queryBuilder) stripDownQuery(from, to sqlparser.SelectStatement) error {
 	var err error
 
 	switch node := from.(type) {
@@ -269,19 +316,16 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		toNode.OrderBy = node.OrderBy
 		toNode.Comments = node.Comments
 		toNode.SelectExprs = node.SelectExprs
-		for _, expr := range toNode.SelectExprs {
-			removeKeyspaceFromSelectExpr(expr)
-		}
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)
 		if !ok {
 			return vterrors.VT13001("AST did not match")
 		}
-		err = stripDownQuery(node.Left, toNode.Left)
+		err = qb.stripDownQuery(node.Left, toNode.Left)
 		if err != nil {
 			return err
 		}
-		err = stripDownQuery(node.Right, toNode.Right)
+		err = qb.stripDownQuery(node.Right, toNode.Right)
 		if err != nil {
 			return err
 		}
@@ -292,7 +336,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	return nil
 }
 
-func buildQuery(op ops.Operator, qb *queryBuilder) error {
+func (qb *queryBuilder) buildQuery(op ops.Operator) error {
 	switch op := op.(type) {
 	case *Table:
 		dbName := ""
@@ -308,7 +352,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: name})
 		}
 	case *ApplyJoin:
-		err := buildQuery(op.LHS, qb)
+		err := qb.buildQuery(op.LHS)
 		if err != nil {
 			return err
 		}
@@ -319,7 +363,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 			qb.ctx.SkipPredicates[expr] = nil
 		}
 		qbR := &queryBuilder{ctx: qb.ctx}
-		err = buildQuery(op.RHS, qbR)
+		err = qbR.buildQuery(op.RHS)
 		if err != nil {
 			return err
 		}
@@ -329,7 +373,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 			qb.joinInnerWith(qbR, op.Predicate)
 		}
 	case *Filter:
-		err := buildQuery(op.Source, qb)
+		err := qb.buildQuery(op.Source)
 		if err != nil {
 			return err
 		}
@@ -337,7 +381,7 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 			qb.addPredicate(pred)
 		}
 	case *Derived:
-		err := buildQuery(op.Source, qb)
+		err := qb.buildQuery(op.Source)
 		if err != nil {
 			return err
 		}
@@ -356,22 +400,11 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 			qb.addProjection(&sqlparser.AliasedExpr{Expr: col})
 		}
 	case *Horizon:
-		err := buildQuery(op.Source, qb)
+		err := qb.buildQuery(op.Source)
 		if err != nil {
 			return err
 		}
-
-		err = stripDownQuery(op.Select, qb.sel)
-		if err != nil {
-			return err
-		}
-		sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
-			if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
-				removeKeyspaceFromSelectExpr(aliasedExpr)
-			}
-			return true
-		}, nil)
-		return nil
+		return op.toSQL(qb)
 
 	default:
 		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))

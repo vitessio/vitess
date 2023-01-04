@@ -108,7 +108,7 @@ func optimizeHorizon(op *Horizon) (ops.Operator, rewrite.TreeIdentity, error) {
 
 		newSrcs = append(newSrcs, &Horizon{
 			Source: src,
-			Select: op.Select,
+			Select: sqlparser.CloneSelectStatement(op.Select),
 		})
 	}
 

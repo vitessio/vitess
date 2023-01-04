@@ -185,7 +185,7 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		return transformDeletePlan(ctx, op, src)
 	}
 	condition := getVindexPredicate(ctx, op)
-	sel, err := operators.ToSQL(ctx, op.Source)
+	sel, err := operators.ToSQL(ctx, op)
 	if err != nil {
 		return nil, err
 	}
