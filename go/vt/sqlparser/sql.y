@@ -258,7 +258,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> CONSTRAINT_NAME CATALOG_NAME SCHEMA_NAME TABLE_NAME COLUMN_NAME CURSOR_NAME SIGNAL RESIGNAL SQLSTATE
 
 // Stored Procedure Tokens
-%token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION FETCH OPEN CLOSE LOOP LEAVE ITERATE
+%token <bytes> DECLARE CONDITION CURSOR CONTINUE EXIT UNDO HANDLER FOUND SQLWARNING SQLEXCEPTION FETCH OPEN CLOSE
+%token <bytes> LOOP LEAVE ITERATE REPEAT UNTIL WHILE DO RETURN
 
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
@@ -340,10 +341,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> INSENSITIVE INT1 INT2 INT3 INT4 INT8 IO_AFTER_GTIDS IO_BEFORE_GTIDS LINEAR
 %token <bytes> MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MIDDLEINT MINUTE_MICROSECOND MINUTE_SECOND
 %token <bytes> PURGE
-%token <bytes> READ_WRITE REPEAT RETURN RLIKE
+%token <bytes> READ_WRITE RLIKE
 %token <bytes> SECOND_MICROSECOND SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
 %token <bytes> VARCHARACTER
-%token <bytes> WHILE
 %token <bytes> YEAR_MONTH
 
 %token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
@@ -369,7 +369,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <statement> create_statement rename_statement drop_statement truncate_statement call_statement
 %type <statement> trigger_begin_end_block statement_list_statement case_statement if_statement signal_statement
 %type <statement> begin_end_block declare_statement resignal_statement open_statement close_statement fetch_statement
-%type <statement> loop_statement leave_statement iterate_statement
+%type <statement> loop_statement leave_statement iterate_statement repeat_statement while_statement return_statement
 %type <statement> savepoint_statement rollback_savepoint_statement release_savepoint_statement
 %type <statement> lock_statement unlock_statement kill_statement grant_statement revoke_statement flush_statement replication_statement
 %type <statements> statement_list
@@ -1649,9 +1649,39 @@ characteristic:
   }
 
 begin_end_block:
-  BEGIN statement_list ';' END
+  BEGIN END
   {
-    $$ = &BeginEndBlock{Statements: $2}
+    $$ = &BeginEndBlock{Label: ""}
+  }
+| ID ':' BEGIN END
+  {
+    $$ = &BeginEndBlock{Label: string($1)}
+  }
+| ID ':' BEGIN END ID
+  {
+    label := string($1)
+      if label != string($5) {
+        yylex.Error("End-label "+string($5)+" without match")
+        return 1
+      }
+    $$ = &BeginEndBlock{Label: label}
+  }
+| BEGIN statement_list ';' END
+  {
+    $$ = &BeginEndBlock{Label: "", Statements: $2}
+  }
+| ID ':' BEGIN statement_list ';' END
+  {
+    $$ = &BeginEndBlock{Label: string($1), Statements: $4}
+  }
+| ID ':' BEGIN statement_list ';' END ID
+  {
+    label := string($1)
+      if label != string($7) {
+        yylex.Error("End-label "+string($7)+" without match")
+        return 1
+      }
+    $$ = &BeginEndBlock{Label: label, Statements: $4}
   }
 
 view_opts:
@@ -1986,10 +2016,6 @@ declare_statement:
   {
     $$ = &Declare{Handler: &DeclareHandler{Action: $2, ConditionValues: $5, Statement: $6}}
   }
-| DECLARE declare_handler_action HANDLER FOR declare_handler_condition_list BEGIN END
-  {
-    $$ = &Declare{Handler: &DeclareHandler{Action: $2, ConditionValues: $5, Statement: &BeginEndBlock{}}}
-  }
 | DECLARE reserved_sql_id_list column_type charset_opt collate_opt
   {
     $3.Charset = $4
@@ -2107,6 +2133,44 @@ loop_statement:
     $$ = &Loop{Label: label, Statements: $4}
   }
 
+repeat_statement:
+  REPEAT statement_list ';' UNTIL expression END REPEAT
+  {
+    $$ = &Repeat{Label: "", Statements: $2, Condition: $5}
+  }
+| ID ':' REPEAT statement_list ';' UNTIL expression END REPEAT
+  {
+    $$ = &Repeat{Label: string($1), Statements: $4, Condition: $7}
+  }
+| ID ':' REPEAT statement_list ';' UNTIL expression END REPEAT ID
+  {
+    label := string($1)
+    if label != string($10) {
+      yylex.Error("End-label "+string($10)+" without match")
+      return 1
+    }
+    $$ = &Repeat{Label: label, Statements: $4, Condition: $7}
+  }
+
+while_statement:
+  WHILE expression DO statement_list ';' END WHILE
+  {
+    $$ = &While{Label: "", Condition: $2, Statements: $4}
+  }
+| ID ':' WHILE expression DO statement_list ';' END WHILE
+  {
+    $$ = &While{Label: string($1), Condition: $4, Statements: $6}
+  }
+| ID ':' WHILE expression DO statement_list ';' END WHILE ID
+  {
+    label := string($1)
+    if label != string($10) {
+      yylex.Error("End-label "+string($10)+" without match")
+      return 1
+    }
+    $$ = &While{Label: label, Condition: $4, Statements: $6}
+  }
+
 leave_statement:
   LEAVE ID
   {
@@ -2117,6 +2181,12 @@ iterate_statement:
   ITERATE ID
   {
     $$ = &Iterate{Label: string($2)}
+  }
+
+return_statement:
+  RETURN value_expression
+  {
+    $$ = &Return{Expr: $2}
   }
 
 signal_statement:
@@ -2298,11 +2368,14 @@ statement_list_statement:
 | open_statement
 | close_statement
 | loop_statement
+| repeat_statement
+| while_statement
 | leave_statement
 | iterate_statement
 | fetch_statement
 | signal_statement
 | resignal_statement
+| return_statement
 | call_statement
 | savepoint_statement
 | rollback_savepoint_statement
@@ -7913,6 +7986,7 @@ non_reserved_keyword:
 | DIRECTORY
 | DISABLE
 | DISK
+| DO
 | DUMPFILE
 | DUPLICATE
 | DYNAMIC
@@ -8091,6 +8165,7 @@ non_reserved_keyword:
 | TRUNCATE
 | UNBOUNDED
 | UNCOMMITTED
+| UNTIL
 | UNUSED
 | USER
 | USER_RESOURCES

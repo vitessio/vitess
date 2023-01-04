@@ -2997,6 +2997,59 @@ end loop empty_loop;
 close cur1;
 end`,
 		},
+		{
+			input: `CREATE PROCEDURE testproc() BEGIN
+  DECLARE a INT DEFAULT 10;
+
+  REPEAT
+    WHILE a < 5 DO
+      BEGIN
+      END;
+    END WHILE;
+  UNTIL a > 5
+  END REPEAT;
+
+  repeat1: REPEAT
+    while1: WHILE a < 6 DO
+      begin1: BEGIN
+      END;
+    END WHILE;
+  UNTIL a > 6
+  END REPEAT;
+
+  repeat2: REPEAT
+    while2: WHILE a < 7 DO
+      begin2: BEGIN
+      END begin2;
+    END WHILE while2;
+  UNTIL a > 7
+  END REPEAT repeat2;
+END`,
+			output: `create procedure testproc () begin
+declare a INT default 10;
+repeat
+while a < 5 do
+begin
+end;
+end while;
+until a > 5
+end repeat;
+repeat1: repeat
+while1: while a < 6 do
+begin1: begin
+end;
+end while;
+until a > 6
+end repeat;
+repeat2: repeat
+while2: while a < 7 do
+begin2: begin
+end;
+end while;
+until a > 7
+end repeat;
+end`,
+		},
 	}
 )
 
@@ -5807,6 +5860,22 @@ var (
 	}, {
 		input:  "drop table dual",
 		output: "syntax error at position 16 near 'dual'",
+	}, {
+		input:  "CREATE PROCEDURE testproc() BEGIN begin1: BEGIN END begin2; END",
+		output: "End-label begin2 without match at position 59 near 'begin2'",
+		excludeMulti: true,
+	}, {
+		input:  "CREATE PROCEDURE testproc() BEGIN loop1: LOOP BEGIN END; END LOOP loop2; END",
+		output: "End-label loop2 without match at position 72 near 'loop2'",
+		excludeMulti: true,
+	}, {
+		input:  "CREATE PROCEDURE testproc() BEGIN repeat1: REPEAT BEGIN END; UNTIL a > 7 END REPEAT repeat2; END",
+		output: "End-label repeat2 without match at position 92 near 'repeat2'",
+		excludeMulti: true,
+	}, {
+		input:  "CREATE PROCEDURE testproc() BEGIN while1: WHILE a > 7 DO BEGIN END; END WHILE while2; END",
+		output: "End-label while2 without match at position 85 near 'while2'",
+		excludeMulti: true,
 	},
 	}
 )
