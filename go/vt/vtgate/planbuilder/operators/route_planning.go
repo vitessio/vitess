@@ -63,27 +63,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		case *Filter:
 			return optimizeFilter(op)
 		case *Horizon:
-			union, ok := op.Source.(*Union)
-			if !ok {
-				return op, rewrite.SameTree, nil
-			}
-
-			var newSrcs []ops.Operator
-			for _, src := range union.Sources {
-				_, ok = src.(*Route)
-				if !ok {
-					return op, rewrite.SameTree, nil
-				}
-
-				// if we got here we are dealing with a UNION created for an info_schema table
-				newSrcs = append(newSrcs, &Horizon{
-					Source: src,
-					Select: op.Select,
-				})
-			}
-
-			union.Sources = newSrcs
-			return union, rewrite.NewTree, nil
+			return optimizeHorizon(op)
 		default:
 			return operator, rewrite.SameTree, nil
 		}
@@ -104,6 +84,36 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	}
 
 	return Compact(ctx, op)
+}
+
+func optimizeHorizon(op *Horizon) (ops.Operator, rewrite.TreeIdentity, error) {
+	/*
+		Horizon being on top of a Union can only happen for information schema tables.
+		So, the first check we do is to see if the source of the Horizon is a Union or not.
+		We then want the horizon to be copied to all the routes under the Union for information schema tables and then remove the original.
+		This is required for the remaining planning process to work properly, which assumes that each route will have
+		a horizon on top of it.
+	*/
+	union, ok := op.Source.(*Union)
+	if !ok {
+		return op, rewrite.SameTree, nil
+	}
+
+	var newSrcs []ops.Operator
+	for _, src := range union.Sources {
+		_, ok = src.(*Route)
+		if !ok {
+			return op, rewrite.SameTree, nil
+		}
+
+		newSrcs = append(newSrcs, &Horizon{
+			Source: src,
+			Select: op.Select,
+		})
+	}
+
+	union.Sources = newSrcs
+	return union, rewrite.NewTree, nil
 }
 
 func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
