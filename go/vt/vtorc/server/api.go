@@ -41,6 +41,8 @@ const (
 	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
 	replicationAnalysisAPI     = "/api/replication-analysis"
 	healthAPI                  = "/debug/health"
+
+	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
 )
 
 var (
@@ -122,6 +124,10 @@ func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 	// This api also supports filtering by shard and keyspace provided.
 	shard := request.URL.Query().Get("shard")
 	keyspace := request.URL.Query().Get("keyspace")
+	if shard != "" && keyspace == "" {
+		http.Error(response, shardWithoutKeyspaceFilteringErrorStr, http.StatusBadRequest)
+		return
+	}
 	instances, err := inst.ReadProblemInstances(keyspace, shard)
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
@@ -155,6 +161,10 @@ func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.R
 	// This api also supports filtering by shard and keyspace provided.
 	shard := request.URL.Query().Get("shard")
 	keyspace := request.URL.Query().Get("keyspace")
+	if shard != "" && keyspace == "" {
+		http.Error(response, shardWithoutKeyspaceFilteringErrorStr, http.StatusBadRequest)
+		return
+	}
 	analysis, err := inst.GetReplicationAnalysis(keyspace, shard, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)

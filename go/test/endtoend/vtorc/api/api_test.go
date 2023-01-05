@@ -116,6 +116,11 @@ func TestProblemsAPI(t *testing.T) {
 		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?keyspace=ks&shard=80-")
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "[]", resp)
+
+		// Check that filtering using just the shard fails
+		status, resp = utils.MakeAPICall(t, vtorc, "/api/replication-analysis?shard=0")
+		assert.Equal(t, 400, status, resp)
+		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 	})
 
 	t.Run("Enable Recoveries API", func(t *testing.T) {
@@ -164,5 +169,10 @@ func TestProblemsAPI(t *testing.T) {
 		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?keyspace=ks&shard=80-")
 		assert.Equal(t, 200, status, resp)
 		assert.Equal(t, "null", resp)
+
+		// Check that filtering using just the shard fails
+		status, resp = utils.MakeAPICall(t, vtorc, "/api/problems?shard=0")
+		assert.Equal(t, 400, status, resp)
+		assert.Equal(t, "Filtering by shard without keyspace isn't supported\n", resp)
 	})
 }
