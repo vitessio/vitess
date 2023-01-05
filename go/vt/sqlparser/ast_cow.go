@@ -523,378 +523,547 @@ func (c cow) COWSQLNode(in SQLNode) (SQLNode, bool) {
 // COWRefOfAddColumns creates a deep clone of the input.
 func (c cow) COWRefOfAddColumns(n *AddColumns) (*AddColumns, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Columns = c.COWSliceOfRefOfColumnDefinition(n.Columns)
-	out.After = c.COWRefOfColName(n.After)
-	return &out
+	Columns, changedColumns := c.COWSliceOfRefOfColumnDefinition(n.Columns)
+	After, changedAfter := c.COWRefOfColName(n.After)
+	if changedColumns || changedAfter {
+		out := *n
+		out.Columns = Columns
+		out.After = After
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAddConstraintDefinition creates a deep clone of the input.
 func (c cow) COWRefOfAddConstraintDefinition(n *AddConstraintDefinition) (*AddConstraintDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ConstraintDefinition = c.COWRefOfConstraintDefinition(n.ConstraintDefinition)
-	return &out
+	ConstraintDefinition, changedConstraintDefinition := c.COWRefOfConstraintDefinition(n.ConstraintDefinition)
+	if changedConstraintDefinition {
+		out := *n
+		out.ConstraintDefinition = ConstraintDefinition
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAddIndexDefinition creates a deep clone of the input.
 func (c cow) COWRefOfAddIndexDefinition(n *AddIndexDefinition) (*AddIndexDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.IndexDefinition = c.COWRefOfIndexDefinition(n.IndexDefinition)
-	return &out
+	IndexDefinition, changedIndexDefinition := c.COWRefOfIndexDefinition(n.IndexDefinition)
+	if changedIndexDefinition {
+		out := *n
+		out.IndexDefinition = IndexDefinition
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAliasedExpr creates a deep clone of the input.
 func (c cow) COWRefOfAliasedExpr(n *AliasedExpr) (*AliasedExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.As = c.COWIdentifierCI(n.As)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	As, changedAs := c.COWIdentifierCI(n.As)
+	if changedExpr || changedAs {
+		out := *n
+		out.Expr = Expr
+		out.As = As
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAliasedTableExpr creates a deep clone of the input.
 func (c cow) COWRefOfAliasedTableExpr(n *AliasedTableExpr) (*AliasedTableExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWSimpleTableExpr(n.Expr)
-	out.Partitions = c.COWPartitions(n.Partitions)
-	out.As = c.COWIdentifierCS(n.As)
-	out.Hints = c.COWIndexHints(n.Hints)
-	out.Columns = c.COWColumns(n.Columns)
-	return &out
+	Expr, changedExpr := c.COWSimpleTableExpr(n.Expr)
+	Partitions, changedPartitions := c.COWPartitions(n.Partitions)
+	As, changedAs := c.COWIdentifierCS(n.As)
+	Hints, changedHints := c.COWIndexHints(n.Hints)
+	Columns, changedColumns := c.COWColumns(n.Columns)
+	if changedExpr || changedPartitions || changedAs || changedHints || changedColumns {
+		out := *n
+		out.Expr = Expr
+		out.Partitions = Partitions
+		out.As = As
+		out.Hints = Hints
+		out.Columns = Columns
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterCharset creates a deep clone of the input.
 func (c cow) COWRefOfAlterCharset(n *AlterCharset) (*AlterCharset, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfAlterCheck creates a deep clone of the input.
 func (c cow) COWRefOfAlterCheck(n *AlterCheck) (*AlterCheck, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterColumn creates a deep clone of the input.
 func (c cow) COWRefOfAlterColumn(n *AlterColumn) (*AlterColumn, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Column = c.COWRefOfColName(n.Column)
-	out.DefaultVal = c.COWExpr(n.DefaultVal)
-	out.Invisible = c.COWRefOfBool(n.Invisible)
-	return &out
+	Column, changedColumn := c.COWRefOfColName(n.Column)
+	DefaultVal, changedDefaultVal := c.COWExpr(n.DefaultVal)
+	Invisible, changedInvisible := c.COWRefOfBool(n.Invisible)
+	if changedColumn || changedDefaultVal || changedInvisible {
+		out := *n
+		out.Column = Column
+		out.DefaultVal = DefaultVal
+		out.Invisible = Invisible
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterDatabase creates a deep clone of the input.
 func (c cow) COWRefOfAlterDatabase(n *AlterDatabase) (*AlterDatabase, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.DBName = c.COWIdentifierCS(n.DBName)
-	out.AlterOptions = c.COWSliceOfDatabaseOption(n.AlterOptions)
-	return &out
+	DBName, changedDBName := c.COWIdentifierCS(n.DBName)
+	AlterOptions, changedAlterOptions := c.COWSliceOfDatabaseOption(n.AlterOptions)
+	if changedDBName || changedAlterOptions {
+		out := *n
+		out.DBName = DBName
+		out.AlterOptions = AlterOptions
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterIndex creates a deep clone of the input.
 func (c cow) COWRefOfAlterIndex(n *AlterIndex) (*AlterIndex, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterMigration creates a deep clone of the input.
 func (c cow) COWRefOfAlterMigration(n *AlterMigration) (*AlterMigration, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Ratio = c.COWRefOfLiteral(n.Ratio)
-	return &out
+	Ratio, changedRatio := c.COWRefOfLiteral(n.Ratio)
+	if changedRatio {
+		out := *n
+		out.Ratio = Ratio
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterTable creates a deep clone of the input.
 func (c cow) COWRefOfAlterTable(n *AlterTable) (*AlterTable, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Table = c.COWTableName(n.Table)
-	out.AlterOptions = c.COWSliceOfAlterOption(n.AlterOptions)
-	out.PartitionSpec = c.COWRefOfPartitionSpec(n.PartitionSpec)
-	out.PartitionOption = c.COWRefOfPartitionOption(n.PartitionOption)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	Table, changedTable := c.COWTableName(n.Table)
+	AlterOptions, changedAlterOptions := c.COWSliceOfAlterOption(n.AlterOptions)
+	PartitionSpec, changedPartitionSpec := c.COWRefOfPartitionSpec(n.PartitionSpec)
+	PartitionOption, changedPartitionOption := c.COWRefOfPartitionOption(n.PartitionOption)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedTable || changedAlterOptions || changedPartitionSpec || changedPartitionOption || changedComments {
+		out := *n
+		out.Table = Table
+		out.AlterOptions = AlterOptions
+		out.PartitionSpec = PartitionSpec
+		out.PartitionOption = PartitionOption
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterView creates a deep clone of the input.
 func (c cow) COWRefOfAlterView(n *AlterView) (*AlterView, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ViewName = c.COWTableName(n.ViewName)
-	out.Definer = c.COWRefOfDefiner(n.Definer)
-	out.Columns = c.COWColumns(n.Columns)
-	out.Select = c.COWSelectStatement(n.Select)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	ViewName, changedViewName := c.COWTableName(n.ViewName)
+	Definer, changedDefiner := c.COWRefOfDefiner(n.Definer)
+	Columns, changedColumns := c.COWColumns(n.Columns)
+	Select, changedSelect := c.COWSelectStatement(n.Select)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedViewName || changedDefiner || changedColumns || changedSelect || changedComments {
+		out := *n
+		out.ViewName = ViewName
+		out.Definer = Definer
+		out.Columns = Columns
+		out.Select = Select
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAlterVschema creates a deep clone of the input.
 func (c cow) COWRefOfAlterVschema(n *AlterVschema) (*AlterVschema, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Table = c.COWTableName(n.Table)
-	out.VindexSpec = c.COWRefOfVindexSpec(n.VindexSpec)
-	out.VindexCols = c.COWSliceOfIdentifierCI(n.VindexCols)
-	out.AutoIncSpec = c.COWRefOfAutoIncSpec(n.AutoIncSpec)
-	return &out
+	Table, changedTable := c.COWTableName(n.Table)
+	VindexSpec, changedVindexSpec := c.COWRefOfVindexSpec(n.VindexSpec)
+	VindexCols, changedVindexCols := c.COWSliceOfIdentifierCI(n.VindexCols)
+	AutoIncSpec, changedAutoIncSpec := c.COWRefOfAutoIncSpec(n.AutoIncSpec)
+	if changedTable || changedVindexSpec || changedVindexCols || changedAutoIncSpec {
+		out := *n
+		out.Table = Table
+		out.VindexSpec = VindexSpec
+		out.VindexCols = VindexCols
+		out.AutoIncSpec = AutoIncSpec
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAndExpr creates a deep clone of the input.
 func (c cow) COWRefOfAndExpr(n *AndExpr) (*AndExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWExpr(n.Left)
-	out.Right = c.COWExpr(n.Right)
-	return &out
+	Left, changedLeft := c.COWExpr(n.Left)
+	Right, changedRight := c.COWExpr(n.Right)
+	if changedLeft || changedRight {
+		out := *n
+		out.Left = Left
+		out.Right = Right
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfArgumentLessWindowExpr creates a deep clone of the input.
 func (c cow) COWRefOfArgumentLessWindowExpr(n *ArgumentLessWindowExpr) (*ArgumentLessWindowExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.OverClause = c.COWRefOfOverClause(n.OverClause)
-	return &out
+	OverClause, changedOverClause := c.COWRefOfOverClause(n.OverClause)
+	if changedOverClause {
+		out := *n
+		out.OverClause = OverClause
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAutoIncSpec creates a deep clone of the input.
 func (c cow) COWRefOfAutoIncSpec(n *AutoIncSpec) (*AutoIncSpec, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Column = c.COWIdentifierCI(n.Column)
-	out.Sequence = c.COWTableName(n.Sequence)
-	return &out
+	Column, changedColumn := c.COWIdentifierCI(n.Column)
+	Sequence, changedSequence := c.COWTableName(n.Sequence)
+	if changedColumn || changedSequence {
+		out := *n
+		out.Column = Column
+		out.Sequence = Sequence
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfAvg creates a deep clone of the input.
 func (c cow) COWRefOfAvg(n *Avg) (*Avg, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfBegin creates a deep clone of the input.
 func (c cow) COWRefOfBegin(n *Begin) (*Begin, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.TxAccessModes = c.COWSliceOfTxAccessMode(n.TxAccessModes)
-	return &out
+	TxAccessModes, changedTxAccessModes := c.COWSliceOfTxAccessMode(n.TxAccessModes)
+	if changedTxAccessModes {
+		out := *n
+		out.TxAccessModes = TxAccessModes
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfBetweenExpr creates a deep clone of the input.
 func (c cow) COWRefOfBetweenExpr(n *BetweenExpr) (*BetweenExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWExpr(n.Left)
-	out.From = c.COWExpr(n.From)
-	out.To = c.COWExpr(n.To)
-	return &out
+	Left, changedLeft := c.COWExpr(n.Left)
+	From, changedFrom := c.COWExpr(n.From)
+	To, changedTo := c.COWExpr(n.To)
+	if changedLeft || changedFrom || changedTo {
+		out := *n
+		out.Left = Left
+		out.From = From
+		out.To = To
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfBinaryExpr creates a deep clone of the input.
 func (c cow) COWRefOfBinaryExpr(n *BinaryExpr) (*BinaryExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWExpr(n.Left)
-	out.Right = c.COWExpr(n.Right)
-	return &out
+	Left, changedLeft := c.COWExpr(n.Left)
+	Right, changedRight := c.COWExpr(n.Right)
+	if changedLeft || changedRight {
+		out := *n
+		out.Left = Left
+		out.Right = Right
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfBitAnd creates a deep clone of the input.
 func (c cow) COWRefOfBitAnd(n *BitAnd) (*BitAnd, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfBitOr creates a deep clone of the input.
 func (c cow) COWRefOfBitOr(n *BitOr) (*BitOr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfBitXor creates a deep clone of the input.
 func (c cow) COWRefOfBitXor(n *BitXor) (*BitXor, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCallProc creates a deep clone of the input.
 func (c cow) COWRefOfCallProc(n *CallProc) (*CallProc, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWTableName(n.Name)
-	out.Params = c.COWExprs(n.Params)
-	return &out
+	Name, changedName := c.COWTableName(n.Name)
+	Params, changedParams := c.COWExprs(n.Params)
+	if changedName || changedParams {
+		out := *n
+		out.Name = Name
+		out.Params = Params
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCaseExpr creates a deep clone of the input.
 func (c cow) COWRefOfCaseExpr(n *CaseExpr) (*CaseExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Whens = c.COWSliceOfRefOfWhen(n.Whens)
-	out.Else = c.COWExpr(n.Else)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Whens, changedWhens := c.COWSliceOfRefOfWhen(n.Whens)
+	Else, changedElse := c.COWExpr(n.Else)
+	if changedExpr || changedWhens || changedElse {
+		out := *n
+		out.Expr = Expr
+		out.Whens = Whens
+		out.Else = Else
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCastExpr creates a deep clone of the input.
 func (c cow) COWRefOfCastExpr(n *CastExpr) (*CastExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Type = c.COWRefOfConvertType(n.Type)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Type, changedType := c.COWRefOfConvertType(n.Type)
+	if changedExpr || changedType {
+		out := *n
+		out.Expr = Expr
+		out.Type = Type
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfChangeColumn creates a deep clone of the input.
 func (c cow) COWRefOfChangeColumn(n *ChangeColumn) (*ChangeColumn, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.OldColumn = c.COWRefOfColName(n.OldColumn)
-	out.NewColDefinition = c.COWRefOfColumnDefinition(n.NewColDefinition)
-	out.After = c.COWRefOfColName(n.After)
-	return &out
+	OldColumn, changedOldColumn := c.COWRefOfColName(n.OldColumn)
+	NewColDefinition, changedNewColDefinition := c.COWRefOfColumnDefinition(n.NewColDefinition)
+	After, changedAfter := c.COWRefOfColName(n.After)
+	if changedOldColumn || changedNewColDefinition || changedAfter {
+		out := *n
+		out.OldColumn = OldColumn
+		out.NewColDefinition = NewColDefinition
+		out.After = After
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCharExpr creates a deep clone of the input.
 func (c cow) COWRefOfCharExpr(n *CharExpr) (*CharExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Exprs = c.COWExprs(n.Exprs)
-	return &out
+	Exprs, changedExprs := c.COWExprs(n.Exprs)
+	if changedExprs {
+		out := *n
+		out.Exprs = Exprs
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCheckConstraintDefinition creates a deep clone of the input.
 func (c cow) COWRefOfCheckConstraintDefinition(n *CheckConstraintDefinition) (*CheckConstraintDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfColName creates a deep clone of the input.
 func (c cow) COWRefOfColName(n *ColName) (*ColName, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Metadata = n.Metadata
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Qualifier = c.COWTableName(n.Qualifier)
-	return &out
+	Metadata, changedMetadata := n.Metadata
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Qualifier, changedQualifier := c.COWTableName(n.Qualifier)
+	if changedMetadata || changedName || changedQualifier {
+		out := *n
+		out.Metadata = Metadata
+		out.Name = Name
+		out.Qualifier = Qualifier
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCollateExpr creates a deep clone of the input.
 func (c cow) COWRefOfCollateExpr(n *CollateExpr) (*CollateExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfColumnDefinition creates a deep clone of the input.
 func (c cow) COWRefOfColumnDefinition(n *ColumnDefinition) (*ColumnDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Type = c.COWColumnType(n.Type)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Type, changedType := c.COWColumnType(n.Type)
+	if changedName || changedType {
+		out := *n
+		out.Name = Name
+		out.Type = Type
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfColumnType creates a deep clone of the input.
 func (c cow) COWRefOfColumnType(n *ColumnType) (*ColumnType, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Options = c.COWRefOfColumnTypeOptions(n.Options)
-	out.Length = c.COWRefOfLiteral(n.Length)
-	out.Scale = c.COWRefOfLiteral(n.Scale)
-	out.Charset = c.COWColumnCharset(n.Charset)
-	out.EnumValues = c.COWSliceOfString(n.EnumValues)
-	return &out
+	Options, changedOptions := c.COWRefOfColumnTypeOptions(n.Options)
+	Length, changedLength := c.COWRefOfLiteral(n.Length)
+	Scale, changedScale := c.COWRefOfLiteral(n.Scale)
+	Charset, changedCharset := c.COWColumnCharset(n.Charset)
+	EnumValues, changedEnumValues := c.COWSliceOfString(n.EnumValues)
+	if changedOptions || changedLength || changedScale || changedCharset || changedEnumValues {
+		out := *n
+		out.Options = Options
+		out.Length = Length
+		out.Scale = Scale
+		out.Charset = Charset
+		out.EnumValues = EnumValues
+		return &out, true
+	}
+	return n, false
 }
 
 // COWColumns creates a deep clone of the input.
@@ -912,309 +1081,433 @@ func COWColumns(n Columns) Columns {
 // COWRefOfCommentOnly creates a deep clone of the input.
 func (c cow) COWRefOfCommentOnly(n *CommentOnly) (*CommentOnly, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWSliceOfString(n.Comments)
-	return &out
+	Comments, changedComments := c.COWSliceOfString(n.Comments)
+	if changedComments {
+		out := *n
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCommit creates a deep clone of the input.
 func (c cow) COWRefOfCommit(n *Commit) (*Commit, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfCommonTableExpr creates a deep clone of the input.
 func (c cow) COWRefOfCommonTableExpr(n *CommonTableExpr) (*CommonTableExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ID = c.COWIdentifierCS(n.ID)
-	out.Columns = c.COWColumns(n.Columns)
-	out.Subquery = c.COWRefOfSubquery(n.Subquery)
-	return &out
+	ID, changedID := c.COWIdentifierCS(n.ID)
+	Columns, changedColumns := c.COWColumns(n.Columns)
+	Subquery, changedSubquery := c.COWRefOfSubquery(n.Subquery)
+	if changedID || changedColumns || changedSubquery {
+		out := *n
+		out.ID = ID
+		out.Columns = Columns
+		out.Subquery = Subquery
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfComparisonExpr creates a deep clone of the input.
 func (c cow) COWRefOfComparisonExpr(n *ComparisonExpr) (*ComparisonExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWExpr(n.Left)
-	out.Right = c.COWExpr(n.Right)
-	out.Escape = c.COWExpr(n.Escape)
-	return &out
+	Left, changedLeft := c.COWExpr(n.Left)
+	Right, changedRight := c.COWExpr(n.Right)
+	Escape, changedEscape := c.COWExpr(n.Escape)
+	if changedLeft || changedRight || changedEscape {
+		out := *n
+		out.Left = Left
+		out.Right = Right
+		out.Escape = Escape
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfConstraintDefinition creates a deep clone of the input.
 func (c cow) COWRefOfConstraintDefinition(n *ConstraintDefinition) (*ConstraintDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Details = c.COWConstraintInfo(n.Details)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Details, changedDetails := c.COWConstraintInfo(n.Details)
+	if changedName || changedDetails {
+		out := *n
+		out.Name = Name
+		out.Details = Details
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfConvertExpr creates a deep clone of the input.
 func (c cow) COWRefOfConvertExpr(n *ConvertExpr) (*ConvertExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Type = c.COWRefOfConvertType(n.Type)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Type, changedType := c.COWRefOfConvertType(n.Type)
+	if changedExpr || changedType {
+		out := *n
+		out.Expr = Expr
+		out.Type = Type
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfConvertType creates a deep clone of the input.
 func (c cow) COWRefOfConvertType(n *ConvertType) (*ConvertType, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Length = c.COWRefOfLiteral(n.Length)
-	out.Scale = c.COWRefOfLiteral(n.Scale)
-	out.Charset = c.COWColumnCharset(n.Charset)
-	return &out
+	Length, changedLength := c.COWRefOfLiteral(n.Length)
+	Scale, changedScale := c.COWRefOfLiteral(n.Scale)
+	Charset, changedCharset := c.COWColumnCharset(n.Charset)
+	if changedLength || changedScale || changedCharset {
+		out := *n
+		out.Length = Length
+		out.Scale = Scale
+		out.Charset = Charset
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfConvertUsingExpr creates a deep clone of the input.
 func (c cow) COWRefOfConvertUsingExpr(n *ConvertUsingExpr) (*ConvertUsingExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCount creates a deep clone of the input.
 func (c cow) COWRefOfCount(n *Count) (*Count, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Args = c.COWExprs(n.Args)
-	return &out
+	Args, changedArgs := c.COWExprs(n.Args)
+	if changedArgs {
+		out := *n
+		out.Args = Args
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCountStar creates a deep clone of the input.
 func (c cow) COWRefOfCountStar(n *CountStar) (*CountStar, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfCreateDatabase creates a deep clone of the input.
 func (c cow) COWRefOfCreateDatabase(n *CreateDatabase) (*CreateDatabase, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.DBName = c.COWIdentifierCS(n.DBName)
-	out.CreateOptions = c.COWSliceOfDatabaseOption(n.CreateOptions)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	DBName, changedDBName := c.COWIdentifierCS(n.DBName)
+	CreateOptions, changedCreateOptions := c.COWSliceOfDatabaseOption(n.CreateOptions)
+	if changedComments || changedDBName || changedCreateOptions {
+		out := *n
+		out.Comments = Comments
+		out.DBName = DBName
+		out.CreateOptions = CreateOptions
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCreateTable creates a deep clone of the input.
 func (c cow) COWRefOfCreateTable(n *CreateTable) (*CreateTable, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Table = c.COWTableName(n.Table)
-	out.TableSpec = c.COWRefOfTableSpec(n.TableSpec)
-	out.OptLike = c.COWRefOfOptLike(n.OptLike)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	Table, changedTable := c.COWTableName(n.Table)
+	TableSpec, changedTableSpec := c.COWRefOfTableSpec(n.TableSpec)
+	OptLike, changedOptLike := c.COWRefOfOptLike(n.OptLike)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedTable || changedTableSpec || changedOptLike || changedComments {
+		out := *n
+		out.Table = Table
+		out.TableSpec = TableSpec
+		out.OptLike = OptLike
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCreateView creates a deep clone of the input.
 func (c cow) COWRefOfCreateView(n *CreateView) (*CreateView, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ViewName = c.COWTableName(n.ViewName)
-	out.Definer = c.COWRefOfDefiner(n.Definer)
-	out.Columns = c.COWColumns(n.Columns)
-	out.Select = c.COWSelectStatement(n.Select)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	ViewName, changedViewName := c.COWTableName(n.ViewName)
+	Definer, changedDefiner := c.COWRefOfDefiner(n.Definer)
+	Columns, changedColumns := c.COWColumns(n.Columns)
+	Select, changedSelect := c.COWSelectStatement(n.Select)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedViewName || changedDefiner || changedColumns || changedSelect || changedComments {
+		out := *n
+		out.ViewName = ViewName
+		out.Definer = Definer
+		out.Columns = Columns
+		out.Select = Select
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfCurTimeFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfCurTimeFuncExpr(n *CurTimeFuncExpr) (*CurTimeFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Fsp = c.COWExpr(n.Fsp)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Fsp, changedFsp := c.COWExpr(n.Fsp)
+	if changedName || changedFsp {
+		out := *n
+		out.Name = Name
+		out.Fsp = Fsp
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDeallocateStmt creates a deep clone of the input.
 func (c cow) COWRefOfDeallocateStmt(n *DeallocateStmt) (*DeallocateStmt, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedComments || changedName {
+		out := *n
+		out.Comments = Comments
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDefault creates a deep clone of the input.
 func (c cow) COWRefOfDefault(n *Default) (*Default, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfDefiner creates a deep clone of the input.
 func (c cow) COWRefOfDefiner(n *Definer) (*Definer, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfDelete creates a deep clone of the input.
 func (c cow) COWRefOfDelete(n *Delete) (*Delete, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.With = c.COWRefOfWith(n.With)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.Targets = c.COWTableNames(n.Targets)
-	out.TableExprs = c.COWTableExprs(n.TableExprs)
-	out.Partitions = c.COWPartitions(n.Partitions)
-	out.Where = c.COWRefOfWhere(n.Where)
-	out.OrderBy = c.COWOrderBy(n.OrderBy)
-	out.Limit = c.COWRefOfLimit(n.Limit)
-	return &out
+	With, changedWith := c.COWRefOfWith(n.With)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	Targets, changedTargets := c.COWTableNames(n.Targets)
+	TableExprs, changedTableExprs := c.COWTableExprs(n.TableExprs)
+	Partitions, changedPartitions := c.COWPartitions(n.Partitions)
+	Where, changedWhere := c.COWRefOfWhere(n.Where)
+	OrderBy, changedOrderBy := c.COWOrderBy(n.OrderBy)
+	Limit, changedLimit := c.COWRefOfLimit(n.Limit)
+	if changedWith || changedComments || changedTargets || changedTableExprs || changedPartitions || changedWhere || changedOrderBy || changedLimit {
+		out := *n
+		out.With = With
+		out.Comments = Comments
+		out.Targets = Targets
+		out.TableExprs = TableExprs
+		out.Partitions = Partitions
+		out.Where = Where
+		out.OrderBy = OrderBy
+		out.Limit = Limit
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDerivedTable creates a deep clone of the input.
 func (c cow) COWRefOfDerivedTable(n *DerivedTable) (*DerivedTable, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Select = c.COWSelectStatement(n.Select)
-	return &out
+	Select, changedSelect := c.COWSelectStatement(n.Select)
+	if changedSelect {
+		out := *n
+		out.Select = Select
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDropColumn creates a deep clone of the input.
 func (c cow) COWRefOfDropColumn(n *DropColumn) (*DropColumn, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWRefOfColName(n.Name)
-	return &out
+	Name, changedName := c.COWRefOfColName(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDropDatabase creates a deep clone of the input.
 func (c cow) COWRefOfDropDatabase(n *DropDatabase) (*DropDatabase, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.DBName = c.COWIdentifierCS(n.DBName)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	DBName, changedDBName := c.COWIdentifierCS(n.DBName)
+	if changedComments || changedDBName {
+		out := *n
+		out.Comments = Comments
+		out.DBName = DBName
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDropKey creates a deep clone of the input.
 func (c cow) COWRefOfDropKey(n *DropKey) (*DropKey, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDropTable creates a deep clone of the input.
 func (c cow) COWRefOfDropTable(n *DropTable) (*DropTable, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.FromTables = c.COWTableNames(n.FromTables)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	FromTables, changedFromTables := c.COWTableNames(n.FromTables)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedFromTables || changedComments {
+		out := *n
+		out.FromTables = FromTables
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDropView creates a deep clone of the input.
 func (c cow) COWRefOfDropView(n *DropView) (*DropView, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.FromTables = c.COWTableNames(n.FromTables)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	FromTables, changedFromTables := c.COWTableNames(n.FromTables)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedFromTables || changedComments {
+		out := *n
+		out.FromTables = FromTables
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfExecuteStmt creates a deep clone of the input.
 func (c cow) COWRefOfExecuteStmt(n *ExecuteStmt) (*ExecuteStmt, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.Arguments = c.COWSliceOfRefOfVariable(n.Arguments)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	Arguments, changedArguments := c.COWSliceOfRefOfVariable(n.Arguments)
+	if changedName || changedComments || changedArguments {
+		out := *n
+		out.Name = Name
+		out.Comments = Comments
+		out.Arguments = Arguments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfExistsExpr creates a deep clone of the input.
 func (c cow) COWRefOfExistsExpr(n *ExistsExpr) (*ExistsExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Subquery = c.COWRefOfSubquery(n.Subquery)
-	return &out
+	Subquery, changedSubquery := c.COWRefOfSubquery(n.Subquery)
+	if changedSubquery {
+		out := *n
+		out.Subquery = Subquery
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfExplainStmt creates a deep clone of the input.
 func (c cow) COWRefOfExplainStmt(n *ExplainStmt) (*ExplainStmt, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Statement = c.COWStatement(n.Statement)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	Statement, changedStatement := c.COWStatement(n.Statement)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedStatement || changedComments {
+		out := *n
+		out.Statement = Statement
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfExplainTab creates a deep clone of the input.
 func (c cow) COWRefOfExplainTab(n *ExplainTab) (*ExplainTab, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Table = c.COWTableName(n.Table)
-	return &out
+	Table, changedTable := c.COWTableName(n.Table)
+	if changedTable {
+		out := *n
+		out.Table = Table
+		return &out, true
+	}
+	return n, false
 }
 
 // COWExprs creates a deep clone of the input.
@@ -1232,134 +1525,187 @@ func COWExprs(n Exprs) Exprs {
 // COWRefOfExtractFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfExtractFuncExpr(n *ExtractFuncExpr) (*ExtractFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfExtractValueExpr creates a deep clone of the input.
 func (c cow) COWRefOfExtractValueExpr(n *ExtractValueExpr) (*ExtractValueExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Fragment = c.COWExpr(n.Fragment)
-	out.XPathExpr = c.COWExpr(n.XPathExpr)
-	return &out
+	Fragment, changedFragment := c.COWExpr(n.Fragment)
+	XPathExpr, changedXPathExpr := c.COWExpr(n.XPathExpr)
+	if changedFragment || changedXPathExpr {
+		out := *n
+		out.Fragment = Fragment
+		out.XPathExpr = XPathExpr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfExtractedSubquery creates a deep clone of the input.
 func (c cow) COWRefOfExtractedSubquery(n *ExtractedSubquery) (*ExtractedSubquery, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Original = c.COWExpr(n.Original)
-	out.Subquery = c.COWRefOfSubquery(n.Subquery)
-	out.OtherSide = c.COWExpr(n.OtherSide)
-	out.alternative = c.COWExpr(n.alternative)
-	return &out
+	Original, changedOriginal := c.COWExpr(n.Original)
+	Subquery, changedSubquery := c.COWRefOfSubquery(n.Subquery)
+	OtherSide, changedOtherSide := c.COWExpr(n.OtherSide)
+	alternative, changedalternative := c.COWExpr(n.alternative)
+	if changedOriginal || changedSubquery || changedOtherSide || changedalternative {
+		out := *n
+		out.Original = Original
+		out.Subquery = Subquery
+		out.OtherSide = OtherSide
+		out.alternative = alternative
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfFirstOrLastValueExpr creates a deep clone of the input.
 func (c cow) COWRefOfFirstOrLastValueExpr(n *FirstOrLastValueExpr) (*FirstOrLastValueExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.NullTreatmentClause = c.COWRefOfNullTreatmentClause(n.NullTreatmentClause)
-	out.OverClause = c.COWRefOfOverClause(n.OverClause)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	NullTreatmentClause, changedNullTreatmentClause := c.COWRefOfNullTreatmentClause(n.NullTreatmentClause)
+	OverClause, changedOverClause := c.COWRefOfOverClause(n.OverClause)
+	if changedExpr || changedNullTreatmentClause || changedOverClause {
+		out := *n
+		out.Expr = Expr
+		out.NullTreatmentClause = NullTreatmentClause
+		out.OverClause = OverClause
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfFlush creates a deep clone of the input.
 func (c cow) COWRefOfFlush(n *Flush) (*Flush, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.FlushOptions = c.COWSliceOfString(n.FlushOptions)
-	out.TableNames = c.COWTableNames(n.TableNames)
-	return &out
+	FlushOptions, changedFlushOptions := c.COWSliceOfString(n.FlushOptions)
+	TableNames, changedTableNames := c.COWTableNames(n.TableNames)
+	if changedFlushOptions || changedTableNames {
+		out := *n
+		out.FlushOptions = FlushOptions
+		out.TableNames = TableNames
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfForce creates a deep clone of the input.
 func (c cow) COWRefOfForce(n *Force) (*Force, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfForeignKeyDefinition creates a deep clone of the input.
 func (c cow) COWRefOfForeignKeyDefinition(n *ForeignKeyDefinition) (*ForeignKeyDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Source = c.COWColumns(n.Source)
-	out.IndexName = c.COWIdentifierCI(n.IndexName)
-	out.ReferenceDefinition = c.COWRefOfReferenceDefinition(n.ReferenceDefinition)
-	return &out
+	Source, changedSource := c.COWColumns(n.Source)
+	IndexName, changedIndexName := c.COWIdentifierCI(n.IndexName)
+	ReferenceDefinition, changedReferenceDefinition := c.COWRefOfReferenceDefinition(n.ReferenceDefinition)
+	if changedSource || changedIndexName || changedReferenceDefinition {
+		out := *n
+		out.Source = Source
+		out.IndexName = IndexName
+		out.ReferenceDefinition = ReferenceDefinition
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfFrameClause creates a deep clone of the input.
 func (c cow) COWRefOfFrameClause(n *FrameClause) (*FrameClause, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Start = c.COWRefOfFramePoint(n.Start)
-	out.End = c.COWRefOfFramePoint(n.End)
-	return &out
+	Start, changedStart := c.COWRefOfFramePoint(n.Start)
+	End, changedEnd := c.COWRefOfFramePoint(n.End)
+	if changedStart || changedEnd {
+		out := *n
+		out.Start = Start
+		out.End = End
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfFramePoint creates a deep clone of the input.
 func (c cow) COWRefOfFramePoint(n *FramePoint) (*FramePoint, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfFromFirstLastClause creates a deep clone of the input.
 func (c cow) COWRefOfFromFirstLastClause(n *FromFirstLastClause) (*FromFirstLastClause, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfFuncExpr(n *FuncExpr) (*FuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Qualifier = c.COWIdentifierCS(n.Qualifier)
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Exprs = c.COWSelectExprs(n.Exprs)
-	return &out
+	Qualifier, changedQualifier := c.COWIdentifierCS(n.Qualifier)
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Exprs, changedExprs := c.COWSelectExprs(n.Exprs)
+	if changedQualifier || changedName || changedExprs {
+		out := *n
+		out.Qualifier = Qualifier
+		out.Name = Name
+		out.Exprs = Exprs
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfGTIDFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfGTIDFuncExpr(n *GTIDFuncExpr) (*GTIDFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Set1 = c.COWExpr(n.Set1)
-	out.Set2 = c.COWExpr(n.Set2)
-	out.Timeout = c.COWExpr(n.Timeout)
-	out.Channel = c.COWExpr(n.Channel)
-	return &out
+	Set1, changedSet1 := c.COWExpr(n.Set1)
+	Set2, changedSet2 := c.COWExpr(n.Set2)
+	Timeout, changedTimeout := c.COWExpr(n.Timeout)
+	Channel, changedChannel := c.COWExpr(n.Channel)
+	if changedSet1 || changedSet2 || changedTimeout || changedChannel {
+		out := *n
+		out.Set1 = Set1
+		out.Set2 = Set2
+		out.Timeout = Timeout
+		out.Channel = Channel
+		return &out, true
+	}
+	return n, false
 }
 
 // COWGroupBy creates a deep clone of the input.
@@ -1377,13 +1723,19 @@ func COWGroupBy(n GroupBy) GroupBy {
 // COWRefOfGroupConcatExpr creates a deep clone of the input.
 func (c cow) COWRefOfGroupConcatExpr(n *GroupConcatExpr) (*GroupConcatExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Exprs = c.COWExprs(n.Exprs)
-	out.OrderBy = c.COWOrderBy(n.OrderBy)
-	out.Limit = c.COWRefOfLimit(n.Limit)
-	return &out
+	Exprs, changedExprs := c.COWExprs(n.Exprs)
+	OrderBy, changedOrderBy := c.COWOrderBy(n.OrderBy)
+	Limit, changedLimit := c.COWRefOfLimit(n.Limit)
+	if changedExprs || changedOrderBy || changedLimit {
+		out := *n
+		out.Exprs = Exprs
+		out.OrderBy = OrderBy
+		out.Limit = Limit
+		return &out, true
+	}
+	return n, false
 }
 
 // COWIdentifierCI creates a deep clone of the input.
@@ -1399,23 +1751,33 @@ func COWIdentifierCS(n IdentifierCS) IdentifierCS {
 // COWRefOfIndexDefinition creates a deep clone of the input.
 func (c cow) COWRefOfIndexDefinition(n *IndexDefinition) (*IndexDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Info = c.COWRefOfIndexInfo(n.Info)
-	out.Columns = c.COWSliceOfRefOfIndexColumn(n.Columns)
-	out.Options = c.COWSliceOfRefOfIndexOption(n.Options)
-	return &out
+	Info, changedInfo := c.COWRefOfIndexInfo(n.Info)
+	Columns, changedColumns := c.COWSliceOfRefOfIndexColumn(n.Columns)
+	Options, changedOptions := c.COWSliceOfRefOfIndexOption(n.Options)
+	if changedInfo || changedColumns || changedOptions {
+		out := *n
+		out.Info = Info
+		out.Columns = Columns
+		out.Options = Options
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfIndexHint creates a deep clone of the input.
 func (c cow) COWRefOfIndexHint(n *IndexHint) (*IndexHint, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Indexes = c.COWSliceOfIdentifierCI(n.Indexes)
-	return &out
+	Indexes, changedIndexes := c.COWSliceOfIdentifierCI(n.Indexes)
+	if changedIndexes {
+		out := *n
+		out.Indexes = Indexes
+		return &out, true
+	}
+	return n, false
 }
 
 // COWIndexHints creates a deep clone of the input.
@@ -1433,158 +1795,231 @@ func COWIndexHints(n IndexHints) IndexHints {
 // COWRefOfIndexInfo creates a deep clone of the input.
 func (c cow) COWRefOfIndexInfo(n *IndexInfo) (*IndexInfo, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.ConstraintName = c.COWIdentifierCI(n.ConstraintName)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	ConstraintName, changedConstraintName := c.COWIdentifierCI(n.ConstraintName)
+	if changedName || changedConstraintName {
+		out := *n
+		out.Name = Name
+		out.ConstraintName = ConstraintName
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfInsert creates a deep clone of the input.
 func (c cow) COWRefOfInsert(n *Insert) (*Insert, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.Table = c.COWTableName(n.Table)
-	out.Partitions = c.COWPartitions(n.Partitions)
-	out.Columns = c.COWColumns(n.Columns)
-	out.Rows = c.COWInsertRows(n.Rows)
-	out.OnDup = c.COWOnDup(n.OnDup)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	Table, changedTable := c.COWTableName(n.Table)
+	Partitions, changedPartitions := c.COWPartitions(n.Partitions)
+	Columns, changedColumns := c.COWColumns(n.Columns)
+	Rows, changedRows := c.COWInsertRows(n.Rows)
+	OnDup, changedOnDup := c.COWOnDup(n.OnDup)
+	if changedComments || changedTable || changedPartitions || changedColumns || changedRows || changedOnDup {
+		out := *n
+		out.Comments = Comments
+		out.Table = Table
+		out.Partitions = Partitions
+		out.Columns = Columns
+		out.Rows = Rows
+		out.OnDup = OnDup
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfInsertExpr creates a deep clone of the input.
 func (c cow) COWRefOfInsertExpr(n *InsertExpr) (*InsertExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Str = c.COWExpr(n.Str)
-	out.Pos = c.COWExpr(n.Pos)
-	out.Len = c.COWExpr(n.Len)
-	out.NewStr = c.COWExpr(n.NewStr)
-	return &out
+	Str, changedStr := c.COWExpr(n.Str)
+	Pos, changedPos := c.COWExpr(n.Pos)
+	Len, changedLen := c.COWExpr(n.Len)
+	NewStr, changedNewStr := c.COWExpr(n.NewStr)
+	if changedStr || changedPos || changedLen || changedNewStr {
+		out := *n
+		out.Str = Str
+		out.Pos = Pos
+		out.Len = Len
+		out.NewStr = NewStr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfIntervalExpr creates a deep clone of the input.
 func (c cow) COWRefOfIntervalExpr(n *IntervalExpr) (*IntervalExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfIntervalFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfIntervalFuncExpr(n *IntervalFuncExpr) (*IntervalFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Exprs = c.COWExprs(n.Exprs)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Exprs, changedExprs := c.COWExprs(n.Exprs)
+	if changedExpr || changedExprs {
+		out := *n
+		out.Expr = Expr
+		out.Exprs = Exprs
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfIntroducerExpr creates a deep clone of the input.
 func (c cow) COWRefOfIntroducerExpr(n *IntroducerExpr) (*IntroducerExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfIsExpr creates a deep clone of the input.
 func (c cow) COWRefOfIsExpr(n *IsExpr) (*IsExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWExpr(n.Left)
-	return &out
+	Left, changedLeft := c.COWExpr(n.Left)
+	if changedLeft {
+		out := *n
+		out.Left = Left
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONArrayExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONArrayExpr(n *JSONArrayExpr) (*JSONArrayExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Params = c.COWExprs(n.Params)
-	return &out
+	Params, changedParams := c.COWExprs(n.Params)
+	if changedParams {
+		out := *n
+		out.Params = Params
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONAttributesExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONAttributesExpr(n *JSONAttributesExpr) (*JSONAttributesExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.Path = c.COWExpr(n.Path)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	Path, changedPath := c.COWExpr(n.Path)
+	if changedJSONDoc || changedPath {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.Path = Path
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONContainsExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONContainsExpr(n *JSONContainsExpr) (*JSONContainsExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Target = c.COWExpr(n.Target)
-	out.Candidate = c.COWExpr(n.Candidate)
-	out.PathList = c.COWSliceOfExpr(n.PathList)
-	return &out
+	Target, changedTarget := c.COWExpr(n.Target)
+	Candidate, changedCandidate := c.COWExpr(n.Candidate)
+	PathList, changedPathList := c.COWSliceOfExpr(n.PathList)
+	if changedTarget || changedCandidate || changedPathList {
+		out := *n
+		out.Target = Target
+		out.Candidate = Candidate
+		out.PathList = PathList
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONContainsPathExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONContainsPathExpr(n *JSONContainsPathExpr) (*JSONContainsPathExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.OneOrAll = c.COWExpr(n.OneOrAll)
-	out.PathList = c.COWSliceOfExpr(n.PathList)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	OneOrAll, changedOneOrAll := c.COWExpr(n.OneOrAll)
+	PathList, changedPathList := c.COWSliceOfExpr(n.PathList)
+	if changedJSONDoc || changedOneOrAll || changedPathList {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.OneOrAll = OneOrAll
+		out.PathList = PathList
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONExtractExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONExtractExpr(n *JSONExtractExpr) (*JSONExtractExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.PathList = c.COWSliceOfExpr(n.PathList)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	PathList, changedPathList := c.COWSliceOfExpr(n.PathList)
+	if changedJSONDoc || changedPathList {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.PathList = PathList
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONKeysExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONKeysExpr(n *JSONKeysExpr) (*JSONKeysExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.Path = c.COWExpr(n.Path)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	Path, changedPath := c.COWExpr(n.Path)
+	if changedJSONDoc || changedPath {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.Path = Path
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONObjectExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONObjectExpr(n *JSONObjectExpr) (*JSONObjectExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Params = c.COWSliceOfRefOfJSONObjectParam(n.Params)
-	return &out
+	Params, changedParams := c.COWSliceOfRefOfJSONObjectParam(n.Params)
+	if changedParams {
+		out := *n
+		out.Params = Params
+		return &out, true
+	}
+	return n, false
 }
 
 // COWJSONObjectParam creates a deep clone of the input.
@@ -1595,374 +2030,527 @@ func COWJSONObjectParam(n JSONObjectParam) JSONObjectParam {
 // COWRefOfJSONOverlapsExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONOverlapsExpr(n *JSONOverlapsExpr) (*JSONOverlapsExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc1 = c.COWExpr(n.JSONDoc1)
-	out.JSONDoc2 = c.COWExpr(n.JSONDoc2)
-	return &out
+	JSONDoc1, changedJSONDoc1 := c.COWExpr(n.JSONDoc1)
+	JSONDoc2, changedJSONDoc2 := c.COWExpr(n.JSONDoc2)
+	if changedJSONDoc1 || changedJSONDoc2 {
+		out := *n
+		out.JSONDoc1 = JSONDoc1
+		out.JSONDoc2 = JSONDoc2
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONPrettyExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONPrettyExpr(n *JSONPrettyExpr) (*JSONPrettyExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONVal = c.COWExpr(n.JSONVal)
-	return &out
+	JSONVal, changedJSONVal := c.COWExpr(n.JSONVal)
+	if changedJSONVal {
+		out := *n
+		out.JSONVal = JSONVal
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONQuoteExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONQuoteExpr(n *JSONQuoteExpr) (*JSONQuoteExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.StringArg = c.COWExpr(n.StringArg)
-	return &out
+	StringArg, changedStringArg := c.COWExpr(n.StringArg)
+	if changedStringArg {
+		out := *n
+		out.StringArg = StringArg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONRemoveExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONRemoveExpr(n *JSONRemoveExpr) (*JSONRemoveExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.PathList = c.COWExprs(n.PathList)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	PathList, changedPathList := c.COWExprs(n.PathList)
+	if changedJSONDoc || changedPathList {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.PathList = PathList
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONSchemaValidFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONSchemaValidFuncExpr(n *JSONSchemaValidFuncExpr) (*JSONSchemaValidFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Schema = c.COWExpr(n.Schema)
-	out.Document = c.COWExpr(n.Document)
-	return &out
+	Schema, changedSchema := c.COWExpr(n.Schema)
+	Document, changedDocument := c.COWExpr(n.Document)
+	if changedSchema || changedDocument {
+		out := *n
+		out.Schema = Schema
+		out.Document = Document
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONSchemaValidationReportFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONSchemaValidationReportFuncExpr(n *JSONSchemaValidationReportFuncExpr) (*JSONSchemaValidationReportFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Schema = c.COWExpr(n.Schema)
-	out.Document = c.COWExpr(n.Document)
-	return &out
+	Schema, changedSchema := c.COWExpr(n.Schema)
+	Document, changedDocument := c.COWExpr(n.Document)
+	if changedSchema || changedDocument {
+		out := *n
+		out.Schema = Schema
+		out.Document = Document
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONSearchExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONSearchExpr(n *JSONSearchExpr) (*JSONSearchExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.OneOrAll = c.COWExpr(n.OneOrAll)
-	out.SearchStr = c.COWExpr(n.SearchStr)
-	out.EscapeChar = c.COWExpr(n.EscapeChar)
-	out.PathList = c.COWSliceOfExpr(n.PathList)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	OneOrAll, changedOneOrAll := c.COWExpr(n.OneOrAll)
+	SearchStr, changedSearchStr := c.COWExpr(n.SearchStr)
+	EscapeChar, changedEscapeChar := c.COWExpr(n.EscapeChar)
+	PathList, changedPathList := c.COWSliceOfExpr(n.PathList)
+	if changedJSONDoc || changedOneOrAll || changedSearchStr || changedEscapeChar || changedPathList {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.OneOrAll = OneOrAll
+		out.SearchStr = SearchStr
+		out.EscapeChar = EscapeChar
+		out.PathList = PathList
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONStorageFreeExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONStorageFreeExpr(n *JSONStorageFreeExpr) (*JSONStorageFreeExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONVal = c.COWExpr(n.JSONVal)
-	return &out
+	JSONVal, changedJSONVal := c.COWExpr(n.JSONVal)
+	if changedJSONVal {
+		out := *n
+		out.JSONVal = JSONVal
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONStorageSizeExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONStorageSizeExpr(n *JSONStorageSizeExpr) (*JSONStorageSizeExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONVal = c.COWExpr(n.JSONVal)
-	return &out
+	JSONVal, changedJSONVal := c.COWExpr(n.JSONVal)
+	if changedJSONVal {
+		out := *n
+		out.JSONVal = JSONVal
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONTableExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONTableExpr(n *JSONTableExpr) (*JSONTableExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Alias = c.COWIdentifierCS(n.Alias)
-	out.Filter = c.COWExpr(n.Filter)
-	out.Columns = c.COWSliceOfRefOfJtColumnDefinition(n.Columns)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Alias, changedAlias := c.COWIdentifierCS(n.Alias)
+	Filter, changedFilter := c.COWExpr(n.Filter)
+	Columns, changedColumns := c.COWSliceOfRefOfJtColumnDefinition(n.Columns)
+	if changedExpr || changedAlias || changedFilter || changedColumns {
+		out := *n
+		out.Expr = Expr
+		out.Alias = Alias
+		out.Filter = Filter
+		out.Columns = Columns
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONUnquoteExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONUnquoteExpr(n *JSONUnquoteExpr) (*JSONUnquoteExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONValue = c.COWExpr(n.JSONValue)
-	return &out
+	JSONValue, changedJSONValue := c.COWExpr(n.JSONValue)
+	if changedJSONValue {
+		out := *n
+		out.JSONValue = JSONValue
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONValueExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONValueExpr(n *JSONValueExpr) (*JSONValueExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.Path = c.COWExpr(n.Path)
-	out.ReturningType = c.COWRefOfConvertType(n.ReturningType)
-	out.EmptyOnResponse = c.COWRefOfJtOnResponse(n.EmptyOnResponse)
-	out.ErrorOnResponse = c.COWRefOfJtOnResponse(n.ErrorOnResponse)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	Path, changedPath := c.COWExpr(n.Path)
+	ReturningType, changedReturningType := c.COWRefOfConvertType(n.ReturningType)
+	EmptyOnResponse, changedEmptyOnResponse := c.COWRefOfJtOnResponse(n.EmptyOnResponse)
+	ErrorOnResponse, changedErrorOnResponse := c.COWRefOfJtOnResponse(n.ErrorOnResponse)
+	if changedJSONDoc || changedPath || changedReturningType || changedEmptyOnResponse || changedErrorOnResponse {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.Path = Path
+		out.ReturningType = ReturningType
+		out.EmptyOnResponse = EmptyOnResponse
+		out.ErrorOnResponse = ErrorOnResponse
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONValueMergeExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONValueMergeExpr(n *JSONValueMergeExpr) (*JSONValueMergeExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.JSONDocList = c.COWExprs(n.JSONDocList)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	JSONDocList, changedJSONDocList := c.COWExprs(n.JSONDocList)
+	if changedJSONDoc || changedJSONDocList {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.JSONDocList = JSONDocList
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJSONValueModifierExpr creates a deep clone of the input.
 func (c cow) COWRefOfJSONValueModifierExpr(n *JSONValueModifierExpr) (*JSONValueModifierExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JSONDoc = c.COWExpr(n.JSONDoc)
-	out.Params = c.COWSliceOfRefOfJSONObjectParam(n.Params)
-	return &out
+	JSONDoc, changedJSONDoc := c.COWExpr(n.JSONDoc)
+	Params, changedParams := c.COWSliceOfRefOfJSONObjectParam(n.Params)
+	if changedJSONDoc || changedParams {
+		out := *n
+		out.JSONDoc = JSONDoc
+		out.Params = Params
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJoinCondition creates a deep clone of the input.
 func (c cow) COWRefOfJoinCondition(n *JoinCondition) (*JoinCondition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.On = c.COWExpr(n.On)
-	out.Using = c.COWColumns(n.Using)
-	return &out
+	On, changedOn := c.COWExpr(n.On)
+	Using, changedUsing := c.COWColumns(n.Using)
+	if changedOn || changedUsing {
+		out := *n
+		out.On = On
+		out.Using = Using
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJoinTableExpr creates a deep clone of the input.
 func (c cow) COWRefOfJoinTableExpr(n *JoinTableExpr) (*JoinTableExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.LeftExpr = c.COWTableExpr(n.LeftExpr)
-	out.RightExpr = c.COWTableExpr(n.RightExpr)
-	out.Condition = c.COWRefOfJoinCondition(n.Condition)
-	return &out
+	LeftExpr, changedLeftExpr := c.COWTableExpr(n.LeftExpr)
+	RightExpr, changedRightExpr := c.COWTableExpr(n.RightExpr)
+	Condition, changedCondition := c.COWRefOfJoinCondition(n.Condition)
+	if changedLeftExpr || changedRightExpr || changedCondition {
+		out := *n
+		out.LeftExpr = LeftExpr
+		out.RightExpr = RightExpr
+		out.Condition = Condition
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJtColumnDefinition creates a deep clone of the input.
 func (c cow) COWRefOfJtColumnDefinition(n *JtColumnDefinition) (*JtColumnDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.JtOrdinal = c.COWRefOfJtOrdinalColDef(n.JtOrdinal)
-	out.JtPath = c.COWRefOfJtPathColDef(n.JtPath)
-	out.JtNestedPath = c.COWRefOfJtNestedPathColDef(n.JtNestedPath)
-	return &out
+	JtOrdinal, changedJtOrdinal := c.COWRefOfJtOrdinalColDef(n.JtOrdinal)
+	JtPath, changedJtPath := c.COWRefOfJtPathColDef(n.JtPath)
+	JtNestedPath, changedJtNestedPath := c.COWRefOfJtNestedPathColDef(n.JtNestedPath)
+	if changedJtOrdinal || changedJtPath || changedJtNestedPath {
+		out := *n
+		out.JtOrdinal = JtOrdinal
+		out.JtPath = JtPath
+		out.JtNestedPath = JtNestedPath
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJtOnResponse creates a deep clone of the input.
 func (c cow) COWRefOfJtOnResponse(n *JtOnResponse) (*JtOnResponse, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfKeyState creates a deep clone of the input.
 func (c cow) COWRefOfKeyState(n *KeyState) (*KeyState, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfLagLeadExpr creates a deep clone of the input.
 func (c cow) COWRefOfLagLeadExpr(n *LagLeadExpr) (*LagLeadExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.N = c.COWExpr(n.N)
-	out.Default = c.COWExpr(n.Default)
-	out.OverClause = c.COWRefOfOverClause(n.OverClause)
-	out.NullTreatmentClause = c.COWRefOfNullTreatmentClause(n.NullTreatmentClause)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	N, changedN := c.COWExpr(n.N)
+	Default, changedDefault := c.COWExpr(n.Default)
+	OverClause, changedOverClause := c.COWRefOfOverClause(n.OverClause)
+	NullTreatmentClause, changedNullTreatmentClause := c.COWRefOfNullTreatmentClause(n.NullTreatmentClause)
+	if changedExpr || changedN || changedDefault || changedOverClause || changedNullTreatmentClause {
+		out := *n
+		out.Expr = Expr
+		out.N = N
+		out.Default = Default
+		out.OverClause = OverClause
+		out.NullTreatmentClause = NullTreatmentClause
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfLimit creates a deep clone of the input.
 func (c cow) COWRefOfLimit(n *Limit) (*Limit, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Offset = c.COWExpr(n.Offset)
-	out.Rowcount = c.COWExpr(n.Rowcount)
-	return &out
+	Offset, changedOffset := c.COWExpr(n.Offset)
+	Rowcount, changedRowcount := c.COWExpr(n.Rowcount)
+	if changedOffset || changedRowcount {
+		out := *n
+		out.Offset = Offset
+		out.Rowcount = Rowcount
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfLiteral creates a deep clone of the input.
 func (c cow) COWRefOfLiteral(n *Literal) (*Literal, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfLoad creates a deep clone of the input.
 func (c cow) COWRefOfLoad(n *Load) (*Load, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfLocateExpr creates a deep clone of the input.
 func (c cow) COWRefOfLocateExpr(n *LocateExpr) (*LocateExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.SubStr = c.COWExpr(n.SubStr)
-	out.Str = c.COWExpr(n.Str)
-	out.Pos = c.COWExpr(n.Pos)
-	return &out
+	SubStr, changedSubStr := c.COWExpr(n.SubStr)
+	Str, changedStr := c.COWExpr(n.Str)
+	Pos, changedPos := c.COWExpr(n.Pos)
+	if changedSubStr || changedStr || changedPos {
+		out := *n
+		out.SubStr = SubStr
+		out.Str = Str
+		out.Pos = Pos
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfLockOption creates a deep clone of the input.
 func (c cow) COWRefOfLockOption(n *LockOption) (*LockOption, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfLockTables creates a deep clone of the input.
 func (c cow) COWRefOfLockTables(n *LockTables) (*LockTables, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Tables = c.COWTableAndLockTypes(n.Tables)
-	return &out
+	Tables, changedTables := c.COWTableAndLockTypes(n.Tables)
+	if changedTables {
+		out := *n
+		out.Tables = Tables
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfLockingFunc creates a deep clone of the input.
 func (c cow) COWRefOfLockingFunc(n *LockingFunc) (*LockingFunc, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWExpr(n.Name)
-	out.Timeout = c.COWExpr(n.Timeout)
-	return &out
+	Name, changedName := c.COWExpr(n.Name)
+	Timeout, changedTimeout := c.COWExpr(n.Timeout)
+	if changedName || changedTimeout {
+		out := *n
+		out.Name = Name
+		out.Timeout = Timeout
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfMatchExpr creates a deep clone of the input.
 func (c cow) COWRefOfMatchExpr(n *MatchExpr) (*MatchExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Columns = c.COWSliceOfRefOfColName(n.Columns)
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Columns, changedColumns := c.COWSliceOfRefOfColName(n.Columns)
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedColumns || changedExpr {
+		out := *n
+		out.Columns = Columns
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfMax creates a deep clone of the input.
 func (c cow) COWRefOfMax(n *Max) (*Max, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfMemberOfExpr creates a deep clone of the input.
 func (c cow) COWRefOfMemberOfExpr(n *MemberOfExpr) (*MemberOfExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Value = c.COWExpr(n.Value)
-	out.JSONArr = c.COWExpr(n.JSONArr)
-	return &out
+	Value, changedValue := c.COWExpr(n.Value)
+	JSONArr, changedJSONArr := c.COWExpr(n.JSONArr)
+	if changedValue || changedJSONArr {
+		out := *n
+		out.Value = Value
+		out.JSONArr = JSONArr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfMin creates a deep clone of the input.
 func (c cow) COWRefOfMin(n *Min) (*Min, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfModifyColumn creates a deep clone of the input.
 func (c cow) COWRefOfModifyColumn(n *ModifyColumn) (*ModifyColumn, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.NewColDefinition = c.COWRefOfColumnDefinition(n.NewColDefinition)
-	out.After = c.COWRefOfColName(n.After)
-	return &out
+	NewColDefinition, changedNewColDefinition := c.COWRefOfColumnDefinition(n.NewColDefinition)
+	After, changedAfter := c.COWRefOfColName(n.After)
+	if changedNewColDefinition || changedAfter {
+		out := *n
+		out.NewColDefinition = NewColDefinition
+		out.After = After
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfNTHValueExpr creates a deep clone of the input.
 func (c cow) COWRefOfNTHValueExpr(n *NTHValueExpr) (*NTHValueExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.N = c.COWExpr(n.N)
-	out.OverClause = c.COWRefOfOverClause(n.OverClause)
-	out.FromFirstLastClause = c.COWRefOfFromFirstLastClause(n.FromFirstLastClause)
-	out.NullTreatmentClause = c.COWRefOfNullTreatmentClause(n.NullTreatmentClause)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	N, changedN := c.COWExpr(n.N)
+	OverClause, changedOverClause := c.COWRefOfOverClause(n.OverClause)
+	FromFirstLastClause, changedFromFirstLastClause := c.COWRefOfFromFirstLastClause(n.FromFirstLastClause)
+	NullTreatmentClause, changedNullTreatmentClause := c.COWRefOfNullTreatmentClause(n.NullTreatmentClause)
+	if changedExpr || changedN || changedOverClause || changedFromFirstLastClause || changedNullTreatmentClause {
+		out := *n
+		out.Expr = Expr
+		out.N = N
+		out.OverClause = OverClause
+		out.FromFirstLastClause = FromFirstLastClause
+		out.NullTreatmentClause = NullTreatmentClause
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfNamedWindow creates a deep clone of the input.
 func (c cow) COWRefOfNamedWindow(n *NamedWindow) (*NamedWindow, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Windows = c.COWWindowDefinitions(n.Windows)
-	return &out
+	Windows, changedWindows := c.COWWindowDefinitions(n.Windows)
+	if changedWindows {
+		out := *n
+		out.Windows = Windows
+		return &out, true
+	}
+	return n, false
 }
 
 // COWNamedWindows creates a deep clone of the input.
@@ -1980,59 +2568,69 @@ func COWNamedWindows(n NamedWindows) NamedWindows {
 // COWRefOfNextval creates a deep clone of the input.
 func (c cow) COWRefOfNextval(n *Nextval) (*Nextval, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfNotExpr creates a deep clone of the input.
 func (c cow) COWRefOfNotExpr(n *NotExpr) (*NotExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfNtileExpr creates a deep clone of the input.
 func (c cow) COWRefOfNtileExpr(n *NtileExpr) (*NtileExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.N = c.COWExpr(n.N)
-	out.OverClause = c.COWRefOfOverClause(n.OverClause)
-	return &out
+	N, changedN := c.COWExpr(n.N)
+	OverClause, changedOverClause := c.COWRefOfOverClause(n.OverClause)
+	if changedN || changedOverClause {
+		out := *n
+		out.N = N
+		out.OverClause = OverClause
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfNullTreatmentClause creates a deep clone of the input.
 func (c cow) COWRefOfNullTreatmentClause(n *NullTreatmentClause) (*NullTreatmentClause, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfNullVal creates a deep clone of the input.
 func (c cow) COWRefOfNullVal(n *NullVal) (*NullVal, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfOffset creates a deep clone of the input.
 func (c cow) COWRefOfOffset(n *Offset) (*Offset, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWOnDup creates a deep clone of the input.
@@ -2050,32 +2648,45 @@ func COWOnDup(n OnDup) OnDup {
 // COWRefOfOptLike creates a deep clone of the input.
 func (c cow) COWRefOfOptLike(n *OptLike) (*OptLike, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.LikeTable = c.COWTableName(n.LikeTable)
-	return &out
+	LikeTable, changedLikeTable := c.COWTableName(n.LikeTable)
+	if changedLikeTable {
+		out := *n
+		out.LikeTable = LikeTable
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfOrExpr creates a deep clone of the input.
 func (c cow) COWRefOfOrExpr(n *OrExpr) (*OrExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWExpr(n.Left)
-	out.Right = c.COWExpr(n.Right)
-	return &out
+	Left, changedLeft := c.COWExpr(n.Left)
+	Right, changedRight := c.COWExpr(n.Right)
+	if changedLeft || changedRight {
+		out := *n
+		out.Left = Left
+		out.Right = Right
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfOrder creates a deep clone of the input.
 func (c cow) COWRefOfOrder(n *Order) (*Order, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWOrderBy creates a deep clone of the input.
@@ -2093,133 +2704,181 @@ func COWOrderBy(n OrderBy) OrderBy {
 // COWRefOfOrderByOption creates a deep clone of the input.
 func (c cow) COWRefOfOrderByOption(n *OrderByOption) (*OrderByOption, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Cols = c.COWColumns(n.Cols)
-	return &out
+	Cols, changedCols := c.COWColumns(n.Cols)
+	if changedCols {
+		out := *n
+		out.Cols = Cols
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfOtherAdmin creates a deep clone of the input.
 func (c cow) COWRefOfOtherAdmin(n *OtherAdmin) (*OtherAdmin, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfOtherRead creates a deep clone of the input.
 func (c cow) COWRefOfOtherRead(n *OtherRead) (*OtherRead, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfOverClause creates a deep clone of the input.
 func (c cow) COWRefOfOverClause(n *OverClause) (*OverClause, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.WindowName = c.COWIdentifierCI(n.WindowName)
-	out.WindowSpec = c.COWRefOfWindowSpecification(n.WindowSpec)
-	return &out
+	WindowName, changedWindowName := c.COWIdentifierCI(n.WindowName)
+	WindowSpec, changedWindowSpec := c.COWRefOfWindowSpecification(n.WindowSpec)
+	if changedWindowName || changedWindowSpec {
+		out := *n
+		out.WindowName = WindowName
+		out.WindowSpec = WindowSpec
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfParenTableExpr creates a deep clone of the input.
 func (c cow) COWRefOfParenTableExpr(n *ParenTableExpr) (*ParenTableExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Exprs = c.COWTableExprs(n.Exprs)
-	return &out
+	Exprs, changedExprs := c.COWTableExprs(n.Exprs)
+	if changedExprs {
+		out := *n
+		out.Exprs = Exprs
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfParsedComments creates a deep clone of the input.
 func (c cow) COWRefOfParsedComments(n *ParsedComments) (*ParsedComments, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.comments = c.COWComments(n.comments)
-	return &out
+	comments, changedcomments := c.COWComments(n.comments)
+	if changedcomments {
+		out := *n
+		out.comments = comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfPartitionDefinition creates a deep clone of the input.
 func (c cow) COWRefOfPartitionDefinition(n *PartitionDefinition) (*PartitionDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Options = c.COWRefOfPartitionDefinitionOptions(n.Options)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Options, changedOptions := c.COWRefOfPartitionDefinitionOptions(n.Options)
+	if changedName || changedOptions {
+		out := *n
+		out.Name = Name
+		out.Options = Options
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfPartitionDefinitionOptions creates a deep clone of the input.
 func (c cow) COWRefOfPartitionDefinitionOptions(n *PartitionDefinitionOptions) (*PartitionDefinitionOptions, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ValueRange = c.COWRefOfPartitionValueRange(n.ValueRange)
-	out.Comment = c.COWRefOfLiteral(n.Comment)
-	out.Engine = c.COWRefOfPartitionEngine(n.Engine)
-	out.DataDirectory = c.COWRefOfLiteral(n.DataDirectory)
-	out.IndexDirectory = c.COWRefOfLiteral(n.IndexDirectory)
-	out.MaxRows = c.COWRefOfInt(n.MaxRows)
-	out.MinRows = c.COWRefOfInt(n.MinRows)
-	out.SubPartitionDefinitions = c.COWSubPartitionDefinitions(n.SubPartitionDefinitions)
-	return &out
+	ValueRange, changedValueRange := c.COWRefOfPartitionValueRange(n.ValueRange)
+	Comment, changedComment := c.COWRefOfLiteral(n.Comment)
+	Engine, changedEngine := c.COWRefOfPartitionEngine(n.Engine)
+	DataDirectory, changedDataDirectory := c.COWRefOfLiteral(n.DataDirectory)
+	IndexDirectory, changedIndexDirectory := c.COWRefOfLiteral(n.IndexDirectory)
+	MaxRows, changedMaxRows := c.COWRefOfInt(n.MaxRows)
+	MinRows, changedMinRows := c.COWRefOfInt(n.MinRows)
+	SubPartitionDefinitions, changedSubPartitionDefinitions := c.COWSubPartitionDefinitions(n.SubPartitionDefinitions)
+	if changedValueRange || changedComment || changedEngine || changedDataDirectory || changedIndexDirectory || changedMaxRows || changedMinRows || changedSubPartitionDefinitions {
+		out := *n
+		out.ValueRange = ValueRange
+		out.Comment = Comment
+		out.Engine = Engine
+		out.DataDirectory = DataDirectory
+		out.IndexDirectory = IndexDirectory
+		out.MaxRows = MaxRows
+		out.MinRows = MinRows
+		out.SubPartitionDefinitions = SubPartitionDefinitions
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfPartitionEngine creates a deep clone of the input.
 func (c cow) COWRefOfPartitionEngine(n *PartitionEngine) (*PartitionEngine, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfPartitionOption creates a deep clone of the input.
 func (c cow) COWRefOfPartitionOption(n *PartitionOption) (*PartitionOption, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ColList = c.COWColumns(n.ColList)
-	out.Expr = c.COWExpr(n.Expr)
-	out.SubPartition = c.COWRefOfSubPartition(n.SubPartition)
-	out.Definitions = c.COWSliceOfRefOfPartitionDefinition(n.Definitions)
-	return &out
+	ColList, changedColList := c.COWColumns(n.ColList)
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	SubPartition, changedSubPartition := c.COWRefOfSubPartition(n.SubPartition)
+	Definitions, changedDefinitions := c.COWSliceOfRefOfPartitionDefinition(n.Definitions)
+	if changedColList || changedExpr || changedSubPartition || changedDefinitions {
+		out := *n
+		out.ColList = ColList
+		out.Expr = Expr
+		out.SubPartition = SubPartition
+		out.Definitions = Definitions
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfPartitionSpec creates a deep clone of the input.
 func (c cow) COWRefOfPartitionSpec(n *PartitionSpec) (*PartitionSpec, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Names = c.COWPartitions(n.Names)
-	out.Number = c.COWRefOfLiteral(n.Number)
-	out.TableName = c.COWTableName(n.TableName)
-	out.Definitions = c.COWSliceOfRefOfPartitionDefinition(n.Definitions)
-	return &out
+	Names, changedNames := c.COWPartitions(n.Names)
+	Number, changedNumber := c.COWRefOfLiteral(n.Number)
+	TableName, changedTableName := c.COWTableName(n.TableName)
+	Definitions, changedDefinitions := c.COWSliceOfRefOfPartitionDefinition(n.Definitions)
+	if changedNames || changedNumber || changedTableName || changedDefinitions {
+		out := *n
+		out.Names = Names
+		out.Number = Number
+		out.TableName = TableName
+		out.Definitions = Definitions
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfPartitionValueRange creates a deep clone of the input.
 func (c cow) COWRefOfPartitionValueRange(n *PartitionValueRange) (*PartitionValueRange, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Range = c.COWValTuple(n.Range)
-	return &out
+	Range, changedRange := c.COWValTuple(n.Range)
+	if changedRange {
+		out := *n
+		out.Range = Range
+		return &out, true
+	}
+	return n, false
 }
 
 // COWPartitions creates a deep clone of the input.
@@ -2237,161 +2896,233 @@ func COWPartitions(n Partitions) Partitions {
 // COWRefOfPerformanceSchemaFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFuncExpr) (*PerformanceSchemaFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Argument = c.COWExpr(n.Argument)
-	return &out
+	Argument, changedArgument := c.COWExpr(n.Argument)
+	if changedArgument {
+		out := *n
+		out.Argument = Argument
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfPrepareStmt creates a deep clone of the input.
 func (c cow) COWRefOfPrepareStmt(n *PrepareStmt) (*PrepareStmt, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Statement = c.COWExpr(n.Statement)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Statement, changedStatement := c.COWExpr(n.Statement)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedName || changedStatement || changedComments {
+		out := *n
+		out.Name = Name
+		out.Statement = Statement
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfReferenceDefinition creates a deep clone of the input.
 func (c cow) COWRefOfReferenceDefinition(n *ReferenceDefinition) (*ReferenceDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ReferencedTable = c.COWTableName(n.ReferencedTable)
-	out.ReferencedColumns = c.COWColumns(n.ReferencedColumns)
-	return &out
+	ReferencedTable, changedReferencedTable := c.COWTableName(n.ReferencedTable)
+	ReferencedColumns, changedReferencedColumns := c.COWColumns(n.ReferencedColumns)
+	if changedReferencedTable || changedReferencedColumns {
+		out := *n
+		out.ReferencedTable = ReferencedTable
+		out.ReferencedColumns = ReferencedColumns
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRegexpInstrExpr creates a deep clone of the input.
 func (c cow) COWRefOfRegexpInstrExpr(n *RegexpInstrExpr) (*RegexpInstrExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Pattern = c.COWExpr(n.Pattern)
-	out.Position = c.COWExpr(n.Position)
-	out.Occurrence = c.COWExpr(n.Occurrence)
-	out.ReturnOption = c.COWExpr(n.ReturnOption)
-	out.MatchType = c.COWExpr(n.MatchType)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Pattern, changedPattern := c.COWExpr(n.Pattern)
+	Position, changedPosition := c.COWExpr(n.Position)
+	Occurrence, changedOccurrence := c.COWExpr(n.Occurrence)
+	ReturnOption, changedReturnOption := c.COWExpr(n.ReturnOption)
+	MatchType, changedMatchType := c.COWExpr(n.MatchType)
+	if changedExpr || changedPattern || changedPosition || changedOccurrence || changedReturnOption || changedMatchType {
+		out := *n
+		out.Expr = Expr
+		out.Pattern = Pattern
+		out.Position = Position
+		out.Occurrence = Occurrence
+		out.ReturnOption = ReturnOption
+		out.MatchType = MatchType
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRegexpLikeExpr creates a deep clone of the input.
 func (c cow) COWRefOfRegexpLikeExpr(n *RegexpLikeExpr) (*RegexpLikeExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Pattern = c.COWExpr(n.Pattern)
-	out.MatchType = c.COWExpr(n.MatchType)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Pattern, changedPattern := c.COWExpr(n.Pattern)
+	MatchType, changedMatchType := c.COWExpr(n.MatchType)
+	if changedExpr || changedPattern || changedMatchType {
+		out := *n
+		out.Expr = Expr
+		out.Pattern = Pattern
+		out.MatchType = MatchType
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRegexpReplaceExpr creates a deep clone of the input.
 func (c cow) COWRefOfRegexpReplaceExpr(n *RegexpReplaceExpr) (*RegexpReplaceExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Pattern = c.COWExpr(n.Pattern)
-	out.Repl = c.COWExpr(n.Repl)
-	out.Occurrence = c.COWExpr(n.Occurrence)
-	out.Position = c.COWExpr(n.Position)
-	out.MatchType = c.COWExpr(n.MatchType)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Pattern, changedPattern := c.COWExpr(n.Pattern)
+	Repl, changedRepl := c.COWExpr(n.Repl)
+	Occurrence, changedOccurrence := c.COWExpr(n.Occurrence)
+	Position, changedPosition := c.COWExpr(n.Position)
+	MatchType, changedMatchType := c.COWExpr(n.MatchType)
+	if changedExpr || changedPattern || changedRepl || changedOccurrence || changedPosition || changedMatchType {
+		out := *n
+		out.Expr = Expr
+		out.Pattern = Pattern
+		out.Repl = Repl
+		out.Occurrence = Occurrence
+		out.Position = Position
+		out.MatchType = MatchType
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRegexpSubstrExpr creates a deep clone of the input.
 func (c cow) COWRefOfRegexpSubstrExpr(n *RegexpSubstrExpr) (*RegexpSubstrExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.Pattern = c.COWExpr(n.Pattern)
-	out.Occurrence = c.COWExpr(n.Occurrence)
-	out.Position = c.COWExpr(n.Position)
-	out.MatchType = c.COWExpr(n.MatchType)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	Pattern, changedPattern := c.COWExpr(n.Pattern)
+	Occurrence, changedOccurrence := c.COWExpr(n.Occurrence)
+	Position, changedPosition := c.COWExpr(n.Position)
+	MatchType, changedMatchType := c.COWExpr(n.MatchType)
+	if changedExpr || changedPattern || changedOccurrence || changedPosition || changedMatchType {
+		out := *n
+		out.Expr = Expr
+		out.Pattern = Pattern
+		out.Occurrence = Occurrence
+		out.Position = Position
+		out.MatchType = MatchType
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRelease creates a deep clone of the input.
 func (c cow) COWRefOfRelease(n *Release) (*Release, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRenameColumn creates a deep clone of the input.
 func (c cow) COWRefOfRenameColumn(n *RenameColumn) (*RenameColumn, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.OldName = c.COWRefOfColName(n.OldName)
-	out.NewName = c.COWRefOfColName(n.NewName)
-	return &out
+	OldName, changedOldName := c.COWRefOfColName(n.OldName)
+	NewName, changedNewName := c.COWRefOfColName(n.NewName)
+	if changedOldName || changedNewName {
+		out := *n
+		out.OldName = OldName
+		out.NewName = NewName
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRenameIndex creates a deep clone of the input.
 func (c cow) COWRefOfRenameIndex(n *RenameIndex) (*RenameIndex, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.OldName = c.COWIdentifierCI(n.OldName)
-	out.NewName = c.COWIdentifierCI(n.NewName)
-	return &out
+	OldName, changedOldName := c.COWIdentifierCI(n.OldName)
+	NewName, changedNewName := c.COWIdentifierCI(n.NewName)
+	if changedOldName || changedNewName {
+		out := *n
+		out.OldName = OldName
+		out.NewName = NewName
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRenameTable creates a deep clone of the input.
 func (c cow) COWRefOfRenameTable(n *RenameTable) (*RenameTable, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.TablePairs = c.COWSliceOfRefOfRenameTablePair(n.TablePairs)
-	return &out
+	TablePairs, changedTablePairs := c.COWSliceOfRefOfRenameTablePair(n.TablePairs)
+	if changedTablePairs {
+		out := *n
+		out.TablePairs = TablePairs
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRenameTableName creates a deep clone of the input.
 func (c cow) COWRefOfRenameTableName(n *RenameTableName) (*RenameTableName, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Table = c.COWTableName(n.Table)
-	return &out
+	Table, changedTable := c.COWTableName(n.Table)
+	if changedTable {
+		out := *n
+		out.Table = Table
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRevertMigration creates a deep clone of the input.
 func (c cow) COWRefOfRevertMigration(n *RevertMigration) (*RevertMigration, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedComments {
+		out := *n
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRollback creates a deep clone of the input.
 func (c cow) COWRefOfRollback(n *Rollback) (*Rollback, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRootNode creates a deep clone of the input.
@@ -2402,42 +3133,65 @@ func COWRootNode(n RootNode) RootNode {
 // COWRefOfSRollback creates a deep clone of the input.
 func (c cow) COWRefOfSRollback(n *SRollback) (*SRollback, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSavepoint creates a deep clone of the input.
 func (c cow) COWRefOfSavepoint(n *Savepoint) (*Savepoint, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSelect creates a deep clone of the input.
 func (c cow) COWRefOfSelect(n *Select) (*Select, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Cache = c.COWRefOfBool(n.Cache)
-	out.From = c.COWSliceOfTableExpr(n.From)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.SelectExprs = c.COWSelectExprs(n.SelectExprs)
-	out.Where = c.COWRefOfWhere(n.Where)
-	out.With = c.COWRefOfWith(n.With)
-	out.GroupBy = c.COWGroupBy(n.GroupBy)
-	out.Having = c.COWRefOfWhere(n.Having)
-	out.Windows = c.COWNamedWindows(n.Windows)
-	out.OrderBy = c.COWOrderBy(n.OrderBy)
-	out.Limit = c.COWRefOfLimit(n.Limit)
-	out.Into = c.COWRefOfSelectInto(n.Into)
-	return &out
+	Cache, changedCache := c.COWRefOfBool(n.Cache)
+	From, changedFrom := c.COWSliceOfTableExpr(n.From)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	SelectExprs, changedSelectExprs := c.COWSelectExprs(n.SelectExprs)
+	Where, changedWhere := c.COWRefOfWhere(n.Where)
+	With, changedWith := c.COWRefOfWith(n.With)
+	GroupBy, changedGroupBy := c.COWGroupBy(n.GroupBy)
+	Having, changedHaving := c.COWRefOfWhere(n.Having)
+	Windows, changedWindows := c.COWNamedWindows(n.Windows)
+	OrderBy, changedOrderBy := c.COWOrderBy(n.OrderBy)
+	Limit, changedLimit := c.COWRefOfLimit(n.Limit)
+	Into, changedInto := c.COWRefOfSelectInto(n.Into)
+	if changedCache || changedFrom || changedComments || changedSelectExprs || changedWhere || changedWith || changedGroupBy || changedHaving || changedWindows || changedOrderBy || changedLimit || changedInto {
+		out := *n
+		out.Cache = Cache
+		out.From = From
+		out.Comments = Comments
+		out.SelectExprs = SelectExprs
+		out.Where = Where
+		out.With = With
+		out.GroupBy = GroupBy
+		out.Having = Having
+		out.Windows = Windows
+		out.OrderBy = OrderBy
+		out.Limit = Limit
+		out.Into = Into
+		return &out, true
+	}
+	return n, false
 }
 
 // COWSelectExprs creates a deep clone of the input.
@@ -2455,33 +3209,47 @@ func COWSelectExprs(n SelectExprs) SelectExprs {
 // COWRefOfSelectInto creates a deep clone of the input.
 func (c cow) COWRefOfSelectInto(n *SelectInto) (*SelectInto, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Charset = c.COWColumnCharset(n.Charset)
-	return &out
+	Charset, changedCharset := c.COWColumnCharset(n.Charset)
+	if changedCharset {
+		out := *n
+		out.Charset = Charset
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSet creates a deep clone of the input.
 func (c cow) COWRefOfSet(n *Set) (*Set, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.Exprs = c.COWSetExprs(n.Exprs)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	Exprs, changedExprs := c.COWSetExprs(n.Exprs)
+	if changedComments || changedExprs {
+		out := *n
+		out.Comments = Comments
+		out.Exprs = Exprs
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSetExpr creates a deep clone of the input.
 func (c cow) COWRefOfSetExpr(n *SetExpr) (*SetExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Var = c.COWRefOfVariable(n.Var)
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Var, changedVar := c.COWRefOfVariable(n.Var)
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedVar || changedExpr {
+		out := *n
+		out.Var = Var
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWSetExprs creates a deep clone of the input.
@@ -2499,181 +3267,255 @@ func COWSetExprs(n SetExprs) SetExprs {
 // COWRefOfShow creates a deep clone of the input.
 func (c cow) COWRefOfShow(n *Show) (*Show, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Internal = c.COWShowInternal(n.Internal)
-	return &out
+	Internal, changedInternal := c.COWShowInternal(n.Internal)
+	if changedInternal {
+		out := *n
+		out.Internal = Internal
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfShowBasic creates a deep clone of the input.
 func (c cow) COWRefOfShowBasic(n *ShowBasic) (*ShowBasic, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Tbl = c.COWTableName(n.Tbl)
-	out.DbName = c.COWIdentifierCS(n.DbName)
-	out.Filter = c.COWRefOfShowFilter(n.Filter)
-	return &out
+	Tbl, changedTbl := c.COWTableName(n.Tbl)
+	DbName, changedDbName := c.COWIdentifierCS(n.DbName)
+	Filter, changedFilter := c.COWRefOfShowFilter(n.Filter)
+	if changedTbl || changedDbName || changedFilter {
+		out := *n
+		out.Tbl = Tbl
+		out.DbName = DbName
+		out.Filter = Filter
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfShowCreate creates a deep clone of the input.
 func (c cow) COWRefOfShowCreate(n *ShowCreate) (*ShowCreate, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Op = c.COWTableName(n.Op)
-	return &out
+	Op, changedOp := c.COWTableName(n.Op)
+	if changedOp {
+		out := *n
+		out.Op = Op
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfShowFilter creates a deep clone of the input.
 func (c cow) COWRefOfShowFilter(n *ShowFilter) (*ShowFilter, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Filter = c.COWExpr(n.Filter)
-	return &out
+	Filter, changedFilter := c.COWExpr(n.Filter)
+	if changedFilter {
+		out := *n
+		out.Filter = Filter
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfShowMigrationLogs creates a deep clone of the input.
 func (c cow) COWRefOfShowMigrationLogs(n *ShowMigrationLogs) (*ShowMigrationLogs, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedComments {
+		out := *n
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfShowOther creates a deep clone of the input.
 func (c cow) COWRefOfShowOther(n *ShowOther) (*ShowOther, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfShowThrottledApps creates a deep clone of the input.
 func (c cow) COWRefOfShowThrottledApps(n *ShowThrottledApps) (*ShowThrottledApps, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWComments(n.Comments)
-	return &out
+	Comments, changedComments := c.COWComments(n.Comments)
+	if changedComments {
+		out := *n
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfShowThrottlerStatus creates a deep clone of the input.
 func (c cow) COWRefOfShowThrottlerStatus(n *ShowThrottlerStatus) (*ShowThrottlerStatus, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWComments(n.Comments)
-	return &out
+	Comments, changedComments := c.COWComments(n.Comments)
+	if changedComments {
+		out := *n
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfStarExpr creates a deep clone of the input.
 func (c cow) COWRefOfStarExpr(n *StarExpr) (*StarExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.TableName = c.COWTableName(n.TableName)
-	return &out
+	TableName, changedTableName := c.COWTableName(n.TableName)
+	if changedTableName {
+		out := *n
+		out.TableName = TableName
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfStd creates a deep clone of the input.
 func (c cow) COWRefOfStd(n *Std) (*Std, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfStdDev creates a deep clone of the input.
 func (c cow) COWRefOfStdDev(n *StdDev) (*StdDev, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfStdPop creates a deep clone of the input.
 func (c cow) COWRefOfStdPop(n *StdPop) (*StdPop, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfStdSamp creates a deep clone of the input.
 func (c cow) COWRefOfStdSamp(n *StdSamp) (*StdSamp, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfStream creates a deep clone of the input.
 func (c cow) COWRefOfStream(n *Stream) (*Stream, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.SelectExpr = c.COWSelectExpr(n.SelectExpr)
-	out.Table = c.COWTableName(n.Table)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	SelectExpr, changedSelectExpr := c.COWSelectExpr(n.SelectExpr)
+	Table, changedTable := c.COWTableName(n.Table)
+	if changedComments || changedSelectExpr || changedTable {
+		out := *n
+		out.Comments = Comments
+		out.SelectExpr = SelectExpr
+		out.Table = Table
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSubPartition creates a deep clone of the input.
 func (c cow) COWRefOfSubPartition(n *SubPartition) (*SubPartition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ColList = c.COWColumns(n.ColList)
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	ColList, changedColList := c.COWColumns(n.ColList)
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedColList || changedExpr {
+		out := *n
+		out.ColList = ColList
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSubPartitionDefinition creates a deep clone of the input.
 func (c cow) COWRefOfSubPartitionDefinition(n *SubPartitionDefinition) (*SubPartitionDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Options = c.COWRefOfSubPartitionDefinitionOptions(n.Options)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Options, changedOptions := c.COWRefOfSubPartitionDefinitionOptions(n.Options)
+	if changedName || changedOptions {
+		out := *n
+		out.Name = Name
+		out.Options = Options
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSubPartitionDefinitionOptions creates a deep clone of the input.
 func (c cow) COWRefOfSubPartitionDefinitionOptions(n *SubPartitionDefinitionOptions) (*SubPartitionDefinitionOptions, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comment = c.COWRefOfLiteral(n.Comment)
-	out.Engine = c.COWRefOfPartitionEngine(n.Engine)
-	out.DataDirectory = c.COWRefOfLiteral(n.DataDirectory)
-	out.IndexDirectory = c.COWRefOfLiteral(n.IndexDirectory)
-	out.MaxRows = c.COWRefOfInt(n.MaxRows)
-	out.MinRows = c.COWRefOfInt(n.MinRows)
-	return &out
+	Comment, changedComment := c.COWRefOfLiteral(n.Comment)
+	Engine, changedEngine := c.COWRefOfPartitionEngine(n.Engine)
+	DataDirectory, changedDataDirectory := c.COWRefOfLiteral(n.DataDirectory)
+	IndexDirectory, changedIndexDirectory := c.COWRefOfLiteral(n.IndexDirectory)
+	MaxRows, changedMaxRows := c.COWRefOfInt(n.MaxRows)
+	MinRows, changedMinRows := c.COWRefOfInt(n.MinRows)
+	if changedComment || changedEngine || changedDataDirectory || changedIndexDirectory || changedMaxRows || changedMinRows {
+		out := *n
+		out.Comment = Comment
+		out.Engine = Engine
+		out.DataDirectory = DataDirectory
+		out.IndexDirectory = IndexDirectory
+		out.MaxRows = MaxRows
+		out.MinRows = MinRows
+		return &out, true
+	}
+	return n, false
 }
 
 // COWSubPartitionDefinitions creates a deep clone of the input.
@@ -2691,33 +3533,47 @@ func COWSubPartitionDefinitions(n SubPartitionDefinitions) SubPartitionDefinitio
 // COWRefOfSubquery creates a deep clone of the input.
 func (c cow) COWRefOfSubquery(n *Subquery) (*Subquery, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Select = c.COWSelectStatement(n.Select)
-	return &out
+	Select, changedSelect := c.COWSelectStatement(n.Select)
+	if changedSelect {
+		out := *n
+		out.Select = Select
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSubstrExpr creates a deep clone of the input.
 func (c cow) COWRefOfSubstrExpr(n *SubstrExpr) (*SubstrExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWExpr(n.Name)
-	out.From = c.COWExpr(n.From)
-	out.To = c.COWExpr(n.To)
-	return &out
+	Name, changedName := c.COWExpr(n.Name)
+	From, changedFrom := c.COWExpr(n.From)
+	To, changedTo := c.COWExpr(n.To)
+	if changedName || changedFrom || changedTo {
+		out := *n
+		out.Name = Name
+		out.From = From
+		out.To = To
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfSum creates a deep clone of the input.
 func (c cow) COWRefOfSum(n *Sum) (*Sum, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWTableExprs creates a deep clone of the input.
@@ -2764,117 +3620,165 @@ func COWTableOptions(n TableOptions) TableOptions {
 // COWRefOfTableSpec creates a deep clone of the input.
 func (c cow) COWRefOfTableSpec(n *TableSpec) (*TableSpec, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Columns = c.COWSliceOfRefOfColumnDefinition(n.Columns)
-	out.Indexes = c.COWSliceOfRefOfIndexDefinition(n.Indexes)
-	out.Constraints = c.COWSliceOfRefOfConstraintDefinition(n.Constraints)
-	out.Options = c.COWTableOptions(n.Options)
-	out.PartitionOption = c.COWRefOfPartitionOption(n.PartitionOption)
-	return &out
+	Columns, changedColumns := c.COWSliceOfRefOfColumnDefinition(n.Columns)
+	Indexes, changedIndexes := c.COWSliceOfRefOfIndexDefinition(n.Indexes)
+	Constraints, changedConstraints := c.COWSliceOfRefOfConstraintDefinition(n.Constraints)
+	Options, changedOptions := c.COWTableOptions(n.Options)
+	PartitionOption, changedPartitionOption := c.COWRefOfPartitionOption(n.PartitionOption)
+	if changedColumns || changedIndexes || changedConstraints || changedOptions || changedPartitionOption {
+		out := *n
+		out.Columns = Columns
+		out.Indexes = Indexes
+		out.Constraints = Constraints
+		out.Options = Options
+		out.PartitionOption = PartitionOption
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfTablespaceOperation creates a deep clone of the input.
 func (c cow) COWRefOfTablespaceOperation(n *TablespaceOperation) (*TablespaceOperation, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfTimestampFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfTimestampFuncExpr(n *TimestampFuncExpr) (*TimestampFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr1 = c.COWExpr(n.Expr1)
-	out.Expr2 = c.COWExpr(n.Expr2)
-	return &out
+	Expr1, changedExpr1 := c.COWExpr(n.Expr1)
+	Expr2, changedExpr2 := c.COWExpr(n.Expr2)
+	if changedExpr1 || changedExpr2 {
+		out := *n
+		out.Expr1 = Expr1
+		out.Expr2 = Expr2
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfTrimFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfTrimFuncExpr(n *TrimFuncExpr) (*TrimFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.TrimArg = c.COWExpr(n.TrimArg)
-	out.StringArg = c.COWExpr(n.StringArg)
-	return &out
+	TrimArg, changedTrimArg := c.COWExpr(n.TrimArg)
+	StringArg, changedStringArg := c.COWExpr(n.StringArg)
+	if changedTrimArg || changedStringArg {
+		out := *n
+		out.TrimArg = TrimArg
+		out.StringArg = StringArg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfTruncateTable creates a deep clone of the input.
 func (c cow) COWRefOfTruncateTable(n *TruncateTable) (*TruncateTable, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Table = c.COWTableName(n.Table)
-	return &out
+	Table, changedTable := c.COWTableName(n.Table)
+	if changedTable {
+		out := *n
+		out.Table = Table
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfUnaryExpr creates a deep clone of the input.
 func (c cow) COWRefOfUnaryExpr(n *UnaryExpr) (*UnaryExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfUnion creates a deep clone of the input.
 func (c cow) COWRefOfUnion(n *Union) (*Union, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWSelectStatement(n.Left)
-	out.Right = c.COWSelectStatement(n.Right)
-	out.OrderBy = c.COWOrderBy(n.OrderBy)
-	out.With = c.COWRefOfWith(n.With)
-	out.Limit = c.COWRefOfLimit(n.Limit)
-	out.Into = c.COWRefOfSelectInto(n.Into)
-	return &out
+	Left, changedLeft := c.COWSelectStatement(n.Left)
+	Right, changedRight := c.COWSelectStatement(n.Right)
+	OrderBy, changedOrderBy := c.COWOrderBy(n.OrderBy)
+	With, changedWith := c.COWRefOfWith(n.With)
+	Limit, changedLimit := c.COWRefOfLimit(n.Limit)
+	Into, changedInto := c.COWRefOfSelectInto(n.Into)
+	if changedLeft || changedRight || changedOrderBy || changedWith || changedLimit || changedInto {
+		out := *n
+		out.Left = Left
+		out.Right = Right
+		out.OrderBy = OrderBy
+		out.With = With
+		out.Limit = Limit
+		out.Into = Into
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfUnlockTables creates a deep clone of the input.
 func (c cow) COWRefOfUnlockTables(n *UnlockTables) (*UnlockTables, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfUpdate creates a deep clone of the input.
 func (c cow) COWRefOfUpdate(n *Update) (*Update, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.With = c.COWRefOfWith(n.With)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.TableExprs = c.COWTableExprs(n.TableExprs)
-	out.Exprs = c.COWUpdateExprs(n.Exprs)
-	out.Where = c.COWRefOfWhere(n.Where)
-	out.OrderBy = c.COWOrderBy(n.OrderBy)
-	out.Limit = c.COWRefOfLimit(n.Limit)
-	return &out
+	With, changedWith := c.COWRefOfWith(n.With)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	TableExprs, changedTableExprs := c.COWTableExprs(n.TableExprs)
+	Exprs, changedExprs := c.COWUpdateExprs(n.Exprs)
+	Where, changedWhere := c.COWRefOfWhere(n.Where)
+	OrderBy, changedOrderBy := c.COWOrderBy(n.OrderBy)
+	Limit, changedLimit := c.COWRefOfLimit(n.Limit)
+	if changedWith || changedComments || changedTableExprs || changedExprs || changedWhere || changedOrderBy || changedLimit {
+		out := *n
+		out.With = With
+		out.Comments = Comments
+		out.TableExprs = TableExprs
+		out.Exprs = Exprs
+		out.Where = Where
+		out.OrderBy = OrderBy
+		out.Limit = Limit
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfUpdateExpr creates a deep clone of the input.
 func (c cow) COWRefOfUpdateExpr(n *UpdateExpr) (*UpdateExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWRefOfColName(n.Name)
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Name, changedName := c.COWRefOfColName(n.Name)
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedName || changedExpr {
+		out := *n
+		out.Name = Name
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWUpdateExprs creates a deep clone of the input.
@@ -2892,48 +3796,71 @@ func COWUpdateExprs(n UpdateExprs) UpdateExprs {
 // COWRefOfUpdateXMLExpr creates a deep clone of the input.
 func (c cow) COWRefOfUpdateXMLExpr(n *UpdateXMLExpr) (*UpdateXMLExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Target = c.COWExpr(n.Target)
-	out.XPathExpr = c.COWExpr(n.XPathExpr)
-	out.NewXML = c.COWExpr(n.NewXML)
-	return &out
+	Target, changedTarget := c.COWExpr(n.Target)
+	XPathExpr, changedXPathExpr := c.COWExpr(n.XPathExpr)
+	NewXML, changedNewXML := c.COWExpr(n.NewXML)
+	if changedTarget || changedXPathExpr || changedNewXML {
+		out := *n
+		out.Target = Target
+		out.XPathExpr = XPathExpr
+		out.NewXML = NewXML
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfUse creates a deep clone of the input.
 func (c cow) COWRefOfUse(n *Use) (*Use, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.DBName = c.COWIdentifierCS(n.DBName)
-	return &out
+	DBName, changedDBName := c.COWIdentifierCS(n.DBName)
+	if changedDBName {
+		out := *n
+		out.DBName = DBName
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfVExplainStmt creates a deep clone of the input.
 func (c cow) COWRefOfVExplainStmt(n *VExplainStmt) (*VExplainStmt, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Statement = c.COWStatement(n.Statement)
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	return &out
+	Statement, changedStatement := c.COWStatement(n.Statement)
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	if changedStatement || changedComments {
+		out := *n
+		out.Statement = Statement
+		out.Comments = Comments
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfVStream creates a deep clone of the input.
 func (c cow) COWRefOfVStream(n *VStream) (*VStream, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Comments = c.COWRefOfParsedComments(n.Comments)
-	out.SelectExpr = c.COWSelectExpr(n.SelectExpr)
-	out.Table = c.COWTableName(n.Table)
-	out.Where = c.COWRefOfWhere(n.Where)
-	out.Limit = c.COWRefOfLimit(n.Limit)
-	return &out
+	Comments, changedComments := c.COWRefOfParsedComments(n.Comments)
+	SelectExpr, changedSelectExpr := c.COWSelectExpr(n.SelectExpr)
+	Table, changedTable := c.COWTableName(n.Table)
+	Where, changedWhere := c.COWRefOfWhere(n.Where)
+	Limit, changedLimit := c.COWRefOfLimit(n.Limit)
+	if changedComments || changedSelectExpr || changedTable || changedWhere || changedLimit {
+		out := *n
+		out.Comments = Comments
+		out.SelectExpr = SelectExpr
+		out.Table = Table
+		out.Where = Where
+		out.Limit = Limit
+		return &out, true
+	}
+	return n, false
 }
 
 // COWValTuple creates a deep clone of the input.
@@ -2951,10 +3878,9 @@ func COWValTuple(n ValTuple) ValTuple {
 // COWRefOfValidation creates a deep clone of the input.
 func (c cow) COWRefOfValidation(n *Validation) (*Validation, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWValues creates a deep clone of the input.
@@ -2972,51 +3898,71 @@ func COWValues(n Values) Values {
 // COWRefOfValuesFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfValuesFuncExpr(n *ValuesFuncExpr) (*ValuesFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWRefOfColName(n.Name)
-	return &out
+	Name, changedName := c.COWRefOfColName(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfVarPop creates a deep clone of the input.
 func (c cow) COWRefOfVarPop(n *VarPop) (*VarPop, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfVarSamp creates a deep clone of the input.
 func (c cow) COWRefOfVarSamp(n *VarSamp) (*VarSamp, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfVariable creates a deep clone of the input.
 func (c cow) COWRefOfVariable(n *Variable) (*Variable, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfVariance creates a deep clone of the input.
 func (c cow) COWRefOfVariance(n *Variance) (*Variance, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Arg = c.COWExpr(n.Arg)
-	return &out
+	Arg, changedArg := c.COWExpr(n.Arg)
+	if changedArg {
+		out := *n
+		out.Arg = Arg
+		return &out, true
+	}
+	return n, false
 }
 
 // COWVindexParam creates a deep clone of the input.
@@ -3027,56 +3973,81 @@ func COWVindexParam(n VindexParam) VindexParam {
 // COWRefOfVindexSpec creates a deep clone of the input.
 func (c cow) COWRefOfVindexSpec(n *VindexSpec) (*VindexSpec, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Type = c.COWIdentifierCI(n.Type)
-	out.Params = c.COWSliceOfVindexParam(n.Params)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Type, changedType := c.COWIdentifierCI(n.Type)
+	Params, changedParams := c.COWSliceOfVindexParam(n.Params)
+	if changedName || changedType || changedParams {
+		out := *n
+		out.Name = Name
+		out.Type = Type
+		out.Params = Params
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfWeightStringFuncExpr creates a deep clone of the input.
 func (c cow) COWRefOfWeightStringFuncExpr(n *WeightStringFuncExpr) (*WeightStringFuncExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	out.As = c.COWRefOfConvertType(n.As)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	As, changedAs := c.COWRefOfConvertType(n.As)
+	if changedExpr || changedAs {
+		out := *n
+		out.Expr = Expr
+		out.As = As
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfWhen creates a deep clone of the input.
 func (c cow) COWRefOfWhen(n *When) (*When, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Cond = c.COWExpr(n.Cond)
-	out.Val = c.COWExpr(n.Val)
-	return &out
+	Cond, changedCond := c.COWExpr(n.Cond)
+	Val, changedVal := c.COWExpr(n.Val)
+	if changedCond || changedVal {
+		out := *n
+		out.Cond = Cond
+		out.Val = Val
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfWhere creates a deep clone of the input.
 func (c cow) COWRefOfWhere(n *Where) (*Where, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Expr = c.COWExpr(n.Expr)
-	return &out
+	Expr, changedExpr := c.COWExpr(n.Expr)
+	if changedExpr {
+		out := *n
+		out.Expr = Expr
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfWindowDefinition creates a deep clone of the input.
 func (c cow) COWRefOfWindowDefinition(n *WindowDefinition) (*WindowDefinition, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.WindowSpec = c.COWRefOfWindowSpecification(n.WindowSpec)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	WindowSpec, changedWindowSpec := c.COWRefOfWindowSpecification(n.WindowSpec)
+	if changedName || changedWindowSpec {
+		out := *n
+		out.Name = Name
+		out.WindowSpec = WindowSpec
+		return &out, true
+	}
+	return n, false
 }
 
 // COWWindowDefinitions creates a deep clone of the input.
@@ -3094,35 +4065,51 @@ func COWWindowDefinitions(n WindowDefinitions) WindowDefinitions {
 // COWRefOfWindowSpecification creates a deep clone of the input.
 func (c cow) COWRefOfWindowSpecification(n *WindowSpecification) (*WindowSpecification, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.PartitionClause = c.COWExprs(n.PartitionClause)
-	out.OrderClause = c.COWOrderBy(n.OrderClause)
-	out.FrameClause = c.COWRefOfFrameClause(n.FrameClause)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	PartitionClause, changedPartitionClause := c.COWExprs(n.PartitionClause)
+	OrderClause, changedOrderClause := c.COWOrderBy(n.OrderClause)
+	FrameClause, changedFrameClause := c.COWRefOfFrameClause(n.FrameClause)
+	if changedName || changedPartitionClause || changedOrderClause || changedFrameClause {
+		out := *n
+		out.Name = Name
+		out.PartitionClause = PartitionClause
+		out.OrderClause = OrderClause
+		out.FrameClause = FrameClause
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfWith creates a deep clone of the input.
 func (c cow) COWRefOfWith(n *With) (*With, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.ctes = c.COWSliceOfRefOfCommonTableExpr(n.ctes)
-	return &out
+	ctes, changedctes := c.COWSliceOfRefOfCommonTableExpr(n.ctes)
+	if changedctes {
+		out := *n
+		out.ctes = ctes
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfXorExpr creates a deep clone of the input.
 func (c cow) COWRefOfXorExpr(n *XorExpr) (*XorExpr, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Left = c.COWExpr(n.Left)
-	out.Right = c.COWExpr(n.Right)
-	return &out
+	Left, changedLeft := c.COWExpr(n.Left)
+	Right, changedRight := c.COWExpr(n.Right)
+	if changedLeft || changedRight {
+		out := *n
+		out.Left = Left
+		out.Right = Right
+		return &out, true
+	}
+	return n, false
 }
 
 // COWAggrFunc creates a deep clone of the input.
@@ -3924,12 +4911,8 @@ func COWSliceOfRefOfColumnDefinition(n []*ColumnDefinition) []*ColumnDefinition 
 }
 
 // COWRefOfBool creates a deep clone of the input.
-func COWRefOfBool(n *bool) *bool {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
+func (c cow) COWRefOfBool(n *bool) (*bool, bool) {
+	return n, false
 }
 
 // COWSliceOfDatabaseOption creates a deep clone of the input.
@@ -3998,20 +4981,33 @@ func COWColumnType(n ColumnType) ColumnType {
 // COWRefOfColumnTypeOptions creates a deep clone of the input.
 func (c cow) COWRefOfColumnTypeOptions(n *ColumnTypeOptions) (*ColumnTypeOptions, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Null = c.COWRefOfBool(n.Null)
-	out.Default = c.COWExpr(n.Default)
-	out.OnUpdate = c.COWExpr(n.OnUpdate)
-	out.As = c.COWExpr(n.As)
-	out.Comment = c.COWRefOfLiteral(n.Comment)
-	out.Reference = c.COWRefOfReferenceDefinition(n.Reference)
-	out.Invisible = c.COWRefOfBool(n.Invisible)
-	out.EngineAttribute = c.COWRefOfLiteral(n.EngineAttribute)
-	out.SecondaryEngineAttribute = c.COWRefOfLiteral(n.SecondaryEngineAttribute)
-	out.SRID = c.COWRefOfLiteral(n.SRID)
-	return &out
+	Null, changedNull := c.COWRefOfBool(n.Null)
+	Default, changedDefault := c.COWExpr(n.Default)
+	OnUpdate, changedOnUpdate := c.COWExpr(n.OnUpdate)
+	As, changedAs := c.COWExpr(n.As)
+	Comment, changedComment := c.COWRefOfLiteral(n.Comment)
+	Reference, changedReference := c.COWRefOfReferenceDefinition(n.Reference)
+	Invisible, changedInvisible := c.COWRefOfBool(n.Invisible)
+	EngineAttribute, changedEngineAttribute := c.COWRefOfLiteral(n.EngineAttribute)
+	SecondaryEngineAttribute, changedSecondaryEngineAttribute := c.COWRefOfLiteral(n.SecondaryEngineAttribute)
+	SRID, changedSRID := c.COWRefOfLiteral(n.SRID)
+	if changedNull || changedDefault || changedOnUpdate || changedAs || changedComment || changedReference || changedInvisible || changedEngineAttribute || changedSecondaryEngineAttribute || changedSRID {
+		out := *n
+		out.Null = Null
+		out.Default = Default
+		out.OnUpdate = OnUpdate
+		out.As = As
+		out.Comment = Comment
+		out.Reference = Reference
+		out.Invisible = Invisible
+		out.EngineAttribute = EngineAttribute
+		out.SecondaryEngineAttribute = SecondaryEngineAttribute
+		out.SRID = SRID
+		return &out, true
+	}
+	return n, false
 }
 
 // COWColumnCharset creates a deep clone of the input.
@@ -4044,19 +5040,17 @@ func COWSliceOfRefOfVariable(n []*Variable) []*Variable {
 // COWRefOfIdentifierCI creates a deep clone of the input.
 func (c cow) COWRefOfIdentifierCI(n *IdentifierCI) (*IdentifierCI, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfIdentifierCS creates a deep clone of the input.
 func (c cow) COWRefOfIdentifierCS(n *IdentifierCS) (*IdentifierCS, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWSliceOfRefOfIndexColumn creates a deep clone of the input.
@@ -4110,12 +5104,17 @@ func COWSliceOfRefOfJSONObjectParam(n []*JSONObjectParam) []*JSONObjectParam {
 // COWRefOfJSONObjectParam creates a deep clone of the input.
 func (c cow) COWRefOfJSONObjectParam(n *JSONObjectParam) (*JSONObjectParam, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Key = c.COWExpr(n.Key)
-	out.Value = c.COWExpr(n.Value)
-	return &out
+	Key, changedKey := c.COWExpr(n.Key)
+	Value, changedValue := c.COWExpr(n.Value)
+	if changedKey || changedValue {
+		out := *n
+		out.Key = Key
+		out.Value = Value
+		return &out, true
+	}
+	return n, false
 }
 
 // COWSliceOfRefOfJtColumnDefinition creates a deep clone of the input.
@@ -4133,36 +5132,53 @@ func COWSliceOfRefOfJtColumnDefinition(n []*JtColumnDefinition) []*JtColumnDefin
 // COWRefOfJtOrdinalColDef creates a deep clone of the input.
 func (c cow) COWRefOfJtOrdinalColDef(n *JtOrdinalColDef) (*JtOrdinalColDef, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	if changedName {
+		out := *n
+		out.Name = Name
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJtPathColDef creates a deep clone of the input.
 func (c cow) COWRefOfJtPathColDef(n *JtPathColDef) (*JtPathColDef, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCI(n.Name)
-	out.Type = c.COWColumnType(n.Type)
-	out.Path = c.COWExpr(n.Path)
-	out.EmptyOnResponse = c.COWRefOfJtOnResponse(n.EmptyOnResponse)
-	out.ErrorOnResponse = c.COWRefOfJtOnResponse(n.ErrorOnResponse)
-	return &out
+	Name, changedName := c.COWIdentifierCI(n.Name)
+	Type, changedType := c.COWColumnType(n.Type)
+	Path, changedPath := c.COWExpr(n.Path)
+	EmptyOnResponse, changedEmptyOnResponse := c.COWRefOfJtOnResponse(n.EmptyOnResponse)
+	ErrorOnResponse, changedErrorOnResponse := c.COWRefOfJtOnResponse(n.ErrorOnResponse)
+	if changedName || changedType || changedPath || changedEmptyOnResponse || changedErrorOnResponse {
+		out := *n
+		out.Name = Name
+		out.Type = Type
+		out.Path = Path
+		out.EmptyOnResponse = EmptyOnResponse
+		out.ErrorOnResponse = ErrorOnResponse
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfJtNestedPathColDef creates a deep clone of the input.
 func (c cow) COWRefOfJtNestedPathColDef(n *JtNestedPathColDef) (*JtNestedPathColDef, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Path = c.COWExpr(n.Path)
-	out.Columns = c.COWSliceOfRefOfJtColumnDefinition(n.Columns)
-	return &out
+	Path, changedPath := c.COWExpr(n.Path)
+	Columns, changedColumns := c.COWSliceOfRefOfJtColumnDefinition(n.Columns)
+	if changedPath || changedColumns {
+		out := *n
+		out.Path = Path
+		out.Columns = Columns
+		return &out, true
+	}
+	return n, false
 }
 
 // COWTableAndLockTypes creates a deep clone of the input.
@@ -4202,12 +5218,8 @@ func COWComments(n Comments) Comments {
 }
 
 // COWRefOfInt creates a deep clone of the input.
-func COWRefOfInt(n *int) *int {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	return &out
+func (c cow) COWRefOfInt(n *int) (*int, bool) {
+	return n, false
 }
 
 // COWSliceOfRefOfPartitionDefinition creates a deep clone of the input.
@@ -4237,11 +5249,15 @@ func COWSliceOfRefOfRenameTablePair(n []*RenameTablePair) []*RenameTablePair {
 // COWRefOfRootNode creates a deep clone of the input.
 func (c cow) COWRefOfRootNode(n *RootNode) (*RootNode, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.SQLNode = c.COWSQLNode(n.SQLNode)
-	return &out
+	SQLNode, changedSQLNode := c.COWSQLNode(n.SQLNode)
+	if changedSQLNode {
+		out := *n
+		out.SQLNode = SQLNode
+		return &out, true
+	}
+	return n, false
 }
 
 // COWSliceOfTableExpr creates a deep clone of the input.
@@ -4259,23 +5275,33 @@ func COWSliceOfTableExpr(n []TableExpr) []TableExpr {
 // COWRefOfTableName creates a deep clone of the input.
 func (c cow) COWRefOfTableName(n *TableName) (*TableName, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Name = c.COWIdentifierCS(n.Name)
-	out.Qualifier = c.COWIdentifierCS(n.Qualifier)
-	return &out
+	Name, changedName := c.COWIdentifierCS(n.Name)
+	Qualifier, changedQualifier := c.COWIdentifierCS(n.Qualifier)
+	if changedName || changedQualifier {
+		out := *n
+		out.Name = Name
+		out.Qualifier = Qualifier
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfTableOption creates a deep clone of the input.
 func (c cow) COWRefOfTableOption(n *TableOption) (*TableOption, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Value = c.COWRefOfLiteral(n.Value)
-	out.Tables = c.COWTableNames(n.Tables)
-	return &out
+	Value, changedValue := c.COWRefOfLiteral(n.Value)
+	Tables, changedTables := c.COWTableNames(n.Tables)
+	if changedValue || changedTables {
+		out := *n
+		out.Value = Value
+		out.Tables = Tables
+		return &out, true
+	}
+	return n, false
 }
 
 // COWSliceOfRefOfIndexDefinition creates a deep clone of the input.
@@ -4305,11 +5331,15 @@ func COWSliceOfRefOfConstraintDefinition(n []*ConstraintDefinition) []*Constrain
 // COWRefOfVindexParam creates a deep clone of the input.
 func (c cow) COWRefOfVindexParam(n *VindexParam) (*VindexParam, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Key = c.COWIdentifierCI(n.Key)
-	return &out
+	Key, changedKey := c.COWIdentifierCI(n.Key)
+	if changedKey {
+		out := *n
+		out.Key = Key
+		return &out, true
+	}
+	return n, false
 }
 
 // COWSliceOfVindexParam creates a deep clone of the input.
@@ -4344,60 +5374,77 @@ func COWDatabaseOption(n DatabaseOption) DatabaseOption {
 // COWRefOfColumnCharset creates a deep clone of the input.
 func (c cow) COWRefOfColumnCharset(n *ColumnCharset) (*ColumnCharset, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }
 
 // COWRefOfIndexColumn creates a deep clone of the input.
 func (c cow) COWRefOfIndexColumn(n *IndexColumn) (*IndexColumn, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Column = c.COWIdentifierCI(n.Column)
-	out.Length = c.COWRefOfLiteral(n.Length)
-	out.Expression = c.COWExpr(n.Expression)
-	return &out
+	Column, changedColumn := c.COWIdentifierCI(n.Column)
+	Length, changedLength := c.COWRefOfLiteral(n.Length)
+	Expression, changedExpression := c.COWExpr(n.Expression)
+	if changedColumn || changedLength || changedExpression {
+		out := *n
+		out.Column = Column
+		out.Length = Length
+		out.Expression = Expression
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfIndexOption creates a deep clone of the input.
 func (c cow) COWRefOfIndexOption(n *IndexOption) (*IndexOption, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Value = c.COWRefOfLiteral(n.Value)
-	return &out
+	Value, changedValue := c.COWRefOfLiteral(n.Value)
+	if changedValue {
+		out := *n
+		out.Value = Value
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfTableAndLockType creates a deep clone of the input.
 func (c cow) COWRefOfTableAndLockType(n *TableAndLockType) (*TableAndLockType, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.Table = c.COWTableExpr(n.Table)
-	return &out
+	Table, changedTable := c.COWTableExpr(n.Table)
+	if changedTable {
+		out := *n
+		out.Table = Table
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfRenameTablePair creates a deep clone of the input.
 func (c cow) COWRefOfRenameTablePair(n *RenameTablePair) (*RenameTablePair, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	out.FromTable = c.COWTableName(n.FromTable)
-	out.ToTable = c.COWTableName(n.ToTable)
-	return &out
+	FromTable, changedFromTable := c.COWTableName(n.FromTable)
+	ToTable, changedToTable := c.COWTableName(n.ToTable)
+	if changedFromTable || changedToTable {
+		out := *n
+		out.FromTable = FromTable
+		out.ToTable = ToTable
+		return &out, true
+	}
+	return n, false
 }
 
 // COWRefOfDatabaseOption creates a deep clone of the input.
 func (c cow) COWRefOfDatabaseOption(n *DatabaseOption) (*DatabaseOption, bool) {
 	if n == nil {
-		return nil
+		return nil, false
 	}
-	out := *n
-	return &out
+	return n, false
 }

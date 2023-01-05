@@ -200,10 +200,8 @@ func (c *cowGen) ptrToOtherMethod(t types.Type, ptr *types.Pointer, spi generato
 
 	funcName := cowName + printableTypeName(t)
 	c.addFunc(funcName,
-		jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
-			ifNilReturnNil("n"),
-			jen.Id("out").Op(":=").Add(c.readValueOfType(ptr.Elem(), jen.Op("*").Id("n"), spi)),
-			jen.Return(jen.Op("&").Id("out")),
+		jen.Func().Params(jen.Id("c").Id("cow")).Id(funcName).Call(jen.Id("n").Id(receiveType)).Params(jen.Id(receiveType), jen.Id("bool")).Block(
+			jen.Return(jen.Id("n"), jen.False()),
 		))
 	return nil
 }
@@ -216,29 +214,45 @@ func (c *cowGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi genera
 	funcDeclaration := jen.Func().Params(jen.Id("c").Id("cow")).Id(funcName).Call(jen.Id("n").Id(receiveType)).Params(jen.Id(receiveType), jen.Id("bool"))
 
 	var fields []jen.Code
+	var cond *jen.Statement
+	fieldSetters := []jen.Code{
+		jen.Id("out").Op(":=").Op("*").Id("n"),
+	}
 	for i := 0; i < strct.NumFields(); i++ {
 		field := strct.Field(i)
 		if isBasic(field.Type()) || strings.HasPrefix(field.Name(), "_") {
 			continue
 		}
-		// out.Field = CloneType(n.Field)
+		// Field, changedField := c.COWType(n.Field)
 		fields = append(fields,
-			jen.Id("out").Dot(field.Name()).Op("=").Add(c.readValueOfType(field.Type(), jen.Id("n").Dot(field.Name()), spi)))
+			jen.List(jen.Id(field.Name()), jen.Id("changed"+field.Name())).Op(":=").Add(c.readValueOfType(field.Type(), jen.Id("n").Dot(field.Name()), spi)))
+
+		if cond == nil {
+			cond = jen.Id("changed" + field.Name())
+		} else {
+			cond = cond.Op("||").Add(jen.Id("changed" + field.Name()))
+		}
+
+		fieldSetters = append(fieldSetters, jen.Id("out").Dot(field.Name()).Op("=").Id(field.Name()))
 	}
 
+	fieldSetters = append(fieldSetters, jen.Return(jen.Op("&").Id("out"), jen.True()))
+	ifChanged := jen.If(cond).Block(fieldSetters...)
+
 	stmts := []jen.Code{
-		// if n == nil { return nil }
-		ifNilReturnNil("n"),
-		// 	out := *n
-		jen.Id("out").Op(":=").Op("*").Id("n"),
+		// if n == nil { return nil, false }
+		ifNilReturnNilAndFalse("n"),
 	}
 
 	// handle all fields with CloneAble types
 	stmts = append(stmts, fields...)
+	if len(fieldSetters) > 2 /*we add two statements always*/ {
+		stmts = append(stmts, ifChanged)
+	}
 
 	stmts = append(stmts,
-		// return &out
-		jen.Return(jen.Op("&").Id("out")),
+		// return n, false
+		jen.Return(jen.Id("n"), jen.False()),
 	)
 
 	c.addFunc(funcName, funcDeclaration.Block(stmts...))
