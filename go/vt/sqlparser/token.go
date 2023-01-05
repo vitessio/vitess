@@ -256,6 +256,7 @@ var keywords = map[string]int{
 	"distinct":                      DISTINCT,
 	"distinctrow":                   DISTINCTROW,
 	"div":                           DIV,
+	"do":                            DO,
 	"double":                        DOUBLE,
 	"drop":                          DROP,
 	"dual":                          DUAL,
@@ -618,6 +619,7 @@ var keywords = map[string]int{
 	"unique":                        UNIQUE,
 	"unlock":                        UNLOCK,
 	"unsigned":                      UNSIGNED,
+	"until":                         UNTIL,
 	"update":                        UPDATE,
 	"usage":                         USAGE,
 	"use":                           USE,
@@ -1021,9 +1023,19 @@ func (tkn *Tokenizer) scanBindVar() (int, []byte) {
 		buffer.WriteByte(byte(tkn.lastChar))
 		tkn.next()
 	}
-	// Due to the way this is written to handle bindings, it includes the colon on the LOOP keyword, so this is a workaround
-	if buffer.Len() == 5 && strings.ToLower(string(buffer.Bytes())) == ":loop" {
-		return LOOP, []byte("LOOP")
+	// Due to the way this is written to handle bindings, it includes the colon on keywords.
+	// This is an issue when it comes to labels, so this is a workaround.
+	if buffer.Len() >= 5 && buffer.Bytes()[0] == ':' {
+		switch strings.ToLower(string(buffer.Bytes())) {
+		case ":begin":
+			return BEGIN, []byte("BEGIN")
+		case ":loop":
+			return LOOP, []byte("LOOP")
+		case ":repeat":
+			return REPEAT, []byte("REPEAT")
+		case ":while":
+			return WHILE, []byte("WHILE")
+		}
 	}
 	return token, buffer.Bytes()
 }

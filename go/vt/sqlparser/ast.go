@@ -405,7 +405,10 @@ func (*OpenCursor) iStatement()        {}
 func (*CloseCursor) iStatement()       {}
 func (*FetchCursor) iStatement()       {}
 func (*Loop) iStatement()              {}
+func (*Repeat) iStatement()            {}
+func (*While) iStatement()             {}
 func (*Leave) iStatement()             {}
+func (*Return) iStatement()            {}
 func (*Iterate) iStatement()           {}
 func (*Call) iStatement()              {}
 func (*Load) iStatement()              {}
@@ -880,11 +883,16 @@ func (node *Lines) Format(buf *TrackedBuffer) {
 
 // BeginEndBlock represents a BEGIN .. END block with one or more statements nested within
 type BeginEndBlock struct {
+	Label      string
 	Statements Statements
 }
 
 func (b *BeginEndBlock) Format(buf *TrackedBuffer) {
-	buf.Myprintf("begin\n")
+	if len(b.Label) == 0 {
+		buf.Myprintf("begin\n")
+	} else {
+		buf.Myprintf("%s: begin\n", b.Label)
+	}
 	for _, s := range b.Statements {
 		buf.Myprintf("%v;\n", s)
 	}
@@ -1240,6 +1248,73 @@ func (l *Loop) walkSubtree(visit Visit) error {
 	return nil
 }
 
+// Repeat represents the REPEAT statement
+type Repeat struct {
+	Label      string
+	Condition  Expr
+	Statements Statements
+}
+
+// Format implements the interface SQLNode.
+func (r *Repeat) Format(buf *TrackedBuffer) {
+	if len(r.Label) == 0 {
+		buf.Myprintf("repeat\n")
+	} else {
+		buf.Myprintf("%s: repeat\n", r.Label)
+	}
+	for _, s := range r.Statements {
+		buf.Myprintf("%v;\n", s)
+	}
+	buf.Myprintf("until %v\n", r.Condition)
+	buf.Myprintf("end repeat")
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (r *Repeat) walkSubtree(visit Visit) error {
+	if r == nil {
+		return nil
+	}
+	for _, s := range r.Statements {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// While represents the WHILE statement
+type While struct {
+	Label      string
+	Condition  Expr
+	Statements Statements
+}
+
+// Format implements the interface SQLNode.
+func (w *While) Format(buf *TrackedBuffer) {
+	label := ""
+	if len(w.Label) > 0 {
+		label = fmt.Sprintf("%s: ", w.Label)
+	}
+	buf.Myprintf("%swhile %v do\n", label, w.Condition)
+	for _, s := range w.Statements {
+		buf.Myprintf("%v;\n", s)
+	}
+	buf.Myprintf("end while")
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (w *While) walkSubtree(visit Visit) error {
+	if w == nil {
+		return nil
+	}
+	for _, s := range w.Statements {
+		if err := Walk(visit, s); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Leave represents the LEAVE statement
 type Leave struct {
 	Label string
@@ -1252,6 +1327,21 @@ func (l *Leave) Format(buf *TrackedBuffer) {
 
 // walkSubtree implements the interface WalkableSQLNode.
 func (l *Leave) walkSubtree(visit Visit) error {
+	return nil
+}
+
+// Return represents the RETURN statement
+type Return struct {
+	Expr Expr
+}
+
+// Format implements the interface SQLNode.
+func (r *Return) Format(buf *TrackedBuffer) {
+	buf.Myprintf("return %v", r.Expr)
+}
+
+// walkSubtree implements the interface WalkableSQLNode.
+func (r *Return) walkSubtree(visit Visit) error {
 	return nil
 }
 
