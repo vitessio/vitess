@@ -31,7 +31,7 @@ import (
 	"golang.org/x/tools/go/packages"
 )
 
-const licenseFileHeader = `Copyright 2021 The Vitess Authors.
+const licenseFileHeader = `Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -244,6 +244,7 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		newCloneGen(pName, &options.Clone),
 		newVisitGen(pName),
 		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
+		newCOWGen(pName),
 	)
 
 	it, err := generator.GenerateCode()
