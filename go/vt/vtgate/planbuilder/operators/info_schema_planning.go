@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -34,26 +35,46 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type infoSchemaRouting struct {
-	// The following two fields are used when routing information_schema queries
+type InfoSchemaRouting struct {
+	// The following two fields are used when Routing information_schema queries
 	SysTableTableSchema []evalengine.Expr
 	SysTableTableName   map[string]evalengine.Expr
+	Table               *QueryTable
 }
 
-func (isr *infoSchemaRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (isr *InfoSchemaRouting) CanMerge(r Routing) bool {
+	other, ok := r.(*InfoSchemaRouting)
+	if !ok {
+		return false
+	}
+	if len(isr.SysTableTableSchema) == 0 || len(other.SysTableTableSchema) == 0 {
+		// one or both of the routings need to be handled with UNIONs and can't be merged
+		return false
+	}
+	for _, lhs := range isr.SysTableTableSchema {
+		for _, rhs := range other.SysTableTableSchema {
+			// here we should be comparing predicates and making sure we can merge these two
+			fmt.Println(lhs)
+			fmt.Println(rhs)
+		}
+	}
+	return true
+}
+
+func (isr *InfoSchemaRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = isr.SysTableTableSchema
 	rp.SysTableTableSchema = isr.SysTableTableSchema
 }
 
-func (isr *infoSchemaRouting) Clone() routing {
-	return &infoSchemaRouting{
+func (isr *InfoSchemaRouting) Clone() Routing {
+	return &InfoSchemaRouting{
 		SysTableTableSchema: slices.Clone(isr.SysTableTableSchema),
 		SysTableTableName:   maps.Clone(isr.SysTableTableName),
 	}
 }
 
-func (isr *infoSchemaRouting) Merge(other routing) routing {
-	otherIsr, isIsr := other.(*infoSchemaRouting)
+func (isr *InfoSchemaRouting) Merge(other Routing) Routing {
+	otherIsr, isIsr := other.(*InfoSchemaRouting)
 	if !isIsr {
 		panic(42)
 	}
@@ -61,11 +82,29 @@ func (isr *infoSchemaRouting) Merge(other routing) routing {
 	for k, v := range otherIsr.SysTableTableName {
 		systableName[k] = v
 	}
-	newIsr := &infoSchemaRouting{
+	newIsr := &InfoSchemaRouting{
 		SysTableTableSchema: append(slices.Clone(isr.SysTableTableSchema), otherIsr.SysTableTableSchema...),
 		SysTableTableName:   systableName,
 	}
 	return newIsr
+}
+
+func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
+	if err != nil || out == nil {
+		return err
+	}
+
+	if isr.SysTableTableName == nil {
+		isr.SysTableTableName = map[string]evalengine.Expr{}
+	}
+
+	if isTableSchema {
+		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
+	} else {
+		isr.SysTableTableName[bvName] = out
+	}
+	return nil
 }
 
 func createInfSchemaPhysOp(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
@@ -73,25 +112,20 @@ func createInfSchemaPhysOp(ctx *plancontext.PlanningContext, table *QueryTable) 
 	if err != nil {
 		return nil, err
 	}
-	schemaNameExprs, tableNameExprs, err := findApplicablePredicates(ctx, table.Predicates)
+
+	route, err := createInfoSchemaRoute(table, ks)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(schemaNameExprs) > 0 {
-		// we have at least one predicate that we can use to send the query to the correct KS
-		return sendToSingleKS(table, ks, tableNameExprs, schemaNameExprs)
+	for _, p := range table.Predicates {
+		route, err = route.AddPredicate(ctx, p)
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	nameFor := schemaColNameFor(table.Table.Name.String())
-	if nameFor == "" {
-		// This table doesn't have a column that contains the schema/keyspace name.
-		// we can send the query to any keyspace, and it will hopefully return something useful
-		return sendToArbitraryKeyspace(ctx, table)
-	}
-
-	// we have to concatenate results from all keyspaces
-	return createInfSchemaUnion(ctx, table, nameFor, schemaNameExprs, tableNameExprs)
+	return route, err
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
@@ -154,7 +188,7 @@ func findApplicablePredicates(
 			return nil, nil, err
 		}
 		if out == nil {
-			// we didn't find a predicate to use for routing, continue to look for next predicate
+			// we didn't find a predicate to use for Routing, continue to look for next predicate
 			continue
 		}
 
@@ -165,58 +199,6 @@ func findApplicablePredicates(
 		}
 	}
 	return
-}
-
-func createInfSchemaUnion(
-	ctx *plancontext.PlanningContext,
-	table *QueryTable,
-	nameFor string,
-	schemaNameExprs []evalengine.Expr,
-	tableNameExprs map[string]evalengine.Expr,
-) (ops.Operator, error) {
-	// We don't have enough info to send the query to a single keyspace, so we have to create a UNION.
-	// We're basically changing a query like this:
-	// Original: SELECT TABLE_NAME from information_schema.tables
-	// Plan:
-	// vtgate-union:
-	// 	 KS0: SELECT TABLE_NAME from information_schema.tables
-	//   KS1: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
-	// 	 KS2: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
-	keyspaces, err := ctx.VSchema.AllKeyspaces()
-	if err != nil {
-		return nil, err
-	}
-	var routes []ops.Operator
-
-	for i, ks := range keyspaces {
-		tbl := &Table{
-			QTable: table,
-			VTable: &vindexes.Table{
-				Name:     table.Table.Name,
-				Keyspace: ks,
-			},
-		}
-
-		var route ops.Operator = &Route{
-			RouteOpCode:         engine.DBA,
-			Source:              tbl,
-			Keyspace:            ks,
-			SysTableTableName:   tableNameExprs,
-			SysTableTableSchema: schemaNameExprs,
-		}
-		if i > 0 {
-			route, err = route.AddPredicate(ctx, schemaNameComparison(nameFor))
-			if err != nil {
-				return nil, err
-			}
-		}
-		routes = append(routes, route)
-	}
-	union := &Union{
-		Sources:  routes,
-		Distinct: false,
-	}
-	return union, nil
 }
 
 var (
@@ -323,7 +305,7 @@ func isTableNameCol(col *sqlparser.ColName) bool {
 	return col.Name.EqualString("table_name") || col.Name.EqualString("referenced_table_name")
 }
 
-func schemaColNames() map[string][]string {
+func SchemaColNames() map[string][]string {
 	version := servenv.MySQLServerVersion()
 	if strings.HasPrefix(version, "5.7") {
 		return schemaColName57
@@ -350,10 +332,11 @@ func sendToArbitraryKeyspace(ctx *plancontext.PlanningContext, table *QueryTable
 			},
 		},
 		Keyspace: ks,
+		Routing:  &InfoSchemaRouting{},
 	}, nil
 }
 
-func sendToSingleKS(table *QueryTable, ks *vindexes.Keyspace, SysTableTableName map[string]evalengine.Expr, SysTableTableSchema []evalengine.Expr) (ops.Operator, error) {
+func createInfoSchemaRoute(table *QueryTable, ks *vindexes.Keyspace) (ops.Operator, error) {
 	// if we have enough info to send the query to a single keyspace,
 	// we create a single route and are done with it
 	return &Route{
@@ -365,14 +348,13 @@ func sendToSingleKS(table *QueryTable, ks *vindexes.Keyspace, SysTableTableName 
 				Keyspace: ks,
 			},
 		},
-		Keyspace:            ks,
-		SysTableTableName:   SysTableTableName,
-		SysTableTableSchema: SysTableTableSchema,
+		Keyspace: ks,
+		Routing:  &InfoSchemaRouting{Table: table},
 	}, nil
 }
 
 func schemaColNameFor(tableName string) string {
-	cols := schemaColNames()[strings.ToUpper(tableName)]
+	cols := SchemaColNames()[strings.ToUpper(tableName)]
 	if len(cols) > 0 {
 		return cols[0]
 	}

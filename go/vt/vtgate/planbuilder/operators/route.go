@@ -44,12 +44,12 @@ type (
 		// the best option available is stored here
 		Selected *VindexOption
 
-		// The following two fields are used when routing information_schema queries
+		// The following two fields are used when Routing information_schema queries
 		SysTableTableSchema []evalengine.Expr
 		SysTableTableName   map[string]evalengine.Expr
 
-		// SeenPredicates contains all the predicates that have had a chance to influence routing.
-		// If we need to replan routing, we'll use this list
+		// SeenPredicates contains all the predicates that have had a chance to influence Routing.
+		// If we need to replan Routing, we'll use this list
 		SeenPredicates []sqlparser.Expr
 
 		// TargetDestination specifies an explicit target destination tablet type
@@ -62,17 +62,17 @@ type (
 		// Routes that have been merged into this one.
 		MergedWith []*Route
 
-		Routing routing
+		Routing Routing
 	}
 
-	routing interface {
+	Routing interface {
 		UpdateRoutingParams(rp *engine.RoutingParameters)
-		Merge(other routing) routing
-		Clone() routing
-		//UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+		Merge(other Routing) Routing
+		Clone() Routing
+		UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+		CanMerge(other Routing) bool
 		//AddQueryTablePredicates(ctx *plancontext.PlanningContext, qt *QueryTable) error
 		//OpCode() engine.Opcode
-		//CanMerge(other routing) bool
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -155,6 +155,12 @@ func (r *Route) Inputs() []ops.Operator {
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	r.SeenPredicates = append(r.SeenPredicates, expr)
+	if r.Routing != nil {
+		err := r.Routing.UpdateRoutingLogic(ctx, expr)
+		if err != nil {
+			return err
+		}
+	}
 	return r.tryImprovingVindex(ctx, expr)
 }
 
@@ -613,7 +619,7 @@ func (r *Route) planCompositeInOpRecursive(
 }
 
 // Reset all vindex predicates on this route and re-build their options from
-// the list of seen routing predicates.
+// the list of seen Routing predicates.
 func (r *Route) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	switch r.RouteOpCode {
 	case engine.DBA, engine.Next, engine.Reference, engine.Unsharded:

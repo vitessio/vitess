@@ -190,6 +190,34 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *operators.Delete:
 		return transformDeletePlan(ctx, op, src)
 	}
+
+	if op.Routing != nil {
+		switch routing := op.Routing.(type) {
+		case *operators.InfoSchemaRouting:
+			if len(routing.SysTableTableSchema) > 0 {
+				// we have at least one predicate that we can use to send the query to the correct KS
+				return sendToSingleKS(ctx, op)
+			}
+
+			nameFor := schemaColNameFor(routing.Table.Table.Name.String())
+			if nameFor == "" {
+				// This table doesn't have a column that contains the schema/keyspace name.
+				// we can send the query to any keyspace, and it will hopefully return something useful
+				keyspace, err := ctx.VSchema.AnyKeyspace()
+				if err != nil {
+					return nil, err
+				}
+				op.Keyspace = keyspace
+				return sendToSingleKS(ctx, op)
+			}
+
+			// we have to concatenate results from all keyspaces
+			return createInfSchemaUnion(ctx, op, routing.Table)
+
+		default:
+			panic("unknown routing")
+		}
+	}
 	condition := getVindexPredicate(ctx, op)
 	sel, needsKS, err := operators.ToSQL(ctx, op)
 	if err != nil {
@@ -206,7 +234,90 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		tables:    operators.TableID(op),
 		condition: condition,
 	}, nil
+}
 
+func createInfSchemaUnion(ctx *plancontext.PlanningContext, op *operators.Route, queryTable *operators.QueryTable) (logicalPlan, error) {
+	// We don't have enough info to send the query to a single keyspace, so we have to create a UNION.
+	// The first query in the UNION will return information about a specific keyspace, and all the other rows
+	// in the info_schema table, rows for databases such as `sys`, `information_schema`, `performance_schema` et al
+	// The other queries in the UNION will only return rows specific to the keyspace they are running on
+	// We're basically changing a query like this:
+	// Original: SELECT TABLE_NAME from information_schema.tables
+	// Plan will be a vtgate-union:
+	// 	 KS0: SELECT TABLE_NAME from information_schema.tables
+	//   KS1: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
+	// 	 KS2: SELECT TABLE_NAME from information_schema.tables WHERE TABLE_SCHEMA = :__vtschemaname
+	keyspaces, err := ctx.VSchema.AllKeyspaces()
+	if err != nil {
+		return nil, err
+	}
+	var srcs []logicalPlan
+	nameFor := schemaColNameFor(queryTable.Table.Name.String())
+	cmp := schemaNameComparison(nameFor)
+	for i, ks := range keyspaces {
+		clone := operators.Clone(op).(*operators.Route)
+		clone.Keyspace = ks
+
+		if i > 0 {
+			newSrc, err := clone.Source.AddPredicate(ctx, cmp)
+			if err != nil {
+				return nil, err
+			}
+			clone.Source = newSrc
+		}
+
+		sel, needsKS, err := operators.ToSQL(ctx, clone)
+		if err != nil {
+			return nil, err
+		}
+		replaceSubQuery(ctx, sel)
+		eroute, err := routeToEngineRoute(ctx, clone, needsKS)
+		if err != nil {
+			return nil, err
+		}
+		srcs = append(srcs, &routeGen4{
+			Select: sel,
+			eroute: eroute,
+			tables: operators.TableID(clone),
+		})
+	}
+	result := &concatenateGen4{
+		sources: srcs,
+	}
+	return result, nil
+}
+
+func schemaNameComparison(colName string) sqlparser.Expr {
+	return &sqlparser.ComparisonExpr{
+		Operator: sqlparser.EqualOp,
+		Left:     sqlparser.NewColName(colName),
+		Right:    sqlparser.Argument(sqltypes.BvSchemaName),
+	}
+}
+
+func sendToSingleKS(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
+	sel, needsKS, err := operators.ToSQL(ctx, op)
+	if err != nil {
+		return nil, err
+	}
+	replaceSubQuery(ctx, sel)
+	eroute, err := routeToEngineRoute(ctx, op, needsKS)
+	if err != nil {
+		return nil, err
+	}
+	return &routeGen4{
+		Select: sel,
+		eroute: eroute,
+		tables: operators.TableID(op),
+	}, nil
+}
+
+func schemaColNameFor(tableName string) string {
+	cols := operators.SchemaColNames()[strings.ToUpper(tableName)]
+	if len(cols) > 0 {
+		return cols[0]
+	}
+	return ""
 }
 
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {

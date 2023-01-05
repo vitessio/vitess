@@ -48,7 +48,7 @@ func (h *Horizon) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 func (h *Horizon) Clone(inputs []ops.Operator) ops.Operator {
 	return &Horizon{
 		Source: inputs[0],
-		Select: h.Select,
+		Select: sqlparser.CloneSelectStatement(h.Select),
 	}
 }
 

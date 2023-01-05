@@ -62,8 +62,6 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 			return optimizeSubQuery(ctx, op)
 		case *Filter:
 			return optimizeFilter(op)
-		case *Horizon:
-			return optimizeHorizon(op)
 		default:
 			return operator, rewrite.SameTree, nil
 		}
@@ -86,35 +84,35 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 	return Compact(ctx, op)
 }
 
-func optimizeHorizon(op *Horizon) (ops.Operator, rewrite.TreeIdentity, error) {
-	/*
-		Horizon being on top of a Union can only happen for information schema tables.
-		So, the first check we do is to see if the source of the Horizon is a Union or not.
-		We then want the horizon to be copied to all the routes under the Union for information schema tables and then remove the original.
-		This is required for the remaining planning process to work properly, which assumes that each route will have
-		a horizon on top of it.
-	*/
-	union, ok := op.Source.(*Union)
-	if !ok {
-		return op, rewrite.SameTree, nil
-	}
-
-	var newSrcs []ops.Operator
-	for _, src := range union.Sources {
-		_, ok = src.(*Route)
-		if !ok {
-			return op, rewrite.SameTree, nil
-		}
-
-		newSrcs = append(newSrcs, &Horizon{
-			Source: src,
-			Select: sqlparser.CloneSelectStatement(op.Select),
-		})
-	}
-
-	union.Sources = newSrcs
-	return union, rewrite.NewTree, nil
-}
+//func optimizeHorizon(op *Horizon) (ops.Operator, rewrite.TreeIdentity, error) {
+//	/*
+//		Horizon being on top of a Union can only happen for information schema tables.
+//		So, the first check we do is to see if the source of the Horizon is a Union or not.
+//		We then want the horizon to be copied to all the routes under the Union for information schema tables and then remove the original.
+//		This is required for the remaining planning process to work properly, which assumes that each route will have
+//		a horizon on top of it.
+//	*/
+//	union, ok := op.Source.(*Union)
+//	if !ok {
+//		return op, rewrite.SameTree, nil
+//	}
+//
+//	var newSrcs []ops.Operator
+//	for _, src := range union.Sources {
+//		_, ok = src.(*Route)
+//		if !ok {
+//			return op, rewrite.SameTree, nil
+//		}
+//
+//		newSrcs = append(newSrcs, &Horizon{
+//			Source: src,
+//			Select: sqlparser.CloneSelectStatement(op.Select),
+//		})
+//	}
+//
+//	union.Sources = newSrcs
+//	return union, rewrite.NewTree, nil
+//}
 
 func optimizeFilter(op *Filter) (ops.Operator, rewrite.TreeIdentity, error) {
 	if route, ok := op.Source.(*Route); ok {
@@ -498,6 +496,12 @@ func tryMerge(
 ) (ops.Operator, error) {
 	aRoute, bRoute := operatorsToRoutes(Clone(a), Clone(b))
 	if aRoute == nil || bRoute == nil {
+		return nil, nil
+	}
+
+	if aRoute.Routing != nil &&
+		bRoute.Routing != nil &&
+		!aRoute.Routing.CanMerge(bRoute.Routing) {
 		return nil, nil
 	}
 

@@ -107,10 +107,10 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	}
 
 	// When merging an inner query with its outer query, we can remove the
-	// inner query from the list of predicates that can influence routing of
+	// inner query from the list of predicates that can influence Routing of
 	// the outer query.
 	//
-	// Note that not all inner queries necessarily are part of the routing
+	// Note that not all inner queries necessarily are part of the Routing
 	// predicates list, so this might be a no-op.
 	subQueryWasPredicate := false
 	for i, predicate := range outer.SeenPredicates {
@@ -132,7 +132,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 
 	if subQueryWasPredicate {
 		// Copy Vindex predicates from the inner route to the upper route.
-		// If we can route based on some of these predicates, the routing can improve
+		// If we can route based on some of these predicates, the Routing can improve
 		outer.VindexPreds = append(outer.VindexPreds, inner.VindexPreds...)
 
 		if inner.RouteOpCode == engine.None {
