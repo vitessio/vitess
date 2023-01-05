@@ -1942,6 +1942,14 @@ case_statement:
   {
     $$ = &CaseStatement{Expr: $2, Cases: $3, Else: $5}
   }
+| CASE case_statement_case_list END CASE
+  {
+    $$ = &CaseStatement{Expr: nil, Cases: $2}
+  }
+| CASE case_statement_case_list ELSE statement_list ';' END CASE
+  {
+    $$ = &CaseStatement{Expr: nil, Cases: $2, Else: $4}
+  }
 
 case_statement_case_list:
   case_statement_case

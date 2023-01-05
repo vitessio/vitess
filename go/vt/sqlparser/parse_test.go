@@ -3050,6 +3050,34 @@ until a > 7
 end repeat;
 end`,
 		},
+		{
+			input: `CREATE PROCEDURE testproc() BEGIN
+  DECLARE a INT DEFAULT 1;
+  CASE a
+    WHEN 1 THEN SET a = 10;
+    WHEN 2 THEN SET a = 20;
+    ELSE SET a = 30;
+  END CASE;
+  CASE
+    WHEN a = 1 THEN SET a = 10;
+    WHEN a = 2 THEN SET a = 20;
+    ELSE SET a = 30;
+  END CASE;
+END`,
+			output: `create procedure testproc () begin
+declare a INT default 1;
+case a
+when 1 then set a = 10;
+when 2 then set a = 20;
+else set a = 30;
+end case;
+case
+when a = 1 then set a = 10;
+when a = 2 then set a = 20;
+else set a = 30;
+end case;
+end`,
+		},
 	}
 )
 
