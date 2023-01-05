@@ -72,9 +72,6 @@ func OpenTabletDiscovery() <-chan time.Time {
 	if _, err := db.ExecVTOrc("delete from vitess_tablet"); err != nil {
 		log.Error(err)
 	}
-	refreshTabletsUsing(func(instanceKey *inst.InstanceKey) {
-		_ = inst.InjectSeed(instanceKey)
-	}, false /* forceRefresh */)
 	return time.Tick(time.Second * time.Duration(config.Config.TopoInformationRefreshSeconds)) //nolint SA1015: using time.Tick leaks the underlying ticker
 }
 
