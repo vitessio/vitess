@@ -925,7 +925,11 @@ type CaseStatementCase struct {
 }
 
 func (c *CaseStatement) Format(buf *TrackedBuffer) {
-	buf.Myprintf("case %v\n", c.Expr)
+	if c.Expr != nil {
+		buf.Myprintf("case %v\n", c.Expr)
+	} else {
+		buf.Myprintf("case\n")
+	}
 	for _, cas := range c.Cases {
 		buf.Myprintf("when %v then ", cas.Case)
 		for i, s := range cas.Statements {
