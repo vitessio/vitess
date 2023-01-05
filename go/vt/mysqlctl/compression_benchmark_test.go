@@ -20,9 +20,10 @@ import (
 
 type (
 	benchmarkCompressArgs struct {
-		b        *testing.B
-		builtin  string
-		external string
+		b          *testing.B
+		builtin    string
+		external   string
+		saveToFile bool
 	}
 
 	benchmarkCompressEnv struct {
@@ -31,14 +32,20 @@ type (
 		dataURL       string
 	}
 
-	countingReader struct {
+	nopWriteCloser struct {
+		io.Writer
+	}
+
+	meteredReader struct {
 		count int64
 		r     io.Reader
 	}
 
-	countingWriter struct {
-		count int64
-		w     io.Writer
+	meteredWriter struct {
+		after  func()
+		before func()
+		count  int64
+		w      io.Writer
 	}
 )
 
@@ -57,6 +64,14 @@ const (
 	userDefinedDataURLEnvVar = "VT_MYSQLCTL_COMPRESSION_BENCHMARK_DATA_URL"
 )
 
+func discardWriteCloser() io.WriteCloser {
+	return &nopWriteCloser{io.Discard}
+}
+
+func (dwc *nopWriteCloser) Close() error {
+	return nil
+}
+
 func setupBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv {
 	bce := benchmarkCompressEnv{
 		benchmarkCompressArgs: args,
@@ -65,38 +80,45 @@ func setupBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv 
 	return bce
 }
 
-func (bce *benchmarkCompressEnv) benchmark() {
+func (bce *benchmarkCompressEnv) compress() {
 	var numUncompressedBytes, numCompressedBytes int64
 
 	bce.b.StopTimer()
 	bce.b.ResetTimer()
 
 	for i := 0; i < bce.b.N; i++ {
-		// Create compressor.
 		logger := logutil.NewMemoryLogger()
-		cWriter := &countingWriter{w: io.Discard}
-		compressor := bce.compressor(logger, cWriter)
 
-		reader, err := bce.reader()
+		// Create writer (to file or /dev/null).
+		w := bce.writer()
+		mw := &meteredWriter{w: w}
+
+		// Create c.
+		c := bce.compressor(logger, mw)
+		mc := &meteredWriter{
+			before: bce.b.StartTimer,
+			after:  bce.b.StopTimer,
+			w:      c,
+		}
+
+		r, err := bce.reader()
 		require.Nil(bce.b, err, "Failed to get data reader.")
-		cReader := &countingReader{r: reader}
+		mr := &meteredReader{r: r}
 
-		// Only time the part we care about.
-		bce.b.StartTimer()
-		_, err = io.Copy(compressor, cReader)
-		bce.b.StopTimer()
+		_, err = io.Copy(mc, mr)
 
-		// Don't defer closing, otherwise we can exhaust open file limit.
-		reader.Close()
-		compressor.Close()
+		// Don't defer closing things, otherwise we can exhaust open file limit.
+		r.Close()
+		c.Close()
+		w.Close()
 		require.Nil(bce.b, err, logger.Events)
 
 		// Report how many bytes we've compressed.
-		bce.b.SetBytes(cReader.count)
+		bce.b.SetBytes(mr.count)
 
 		// Record how many bytes compressed so we can report these later.
-		numCompressedBytes += cWriter.count
-		numUncompressedBytes += cReader.count
+		numCompressedBytes += mw.count
+		numUncompressedBytes += mr.count
 	}
 
 	// Report the average compression ratio (= <uncompressed>:<compressed>) achieved per-operation.
@@ -122,6 +144,18 @@ func (bce *benchmarkCompressEnv) compressor(logger logutil.Logger, writer io.Wri
 
 	require.Nil(bce.b, err, "Failed to create compressor.")
 	return compressor
+}
+
+func (bce *benchmarkCompressEnv) writer() io.WriteCloser {
+	var f io.WriteCloser
+	f = discardWriteCloser()
+	if bce.saveToFile {
+		p := path.Join(bce.b.TempDir(), fmt.Sprintf("%x.archive", bce.b.Name()))
+		var err error
+		f, err = os.OpenFile(p, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0644)
+		require.Nil(bce.b, err)
+	}
+	return f
 }
 
 func (bce *benchmarkCompressEnv) reader() (io.ReadCloser, error) {
@@ -190,78 +224,156 @@ func (bce *benchmarkCompressEnv) validate() {
 	}
 }
 
-func (cr *countingReader) Read(p []byte) (nbytes int, err error) {
-	nbytes, err = cr.r.Read(p)
-	cr.count += int64(nbytes)
+func (mr *meteredReader) Read(p []byte) (nbytes int, err error) {
+	nbytes, err = mr.r.Read(p)
+	mr.count += int64(nbytes)
 	return
 }
 
-func (cr *countingWriter) Write(p []byte) (nbytes int, err error) {
-	nbytes, err = cr.w.Write(p)
-	cr.count += int64(nbytes)
+func (mw *meteredWriter) Write(p []byte) (nbytes int, err error) {
+	if mw.before != nil {
+		mw.before()
+	}
+	if mw.after != nil {
+		defer mw.after()
+	}
+	nbytes, err = mw.w.Write(p)
+	mw.count += int64(nbytes)
 	return
 }
 
-func BenchmarkCompressLz4Builtin(b *testing.B) {
+func BenchmarkCompressThenDiscardLz4Builtin(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: Lz4Compressor,
 	})
-	env.benchmark()
+	env.compress()
 }
 
-func BenchmarkCompressPargzipBuiltin(b *testing.B) {
+func BenchmarkCompressThenDiscardPargzipBuiltin(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: PargzipCompressor,
 	})
-	env.benchmark()
+	env.compress()
 }
 
-func BenchmarkCompressPgzipBuiltin(b *testing.B) {
+func BenchmarkCompressThenDiscardDiscardPgzipBuiltin(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: PgzipCompressor,
 	})
-	env.benchmark()
+	env.compress()
 }
 
-func BenchmarkCompressZstdBuiltin(b *testing.B) {
+func BenchmarkCompressThenDiscardZstdBuiltin(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: ZstdCompressor,
 	})
-	env.benchmark()
+	env.compress()
 }
 
-func BenchmarkCompressZstdExternal(b *testing.B) {
+func BenchmarkCompressThenDiscardZstdExternal(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d", compressionLevel),
 	})
-	env.benchmark()
+	env.compress()
 }
 
-func BenchmarkCompressZstdExternalFast4(b *testing.B) {
+func BenchmarkCompressThenDiscardZstdExternalFast4(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d --fast=4", compressionLevel),
 	})
-	env.benchmark()
+	env.compress()
 }
 
-func BenchmarkCompressZstdExternalT0(b *testing.B) {
+func BenchmarkCompressThenDiscardZstdExternalT0(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d -T0", compressionLevel),
 	})
-	env.benchmark()
+	env.compress()
 }
 
-func BenchmarkCompressZstdExternalT4(b *testing.B) {
+func BenchmarkCompressThenDiscardZstdExternalT4(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d -T4", compressionLevel),
 	})
-	env.benchmark()
+	env.compress()
+}
+
+func BenchmarkCompressToFileLz4Builtin(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		builtin:    Lz4Compressor,
+		saveToFile: true,
+	})
+	env.compress()
+}
+
+func BenchmarkCompressToFilePargzipBuiltin(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		builtin:    PargzipCompressor,
+		saveToFile: true,
+	})
+	env.compress()
+}
+
+func BenchmarkCompressToFileDiscardPgzipBuiltin(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		builtin:    PgzipCompressor,
+		saveToFile: true,
+	})
+	env.compress()
+}
+
+func BenchmarkCompressToFileZstdBuiltin(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		builtin:    ZstdCompressor,
+		saveToFile: true,
+	})
+	env.compress()
+}
+
+func BenchmarkCompressToFileZstdExternal(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		external:   fmt.Sprintf("zstd -%d", compressionLevel),
+		saveToFile: true,
+	})
+	env.compress()
+}
+
+func BenchmarkCompressToFileZstdExternalFast4(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		external:   fmt.Sprintf("zstd -%d --fast=4", compressionLevel),
+		saveToFile: true,
+	})
+	env.compress()
+}
+
+func BenchmarkCompressToFileZstdExternalT0(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		external:   fmt.Sprintf("zstd -%d -T0", compressionLevel),
+		saveToFile: true,
+	})
+	env.compress()
+}
+
+func BenchmarkCompressToFileZstdExternalT4(b *testing.B) {
+	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+		b:          b,
+		external:   fmt.Sprintf("zstd -%d -T4", compressionLevel),
+		saveToFile: true,
+	})
+	env.compress()
 }
