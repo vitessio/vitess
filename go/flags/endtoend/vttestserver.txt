@@ -108,6 +108,7 @@ Usage of vttestserver:
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
       --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tablet_refresh_interval duration                                 Interval at which vtgate refreshes tablet information from topology server. (default 10s)
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.

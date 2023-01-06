@@ -21,6 +21,7 @@ Usage of vtgate:
       --discovery_low_replication_lag duration                           Threshold below which replication lag is considered low enough to be healthy. (default 30s)
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-partial-keyspace-migration                                (Experimental) Follow shard routing rules: enable only while migrating a keyspace shard by shard. See documentation on Partial MoveTables for more. (default false)
+      --enable-views                                                     Enable views support in vtgate.
       --enable_buffer                                                    Enable buffering (stalling) of primary traffic during failovers.
       --enable_buffer_dry_run                                            Detect and log failover events, but do not actually buffer requests.
       --enable_direct_ddl                                                Allow users to submit direct DDL statements (default true)

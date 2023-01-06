@@ -530,7 +530,7 @@ func TestGetReplicationAnalysis(t *testing.T) {
 			}
 			db.Db = test.NewTestDB([][]sqlutils.RowMap{rowMaps})
 
-			got, err := GetReplicationAnalysis("", &ReplicationAnalysisHints{})
+			got, err := GetReplicationAnalysis("", "", &ReplicationAnalysisHints{})
 			if tt.wantErr != "" {
 				require.EqualError(t, err, tt.wantErr)
 				return

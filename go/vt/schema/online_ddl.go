@@ -54,13 +54,15 @@ const (
 )
 
 // when validateWalk returns true, then the child nodes are also visited
-func validateWalk(node sqlparser.SQLNode) (kontinue bool, err error) {
+func validateWalk(node sqlparser.SQLNode, allowForeignKeys bool) (kontinue bool, err error) {
 	switch node.(type) {
 	case *sqlparser.CreateTable, *sqlparser.AlterTable,
 		*sqlparser.TableSpec, *sqlparser.AddConstraintDefinition, *sqlparser.ConstraintDefinition:
 		return true, nil
 	case *sqlparser.ForeignKeyDefinition:
-		return false, ErrForeignKeyFound
+		if !allowForeignKeys {
+			return false, ErrForeignKeyFound
+		}
 	case *sqlparser.RenameTableName:
 		return false, ErrRenameTableFound
 	}
@@ -118,7 +120,7 @@ func ParseOnlineDDLStatement(sql string) (ddlStmt sqlparser.DDLStatement, action
 	return ddlStmt, action, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported query type: %s", sql)
 }
 
-func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error {
+func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting) error {
 	// SQL statement sanity checks:
 	if !ddlStmt.IsFullyParsed() {
 		if _, err := sqlparser.ParseStrictDDL(sql); err != nil {
@@ -128,7 +130,10 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.SyntaxError, "cannot parse statement: %v", sql)
 	}
 
-	if err := sqlparser.Walk(validateWalk, ddlStmt); err != nil {
+	walkFunc := func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		return validateWalk(node, ddlStrategySetting.IsAllowForeignKeysFlag())
+	}
+	if err := sqlparser.Walk(walkFunc, ddlStmt); err != nil {
 		switch err {
 		case ErrForeignKeyFound:
 			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not supported in online DDL, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
@@ -142,7 +147,7 @@ func onlineDDLStatementSanity(sql string, ddlStmt sqlparser.DDLStatement) error 
 // NewOnlineDDLs takes a single DDL statement, normalizes it (potentially break down into multiple statements), and generates one or more OnlineDDL instances, one for each normalized statement
 func NewOnlineDDLs(keyspace string, sql string, ddlStmt sqlparser.DDLStatement, ddlStrategySetting *DDLStrategySetting, migrationContext string, providedUUID string) (onlineDDLs [](*OnlineDDL), err error) {
 	appendOnlineDDL := func(tableName string, ddlStmt sqlparser.DDLStatement) error {
-		if err := onlineDDLStatementSanity(sql, ddlStmt); err != nil {
+		if err := onlineDDLStatementSanity(sql, ddlStmt, ddlStrategySetting); err != nil {
 			return err
 		}
 		onlineDDL, err := NewOnlineDDL(keyspace, tableName, sqlparser.String(ddlStmt), ddlStrategySetting, migrationContext, providedUUID)

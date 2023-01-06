@@ -1680,6 +1680,20 @@ func (ty ExplainType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty VExplainType) ToString() string {
+	switch ty {
+	case PlanVExplainType:
+		return PlanStr
+	case QueriesVExplainType:
+		return QueriesStr
+	case AllVExplainType:
+		return AllVExplainStr
+	default:
+		return "Unknown VExplainType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty IntervalTypes) ToString() string {
 	switch ty {
 	case IntervalYear:
@@ -1821,7 +1835,7 @@ func (ty ShowCommandType) ToString() string {
 	case StatusSession:
 		return StatusSessionStr
 	case Table:
-		return TableStr
+		return TablesStr
 	case TableStatus:
 		return TableStatusStr
 	case Trigger:

@@ -8,7 +8,7 @@ Available Commands:
   AddCellsAlias               Defines a group of cells that can be referenced by a single name (the alias).
   ApplyRoutingRules           Applies the VSchema routing rules.
   ApplySchema                 Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication.
-  ApplyShardRoutingRules      Applies VSchema shard routing rules.
+  ApplyShardRoutingRules      Applies the provided shard routing rules.
   ApplyVSchema                Applies the VTGate routing schema to the provided keyspace. Shows the result after application.
   Backup                      Uses the BackupStorage service on the given tablet to create and store a new backup.
   BackupShard                 Finds the most up-to-date REPLICA, RDONLY, or SPARE tablet in the given shard and uses the BackupStorage service on that tablet to create and store a new backup.
@@ -38,7 +38,7 @@ Available Commands:
   GetRoutingRules             Displays the VSchema routing rules.
   GetSchema                   Displays the full schema for a tablet, optionally restricted to the specified tables/views.
   GetShard                    Returns information about a shard in the topology.
-  GetShardRoutingRules        Displays VSchema shard routing rules.
+  GetShardRoutingRules        Displays the currently active shard routing rules as a JSON document.
   GetSrvKeyspaceNames         Outputs a JSON mapping of cell=>keyspace names served in that cell. Omit to query all cells.
   GetSrvKeyspaces             Returns the SrvKeyspaces for the given keyspace in one or more cells.
   GetSrvVSchema               Returns the SrvVSchema for the given cell.
@@ -46,7 +46,7 @@ Available Commands:
   GetTablet                   Outputs a JSON structure that contains information about the tablet.
   GetTabletVersion            Print the version of a tablet from its debug vars.
   GetTablets                  Looks up tablets according to filter criteria.
-  GetTopologyPath             Gets the file located at the specified path in the topology server.
+  GetTopologyPath             Gets the value associated with the particular path (key) in the topology server.
   GetVSchema                  Prints a JSON representation of a keyspace's topo record.
   GetWorkflows                Gets all vreplication workflows (Reshard, MoveTables, etc) in the given keyspace.
   LegacyVtctlCommand          Invoke a legacy vtctlclient command. Flag parsing is best effort.
@@ -79,7 +79,7 @@ Available Commands:
   TabletExternallyReparented  Updates the topology record for the tablet's shard to acknowledge that an external tool made this tablet the primary.
   UpdateCellInfo              Updates the content of a CellInfo with the provided parameters, creating the CellInfo if it does not exist.
   UpdateCellsAlias            Updates the content of a CellsAlias with the provided parameters, creating the CellsAlias if it does not exist.
-  UpdateThrottlerConfig       Update the table throttler configuration for all cells and tablets of a given keyspace
+  UpdateThrottlerConfig       Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)
   Validate                    Validates that all nodes reachable from the global replication graph, as well as all tablets in discoverable cells, are consistent.
   ValidateKeyspace            Validates that all nodes reachable from the specified keyspace are consistent.
   ValidateSchemaKeyspace      Validates that the schema on the primary tablet for shard 0 matches the schema on all other tablets in the keyspace.

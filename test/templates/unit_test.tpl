@@ -108,17 +108,6 @@ jobs:
 
         {{end}}
 
-        {{if (eq .Platform "mariadb103")}}
-
-        # mariadb103
-        sudo apt-get install -y software-properties-common
-        sudo apt-key adv --recv-keys --keyserver hkp://keyserver.ubuntu.com:80 0xF1656F24C74CD1D8
-        sudo add-apt-repository 'deb [arch=amd64,arm64,ppc64el] https://mirror.rackspace.com/mariadb/repo/10.3/ubuntu bionic main'
-        sudo apt update
-        sudo DEBIAN_FRONTEND="noninteractive" apt install -y mariadb-server
-
-        {{end}}
-
         sudo apt-get install -y make unzip g++ curl git wget ant openjdk-11-jdk eatmydata
         sudo service mysql stop
         sudo bash -c "echo '/usr/sbin/mysqld { }' > /etc/apparmor.d/usr.sbin.mysqld" # https://bugs.launchpad.net/ubuntu/+source/mariadb-10.1/+bug/1806263

@@ -26,6 +26,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/vt/withddl"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/pools"
@@ -69,11 +71,22 @@ const (
 	maxQueryBufferDuration = 10 * time.Second
 )
 
-var streamResultPool = sync.Pool{New: func() any {
-	return &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+var (
+	streamResultPool = sync.Pool{New: func() any {
+		return &sqltypes.Result{
+			Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+		}
+	}}
+	sequenceFields = []*querypb.Field{
+		{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		},
 	}
-}}
+	withDDL = withddl.New([]string{
+		mysql.CreateViewsTable,
+	})
+)
 
 func returnStreamResult(result *sqltypes.Result) error {
 	// only return large results slices to the pool
@@ -88,13 +101,6 @@ func returnStreamResult(result *sqltypes.Result) error {
 
 func allocStreamResult() *sqltypes.Result {
 	return streamResultPool.Get().(*sqltypes.Result)
-}
-
-var sequenceFields = []*querypb.Field{
-	{
-		Name: "nextval",
-		Type: sqltypes.Int64,
-	},
 }
 
 func (qre *QueryExecutor) shouldConsolidate() bool {
@@ -182,6 +188,8 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execOther()
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
+	case p.PlanViewDDL:
+		return qre.execAutocommit(qre.execViewDDL)
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
 	case p.PlanCallProc:
@@ -287,6 +295,134 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execProc(conn)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
+}
+
+func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	switch stmt := qre.plan.FullStmt.(type) {
+	case *sqlparser.CreateView:
+		return qre.execCreateViewDDL(conn, stmt)
+	case *sqlparser.AlterView:
+		return qre.execAlterViewDDL(conn, stmt)
+	case *sqlparser.DropView:
+		return qre.execDropViewDDL(conn, stmt)
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected view DDL type: %T", qre.plan.FullStmt)
+}
+
+func (qre *QueryExecutor) execCreateViewDDL(conn *StatefulConnection, stmt *sqlparser.CreateView) (*sqltypes.Result, error) {
+	bindVars := qre.generateBindVarsForViewDDLInsert(stmt)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
+	if err != nil {
+		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		// If it is a MySQL error and its code is of duplicate entry,
+		// then we would return duplicate create view error.
+		if isSQLErr && sqlErr.Number() == mysql.ERDupEntry {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "View '%s' already exists", stmt.ViewName.Name.String())
+		}
+		return nil, err
+	}
+	return qr, nil
+}
+
+func (qre *QueryExecutor) execAlterViewDDL(conn *StatefulConnection, stmt *sqlparser.AlterView) (*sqltypes.Result, error) {
+	createViewDDL := &sqlparser.CreateView{
+		ViewName:    stmt.ViewName,
+		Algorithm:   stmt.Algorithm,
+		Definer:     stmt.Definer,
+		Security:    stmt.Security,
+		Columns:     stmt.Columns,
+		Select:      stmt.Select,
+		CheckOption: stmt.CheckOption,
+		Comments:    stmt.Comments,
+	}
+	bindVars := qre.generateBindVarsForViewDDLInsert(createViewDDL)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
+	if err != nil {
+		return nil, err
+	}
+	if qr.RowsAffected == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "View '%s' does not exist", stmt.ViewName.Name.String())
+	}
+	return qr, nil
+}
+
+func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlparser.DropView) (*sqltypes.Result, error) {
+	viewsMap := make(map[string]int)
+	var viewNames []string
+	for pos, view := range stmt.FromTables {
+		viewName := view.Name.String()
+		if _, exists := viewsMap[viewName]; exists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Not unique view: '%s'", viewName)
+		}
+		viewNames = append(viewNames, viewName)
+		viewsMap[viewName] = pos
+	}
+	viewNamesBV, err := sqltypes.BuildBindVariable(viewNames)
+	if err != nil {
+		return nil, err
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"TABLE_NAME": viewNamesBV,
+	}
+
+	existErr := qre.checkViewExists(conn, stmt, bindVars, viewsMap, viewNames)
+
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
+	if err != nil {
+		return nil, err
+	}
+	if existErr != nil {
+		return nil, existErr
+	}
+	return qr, nil
+}
+
+func execWithDDLView(ctx context.Context, conn *StatefulConnection, sql string) (*sqltypes.Result, error) {
+	return withDDL.Exec(ctx, sql, conn.Exec, conn.Exec)
+}
+
+func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlparser.DropView, bindVars map[string]*querypb.BindVariable, viewsMap map[string]int, viewNames []string) error {
+	if stmt.IfExists {
+		return nil
+	}
+	// run the select to know which views exist.
+	sel, err := sqlparser.Parse(mysql.SelectFromViewsTable)
+	if err != nil {
+		return err
+	}
+	sql, _, err := qre.generateFinalSQL(p.GenerateFullQuery(sel), bindVars)
+	if err != nil {
+		return err
+	}
+
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
+	if err != nil {
+		return err
+	}
+	if len(qr.Rows) != len(viewNames) {
+		// If the number of rows returned by the select is not equal to the number of views
+		// that we are trying to drop, then we would return the error.
+		for _, row := range qr.Rows {
+			viewName := row[0].ToString()
+			if pos, exists := viewsMap[viewName]; exists {
+				viewNames = append(viewNames[:pos], viewNames[pos+1:]...)
+			}
+		}
+		return vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "Unknown view '%s'", strings.Join(viewNames, ","))
+	}
+	return nil
 }
 
 // Stream performs a streaming query execution.
@@ -1092,4 +1228,12 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
+}
+
+func (qre *QueryExecutor) generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
+	bindVars := make(map[string]*querypb.BindVariable)
+	bindVars["TABLE_NAME"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
+	bindVars["VIEW_DEFINITION"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))
+	bindVars["CREATE_STATEMENT"] = sqltypes.StringBindVariable(sqlparser.String(createView))
+	return bindVars
 }

@@ -125,12 +125,7 @@ func TestAssumeVersionString(t *testing.T) {
 		},
 		{
 			versionString: "MariaDB",
-			version:       ServerVersion{10, 0, 10},
-			flavor:        FlavorMariaDB,
-		},
-		{
-			versionString: "MariaDB103",
-			version:       ServerVersion{10, 3, 7},
+			version:       ServerVersion{10, 6, 11},
 			flavor:        FlavorMariaDB,
 		},
 	}

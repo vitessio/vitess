@@ -228,6 +228,15 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
 	}...)
 
+	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note
+	// that the default value is 1 minute, but we are keeping it low to make vttestserver perform faster.
+	// Less value might result in high pressure on topo but for testing purpose that should not be a concern.
+	if args.VtgateTabletRefreshInterval <= 0 {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", 10*time.Second))
+	} else {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", args.VtgateTabletRefreshInterval))
+	}
+
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
 

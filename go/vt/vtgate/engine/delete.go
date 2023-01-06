@@ -57,9 +57,9 @@ func (del *Delete) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 	switch del.Opcode {
 	case Unsharded:
-		return del.execUnsharded(ctx, vcursor, bindVars, rss)
+		return del.execUnsharded(ctx, del, vcursor, bindVars, rss)
 	case Equal, IN, Scatter, ByDestination, SubShard, EqualUnique, MultiEqual:
-		return del.execMultiDestination(ctx, vcursor, bindVars, rss, del.deleteVindexEntries)
+		return del.execMultiDestination(ctx, del, vcursor, bindVars, rss, del.deleteVindexEntries)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", del.Opcode)
@@ -91,7 +91,7 @@ func (del *Delete) deleteVindexEntries(ctx context.Context, vcursor VCursor, bin
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: del.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResults, errors := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	subQueryResults, errors := vcursor.ExecuteMultiShard(ctx, del, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	for _, err := range errors {
 		if err != nil {
 			return err
