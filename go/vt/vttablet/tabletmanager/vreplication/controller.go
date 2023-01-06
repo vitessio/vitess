@@ -206,7 +206,11 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
-		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
+		// Retry 5 times before giving up and returning an error that the user
+		// can see and act upon if needed.
+		tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*5)
+		defer tpCancel()
+		tablet, err = ct.tabletPicker.PickForStreaming(tpCtx)
 		if err != nil {
 			select {
 			case <-ctx.Done():

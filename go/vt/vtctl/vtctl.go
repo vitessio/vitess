@@ -2391,7 +2391,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			for {
 				select {
 				case <-ctx.Done():
-					errCh <- fmt.Errorf("workflow did not start within %s", (*timeout).String())
 					return
 				case <-ticker.C:
 					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount()
@@ -2420,9 +2419,13 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 					return nil
 				}
 				wr.Logger().Printf("%d%% ... ", 100*progress.started/progress.total)
+			case <-timedCtx.Done():
+				wr.Logger().Printf("\nThe workflow did not start within %s. The workflow may simply be slow to start or there may be an issue.\n",
+					(*timeout).String())
+				wr.Logger().Printf("Check the status using the 'Workflow %s show' client command for details.\n", ksWorkflow)
+				return fmt.Errorf("timed out waiting for workflow to start")
 			case err := <-errCh:
 				wr.Logger().Error(err)
-				cancelTimedCtx()
 				return err
 			case wfErrs := <-wfErrCh:
 				wr.Logger().Printf("Found problems with the streams created for this workflow:\n")
