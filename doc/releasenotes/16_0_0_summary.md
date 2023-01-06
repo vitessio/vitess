@@ -35,6 +35,11 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 
 ### Breaking Changes
 
+#### VTGate Advertised MySQL Version 
+
+VTGate now advertises MySQL version 8.0.31. This is a breaking change for clients that rely on the VTGate advertised MySQL version and still use MySQL 5.7.
+The users can set the `mysql_server_version` flag to advertise the correct version.
+
 #### Orchestrator Integration Deletion
 
 Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
