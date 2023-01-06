@@ -277,7 +277,7 @@ func BenchmarkCompressThenDiscardZstdBuiltin(b *testing.B) {
 func BenchmarkCompressThenDiscardZstdExternal(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
-		external: fmt.Sprintf("zstd -%d", compressionLevel),
+		external: fmt.Sprintf("zstd -%d -c", compressionLevel),
 	})
 	env.compress()
 }
@@ -285,7 +285,7 @@ func BenchmarkCompressThenDiscardZstdExternal(b *testing.B) {
 func BenchmarkCompressThenDiscardZstdExternalFast4(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
-		external: fmt.Sprintf("zstd -%d --fast=4", compressionLevel),
+		external: fmt.Sprintf("zstd -%d --fast=4 -c", compressionLevel),
 	})
 	env.compress()
 }
@@ -293,7 +293,7 @@ func BenchmarkCompressThenDiscardZstdExternalFast4(b *testing.B) {
 func BenchmarkCompressThenDiscardZstdExternalT0(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
-		external: fmt.Sprintf("zstd -%d -T0", compressionLevel),
+		external: fmt.Sprintf("zstd -%d -T0 -c", compressionLevel),
 	})
 	env.compress()
 }
@@ -301,7 +301,7 @@ func BenchmarkCompressThenDiscardZstdExternalT0(b *testing.B) {
 func BenchmarkCompressThenDiscardZstdExternalT4(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
-		external: fmt.Sprintf("zstd -%d -T4", compressionLevel),
+		external: fmt.Sprintf("zstd -%d -T4 -c", compressionLevel),
 	})
 	env.compress()
 }
@@ -345,7 +345,7 @@ func BenchmarkCompressToFileZstdBuiltin(b *testing.B) {
 func BenchmarkCompressToFileZstdExternal(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:          b,
-		external:   fmt.Sprintf("zstd -%d", compressionLevel),
+		external:   fmt.Sprintf("zstd -%d -c", compressionLevel),
 		saveToFile: true,
 	})
 	env.compress()
@@ -354,7 +354,7 @@ func BenchmarkCompressToFileZstdExternal(b *testing.B) {
 func BenchmarkCompressToFileZstdExternalFast4(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:          b,
-		external:   fmt.Sprintf("zstd -%d --fast=4", compressionLevel),
+		external:   fmt.Sprintf("zstd -%d --fast=4 -c", compressionLevel),
 		saveToFile: true,
 	})
 	env.compress()
@@ -363,7 +363,7 @@ func BenchmarkCompressToFileZstdExternalFast4(b *testing.B) {
 func BenchmarkCompressToFileZstdExternalT0(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:          b,
-		external:   fmt.Sprintf("zstd -%d -T0", compressionLevel),
+		external:   fmt.Sprintf("zstd -%d -T0 -c", compressionLevel),
 		saveToFile: true,
 	})
 	env.compress()
@@ -372,7 +372,7 @@ func BenchmarkCompressToFileZstdExternalT0(b *testing.B) {
 func BenchmarkCompressToFileZstdExternalT4(b *testing.B) {
 	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:          b,
-		external:   fmt.Sprintf("zstd -%d -T4", compressionLevel),
+		external:   fmt.Sprintf("zstd -%d -T4 -c", compressionLevel),
 		saveToFile: true,
 	})
 	env.compress()
