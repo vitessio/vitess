@@ -2185,21 +2185,23 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 			for _, st := range statuses {
 				msg := ""
-				if st.Pos == "" {
-					msg += " VStream has not started."
+				if st.State == "Error" {
+					msg += fmt.Sprintf(": %s.", st.Message)
+				} else if st.Pos == "" {
+					msg += ". VStream has not started."
 				} else {
 					now := time.Now().Nanosecond()
 					updateLag := int64(now) - st.TimeUpdated
 					if updateLag > 0*1e9 {
-						msg += " VStream may not be running."
+						msg += ". VStream may not be running."
 					}
 					txLag := int64(now) - st.TransactionTimestamp
-					msg += fmt.Sprintf(" VStream Lag: %ds.", txLag/1e9)
+					msg += fmt.Sprintf(". VStream Lag: %ds.", txLag/1e9)
 					if st.TransactionTimestamp > 0 { // if no events occur after copy phase, TransactionTimeStamp can be 0
 						msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp, 0).Format(time.ANSIC))
 					}
 				}
-				s += fmt.Sprintf("id=%d on %s: Status: %s.%s\n", st.ID, ksShard, st.State, msg)
+				s += fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg)
 			}
 		}
 		wr.Logger().Printf("\n%s\n", s)
