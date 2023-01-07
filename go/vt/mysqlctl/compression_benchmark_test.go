@@ -31,8 +31,6 @@ type (
 
 	benchmarkCompressEnv struct {
 		benchmarkCompressArgs
-		dataLocalPath string
-		dataURL       string
 	}
 
 	fnReadCloser struct {
@@ -100,7 +98,7 @@ func (frc *fnReadCloser) Close() error {
 
 func dataLocalPath(u *url.URL) string {
 	if isLocal(u) {
-		return u.String()
+		return u.Path
 	}
 	// Compute a local path for a file by hashing the URL.
 	return path.Join(os.TempDir(), fmt.Sprintf("%x.dat", md5.Sum([]byte(u.String()))))
@@ -192,6 +190,7 @@ func newBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv {
 		benchmarkCompressArgs: args,
 	}
 	bce.validate()
+	bce.prepare()
 	return bce
 }
 
@@ -276,7 +275,6 @@ func (bce *benchmarkCompressEnv) compress() {
 
 	bce.b.ReportMetric(
 		float64(numUncompressedBytes)/float64(numCompressedBytes),
-		// By convention, units should end in /op.
 		"compression-ratio",
 	)
 }
@@ -291,19 +289,49 @@ func (bce *benchmarkCompressEnv) compressor(logger logutil.Logger, writer io.Wri
 		compressor, err = newExternalCompressor(context.Background(), bce.external, writer, logger)
 	}
 
-	require.Nil(bce.b, err, "Failed to create compressor.")
+	require.Nil(bce.b, err, "failed to create compressor.")
 	return compressor
 }
 
+func (bce *benchmarkCompressEnv) prepare() {
+	u, err := dataURL()
+	require.NoError(bce.b, err, "failed to get data url")
+
+	localPath := dataLocalPath(u)
+
+	if isLocal(u) {
+		if _, err := os.Stat(localPath); errors.Is(err, os.ErrNotExist) {
+			require.Failf(bce.b, "local path does not exist", localPath)
+		}
+	} else if isHTTP(u) {
+		if _, err := os.Stat(localPath); errors.Is(err, os.ErrNotExist) {
+			mb, _ := maxBytes()
+			if err := downloadData(u.String(), localPath, mb); err != nil {
+				require.Failf(bce.b, "failed to download data", err.Error())
+			}
+		}
+	} else {
+		require.Failf(bce.b, "don't know how to get data from url", u.String())
+	}
+}
+
 func (bce *benchmarkCompressEnv) reader() (io.ReadCloser, error) {
+	var r io.Reader
+
 	u, _ := dataURL()
+
 	f, err := os.Open(dataLocalPath(u))
 	if err != nil {
 		return nil, err
 	}
+	r = f
+
 	mb, _ := maxBytes()
-	l := io.LimitReader(f, mb)
-	buf := bufio.NewReaderSize(l, 2*1024*1024)
+	if mb > 0 {
+		r = io.LimitReader(f, mb)
+	}
+
+	buf := bufio.NewReaderSize(r, 2*1024*1024)
 	return &fnReadCloser{buf, f.Close}, nil
 }
 
@@ -313,12 +341,12 @@ func (bce *benchmarkCompressEnv) validate() {
 
 		_, err := validateExternalCmd(cmdArgs[0])
 		if err != nil {
-			bce.b.Skipf("Command %q not available in this host: %v; skipping...", cmdArgs[0], err)
+			bce.b.Skipf("command %q not available in this host: %v; skipping...", cmdArgs[0], err)
 		}
 	}
 
 	if bce.builtin == "" && bce.external == "" {
-		require.Fail(bce.b, "Either builtin or external compressor must be specified.")
+		require.Fail(bce.b, "either builtin or external compressor must be specified.")
 	}
 }
 
@@ -342,61 +370,24 @@ func (tw *timedWriter) Write(p []byte) (nbytes int, err error) {
 }
 
 func TestMain(m *testing.M) {
-	u, err := dataURL()
-	if err != nil {
-		fmt.Printf("could not parse url: %v", err)
-		os.Exit(1)
-	}
-
-	localPath := dataLocalPath(u)
-
-	if _, err := os.Stat(localPath); errors.Is(err, os.ErrNotExist) {
-		if isHTTP(u) {
-			fmt.Printf("downloading data from %q\n", u.String())
-
-			mb, err := maxBytes()
-			if mb > 0 {
-				args := []any{mb}
-				mbMsg := "will limit uncompressed downloaded data to %d bytes"
-				if err != nil {
-					args = append(args, err)
-					mbMsg = mbMsg + "; %v"
-				}
-				fmt.Printf(mbMsg+"\n", args...)
-			}
-
-			if err := downloadData(u.String(), localPath, mb); err != nil {
-				fmt.Printf("failed to download data: %v\n", err)
-				os.Exit(1)
-			}
-
-			fmt.Printf("downloaded data to local path %q\n", localPath)
-		} else {
-			fmt.Printf("don't know how to get data from url: %q", u.String())
-			os.Exit(1)
-		}
-	} else {
-		fmt.Printf("local data path %q found, will use in benchmarks\n", localPath)
-	}
-
 	code := m.Run()
 
-	msg := "cleaning up %q"
-	args := []any{localPath}
+	u, _ := dataURL()
+	localPath := dataLocalPath(u)
+
 	cleanup, err := shouldCleanup(u)
-	if err != nil {
-		args = append(args, err)
-		msg = msg + "; %v"
-	}
-
-	if !cleanup {
-		msg = "not " + msg
-	}
-
-	fmt.Printf(msg+"\n", args...)
 	if cleanup {
-		if err := os.Remove(localPath); err != nil {
-			fmt.Printf("failed to cleanup %q: %v\n", localPath, err)
+		msg := "cleaning up %q"
+		args := []any{localPath}
+
+		if err != nil {
+			args = append(args, err)
+			msg = msg + "; %v"
+		}
+
+		fmt.Printf(msg+"\n", args...)
+		if _, err := os.Stat(localPath); !errors.Is(err, os.ErrNotExist) {
+			os.Remove(localPath)
 		}
 	}
 
@@ -419,7 +410,7 @@ func BenchmarkCompressPargzipBuiltin(b *testing.B) {
 	env.compress()
 }
 
-func BenchmarkCompressDiscardPgzipBuiltin(b *testing.B) {
+func BenchmarkCompressPgzipBuiltin(b *testing.B) {
 	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: PgzipCompressor,
