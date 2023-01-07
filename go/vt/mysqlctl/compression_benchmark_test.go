@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"path"
 	"strconv"
@@ -60,14 +61,17 @@ const (
 	// by the compression benchmarks in this suite. It's a ~60GB gzipped InnoDB
 	// file, which was built from this Wikipedia dataset:
 	//
-	// https://dumps.wikimedia.org/enwiki/20221220/enwiki-20221220-externallinks.sql.gz
+	//     https://dumps.wikimedia.org/enwiki/20221220/enwiki-20221220-externallinks.sql.gz
 	defaultDataURL = "https://archive.org/download/enwiki-20221220-externallinks.ibd/enwiki-20221220-externallinks.ibd.gz"
 
 	// By default, don't limit how many bytes we input into compression.
 	defaultMaxBytes int64 = 0
 
 	// By default the benchmarks will remove any downloaded data after all
-	// benchmarks are run. Users may disable this behavior. This option is
+	// benchmarks are run, unless the data URL is a local path, in which case
+	// it will be left alone.
+	//
+	// Users may override this behavior. This option is
 	// intended purely for debugging purposes.
 	//
 	//     export VT_MYSQLCTL_COMPRESSION_BENCHMARK_CLEANUP=false
@@ -77,6 +81,10 @@ const (
 	// purely for development and debugging purposes. For example:
 	//
 	//     export VT_MYSQLCTL_COMPRESSION_BENCHMARK_DATA_URL=https://wiki.mozilla.org/images/f/ff/Example.json.gz
+	//
+	// A local path can also be specified:
+	//
+	//     export VT_MYSQLCTL_COMPRESSION_BENCHMARK_DATA_URL=file:///tmp/custom.dat
 	envVarDataURL = "VT_MYSQLCTL_COMPRESSION_BENCHMARK_DATA_URL"
 
 	// Users may override how many bytes are downloaded. This option is
@@ -90,20 +98,23 @@ func (frc *fnReadCloser) Close() error {
 	return frc.closer()
 }
 
-func dataLocalPath(url string) string {
+func dataLocalPath(u *url.URL) string {
+	if isLocal(u) {
+		return u.String()
+	}
 	// Compute a local path for a file by hashing the URL.
-	return path.Join(os.TempDir(), fmt.Sprintf("%x.dat", md5.Sum([]byte(url))))
+	return path.Join(os.TempDir(), fmt.Sprintf("%x.dat", md5.Sum([]byte(u.String()))))
 }
 
-func dataURL() string {
-	url := defaultDataURL
+func dataURL() (*url.URL, error) {
+	u := defaultDataURL
 
 	// Use user-defined URL, if specified.
 	if udURL := os.Getenv(envVarDataURL); udURL != "" {
-		url = udURL
+		u = udURL
 	}
 
-	return url
+	return url.Parse(u)
 }
 
 func downloadData(url, localPath string, maxBytes int64) error {
@@ -152,6 +163,14 @@ func downloadData(url, localPath string, maxBytes int64) error {
 	return nil
 }
 
+func isHTTP(u *url.URL) bool {
+	return u.Scheme == "http" || u.Scheme == "https"
+}
+
+func isLocal(u *url.URL) bool {
+	return u.Scheme == "file" || (u.Scheme == "" && u.Hostname() == "")
+}
+
 func maxBytes() (int64, error) {
 	// Limit how many bytes we unpack from the archive.
 	mb := defaultMaxBytes
@@ -168,7 +187,7 @@ func maxBytes() (int64, error) {
 	return mb, nil
 }
 
-func setupBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv {
+func newBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv {
 	bce := benchmarkCompressEnv{
 		benchmarkCompressArgs: args,
 	}
@@ -176,8 +195,13 @@ func setupBenchmarkCompressEnv(args benchmarkCompressArgs) benchmarkCompressEnv 
 	return bce
 }
 
-func shouldCleanup() (bool, error) {
+func shouldCleanup(u *url.URL) (bool, error) {
 	c := true
+
+	// Don't cleanup local paths provided by the user.
+	if isLocal(u) {
+		c = false
+	}
 
 	// Use user-defined cleanup, if specified and valid.
 	if udCleanup := os.Getenv(envVarCleanup); udCleanup != "" {
@@ -272,11 +296,14 @@ func (bce *benchmarkCompressEnv) compressor(logger logutil.Logger, writer io.Wri
 }
 
 func (bce *benchmarkCompressEnv) reader() (io.ReadCloser, error) {
-	f, err := os.Open(dataLocalPath(dataURL()))
+	u, _ := dataURL()
+	f, err := os.Open(dataLocalPath(u))
 	if err != nil {
 		return nil, err
 	}
-	buf := bufio.NewReaderSize(f, 2*1024*1024)
+	mb, _ := maxBytes()
+	l := io.LimitReader(f, mb)
+	buf := bufio.NewReaderSize(l, 2*1024*1024)
 	return &fnReadCloser{buf, f.Close}, nil
 }
 
@@ -313,41 +340,50 @@ func (tw *timedWriter) Write(p []byte) (nbytes int, err error) {
 	tw.duration += time.Since(start)
 	return
 }
-func TestMain(m *testing.M) {
-	url := dataURL()
-	fmt.Printf("data url is %q\n", url)
 
-	localPath := dataLocalPath(url)
-	fmt.Printf("data local path is %q\n", localPath)
+func TestMain(m *testing.M) {
+	u, err := dataURL()
+	if err != nil {
+		fmt.Printf("could not parse url: %v", err)
+		os.Exit(1)
+	}
+
+	localPath := dataLocalPath(u)
 
 	if _, err := os.Stat(localPath); errors.Is(err, os.ErrNotExist) {
-		fmt.Printf("local data file %q not found\n", localPath)
+		if isHTTP(u) {
+			fmt.Printf("downloading data from %q\n", u.String())
 
-		mb, err := maxBytes()
-		if mb > 0 {
-			args := []any{mb}
-			mbMsg := "will limit uncompressed input to to %d bytes"
-			if err != nil {
-				args = append(args, err)
-				mbMsg = mbMsg + "; %v"
+			mb, err := maxBytes()
+			if mb > 0 {
+				args := []any{mb}
+				mbMsg := "will limit uncompressed downloaded data to %d bytes"
+				if err != nil {
+					args = append(args, err)
+					mbMsg = mbMsg + "; %v"
+				}
+				fmt.Printf(mbMsg+"\n", args...)
 			}
-			fmt.Printf(mbMsg+"\n", args...)
-		}
 
-		fmt.Printf("downloading data from %q\n", url)
-		if err := downloadData(url, localPath, mb); err != nil {
-			fmt.Printf("failed to download data: %v\n", err)
+			if err := downloadData(u.String(), localPath, mb); err != nil {
+				fmt.Printf("failed to download data: %v\n", err)
+				os.Exit(1)
+			}
+
+			fmt.Printf("downloaded data to local path %q\n", localPath)
+		} else {
+			fmt.Printf("don't know how to get data from url: %q", u.String())
 			os.Exit(1)
 		}
 	} else {
-		fmt.Printf("local data file %q found, will use in benchmarks\n", localPath)
+		fmt.Printf("local data path %q found, will use in benchmarks\n", localPath)
 	}
 
 	code := m.Run()
 
 	msg := "cleaning up %q"
 	args := []any{localPath}
-	cleanup, err := shouldCleanup()
+	cleanup, err := shouldCleanup(u)
 	if err != nil {
 		args = append(args, err)
 		msg = msg + "; %v"
@@ -368,7 +404,7 @@ func TestMain(m *testing.M) {
 }
 
 func BenchmarkCompressLz4Builtin(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: Lz4Compressor,
 	})
@@ -376,7 +412,7 @@ func BenchmarkCompressLz4Builtin(b *testing.B) {
 }
 
 func BenchmarkCompressPargzipBuiltin(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: PargzipCompressor,
 	})
@@ -384,7 +420,7 @@ func BenchmarkCompressPargzipBuiltin(b *testing.B) {
 }
 
 func BenchmarkCompressDiscardPgzipBuiltin(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: PgzipCompressor,
 	})
@@ -392,7 +428,7 @@ func BenchmarkCompressDiscardPgzipBuiltin(b *testing.B) {
 }
 
 func BenchmarkCompressZstdBuiltin(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:       b,
 		builtin: ZstdCompressor,
 	})
@@ -400,7 +436,7 @@ func BenchmarkCompressZstdBuiltin(b *testing.B) {
 }
 
 func BenchmarkCompressZstdExternal(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d -c", compressionLevel),
 	})
@@ -408,7 +444,7 @@ func BenchmarkCompressZstdExternal(b *testing.B) {
 }
 
 func BenchmarkCompressZstdExternalFast4(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d --fast=4 -c", compressionLevel),
 	})
@@ -416,7 +452,7 @@ func BenchmarkCompressZstdExternalFast4(b *testing.B) {
 }
 
 func BenchmarkCompressZstdExternalT0(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d -T0 -c", compressionLevel),
 	})
@@ -424,7 +460,7 @@ func BenchmarkCompressZstdExternalT0(b *testing.B) {
 }
 
 func BenchmarkCompressZstdExternalT4(b *testing.B) {
-	env := setupBenchmarkCompressEnv(benchmarkCompressArgs{
+	env := newBenchmarkCompressEnv(benchmarkCompressArgs{
 		b:        b,
 		external: fmt.Sprintf("zstd -%d -T4 -c", compressionLevel),
 	})
