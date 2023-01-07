@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -68,7 +68,7 @@ func init() {
 // testVTCtlEnv
 
 func newTestVTCtlEnv() *testVTCtlEnv {
-	tabletconntest.SetProtocol("go.vt.vtctl.vtctl_env_test", "VDiffTest")
+	tabletconntest.SetProtocol("go.vt.vtctl.vtctl_env_test", "VTCtlTest")
 	env := &testVTCtlEnv{
 		workflow:   "vtctlTest",
 		tablets:    make(map[int]*testVTCtlTablet),
@@ -154,7 +154,7 @@ func (tvt *testVTCtlTablet) StreamHealth(ctx context.Context, callback func(*que
 }
 
 //----------------------------------------------
-// testVDiffTMCclient
+// testVTCtlTMClient
 
 type testVTCtlTMClient struct {
 	tmclient.TabletManagerClient
