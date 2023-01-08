@@ -467,6 +467,11 @@ func TestBuildPlanSuccess(t *testing.T) {
 			require.NoError(t, err, tcase.input)
 			require.Equal(t, 1, len(wd.tableDiffers), tcase.input)
 			assert.Equal(t, tcase.tablePlan, wd.tableDiffers[tcase.table].tablePlan, tcase.input)
+
+			// Confirm that the options are passed through.
+			for _, td := range wd.tableDiffers {
+				require.Equal(t, vdiffenv.opts, td.wd.opts)
+			}
 		})
 	}
 }
