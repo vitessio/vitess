@@ -2193,7 +2193,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 					now := time.Now().Nanosecond()
 					updateLag := int64(now) - st.TimeUpdated
 					if updateLag > 0*1e9 {
-						msg += ". VStream may not be running."
+						msg += ". VStream may not be running"
 					}
 					txLag := int64(now) - st.TransactionTimestamp
 					msg += fmt.Sprintf(". VStream Lag: %ds.", txLag/1e9)

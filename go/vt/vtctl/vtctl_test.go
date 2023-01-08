@@ -19,64 +19,213 @@ package vtctl
 import (
 	"context"
 	"fmt"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/spf13/pflag"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
 func TestMoveTables(t *testing.T) {
-	cell := "cell1"
+	vrID := 1
 	shard := "0"
-	sourceKs := "sourceKs"
-	targetKs := "targetKs"
+	sourceKs := "sourceks"
+	targetKs := "targetks"
 	table := "customer"
 	wf := "testwf"
 	ksWf := fmt.Sprintf("%s.%s", targetKs, wf)
-	sourceCol := fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"%s" filter:"select * from %s"}}`, sourceKs, shard, table, table)
+	minTableSize := 16384 // a single 16KiB InnoDB page
 	ctx := context.Background()
 	env := newTestVTCtlEnv()
 	defer env.close()
-	_ = env.addTablet(100, sourceKs, shard, topodatapb.TabletType_PRIMARY)
+	source := env.addTablet(100, sourceKs, shard, topodatapb.TabletType_PRIMARY)
 	target := env.addTablet(200, targetKs, shard, topodatapb.TabletType_PRIMARY)
+	sourceCol := fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"%s" filter:"select * from %s"}}`, sourceKs, shard, table, table)
+	bls := &binlogdatapb.BinlogSource{
+		Keyspace: sourceKs,
+		Shard:    shard,
+		Filter: &binlogdatapb.Filter{
+			Rules: []*binlogdatapb.Rule{{
+				Match:  table,
+				Filter: fmt.Sprintf("select * from %s", table),
+			}},
+		},
+	}
+	now := time.Now().UTC().Unix()
 
-	subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
-	subFlags.Set("cells", cell)
-	subFlags.Set("source", sourceKs)
-	subFlags.Set("tables", table)
-	subFlags.Set("tablet_types", "PRIMARY")
-
-	env.tmc.setVRResults(
-		target.tablet,
-		fmt.Sprintf("select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='%s' and db_name='vt_%s'", wf, targetKs),
-		sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
-			"int64|varchar|varchar|varchar|varchar|int64|int64"),
-			fmt.Sprintf("1|%s||%s|primary|1|0", sourceCol, cell),
-		),
-	)
+	expectGlobalResults := func() {
+		env.tmc.setVRResults(
+			target.tablet,
+			fmt.Sprintf("select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='%s' and db_name='vt_%s'", wf, targetKs),
+			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
+				"int64|varchar|varchar|varchar|varchar|int64|int64"),
+				fmt.Sprintf("1|%s||%s|primary|1|0", sourceCol, env.cell),
+			),
+		)
+	}
 
 	tests := []struct {
-		name         string
-		workflowType wrangler.VReplicationWorkflowType
-		args         []string
-		wantErr      bool
+		name          string
+		workflowType  wrangler.VReplicationWorkflowType
+		args          []string
+		expectResults func()
+		output        string
 	}{
 		{
-			name:         "1",
+			name:         "NotStarted",
 			workflowType: wrangler.MoveTablesWorkflow,
 			args:         []string{"Progress", ksWf},
+			expectResults: func() {
+				env.tmc.setVRResults(
+					target.tablet,
+					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)", vrID, vrID),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name|lastpk",
+						"varchar|varbinary"),
+						fmt.Sprintf("%s|", table),
+					),
+				)
+				env.tmc.setDBAResults(
+					target.tablet,
+					fmt.Sprintf("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d", vrID),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name",
+						"varchar"),
+						table,
+					),
+				)
+				env.tmc.setVRResults(
+					target.tablet,
+					fmt.Sprintf("select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'", targetKs, wf),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type",
+						"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|varchar|int64|int64"),
+						fmt.Sprintf("%d|%s|||0|Running|vt_%s|0|0|0|0||||1|0", vrID, bls, sourceKs),
+					),
+				)
+				env.tmc.setDBAResults(
+					target.tablet,
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')", targetKs, table),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name|table_rows|data_length",
+						"varchar|int64|int64"),
+						fmt.Sprintf("%s|0|%d", table, minTableSize),
+					),
+				)
+				env.tmc.setDBAResults(
+					source.tablet,
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')", sourceKs, table),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name|table_rows|data_length",
+						"varchar|int64|int64"),
+						fmt.Sprintf("%s|10|%d", table, minTableSize),
+					),
+				)
+			},
+			output: "\nCopy Progress (approx):\n\n\ncustomer: rows copied 0/10 (0%), size copied 16384/16384 (100%)\n\n\n\nThe following vreplication streams exist for workflow targetks.testwf:\n\nid=1 on 0/cell-0000000200: Status: Copying. VStream has not started.\n\n\n",
+		},
+		{
+			name:         "Error",
+			workflowType: wrangler.MoveTablesWorkflow,
+			args:         []string{"Progress", ksWf},
+			expectResults: func() {
+				env.tmc.setVRResults(
+					target.tablet,
+					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)", vrID, vrID),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name|lastpk",
+						"varchar|varbinary"),
+						fmt.Sprintf("%s|", table),
+					),
+				)
+				env.tmc.setDBAResults(
+					target.tablet,
+					fmt.Sprintf("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d", vrID),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name",
+						"varchar"),
+						table,
+					),
+				)
+				env.tmc.setVRResults(
+					target.tablet,
+					fmt.Sprintf("select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'", targetKs, wf),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type",
+						"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|varchar|int64|int64"),
+						fmt.Sprintf("%d|%s|||0|Error|vt_%s|0|0|0|0||Duplicate entry '6' for key 'customer.PRIMARY' (errno 1062) (sqlstate 23000) during query: insert into customer(customer_id,email) values (6,'mlord@planetscale.com')||1|0", vrID, bls, sourceKs),
+					),
+				)
+				env.tmc.setDBAResults(
+					target.tablet,
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')", targetKs, table),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name|table_rows|data_length",
+						"varchar|int64|int64"),
+						fmt.Sprintf("%s|5|%d", table, minTableSize),
+					),
+				)
+				env.tmc.setDBAResults(
+					source.tablet,
+					fmt.Sprintf("select table_name, table_rows, data_length from information_schema.tables where table_schema = 'vt_%s' and table_name in ('%s')", sourceKs, table),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"table_name|table_rows|data_length",
+						"varchar|int64|int64"),
+						fmt.Sprintf("%s|10|%d", table, minTableSize),
+					),
+				)
+			},
+			output: "\nCopy Progress (approx):\n\n\ncustomer: rows copied 5/10 (50%), size copied 16384/16384 (100%)\n\n\n\nThe following vreplication streams exist for workflow targetks.testwf:\n\nid=1 on 0/cell-0000000200: Status: Error: Duplicate entry '6' for key 'customer.PRIMARY' (errno 1062) (sqlstate 23000) during query: insert into customer(customer_id,email) values (6,'mlord@planetscale.com').\n\n\n",
+		},
+		{
+			name:         "Running",
+			workflowType: wrangler.MoveTablesWorkflow,
+			args:         []string{"Progress", ksWf},
+			expectResults: func() {
+				env.tmc.setVRResults(
+					target.tablet,
+					fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)", vrID, vrID),
+					&sqltypes.Result{},
+				)
+				env.tmc.setDBAResults(
+					target.tablet,
+					fmt.Sprintf("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = %d", vrID),
+					&sqltypes.Result{},
+				)
+				env.tmc.setVRResults(
+					target.tablet,
+					fmt.Sprintf("select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'", targetKs, wf),
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+						"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type",
+						"int64|varchar|varchar|varchar|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|varchar|int64|int64"),
+						fmt.Sprintf("%d|%s|MySQL56/4ec30b1e-8ee2-11ed-a1eb-0242ac120002:1-15||0|Running|vt_%s|%d|%d|%d|0||||1|0", vrID, bls, sourceKs, now, now, now),
+					),
+				)
+			},
+			output: "/\nThe following vreplication streams exist for workflow targetks.testwf:\n\nid=1 on 0/cell-0000000200: Status: Running. VStream Lag: .* Tx time: .*",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := commandVRWorkflow(ctx, env.wr, subFlags, tt.args, tt.workflowType); (err != nil) != tt.wantErr {
-				// This needs to produce an ERROR once the tests are working
-				t.Logf("commandVRWorkflow() error = %v, wantErr %v", err, tt.wantErr)
+			subFlags := pflag.NewFlagSet("test", pflag.ContinueOnError)
+			expectGlobalResults()
+			tt.expectResults()
+			err := commandVRWorkflow(ctx, env.wr, subFlags, tt.args, tt.workflowType)
+			require.NoError(t, err)
+			if strings.HasPrefix(tt.output, "/") {
+				require.Regexp(t, tt.output[1:], env.cmdlog.String())
+			} else {
+				require.Equal(t, tt.output, env.cmdlog.String())
 			}
+			env.cmdlog.Clear()
+			env.tmc.clearResults()
 		})
 	}
 }

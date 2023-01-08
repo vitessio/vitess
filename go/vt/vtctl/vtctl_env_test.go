@@ -34,7 +34,9 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
 
 type testVTCtlEnv struct {
@@ -97,6 +99,7 @@ func (env *testVTCtlEnv) close() {
 func (env *testVTCtlEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testVTCtlTablet {
 	env.mu.Lock()
 	defer env.mu.Unlock()
+	ctx := context.Background()
 	tablet := &topodatapb.Tablet{
 		Alias: &topodatapb.TabletAlias{
 			Cell: env.cell,
@@ -111,15 +114,22 @@ func (env *testVTCtlEnv) addTablet(id int, keyspace, shard string, tabletType to
 		},
 	}
 	env.tablets[id] = newTestVTCtlTablet(tablet)
-	if err := env.topoServ.InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
+	if err := env.topoServ.InitTablet(ctx, tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
 	if tabletType == topodatapb.TabletType_PRIMARY {
-		_, err := env.topoServ.UpdateShardFields(context.Background(), keyspace, shard, func(si *topo.ShardInfo) error {
+		_, err := env.topoServ.UpdateShardFields(ctx, keyspace, shard, func(si *topo.ShardInfo) error {
 			si.PrimaryAlias = tablet.Alias
 			return nil
 		})
 		if err != nil {
+			panic(err)
+		}
+		emptySrvVSchema := &vschemapb.SrvVSchema{
+			RoutingRules:      &vschemapb.RoutingRules{},
+			ShardRoutingRules: &vschemapb.ShardRoutingRules{},
+		}
+		if err = env.topoServ.UpdateSrvVSchema(ctx, env.cell, emptySrvVSchema); err != nil {
 			panic(err)
 		}
 	}
@@ -158,18 +168,20 @@ func (tvt *testVTCtlTablet) StreamHealth(ctx context.Context, callback func(*que
 
 type testVTCtlTMClient struct {
 	tmclient.TabletManagerClient
-	vrQueries map[int]map[string]*querypb.QueryResult
-	waitpos   map[int]string
-	vrpos     map[int]string
-	pos       map[int]string
+	vrQueries  map[int]map[string]*querypb.QueryResult
+	dbaQueries map[int]map[string]*querypb.QueryResult
+	waitpos    map[int]string
+	vrpos      map[int]string
+	pos        map[int]string
 }
 
 func newTestVTCtlTMClient() *testVTCtlTMClient {
 	return &testVTCtlTMClient{
-		vrQueries: make(map[int]map[string]*querypb.QueryResult),
-		waitpos:   make(map[int]string),
-		vrpos:     make(map[int]string),
-		pos:       make(map[int]string),
+		vrQueries:  make(map[int]map[string]*querypb.QueryResult),
+		dbaQueries: make(map[int]map[string]*querypb.QueryResult),
+		waitpos:    make(map[int]string),
+		vrpos:      make(map[int]string),
+		pos:        make(map[int]string),
 	}
 }
 
@@ -185,7 +197,29 @@ func (tmc *testVTCtlTMClient) setVRResults(tablet *topodatapb.Tablet, query stri
 func (tmc *testVTCtlTMClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	result, ok := tmc.vrQueries[int(tablet.Alias.Uid)][query]
 	if !ok {
-		return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
+		return nil, fmt.Errorf("query %q not found for VReplicationExec() on tablet %d", query, tablet.Alias.Uid)
 	}
 	return result, nil
+}
+
+func (tmc *testVTCtlTMClient) setDBAResults(tablet *topodatapb.Tablet, query string, result *sqltypes.Result) {
+	queries, ok := tmc.dbaQueries[int(tablet.Alias.Uid)]
+	if !ok {
+		queries = make(map[string]*querypb.QueryResult)
+		tmc.dbaQueries[int(tablet.Alias.Uid)] = queries
+	}
+	queries[query] = sqltypes.ResultToProto3(result)
+}
+
+func (tmc *testVTCtlTMClient) ExecuteFetchAsDba(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error) {
+	result, ok := tmc.dbaQueries[int(tablet.Alias.Uid)][string(req.Query)]
+	if !ok {
+		return nil, fmt.Errorf("query %q not found for ExecuteFetchAsDba() on tablet %d", req.Query, tablet.Alias.Uid)
+	}
+	return result, nil
+}
+
+func (tmc *testVTCtlTMClient) clearResults() {
+	tmc.vrQueries = make(map[int]map[string]*querypb.QueryResult)
+	tmc.dbaQueries = make(map[int]map[string]*querypb.QueryResult)
 }

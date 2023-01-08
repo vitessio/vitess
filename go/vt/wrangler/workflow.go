@@ -92,7 +92,7 @@ func (vrw *VReplicationWorkflow) String() string {
 func (wr *Wrangler) NewVReplicationWorkflow(ctx context.Context, workflowType VReplicationWorkflowType,
 	params *VReplicationWorkflowParams) (*VReplicationWorkflow, error) {
 
-	log.Errorf("NewVReplicationWorkflow with params %+v", params)
+	log.Infof("NewVReplicationWorkflow with params %+v", params)
 	vrw := &VReplicationWorkflow{wr: wr, ctx: ctx, params: params, workflowType: workflowType}
 	ts, ws, err := wr.getWorkflowState(ctx, params.TargetKeyspace, params.Workflow)
 	if err != nil {
