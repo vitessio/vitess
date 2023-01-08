@@ -41,7 +41,6 @@ import (
 
 type testVTCtlEnv struct {
 	wr         *wrangler.Wrangler
-	workflow   string
 	topoServ   *topo.Server
 	cell       string
 	tabletType topodatapb.TabletType
@@ -71,11 +70,11 @@ func init() {
 
 func newTestVTCtlEnv() *testVTCtlEnv {
 	tabletconntest.SetProtocol("go.vt.vtctl.vtctl_env_test", "VTCtlTest")
+	cellName := "cell1"
 	env := &testVTCtlEnv{
-		workflow:   "vtctlTest",
 		tablets:    make(map[int]*testVTCtlTablet),
-		topoServ:   memorytopo.NewServer("cell"),
-		cell:       "cell",
+		topoServ:   memorytopo.NewServer(cellName),
+		cell:       cellName,
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestVTCtlTMClient(),
 		cmdlog:     logutil.NewMemoryLogger(),
@@ -92,11 +91,12 @@ func (env *testVTCtlEnv) close() {
 	}
 	env.tablets = nil
 	env.cmdlog.Clear()
+	env.tmc.clearResults()
 	env.topoServ.Close()
 	env.wr = nil
 }
 
-func (env *testVTCtlEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testVTCtlTablet {
+func (env *testVTCtlEnv) addTablet(id int, keyspace, shard string, keyRange *topodatapb.KeyRange, tabletType topodatapb.TabletType) *testVTCtlTablet {
 	env.mu.Lock()
 	defer env.mu.Unlock()
 	ctx := context.Background()
@@ -107,7 +107,7 @@ func (env *testVTCtlEnv) addTablet(id int, keyspace, shard string, tabletType to
 		},
 		Keyspace: keyspace,
 		Shard:    shard,
-		KeyRange: &topodatapb.KeyRange{},
+		KeyRange: keyRange,
 		Type:     tabletType,
 		PortMap: map[string]int32{
 			"test": int32(id),
@@ -170,18 +170,12 @@ type testVTCtlTMClient struct {
 	tmclient.TabletManagerClient
 	vrQueries  map[int]map[string]*querypb.QueryResult
 	dbaQueries map[int]map[string]*querypb.QueryResult
-	waitpos    map[int]string
-	vrpos      map[int]string
-	pos        map[int]string
 }
 
 func newTestVTCtlTMClient() *testVTCtlTMClient {
 	return &testVTCtlTMClient{
 		vrQueries:  make(map[int]map[string]*querypb.QueryResult),
 		dbaQueries: make(map[int]map[string]*querypb.QueryResult),
-		waitpos:    make(map[int]string),
-		vrpos:      make(map[int]string),
-		pos:        make(map[int]string),
 	}
 }
 
