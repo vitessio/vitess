@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-source release_utils.sh
+source ./tools/release_utils.sh
 
 ROOT=$(pwd)
 if [ "$VTROOT" != "" ]; then
@@ -66,10 +66,10 @@ function createRelease () {
   git commit -n -s -m "Release commit for $RELEASE_VERSION"
 }
 
+checkGitState
+
 current_branch=""
 checkoutNewBranch "create_release"
-
-checkGitState
 
 createRelease
 
