@@ -161,18 +161,19 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 }
 
 func (qb *queryBuilder) rewriteExprForDerivedTable(expr sqlparser.Expr, dtName string) {
-	sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			hasTable := qb.hasTable(node.Qualifier.Name.String())
-			if hasTable {
-				node.Qualifier = sqlparser.TableName{
-					Name: sqlparser.NewIdentifierCS(dtName),
-				}
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		hasTable := qb.hasTable(col.Qualifier.Name.String())
+		if hasTable {
+			col.Qualifier = sqlparser.TableName{
+				Name: sqlparser.NewIdentifierCS(dtName),
 			}
 		}
-		return true
-	}, nil)
+		return true, nil
+	}, expr)
 }
 
 func (qb *queryBuilder) hasTable(tableName string) bool {
@@ -236,12 +237,12 @@ func (h *Horizon) toSQL(qb *queryBuilder) error {
 	if err != nil {
 		return err
 	}
-	sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
-		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
 			removeKeyspaceFromSelectExpr(aliasedExpr)
 		}
-		return true
-	}, nil)
+		return true, nil
+	}, qb.sel)
 	return nil
 }
 
@@ -343,7 +344,8 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		}
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil
-		opQuery := sqlparser.RemoveKeyspace(op.Query).(*sqlparser.Select)
+		sqlparser.RemoveKeyspace(op.Query)
+		opQuery := op.Query.(*sqlparser.Select)
 		sel.Limit = opQuery.Limit
 		sel.OrderBy = opQuery.OrderBy
 		sel.GroupBy = opQuery.GroupBy
@@ -365,12 +367,12 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		if err != nil {
 			return err
 		}
-		sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
-			if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
 				removeKeyspaceFromSelectExpr(aliasedExpr)
 			}
-			return true
-		}, nil)
+			return true, nil
+		}, qb.sel)
 		return nil
 
 	default:

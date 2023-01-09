@@ -2145,21 +2145,22 @@ func defaultRequiresParens(ct *ColumnType) bool {
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
-func RemoveKeyspaceFromColName(expr Expr) Expr {
-	return RemoveKeyspace(expr).(Expr) // This hard cast is safe because we do not change the type the input
+func RemoveKeyspaceFromColName(expr Expr) {
+	RemoveKeyspace(expr)
 }
 
 // RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
-func RemoveKeyspace(in SQLNode) SQLNode {
-	return Rewrite(in, nil, func(cursor *Cursor) bool {
-		switch col := cursor.Node().(type) {
+func RemoveKeyspace(in SQLNode) {
+	// Walk will only return an error if we return an error from the inner func. safe to ignore here
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch col := node.(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}
-		return true
-	})
+		return true, nil
+	}, in)
 }
 
 func convertStringToInt(integer string) int {

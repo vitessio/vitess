@@ -159,28 +159,27 @@ func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
 			_, parentIsAggr := inner.Parent().(sqlparser.AggrFunc)
 			for _, e := range sel.SelectExprs {
 				ae, ok := e.(*sqlparser.AliasedExpr)
-				if !ok {
+				if !ok || !ae.As.Equal(col.Name) {
 					continue
 				}
-				if ae.As.Equal(col.Name) {
-					_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
-					if parentIsAggr && aliasPointsToAggr {
-						return false
-					}
+				_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
+				if parentIsAggr && aliasPointsToAggr {
+					return false
+				}
 
-					safeToRewrite := true
-					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
-						switch cursor.Node().(type) {
-						case *sqlparser.ColName:
-							safeToRewrite = false
-						case sqlparser.AggrFunc:
-							return false
-						}
-						return true
-					}, nil)
-					if safeToRewrite {
-						inner.Replace(ae.Expr)
+				safeToRewrite := true
+				_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+					switch node.(type) {
+					case *sqlparser.ColName:
+						safeToRewrite = false
+						return false, nil
+					case sqlparser.AggrFunc:
+						return false, nil
 					}
+					return true, nil
+				}, ae.Expr)
+				if safeToRewrite {
+					inner.Replace(ae.Expr)
 				}
 			}
 		}
@@ -230,17 +229,20 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 // realCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
 func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
-	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
-		switch exp := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			newColName := *exp
-			if union {
-				newColName.Qualifier = sqlparser.TableName{}
-			}
-			cursor.Replace(&newColName)
+	// todo copy-on-rewrite!
+	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), nil, func(cursor *sqlparser.Cursor) bool {
+		exp, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
 		}
+
+		newColName := *exp
+		if union {
+			newColName.Qualifier = sqlparser.TableName{}
+		}
+		cursor.Replace(&newColName)
 		return true
-	}, nil).(sqlparser.Expr)
+	}).(sqlparser.Expr)
 }
 
 func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {
