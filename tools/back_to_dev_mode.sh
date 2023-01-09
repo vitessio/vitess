@@ -14,50 +14,30 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-function updateJava () {
-  cd $ROOT/java || exit 1
-  mvn versions:set -DnewVersion=$1
-}
+source ./tools/release_utils.sh
 
-# First argument is the Release Version the docker release script should be set to (for instance: v15.0.0)
-function updateDockerReleaseScript () {
-  sed -i.bak -E "s/vt_base_version=.*/vt_base_version='$1'/g" $ROOT/docker/release.sh
-  rm -f $ROOT/docker/release.sh.bak
-}
+ROOT=$(pwd)
+if [ "$VTROOT" != "" ]; then
+    ROOT=$VTROOT
+fi
 
-function updateVersionGo () {
+if [ "$BASE_REMOTE" == "" ]; then
+  echo "Set the env var BASE_REMOTE with the name of the remote on which the release branch is located."
+  exit 1
+fi
 
-  cat << EOF > ${ROOT}/go/vt/servenv/version.go
-/*
-Copyright 2022 The Vitess Authors.
+if [ "$BASE_BRANCH" == "" ]; then
+  echo "Set the env var BASE_BRANCH with the name of the branch on which the release will take place."
+  exit 1
+fi
 
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-
-    http://www.apache.org/licenses/LICENSE-2.0
-
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
-package servenv
-
-// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY ./tools/do_releases.sh
-// DO NOT EDIT
-
-const versionName = "${1}"
-EOF
-
-}
+if [ "$RELEASE_VERSION" == "" ]; then
+  echo "Set the env var RELEASE_VERSION with the release version"
+  exit 1
+fi
 
 # Putting the branch back into dev mode
 function doBackToDevMode () {
-  checkoutNewBranch "back-to-dev"
-
   # Preparing the "dev mode" commit
   updateJava $DEV_VERSION
   updateDockerReleaseScript $DEV_VERSION
@@ -65,19 +45,29 @@ function doBackToDevMode () {
 
   git add --all
   git commit -n -s -m "Back to dev mode"
-
-  push_branches+=($current_branch)
 }
 
-git_status_output=$(git status --porcelain)
-if [ "$git_status_output" == "" ]; then
-  	echo so much clean
-else
-    echo "cannot do release with dirty git state"
-    exit 1
-fi
+checkGitState
 
-push_branches=()
 current_branch=""
+checkoutNewBranch "back_to_dev"
 
 doBackToDevMode
+
+echo " "
+echo " "
+echo "----------------"
+echo "Back-to-dev mode successful."
+echo " "
+echo "One branch created: $current_branch"
+echo " "
+echo "Please push $current_branch to a remote. You will then create a Pull Request to merge into $BASE_REMOTE:$BASE_BRANCH."
+echo " "
+echo "   git push upstream $current_branch"
+echo " "
+echo " "
+echo "Once pushed, please execute the following gh command to create the Pull Requests. Please replace 'USER_ON_WHICH_YOU_PUSHED' with the user/org on which you pushed the two branches."
+echo " "
+echo "   gh pr create -w --title 'Back to dev mode after v$RELEASE_VERSION' --base $BASE_BRANCH --head USER_ON_WHICH_YOU_PUSHED:$current_branch --label 'Type: Release','Component: General' --body 'Includes the changes required to go back into dev mode (v$DEV_VERSION) after the release of v$RELEASE_VERSION.'"
+echo " "
+echo "----------------"
