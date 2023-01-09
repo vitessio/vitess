@@ -51,16 +51,28 @@ func TestVexecUpdateTemplates(t *testing.T) {
 	}
 }
 
+func TestGetConstraintType(t *testing.T) {
+	{
+		typ := GetConstraintType(&sqlparser.CheckConstraintDefinition{})
+		assert.Equal(t, CheckConstraintType, typ)
+	}
+	{
+		typ := GetConstraintType(&sqlparser.ForeignKeyDefinition{})
+		assert.Equal(t, ForeignKeyConstraintType, typ)
+	}
+}
+
 func TestValidateAndEditCreateTableStatement(t *testing.T) {
 	e := Executor{}
 	tt := []struct {
 		name             string
 		query            string
-		expectError      bool
+		strategyOptions  string
+		expectError      string
 		countConstraints int
 	}{
 		{
-			name: "table with FK",
+			name: "table with FK, not allowed",
 			query: `
 				create table onlineddl_test (
 						id int auto_increment,
@@ -71,10 +83,38 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 					)
 				`,
 			countConstraints: 1,
-			expectError:      true,
+			expectError:      schema.ErrForeignKeyFound.Error(),
 		},
 		{
-			name: "table with FK",
+			name: "table with FK, allowed",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
+			strategyOptions:  "--unsafe-allow-foreign-keys",
+			countConstraints: 1,
+		},
+		{
+			name: "table with anonymous FK, allowed",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						parent_id int not null,
+						primary key(id),
+						foreign key (parent_id) references onlineddl_test_parent (id) on delete no action
+					)
+				`,
+			strategyOptions:  "--unsafe-allow-foreign-keys",
+			countConstraints: 1,
+		},
+		{
+			name: "table with CHECK constraints",
 			query: `
 				create table onlineddl_test (
 						id int auto_increment,
@@ -88,6 +128,21 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 				`,
 			countConstraints: 4,
 		},
+		{
+			name: "table with both FOREIGN and CHECK constraints",
+			query: `
+				create table onlineddl_test (
+						id int auto_increment,
+						i int not null,
+						primary key(id),
+						constraint check_1 CHECK ((i >= 0)),
+						constraint test_fk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action,
+						constraint chk_1111033c1d2d5908bf1f956ba900b192_check_4 CHECK ((i >= 0))
+					)
+				`,
+			strategyOptions:  "--unsafe-allow-foreign-keys",
+			countConstraints: 3,
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
@@ -96,10 +151,11 @@ func TestValidateAndEditCreateTableStatement(t *testing.T) {
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test"}
+			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "onlineddl_test", Options: tc.strategyOptions}
 			constraintMap, err := e.validateAndEditCreateTableStatement(context.Background(), onlineDDL, createTable)
-			if tc.expectError {
-				assert.Error(t, err)
+			if tc.expectError != "" {
+				require.Error(t, err)
+				assert.ErrorContains(t, err, tc.expectError)
 			} else {
 				assert.NoError(t, err)
 			}
@@ -152,6 +208,26 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			alter:  "alter table t add constraint some_check check (id != 1)",
 			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
 		},
+		{
+			alter:  "alter table t add constraint some_check check (id != 1), add constraint another_check check (id != 2)",
+			expect: []string{"alter table t add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1), add constraint another_check_4fa197273p3w96267pzm3gfi3 check (id != 2)"},
+		},
+		{
+			alter:  "alter table t add foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint fk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+		},
+		{
+			alter:  "alter table t add constraint myfk foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint myfk_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+		},
+		{
+			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action",
+			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action"},
+		},
+		{
+			alter:  "alter table t add constraint t_fk_1 foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check check (id != 1)",
+			expect: []string{"alter table t add constraint fk_1_6fmhzdlya89128u5j3xapq34i foreign key (parent_id) references onlineddl_test_parent (id) on delete no action, add constraint some_check_aulpn7bjeortljhguy86phdn9 check (id != 1)"},
+		},
 	}
 	for _, tc := range tt {
 		t.Run(tc.alter, func(t *testing.T) {
@@ -161,7 +237,7 @@ func TestValidateAndEditAlterTableStatement(t *testing.T) {
 			require.True(t, ok)
 
 			m := map[string]string{}
-			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t"}
+			onlineDDL := &schema.OnlineDDL{UUID: "a5a563da_dc1a_11ec_a416_0a43f95f28a3", Table: "t", Options: "--unsafe-allow-foreign-keys"}
 			alters, err := e.validateAndEditAlterTableStatement(context.Background(), onlineDDL, alterTable, m)
 			assert.NoError(t, err)
 			altersStrings := []string{}
