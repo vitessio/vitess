@@ -13,7 +13,7 @@
 # limitations under the License.
 
 ARG bootstrap_version=14
-ARG image="vitess/bootstrap:${bootstrap_version}-mariadb"
+ARG image="vitess/bootstrap:${bootstrap_version}-mysql57"
 
 FROM "${image}"
 
