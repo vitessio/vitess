@@ -31,7 +31,7 @@ import (
 
 func unshardedShortcut(ctx *plancontext.PlanningContext, stmt sqlparser.SelectStatement, ks *vindexes.Keyspace) (logicalPlan, []string, error) {
 	// this method is used when the query we are handling has all tables in the same unsharded keyspace
-	sqlparser.Rewrite(stmt, nil, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.SafeRewrite(stmt, nil, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case sqlparser.SelectExpr:
 			removeKeyspaceFromSelectExpr(node)

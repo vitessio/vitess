@@ -97,7 +97,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 		// TODO copy-on-rewrite should be used here
 		predicate := sqlparser.CloneExpr(expr)
 		var err error
-		predicate = sqlparser.Rewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
+		predicate = sqlparser.SafeRewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
 				return err == nil
