@@ -41,7 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -655,25 +654,42 @@ func (bp *backupPipe) ReportProgress(period time.Duration, logger logutil.Logger
 // backupFile backs up an individual file.
 func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle, fe *FileEntry, name string) (finalErr error) {
 	// Open the source file for reading.
+	openSourceAt := time.Now()
 	source, err := fe.open(params.Cnf, true)
 	if err != nil {
 		return err
 	}
-	defer source.Close()
+	params.Stats.Scope(stats.Operation("source:open")).TimedIncrement(time.Since(openSourceAt))
+
+	defer func() {
+		closeSourceAt := time.Now()
+		source.Close()
+		params.Stats.Scope(stats.Operation("source:close")).TimedIncrement(time.Since(closeSourceAt))
+	}()
+
+	readStats := params.Stats.Scope(stats.Operation("source:read"))
+	timedSource := ioutil.NewTimedReadCloser(source, readStats.TimedIncrement)
 
 	fi, err := source.Stat()
 	if err != nil {
 		return err
 	}
 
-	params.Logger.Infof("Backing up file: %v", fe.Name)
+	br := newBackupReader(fe.Name, fi.Size(), timedSource)
+	go br.ReportProgress(builtinBackupProgress, params.Logger)
+
 	// Open the destination file for writing, and a buffer.
-	wc, err := bh.AddFile(ctx, name, fi.Size())
+	params.Logger.Infof("Backing up file: %v", fe.Name)
+	openDestAt := time.Now()
+	dest, err := bh.AddFile(ctx, name, fi.Size())
 	if err != nil {
 		return vterrors.Wrapf(err, "cannot add file: %v,%v", name, fe.Name)
 	}
+	params.Stats.Scope(stats.Operation("destination:open")).TimedIncrement(time.Since(openDestAt))
+
 	defer func(name, fileName string) {
-		if rerr := wc.Close(); rerr != nil {
+		closeDestAt := time.Now()
+		if rerr := dest.Close(); rerr != nil {
 			if finalErr != nil {
 				// We already have an error, just log this one.
 				params.Logger.Errorf2(rerr, "failed to close file %v,%v", name, fe.Name)
@@ -681,16 +697,13 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 				finalErr = rerr
 			}
 		}
+		params.Stats.Scope(stats.Operation("destination:close")).TimedIncrement(time.Since(closeDestAt))
 	}(name, fe.Name)
 
-	readStats := params.Stats.Scope(stats.Operation("read"))
-	timedSource := ioutil.NewTimedReadCloser(source, readStats.TimedIncrement)
+	destStats := params.Stats.Scope(stats.Operation("destination:write"))
+	timedDest := ioutil.NewTimedWriteCloser(dest, destStats.TimedIncrement)
 
-	bw := newBackupWriter(fe.Name, fi.Size(), wc)
-
-	br := newBackupReader(fe.Name, fi.Size(), timedSource)
-	go br.ReportProgress(builtinBackupProgress, params.Logger)
-
+	bw := newBackupWriter(fe.Name, fi.Size(), timedDest)
 	var writer io.Writer = bw
 
 	// Create the external write pipe, if any.
@@ -706,9 +719,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		writer = pipe
 	}
 
-	writeStats := params.Stats.Scope(stats.Operation("write"))
-	writer = ioutil.NewTimedWriter(writer, writeStats.TimedIncrement)
-
 	// Create the gzip compression pipe, if necessary.
 	var compressor io.WriteCloser
 	if backupStorageCompress {
@@ -721,7 +731,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 			return vterrors.Wrap(err, "can't create compressor")
 		}
 
-		compressStats := params.Stats.Scope(backupstats.Operation("compress"))
+		compressStats := params.Stats.Scope(stats.Operation("compressor:write"))
 		writer = ioutil.NewTimedWriter(compressor, compressStats.TimedIncrement)
 	}
 
@@ -734,9 +744,11 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 
 	// Close gzip to flush it, after that all data is sent to writer.
 	if compressor != nil {
+		closeCompressorAt := time.Now()
 		if err = compressor.Close(); err != nil {
 			return vterrors.Wrap(err, "cannot close compressor")
 		}
+		params.Stats.Scope(stats.Operation("compressor:close")).TimedIncrement(time.Since(closeCompressorAt))
 	}
 
 	// Close the hook pipe if necessary.
@@ -754,13 +766,17 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	// Close the backupPipe to finish writing on destination.
+	closeWriterAt := time.Now()
 	if err = bw.Close(); err != nil {
 		return vterrors.Wrapf(err, "cannot flush destination: %v", name)
 	}
+	params.Stats.Scope(stats.Operation("writer:close")).TimedIncrement(time.Since(closeWriterAt))
 
+	closeReaderAt := time.Now()
 	if err := br.Close(); err != nil {
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
+	params.Stats.Scope(stats.Operation("reader:close")).TimedIncrement(time.Since(closeReaderAt))
 
 	// Save the hash.
 	fe.Hash = bw.HashString()
@@ -903,21 +919,37 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 // restoreFile restores an individual file.
 func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, fe *FileEntry, bm builtinBackupManifest, name string) (finalErr error) {
 	// Open the source file for reading.
+	openSourceAt := time.Now()
 	source, err := bh.ReadFile(ctx, name)
 	if err != nil {
 		return vterrors.Wrap(err, "can't open source file for reading")
 	}
-	defer source.Close()
+	params.Stats.Scope(stats.Operation("source:open")).TimedIncrement(time.Since(openSourceAt))
+
+	readStats := params.Stats.Scope(stats.Operation("source:read"))
+	timedSource := ioutil.NewTimedReader(source, readStats.TimedIncrement)
+
+	defer func() {
+		closeSourceAt := time.Now()
+		source.Close()
+		params.Stats.Scope(stats.Operation("source:close")).TimedIncrement(time.Since(closeSourceAt))
+	}()
+
+	br := newBackupReader(name, 0, timedSource)
+	go br.ReportProgress(builtinBackupProgress, params.Logger)
+	var reader io.Reader = br
 
 	// Open the destination file for writing.
-
-	dstFile, err := fe.open(params.Cnf, false)
+	openDestAt := time.Now()
+	dest, err := fe.open(params.Cnf, false)
 	if err != nil {
 		return vterrors.Wrap(err, "can't open destination file for writing")
 	}
+	params.Stats.Scope(stats.Operation("destination:open")).TimedIncrement(time.Since(openDestAt))
 
 	defer func() {
-		if cerr := dstFile.Close(); cerr != nil {
+		closeDestAt := time.Now()
+		if cerr := dest.Close(); cerr != nil {
 			if finalErr != nil {
 				// We already have an error, just log this one.
 				log.Errorf("failed to close file %v: %v", name, cerr)
@@ -925,20 +957,13 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 				finalErr = vterrors.Wrap(cerr, "failed to close destination file")
 			}
 		}
+		params.Stats.Scope(stats.Operation("destination:close")).TimedIncrement(time.Since(closeDestAt))
 	}()
 
-	writeStats := params.Stats.Scope(stats.Operation("write"))
-	timedDstFile := ioutil.NewTimedWriter(dstFile, writeStats.TimedIncrement)
+	writeStats := params.Stats.Scope(stats.Operation("destination:write"))
+	timedDest := ioutil.NewTimedWriter(dest, writeStats.TimedIncrement)
 
-	dst := bufio.NewWriterSize(timedDstFile, writerBufferSize)
-
-	bp := newBackupReader(name, 0, source)
-	go bp.ReportProgress(builtinBackupProgress, params.Logger)
-
-	var reader io.Reader = bp
-
-	readStats := params.Stats.Scope(stats.Operation("read"))
-	reader = ioutil.NewTimedReader(reader, readStats.TimedIncrement)
+	bufferedDest := bufio.NewWriterSize(timedDest, writerBufferSize)
 
 	// Create the external read pipe, if any.
 	var wait hook.WaitFunc
@@ -977,10 +1002,11 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 			return vterrors.Wrap(err, "can't create decompressor")
 		}
 
-		decompressStats := params.Stats.Scope(stats.Operation("decompress"))
+		decompressStats := params.Stats.Scope(stats.Operation("decompressor:read"))
 		reader = ioutil.NewTimedReader(decompressor, decompressStats.TimedIncrement)
 
 		defer func() {
+			closeDecompressorAt := time.Now()
 			if cerr := decompressor.Close(); cerr != nil {
 				params.Logger.Errorf("failed to close decompressor: %v", cerr)
 				if finalErr != nil {
@@ -990,11 +1016,12 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 					finalErr = vterrors.Wrap(cerr, "failed to close decompressor")
 				}
 			}
+			params.Stats.Scope(stats.Operation("decompressor:close")).TimedIncrement(time.Since(closeDecompressorAt))
 		}()
 	}
 
 	// Copy the data. Will also write to the hasher.
-	if _, err = io.Copy(dst, reader); err != nil {
+	if _, err = io.Copy(bufferedDest, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
 	}
 
@@ -1010,19 +1037,23 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}
 
 	// Check the hash.
-	hash := bp.HashString()
+	hash := br.HashString()
 	if hash != fe.Hash {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "hash mismatch for %v, got %v expected %v", fe.Name, hash, fe.Hash)
 	}
 
 	// Flush the buffer.
-	if err := dst.Flush(); err != nil {
+	closeDestAt := time.Now()
+	if err := bufferedDest.Flush(); err != nil {
 		return vterrors.Wrap(err, "failed to flush destination buffer")
 	}
+	params.Stats.Scope(stats.Operation("destination:close")).TimedIncrement(time.Since(closeDestAt))
 
-	if err := bp.Close(); err != nil {
+	closeSourceAt := time.Now()
+	if err := br.Close(); err != nil {
 		return vterrors.Wrap(err, "failed to close the source reader")
 	}
+	params.Stats.Scope(stats.Operation("source:close")).TimedIncrement(time.Since(closeSourceAt))
 
 	return nil
 }
