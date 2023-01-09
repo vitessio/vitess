@@ -100,7 +100,6 @@ type OnlineDDL struct {
 	MigrationContext   string          `json:"context,omitempty"`
 	Status             OnlineDDLStatus `json:"status,omitempty"`
 	TabletAlias        string          `json:"tablet,omitempty"`
-	Retries            int64           `json:"retries,omitempty"`
 	ReadyToComplete    int64           `json:"ready_to_complete,omitempty"`
 	WasReadyToComplete int64           `json:"was_ready_to_complete,omitempty"`
 }
