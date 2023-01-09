@@ -5,7 +5,7 @@ on:
 jobs:
   build:
     name: Code Freeze
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
     - name: Fail if Code Freeze is enabled
       run: |
