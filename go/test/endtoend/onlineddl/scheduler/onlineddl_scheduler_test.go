@@ -830,9 +830,6 @@ func TestSingleton(t *testing.T) {
 		multiDropStatements = `DROP TABLE IF EXISTS t1; DROP TABLE IF EXISTS t2; DROP TABLE IF EXISTS t3;`
 	)
 
-	// func testOnlineDDLStatement(t *testing.T, ddlStatement string, ddlStrategy string, executeStrategy string,                            expectHint string, expectError string, skipWait bool) (uuid string) {
-	// func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, migrationContext string, expectHint string, expectError string, skipWait bool) (uuid string) {
-
 	var uuids []string
 	// CREATE
 	t.Run("CREATE TABLE", func(t *testing.T) {
