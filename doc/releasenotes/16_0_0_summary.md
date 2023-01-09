@@ -36,7 +36,7 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 
 ### Structured Logging Flag
 
-In [PR #11960](https://github.com/vitessio/vitess/pull/11960/) we introduced and new flag `structured-logging`. This flag stops the `glog` usage and use [`PlanetScale Log`](https://github.com/planetscale/log) instead.
+In [PR #11960](https://github.com/vitessio/vitess/pull/11960/) we introduced a new flag `structured-logging`. This flag stops the `glog` usage and use [`PlanetScale Log`](https://github.com/planetscale/log) instead.
 
 The flag is available in these components:
 
