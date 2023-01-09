@@ -15,36 +15,45 @@ limitations under the License.
 */
 
 /*
-This file contains the timer struct, which contains contains time-keeping
-functionality used by TimedReader, TimedReadCloser, TimedWriter,
-TimedWriteCloser.
+This file contains the meter struct, which contains contains
+time-and-byte-tracking functionality used by MeteredReader, MeteredReadCloser,
+MeteredWriter, MeteredWriteCloser.
 */
 
 package ioutil
 
 import "time"
 
-// timer contains time-keeping functionality used by TimedReader,
-// TimedReadCloser, TimedWriter, TimedWriteCloser.
-type timer struct {
-	fs    []func(delta time.Duration)
-	total time.Duration
+// meter contains time-and-byte-tracking functionality.
+type meter struct {
+	fs       []func(b int, d time.Duration)
+	bytes    int64
+	duration time.Duration
 }
 
-// Duration reports the total time spend on Read calls so far.
-func (t *timer) Duration() time.Duration {
-	return t.total
+// Bytes reports the total bytes read in calls to f so far.
+func (mtr *meter) Bytes() int64 {
+	return mtr.bytes
 }
 
-// time tracks the time it takes to execute f. Time is accumulated into total,
+// Duration reports the total time spend in calls to f so far.
+func (mtr *meter) Duration() time.Duration {
+	return mtr.duration
+}
+
+// measure tracks the measure it takes to execute f. Time is accumulated into total,
 // and reported to callback fns.
-func (t *timer) time(f func(p []byte) (int, error), p []byte) (n int, err error) {
+func (mtr *meter) measure(f func(p []byte) (int, error), p []byte) (b int, err error) {
 	s := time.Now()
-	n, err = f(p)
-	delta := time.Since(s)
-	t.total += delta
-	for _, cb := range t.fs {
-		cb(delta)
+	b, err = f(p)
+	d := time.Since(s)
+
+	mtr.bytes += int64(b)
+	mtr.duration += d
+
+	for _, cb := range mtr.fs {
+		cb(b, d)
 	}
+
 	return
 }

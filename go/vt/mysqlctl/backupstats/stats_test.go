@@ -41,12 +41,13 @@ func TestRestoreStats(t *testing.T) {
 }
 
 func TestScope(t *testing.T) {
+	bytes := stats.NewCountersWithMultiLabels("test_scope_bytes", "", labels)
 	count := stats.NewCountersWithMultiLabels("test_scope_count", "", labels)
 	durationNs := stats.NewCountersWithMultiLabels("test_scope_duration_ns", "", labels)
 
 	duration := 10 * time.Second
 
-	stats1 := newScopedStats(count, durationNs, nil)
+	stats1 := newScopedStats(bytes, count, durationNs, nil)
 	path1 := strings.Join([]string{unscoped, unscoped, unscoped}, ".")
 
 	stats2 := stats1.Scope(Component(BackupEngine), Implementation("test"))
@@ -100,9 +101,11 @@ func TestStatsAreNotInitializedByDefault(t *testing.T) {
 }
 
 func TestTimedIncrement(t *testing.T) {
+	bytes := stats.NewCountersWithMultiLabels("test_timed_increment_bytes", "", labels)
 	count := stats.NewCountersWithMultiLabels("test_timed_increment_count", "", labels)
 	durationNs := stats.NewCountersWithMultiLabels("test_timed_increment_duration_ns", "", labels)
-	stats := newScopedStats(count, durationNs, nil)
+
+	stats := newScopedStats(bytes, count, durationNs, nil)
 
 	duration := 10 * time.Second
 	path := strings.Join([]string{unscoped, unscoped, unscoped}, ".")

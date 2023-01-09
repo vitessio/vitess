@@ -45,11 +45,14 @@ type Stats interface {
 	Scope(...Scope) Stats
 	// Increment count by 1 and increase duration.
 	TimedIncrement(time.Duration)
+	// Increment bytes and increase duration.
+	TimedIncrementBytes(int, time.Duration)
 }
 
 type noStats struct{}
 
 type scopedStats struct {
+	bytes       *vtstats.CountersWithMultiLabels
 	count       *vtstats.CountersWithMultiLabels
 	durationNs  *vtstats.CountersWithMultiLabels
 	labelValues []string
@@ -65,8 +68,10 @@ var (
 	registerBackupStats  sync.Once
 	registerRestoreStats sync.Once
 
+	backupBytes       *stats.CountersWithMultiLabels
 	backupCount       *stats.CountersWithMultiLabels
 	backupDurationNs  *stats.CountersWithMultiLabels
+	restoreBytes      *stats.CountersWithMultiLabels
 	restoreCount      *stats.CountersWithMultiLabels
 	restoreDurationNs *stats.CountersWithMultiLabels
 )
@@ -75,12 +80,19 @@ var (
 //
 // It registers two stats with the Vitess stats package.
 //
+//   - backup_bytes: number of bytes processed by an an operation for given
+//     component and implementation.
 //   - backup_count: number of times an operation has happened for given
 //     component and implementation.
 //   - backup_duration_nanoseconds: time spent on an operation for a given
 //     component and implementation.
 func BackupStats() Stats {
 	registerBackupStats.Do(func() {
+		backupBytes = stats.NewCountersWithMultiLabels(
+			"backup_bytes",
+			"How many backup bytes processed.",
+			labels,
+		)
 		backupCount = stats.NewCountersWithMultiLabels(
 			"backup_count",
 			"How many backup operations have happened.",
@@ -92,19 +104,26 @@ func BackupStats() Stats {
 			labels,
 		)
 	})
-	return newScopedStats(backupCount, backupDurationNs, nil)
+	return newScopedStats(backupBytes, backupCount, backupDurationNs, nil)
 }
 
 // RestoreStats creates a new Stats for restore operations.
 //
 // It registers two stats with the Vitess stats package.
 //
+//   - restore_bytes: number of bytes processed by an an operation for given
+//     component and implementation.
 //   - restore_count: number of times an operation has happened for given
 //     component and implementation.
 //   - restore_duration_nanoseconds: time spent on an operation for a given
 //     component and implementation.
 func RestoreStats() Stats {
 	registerRestoreStats.Do(func() {
+		restoreBytes = stats.NewCountersWithMultiLabels(
+			"restore_bytes",
+			"How many restore bytes processed.",
+			labels,
+		)
 		restoreCount = stats.NewCountersWithMultiLabels(
 			"restore_count",
 			"How many restore operations have happened.",
@@ -116,7 +135,7 @@ func RestoreStats() Stats {
 			labels,
 		)
 	})
-	return newScopedStats(restoreCount, restoreDurationNs, nil)
+	return newScopedStats(restoreBytes, restoreCount, restoreDurationNs, nil)
 }
 
 // NoStats returns a no-op Stats suitable for tests and for backwards
@@ -125,11 +144,13 @@ func NoStats() Stats {
 	return defaultNoStats
 }
 
-func (ns *noStats) Lock(...ScopeType) Stats        { return ns }
-func (ns *noStats) Scope(...Scope) Stats           { return ns }
-func (ns *noStats) TimedIncrement(d time.Duration) {}
+func (ns *noStats) Lock(...ScopeType) Stats                { return ns }
+func (ns *noStats) Scope(...Scope) Stats                   { return ns }
+func (ns *noStats) TimedIncrement(time.Duration)           {}
+func (ns *noStats) TimedIncrementBytes(int, time.Duration) {}
 
 func newScopedStats(
+	bytes *stats.CountersWithMultiLabels,
 	count *stats.CountersWithMultiLabels,
 	durationNs *stats.CountersWithMultiLabels,
 	labelValues []string,
@@ -141,7 +162,7 @@ func newScopedStats(
 		}
 	}
 
-	return &scopedStats{count, durationNs, labelValues}
+	return &scopedStats{bytes, count, durationNs, labelValues}
 }
 
 // Scope returns a new Stats narrowed by the provided scopes. If a provided
@@ -162,11 +183,17 @@ func (s *scopedStats) Scope(scopes ...Scope) Stats {
 			copyOfLabelValues[typeIdx] = scope.Value
 		}
 	}
-	return newScopedStats(s.count, s.durationNs, copyOfLabelValues)
+	return newScopedStats(s.bytes, s.count, s.durationNs, copyOfLabelValues)
 }
 
 // TimedIncrement increments the count and duration of the current scope.
 func (s *scopedStats) TimedIncrement(d time.Duration) {
 	s.count.Add(s.labelValues, 1)
+	s.durationNs.Add(s.labelValues, int64(d.Nanoseconds()))
+}
+
+// TimedIncrementBytes increments the byte-count and duration of the current scope.
+func (s *scopedStats) TimedIncrementBytes(b int, d time.Duration) {
+	s.bytes.Add(s.labelValues, 1)
 	s.durationNs.Add(s.labelValues, int64(d.Nanoseconds()))
 }

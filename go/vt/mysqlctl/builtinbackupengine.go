@@ -668,7 +668,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}()
 
 	readStats := params.Stats.Scope(stats.Operation("source:read"))
-	timedSource := ioutil.NewTimedReadCloser(source, readStats.TimedIncrement)
+	timedSource := ioutil.NewMeteredReadCloser(source, readStats.TimedIncrementBytes)
 
 	fi, err := source.Stat()
 	if err != nil {
@@ -701,7 +701,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}(name, fe.Name)
 
 	destStats := params.Stats.Scope(stats.Operation("destination:write"))
-	timedDest := ioutil.NewTimedWriteCloser(dest, destStats.TimedIncrement)
+	timedDest := ioutil.NewMeteredWriteCloser(dest, destStats.TimedIncrementBytes)
 
 	bw := newBackupWriter(fe.Name, fi.Size(), timedDest)
 	var writer io.Writer = bw
@@ -732,7 +732,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 		}
 
 		compressStats := params.Stats.Scope(stats.Operation("compressor:write"))
-		writer = ioutil.NewTimedWriter(compressor, compressStats.TimedIncrement)
+		writer = ioutil.NewMeteredWriter(compressor, compressStats.TimedIncrementBytes)
 	}
 
 	// Copy from the source file to writer (optional gzip,
@@ -927,7 +927,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	params.Stats.Scope(stats.Operation("source:open")).TimedIncrement(time.Since(openSourceAt))
 
 	readStats := params.Stats.Scope(stats.Operation("source:read"))
-	timedSource := ioutil.NewTimedReader(source, readStats.TimedIncrement)
+	timedSource := ioutil.NewMeteredReader(source, readStats.TimedIncrementBytes)
 
 	defer func() {
 		closeSourceAt := time.Now()
@@ -961,7 +961,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	}()
 
 	writeStats := params.Stats.Scope(stats.Operation("destination:write"))
-	timedDest := ioutil.NewTimedWriter(dest, writeStats.TimedIncrement)
+	timedDest := ioutil.NewMeteredWriter(dest, writeStats.TimedIncrementBytes)
 
 	bufferedDest := bufio.NewWriterSize(timedDest, writerBufferSize)
 
@@ -1003,7 +1003,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 		}
 
 		decompressStats := params.Stats.Scope(stats.Operation("decompressor:read"))
-		reader = ioutil.NewTimedReader(decompressor, decompressStats.TimedIncrement)
+		reader = ioutil.NewMeteredReader(decompressor, decompressStats.TimedIncrementBytes)
 
 		defer func() {
 			closeDecompressorAt := time.Now()

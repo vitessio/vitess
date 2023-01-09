@@ -114,8 +114,8 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 	if err != nil {
 		return nil, err
 	}
-	stat := fbh.fbs.params.Stats.Scope(stats.Operation("write"))
-	return ioutil.NewTimedWriteCloser(f, stat.TimedIncrement), nil
+	stat := fbh.fbs.params.Stats.Scope(stats.Operation("file:write"))
+	return ioutil.NewMeteredWriteCloser(f, stat.TimedIncrementBytes), nil
 }
 
 // EndBackup is part of the BackupHandle interface
@@ -144,8 +144,8 @@ func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 	if err != nil {
 		return nil, err
 	}
-	stat := fbh.fbs.params.Stats.Scope(stats.Operation("read"))
-	return ioutil.NewTimedReadCloser(f, stat.TimedIncrement), nil
+	stat := fbh.fbs.params.Stats.Scope(stats.Operation("file:read"))
+	return ioutil.NewMeteredReadCloser(f, stat.TimedIncrementBytes), nil
 }
 
 // FileBackupStorage implements BackupStorage for local file system.

@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 /*
-This file contains TimedWriteCloser and TimedWriter, which are, respectively,
-time-keeping wrappers around WriteCloser and Writer.
+This file contains MeteredWriteCloser and MeteredWriter, which are,
+respectively, time-and-byte-tracking wrappers around WriteCloser and Writer.
 */
 
 package ioutil
@@ -26,58 +26,64 @@ import (
 	"time"
 )
 
-// TimedWriteCloser tracks how much time is spent on Write calls.
-type TimedWriteCloser interface {
+// MeteredWriteCloser tracks how much time is spent and bytes are written in
+// Write calls.
+type MeteredWriteCloser interface {
 	io.WriteCloser
 	// Duration reports the total duration of time spent on Write calls.
 	Duration() time.Duration
 }
 
-// TimedWriter tracks how much time is spent on Write calls.
-type TimedWriter interface {
+// MeteredWriter tracks how much time is spent and bytes are written in Write
+// calls.
+type MeteredWriter interface {
 	io.Writer
 	// Duration reports the total duration of time spent on Writer calls.
 	Duration() time.Duration
 }
 
-type timedWriteCloser struct {
+type meteredWriteCloser struct {
 	io.WriteCloser
-	*timer
+	*meter
 }
 
-type timedWriter struct {
+type meteredWriter struct {
 	io.Writer
-	*timer
+	*meter
 }
 
-// NewTimedWriteCloser creates a TimedWriteCloser which tracks the amount of
-// time spent on Write calls to the provided inner WriteCloser. Optional
-// callbacks will be called with the time spent on each Write call.
-func NewTimedWriteCloser(wc io.WriteCloser, fns ...func(delta time.Duration)) TimedWriteCloser {
-	return &timedWriteCloser{
+// NewMeteredWriteCloser creates a MeteredWriteCloser which tracks the amount of
+// time spent and bytes writtein in Write calls to the provided inner
+// WriteCloser. Optional callbacks will be called with the time spent and bytes
+// written in each Write call.
+func NewMeteredWriteCloser(wc io.WriteCloser, fns ...func(int, time.Duration)) MeteredWriteCloser {
+	return &meteredWriteCloser{
 		WriteCloser: wc,
-		timer:       &timer{fns, 0},
+		meter:       &meter{fns, 0, 0},
 	}
 }
 
-// Write calls the inner WriteCloser, increments the total Duration, and calls
-// any registered callbacks with the amount of time spent on this Write call.
-func (twc *timedWriteCloser) Write(p []byte) (int, error) {
-	return twc.timer.time(twc.WriteCloser.Write, p)
+// Write calls the inner WriteCloser, increments the total Duration and Bytes,
+// and calls any registered callbacks with the amount of time spent and bytes
+// written in this Write call.
+func (twc *meteredWriteCloser) Write(p []byte) (int, error) {
+	return twc.meter.measure(twc.WriteCloser.Write, p)
 }
 
-// NewTimedWriter creates a TimedWriter which tracks the amount of time spent
-// on Write calls to the provided inner Writer. Optional callbacks will be
-// called with the time spent on each Write call.
-func NewTimedWriter(tw io.Writer, fns ...func(delta time.Duration)) TimedWriter {
-	return &timedWriter{
+// NewMeteredWriter creates a MeteredWriter which tracks the amount of time spent
+// and bytes written in Write calls to the provided inner Writer. Optional
+// callbacks will be called with the time spent and bytes written in each Write
+// call.
+func NewMeteredWriter(tw io.Writer, fns ...func(int, time.Duration)) MeteredWriter {
+	return &meteredWriter{
 		Writer: tw,
-		timer:  &timer{fns, 0},
+		meter:  &meter{fns, 0, 0},
 	}
 }
 
-// Write calls the inner Writer, increments the total Duration, and calls
-// any registered callbacks with the amount of time spent on this Write call.
-func (tw *timedWriter) Write(p []byte) (int, error) {
-	return tw.timer.time(tw.Writer.Write, p)
+// Write calls the inner Writer, increments the total Duration and Bytes, and
+// calls any registered callbacks with the amount of time spent and bytes
+// written in this Write call.
+func (tw *meteredWriter) Write(p []byte) (int, error) {
+	return tw.meter.measure(tw.Writer.Write, p)
 }

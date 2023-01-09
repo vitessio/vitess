@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 /*
-This file contains TimedReadCloser and TimedReader, which are, respectively,
-time-keeping wrappers around ReadCloser and Reader.
+This file contains MeteredReadCloser and MeteredReader, which are,
+respectively, time-and-byte-tracking wrappers around ReadCloser and Reader.
 */
 
 package ioutil
@@ -26,63 +26,73 @@ import (
 	"time"
 )
 
-// TimedReadCloser tracks how much time is spent on Read calls.
-type TimedReadCloser interface {
+// MeteredReadCloser tracks how much time is spent and bytes are read in Read
+// calls.
+type MeteredReadCloser interface {
 	io.ReadCloser
+	// Bytes reports the total number of bytes read in Read calls.
+	Bytes() int64
 	// Duration reports the total duration of time spent on Read calls.
 	Duration() time.Duration
 }
 
-// TimedReader tracks how much time is spent on Read calls.
-type TimedReader interface {
+// MeteredReader tracks how much time is spent and bytes are read in Read
+// calls.
+type MeteredReader interface {
 	io.Reader
+	// Bytes reports the total number of bytes read in Read calls.
+	Bytes() int64
 	// Duration reports the total duration of time spent on Read calls.
 	Duration() time.Duration
 }
 
-type timedReadCloser struct {
+type meteredReadCloser struct {
 	io.ReadCloser
-	*timer
+	*meter
 }
 
-type timedReader struct {
+type meteredReader struct {
 	io.Reader
-	*timer
+	*meter
 }
 
-// NewTimedReadCloser creates a TimedReadCloser which tracks the amount of time
-// spent on Read calls to the provided inner ReadCloser. Optional callbacks
-// will be called with the time spent on each Read call.
-func NewTimedReadCloser(rc io.ReadCloser, fns ...func(delta time.Duration)) TimedReadCloser {
-	return &timedReadCloser{
+// NewMeteredReadCloser creates a MeteredReadCloser which tracks the amount of
+// time spent and bytes read in Read calls to the provided inner ReadCloser.
+// Optional callbacks will be called with the time spent and bytes read in each
+// Read call.
+func NewMeteredReadCloser(rc io.ReadCloser, fns ...func(int, time.Duration)) MeteredReadCloser {
+	return &meteredReadCloser{
 		ReadCloser: rc,
-		timer:      &timer{fns, 0},
+		meter:      &meter{fns, 0, 0},
 	}
 }
 
-// Read calls the inner ReadCloser, increments the total Duration, and calls
-// any registered callbacks with the amount of time spent on this Read call.
-func (trc *timedReadCloser) Read(p []byte) (n int, err error) {
-	return trc.timer.time(trc.ReadCloser.Read, p)
+// Read calls the inner ReadCloser, increments the total Duration and Bytes,
+// and calls any registered callbacks with the amount of time spent and bytes
+// read in this Read call.
+func (trc *meteredReadCloser) Read(p []byte) (n int, err error) {
+	return trc.meter.measure(trc.ReadCloser.Read, p)
 }
 
-// NewTimedReader creates a TimedReader which tracks the amount of time spent
-// on Read calls to the provided inner Reader. Optional callbacks will be
-// called with the time spent on each Read call.
-func NewTimedReader(r io.Reader, fns ...func(delta time.Duration)) TimedReader {
-	return &timedReader{
+// NewMeteredReader creates a MeteredReader which tracks the amount of time spent
+// and bytes read in Read calls to the provided inner Reader. Optional
+// callbacks will be called with the time spent and bytes read in each Read
+// call.
+func NewMeteredReader(r io.Reader, fns ...func(int, time.Duration)) MeteredReader {
+	return &meteredReader{
 		Reader: r,
-		timer:  &timer{fns, 0},
+		meter:  &meter{fns, 0, 0},
 	}
 }
 
 // Duration reports the total time spend on Read calls so far.
-func (tr *timedReader) Duration() time.Duration {
-	return tr.total
+func (tr *meteredReader) Duration() time.Duration {
+	return tr.duration
 }
 
-// Read calls the inner Reader, increments the total Duration, and calls
-// any registered callbacks with the amount of time spent on this Read call.
-func (tr *timedReader) Read(p []byte) (int, error) {
-	return tr.time(tr.Reader.Read, p)
+// Read calls the inner Reader, increments the total Duration and Bytes, and
+// calls any registered callbacks with the amount of time spent and bytes read
+// in this Read call.
+func (tr *meteredReader) Read(p []byte) (int, error) {
+	return tr.measure(tr.Reader.Read, p)
 }

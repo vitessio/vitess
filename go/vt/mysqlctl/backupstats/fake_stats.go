@@ -3,10 +3,14 @@ package backupstats
 import "time"
 
 type FakeStats struct {
-	ScopeV              map[ScopeType]ScopeValue
-	TimedIncrementCalls []time.Duration
-	ScopeCalls          [][]Scope
-	ScopeReturns        []Stats
+	ScopeV                   map[ScopeType]ScopeValue
+	TimedIncrementCalls      []time.Duration
+	TimedIncrementBytesCalls []struct {
+		Bytes    int
+		Duration time.Duration
+	}
+	ScopeCalls   [][]Scope
+	ScopeReturns []Stats
 }
 
 func NewFakeStats(scopes ...Scope) *FakeStats {
@@ -46,4 +50,13 @@ func (fs *FakeStats) Scope(scopes ...Scope) Stats {
 // TimedIncrementCalls, for use in unit test assertions.
 func (fs *FakeStats) TimedIncrement(d time.Duration) {
 	fs.TimedIncrementCalls = append(fs.TimedIncrementCalls, d)
+}
+
+// TimedIncrement does nothing except record calls made to this function in
+// TimedIncrementBytesCalls, for use in unit test assertions.
+func (fs *FakeStats) TimedIncrementBytes(b int, d time.Duration) {
+	fs.TimedIncrementBytesCalls = append(fs.TimedIncrementBytesCalls, struct {
+		Bytes    int
+		Duration time.Duration
+	}{b, d})
 }
