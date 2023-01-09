@@ -281,9 +281,9 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 		return sqltypes.Timestamp
 	case YEAR:
 		return sqltypes.Year
-	case FLOAT_TYPE:
+	case FLOAT_TYPE, FLOAT4_TYPE:
 		return sqltypes.Float32
-	case DOUBLE:
+	case DOUBLE, FLOAT8_TYPE:
 		return sqltypes.Float64
 	case DECIMAL, DECIMAL_TYPE:
 		return sqltypes.Decimal
