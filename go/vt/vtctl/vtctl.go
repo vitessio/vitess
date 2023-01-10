@@ -300,10 +300,12 @@ var commands = []commandGroup{
 				help:   "Runs the given SQL command as a DBA on the remote tablet.",
 			},
 			{
-				name:   "VReplicationExec",
-				method: commandVReplicationExec,
-				params: "[--json] <tablet alias> <sql command>",
-				help:   "Runs the given VReplication command on the remote tablet.",
+				name:         "VReplicationExec",
+				method:       commandVReplicationExec,
+				params:       "[--json] <tablet alias> <sql command>",
+				help:         "Runs the given VReplication command on the remote tablet.",
+				deprecated:   true,
+				deprecatedBy: "Workflow -- <keyspace.workflow> <action>",
 			},
 		},
 	},
@@ -1339,6 +1341,8 @@ func commandExecuteFetchAsDba(ctx context.Context, wr *wrangler.Wrangler, subFla
 }
 
 func commandVReplicationExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	wr.Logger().Printf("\nWARNING: VReplicationExec is deprecated and will be removed in a future release. Please use 'Workflow -- <keyspace.workflow> <action>' instead.\n\n")
+
 	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
 
 	if err := subFlags.Parse(args); err != nil {
