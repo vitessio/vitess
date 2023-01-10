@@ -139,6 +139,7 @@ func TestMain(m *testing.M) {
 	os.Exit(exitcode)
 }
 
+// TestAuthenticatedUserWithAccess verifies that an authenticated gRPC static user with ACL access can execute queries
 func TestAuthenticatedUserWithAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -155,6 +156,7 @@ func TestAuthenticatedUserWithAccess(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+// TestAuthenticatedUserNoAccess verifies that an authenticated gRPC static user with no ACL access cannot execute queries
 func TestAuthenticatedUserNoAccess(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -173,6 +175,7 @@ func TestAuthenticatedUserNoAccess(t *testing.T) {
 	assert.Contains(t, err.Error(), "for table 'test_table' (ACL check error)")
 }
 
+// TestUnauthenticatedUser verifies that an unauthenticated gRPC user cannot execute queries
 func TestUnauthenticatedUser(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
