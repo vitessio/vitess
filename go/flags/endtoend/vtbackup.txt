@@ -12,6 +12,8 @@ Usage of vtbackup:
       --backup_storage_implementation string            Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --ceph_backup_storage_config string               Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --compression-engine-name string                  compressor engine used for compression. (default "pargzip")
+      --compression-level int                           what level to pass to the compressor. (default 1)
       --concurrency int                                 (init restore parameter) how many concurrent files to restore at once (default 4)
       --consul_auth_static_file string                  JSON File to read the topos/tokens from.
       --db-credentials-file string                      db credentials file; send SIGHUP to reload this file
@@ -64,6 +66,9 @@ Usage of vtbackup:
       --detach                                          detached mode - run backups detached from the terminal
       --disable-redo-log                                Disable InnoDB redo log during replication-from-primary phase of backup.
       --emit_stats                                      If set, emit stats to push-based monitoring and stats backends
+      --external-compressor string                      command with arguments to use when compressing a backup.
+      --external-compressor-extension string            extension to use when using an external compressor.
+      --external-decompressor string                    command with arguments to use when decompressing a backup.
       --file_backup_storage_root string                 Root directory for the file backup storage.
       --gcs_backup_storage_bucket string                Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                  Root prefix for all backup-related object names.
