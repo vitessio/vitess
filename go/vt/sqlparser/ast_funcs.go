@@ -443,7 +443,7 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	tmp := Rewrite(root, replaceExpr(from, to), nil)
+	tmp := SafeRewrite(root, stopWalking, replaceExpr(from, to))
 
 	expr, success := tmp.(Expr)
 	if !success {
@@ -454,16 +454,20 @@ func ReplaceExpr(root, from, to Expr) Expr {
 	return expr
 }
 
+func stopWalking(e SQLNode) bool {
+	switch e.(type) {
+	case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
+		return false
+	default:
+		return true
+	}
+}
+
 func replaceExpr(from, to Expr) func(cursor *Cursor) bool {
 	return func(cursor *Cursor) bool {
 		if cursor.Node() == from {
 			cursor.Replace(to)
 		}
-		switch cursor.Node().(type) {
-		case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
-			return false
-		}
-
 		return true
 	}
 }
