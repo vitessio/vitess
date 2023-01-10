@@ -2038,7 +2038,7 @@ func (c *CreateTableEntity) validate() error {
 			continue
 		}
 		if len(check.Source) != len(check.ReferenceDefinition.ReferencedColumns) {
-			return &MismatchingForeignKeyColumnCountError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(check.Source), ReferencedTable: check.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(check.ReferenceDefinition.ReferencedColumns)}
+			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(check.Source), ReferencedTable: check.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(check.ReferenceDefinition.ReferencedColumns)}
 		}
 		for _, col := range check.Source {
 			if !columnExists[col.Lowered()] {

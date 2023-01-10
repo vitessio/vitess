@@ -298,11 +298,11 @@ func TestInvalidSchema(t *testing.T) {
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t11(id, i) on delete restrict)",
-			expectErr: &MismatchingForeignKeyColumnCountError{Table: "t11", Constraint: "f11", ColumnCount: 1, ReferencedTable: "t11", ReferencedColumnCount: 2},
+			expectErr: &ForeignKeyColumnCountMismatchError{Table: "t11", Constraint: "f11", ColumnCount: 1, ReferencedTable: "t11", ReferencedColumnCount: 2},
 		},
 		{
 			schema:    "create table t11 (id int primary key, i1 int, i2 int, constraint f11 foreign key (i1, i2) references t11(i1) on delete restrict)",
-			expectErr: &MismatchingForeignKeyColumnCountError{Table: "t11", Constraint: "f11", ColumnCount: 2, ReferencedTable: "t11", ReferencedColumnCount: 1},
+			expectErr: &ForeignKeyColumnCountMismatchError{Table: "t11", Constraint: "f11", ColumnCount: 2, ReferencedTable: "t11", ReferencedColumnCount: 1},
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict)",

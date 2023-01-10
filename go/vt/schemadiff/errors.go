@@ -260,7 +260,7 @@ func (e *InvalidReferencedColumnInForeignKeyConstraintError) Error() string {
 		sqlescape.EscapeID(e.ReferencedTable), sqlescape.EscapeID(e.ReferencedColumn), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
 }
 
-type MismatchingForeignKeyColumnCountError struct {
+type ForeignKeyColumnCountMismatchError struct {
 	Table                 string
 	Constraint            string
 	ColumnCount           int
@@ -268,7 +268,7 @@ type MismatchingForeignKeyColumnCountError struct {
 	ReferencedColumnCount int
 }
 
-func (e *MismatchingForeignKeyColumnCountError) Error() string {
+func (e *ForeignKeyColumnCountMismatchError) Error() string {
 	return fmt.Sprintf("mismatching column count %d referenced by foreign key constraint %s in table %s. Expected %d",
 		e.ReferencedColumnCount, sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table), e.ColumnCount)
 }
