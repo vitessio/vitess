@@ -44,7 +44,6 @@ var (
 )
 
 func init() {
-	servenv.RegisterDefaultFlags()
 	servenv.RegisterDefaultSocketFileFlags()
 	servenv.RegisterFlags()
 	servenv.RegisterServiceMapFlag()

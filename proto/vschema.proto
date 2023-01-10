@@ -91,6 +91,9 @@ message Table {
   // an authoritative list for the table. This allows
   // us to expand 'select *' expressions.
   bool column_list_authoritative = 6;
+
+  // reference tables may optionally indicate their source table.
+  string source = 7;
 }
 
 // ColumnVindex is used to associate a column to a vindex.

@@ -152,10 +152,12 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 	}
 }
 
-var stateToMysqlCode = map[vterrors.State]struct {
+type mysqlCode struct {
 	num   int
 	state string
-}{
+}
+
+var stateToMysqlCode = map[vterrors.State]mysqlCode{
 	vterrors.Undefined:                    {num: ERUnknownError, state: SSUnknownSQLState},
 	vterrors.AccessDeniedError:            {num: ERAccessDeniedError, state: SSAccessDeniedError},
 	vterrors.BadDb:                        {num: ERBadDb, state: SSClientError},
@@ -197,6 +199,28 @@ var stateToMysqlCode = map[vterrors.State]struct {
 	vterrors.NoSuchSession:                {num: ERUnknownComError, state: SSNetError},
 	vterrors.OperandColumns:               {num: EROperandColumns, state: SSWrongNumberOfColumns},
 	vterrors.WrongValueCountOnRow:         {num: ERWrongValueCountOnRow, state: SSWrongValueCountOnRow},
+}
+
+func getStateToMySQLState(state vterrors.State) mysqlCode {
+	if state == 0 {
+		return mysqlCode{}
+	}
+	s := stateToMysqlCode[state]
+	return s
+}
+
+// ConvertStateToMySQLErrorCode returns MySQL error code for the given vterrors.State
+// If the state is == 0, an empty string is returned
+func ConvertStateToMySQLErrorCode(state vterrors.State) string {
+	s := getStateToMySQLState(state)
+	return strconv.Itoa(s.num)
+}
+
+// ConvertStateToMySQLState returns MySQL state for the given vterrors.State
+// If the state is == 0, an empty string is returned
+func ConvertStateToMySQLState(state vterrors.State) string {
+	s := getStateToMySQLState(state)
+	return s.state
 }
 
 func init() {

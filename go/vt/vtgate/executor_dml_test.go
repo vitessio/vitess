@@ -2258,7 +2258,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	primarySession.TargetString = "TestExecutor[-]"
 	_, err := executorExec(executor, insertInput, nil)
 
-	require.EqualError(t, err, "INSERT not supported when targeting a key range: TestExecutor[-]")
+	require.EqualError(t, err, "VT03023: INSERT not supported when targeting a key range: TestExecutor[-]")
 
 	primarySession.TargetString = ""
 }
@@ -2344,6 +2344,45 @@ func TestUpdateLastInsertID(t *testing.T) {
 	assertQueries(t, sbc1, wantQueries)
 }
 
+func TestUpdateReference(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	_, err := executorExec(executor, "update zip_detail set status = 'CLOSED' where id = 1", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "update zip_detail set `status` = 'CLOSED' where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueries(t, sbc1, nil)
+	assertQueries(t, sbc2, nil)
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, logChan, "TestExecute", "UPDATE", "update zip_detail set status = 'CLOSED' where id = 1", 1)
+
+	sbclookup.Queries = nil
+
+	_, err = executorExec(executor, "update TestUnsharded.zip_detail set status = 'CLOSED' where id = 1", nil)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "update zip_detail set `status` = 'CLOSED' where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueries(t, sbc1, nil)
+	assertQueries(t, sbc2, nil)
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, logChan, "TestExecute", "UPDATE",
+		"update TestUnsharded.zip_detail set status = 'CLOSED' where id = 1", 1)
+
+	sbclookup.Queries = nil
+
+	_, err = executorExec(executor, "update TestExecutor.zip_detail set status = 'CLOSED' where id = 1", nil)
+	require.Error(t, err)
+}
+
 func TestDeleteLookupOwnedEqual(t *testing.T) {
 	executor, sbc1, sbc2, _ := createExecutorEnv()
 
@@ -2369,6 +2408,44 @@ func TestDeleteLookupOwnedEqual(t *testing.T) {
 	}}
 	assertQueries(t, sbc1, sbc1wantQueries)
 	assertQueries(t, sbc2, sbc2wantQueries)
+}
+
+func TestDeleteReference(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	_, err := executorExec(executor, "delete from zip_detail where id = 1", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "delete from zip_detail where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueries(t, sbc1, nil)
+	assertQueries(t, sbc2, nil)
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, logChan, "TestExecute", "DELETE", "delete from zip_detail where id = 1", 1)
+
+	sbclookup.Queries = nil
+
+	_, err = executorExec(executor, "delete from zip_detail where id = 1", nil)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "delete from zip_detail where id = 1",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueries(t, sbc1, nil)
+	assertQueries(t, sbc2, nil)
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, logChan, "TestExecute", "DELETE", "delete from zip_detail where id = 1", 1)
+
+	sbclookup.Queries = nil
+
+	_, err = executorExec(executor, "delete from TestExecutor.zip_detail where id = 1", nil)
+	require.Error(t, err)
 }
 
 func TestReservedConnDML(t *testing.T) {
@@ -2760,4 +2837,43 @@ func TestInsertSelectFromTable(t *testing.T) {
 		testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(name, user_id) values(:name_0, :user_id_0), (:name_1, :user_id_1), (:name_2, :user_id_2), (:name_3, :user_id_3), (:name_4, :user_id_4), (:name_5, :user_id_5), (:name_6, :user_id_6), (:name_7, :user_id_7)", 1)
 		testQueryLog(t, logChan, "TestInsertSelect", "INSERT", "insert into user(id, name) select c1, c2 from music", 9) // 8 from select and 1 from insert.
 	}
+}
+
+func TestInsertReference(t *testing.T) {
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
+
+	logChan := QueryLogger.Subscribe("Test")
+	defer QueryLogger.Unsubscribe(logChan)
+
+	_, err := executorExec(executor, "insert into zip_detail(id, status) values (1, 'CLOSED')", nil)
+	require.NoError(t, err)
+	wantQueries := []*querypb.BoundQuery{{
+		Sql:           "insert into zip_detail(id, `status`) values (1, 'CLOSED')",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueries(t, sbc1, nil)
+	assertQueries(t, sbc2, nil)
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into zip_detail(id, status) values (1, 'CLOSED')", 1)
+
+	sbclookup.Queries = nil
+
+	_, err = executorExec(executor, "insert into TestUnsharded.zip_detail(id, status) values (1, 'CLOSED')", nil)
+	require.NoError(t, err)
+	wantQueries = []*querypb.BoundQuery{{
+		Sql:           "insert into zip_detail(id, `status`) values (1, 'CLOSED')",
+		BindVariables: map[string]*querypb.BindVariable{},
+	}}
+	assertQueries(t, sbc1, nil)
+	assertQueries(t, sbc2, nil)
+	assertQueries(t, sbclookup, wantQueries)
+
+	testQueryLog(t, logChan, "TestExecute", "INSERT",
+		"insert into TestUnsharded.zip_detail(id, status) values (1, 'CLOSED')", 1)
+
+	sbclookup.Queries = nil
+
+	_, err = executorExec(executor, "insert into TestExecutor.zip_detail(id, status) values (1, 'CLOSED')", nil)
+	require.Error(t, err)
 }

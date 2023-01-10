@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-	"vitess.io/vitess/go/vt/vtorc/attributes"
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/inst"
 	"vitess.io/vitess/go/vt/vtorc/util"
@@ -100,7 +99,6 @@ type RecoveryAcknowledgement struct {
 	Comment   string
 
 	Key           inst.InstanceKey
-	ClusterName   string
 	ID            int64
 	UID           string
 	AllRecoveries bool
@@ -109,7 +107,6 @@ type RecoveryAcknowledgement struct {
 // BlockedTopologyRecovery represents an entry in the blocked_topology_recovery table
 type BlockedTopologyRecovery struct {
 	FailedInstanceKey    inst.InstanceKey
-	ClusterName          string
 	Analysis             inst.AnalysisCode
 	LastBlockedTimestamp string
 	BlockingRecoveryID   int64
@@ -289,6 +286,8 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 			log.Warningf("ERS - %s", value)
 		case logutilpb.Level_ERROR:
 			log.Errorf("ERS - %s", value)
+		default:
+			log.Infof("ERS - %s", value)
 		}
 		_ = AuditTopologyRecovery(topologyRecovery, value)
 	})).ReparentShard(ctx,
@@ -301,6 +300,9 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 			PreventCrossCellPromotion: config.Config.PreventCrossDataCenterPrimaryFailover,
 		},
 	)
+	if err != nil {
+		log.Errorf("Error running ERS - %v", err)
+	}
 
 	if ev != nil && ev.NewPrimary != nil {
 		promotedReplica, _, _ = inst.ReadInstance(&inst.InstanceKey{
@@ -322,8 +324,6 @@ func postErsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 	if promotedReplica != nil {
 		// Success!
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("RecoverDeadPrimary: successfully promoted %+v", promotedReplica.Key))
-
-		_ = attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 	}
 }
 
@@ -745,7 +745,7 @@ func executeCheckAndRecoverFunction(analysisEntry inst.ReplicationAnalysis, cand
 // checkIfAlreadyFixed checks whether the problem that the analysis entry represents has already been fixed by another agent or not
 func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
 	// Run a replication analysis again. We will check if the problem persisted
-	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.ClusterName, &inst.ReplicationAnalysisHints{})
+	analysisEntries, err := inst.GetReplicationAnalysis(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		return false, err
 	}
@@ -764,7 +764,7 @@ func checkIfAlreadyFixed(analysisEntry inst.ReplicationAnalysis) (bool, error) {
 // CheckAndRecover is the main entry point for the recovery mechanism
 func CheckAndRecover(specificInstance *inst.InstanceKey, candidateInstanceKey *inst.InstanceKey, skipProcesses bool) (recoveryAttempted bool, promotedReplicaKey *inst.InstanceKey, err error) {
 	// Allow the analysis to run even if we don't want to recover
-	replicationAnalysis, err := inst.GetReplicationAnalysis("", &inst.ReplicationAnalysisHints{IncludeDowntimed: true, AuditAnalysis: true})
+	replicationAnalysis, err := inst.GetReplicationAnalysis("", "", &inst.ReplicationAnalysisHints{IncludeDowntimed: true, AuditAnalysis: true})
 	if err != nil {
 		log.Error(err)
 		return false, nil, err
@@ -815,7 +815,6 @@ func postPrsCompletion(topologyRecovery *TopologyRecovery, analysisEntry inst.Re
 	if promotedReplica != nil {
 		// Success!
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("%+v: successfully promoted %+v", analysisEntry.Analysis, promotedReplica.Key))
-		_ = attributes.SetGeneralAttribute(analysisEntry.ClusterDetails.ClusterDomain, promotedReplica.Key.StringCode())
 	}
 }
 
@@ -826,7 +825,7 @@ func electNewPrimary(ctx context.Context, analysisEntry inst.ReplicationAnalysis
 		_ = AuditTopologyRecovery(topologyRecovery, fmt.Sprintf("found an active or recent recovery on %+v. Will not issue another electNewPrimary.", analysisEntry.AnalyzedInstanceKey))
 		return false, nil, err
 	}
-	log.Infof("Analysis: %v, will elect a new primary: %v", analysisEntry.Analysis, analysisEntry.ClusterDetails.ClusterName)
+	log.Infof("Analysis: %v, will elect a new primary for %v:%v", analysisEntry.Analysis, analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
 
 	var promotedReplica *inst.Instance
 	// This has to be done in the end; whether successful or not, we should mark that the recovery is done.

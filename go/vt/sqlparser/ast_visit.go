@@ -470,6 +470,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUpdateXMLExpr(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
+	case *VExplainStmt:
+		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
 	case ValTuple:
@@ -3717,6 +3719,21 @@ func VisitRefOfUse(in *Use, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfVExplainStmt(in *VExplainStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfVStream(in *VStream, f Visit) error {
 	if in == nil {
 		return nil
@@ -4667,6 +4684,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfUpdate(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
+	case *VExplainStmt:
+		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
 	default:

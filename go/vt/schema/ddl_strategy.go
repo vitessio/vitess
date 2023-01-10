@@ -39,6 +39,7 @@ const (
 	preferInstantDDL       = "prefer-instant-ddl"
 	fastRangeRotationFlag  = "fast-range-rotation"
 	vreplicationTestSuite  = "vreplication-test-suite"
+	allowForeignKeysFlag   = "unsafe-allow-foreign-keys"
 )
 
 // DDLStrategy suggests how an ALTER TABLE should run (e.g. "direct", "online", "gh-ost" or "pt-osc")
@@ -123,54 +124,59 @@ func (setting *DDLStrategySetting) hasFlag(name string) bool {
 	return false
 }
 
-// IsDeclarative checks if strategy options include -declarative
+// IsDeclarative checks if strategy options include --declarative
 func (setting *DDLStrategySetting) IsDeclarative() bool {
 	return setting.hasFlag(declarativeFlag)
 }
 
-// IsSingleton checks if strategy options include -singleton
+// IsSingleton checks if strategy options include --singleton
 func (setting *DDLStrategySetting) IsSingleton() bool {
 	return setting.hasFlag(singletonFlag)
 }
 
-// IsSingletonContext checks if strategy options include -singleton-context
+// IsSingletonContext checks if strategy options include --singleton-context
 func (setting *DDLStrategySetting) IsSingletonContext() bool {
 	return setting.hasFlag(singletonContextFlag)
 }
 
-// IsAllowZeroInDateFlag checks if strategy options include -allow-zero-in-date
+// IsAllowZeroInDateFlag checks if strategy options include --allow-zero-in-date
 func (setting *DDLStrategySetting) IsAllowZeroInDateFlag() bool {
 	return setting.hasFlag(allowZeroInDateFlag)
 }
 
-// IsPostponeLaunch checks if strategy options include -postpone-launch
+// IsPostponeLaunch checks if strategy options include --postpone-launch
 func (setting *DDLStrategySetting) IsPostponeLaunch() bool {
 	return setting.hasFlag(postponeLaunchFlag)
 }
 
-// IsPostponeCompletion checks if strategy options include -postpone-completion
+// IsPostponeCompletion checks if strategy options include --postpone-completion
 func (setting *DDLStrategySetting) IsPostponeCompletion() bool {
 	return setting.hasFlag(postponeCompletionFlag)
 }
 
-// IsAllowConcurrent checks if strategy options include -allow-concurrent
+// IsAllowConcurrent checks if strategy options include --allow-concurrent
 func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
 	return setting.hasFlag(allowConcurrentFlag)
 }
 
-// IsPreferInstantDDL checks if strategy options include -prefer-instant-ddl
+// IsPreferInstantDDL checks if strategy options include --prefer-instant-ddl
 func (setting *DDLStrategySetting) IsPreferInstantDDL() bool {
 	return setting.hasFlag(preferInstantDDL)
 }
 
-// IsFastRangeRotationFlag checks if strategy options include -fast-range-rotation
+// IsFastRangeRotationFlag checks if strategy options include --fast-range-rotation
 func (setting *DDLStrategySetting) IsFastRangeRotationFlag() bool {
 	return setting.hasFlag(fastRangeRotationFlag)
 }
 
-// IsVreplicationTestSuite checks if strategy options include -vreplicatoin-test-suite
+// IsVreplicationTestSuite checks if strategy options include --vreplicatoin-test-suite
 func (setting *DDLStrategySetting) IsVreplicationTestSuite() bool {
 	return setting.hasFlag(vreplicationTestSuite)
+}
+
+// IsAllowForeignKeysFlag checks if strategy options include --unsafe-allow-foreign-keys
+func (setting *DDLStrategySetting) IsAllowForeignKeysFlag() bool {
+	return setting.hasFlag(allowForeignKeysFlag)
 }
 
 // RuntimeOptions returns the options used as runtime flags for given strategy, removing any internal hint options
@@ -190,6 +196,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, preferInstantDDL):
 		case isFlag(opt, fastRangeRotationFlag):
 		case isFlag(opt, vreplicationTestSuite):
+		case isFlag(opt, allowForeignKeysFlag):
 		default:
 			validOpts = append(validOpts, opt)
 		}

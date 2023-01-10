@@ -52,7 +52,7 @@ func TestTxConnBegin(t *testing.T) {
 	require.NoError(t, err)
 	wantSession := vtgatepb.Session{InTransaction: true}
 	utils.MustMatch(t, &wantSession, session, "Session")
-	_, errors := sc.ExecuteMultiShard(ctx, rss0, queries, safeSession, false, false)
+	_, errors := sc.ExecuteMultiShard(ctx, nil, rss0, queries, safeSession, false, false)
 	require.Empty(t, errors)
 
 	// Begin again should cause a commit and a new begin.
@@ -68,7 +68,7 @@ func TestTxConnCommitFailure(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession := vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -82,7 +82,7 @@ func TestTxConnCommitFailure(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -125,7 +125,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession := vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -139,7 +139,7 @@ func TestTxConnCommitSuccess(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -176,7 +176,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession := vtgatepb.Session{
 		InTransaction:  true,
 		InReservedConn: true,
@@ -192,7 +192,7 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction:  true,
 		InReservedConn: true,
@@ -261,9 +261,9 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InReservedConn: true})
 
 	// this will create reserved connections against all tablets
-	_, errs := sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 	require.Empty(t, errs)
-	_, errs = sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	_, errs = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	require.Empty(t, errs)
 
 	wantSession := vtgatepb.Session{
@@ -291,7 +291,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 	session.Session.InTransaction = true
 
 	// start a transaction against rss0
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction:  true,
 		InReservedConn: true,
@@ -354,9 +354,9 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 	session := NewSafeSession(&vtgatepb.Session{InReservedConn: true})
 
 	// this will create reserved connections against all tablets
-	_, errs := sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	_, errs := sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 	require.Empty(t, errs)
-	_, errs = sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	_, errs = sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	require.Empty(t, errs)
 
 	wantSession := vtgatepb.Session{
@@ -384,7 +384,7 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 	session.Session.InTransaction = true
 
 	// start a transaction against rss0
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction:  true,
 		InReservedConn: true,
@@ -446,13 +446,13 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
-	sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 
 	sbc0.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(ctx, session)
@@ -479,13 +479,13 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(context.Background(), rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(context.Background(), nil, rss1, queries, session, false, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
-	sc.ExecuteMultiShard(context.Background(), rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(context.Background(), nil, rss0, queries, session, false, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
-	sc.ExecuteMultiShard(context.Background(), rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(context.Background(), nil, rss1, queries, session, false, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	err := sc.txConn.Commit(ctx, session)
@@ -511,13 +511,13 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
-	sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	require.NoError(t,
@@ -551,7 +551,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession := vtgatepb.Session{
 		InTransaction: true,
 		ShardSessions: []*vtgatepb.Session_ShardSession{{
@@ -567,7 +567,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
 		PreSessions: []*vtgatepb.Session_ShardSession{{
@@ -592,7 +592,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
-	sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction: true,
 		PreSessions: []*vtgatepb.Session_ShardSession{{
@@ -626,7 +626,7 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	// Ensure nothing changes if we reuse a transaction.
-	sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	require.NoError(t,
@@ -647,7 +647,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 
 	// Sequence the executes to ensure commit order
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession := vtgatepb.Session{
 		InTransaction:  true,
 		InReservedConn: true,
@@ -665,7 +665,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_PRE)
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction:  true,
 		InReservedConn: true,
@@ -693,7 +693,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	session.SetCommitOrder(vtgatepb.CommitOrder_POST)
-	sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 	wantSession = vtgatepb.Session{
 		InTransaction:  true,
 		InReservedConn: true,
@@ -731,7 +731,7 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	// Ensure nothing changes if we reuse a transaction.
-	sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
 
 	require.NoError(t,
@@ -782,8 +782,8 @@ func TestTxConnCommit2PC(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PC")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	require.NoError(t,
 		sc.txConn.Commit(ctx, session))
@@ -797,7 +797,7 @@ func TestTxConnCommit2PC(t *testing.T) {
 func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 	sc, sbc0, _, rss0, _, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCOneParticipant")
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	require.NoError(t,
 		sc.txConn.Commit(ctx, session))
@@ -808,8 +808,8 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 	sc, sbc0, sbc1, rss0, rss1, _ := newTestTxConnEnv(t, "TestTxConnCommit2PCCreateTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss1, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss1, queries, session, false, false)
 
 	sbc0.MustFailCreateTransaction = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -830,8 +830,8 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCPrepareFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 
 	sbc1.MustFailPrepare = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -850,8 +850,8 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCStartCommitFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 
 	sbc0.MustFailStartCommit = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -870,8 +870,8 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCCommitPreparedFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 
 	sbc1.MustFailCommitPrepared = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -890,8 +890,8 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TestTxConnCommit2PCConcludeTransactionFail")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 
 	sbc0.MustFailConcludeTransaction = 1
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
@@ -910,8 +910,8 @@ func TestTxConnRollback(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 	require.NoError(t,
 		sc.txConn.Rollback(ctx, session))
 	wantSession := vtgatepb.Session{}
@@ -924,8 +924,8 @@ func TestTxConnReservedRollback(t *testing.T) {
 	sc, sbc0, sbc1, rss0, _, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 	require.NoError(t,
 		sc.txConn.Rollback(ctx, session))
 	wantSession := vtgatepb.Session{
@@ -959,8 +959,8 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 	sc, sbc0, sbc1, rss0, rss1, rss01 := newTestTxConnEnv(t, "TxConnReservedRollback")
 
 	session := NewSafeSession(&vtgatepb.Session{InTransaction: true, InReservedConn: true})
-	sc.ExecuteMultiShard(ctx, rss0, queries, session, false, false)
-	sc.ExecuteMultiShard(ctx, rss01, twoQueries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss0, queries, session, false, false)
+	sc.ExecuteMultiShard(ctx, nil, rss01, twoQueries, session, false, false)
 
 	sbc1.MustFailCodes[vtrpcpb.Code_INVALID_ARGUMENT] = 1
 	assert.Error(t,

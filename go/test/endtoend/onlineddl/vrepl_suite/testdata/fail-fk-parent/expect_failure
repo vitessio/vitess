@@ -1,1 +1,1 @@
-foreign key constraints are not supported in online DDL
+FOREIGN KEY constraints are not supported

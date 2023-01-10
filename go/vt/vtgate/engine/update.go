@@ -67,9 +67,9 @@ func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 	switch upd.Opcode {
 	case Unsharded:
-		return upd.execUnsharded(ctx, vcursor, bindVars, rss)
+		return upd.execUnsharded(ctx, upd, vcursor, bindVars, rss)
 	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard, MultiEqual:
-		return upd.execMultiDestination(ctx, vcursor, bindVars, rss, upd.updateVindexEntries)
+		return upd.execMultiDestination(ctx, upd, vcursor, bindVars, rss, upd.updateVindexEntries)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd.Opcode)
@@ -105,7 +105,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, upd, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	for _, err := range errors {
 		if err != nil {
 			return err

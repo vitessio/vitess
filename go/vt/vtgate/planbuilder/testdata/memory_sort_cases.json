@@ -137,6 +137,7 @@
     }
   },
   {
+    "comment": "select a, b, count(*) k from user group by a order by b, a, k",
     "query": "select a, b, count(*) k from user group by a order by b, a, k",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -1025,7 +1026,7 @@
   {
     "comment": "unary expression",
     "query": "select a from user order by binary a desc",
-    "v3-plan": "unsupported: in scatter query: complex order by expression: convert(a, binary)",
+    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: convert(a, binary)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select a from user order by binary a desc",
@@ -1050,7 +1051,7 @@
   {
     "comment": "unary expression in join query",
     "query": "select u.a from user u join music m on u.a = m.a order by binary a desc",
-    "v3-plan": "unsupported: in scatter query: complex order by expression: convert(a, binary)",
+    "v3-plan": "VT12001: unsupported: in scatter query: complex ORDER BY expression: convert(a, binary)",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u.a from user u join music m on u.a = m.a order by binary a desc",
@@ -1136,7 +1137,7 @@
   {
     "comment": "scatter order by with order by column not present",
     "query": "select col from user order by id",
-    "v3-plan": "unsupported: in scatter query: order by must reference a column in the select list: id asc",
+    "v3-plan": "VT12001: unsupported: in scatter query: ORDER BY must reference a column in the SELECT list: id asc",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select col from user order by id",
