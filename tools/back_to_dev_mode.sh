@@ -36,6 +36,11 @@ if [ "$RELEASE_VERSION" == "" ]; then
   exit 1
 fi
 
+if [ "$DEV_VERSION" == "" ]; then
+  echo "Set the env var DEV_VERSION with the next release version of this branch"
+  exit 1
+fi
+
 # Putting the branch back into dev mode
 function doBackToDevMode () {
   # Preparing the "dev mode" commit
