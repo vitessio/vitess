@@ -224,7 +224,7 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
 		return nil, nil, vterrors.VT12001(ViewComplex)
 	}
-	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.SafeRewrite(ddl.Select, nil, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
 		case sqlparser.TableName:
 			cursor.Replace(sqlparser.TableName{
@@ -232,7 +232,7 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 			})
 		}
 		return true
-	}, nil)
+	})
 	return destination, keyspace, nil
 }
 
@@ -265,7 +265,7 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
 		return nil, nil, vterrors.VT12001(ViewComplex)
 	}
-	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.SafeRewrite(ddl.Select, nil, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
 		case sqlparser.TableName:
 			cursor.Replace(sqlparser.TableName{
@@ -273,7 +273,7 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 			})
 		}
 		return true
-	}, nil)
+	})
 	return destination, keyspace, nil
 }
 
