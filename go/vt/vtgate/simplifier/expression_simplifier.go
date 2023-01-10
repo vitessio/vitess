@@ -81,7 +81,6 @@ func SimplifyExpr(in sqlparser.Expr, test CheckF) (smallestKnown sqlparser.Expr)
 func getNodesAtLevel(e sqlparser.Expr, level int) (result []sqlparser.Expr, replaceF []func(node sqlparser.SQLNode)) {
 	lvl := 0
 	pre := func(cursor *sqlparser.Cursor) bool {
-
 		if expr, isExpr := cursor.Node().(sqlparser.Expr); level == lvl && isExpr {
 			result = append(result, expr)
 			replaceF = append(replaceF, cursor.ReplacerF())
