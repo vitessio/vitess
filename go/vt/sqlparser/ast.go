@@ -1451,6 +1451,7 @@ func (s *Resignal) Format(buf *TrackedBuffer) {
 type Call struct {
 	ProcName ProcedureName
 	Params   []Expr
+	AsOf     Expr
 }
 
 func (c *Call) Format(buf *TrackedBuffer) {
@@ -1464,6 +1465,9 @@ func (c *Call) Format(buf *TrackedBuffer) {
 			buf.Myprintf("%v", param)
 		}
 		buf.Myprintf(")")
+	}
+	if c.AsOf != nil {
+		buf.Myprintf(" as of %v", c.AsOf)
 	}
 }
 
