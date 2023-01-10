@@ -75,6 +75,10 @@ The default value for `remote_operation_timeout` has also changed from 30 second
 During upgrades, if the users want to preserve the same behaviour as previous releases, then they should provide the `remote_operation_timeout` flag explicitly before upgrading.
 After the upgrade, they should then alter their configuration to also specify `lock-timeout` explicitly.
 
+#### Normalized labels in the Prometheus Exporter
+
+The Prometheus metrics exporter now properly normalizes _all_ label names into their `snake_case` form, as it is idiomatic for Prometheus metrics. Previously, Vitess instances were emitting inconsistent labels for their metrics, with some of them being `CamelCase` and others being `snake_case`.
+
 ### New command line flags and behavior
 
 #### VTGate: Support query timeout --query-timeout
