@@ -272,8 +272,8 @@ var keywords = []keyword{
 	{"first_value", FIRST_VALUE},
 	{"fixed", FIXED},
 	{"float", FLOAT_TYPE},
-	{"float4", UNUSED},
-	{"float8", UNUSED},
+	{"float4", FLOAT4_TYPE},
+	{"float8", FLOAT8_TYPE},
 	{"flush", FLUSH},
 	{"following", FOLLOWING},
 	{"for", FOR},
@@ -481,6 +481,7 @@ var keywords = []keyword{
 	{"password", PASSWORD},
 	{"path", PATH},
 	{"percent_rank", PERCENT_RANK},
+	{"plan", PLAN},
 	{"plugins", PLUGINS},
 	{"point", POINT},
 	{"polygon", POLYGON},
@@ -494,6 +495,7 @@ var keywords = []keyword{
 	{"procedure", PROCEDURE},
 	{"ps_current_thread_id", PS_CURRENT_THREAD_ID},
 	{"ps_thread_id", PS_THREAD_ID},
+	{"queries", QUERIES},
 	{"query", QUERY},
 	{"range", RANGE},
 	{"quarter", QUARTER},
@@ -650,6 +652,7 @@ var keywords = []keyword{
 	{"varcharacter", UNUSED},
 	{"variance", VARIANCE},
 	{"varying", UNUSED},
+	{"vexplain", VEXPLAIN},
 	{"vgtid_executed", VGTID_EXECUTED},
 	{"virtual", VIRTUAL},
 	{"vindex", VINDEX},
@@ -690,6 +693,7 @@ var keywords = []keyword{
 
 // keywordStrings contains the reverse mapping of token to keyword strings
 var keywordStrings = map[int]string{}
+var keywordVals = map[string]int{}
 
 // keywordLookupTable is a perfect hash map that maps **case insensitive** keyword names to their ids
 var keywordLookupTable *caseInsensitiveTable
@@ -738,6 +742,7 @@ func init() {
 			panic(fmt.Sprintf("keyword %q must be lowercase in table", kw.name))
 		}
 		keywordStrings[kw.id] = kw.name
+		keywordVals[kw.name] = kw.id
 	}
 
 	keywordLookupTable = buildCaseInsensitiveTable(keywords)

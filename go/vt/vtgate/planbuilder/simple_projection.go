@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 )
 
@@ -57,7 +58,7 @@ func newSimpleProjection(alias sqlparser.IdentifierCS, plan logicalPlan) (*simpl
 	// Create column symbols based on the result column names.
 	for _, rc := range plan.ResultColumns() {
 		if _, ok := t.columns[rc.alias.Lowered()]; ok {
-			return nil, nil, fmt.Errorf("duplicate column names in subquery: %s", sqlparser.String(rc.alias))
+			return nil, nil, vterrors.VT12001(fmt.Sprintf("duplicate column names in subquery: %s", sqlparser.String(rc.alias)))
 		}
 		t.addColumn(rc.alias, &column{origin: sq})
 	}

@@ -22,6 +22,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 func TestAddQueryHint(t *testing.T) {
@@ -78,6 +81,56 @@ func TestAddQueryHint(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, tc.expected, got)
 			}
+		})
+	}
+}
+
+func TestSQLTypeToQueryType(t *testing.T) {
+	tcs := []struct {
+		input    string
+		unsigned bool
+		output   querypb.Type
+	}{
+		{
+			input:    "tinyint",
+			unsigned: true,
+			output:   sqltypes.Uint8,
+		},
+		{
+			input:    "tinyint",
+			unsigned: false,
+			output:   sqltypes.Int8,
+		},
+		{
+			input:  "double",
+			output: sqltypes.Float64,
+		},
+		{
+			input:  "float8",
+			output: sqltypes.Float64,
+		},
+		{
+			input:  "float",
+			output: sqltypes.Float32,
+		},
+		{
+			input:  "float4",
+			output: sqltypes.Float32,
+		},
+		{
+			input:  "decimal",
+			output: sqltypes.Decimal,
+		},
+	}
+
+	for _, tc := range tcs {
+		name := tc.input
+		if tc.unsigned {
+			name += " unsigned"
+		}
+		t.Run(name, func(t *testing.T) {
+			got := SQLTypeToQueryType(tc.input, tc.unsigned)
+			require.Equal(t, tc.output, got)
 		})
 	}
 }

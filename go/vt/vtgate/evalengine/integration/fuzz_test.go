@@ -131,7 +131,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
-		expr, err = evalengine.TranslateEx(astExpr, evalengine.LookupDefaultCollation(collations.CollationUtf8mb4ID), *debugSimplify)
+		expr, err = evalengine.TranslateEx(astExpr, evalengine.LookupDefaultCollation(collations.CollationUtf8mb4ID), debugSimplify)
 		return
 	}()
 
@@ -146,7 +146,7 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 			}()
 			env := evalengine.EnvWithBindVars(nil, 255)
 			eval, err = env.Evaluate(local)
-			if err == nil && *debugCheckTypes {
+			if err == nil && debugCheckTypes {
 				tt, err = env.TypeOf(local)
 			}
 			return

@@ -18,6 +18,7 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,6 +42,30 @@ func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
+	}
+}
+
+// AssertMatchesContains ensures the given query produces the given substring.
+func AssertMatchesContains(t testing.TB, conn *mysql.Conn, query string, substrings ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, substring := range substrings {
+		if !strings.Contains(got, substring) {
+			t.Errorf("Query: %s Got:\n%s\nLooking for substring:%s", query, got, substring)
+		}
+	}
+}
+
+// AssertMatchesNotContains ensures the given query's output doesn't have the given substring.
+func AssertMatchesNotContains(t testing.TB, conn *mysql.Conn, query string, substrings ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, substring := range substrings {
+		if strings.Contains(got, substring) {
+			t.Errorf("Query: %s Got:\n%s\nFound substring:%s", query, got, substring)
+		}
 	}
 }
 

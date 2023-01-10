@@ -163,7 +163,11 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	//defer vs.cancel()
 	ctx := context.Background()
-	defer ctx.Done()
+	vs.vse.vstreamerCount.Add(1)
+	defer func() {
+		ctx.Done()
+		vs.vse.vstreamerCount.Add(-1)
+	}()
 	vs.vse.vstreamersCreated.Add(1)
 	log.Infof("Starting Stream() with startPos %s", vs.startPos)
 	pos, err := mysql.DecodePosition(vs.startPos)

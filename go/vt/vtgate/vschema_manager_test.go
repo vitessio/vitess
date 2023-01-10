@@ -110,7 +110,7 @@ func TestVSchemaUpdate(t *testing.T) {
 			vm.currentVschema = tcase.currentVSchema
 			vm.VSchemaUpdate(tcase.srvVschema, nil)
 
-			utils.MustMatchFn(".uniqueTables", ".uniqueVindexes")(t, tcase.expected, vs)
+			utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, tcase.expected, vs)
 			if tcase.srvVschema != nil {
 				utils.MustMatch(t, vs, vm.currentVschema, "currentVschema should have same reference as Vschema")
 			}
@@ -210,7 +210,7 @@ func TestRebuildVSchema(t *testing.T) {
 			vm.currentVschema = nil
 			vm.Rebuild()
 
-			utils.MustMatchFn(".uniqueTables", ".uniqueVindexes")(t, tcase.expected, vs)
+			utils.MustMatchFn(".globalTables", ".uniqueVindexes")(t, tcase.expected, vs)
 			if vs != nil {
 				utils.MustMatch(t, vs, vm.currentVschema, "currentVschema should have same reference as Vschema")
 			}

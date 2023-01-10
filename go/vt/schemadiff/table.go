@@ -435,6 +435,30 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
+		if _, ok := floatTypes[col.Type.Type]; ok {
+			// First, normalize the actual type
+			switch col.Type.Type {
+			case "float4":
+				col.Type.Type = "float"
+			case "float8", "real":
+				col.Type.Type = "double"
+			}
+
+			if col.Type.Length != nil && col.Type.Scale == nil && col.Type.Length.Type == sqlparser.IntVal {
+				if l, err := strconv.ParseInt(col.Type.Length.Val, 10, 64); err == nil {
+					// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
+					// subtly wrong. We use a float for a precision of 24, not a double as the documentation
+					// mentioned. Validated against the actual behavior of MySQL.
+					if l <= 24 {
+						col.Type.Type = "float"
+					} else {
+						col.Type.Type = "double"
+					}
+				}
+				col.Type.Length = nil
+			}
+		}
+
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
@@ -508,7 +532,36 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 	}
 }
 
+func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlparser.IndexDefinition {
+	index := &sqlparser.IndexDefinition{
+		Info: &sqlparser.IndexInfo{
+			Name:    sqlparser.NewIdentifierCI("PRIMARY"),
+			Type:    "PRIMARY KEY",
+			Primary: true,
+			Unique:  true,
+		},
+		Columns: []*sqlparser.IndexColumn{{Column: name}},
+	}
+	return index
+}
+
+func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
+	// normalize PRIMARY KEY:
+	// `create table t (id int primary key)`
+	// should turn into:
+	// `create table t (id int, primary key (id))`
+	// Also, PRIMARY KEY must come first before all other keys
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+			c.CreateTable.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(col.Name)}, c.CreateTable.TableSpec.Indexes...)
+			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
+		}
+	}
+}
+
 func (c *CreateTableEntity) normalizeKeys() {
+	c.normalizePrimaryKeyColumns()
+
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
@@ -873,7 +926,7 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 		if t1Option, ok := t1OptionsMap[t2Option.Name]; ok {
 			options1 := sqlparser.TableOptions{t1Option}
 			options2 := sqlparser.TableOptions{t2Option}
-			if !sqlparser.EqualsTableOptions(options1, options2, nil) {
+			if !sqlparser.Equals.TableOptions(options1, options2) {
 				// options are different.
 				// However, we don't automatically apply these changes. It depends on the option!
 				switch strings.ToUpper(t1Option.Name) {
@@ -954,7 +1007,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	}
 	var droppedPartitions1 []*sqlparser.PartitionDefinition
 	// It's OK for prefix of t1 partitions to be nonexistent in t2 (as they may have been rotated away in t2)
-	for len(definitions1) > 0 && !sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0], nil) {
+	for len(definitions1) > 0 && !sqlparser.Equals.RefOfPartitionDefinition(definitions1[0], definitions2[0]) {
 		droppedPartitions1 = append(droppedPartitions1, definitions1[0])
 		definitions1 = definitions1[1:]
 	}
@@ -973,7 +1026,7 @@ func (c *CreateTableEntity) isRangePartitionsRotation(
 	// Now let's ensure that whatever is remaining in definitions1 is an exact match for a prefix of definitions2
 	// It's ok if we end up with leftover elements in definition2
 	for len(definitions1) > 0 {
-		if !sqlparser.EqualsRefOfPartitionDefinition(definitions1[0], definitions2[0], nil) {
+		if !sqlparser.Equals.RefOfPartitionDefinition(definitions1[0], definitions2[0]) {
 			return false, nil, nil
 		}
 		definitions1 = definitions1[1:]
@@ -1016,7 +1069,7 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 			IsAll:  true,
 		}
 		alterTable.PartitionSpec = partitionSpec
-	case sqlparser.EqualsRefOfPartitionOption(t1Partitions, t2Partitions, nil):
+	case sqlparser.Equals.RefOfPartitionOption(t1Partitions, t2Partitions):
 		// identical partitioning
 		return nil, nil
 	default:
@@ -1101,13 +1154,13 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 		if t1Constraint, ok := t1ConstraintsMap[normalizedT2ConstraintName]; ok {
 			// constraint exists in both tables
 			// check diff between before/after columns:
-			if !sqlparser.EqualsConstraintInfo(t2Constraint.Details, t1Constraint.Details, nil) {
+			if !sqlparser.Equals.ConstraintInfo(t2Constraint.Details, t1Constraint.Details) {
 				// constraints with same name have different definition.
 				// First we check if this is only the enforced setting that changed which can
 				// be directly altered.
 				check1Details, ok1 := t1Constraint.Details.(*sqlparser.CheckConstraintDefinition)
 				check2Details, ok2 := t2Constraint.Details.(*sqlparser.CheckConstraintDefinition)
-				if ok1 && ok2 && sqlparser.EqualsExpr(check1Details.Expr, check2Details.Expr, nil) {
+				if ok1 && ok2 && sqlparser.Equals.Expr(check1Details.Expr, check2Details.Expr) {
 					// We have the same expression, so we have a different Enforced here
 					alterConstraint := &sqlparser.AlterCheck{
 						Name:     t2Constraint.Name,
@@ -1178,7 +1231,7 @@ func (c *CreateTableEntity) diffKeys(alterTable *sqlparser.AlterTable,
 		if t1Key, ok := t1KeysMap[t2KeyName]; ok {
 			// key exists in both tables
 			// check diff between before/after columns:
-			if !sqlparser.EqualsRefOfIndexDefinition(t2Key, t1Key, nil) {
+			if !sqlparser.Equals.RefOfIndexDefinition(t2Key, t1Key) {
 				indexVisibilityChange, newVisibility := indexOnlyVisibilityChange(t1Key, t2Key)
 				if indexVisibilityChange {
 					alterTable.AlterOptions = append(alterTable.AlterOptions, &sqlparser.AlterIndex{
@@ -1243,7 +1296,7 @@ func indexOnlyVisibilityChange(t1Key, t2Key *sqlparser.IndexDefinition) (bool, b
 		t2KeyKeptOptions = append(t2KeyKeptOptions, opt)
 	}
 	t2KeyCopy.Options = t2KeyKeptOptions
-	if sqlparser.EqualsRefOfIndexDefinition(t2KeyCopy, t1KeyCopy, nil) {
+	if sqlparser.Equals.RefOfIndexDefinition(t2KeyCopy, t1KeyCopy) {
 		return true, t2KeyInvisible
 	}
 	return false, false
@@ -1482,6 +1535,17 @@ func heuristicallyDetectColumnRenames(
 		}
 	}
 	return dropColumns, addColumns, renameColumns
+}
+
+// primaryKeyColumns returns the columns covered by an existing PRIMARY KEY, or nil if there isn't
+// a PRIMARY KEY
+func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
+	for _, existingIndex := range c.CreateTable.TableSpec.Indexes {
+		if existingIndex.Info.Primary {
+			return existingIndex.Columns
+		}
+	}
+	return nil
 }
 
 // Create implements Entity interface
@@ -1732,6 +1796,12 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					return &ApplyDuplicateColumnError{Table: c.Name(), Column: addedCol.Name.String()}
 				}
 			}
+			// if this column has the PRIMARY KEY option, verify there isn't already a PRIMARY KEY
+			if addedCol.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+				if cols := c.primaryKeyColumns(); cols != nil {
+					return &DuplicateKeyNameError{Table: c.Name(), Key: "PRIMARY"}
+				}
+			}
 			c.TableSpec.Columns = append(c.TableSpec.Columns, addedCol)
 			// see if we need to position it anywhere other than end of table
 			if err := reorderColumn(len(c.TableSpec.Columns)-1, opt.First, opt.After); err != nil {
@@ -1755,6 +1825,24 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if !found {
 				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.NewColDefinition.Name.String()}
 			}
+			// if this column has the PRIMARY KEY option:
+			// - validate there isn't already a PRIMARY KEY for other columns
+			// - if there isn't any PRIMARY KEY, create one
+			// - if there exists a PRIMARY KEY for exactly this column, noop
+			if opt.NewColDefinition.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+				cols := c.primaryKeyColumns()
+				if cols == nil {
+					// add primary key
+					c.CreateTable.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(opt.NewColDefinition.Name)}, c.CreateTable.TableSpec.Indexes...)
+				} else {
+					if len(cols) == 1 && strings.EqualFold(cols[0].Column.String(), opt.NewColDefinition.Name.String()) {
+						// existing PK is exactly this column. Nothing to do
+					} else {
+						return &DuplicateKeyNameError{Table: c.Name(), Key: "PRIMARY"}
+					}
+				}
+			}
+			opt.NewColDefinition.Type.Options.KeyOpt = sqlparser.ColKeyNone
 		case *sqlparser.RenameColumn:
 			// we expect the column to exist
 			found := false
@@ -1969,6 +2057,18 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 	return colNames
 }
 
+func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
+	keyNames := map[string]bool{}
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		name := key.Info.Name
+		if _, ok := keyNames[name.Lowered()]; ok {
+			return &DuplicateKeyNameError{Table: c.Name(), Key: name.String()}
+		}
+		keyNames[name.Lowered()] = true
+	}
+	return nil
+}
+
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
@@ -2065,6 +2165,10 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
+	// validate no two keys have same name
+	if err := c.validateDuplicateKeyNameError(); err != nil {
+		return err
+	}
 
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {
 		// validate no two partitions have same name
@@ -2122,6 +2226,6 @@ func (c *CreateTableEntity) identicalOtherThanName(other *CreateTableEntity) boo
 	if other == nil {
 		return false
 	}
-	return sqlparser.EqualsRefOfTableSpec(c.TableSpec, other.TableSpec, nil) &&
-		sqlparser.EqualsRefOfParsedComments(c.Comments, other.Comments, nil)
+	return sqlparser.Equals.RefOfTableSpec(c.TableSpec, other.TableSpec) &&
+		sqlparser.Equals.RefOfParsedComments(c.Comments, other.Comments)
 }

@@ -25,7 +25,13 @@ import (
 )
 
 func TestFullGeneration(t *testing.T) {
-	result, err := GenerateASTHelpers([]string{"./integration/..."}, "vitess.io/vitess/go/tools/asthelpergen/integration.AST", "*NoCloneType")
+	result, err := GenerateASTHelpers(&Options{
+		Packages:      []string{"./integration/..."},
+		RootInterface: "vitess.io/vitess/go/tools/asthelpergen/integration.AST",
+		Clone: CloneOptions{
+			Exclude: []string{"*NoCloneType"},
+		},
+	})
 	require.NoError(t, err)
 
 	verifyErrors := VerifyFilesOnDisk(result)

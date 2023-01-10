@@ -42,10 +42,11 @@ func Normalize(stmt Statement, reserved *ReservedVars, bindVars map[string]*quer
 }
 
 type normalizer struct {
-	bindVars map[string]*querypb.BindVariable
-	reserved *ReservedVars
-	vals     map[string]string
-	err      error
+	bindVars  map[string]*querypb.BindVariable
+	reserved  *ReservedVars
+	vals      map[string]string
+	err       error
+	inDerived bool
 }
 
 func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) *normalizer {
@@ -65,8 +66,12 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
+		_, isDerived := cursor.Parent().(*DerivedTable)
+		var tmp bool
+		tmp, nz.inDerived = nz.inDerived, isDerived
 		_ = Rewrite(node, nz.WalkSelect, nil)
 		// Don't continue
+		nz.inDerived = tmp
 		return false
 	case *Literal:
 		nz.convertLiteral(node, cursor)
@@ -87,6 +92,19 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 // WalkSelect normalizes the AST in Select mode.
 func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	switch node := cursor.Node().(type) {
+	case *Select:
+		_, isDerived := cursor.Parent().(*DerivedTable)
+		if !isDerived {
+			return true
+		}
+		var tmp bool
+		tmp, nz.inDerived = nz.inDerived, isDerived
+		_ = Rewrite(node, nz.WalkSelect, nil)
+		// Don't continue
+		nz.inDerived = tmp
+		return false
+	case SelectExprs:
+		return !nz.inDerived
 	case *Literal:
 		parent := cursor.Parent()
 		switch parent.(type) {

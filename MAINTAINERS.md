@@ -4,6 +4,7 @@ The following is the full list, alphabetically ordered.
 
 * Andres Taylor ([systay](https://github.com/systay)) andres@planetscale.com
 * Andrew Mason ([amason](https://github.com/ajm188)) andrew@planetscale.com
+* Arthur Schreiber ([arthurschreiber](https://github.com/arthurschreiber)) arthurschreiber@github.com
 * Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) dan.kozlowski@gmail.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io

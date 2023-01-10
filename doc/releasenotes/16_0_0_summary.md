@@ -40,11 +40,47 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
 Consider using `VTOrc` instead of `Orchestrator`.
 
+#### mysqlctl Flags
+
+The [`mysqlctl` command-line client](https://vitess.io/docs/16.0/reference/programs/mysqlctl/) had some leftover (ignored) server flags after the [v15 pflag work](https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md). Those unused flags have now been removed. If you are using any of the following flags with `mysqlctl` in your scripts or other tooling, they will need to be removed prior to upgrading to v16:
+  `--port --grpc_auth_static_client_creds --grpc_compression --grpc_initial_conn_window_size --grpc_initial_window_size --grpc_keepalive_time --grpc_keepalive_timeout`
+
+#### Query Serving Errors
+
+In this release, we are introducing a new way to report errors from Vitess through the query interface.
+Errors will now have an error code for each error, which will make it easy to search for more information on the issue.
+For instance, the following error:
+
+```
+aggregate functions take a single argument 'count(user_id, name)'
+```
+
+Will be transformed into:
+
+```
+VT03001: aggregate functions take a single argument 'count(user_id, name)'
+```
+
+The error code `VT03001` can then be used to search or ask for help and report problems.
+
+If you have code searching for error strings from Vitess, this is a breaking change.
+Many error strings have been tweaked.
+If your application is searching for specific errors, you might need to update your code.
+
+#### <a id="lock-timeout-introduction"/> `lock-timeout` and `remote_operation_timeout` Changes
+Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced. 
+For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
+The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
+
+During upgrades, if the users want to preserve the same behaviour as previous releases, then they should provide the `remote_operation_timeout` flag explicitly before upgrading.
+After the upgrade, they should then alter their configuration to also specify `lock-timeout` explicitly.
+
 ### New command line flags and behavior
 
 #### VTGate: Support query timeout --query-timeout
+
 `--query-timeout` allows you to specify a timeout for queries. This timeout is applied to all queries.
-It can be overridden by setting the `query_timeout` session variable. 
+It can be overridden by setting the `query_timeout` session variable.
 Setting it as command line directive with `QUERY_TIMEOUT_MS` will override other values.
 
 #### VTTablet: VReplication parallel insert workers --vreplication-parallel-insert-workers
@@ -144,6 +180,17 @@ The `RestoreFromBackup  --restore_to_pos` ends with:
 - the restored server in intentionally broken replication setup
 - tablet type is `DRAINED`
 
+#### New `vexplain` command
+A new `vexplain` command has been introduced with the following syntax -
+```
+VEXPLAIN [ALL|QUERIES|PLAN] explainable_stmt
+```
+
+This command will help the users look at the plan that vtgate comes up with for the given query (`PLAN` type), see all the queries that are executed on all the MySQL instances (`QUERIES` type), 
+and see the vtgate plan along with the MySQL explain output for the executed queries (`ALL` type).
+
+The formats `VTEXPLAIN` and `VITESS` for `EXPLAIN` queries are deprecated, and these newly introduced commands should be used instead.
+
 ### Important bug fixes
 
 #### Corrupted results for non-full-group-by queries with JOINs
@@ -190,3 +237,37 @@ transaction_characteristic: {
 }
 ```
 This will allow users to start a transaction with these characteristics.
+
+#### Support for views
+
+Vitess now supports views in sharded keyspace. Views are not created on the underlying database but are logically stored
+in vschema.
+Any query using view will get re-rewritten as derived table during query planning.
+VSchema Example
+
+```json
+{
+  "sharded": true,
+  "vindexes": {},
+  "tables": {},
+  "views": {
+    "view1": "select * from t1",
+    "view2": "select * from t2",
+  }
+}
+```
+
+### VTOrc
+
+#### Flag Deprecations
+
+The flag `lock-shard-timeout` has been deprecated. Please use the newly introduced `lock-timeout` instead. More detail [here](#lock-timeout-introduction).
+
+### VTTestServer
+
+#### Improvement
+
+Creating a database with vttestserver was taking ~45 seconds. This can be problematic in test environments where testcases do a lot of `create` and `drop` database.
+In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
+For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this values might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
+this shouldn't be a concern.
