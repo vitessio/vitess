@@ -9,11 +9,7 @@ concurrency:
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
-  EXPERIMENTAL_GITHUB_OIDC_TOKEN_AUTH: 1
-
-permissions:
-  id-token: write
-  contents: read
+  GITHUB_PR_HEAD_SHA: "${{ github.event.pull_request.head.sha }}"
 
 jobs:
   test:
