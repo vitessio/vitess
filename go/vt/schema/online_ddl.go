@@ -26,10 +26,12 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/openark/golib/log"
 	"google.golang.org/protobuf/encoding/protojson"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -105,9 +107,30 @@ type OnlineDDL struct {
 }
 
 // FromJSON creates an OnlineDDL from json
-func FromJSON(bytes []byte) (*OnlineDDL, error) {
-	onlineDDL := &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}}
-	err := protojson.Unmarshal(bytes, onlineDDL)
+func FromJSON(bytes []byte) (onlineDDL *OnlineDDL, err error) {
+	onlineDDL = &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}}
+	err = protojson.Unmarshal(bytes, onlineDDL)
+
+	if err != nil {
+		return
+	}
+
+	if onlineDDL.TabletAlias != "" {
+		switch onlineDDL.OnlineDDL.TabletAlias {
+		case nil:
+			log.Warningf("")
+			onlineDDL.OnlineDDL.TabletAlias, err = topoproto.ParseTabletAlias(onlineDDL.TabletAlias)
+		default:
+			log.Warningf("")
+		}
+
+		if err != nil {
+			return
+		}
+
+		onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
+	}
+
 	return onlineDDL, err
 }
 

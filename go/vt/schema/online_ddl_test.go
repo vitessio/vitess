@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 func TestCreateUUID(t *testing.T) {
@@ -494,6 +495,73 @@ func TestFromJSON(t *testing.T) {
 			{
 				json:      `{"strategy": "not a strategy"}`,
 				shouldErr: true,
+			},
+		}
+
+		for _, test := range tests {
+			test := test
+
+			t.Run("", func(t *testing.T) {
+				actual, err := FromJSON([]byte(test.json))
+				if test.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				utils.MustMatch(t, test.expected, actual)
+			})
+		}
+	})
+
+	t.Run("tablet alias parsing", func(t *testing.T) {
+		tests := []testcase{
+			{
+				json: `{"tablet": "zone1-101"}`,
+				expected: &OnlineDDL{
+					TabletAlias: "zone1-101",
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						TabletAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			{
+				json: `{
+					"tablet_alias": {
+						"cell": "zone1",
+						"uid": 101
+					}
+				}`,
+				expected: &OnlineDDL{
+					TabletAlias: "zone1-101",
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						TabletAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			{
+				json: `{
+					"tablet": "zone1-404",
+					"tablet_alias": {
+						"cell": "zone1",
+						"uid": 101
+					}
+				}`,
+				expected: &OnlineDDL{
+					TabletAlias: "zone1-101",
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						TabletAlias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
 			},
 		}
 
