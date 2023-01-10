@@ -41,6 +41,8 @@ const (
 	enableGlobalRecoveriesAPI  = "/api/enable-global-recoveries"
 	replicationAnalysisAPI     = "/api/replication-analysis"
 	healthAPI                  = "/debug/health"
+
+	shardWithoutKeyspaceFilteringErrorStr = "Filtering by shard without keyspace isn't supported"
 )
 
 var (
@@ -120,18 +122,13 @@ func returnAsJSON(response http.ResponseWriter, code int, stuff any) {
 // problemsAPIHandler is the handler for the problemsAPI endpoint
 func problemsAPIHandler(response http.ResponseWriter, request *http.Request) {
 	// This api also supports filtering by shard and keyspace provided.
-	// Currently, both of them have to be provided in order to filter the instances.
-	// Once we split the cluster_name field into keyspace and shard, we can support
-	// filtering just by keyspace as well.
 	shard := request.URL.Query().Get("shard")
 	keyspace := request.URL.Query().Get("keyspace")
-	clusterName := ""
-	// Override the cluster name to filter by only when both the parameters
-	// are specified and not empty
-	if keyspace != "" && shard != "" {
-		clusterName = inst.GetClusterNameFromKeyspaceAndShard(keyspace, shard)
+	if shard != "" && keyspace == "" {
+		http.Error(response, shardWithoutKeyspaceFilteringErrorStr, http.StatusBadRequest)
+		return
 	}
-	instances, err := inst.ReadProblemInstances(clusterName)
+	instances, err := inst.ReadProblemInstances(keyspace, shard)
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return
@@ -162,18 +159,13 @@ func enableGlobalRecoveriesAPIHandler(response http.ResponseWriter) {
 // replicationAnalysisAPIHandler is the handler for the replicationAnalysisAPI endpoint
 func replicationAnalysisAPIHandler(response http.ResponseWriter, request *http.Request) {
 	// This api also supports filtering by shard and keyspace provided.
-	// Currently, both of them have to be provided in order to filter the replication analysis.
-	// Once we split the cluster_name field into keyspace and shard, we can support
-	// filtering just by keyspace as well.
 	shard := request.URL.Query().Get("shard")
 	keyspace := request.URL.Query().Get("keyspace")
-	clusterName := ""
-	// Override the cluster name to filter by only when both the parameters
-	// are specified and not empty
-	if keyspace != "" && shard != "" {
-		clusterName = inst.GetClusterNameFromKeyspaceAndShard(keyspace, shard)
+	if shard != "" && keyspace == "" {
+		http.Error(response, shardWithoutKeyspaceFilteringErrorStr, http.StatusBadRequest)
+		return
 	}
-	analysis, err := inst.GetReplicationAnalysis(clusterName, &inst.ReplicationAnalysisHints{})
+	analysis, err := inst.GetReplicationAnalysis(keyspace, shard, &inst.ReplicationAnalysisHints{})
 	if err != nil {
 		http.Error(response, err.Error(), http.StatusInternalServerError)
 		return

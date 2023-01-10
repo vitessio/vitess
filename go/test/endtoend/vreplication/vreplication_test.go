@@ -270,6 +270,10 @@ func TestVreplicationCopyParallel(t *testing.T) {
 }
 
 func testBasicVreplicationWorkflow(t *testing.T) {
+	testVreplicationWorkflows(t, false)
+}
+
+func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -303,6 +307,10 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	shardOrders(t)
 	shardMerchant(t)
 
+	if minimal {
+		return
+	}
+
 	materializeProduct(t)
 
 	materializeMerchantOrders(t)
@@ -334,6 +342,15 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t)
+}
+
+// TestMoveTablesMariaDBToMySQL tests that MoveTables works between a MariaDB source
+// and a MySQL target as while MariaDB is not supported in Vitess v14+ we want
+// MariaDB users to have a way to migrate into Vitess.
+func TestMoveTablesMariaDBToMySQL(t *testing.T) {
+	sourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	testVreplicationWorkflows(t, true /* only do MoveTables */)
 }
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {

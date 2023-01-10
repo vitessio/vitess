@@ -106,13 +106,13 @@ type TableOption struct {
 type ColumnKeyOption int
 
 const (
-	colKeyNone ColumnKeyOption = iota
-	colKeyPrimary
-	colKeySpatialKey
-	colKeyFulltextKey
-	colKeyUnique
-	colKeyUniqueKey
-	colKey
+	ColKeyNone ColumnKeyOption = iota
+	ColKeyPrimary
+	ColKeySpatialKey
+	ColKeyFulltextKey
+	ColKeyUnique
+	ColKeyUniqueKey
+	ColKey
 )
 
 // ReferenceAction indicates the action takes by a referential constraint e.g.
@@ -281,9 +281,9 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 		return sqltypes.Timestamp
 	case YEAR:
 		return sqltypes.Year
-	case FLOAT_TYPE:
+	case FLOAT_TYPE, FLOAT4_TYPE:
 		return sqltypes.Float32
-	case DOUBLE:
+	case DOUBLE, FLOAT8_TYPE:
 		return sqltypes.Float64
 	case DECIMAL, DECIMAL_TYPE:
 		return sqltypes.Decimal
@@ -1680,6 +1680,20 @@ func (ty ExplainType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty VExplainType) ToString() string {
+	switch ty {
+	case PlanVExplainType:
+		return PlanStr
+	case QueriesVExplainType:
+		return QueriesStr
+	case AllVExplainType:
+		return AllVExplainStr
+	default:
+		return "Unknown VExplainType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty IntervalTypes) ToString() string {
 	switch ty {
 	case IntervalYear:
@@ -1821,7 +1835,7 @@ func (ty ShowCommandType) ToString() string {
 	case StatusSession:
 		return StatusSessionStr
 	case Table:
-		return TableStr
+		return TablesStr
 	case TableStatus:
 		return TableStatusStr
 	case Trigger:

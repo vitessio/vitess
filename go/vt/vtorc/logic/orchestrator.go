@@ -385,7 +385,6 @@ func ContinuousDiscovery() {
 			// Various periodic internal maintenance tasks
 			go func() {
 				if IsLeaderOrActive() {
-					go inst.InjectUnseenPrimaries()
 
 					go inst.ForgetLongUnseenInstances()
 					go inst.ForgetUnseenInstancesDifferentlyResolved()
@@ -395,7 +394,6 @@ func ContinuousDiscovery() {
 					go inst.ExpireMaintenance()
 					go inst.ExpireCandidateInstances()
 					go inst.ExpireHostnameUnresolve()
-					go inst.ExpireClusterDomainName()
 					go inst.ExpireAudit()
 					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()

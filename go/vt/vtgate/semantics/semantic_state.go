@@ -151,23 +151,22 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 }
 
 // ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
-func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) error {
+func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) {
 	if id.NumberOfTables() != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier should represent single table: %v", id)
+		// This is probably a derived table
+		return
 	}
 	tblOffset := id.TableOffset()
 	if tblOffset > len(st.Tables) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier greater than number of tables: %v, %d", id, len(st.Tables))
+		// This should not happen and is probably a bug, but the output query will still work fine
+		return
 	}
 	switch tbl := st.Tables[id.TableOffset()].(type) {
 	case *RealTable:
 		tbl.ASTNode = t
 	case *DerivedTable:
 		tbl.ASTNode = t
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: replacement not expected for : %T", tbl)
 	}
-	return nil
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.

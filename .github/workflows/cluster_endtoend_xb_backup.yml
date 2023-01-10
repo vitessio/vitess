@@ -18,7 +18,7 @@ permissions:
 jobs:
   build:
     name: Run endtoend tests on Cluster (xb_backup)
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI
@@ -95,7 +95,7 @@ jobs:
         sudo apt-get update
 
         # Install everything else we need, and configure
-        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils
+        sudo apt-get install -y percona-server-server percona-server-client make unzip g++ etcd git wget eatmydata xz-utils libncurses5
 
         sudo service mysql stop
         sudo service etcd stop
