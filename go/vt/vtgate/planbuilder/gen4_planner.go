@@ -17,10 +17,9 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
+	"fmt"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -40,7 +39,7 @@ func gen4Planner(query string, plannerVersion querypb.ExecuteOptions_PlannerVers
 		case *sqlparser.Delete:
 			return gen4DeleteStmtPlanner(plannerVersion, stmt, reservedVars, vschema)
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%T not yet supported", stmt)
+			return nil, vterrors.VT12001(fmt.Sprintf("%T", stmt))
 		}
 	}
 }
@@ -55,11 +54,11 @@ func gen4SelectStmtPlanner(
 	switch node := stmt.(type) {
 	case *sqlparser.Select:
 		if node.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in select statement")
+			return nil, vterrors.VT12001("WITH expression in SELECT statement")
 		}
 	case *sqlparser.Union:
 		if node.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			return nil, vterrors.VT12001("WITH expression in UNION statement")
 		}
 	}
 
@@ -267,7 +266,7 @@ func gen4UpdateStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if updStmt.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in update statement")
+		return nil, vterrors.VT12001("WITH expression in UPDATE statement")
 	}
 
 	ksName := ""
@@ -338,7 +337,7 @@ func gen4DeleteStmtPlanner(
 	vschema plancontext.VSchema,
 ) (*planResult, error) {
 	if deleteStmt.With != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in delete statement")
+		return nil, vterrors.VT12001("WITH expression in DELETE statement")
 	}
 
 	var err error
@@ -409,21 +408,21 @@ func gen4DeleteStmtPlanner(
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
-func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) (err error) {
+func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
 	// Rewrite routed tables
-	_ = sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
-		aliasTbl, isAlias := cursor.Node().(*sqlparser.AliasedTableExpr)
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		aliasTbl, isAlias := node.(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return err == nil
+			return true, nil
 		}
 		tableName, ok := aliasTbl.Expr.(sqlparser.TableName)
 		if !ok {
-			return err == nil
+			return true, nil
 		}
 		var vschemaTable *vindexes.Table
 		vschemaTable, _, _, _, _, err = vschema.FindTableOrVindex(tableName)
 		if err != nil {
-			return false
+			return false, err
 		}
 
 		if vschemaTable.Name.String() != tableName.Name.String() {
@@ -436,9 +435,8 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 			aliasTbl.Expr = tableName
 		}
 
-		return err == nil
-	}, nil)
-	return
+		return true, nil
+	}, stmt)
 }
 
 func setLockOnAllSelect(plan logicalPlan) {
@@ -563,40 +561,26 @@ func checkIfDeleteSupported(del *sqlparser.Delete, semTable *semantics.SemTable)
 	}
 
 	// Delete is only supported for a single TableExpr which is supposed to be an aliased expression
-	multiShardErr := errors.New("unsupported: multi-shard or vindex write statement")
+	multiShardErr := vterrors.VT12001("multi-shard or vindex write statement")
 	if len(del.TableExprs) != 1 {
 		return multiShardErr
 	}
-	aliasedTableExpr, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
+	_, isAliasedExpr := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !isAliasedExpr {
 		return multiShardErr
 	}
 
 	if len(del.Targets) > 1 {
-		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "multi-table delete statement in not supported in sharded database")
+		return vterrors.VT12001("multi-table DELETE statement in a sharded keyspace")
 	}
 
-	// Get the table information and the vindex table from it
-	ti, err := semTable.TableInfoFor(semTable.TableSetFor(aliasedTableExpr))
-	if err != nil {
-		return err
-	}
-	isSharded := false
-	vt := ti.GetVindexTable()
-	if vt != nil && vt.Keyspace != nil {
-		isSharded = vt.Keyspace.Sharded
-	}
-
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node.(type) {
 		case *sqlparser.Subquery, *sqlparser.DerivedTable:
 			// We have a subquery, so we must fail the planning.
 			// If this subquery and the table expression were all belonging to the same unsharded keyspace,
 			// we would have already created a plan for them before doing these checks.
-			if isSharded {
-				return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: subqueries in sharded DML")
-			}
-			return false, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: sharded subqueries in DML")
+			return false, vterrors.VT12001("subqueries in DML")
 		}
 		return true, nil
 	}, del)

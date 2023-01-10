@@ -83,7 +83,6 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"math"
@@ -104,11 +103,13 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/discovery"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
@@ -116,6 +117,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -128,14 +130,35 @@ import (
 var (
 	// ErrUnknownCommand is returned for an unknown command
 	ErrUnknownCommand = errors.New("unknown command")
+
+	// Flag variables.
+	healthCheckRetryDelay = 5 * time.Second
+	healthCheckTimeout    = time.Minute
 )
 
-// Flags are exported for use in go/vt/vtctld.
-var (
-	HealthCheckTopologyRefresh = flag.Duration("vtctl_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
-	HealthcheckRetryDelay      = flag.Duration("vtctl_healthcheck_retry_delay", 5*time.Second, "delay before retrying a failed healthcheck")
-	HealthCheckTimeout         = flag.Duration("vtctl_healthcheck_timeout", time.Minute, "the health check timeout period")
-)
+func init() {
+	servenv.OnParseFor("vtctl", registerFlags)
+	servenv.OnParseFor("vtctld", registerFlags)
+}
+
+func registerFlags(fs *pflag.FlagSet) {
+	// TODO: https://github.com/vitessio/vitess/issues/11973
+	// Then remove this function and associated code (NewHealthCheck, servenv
+	// OnParseFor hooks, etc) entirely.
+	fs.Duration("vtctl_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
+	fs.MarkDeprecated("vtctl_healthcheck_topology_refresh", "")
+
+	fs.DurationVar(&healthCheckRetryDelay, "vtctl_healthcheck_retry_delay", healthCheckRetryDelay, "delay before retrying a failed healthcheck")
+	fs.MarkDeprecated("vtctl_healthcheck_retry_delay", "This is used only by the legacy vtctld UI that is already deprecated and will be removed in the next release.")
+	fs.DurationVar(&healthCheckTimeout, "vtctl_healthcheck_timeout", healthCheckTimeout, "the health check timeout period")
+	fs.MarkDeprecated("vtctl_healthcheck_timeout", "This is used only by the legacy vtctld UI that is already deprecated and will be removed in the next release.")
+}
+
+// NewHealthCheck returns a healthcheck implementation based on the vtctl flags.
+// It is exported for use in go/vt/vtctld.
+func NewHealthCheck(ctx context.Context, ts *topo.Server, local string, cellsToWatch []string) discovery.HealthCheck {
+	return discovery.NewHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, ts, local, strings.Join(cellsToWatch, ","))
+}
 
 type command struct {
 	name   string
@@ -717,16 +740,6 @@ var commands = []commandGroup{
 				method: commandGetShardReplication,
 				params: "<cell> <keyspace/shard>",
 				help:   "Outputs a JSON structure that contains information about the ShardReplication.",
-			},
-		},
-	},
-	{
-		"Workflow", []command{
-			{
-				name:   "VExec",
-				method: commandVExec,
-				params: "<ks.workflow> <query> --dry-run",
-				help:   "Runs query on all tablets in workflow. Example: VExec merchant.morders \"update _vt.vreplication set Status='Running'\"",
 			},
 		},
 	},
@@ -2934,8 +2947,8 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 		arg = subFlags.Args()[2]
 	}
 
-	query := ""
-	uuid := ""
+	applySchemaQuery := ""
+	executeFetchQuery := ""
 	var bindErr error
 	switch command {
 	case "show":
@@ -2955,15 +2968,17 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
 		default:
 			if schema.IsOnlineDDLUUID(arg) {
-				uuid = arg
 				condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
 			} else {
 				condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 			}
 		}
-		order := " order by `id` ASC"
-		if *orderBy == "descending" {
-			order = " order by `id` DESC"
+		order := " order by `id` "
+		switch *orderBy {
+		case "desc", "descending":
+			order = order + "DESC"
+		default:
+			order = order + "ASC"
 		}
 
 		skipLimit := ""
@@ -2971,46 +2986,79 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			skipLimit = fmt.Sprintf("LIMIT %v,%v", *skip, *limit)
 		}
 
-		query = fmt.Sprintf(`select
+		executeFetchQuery = fmt.Sprintf(`select
 				*
 				from _vt.schema_migrations where %s %s %s`, condition, order, skipLimit)
 	case "retry":
 		if arg == "" {
 			return fmt.Errorf("UUID required")
 		}
-		uuid = arg
-		query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='retry' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
+		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a retry`, sqltypes.StringBindVariable(arg))
 	case "complete":
 		if arg == "" {
 			return fmt.Errorf("UUID required")
 		}
-		uuid = arg
-		query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='complete' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
+		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a complete`, sqltypes.StringBindVariable(arg))
 	case "cancel":
 		if arg == "" {
 			return fmt.Errorf("UUID required")
 		}
-		uuid = arg
-		query, bindErr = sqlparser.ParseAndBind(`update _vt.schema_migrations set migration_status='cancel' where migration_uuid=%a`, sqltypes.StringBindVariable(arg))
+		applySchemaQuery, bindErr = sqlparser.ParseAndBind(`alter vitess_migration %a cancel`, sqltypes.StringBindVariable(arg))
 	case "cancel-all":
 		if arg != "" {
 			return fmt.Errorf("UUID not allowed in %s", command)
 		}
-		query = `update _vt.schema_migrations set migration_status='cancel-all'`
+		applySchemaQuery = `alter vitess_migration cancel all`
 	default:
 		return fmt.Errorf("Unknown OnlineDDL command: %s", command)
 	}
 	if bindErr != nil {
 		return fmt.Errorf("Error generating OnlineDDL query: %+v", bindErr)
 	}
-	qr, err := wr.VExecResult(ctx, uuid, keyspace, query, false)
-	if err != nil {
-		return err
+
+	if applySchemaQuery != "" {
+		log.Info("Calling ApplySchema on VtctldServer")
+
+		resp, err := wr.VtctldServer().ApplySchema(ctx, &vtctldatapb.ApplySchemaRequest{
+			Keyspace:            keyspace,
+			Sql:                 []string{applySchemaQuery},
+			SkipPreflight:       true,
+			WaitReplicasTimeout: protoutil.DurationToProto(wrangler.DefaultWaitReplicasTimeout),
+		})
+		if err != nil {
+			return err
+		}
+		loggerWriter{wr.Logger()}.Printf("resp: %v\n", resp)
+	} else {
+		// This is a SELECT. We run this on all PRIMARY tablets of this keyspace, and return the combined result
+		resp, err := wr.VtctldServer().GetTablets(ctx, &vtctldatapb.GetTabletsRequest{
+			Cells:      nil,
+			Strict:     false,
+			Keyspace:   keyspace,
+			TabletType: topodatapb.TabletType_PRIMARY,
+		})
+		if err != nil {
+			return err
+		}
+
+		tabletResults := map[string]*sqltypes.Result{}
+		for _, tablet := range resp.Tablets {
+			tabletAlias := topoproto.TabletAliasString(tablet.Alias)
+
+			qrproto, err := wr.ExecuteFetchAsDba(ctx, tablet.Alias, executeFetchQuery, 10000, false, false)
+			if err != nil {
+				return err
+			}
+			tabletResults[tabletAlias] = sqltypes.Proto3ToResult(qrproto)
+		}
+		// combine results. This loses sorting if there's more then 1 tablet
+		combinedResults := queryResultForTabletResults(tabletResults)
+		if *json {
+			printJSON(wr.Logger(), combinedResults)
+		} else {
+			printQueryResult(loggerWriter{wr.Logger()}, combinedResults)
+		}
 	}
-	if *json {
-		return printJSON(wr.Logger(), qr)
-	}
-	printQueryResult(loggerWriter{wr.Logger()}, qr)
 	return nil
 }
 
@@ -3576,45 +3624,6 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 	return nil
 }
 
-func commandVExec(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	deprecationMessage := `VExec command will be deprecated in version v12. For Online DDL control, use "vtctl OnlineDDL" commands or SQL syntax`
-	log.Warningf(deprecationMessage)
-
-	json := subFlags.Bool("json", false, "Output JSON instead of human-readable table")
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of VExec and only reports the final query and list of tablets on which it will be applied")
-	if err := subFlags.Parse(args); err != nil {
-		return err
-	}
-	if subFlags.NArg() != 2 {
-		return fmt.Errorf("usage: VExec --dry-run keyspace.workflow \"<query>\"")
-	}
-	keyspace, workflow, err := splitKeyspaceWorkflow(subFlags.Arg(0))
-	if err != nil {
-		return err
-	}
-	_, err = wr.TopoServer().GetKeyspace(ctx, keyspace)
-	if err != nil {
-		wr.Logger().Errorf("keyspace %s not found", keyspace)
-	}
-	query := subFlags.Arg(1)
-
-	qr, err := wr.VExecResult(ctx, workflow, keyspace, query, *dryRun)
-	if err != nil {
-		return err
-	}
-	if *dryRun {
-		return nil
-	}
-	if qr == nil {
-		wr.Logger().Printf("no result returned\n")
-	}
-	if *json {
-		return printJSON(wr.Logger(), qr)
-	}
-	printQueryResult(loggerWriter{wr.Logger()}, qr)
-	return nil
-}
-
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
 	if err := subFlags.Parse(args); err != nil {
@@ -3925,4 +3934,27 @@ func PrintAllCommands(logger logutil.Logger) {
 		}
 		logger.Printf("\n")
 	}
+}
+
+// queryResultForTabletResults aggregates given results into a combined result set
+func queryResultForTabletResults(results map[string]*sqltypes.Result) *sqltypes.Result {
+	var qr = &sqltypes.Result{}
+	defaultFields := []*querypb.Field{{
+		Name: "Tablet",
+		Type: sqltypes.VarBinary,
+	}}
+	var row2 []sqltypes.Value
+	for tabletAlias, result := range results {
+		if qr.Fields == nil {
+			qr.Fields = append(qr.Fields, defaultFields...)
+			qr.Fields = append(qr.Fields, result.Fields...)
+		}
+		for _, row := range result.Rows {
+			row2 = nil
+			row2 = append(row2, sqltypes.NewVarBinary(tabletAlias))
+			row2 = append(row2, row...)
+			qr.Rows = append(qr.Rows, row2)
+		}
+	}
+	return qr
 }

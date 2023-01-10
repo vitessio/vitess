@@ -18,6 +18,7 @@ package schema
 
 import (
 	"encoding/hex"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -319,6 +320,54 @@ func TestNewOnlineDDLs(t *testing.T) {
 				assert.Equal(t, expect.isView, onlineDDL.IsView())
 			}
 			assert.Equal(t, expect.sqls, sqls)
+		})
+	}
+}
+
+func TestNewOnlineDDLsForeignKeys(t *testing.T) {
+	type expect struct {
+		sqls            []string
+		notDDL          bool
+		parseError      bool
+		isError         bool
+		expectErrorText string
+		isView          bool
+	}
+	queries := []string{
+		"alter table corder add FOREIGN KEY my_fk(customer_id) references customer(customer_id)",
+		"create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
+	}
+
+	migrationContext := "354b-11eb-82cd-f875a4d24e90"
+	for _, query := range queries {
+		t.Run(query, func(t *testing.T) {
+			for _, allowForeignKeys := range []bool{false, true} {
+				testName := fmt.Sprintf("%t", allowForeignKeys)
+				t.Run(testName, func(t *testing.T) {
+					stmt, err := sqlparser.Parse(query)
+					require.NoError(t, err)
+					ddlStmt, ok := stmt.(sqlparser.DDLStatement)
+					require.True(t, ok)
+
+					flags := ""
+					if allowForeignKeys {
+						flags = "--unsafe-allow-foreign-keys"
+					}
+					onlineDDLs, err := NewOnlineDDLs("test_ks", query, ddlStmt, NewDDLStrategySetting(DDLStrategyVitess, flags), migrationContext, "")
+					if allowForeignKeys {
+						assert.NoError(t, err)
+					} else {
+						assert.Error(t, err)
+						assert.Contains(t, err.Error(), "foreign key constraints are not supported")
+					}
+
+					for _, onlineDDL := range onlineDDLs {
+						sql, err := onlineDDL.sqlWithoutComments()
+						assert.NoError(t, err)
+						assert.NotEmpty(t, sql)
+					}
+				})
+			}
 		})
 	}
 }

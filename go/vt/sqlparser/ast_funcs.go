@@ -106,13 +106,13 @@ type TableOption struct {
 type ColumnKeyOption int
 
 const (
-	colKeyNone ColumnKeyOption = iota
-	colKeyPrimary
-	colKeySpatialKey
-	colKeyFulltextKey
-	colKeyUnique
-	colKeyUniqueKey
-	colKey
+	ColKeyNone ColumnKeyOption = iota
+	ColKeyPrimary
+	ColKeySpatialKey
+	ColKeyFulltextKey
+	ColKeyUnique
+	ColKeyUniqueKey
+	ColKey
 )
 
 // ReferenceAction indicates the action takes by a referential constraint e.g.
@@ -281,9 +281,9 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 		return sqltypes.Timestamp
 	case YEAR:
 		return sqltypes.Year
-	case FLOAT_TYPE:
+	case FLOAT_TYPE, FLOAT4_TYPE:
 		return sqltypes.Float32
-	case DOUBLE:
+	case DOUBLE, FLOAT8_TYPE:
 		return sqltypes.Float64
 	case DECIMAL, DECIMAL_TYPE:
 		return sqltypes.Decimal
@@ -1680,6 +1680,20 @@ func (ty ExplainType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty VExplainType) ToString() string {
+	switch ty {
+	case PlanVExplainType:
+		return PlanStr
+	case QueriesVExplainType:
+		return QueriesStr
+	case AllVExplainType:
+		return AllVExplainStr
+	default:
+		return "Unknown VExplainType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty IntervalTypes) ToString() string {
 	switch ty {
 	case IntervalYear:
@@ -1821,7 +1835,7 @@ func (ty ShowCommandType) ToString() string {
 	case StatusSession:
 		return StatusSessionStr
 	case Table:
-		return TableStr
+		return TablesStr
 	case TableStatus:
 		return TableStatusStr
 	case Trigger:
@@ -2131,21 +2145,22 @@ func defaultRequiresParens(ct *ColumnType) bool {
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
-func RemoveKeyspaceFromColName(expr Expr) Expr {
-	return RemoveKeyspace(expr).(Expr) // This hard cast is safe because we do not change the type the input
+func RemoveKeyspaceFromColName(expr Expr) {
+	RemoveKeyspace(expr)
 }
 
 // RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
-func RemoveKeyspace(in SQLNode) SQLNode {
-	return Rewrite(in, nil, func(cursor *Cursor) bool {
-		switch col := cursor.Node().(type) {
+func RemoveKeyspace(in SQLNode) {
+	// Walk will only return an error if we return an error from the inner func. safe to ignore here
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch col := node.(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}
-		return true
-	})
+		return true, nil
+	}, in)
 }
 
 func convertStringToInt(integer string) int {

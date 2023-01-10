@@ -223,7 +223,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		// the starting position we pass in, it seems it is
 		// just the PREVIOUS_GTIDS_EVENT from the file we're reading.
 		// So we have to skip it.
-		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, bls.startPos)
+		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, "", bls.startPos)
 	} else {
 		bls.startPos, events, err = bls.conn.StartBinlogDumpFromCurrent(ctx)
 	}

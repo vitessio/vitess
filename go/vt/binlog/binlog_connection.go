@@ -107,7 +107,7 @@ func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mys
 		return mysql.Position{}, nil, fmt.Errorf("failed to get primary position: %v", err)
 	}
 
-	c, err := bc.StartBinlogDumpFromPosition(ctx, position)
+	c, err := bc.StartBinlogDumpFromPosition(ctx, "", position)
 	return position, c, err
 }
 
@@ -120,11 +120,11 @@ func (bc *BinlogConnection) StartBinlogDumpFromCurrent(ctx context.Context) (mys
 // by canceling the context.
 //
 // Note the context is valid and used until eventChan is closed.
-func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, startPos mysql.Position) (<-chan mysql.BinlogEvent, error) {
+func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, binlogFilename string, startPos mysql.Position) (<-chan mysql.BinlogEvent, error) {
 	ctx, bc.cancel = context.WithCancel(ctx)
 
 	log.Infof("sending binlog dump command: startPos=%v, serverID=%v", startPos, bc.serverID)
-	if err := bc.SendBinlogDumpCommand(bc.serverID, startPos); err != nil {
+	if err := bc.SendBinlogDumpCommand(bc.serverID, binlogFilename, startPos); err != nil {
 		log.Errorf("couldn't send binlog dump command: %v", err)
 		return nil, err
 	}

@@ -86,7 +86,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:
 		return StmtOther
-	case Explain:
+	case Explain, *VExplainStmt:
 		return StmtExplain
 	case *Begin:
 		return StmtBegin

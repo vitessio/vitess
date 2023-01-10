@@ -23,14 +23,14 @@ Usage of vtorc:
       --keep_logs duration                           keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                  keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                     keep running at least this long after SIGTERM before stopping (default 50ms)
-      --lock-shard-timeout duration                  Duration for which a shard lock is held when running a recovery (default 30s)
+      --lock-timeout duration                        Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --log_backtrace_at traceLocation               when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                               If non-empty, write log files in this directory
       --log_err_stacks                               log stack traces for errors
       --log_rotate_max_size uint                     size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                  log to standard error instead of files
       --max-stack-size int                           configure the maximum stack size in bytes (default 67108864)
-      --onclose_timeout duration                     wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onclose_timeout duration                     wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm_timeout duration                      wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid_file string                              If set, the process will write its pid to the named file, and delete it on graceful shutdown.
       --port int                                     port for the server
@@ -40,7 +40,7 @@ Usage of vtorc:
       --reasonable-replication-lag duration          Maximum replication lag on replicas which is deemed to be acceptable (default 10s)
       --recovery-period-block-duration duration      Duration for which a new recovery is blocked on an instance after running a recovery (default 30s)
       --recovery-poll-duration duration              Timer duration on which VTOrc polls its database to run a recovery (default 1s)
-      --remote_operation_timeout duration            time to wait for a remote operation (default 30s)
+      --remote_operation_timeout duration            time to wait for a remote operation (default 15s)
       --security_policy string                       the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
       --shutdown_wait_time duration                  Maximum time to wait for VTOrc to release all the locks that it is holding before shutting down on SIGTERM (default 30s)
       --snapshot-topology-interval duration          Timer duration on which VTOrc takes a snapshot of the current MySQL information it has in the database. Should be in multiple of hours
