@@ -331,117 +331,146 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 
 	switch node := cursor.Node().(type) {
 	case *Select:
-		for _, col := range node.SelectExprs {
-			_, hasStar := col.(*StarExpr)
-			if hasStar {
-				er.hasStarInSelect = true
-			}
-
-			aliasedExpr, ok := col.(*AliasedExpr)
-			if ok && aliasedExpr.As.IsEmpty() {
-				buf := NewTrackedBuffer(nil)
-				aliasedExpr.Expr.Format(buf)
-				// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
-				innerBindVarNeeds, err := er.rewriteAliasedExpr(aliasedExpr)
-				if err != nil {
-					er.err = err
-					return false
-				}
-				if innerBindVarNeeds.HasRewrites() {
-					aliasedExpr.As = NewIdentifierCI(buf.String())
-				}
-				er.bindVars.MergeWith(innerBindVarNeeds)
-			}
-		}
-		// set select limit if explicitly not set when sql_select_limit is set on the connection.
-		if er.selectLimit > 0 && node.Limit == nil {
-			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
-		}
+		er.visitSelect(node)
 	case *Union:
-		// set select limit if explicitly not set when sql_select_limit is set on the connection.
-		if er.selectLimit > 0 && node.Limit == nil {
-			node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
-		}
+		er.rewriteUnion(node)
 	case *FuncExpr:
 		er.funcRewrite(cursor, node)
 	case *Variable:
-		// Iff we are in SET, we want to change the scope of variables if a modifier has been set
-		// and only on the lhs of the assignment:
-		// set session sql_mode = @someElse
-		// here we need to change the scope of `sql_mode` and not of `@someElse`
-		if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
-			break
-		}
-		switch node.Scope {
-		case VariableScope:
-			er.udvRewrite(cursor, node)
-		case GlobalScope, SessionScope, NextTxScope:
-			er.sysVarRewrite(cursor, node)
-		}
+		er.rewriteVariable(cursor, node)
 	case *Subquery:
 		er.unnestSubQueries(cursor, node)
 	case *NotExpr:
-		switch inner := node.Expr.(type) {
-		case *ComparisonExpr:
-			// not col = 42 => col != 42
-			// not col > 42 => col <= 42
-			// etc
-			canChange, inverse := inverseOp(inner.Operator)
-			if canChange {
-				inner.Operator = inverse
-				cursor.Replace(inner)
-			}
-		case *NotExpr:
-			// not not true => true
-			cursor.Replace(inner.Expr)
-		case BoolVal:
-			// not true => false
-			inner = !inner
-			cursor.Replace(inner)
-		}
+		er.rewriteNotExpr(cursor, node)
 	case *AliasedTableExpr:
-		aliasTableName, ok := node.Expr.(TableName)
-		if !ok {
-			break
-		}
-		// Qualifier should not be added to dual table
-		tblName := aliasTableName.Name.String()
-		if tblName == "dual" {
-			break
-		}
-		if SystemSchema(er.keyspace) {
-			if aliasTableName.Qualifier.IsEmpty() {
-				aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
-				node.Expr = aliasTableName
-				cursor.Replace(node)
-			}
-			break
-		}
-		if er.views == nil {
-			break
-		}
-		view := er.views.FindView(aliasTableName)
-		if view == nil {
-			break
-		}
-
-		node.Expr = &DerivedTable{
-			Select: CloneSelectStatement(view),
-		}
-		if node.As.IsEmpty() {
-			node.As = NewIdentifierCS(tblName)
-		}
+		er.rewriteAliasedTable(cursor, node)
 	case *ShowBasic:
-		if node.Command == VariableGlobal || node.Command == VariableSession {
-			varsToAdd := sysvars.GetInterestingVariables()
-			for _, sysVar := range varsToAdd {
-				er.bindVars.AddSysVar(sysVar)
-			}
-		}
+		er.rewriteShowBasic(node)
 	case *ExistsExpr:
 		er.existsRewrite(cursor, node)
 	}
 	return true
+}
+
+func (er *astRewriter) rewriteUnion(node *Union) {
+	// set select limit if explicitly not set when sql_select_limit is set on the connection.
+	if er.selectLimit > 0 && node.Limit == nil {
+		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
+	}
+}
+
+func (er *astRewriter) rewriteAliasedTable(cursor *Cursor, node *AliasedTableExpr) {
+	aliasTableName, ok := node.Expr.(TableName)
+	if !ok {
+		return
+	}
+
+	// Qualifier should not be added to dual table
+	tblName := aliasTableName.Name.String()
+	if tblName == "dual" {
+		return
+	}
+
+	if SystemSchema(er.keyspace) {
+		if aliasTableName.Qualifier.IsEmpty() {
+			aliasTableName.Qualifier = NewIdentifierCS(er.keyspace)
+			node.Expr = aliasTableName
+			cursor.Replace(node)
+		}
+		return
+	}
+
+	// Could we be dealing with a view?
+	if er.views == nil {
+		return
+	}
+	view := er.views.FindView(aliasTableName)
+	if view == nil {
+		return
+	}
+
+	// Aha! It's a view. Let's replace it with a derived table
+	node.Expr = &DerivedTable{Select: CloneSelectStatement(view)}
+	if node.As.IsEmpty() {
+		node.As = NewIdentifierCS(tblName)
+	}
+}
+
+func (er *astRewriter) rewriteShowBasic(node *ShowBasic) {
+	if node.Command == VariableGlobal || node.Command == VariableSession {
+		varsToAdd := sysvars.GetInterestingVariables()
+		for _, sysVar := range varsToAdd {
+			er.bindVars.AddSysVar(sysVar)
+		}
+	}
+}
+
+func (er *astRewriter) rewriteNotExpr(cursor *Cursor, node *NotExpr) {
+	switch inner := node.Expr.(type) {
+	case *ComparisonExpr:
+		// not col = 42 => col != 42
+		// not col > 42 => col <= 42
+		// etc
+		canChange, inverse := inverseOp(inner.Operator)
+		if canChange {
+			inner.Operator = inverse
+			cursor.Replace(inner)
+		}
+	case *NotExpr:
+		// not not true => true
+		cursor.Replace(inner.Expr)
+	case BoolVal:
+		// not true => false
+		inner = !inner
+		cursor.Replace(inner)
+	}
+}
+
+func (er *astRewriter) rewriteVariable(cursor *Cursor, node *Variable) {
+	// Iff we are in SET, we want to change the scope of variables if a modifier has been set
+	// and only on the lhs of the assignment:
+	// set session sql_mode = @someElse
+	// here we need to change the scope of `sql_mode` and not of `@someElse`
+	if v, isSet := cursor.Parent().(*SetExpr); isSet && v.Var == node {
+		return
+	}
+	switch node.Scope {
+	case VariableScope:
+		er.udvRewrite(cursor, node)
+	case GlobalScope, SessionScope, NextTxScope:
+		er.sysVarRewrite(cursor, node)
+	}
+}
+
+func (er *astRewriter) visitSelect(node *Select) {
+	for _, col := range node.SelectExprs {
+		if _, hasStar := col.(*StarExpr); hasStar {
+			er.hasStarInSelect = true
+			continue
+		}
+
+		aliasedExpr, ok := col.(*AliasedExpr)
+		if !ok || !aliasedExpr.As.IsEmpty() {
+			continue
+		}
+		buf := NewTrackedBuffer(nil)
+		aliasedExpr.Expr.Format(buf)
+		// select last_insert_id() -> select :__lastInsertId as `last_insert_id()`
+		innerBindVarNeeds, err := er.rewriteAliasedExpr(aliasedExpr)
+		if err != nil {
+			er.err = err
+			return
+		}
+		if innerBindVarNeeds.HasRewrites() {
+			aliasedExpr.As = NewIdentifierCI(buf.String())
+		}
+		er.bindVars.MergeWith(innerBindVarNeeds)
+
+	}
+	// set select limit if explicitly not set when sql_select_limit is set on the connection.
+	if er.selectLimit > 0 && node.Limit == nil {
+		node.Limit = &Limit{Rowcount: NewIntLiteral(strconv.Itoa(er.selectLimit))}
+	}
 }
 
 func inverseOp(i ComparisonExprOperator) (bool, ComparisonExprOperator) {
@@ -527,17 +556,15 @@ var funcRewrites = map[string]string{
 
 func (er *astRewriter) funcRewrite(cursor *Cursor, node *FuncExpr) {
 	bindVar, found := funcRewrites[node.Name.Lowered()]
-	if found {
-		if bindVar == DBVarName && !er.shouldRewriteDatabaseFunc {
-			return
-		}
-		if len(node.Exprs) > 0 {
-			er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", node.Name.Lowered())
-			return
-		}
-		cursor.Replace(bindVarExpression(bindVar))
-		er.bindVars.AddFuncResult(bindVar)
+	if !found || (bindVar == DBVarName && !er.shouldRewriteDatabaseFunc) {
+		return
 	}
+	if len(node.Exprs) > 0 {
+		er.err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Argument to %s() not supported", node.Name.Lowered())
+		return
+	}
+	cursor.Replace(bindVarExpression(bindVar))
+	er.bindVars.AddFuncResult(bindVar)
 }
 
 func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
@@ -604,31 +631,33 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 }
 
 func (er *astRewriter) existsRewrite(cursor *Cursor, node *ExistsExpr) {
-	switch node := node.Subquery.Select.(type) {
-	case *Select:
-		if node.Limit == nil {
-			node.Limit = &Limit{}
-		}
-		node.Limit.Rowcount = NewIntLiteral("1")
-
-		if node.Having != nil {
-			// If the query has HAVING, we can't take any shortcuts
-			return
-		}
-
-		if len(node.GroupBy) == 0 && node.SelectExprs.AllAggregation() {
-			// in these situations, we are guaranteed to always get a non-empty result,
-			// so we can replace the EXISTS with a literal true
-			cursor.Replace(BoolVal(true))
-		}
-
-		// If we are not doing HAVING, we can safely replace all select expressions with a
-		// single `1` and remove any grouping
-		node.SelectExprs = SelectExprs{
-			&AliasedExpr{Expr: NewIntLiteral("1")},
-		}
-		node.GroupBy = nil
+	sel, ok := node.Subquery.Select.(*Select)
+	if !ok {
+		return
 	}
+
+	if sel.Limit == nil {
+		sel.Limit = &Limit{}
+	}
+	sel.Limit.Rowcount = NewIntLiteral("1")
+
+	if sel.Having != nil {
+		// If the query has HAVING, we can't take any shortcuts
+		return
+	}
+
+	if len(sel.GroupBy) == 0 && sel.SelectExprs.AllAggregation() {
+		// in these situations, we are guaranteed to always get a non-empty result,
+		// so we can replace the EXISTS with a literal true
+		cursor.Replace(BoolVal(true))
+	}
+
+	// If we are not doing HAVING, we can safely replace all select expressions with a
+	// single `1` and remove any grouping
+	sel.SelectExprs = SelectExprs{
+		&AliasedExpr{Expr: NewIntLiteral("1")},
+	}
+	sel.GroupBy = nil
 }
 
 func bindVarExpression(name string) Expr {
