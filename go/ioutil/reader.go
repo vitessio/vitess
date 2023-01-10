@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 /*
-This file contains MeteredReadCloser and MeteredReader, which are,
-respectively, time-and-byte-tracking wrappers around ReadCloser and Reader.
+MeteredReadCloser and MeteredReader are time-and-byte-tracking wrappers around
+ReadCloser and Reader.
 */
 
 package ioutil

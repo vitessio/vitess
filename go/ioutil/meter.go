@@ -15,9 +15,8 @@ limitations under the License.
 */
 
 /*
-This file contains the meter struct, which contains contains
-time-and-byte-tracking functionality used by MeteredReader, MeteredReadCloser,
-MeteredWriter, MeteredWriteCloser.
+The meter struct contains time-and-byte-tracking functionality used by
+MeteredReader, MeteredReadCloser, MeteredWriter, MeteredWriteCloser.
 */
 
 package ioutil

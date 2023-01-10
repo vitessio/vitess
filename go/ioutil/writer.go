@@ -15,8 +15,8 @@ limitations under the License.
 */
 
 /*
-This file contains MeteredWriteCloser and MeteredWriter, which are,
-respectively, time-and-byte-tracking wrappers around WriteCloser and Writer.
+MeteredWriteCloser and MeteredWriter are respectively, time-and-byte-tracking
+wrappers around WriteCloser and Writer.
 */
 
 package ioutil
