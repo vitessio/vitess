@@ -11,13 +11,14 @@ env:
   LAUNCHABLE_WORKSPACE: "vitess-app"
   EXPERIMENTAL_GITHUB_OIDC_TOKEN_AUTH: 1
 
+permissions:
+  id-token: write
+  contents: read
+
 jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_topo_consul)
     runs-on: ubuntu-20.04
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
     - name: Skip CI
