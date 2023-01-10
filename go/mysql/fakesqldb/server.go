@@ -497,8 +497,18 @@ func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback
 	return nil
 }
 
+// ComRegisterReplica is part of the mysql.Handler interface.
+func (db *DB) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return nil
+}
+
+// ComBinlogDump is part of the mysql.Handler interface.
+func (db *DB) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
+	return nil
+}
+
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
 	return nil
 }
 

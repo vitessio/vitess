@@ -225,7 +225,14 @@ func (th *testHandler) ComPrepare(c *Conn, query string, bindVars map[string]*qu
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	return nil
 }
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
+
+func (th *testHandler) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return nil
+}
+func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
+	return nil
+}
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error {
 	return nil
 }
 

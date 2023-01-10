@@ -17,6 +17,9 @@ limitations under the License.
 package mysql
 
 import (
+	"encoding/binary"
+	"io"
+
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -27,8 +30,32 @@ var (
 	readPacketErr      = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "error reading BinlogDumpGTID packet")
 )
 
-func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint64, position Position, err error) {
+const (
+	BinlogDumpNonBlock    = 0x01
+	BinlogThroughPosition = 0x02
+	BinlogThroughGTID     = 0x04
+)
+
+func (c *Conn) parseComBinlogDump(data []byte) (logFile string, binlogPos uint32, err error) {
 	pos := 1
+
+	binlogPos, pos, ok := readUint32(data, pos)
+	if !ok {
+		return logFile, binlogPos, readPacketErr
+	}
+
+	pos += 2 // flags
+	pos += 4 // server-id
+
+	logFile = string(data[pos:])
+	return logFile, binlogPos, nil
+}
+
+func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint64, position Position, err error) {
+	// see https://dev.mysql.com/doc/internals/en/com-binlog-dump-gtid.html
+	pos := 1
+
+	flags2 := binary.LittleEndian.Uint16(data[pos : pos+2])
 	pos += 2 // flags
 	pos += 4 // server-id
 
@@ -44,14 +71,19 @@ func (c *Conn) parseComBinlogDumpGTID(data []byte) (logFile string, logPos uint6
 		return logFile, logPos, position, readPacketErr
 	}
 
-	dataSize, pos, ok := readUint32(data, pos)
-	if !ok {
-		return logFile, logPos, position, readPacketErr
+	if flags2&BinlogDumpNonBlock != 0 {
+		return logFile, logPos, position, io.EOF
 	}
-	if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
-		position, err = DecodePosition(gtid)
-		if err != nil {
-			return logFile, logPos, position, err
+	if flags2&BinlogThroughGTID != 0 {
+		dataSize, pos, ok := readUint32(data, pos)
+		if !ok {
+			return logFile, logPos, position, readPacketErr
+		}
+		if gtid := string(data[pos : pos+int(dataSize)]); gtid != "" {
+			position, err = DecodePosition(gtid)
+			if err != nil {
+				return logFile, logPos, position, err
+			}
 		}
 	}
 
