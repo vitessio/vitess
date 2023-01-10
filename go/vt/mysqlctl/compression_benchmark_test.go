@@ -2,7 +2,6 @@ package mysqlctl
 
 import (
 	"bufio"
-	"compress/gzip"
 	"context"
 	"crypto/md5"
 	"errors"
@@ -17,6 +16,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/logutil"
@@ -55,12 +55,13 @@ type (
 )
 
 const (
-	// This is the default file which will be downloaded, gunzipped, and used
-	// by the compression benchmarks in this suite. It's a ~60GB gzipped InnoDB
-	// file, which was built from this Wikipedia dataset:
+	// This is the default file which will be downloaded, decompressed, and
+	// used by the compression benchmarks in this suite. It's a ~1.5 GiB
+	// compressed tar file containing 3 InnoDB files. The InnoDB files were
+	// built from this Wikipedia dataset:
 	//
-	//     https://dumps.wikimedia.org/enwiki/20221220/enwiki-20221220-externallinks.sql.gz
-	defaultDataURL = "https://archive.org/download/enwiki-20221220-externallinks.ibd/enwiki-20221220-externallinks.ibd.gz"
+	//     https://dumps.wikimedia.org/archive/enwiki/20080103/enwiki-20080103-pages-articles.xml.bz2
+	defaultDataURL = "https://www.dropbox.com/s/raw/smmgifsooy5qytd/enwiki-20080103-pages-articles.ibd.tar.zst"
 
 	// By default, don't limit how many bytes we input into compression.
 	defaultMaxBytes int64 = 0
@@ -134,13 +135,13 @@ func downloadData(url, localPath string, maxBytes int64) error {
 	defer resp.Body.Close()
 	rdr = resp.Body
 
-	// Assume the data we're downloading is gzipped.
-	gzr, err := gzip.NewReader(rdr)
+	// Assume the data we're downloading is compressed with zstd.
+	zr, err := zstd.NewReader(rdr)
 	if err != nil {
-		return fmt.Errorf("failed to gunzip data at URL %q: %v", url, err)
+		return fmt.Errorf("failed to decompress data at URL %q: %v", url, err)
 	}
-	defer gzr.Close()
-	rdr = gzr
+	defer zr.Close()
+	rdr = zr
 
 	if maxBytes > 0 {
 		rdr = io.LimitReader(rdr, maxBytes)
@@ -153,7 +154,7 @@ func downloadData(url, localPath string, maxBytes int64) error {
 	}
 	defer file.Close()
 
-	// Write the gunzipped HTTP response to local path.
+	// Write the decompressed data to local path.
 	if _, err := io.Copy(file, rdr); err != nil {
 		return err
 	}
@@ -306,6 +307,7 @@ func (bce *benchmarkCompressEnv) prepare() {
 	} else if isHTTP(u) {
 		if _, err := os.Stat(localPath); errors.Is(err, os.ErrNotExist) {
 			mb, _ := maxBytes()
+			bce.b.Logf("downloading data from %s", u.String())
 			if err := downloadData(u.String(), localPath, mb); err != nil {
 				require.Failf(bce.b, "failed to download data", err.Error())
 			}
