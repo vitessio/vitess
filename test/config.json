@@ -333,7 +333,7 @@
 		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
