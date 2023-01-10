@@ -180,6 +180,15 @@ type InvalidColumnInKeyError struct {
 	Key    string
 }
 
+type DuplicateKeyNameError struct {
+	Table string
+	Key   string
+}
+
+func (e *DuplicateKeyNameError) Error() string {
+	return fmt.Sprintf("duplicate key %s in table %s", sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))
+}
+
 func (e *InvalidColumnInKeyError) Error() string {
 	return fmt.Sprintf("invalid column %s referenced by key %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Key), sqlescape.EscapeID(e.Table))
