@@ -121,6 +121,15 @@ func deployStatements(db *sql.DB, queries []string) error {
 	return nil
 }
 
+// ClearVTOrcDatabase is used to clear the VTOrc database. This function is meant to be used by tests to clear the
+// database to get a clean slate without starting a new one.
+func ClearVTOrcDatabase() {
+	db, _, _ := sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
+	if db != nil {
+		_ = initVTOrcDB(db)
+	}
+}
+
 // initVTOrcDB attempts to create/upgrade the vtorc backend database. It is created once in the
 // application's lifetime.
 func initVTOrcDB(db *sql.DB) error {
