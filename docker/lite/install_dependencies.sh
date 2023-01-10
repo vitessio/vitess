@@ -125,16 +125,6 @@ percona80)
         percona-xtrabackup-80
     )
     ;;
-mariadb)
-    PACKAGES=(
-        mariadb-server-10.2
-    )
-    ;;
-mariadb103)
-    PACKAGES=(
-        mariadb-server
-    )
-    ;;
 *)
     echo "Unknown flavor ${FLAVOR}"
     exit 1
@@ -142,19 +132,11 @@ mariadb103)
 esac
 
 # Get GPG keys for extra apt repositories.
-case "${FLAVOR}" in
-mysql57|mysql80)
-    # repo.mysql.com
-    add_apt_key 8C718D3B5072E1F5
-    add_apt_key 467B942D3A79BD29
-    ;;
-mariadb|mariadb103)
-    # digitalocean.com
-    add_apt_key F1656F24C74CD1D8
-    ;;
-esac
+# repo.mysql.com
+add_apt_key 8C718D3B5072E1F5
+add_apt_key 467B942D3A79BD29
 
-# All flavors (except mariadb*) include Percona XtraBackup (from repo.percona.com).
+# All flavors include Percona XtraBackup (from repo.percona.com).
 add_apt_key 9334A25F8507EFA5
 
 # Add extra apt repositories for MySQL.
@@ -164,12 +146,6 @@ mysql57)
     ;;
 mysql80)
     echo 'deb http://repo.mysql.com/apt/debian/ buster mysql-8.0' > /etc/apt/sources.list.d/mysql.list
-    ;;
-mariadb)
-    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.2/debian stretch main' > /etc/apt/sources.list.d/mariadb.list
-    ;;
-mariadb103)
-    echo 'deb http://sfo1.mirrors.digitalocean.com/mariadb/repo/10.3/debian buster main' > /etc/apt/sources.list.d/mariadb.list
     ;;
 esac
 
