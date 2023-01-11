@@ -78,11 +78,25 @@ jobs:
           sudo apt-get update
           sudo apt-get install percona-xtrabackup-24
 
-      - name: Building last release's binaries
-        timeout-minutes: 10
+      - name: Building binaries
+        timeout-minutes: 30
         run: |
           source build.env
           make build
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v2
+
+      - name: Slack Workflow Notification
+        if: ${{ failure() }}
+        uses: Gamesight/slack-workflow-status@master
+        with:
+          repo_token: ${{secrets.GITHUB_TOKEN}}
+          slack_webhook_url: ${{secrets.SLACK_WEBHOOK_URL}}
+          channel: '#codeql'
+          name: 'CodeQL Workflows'
+
+      - name: Fail if needed
+        if: ${{ failure() }}
+        run: |
+          exit 1
