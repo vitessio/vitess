@@ -270,7 +270,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT RESET
+%token <bytes> REPLICA SOURCE STOP RESET
+%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
@@ -3370,6 +3371,14 @@ replication_option:
     $$ = &ReplicationOption{Name: string($1), Value: string($3)}
   }
 | SOURCE_PORT '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+| SOURCE_CONNECT_RETRY '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+| SOURCE_RETRY_COUNT '=' INTEGRAL
   {
     $$ = &ReplicationOption{Name: string($1), Value: string($3)}
   }
@@ -8151,9 +8160,11 @@ non_reserved_keyword:
 | SLAVE
 | SLOW
 | SOURCE
+| SOURCE_CONNECT_RETRY
 | SOURCE_HOST
 | SOURCE_PASSWORD
 | SOURCE_PORT
+| SOURCE_RETRY_COUNT
 | SOURCE_USER
 | SRID
 | START
