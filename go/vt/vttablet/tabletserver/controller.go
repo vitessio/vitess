@@ -26,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	"time"
 
@@ -81,9 +80,6 @@ type Controller interface {
 
 	// QueryService returns the QueryService object used by this Controller
 	QueryService() queryservice.QueryService
-
-	// OnlineDDLExecutor the online DDL executor used by this Controller
-	OnlineDDLExecutor() vexec.Executor
 
 	// SchemaEngine returns the SchemaEngine object used by this Controller
 	SchemaEngine() *schema.Engine

@@ -244,16 +244,6 @@ func (client *FakeTabletManagerClient) WaitForPosition(ctx context.Context, tabl
 	return nil
 }
 
-// VExec is part of the tmclient.TabletManagerClient interface.
-func (client *FakeTabletManagerClient) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	// This result satisfies a generic VExec command
-	result := sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("id", "int"),
-		"complete",
-	)
-	return sqltypes.ResultToProto3(result), nil
-}
-
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *FakeTabletManagerClient) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	// This result satisfies 'select pos from _vt.vreplication...' called from split clone unit tests in go/vt/worker.
