@@ -2318,9 +2318,9 @@ resignal_statement:
   }
 
 call_statement:
-  CALL procedure_name call_param_list_opt
+  CALL procedure_name call_param_list_opt as_of_opt
   {
-    $$ = &Call{ProcName: $2, Params: $3}
+    $$ = &Call{ProcName: $2, Params: $3, AsOf: $4}
   }
 
 call_param_list_opt:

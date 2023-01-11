@@ -2289,6 +2289,10 @@ var (
 		}, {
 			input: "call f1(now(), rand())",
 		}, {
+			input: "call f1(a) as of '2023-10-10'",
+		}, {
+			input: "call f1(now(), rand()) as of 'uo5qcl722f891g6aisqp3ma7r41s4ha4'",
+		}, {
 			input: "drop procedure p1",
 		}, {
 			input: "drop procedure if exists p1",
