@@ -51,6 +51,18 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 	return parent.SQLNode
 }
 
+// SafeRewrite does not allow replacing nodes on the down walk of the tree walking
+// Long term this is the only Rewrite functionality we want
+func SafeRewrite(node SQLNode, down func(SQLNode) bool, up ApplyFunc) (result SQLNode) {
+	var pre func(cursor *Cursor) bool
+	if down != nil {
+		pre = func(cursor *Cursor) bool {
+			return down(cursor.Node())
+		}
+	}
+	return Rewrite(node, pre, up)
+}
+
 // RootNode is the root node of the AST when rewriting. It is the first element of the tree.
 type RootNode struct {
 	SQLNode

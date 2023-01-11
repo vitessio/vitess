@@ -68,12 +68,17 @@ Many error strings have been tweaked.
 If your application is searching for specific errors, you might need to update your code.
 
 #### <a id="lock-timeout-introduction"/> `lock-timeout` and `remote_operation_timeout` Changes
+
 Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced. 
 For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
 The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
 
 During upgrades, if the users want to preserve the same behaviour as previous releases, then they should provide the `remote_operation_timeout` flag explicitly before upgrading.
 After the upgrade, they should then alter their configuration to also specify `lock-timeout` explicitly.
+
+#### Normalized labels in the Prometheus Exporter
+
+The Prometheus metrics exporter now properly normalizes _all_ label names into their `snake_case` form, as it is idiomatic for Prometheus metrics. Previously, Vitess instances were emitting inconsistent labels for their metrics, with some of them being `CamelCase` and others being `snake_case`.
 
 ### New command line flags and behavior
 
@@ -84,12 +89,14 @@ It can be overridden by setting the `query_timeout` session variable.
 Setting it as command line directive with `QUERY_TIMEOUT_MS` will override other values.
 
 #### VTTablet: VReplication parallel insert workers --vreplication-parallel-insert-workers
+
 `--vreplication-parallel-insert-workers=[integer]` enables parallel bulk inserts during the copy phase
 of VReplication (disabled by default). When set to a value greater than 1 the bulk inserts — each
 executed as a single transaction from the vstream packet contents — may happen in-parallel and
 out-of-order, but the commit of those transactions are still serialized in order.
 
 Other aspects of the VReplication copy-phase logic are preserved:
+
   1. All statements executed when processing a vstream packet occur within a single MySQL transaction.
   2. Writes to `_vt.copy_state` always follow their corresponding inserts from within the vstream packet.
   3. The final `commit` for the vstream packet always follows the corresponding write to `_vt.copy_state`.
@@ -98,6 +105,7 @@ Other aspects of the VReplication copy-phase logic are preserved:
  Other phases, catchup, fast-forward, and replicating/"running", are unchanged.
 
 #### VTTablet: --queryserver-config-pool-conn-max-lifetime
+
 `--queryserver-config-pool-conn-max-lifetime=[integer]` allows you to set a timeout on each connection in the query server connection pool. It chooses a random value between its value and twice its value, and when a connection has lived longer than the chosen value, it'll be removed from the pool the next time it's returned to the pool.
 
 #### vttablet --throttler-config-via-topo
@@ -109,6 +117,7 @@ The flag `--throttler-config-via-topo` switches throttler configuration from `vt
 Tablet throttler configuration is now supported in `topo`. Updating the throttler configuration is done via `vtctldclient UpdateThrottlerConfig` and applies to all tablet in all cells for a given keyspace.
 
 Examples:
+
 ```shell
 # disable throttler; all throttler checks will return with "200 OK"
 $ vtctldclient UpdateThrottlerConfig --disable commerce
@@ -159,7 +168,7 @@ The manifest of an incremental backup has a non-empty `FromPosition` value, and 
 
 Examples:
 
-```
+```shell
 $ vtctlclient -- RestoreFromBackup  --restore_to_pos  "MySQL56/16b1039f-22b6-11ed-b765-0a43f95f28a3:1-220" zone1-0000000102
 ```
 
@@ -200,14 +209,20 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 ### Deprecations and Removals
 
-The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
+- The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
 
-The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
+- The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
+
+- `vtctlclient VExec` command was removed, having been deprecated since v13.
+
+- `vtctlclient OnlineDDL ... [complete|retry|cancel|cancel-all]` returns empty result on success instead of number of shard affected.
 
 ### MySQL Compatibility
 
 #### Transaction Isolation Level
+
 Support added for `set [session] transaction isolation level <transaction_characteristic>`
+
 ```sql
 transaction_characteristic: {
     ISOLATION LEVEL level
@@ -221,11 +236,14 @@ level: {
    | SERIALIZABLE
 }
 ```
+
 This will set the transaction isolation level for the current session. 
 This will be applied to any shard where the session will open a transaction.
 
 #### Transaction Access Mode
+
 Support added for `start transaction` with transaction characteristic.
+
 ```sql
 START TRANSACTION
     [transaction_characteristic [, transaction_characteristic] ...]
@@ -236,6 +254,7 @@ transaction_characteristic: {
   | READ ONLY
 }
 ```
+
 This will allow users to start a transaction with these characteristics.
 
 #### Support for views

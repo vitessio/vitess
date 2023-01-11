@@ -80,6 +80,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
 		primary_instance.read_only AS read_only,
+		MIN(primary_instance.hostname) IS NULL AS is_invalid,
 		MIN(primary_instance.data_center) AS data_center,
 		MIN(primary_instance.region) AS region,
 		MIN(primary_instance.physical_environment) AS physical_environment,
@@ -288,7 +289,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		JOIN vitess_keyspace ON (
 			vitess_tablet.keyspace = vitess_keyspace.keyspace
 		)
-		JOIN database_instance primary_instance ON (
+		LEFT JOIN database_instance primary_instance ON (
 			vitess_tablet.hostname = primary_instance.hostname
 			AND vitess_tablet.port = primary_instance.port
 		)
@@ -466,6 +467,10 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		}
 		if ca.durability == nil {
 			// We failed to load the durability policy, so we shouldn't run any analysis
+			return nil
+		}
+		isInvalid := m.GetBool("is_invalid")
+		if isInvalid {
 			return nil
 		}
 		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {
