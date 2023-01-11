@@ -176,6 +176,9 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
 // The function returns a boolean that indicates if the backup is usable, and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
+	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
+		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
+
 	if isIncrementalBackup(params) {
 		return be.executeIncrementalBackup(ctx, params, bh)
 	}
