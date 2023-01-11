@@ -57,6 +57,22 @@ var (
 			output: "change replication source to source_host = host, source_password = PaSSword, source_port = 12345, source_user = root, source_connect_retry = 60, source_retry_count = 3",
 		},
 		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(table1)",
+			output: "change replication filter replicate_do_table = (table1)",
+		},
+		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(table1, db.table2, db.table3)",
+			output: "change replication filter replicate_do_table = (table1, db.table2, db.table3)",
+		},
+		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(db1.t1, db2.t2), REPLICATE_IGNORE_TABLE=(t1)",
+			output: "change replication filter replicate_do_table = (db1.t1, db2.t2), replicate_ignore_table = (t1)",
+		},
+		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(db1.t1, db2.t2), REPLICATE_IGNORE_TABLE=(db1.t1, db2.t2)",
+			output: "change replication filter replicate_do_table = (db1.t1, db2.t2), replicate_ignore_table = (db1.t1, db2.t2)",
+		},
+		{
 			input: "reset replica",
 		},
 		{
@@ -3707,6 +3723,12 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
+		input: "CHANGE REPLICATION FILTER",
+		err:   "syntax error",
+	}, {
+		input: "change replication filter REPLICATE_DO_TABLE=()",
+		err:   "syntax error",
+	}, {
 		input: "CHANGE REPLICATION SOURCE TO",
 		err:   "syntax error",
 	}, {

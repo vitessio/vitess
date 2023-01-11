@@ -270,8 +270,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP RESET
+%token <bytes> REPLICA SOURCE STOP RESET FILTER
 %token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
+%token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
@@ -513,8 +514,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
 %type <flushOption> flush_option
-%type <replicationOptions> replication_option_list
-%type <replicationOption> replication_option
+%type <replicationOptions> replication_option_list replication_filter_option_list
+%type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
@@ -3328,6 +3329,10 @@ replication_statement:
   {
     $$ = &ChangeReplicationSource{Options: $5}
   }
+| CHANGE REPLICATION FILTER replication_filter_option_list
+  {
+    $$ = &ChangeReplicationFilter{Options: $4}
+  }
 | START REPLICA
   {
     $$ = &StartReplica{}
@@ -3381,6 +3386,26 @@ replication_option:
 | SOURCE_RETRY_COUNT '=' INTEGRAL
   {
     $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+  }
+
+replication_filter_option_list:
+  replication_filter_option
+  {
+    $$ = []*ReplicationOption{$1}
+  }
+| replication_filter_option_list ',' replication_filter_option
+ {
+   $$ = append($$, $3)
+ }
+
+replication_filter_option:
+  REPLICATE_DO_TABLE '=' '(' table_name_list ')'
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: $4}
+  }
+| REPLICATE_IGNORE_TABLE '=' '(' table_name_list ')'
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: $4}
   }
 
 index_definition:
