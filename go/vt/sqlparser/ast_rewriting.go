@@ -321,7 +321,7 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 	return inner.bindVars, nil
 }
 
-func (er *astRewriter) rewriteDown(node SQLNode) bool {
+func (er *astRewriter) rewriteDown(node SQLNode, _ SQLNode) bool {
 	switch node := node.(type) {
 	case *Select:
 		er.visitSelect(node)

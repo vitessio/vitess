@@ -454,7 +454,7 @@ func ReplaceExpr(root, from, to Expr) Expr {
 	return expr
 }
 
-func stopWalking(e SQLNode) bool {
+func stopWalking(e SQLNode, _ SQLNode) bool {
 	switch e.(type) {
 	case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
 		return false
