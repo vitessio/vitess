@@ -26,10 +26,10 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/openark/golib/log"
-	"google.golang.org/protobuf/encoding/protojson"
+	"github.com/mitchellh/mapstructure"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/schema/internal/hooks"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -107,31 +107,77 @@ type OnlineDDL struct {
 }
 
 // FromJSON creates an OnlineDDL from json
-func FromJSON(bytes []byte) (onlineDDL *OnlineDDL, err error) {
-	onlineDDL = &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}}
-	err = protojson.Unmarshal(bytes, onlineDDL)
+func FromJSON(data []byte) (*OnlineDDL, error) {
+	onlineDDL := &OnlineDDL{OnlineDDL: &tabletmanagerdatapb.OnlineDDL{}}
 
+	m := map[string]any{}
+	if err := json.Unmarshal(data, &m); err != nil {
+		return onlineDDL, err
+	}
+
+	camelcase := func(s string) string {
+		out := []string{}
+		for _, word := range strings.Split(s, "_") {
+			if len(word) == 0 {
+				out = append(out, word)
+				continue
+			}
+
+			camelcased := strings.Join(
+				[]string{strings.ToUpper(word[0:1]), word[1:]},
+				"",
+			)
+			out = append(out, camelcased)
+		}
+
+		return strings.Join(out, "")
+	}
+	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
+		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			// hooks.DecodeStatus,
+			hooks.DecodeStrategy,
+		),
+		Result: onlineDDL,
+		Squash: true,
+		MatchName: func(mapKey, fieldName string) bool {
+			switch mapKey {
+			case "tablet_alias":
+				if strings.EqualFold(mapKey, fieldName) {
+					return true
+				} else if strings.EqualFold(camelcase(mapKey), camelcase(fieldName)) {
+					// TODO: log warning here
+					return true
+				}
+			}
+
+			return strings.EqualFold(mapKey, fieldName)
+		},
+	})
 	if err != nil {
-		return
+		return onlineDDL, err
+	}
+	if err := dec.Decode(m); err != nil {
+		return onlineDDL, err
 	}
 
 	if onlineDDL.TabletAlias != "" {
+		var err error
 		switch onlineDDL.OnlineDDL.TabletAlias {
 		case nil:
-			log.Warningf("")
+			// TODO: log warning
 			onlineDDL.OnlineDDL.TabletAlias, err = topoproto.ParseTabletAlias(onlineDDL.TabletAlias)
 		default:
-			log.Warningf("")
+			// TODO: log warning
 		}
 
 		if err != nil {
-			return
+			return onlineDDL, err
 		}
 
 		onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
 	}
 
-	return onlineDDL, err
+	return onlineDDL, nil
 }
 
 // ParseOnlineDDLStatement parses the given SQL into a statement and returns the action type of the DDL statement, or error

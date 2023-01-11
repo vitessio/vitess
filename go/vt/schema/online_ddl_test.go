@@ -473,8 +473,12 @@ func TestFromJSON(t *testing.T) {
 	t.Run("strategy parsing", func(t *testing.T) {
 		tests := []testcase{
 			{
-				json:      `{"strategy": "pt-osc"}`,
-				shouldErr: true,
+				json: `{"strategy": "pt-osc"}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						Strategy: tabletmanagerdatapb.OnlineDDL_PTOSC,
+					},
+				},
 			},
 			{
 				json: `{"strategy": "GHOST"}`,
@@ -547,6 +551,7 @@ func TestFromJSON(t *testing.T) {
 			},
 			{
 				json: `{
+					"context": "abcd",
 					"tablet": "zone1-404",
 					"tablet_alias": {
 						"cell": "zone1",
