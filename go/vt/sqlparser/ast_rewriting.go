@@ -230,7 +230,10 @@ func RewriteAST(
 ) (*RewriteASTResult, error) {
 	er := newASTRewriter(keyspace, selectLimit, setVarComment, sysVars, views)
 	er.shouldRewriteDatabaseFunc = shouldRewriteDatabaseFunc(in)
-	result := Rewrite(in, er.rewrite, nil)
+	result := SafeRewrite(in, er.rewriteDown, er.rewriteUp)
+	if er.err != nil {
+		return nil, er.err
+	}
 
 	out, ok := result.(Statement)
 	if !ok {
@@ -309,7 +312,7 @@ const (
 func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, error) {
 	inner := newASTRewriter(er.keyspace, er.selectLimit, er.setVarComment, er.sysVars, er.views)
 	inner.shouldRewriteDatabaseFunc = er.shouldRewriteDatabaseFunc
-	tmp := Rewrite(node.Expr, inner.rewrite, nil)
+	tmp := SafeRewrite(node.Expr, inner.rewriteDown, inner.rewriteUp)
 	newExpr, ok := tmp.(Expr)
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to rewrite AST. function expected to return Expr returned a %s", String(tmp))
@@ -318,7 +321,15 @@ func (er *astRewriter) rewriteAliasedExpr(node *AliasedExpr) (*BindVarNeeds, err
 	return inner.bindVars, nil
 }
 
-func (er *astRewriter) rewrite(cursor *Cursor) bool {
+func (er *astRewriter) rewriteDown(node SQLNode) bool {
+	switch node := node.(type) {
+	case *Select:
+		er.visitSelect(node)
+	}
+	return true
+}
+
+func (er *astRewriter) rewriteUp(cursor *Cursor) bool {
 	// Add SET_VAR comment to this node if it supports it and is needed
 	if supportOptimizerHint, supportsOptimizerHint := cursor.Node().(SupportOptimizerHint); supportsOptimizerHint && er.setVarComment != "" {
 		newComments, err := supportOptimizerHint.GetParsedComments().AddQueryHint(er.setVarComment)
@@ -330,8 +341,6 @@ func (er *astRewriter) rewrite(cursor *Cursor) bool {
 	}
 
 	switch node := cursor.Node().(type) {
-	case *Select:
-		er.visitSelect(node)
 	case *Union:
 		er.rewriteUnion(node)
 	case *FuncExpr:
@@ -609,7 +618,7 @@ func (er *astRewriter) unnestSubQueries(cursor *Cursor, subquery *Subquery) {
 	er.bindVars.NoteRewrite()
 	// we need to make sure that the inner expression also gets rewritten,
 	// so we fire off another rewriter traversal here
-	rewritten := Rewrite(expr.Expr, er.rewrite, nil)
+	rewritten := SafeRewrite(expr.Expr, er.rewriteDown, er.rewriteUp)
 
 	// Here we need to handle the subquery rewrite in case in occurs in an IN clause
 	// For example, SELECT id FROM user WHERE id IN (SELECT 1 FROM DUAL)
