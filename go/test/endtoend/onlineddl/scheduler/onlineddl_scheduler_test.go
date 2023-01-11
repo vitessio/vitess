@@ -1587,7 +1587,7 @@ func testDeclarative(t *testing.T) {
 	})
 	// CREATE2
 	t.Run("declarative CREATE TABLE with changes where table exists", func(t *testing.T) {
-		// The exists but with different schema
+		// The table exists but with different schema
 		uuid := testOnlineDDL(t, createStatement2, declarativeStrategy, "vtgate", "create2", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -1597,7 +1597,7 @@ func testDeclarative(t *testing.T) {
 	})
 	// CREATE1 again
 	t.Run("declarative CREATE TABLE again with changes where table exists", func(t *testing.T) {
-		// The exists but with different schema
+		// The table exists but with different schema
 		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
 		uuids = append(uuids, uuid)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
