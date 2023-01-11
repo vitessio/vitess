@@ -16,6 +16,7 @@ set -euo pipefail
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+source ./build.env
 source ./tools/release_utils.sh
 
 ROOT=$(pwd)
