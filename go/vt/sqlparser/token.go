@@ -508,6 +508,7 @@ var keywords = map[string]int{
 	"replica":                       REPLICA,
 	"replication":                   REPLICATION,
 	"require":                       REQUIRE,
+	"reset":                         RESET,
 	"resignal":                      RESIGNAL,
 	"restrict":                      RESTRICT,
 	"return":                        RETURN,

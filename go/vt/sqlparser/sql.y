@@ -270,7 +270,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT
+%token <bytes> REPLICA SOURCE STOP SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT RESET
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
@@ -416,7 +416,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> where_expression_opt
 %type <expr> condition
 %type <boolVal> boolean_value
-%type <boolean> enforced_opt
+%type <boolean> all_opt enforced_opt
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr
@@ -3335,6 +3335,16 @@ replication_statement:
   {
     $$ = &StopReplica{}
   }
+| RESET REPLICA all_opt
+  {
+    $$ = &ResetReplica{All: $3}
+  }
+
+all_opt:
+  { $$ = false }
+| ALL
+  { $$ = true }
+
 
 replication_option_list:
   replication_option
@@ -8114,6 +8124,7 @@ non_reserved_keyword:
 | REPLICA
 | REPLICATION
 | REQUIRE_ROW_FORMAT
+| RESET
 | RESOURCE
 | RESPECT
 | RESTART

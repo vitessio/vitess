@@ -3367,6 +3367,23 @@ func (r *StopReplica) Format(buf *TrackedBuffer) {
 	buf.WriteString("stop replica")
 }
 
+// ResetReplica represents a "RESET REPLICA" statement.
+// https://dev.mysql.com/doc/refman/8.0/en/reset-replica.html
+type ResetReplica struct {
+	All bool
+}
+
+var _ Statement = (*ResetReplica)(nil)
+
+func (*ResetReplica) iStatement() {}
+
+func (r *ResetReplica) Format(buf *TrackedBuffer) {
+	buf.WriteString("reset replica")
+	if r.All {
+		buf.WriteString(" all")
+	}
+}
+
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.
 // It should be used only as an indicator. It does not contain
 // the full AST for the statement.

@@ -57,6 +57,12 @@ var (
 			output: "change replication source to source_host = host, source_password = PaSSword, source_port = 12345, source_user = root",
 		},
 		{
+			input: "reset replica",
+		},
+		{
+			input: "reset replica all",
+		},
+		{
 			input:  "create database `db1` charset 'utf8mb4' collate 'utf8_bin';",
 			output: "create database db1 charset utf8mb4 collate utf8_bin",
 		},
@@ -5893,20 +5899,20 @@ var (
 		input:  "drop table dual",
 		output: "syntax error at position 16 near 'dual'",
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN begin1: BEGIN END begin2; END",
-		output: "End-label begin2 without match at position 59 near 'begin2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN begin1: BEGIN END begin2; END",
+		output:       "End-label begin2 without match at position 59 near 'begin2'",
 		excludeMulti: true,
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN loop1: LOOP BEGIN END; END LOOP loop2; END",
-		output: "End-label loop2 without match at position 72 near 'loop2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN loop1: LOOP BEGIN END; END LOOP loop2; END",
+		output:       "End-label loop2 without match at position 72 near 'loop2'",
 		excludeMulti: true,
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN repeat1: REPEAT BEGIN END; UNTIL a > 7 END REPEAT repeat2; END",
-		output: "End-label repeat2 without match at position 92 near 'repeat2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN repeat1: REPEAT BEGIN END; UNTIL a > 7 END REPEAT repeat2; END",
+		output:       "End-label repeat2 without match at position 92 near 'repeat2'",
 		excludeMulti: true,
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN while1: WHILE a > 7 DO BEGIN END; END WHILE while2; END",
-		output: "End-label while2 without match at position 85 near 'while2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN while1: WHILE a > 7 DO BEGIN END; END WHILE while2; END",
+		output:       "End-label while2 without match at position 85 near 'while2'",
 		excludeMulti: true,
 	},
 	}
