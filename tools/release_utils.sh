@@ -33,10 +33,13 @@ function checkoutNewBranch () {
   branch_name=$1
 
   current_branch=$BASE_BRANCH-$branch_name-1
-  git checkout -b $current_branch $BASE_REMOTE/$BASE_BRANCH
-  for (( i = 2; $? != 0; i++ )); do
-   current_branch=$BASE_BRANCH-$branch_name-$i
-   git checkout -b $current_branch $BASE_REMOTE/$BASE_BRANCH
+
+  failed=0
+  git checkout -b $current_branch $BASE_REMOTE/$BASE_BRANCH || failed=1
+  for (( i = 2; $failed != 0; i++ )); do
+    failed=0
+    current_branch=$BASE_BRANCH-$branch_name-$i
+    git checkout -b $current_branch $BASE_REMOTE/$BASE_BRANCH || failed=1
   done
 }
 

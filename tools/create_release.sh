@@ -1,7 +1,5 @@
 #!/bin/bash
 
-set -euo pipefail
-
 # Copyright 2023 The Vitess Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,6 +13,8 @@ set -euo pipefail
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
+set -euo pipefail
 
 source ./build.env
 source ./tools/release_utils.sh
@@ -56,7 +56,7 @@ function createRelease () {
   read line
 
   git add --all
-  git commit -n -s -m "Release notes for $RELEASE_VERSION"
+  git commit -n -s -m "Release notes for $RELEASE_VERSION" || true
 
   # Preparing the release commit
   updateVitessExamples $RELEASE_VERSION $VTOP_VERSION
