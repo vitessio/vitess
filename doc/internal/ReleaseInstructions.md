@@ -55,7 +55,7 @@ Pre-release versions should be labeled with a suffix like `-beta2` or `-rc1`.
 ## Release Branches
 
 Each major and minor releases (X.Y) should have a [release branch](https://github.com/vitessio/vitess/branches/all?query=release) named
-`release-X.Y`. This branch should diverge from `main` when the code freeze when the release
+`release-X.Y`. This branch should diverge from `main` when the release
 is declared, after which point only bugfix PRs should be cherry-picked onto the branch.
 All other activity on `main` will go out with a subsequent major or minor release.
 
@@ -132,7 +132,8 @@ We usually create the RC1 during the first week of the month, and the GA version
 #### Code Freeze
 
 Before creating RC1, there is a code freeze. Assuming the release of RC1 happens on a Tuesday, the release branch will be frozen Friday of the previous week.
-This allows us to test that the release branch can be released and avoid discovering unwanted events during the release day. Once the RC1 is released, there are three more weeks to backport bug fixes into the release branches. However, we also proceed to a code freeze the Friday before the GA release. (Assuming GA is on a Tuesday)
+This allows us to test that the release branch can be released and avoid discovering unwanted events during the release day. Once the RC1 is released, there are three more weeks to backport bug fixes into the release branches.
+However, we also proceed to a code freeze the Friday before the GA release. (Assuming GA is on a Tuesday)
 Regarding patch releases, no code freeze is planned.
 
 #### Tracking Issue for each Release
@@ -161,6 +162,9 @@ That includes:
   > - As soon as we go into code freeze, if we are doing an RC, create the release branch.
   > - If we are doing a GA release, do not merge any new Pull Requests.
   > - The guide on how to do a code freeze is available in the [How To Code Freeze](#how-to-code-freeze) section.
+- **Create the Vitess release.**
+  > - A guide on how to create a Vitess release is available in the [How to prepare the release of Vitess](#how-to-prepare-the-release-of-vitess) section.
+  > - This step will create a Release Pull Request, it must be reviewed and merged before the release day. The release commit will be used to tag the release.
 - **Preparing the Vitess Operator release.**
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
@@ -170,8 +174,8 @@ That includes:
 
 On the release day, there are several things to do:
 
-- **Create the Vitess release.**
-  > - A guide on how to create a Vitess release is available in the [How To Release Vitess](#how-to-release-vitess) section.
+- **Tag the Vitess release.**
+  > - A guide on how to tag a version is available in the [How To Release Vitess](#how-to-release-vitess) section.
 - **Create the corresponding Vitess operator release.**
   > - Applies only to versions greater or equal to `v14.0.0`.
   > - If we are doing an RC release, then we will need to create the Vitess Operator RC too. If we are doing a GA release, we're also doing a GA release in the Operator.
@@ -193,10 +197,10 @@ On the release day, there are several things to do:
   > - After a while, those elements will finish their execution and their status will be green.
   > - This step is even more important for GA releases as we often include a link to _arewefastyet_ in the blog post.
   > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
-- **Update the release notes on the release branch and on `main`.**
-  > - Two new Pull Requests have to be created.
-  > - One against `main`, it will contain only the new release notes.
-  > - And another against the release branch, this one contains the release notes and the release commit. (The commit on which we did `git tag`) 
+- **Update the release notes on `main`.**
+  > - One Pull Request against `main` must be created, it will contain the new release notes. 
+- **Go back to dev mode on the release branch.**
+  > - The version constants across the codebase must be updated to `SNAPSHOT`. 
 - **Build k8s Docker images and publish them**
   > - The docker image for `base`, `lite`, etc are built automatically by DockerHub. The k8s images however are dependent on these images and are required to be built manually.
   > - These images should be built after the `base` image has been built and available on DockerHub.
@@ -207,6 +211,54 @@ On the release day, there are several things to do:
 Once the release is over, we need to announce it on both Slack and Twitter. We also want to make sure the blog post was cross-posted, if applicable.
 We need to verify that _arewefastyet_ has finished the benchmark too.
 
+### How to prepare the release of Vitess
+
+> In this example our current version is `v14.0.3` and we release the version `v15.0.0`.
+> Alongside Vitess' release, we also release a new version of the operator.
+> Since we are releasing a release candidate here, the new version of the operator will also be a release candidate.
+> In this example, the new operator version is `2.8.0`.
+>
+> It is important to note that before the RC, there is a code freeze during which we create the release branch.
+>
+> The release branch in this example is `release-15.0`.
+>
+> The example also assumes that `origin` is the `vitessio/vitess` remote.
+
+1. Fetch `github.com/vitessio/vitess`'s remote.
+    ```shell
+    git fetch origin
+    ```
+
+2. Creation of the Release Pull Request.
+    > This step will create the Release Pull Request that will then be reviewed ahead of the release day.
+    > The merge commit of that Pull Request will be used during the release day to tag the release.
+    1. Run the `create_release` script using the Makefile:
+        1. Release Candidate:
+            ```shell
+            make BASE_BRANCH="release-15.0" BASE_REMOTE="origin" RELEASE_VERSION="15.0.0-rc1" VTOP_VERSION="2.8.0-rc1" create_release
+            ```
+        2. General Availability:
+           ```shell
+           make BASE_BRANCH="release-15.0" BASE_REMOTE="origin" RELEASE_VERSION="15.0.0" VTOP_VERSION="2.8.0" create_release
+           ```
+
+       The script will prompt you `Pausing so release notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
+
+    2. Run the following command to generate the release notes:
+        1. Release Candidate:
+            ```shell
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            ```
+        2. General Availability:
+            ```shell
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            ```
+       This command will generate the release notes by looking at all the commits between the tag `v14.0.3` and the reference `HEAD`.
+       It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
+       Please verify the generated release notes to make sure it is well-formatted and all the bookmarks are generated properly.
+
+
+3. Follow the instruction prompted by the `create_release` Makefile command's output in order to push the newly created branch and create the Release Pull Request on GitHub.
 
 ### How To Release Vitess
 This section is divided into two parts:
@@ -215,7 +267,10 @@ This section is divided into two parts:
 
 #### Creation of the tags and release notes
 
-> In this example our current version is `v14` and we release the version `v15.0.0`.
+> This step implies that you have created a [Release Pull Request](#how-to-prepare-the-release-of-vitess) beforehand and that it has been reviewed.
+> The merge commit of this Release Pull Request will be used to tag the release.
+> 
+> In this example our current version is `v14.0.3` and we release the version `v15.0.0`.
 > Alongside Vitess' release, we also release a new version of the operator.
 > Since we are releasing a release candidate here, the new version of the operator will also be a release candidate.
 > In this example, the new operator version is `2.8.0`.
@@ -231,38 +286,22 @@ This section is divided into two parts:
     git fetch origin
     ```
 
-2. Creation of the release notes and tags.
-   1. Run the release script using the Makefile:
-      1. Release Candidate:
-          ```shell
-          make BASE_BRANCH="release-15.0" BASE_REMOTE="origin" RELEASE_VERSION="15.0.0-rc1" DEV_VERSION="15.0.0-SNAPSHOT" VTOP_VERSION="2.8.0-rc1" do_release
-          ```
-      2. General Availability:
-         ```shell
-         make BASE_BRANCH="release-15.0" BASE_REMOTE="origin" RELEASE_VERSION="15.0.0" DEV_VERSION="15.0.1-SNAPSHOT" VTOP_VERSION="2.8.0" do_release
-         ```
+2. Checkout to the merge commit of the Release Pull Request.
 
-      The script will prompt you `Pausing so release notes can be added. Press enter to continue`. We are now going to generate the release notes, continue to the next sub-step.
+3. Tag the release and push the tags
+   ```shell
+   git tag v15.0.0 && git tag v0.15.0 && git push origin v15.0.0 && git push origin v0.15.0
+   ```
 
-   2. Run the following command to generate the release notes:
-      1. Release Candidate:
-          ```shell
-          make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
-          ```
-      2. General Availability:
-          ```shell
-          make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
-          ```
-      This command will generate the release notes by looking at all the commits between the tag `v14.0.0` and the reference `HEAD`.
-      It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
-      Please verify the generated release notes to make sure it is well-formatted and all the bookmarks are generated properly.
+4. Create a Pull Request against the `main` branch with the release notes found in `doc/releasenotes/15_0_0_*.md`.
 
-
-3. Follow the instruction prompted by the `do_release` Makefile command's output in order to push the tags, branches and create the Pull Requests.
-
-4. Create a Pull Request against the `main` branch with the newly created release notes.
-
-5. Release the tag on GitHub UI as explained in the following section.
+5. Run the back to dev mode tool.
+   ```shell
+   make BASE_BRANCH="release-15.0" BASE_REMOTE="origin" RELEASE_VERSION="15.0.0-rc1" DEV_VERSION="15.0.0-SNAPSHOT" back_to_dev_mode
+   ```
+   > You will then need to follow the instructions given by the output of the back_to_dev_mode Makefile command. You will need to push the newly created branch and open a Pull Request.
+   
+6. Release the tag on GitHub UI as explained in the following section.
 
 #### Creating Release or Release Candidate on the GitHub UI
 
