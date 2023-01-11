@@ -213,7 +213,7 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
 
 ### How to prepare the release of Vitess
 
-> In this example our current version is `v14` and we release the version `v15.0.0`.
+> In this example our current version is `v14.0.3` and we release the version `v15.0.0`.
 > Alongside Vitess' release, we also release a new version of the operator.
 > Since we are releasing a release candidate here, the new version of the operator will also be a release candidate.
 > In this example, the new operator version is `2.8.0`.
@@ -247,13 +247,13 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
     2. Run the following command to generate the release notes:
         1. Release Candidate:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
             ```
         2. General Availability:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.0" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
             ```
-       This command will generate the release notes by looking at all the commits between the tag `v14.0.0` and the reference `HEAD`.
+       This command will generate the release notes by looking at all the commits between the tag `v14.0.3` and the reference `HEAD`.
        It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
        Please verify the generated release notes to make sure it is well-formatted and all the bookmarks are generated properly.
 
@@ -270,7 +270,7 @@ This section is divided into two parts:
 > This step implies that you have created a [Release Pull Request](#how-to-prepare-the-release-of-vitess) beforehand and that it has been reviewed.
 > The merge commit of this Release Pull Request will be used to tag the release.
 > 
-> In this example our current version is `v14` and we release the version `v15.0.0`.
+> In this example our current version is `v14.0.3` and we release the version `v15.0.0`.
 > Alongside Vitess' release, we also release a new version of the operator.
 > Since we are releasing a release candidate here, the new version of the operator will also be a release candidate.
 > In this example, the new operator version is `2.8.0`.
@@ -293,7 +293,7 @@ This section is divided into two parts:
    git tag v15.0.0 && git tag v0.15.0 && git push origin v15.0.0 && git push origin v0.15.0
    ```
 
-4. Create a Pull Request against the `main` branch with the release notes found in `docs/release_notes/15_0_0_*.md`.
+4. Create a Pull Request against the `main` branch with the release notes found in `doc/releasenotes/15_0_0_*.md`.
 
 5. Run the back to dev mode tool.
    ```shell
