@@ -50,3 +50,24 @@ jobs:
             echo "Expecting PR to have label 'Type: ...'"
             exit 1
           fi
+
+      - name: Check NeedsWebsiteDocsUpdate and NeedsDescriptionUpdate are off
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          LABELS_JSON="/tmp/labels.json"
+          # Get labels for this pull request
+          curl -s \
+            -H 'authorization: Bearer ${{ secrets.GITHUB_TOKEN }}' \
+            -H "Accept: application/vnd.github.v3+json" \
+            -H "Content-type: application/json" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/labels" \
+            > "$LABELS_JSON"
+          if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsDescriptionUpdate' ; then
+            echo "Expecting PR to not have the NeedsDescriptionUpdate label, please update the PR's description and remove the label."
+            exit 1
+          fi
+          if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsWebsiteDocsUpdate' ; then
+            echo "Expecting PR to not have the NeedsWebsiteDocsUpdate label, please update the documentation and remove the label."
+            exit 1
+          fi
