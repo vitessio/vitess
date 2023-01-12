@@ -2515,7 +2515,6 @@ func useVDiffV2(args []string) bool {
 
 func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if useVDiffV2(args) {
-		log.Infof("*** Using (experimental) VDiff2 ***")
 		return commandVDiff2(ctx, wr, subFlags, args)
 	}
 	_ = subFlags.Bool("v2", false, "Use VDiff2")
