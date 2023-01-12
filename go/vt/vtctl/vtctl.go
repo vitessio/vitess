@@ -2171,22 +2171,28 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		if err != nil {
 			return err
 		}
-		s += fmt.Sprintf("Following vreplication streams are running for workflow %s.%s:\n\n", target, workflowName)
+		s += fmt.Sprintf("The following vreplication streams exist for workflow %s.%s:\n\n", target, workflowName)
 		for ksShard := range res.ShardStatuses {
 			statuses := res.ShardStatuses[ksShard].PrimaryReplicationStatuses
 			for _, st := range statuses {
-				now := time.Now().Nanosecond()
 				msg := ""
-				updateLag := int64(now) - st.TimeUpdated
-				if updateLag > 0*1e9 {
-					msg += " Vstream may not be running."
+				if st.State == "Error" {
+					msg += fmt.Sprintf(": %s.", st.Message)
+				} else if st.Pos == "" {
+					msg += ". VStream has not started."
+				} else {
+					now := time.Now().Nanosecond()
+					updateLag := int64(now) - st.TimeUpdated
+					if updateLag > 0*1e9 {
+						msg += ". VStream may not be running"
+					}
+					txLag := int64(now) - st.TransactionTimestamp
+					msg += fmt.Sprintf(". VStream Lag: %ds.", txLag/1e9)
+					if st.TransactionTimestamp > 0 { // if no events occur after copy phase, TransactionTimeStamp can be 0
+						msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp, 0).Format(time.ANSIC))
+					}
 				}
-				txLag := int64(now) - st.TransactionTimestamp
-				msg += fmt.Sprintf(" VStream Lag: %ds.", txLag/1e9)
-				if st.TransactionTimestamp > 0 { // if no events occur after copy phase, TransactionTimeStamp can be 0
-					msg += fmt.Sprintf(" Tx time: %s.", time.Unix(st.TransactionTimestamp, 0).Format(time.ANSIC))
-				}
-				s += fmt.Sprintf("id=%d on %s: Status: %s.%s\n", st.ID, ksShard, st.State, msg)
+				s += fmt.Sprintf("id=%d on %s: Status: %s%s\n", st.ID, ksShard, st.State, msg)
 			}
 		}
 		wr.Logger().Printf("\n%s\n", s)
@@ -2310,9 +2316,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 		if err != nil {
 			return err
 		}
-		if copyProgress == nil {
-			wr.Logger().Printf("\nCopy Completed.\n")
-		} else {
+		if copyProgress != nil {
 			wr.Logger().Printf("\nCopy Progress (approx):\n")
 			var tables []string
 			for table := range *copyProgress {
@@ -2337,7 +2341,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			wr.Logger().Printf("\n%s\n", s)
 		}
 		return printDetails()
-
 	}
 
 	if *dryRun {
@@ -2381,7 +2384,6 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			for {
 				select {
 				case <-ctx.Done():
-					errCh <- fmt.Errorf("workflow did not start within %s", (*timeout).String())
 					return
 				case <-ticker.C:
 					totalStreams, startedStreams, workflowErrors, err := wf.GetStreamCount()
@@ -2410,9 +2412,13 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 					return nil
 				}
 				wr.Logger().Printf("%d%% ... ", 100*progress.started/progress.total)
+			case <-timedCtx.Done():
+				wr.Logger().Printf("\nThe workflow did not start within %s. The workflow may simply be slow to start or there may be an issue.\n",
+					(*timeout).String())
+				wr.Logger().Printf("Check the status using the 'Workflow %s show' client command for details.\n", ksWorkflow)
+				return fmt.Errorf("timed out waiting for workflow to start")
 			case err := <-errCh:
 				wr.Logger().Error(err)
-				cancelTimedCtx()
 				return err
 			case wfErrs := <-wfErrCh:
 				wr.Logger().Printf("Found problems with the streams created for this workflow:\n")
