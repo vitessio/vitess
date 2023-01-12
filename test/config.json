@@ -125,7 +125,7 @@
 			"Manual": false,
 			"Shard": "vtbackup_transform",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
+			"Tags": [""]
 		},
 		"backup_transform_mysqlctld": {
 			"File": "unused.go",
