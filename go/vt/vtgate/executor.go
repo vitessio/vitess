@@ -320,8 +320,6 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 5: Log and add statistics
-		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
-		logStats.Table = plan.Instructions.GetTableName()
 		logStats.TablesUsed = plan.TablesUsed
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
