@@ -314,6 +314,9 @@ define build_docker_image
 	if grep -q arm64 <<< ${2}; then \
 		echo "Building docker using arm64 buildx"; \
 		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	elif [ $$(go env GOOS) != $$(go env GOHOSTOS) ] || [ $$(go env GOARCH) != $$(go env GOHOSTARCH) ]; then \
+		echo "Building docker using buildx --platform=$$(go env GOOS)/$$(go env GOARCH)"; \
+		docker buildx build --platform "$$(go env GOOS)/$$(go env GOARCH)" -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
 		echo "Building docker using straight docker build"; \
 		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
