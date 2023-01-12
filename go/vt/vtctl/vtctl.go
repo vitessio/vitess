@@ -2504,9 +2504,9 @@ func commandMaterialize(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	return wr.Materialize(ctx, ms)
 }
 
-func useVDiffV2(args []string) bool {
+func useVDiffV1(args []string) bool {
 	for _, arg := range args {
-		if arg == "-v2" || arg == "--v2" {
+		if arg == "-v1" || arg == "--v1" {
 			return true
 		}
 	}
@@ -2514,10 +2514,10 @@ func useVDiffV2(args []string) bool {
 }
 
 func commandVDiff(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	if useVDiffV2(args) {
+	if !useVDiffV1(args) {
 		return commandVDiff2(ctx, wr, subFlags, args)
 	}
-	_ = subFlags.Bool("v2", false, "Use VDiff2")
+	_ = subFlags.Bool("v1", false, "Use legacy VDiff v1")
 
 	sourceCell := subFlags.String("source_cell", "", "The source cell to compare from; default is any available cell")
 	targetCell := subFlags.String("target_cell", "", "The target cell to compare with; default is any available cell")
