@@ -32,6 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
+// TestMoveTables tests the the MoveTables client command
+// via the commandVRWorkflow() cmd handler.
+// This currently only tests the Progress action (which is
+// a parent of the Show action) but it can be used to test
+// other actions as well.
 func TestMoveTables(t *testing.T) {
 	vrID := 1
 	shard := "0"
