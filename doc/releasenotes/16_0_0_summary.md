@@ -19,6 +19,7 @@ In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the 
 #### <a id="vdiff2-ga"/>VDiff2 GA
 
 We are marking [VDiff v2](https://vitess.io/docs/16.0/reference/vreplication/vdiff2/) as Generally Available or production-ready in v16. We now recommend that you use v2 rather than v1 going forward. V1 will be deprecated and eventually removed in future releases.
+If you wish to use v1 for any reason, you will now need to specify the `--v1` flag.
 
 ### Tablet throttler
 
