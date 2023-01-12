@@ -172,6 +172,8 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 		if err != nil {
 			return onlineDDL, err
 		}
+	}
+	onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
 
 		onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
 	}
