@@ -99,11 +99,10 @@ type OnlineDDL struct {
 
 	RequestTime int64 `json:"time_created,omitempty"`
 	// Stateful fields:
-	MigrationContext   string          `json:"context,omitempty"`
-	Status             OnlineDDLStatus `json:"status,omitempty"`
-	TabletAlias        string          `json:"tablet,omitempty"`
-	ReadyToComplete    int64           `json:"ready_to_complete,omitempty"`
-	WasReadyToComplete int64           `json:"was_ready_to_complete,omitempty"`
+	MigrationContext   string `json:"context,omitempty"`
+	TabletAlias        string `json:"tablet,omitempty"`
+	ReadyToComplete    int64  `json:"ready_to_complete,omitempty"`
+	WasReadyToComplete int64  `json:"was_ready_to_complete,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -134,7 +133,7 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 	}
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
-			// hooks.DecodeStatus,
+			hooks.DecodeStatus,
 			hooks.DecodeStrategy,
 		),
 		Result: onlineDDL,
@@ -178,6 +177,25 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 	}
 
 	return onlineDDL, nil
+}
+
+// ParseOnlineDDLStatus parses the given status into the underlying enum type.
+func ParseOnlineDDLStatus(name string) (tabletmanagerdatapb.OnlineDDL_Status, error) {
+	key := strings.ToUpper(name)
+	val, ok := tabletmanagerdatapb.OnlineDDL_Status_value[key]
+	if !ok {
+		return 0, fmt.Errorf("unknown enum name for OnlineDDL_Status: %s", name)
+	}
+
+	if name != key {
+		// TODO: deprecation warning
+	}
+
+	return tabletmanagerdatapb.OnlineDDL_Status(val), nil
+}
+
+func OnlineDDLStatusName(status tabletmanagerdatapb.OnlineDDL_Status) string {
+	return strings.ToLower(tabletmanagerdatapb.OnlineDDL_Status_name[int32(status)])
 }
 
 // ParseOnlineDDLStatement parses the given SQL into a statement and returns the action type of the DDL statement, or error
@@ -324,9 +342,9 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 			Uuid:     onlineDDLUUID,
 			Strategy: ddlStrategySetting.Strategy,
 			Options:  ddlStrategySetting.Options,
+			Status:   tabletmanagerdatapb.OnlineDDL_REQUESTED,
 		},
 		MigrationContext: migrationContext,
-		Status:           OnlineDDLStatusRequested,
 	}, nil
 }
 

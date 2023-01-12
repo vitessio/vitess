@@ -633,7 +633,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		return false, err
 	}
 
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_RUNNING, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
 	_, err = conn.ExecuteFetch(onlineDDL.Sql, 0, false)
 
 	if err != nil {
@@ -653,7 +653,7 @@ func (e *Executor) executeDirectly(ctx context.Context, onlineDDL *schema.Online
 		return false, err
 	}
 	defer e.reloadSchema(ctx)
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 
 	return acceptableErrorCodeFound, nil
 }
@@ -1075,7 +1075,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	e.updateMigrationStage(ctx, onlineDDL.Uuid, "re-enabling writes")
 	reenableWritesOnce() // this function is also deferred, in case of early return; but now would be a good time to resume writes, before we publish the migration as "complete"
 	go log.Infof("cutOverVReplMigration %v: marking as complete", s.workflow)
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, s.rowsCopied, emptyHint)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, s.rowsCopied, emptyHint)
 	return nil
 
 	// deferred function will re-enable writes now
@@ -1391,7 +1391,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 	defer conn.Close()
 
 	e.ownedRunningMigrations.Store(onlineDDL.Uuid, onlineDDL)
-	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint); err != nil {
+	if err := e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_RUNNING, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint); err != nil {
 		return err
 	}
 
@@ -1536,28 +1536,28 @@ exit $exit_code
 		log.Errorf("Error creating wrapper script: %+v", err)
 		return err
 	}
-	onHookContent := func(status schema.OnlineDDLStatus, hint string) string {
+	onHookContent := func(status tabletmanagerdatapb.OnlineDDL_Status, hint string) string {
 		return fmt.Sprintf(`#!/bin/bash
 	curl --max-time 10 -s 'http://localhost:%d/schema-migration/report-status?uuid=%s&status=%s&hint=%s&dryrun='"$GH_OST_DRY_RUN"'&progress='"$GH_OST_PROGRESS"'&eta='"$GH_OST_ETA_SECONDS"'&rowscopied='"$GH_OST_COPIED_ROWS"
-			`, servenv.Port(), onlineDDL.Uuid, string(status), hint)
+			`, servenv.Port(), onlineDDL.Uuid, schema.OnlineDDLStatusName(status), hint)
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(schema.OnlineDDLStatusRunning, emptyHint)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-startup", onHookContent(tabletmanagerdatapb.OnlineDDL_RUNNING, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-status", onHookContent(schema.OnlineDDLStatusRunning, emptyHint)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-status", onHookContent(tabletmanagerdatapb.OnlineDDL_RUNNING, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-success", onHookContent(schema.OnlineDDLStatusComplete, emptyHint)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-success", onHookContent(tabletmanagerdatapb.OnlineDDL_COMPLETE, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-failure", onHookContent(schema.OnlineDDLStatusFailed, emptyHint)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-failure", onHookContent(tabletmanagerdatapb.OnlineDDL_FAILED, emptyHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
-	if _, err := createTempScript(tempDir, "gh-ost-on-begin-postponed", onHookContent(schema.OnlineDDLStatusRunning, readyToCompleteHint)); err != nil {
+	if _, err := createTempScript(tempDir, "gh-ost-on-begin-postponed", onHookContent(tabletmanagerdatapb.OnlineDDL_RUNNING, readyToCompleteHint)); err != nil {
 		log.Errorf("Error creating script: %+v", err)
 		return err
 	}
@@ -1790,9 +1790,9 @@ export MYSQL_PWD
 	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_ONLINE_DDL_APP}}", throttlerapp.OnlineDDLName.String())
 	pluginCode = strings.ReplaceAll(pluginCode, "{{THROTTLER_PT_OSC_APP}}", throttlerapp.PTOSCName.String())
 
-	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(schema.OnlineDDLStatusRunning))
-	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(schema.OnlineDDLStatusComplete))
-	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusFailed}}", string(schema.OnlineDDLStatusFailed))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusRunning}}", string(tabletmanagerdatapb.OnlineDDL_RUNNING))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusComplete}}", string(tabletmanagerdatapb.OnlineDDL_COMPLETE))
+	pluginCode = strings.ReplaceAll(pluginCode, "{{OnlineDDLStatusFailed}}", string(tabletmanagerdatapb.OnlineDDL_FAILED))
 
 	// Validate pt-online-schema-change binary:
 	log.Infof("Will now validate pt-online-schema-change binary")
@@ -1935,6 +1935,11 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	if err != nil {
 		return onlineDDL, nil, err
 	}
+
+	status, err := schema.ParseOnlineDDLStatus(row["migration_status"].ToString())
+	if err != nil {
+		return onlineDDL, nil, err
+	}
 	onlineDDL = &schema.OnlineDDL{
 		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
 			Keyspace: row["keyspace"].ToString(),
@@ -1945,8 +1950,8 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 			Strategy: strategy,
 			Options:  row["options"].ToString(),
 			Retries:  row.AsInt64("retries", 0),
+			Status:   status,
 		},
-		Status:           schema.OnlineDDLStatus(row["migration_status"].ToString()),
 		ReadyToComplete:  row.AsInt64("ready_to_complete", 0),
 		TabletAlias:      row["tablet"].ToString(),
 		MigrationContext: row["migration_context"].ToString(),
@@ -2035,7 +2040,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	}
 
 	switch onlineDDL.Status {
-	case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled:
+	case tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED, tabletmanagerdatapb.OnlineDDL_CANCELLED:
 		log.Infof("CancelMigration: migration %s is in non-cancellable status: %v", uuid, onlineDDL.Status)
 		return emptyResult, nil
 	}
@@ -2054,7 +2059,7 @@ func (e *Executor) CancelMigration(ctx context.Context, uuid string, message str
 	defer e.triggerNextCheckInterval()
 
 	switch onlineDDL.Status {
-	case schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady:
+	case tabletmanagerdatapb.OnlineDDL_QUEUED, tabletmanagerdatapb.OnlineDDL_READY:
 		log.Infof("CancelMigration: cancelling %s with status: %v", uuid, onlineDDL.Status)
 		return &sqltypes.Result{RowsAffected: 1}, nil
 	}
@@ -2218,7 +2223,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 			// postponed ALTER can be scheduled (because gh-ost or vreplication will postpone the cut-over)
 			// We only schedule a single migration in the execution of this function
 			onlyScheduleOneMigration.Do(func() {
-				err = e.updateMigrationStatus(ctx, uuid, schema.OnlineDDLStatusReady)
+				err = e.updateMigrationStatus(ctx, uuid, tabletmanagerdatapb.OnlineDDL_READY)
 				log.Infof("Executor.scheduleNextMigration: scheduling migration %s; err: %v", uuid, err)
 				e.triggerNextCheckInterval()
 			})
@@ -2404,8 +2409,8 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 	default:
 		return fmt.Errorf("cannot revert migration %s: unexpected action %s", revertMigration.Uuid, actionStr)
 	}
-	if revertMigration.Status != schema.OnlineDDLStatusComplete {
-		return fmt.Errorf("can only revert a migration in a '%s' state. Migration %s is in '%s' state", schema.OnlineDDLStatusComplete, revertMigration.Uuid, revertMigration.Status)
+	if revertMigration.Status != tabletmanagerdatapb.OnlineDDL_COMPLETE {
+		return fmt.Errorf("can only revert a migration in a '%s' state. Migration %s is in '%s' state", tabletmanagerdatapb.OnlineDDL_COMPLETE, revertMigration.Uuid, revertMigration.Status)
 	}
 	{
 		// Validation: see if there's a pending migration on this table:
@@ -2490,7 +2495,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			}
 			if len(artifactTables) == 0 {
 				// This indicates no table was actually created. this must have been a CREATE TABLE IF NOT EXISTS where the table already existed.
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 			}
 
 			for _, artifactTable := range artifactTables {
@@ -2516,7 +2521,7 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 			}
 			if len(artifactTables) == 0 {
 				// Could happen on `DROP TABLE IF EXISTS` where the table did not exist...
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 			}
 			for _, artifactTable := range artifactTables {
 				if err := e.updateArtifacts(ctx, onlineDDL.Uuid, artifactTable); err != nil {
@@ -2870,7 +2875,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 	}
 	defer conn.Close()
 
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusRunning, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_RUNNING, false, progressPctStarted, etaSecondsUnknown, rowsCopiedUnknown, emptyHint)
 
 	if _, err := conn.ExecuteFetch(artifactViewCreateSQL, 0, false); err != nil {
 		return err
@@ -2897,7 +2902,7 @@ func (e *Executor) executeAlterViewOnline(ctx context.Context, onlineDDL *schema
 		return err
 	}
 
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 
 	return nil
 }
@@ -2987,7 +2992,7 @@ func (e *Executor) executeSpecialAlterDDLActionMigrationIfApplicable(ctx context
 	if err := e.updateMigrationSpecialPlan(ctx, onlineDDL.Uuid, specialPlan.String()); err != nil {
 		return true, err
 	}
-	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+	_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 	return true, nil
 }
 
@@ -3085,7 +3090,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 		}
 		if completedUUID != "" {
 			// Yep. We mark this migration as implicitly complete, and we're done with it!
-			_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+			_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 			_ = e.updateMigrationMessage(ctx, onlineDDL.Uuid, fmt.Sprintf("duplicate DDL as %s for migration context %s", completedUUID, onlineDDL.MigrationContext))
 			return nil
 		}
@@ -3119,7 +3124,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				// table does exist, so this declarative DROP turns out to really be an actual DROP. No further action is needed here
 			} else {
 				// table does not exist. We mark this DROP as implicitly sucessful
-				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+				_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 				_ = e.updateMigrationMessage(ctx, onlineDDL.Uuid, "no change")
 				return nil
 			}
@@ -3152,7 +3157,7 @@ func (e *Executor) executeMigration(ctx context.Context, onlineDDL *schema.Onlin
 				}
 				if diff == nil || diff.IsEmpty() {
 					// No diff! We mark this CREATE as implicitly sucessful
-					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusComplete, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
+					_ = e.onSchemaMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE, false, progressPctFull, etaSecondsNow, rowsCopiedUnknown, emptyHint)
 					_ = e.updateMigrationMessage(ctx, onlineDDL.Uuid, "no change")
 					return nil
 				}
@@ -3700,7 +3705,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 		if err := e.updateMigrationMessage(ctx, onlineDDL.Uuid, message); err != nil {
 			return err
 		}
-		if err := e.updateMigrationStatus(ctx, onlineDDL.Uuid, schema.OnlineDDLStatusFailed); err != nil {
+		if err := e.updateMigrationStatus(ctx, onlineDDL.Uuid, tabletmanagerdatapb.OnlineDDL_FAILED); err != nil {
 			return err
 		}
 		defer e.triggerNextCheckInterval()
@@ -4073,10 +4078,10 @@ func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, u
 	return err
 }
 
-func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
-	log.Infof("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, string(status))
+func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status tabletmanagerdatapb.OnlineDDL_Status) error {
+	log.Infof("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, schema.OnlineDDLStatusName(status))
 	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatus,
-		sqltypes.StringBindVariable(string(status)),
+		sqltypes.StringBindVariable(schema.OnlineDDLStatusName(status)),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4682,7 +4687,7 @@ func (e *Executor) SubmitMigration(
 		sqltypes.StringBindVariable(onlineDDL.Options),
 		sqltypes.StringBindVariable(actionStr),
 		sqltypes.StringBindVariable(onlineDDL.MigrationContext),
-		sqltypes.StringBindVariable(string(schema.OnlineDDLStatusQueued)),
+		sqltypes.StringBindVariable(string(tabletmanagerdatapb.OnlineDDL_QUEUED)),
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.Int64BindVariable(retainArtifactsSeconds),
 		sqltypes.BoolBindVariable(onlineDDL.StrategySetting().IsPostponeLaunch()),
@@ -4769,28 +4774,28 @@ func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMi
 
 // onSchemaMigrationStatus is called when a status is set/changed for a running migration
 func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
-	uuid string, status schema.OnlineDDLStatus, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string) (err error) {
-	if dryRun && status != schema.OnlineDDLStatusFailed {
+	uuid string, status tabletmanagerdatapb.OnlineDDL_Status, dryRun bool, progressPct float64, etaSeconds int64, rowsCopied int64, hint string) (err error) {
+	if dryRun && status != tabletmanagerdatapb.OnlineDDL_FAILED {
 		// We don't consider dry-run reports unless there's a failure
 		return nil
 	}
 	switch status {
-	case schema.OnlineDDLStatusReady:
+	case tabletmanagerdatapb.OnlineDDL_READY:
 		{
 			err = e.updateMigrationTimestamp(ctx, "ready_timestamp", uuid)
 		}
-	case schema.OnlineDDLStatusRunning:
+	case tabletmanagerdatapb.OnlineDDL_RUNNING:
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "liveness_timestamp", uuid)
 		}
-	case schema.OnlineDDLStatusComplete:
+	case tabletmanagerdatapb.OnlineDDL_COMPLETE:
 		{
 			progressPct = progressPctFull
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
 		}
-	case schema.OnlineDDLStatusFailed:
+	case tabletmanagerdatapb.OnlineDDL_FAILED:
 		{
 			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
@@ -4818,7 +4823,7 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 	}
 	if !dryRun {
 		switch status {
-		case schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed:
+		case tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED:
 			e.triggerNextCheckInterval()
 		}
 	}
@@ -4829,7 +4834,10 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 // OnSchemaMigrationStatus is called by TabletServer's API, which is invoked by a running gh-ost migration's hooks.
 func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 	uuidParam, statusParam, dryrunParam, progressParam, etaParam, rowsCopiedParam, hint string) (err error) {
-	status := schema.OnlineDDLStatus(statusParam)
+	status, err := schema.ParseOnlineDDLStatus(statusParam)
+	if err != nil {
+		return err
+	}
 	dryRun := (dryrunParam == "true")
 	var progressPct float64
 	if pct, err := strconv.ParseFloat(progressParam, 64); err == nil {
