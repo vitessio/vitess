@@ -177,7 +177,7 @@ func main() {
 		args = args[1:]
 		fallthrough
 	default:
-		log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
+		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
 
 		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 

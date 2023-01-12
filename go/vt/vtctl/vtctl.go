@@ -495,7 +495,7 @@ var commands = []commandGroup{
 			{
 				name:   "VDiff",
 				method: commandVDiff,
-				params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=in_order:RDONLY,REPLICA,PRIMARY] [--filtered_replication_wait_time=30s] [--max_extra_rows_to_compare=1000] <keyspace.workflow>",
+				params: "[--source_cell=<cell>] [--target_cell=<cell>] [--tablet_types=in_order:RDONLY,REPLICA,PRIMARY] [--limit=<max rows to diff>] [--tables=<table list>] [--format=json] [--auto-retry] [--verbose] [--max_extra_rows_to_compare=1000] [--filtered_replication_wait_time=30s] [--debug_query] [--only_pks] [--wait] [--wait-update-interval=1m] <keyspace.workflow> [<action>] [<UUID>]",
 				help:   "Perform a diff of all tables in the workflow",
 			},
 			{
