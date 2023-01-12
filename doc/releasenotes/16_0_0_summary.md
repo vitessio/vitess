@@ -72,6 +72,11 @@ If your application is searching for specific errors, you might need to update y
 Information about which tables are used is now reported by the field TablesUsed added in V15, that is a string array, listing all tables and which keyspace they are in.
 The Table/Keyspace fields were deprecated in V15 and are now removed in the V16 release of Vitess.
 
+#### Removed flags
+
+The following flags are removed in V16 -
+- `enable_semi_sync`
+
 #### <a id="lock-timeout-introduction"/> `lock-timeout` and `remote_operation_timeout` Changes
 
 Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced. 
