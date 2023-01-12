@@ -221,6 +221,8 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 - vtbackup flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
+- The dead legacy Workflow Manager related code was removed in [#12085](https://github.com/vitessio/vitess/pull/12085). This included the following `vtctl` client commands: `WorkflowAction`, `WorkflowCreate`, `WorkflowWait`, `WorkflowStart`, `WorkflowStop`, `WorkflowDelete`.
+
 
 ### MySQL Compatibility
 
