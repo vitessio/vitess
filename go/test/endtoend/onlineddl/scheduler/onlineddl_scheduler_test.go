@@ -766,7 +766,7 @@ func TestSchemaChange(t *testing.T) {
 	// 'mysql' strategy
 	t.Run("mysql strategy", func(t *testing.T) {
 		t.Run("declarative", func(t *testing.T) {
-			t1uuid = testOnlineDDLStatement(t, createT1Statement, "mysql --declarative", "vtgate", "just-created", "", false)
+			t1uuid = testOnlineDDLStatement(t, createParams(createT1Statement, "mysql --declarative", "vtgate", "just-created", "", false))
 
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -775,7 +775,7 @@ func TestSchemaChange(t *testing.T) {
 		})
 
 		t.Run("fail postpone-completion", func(t *testing.T) {
-			t1uuid := testOnlineDDLStatement(t, trivialAlterT1Statement, "mysql --postpone-completion", "vtgate", "", "", true)
+			t1uuid := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, "mysql --postpone-completion", "vtgate", "", "", true))
 
 			// --postpone-completion not supported in mysql strategy
 			time.Sleep(ensureStateNotChangedTime)
@@ -783,7 +783,7 @@ func TestSchemaChange(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusFailed)
 		})
 		t.Run("trivial", func(t *testing.T) {
-			t1uuid := testOnlineDDLStatement(t, trivialAlterT1Statement, "mysql", "vtgate", "", "", true)
+			t1uuid := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, "mysql", "vtgate", "", "", true))
 
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -797,7 +797,7 @@ func TestSchemaChange(t *testing.T) {
 			}
 		})
 		t.Run("instant", func(t *testing.T) {
-			t1uuid := testOnlineDDLStatement(t, instantAlterT1Statement, "mysql", "vtgate", "", "", true)
+			t1uuid := testOnlineDDLStatement(t, createParams(instantAlterT1Statement, "mysql", "vtgate", "", "", true))
 
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
