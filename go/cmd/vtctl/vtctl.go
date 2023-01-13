@@ -41,7 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -132,8 +131,6 @@ func main() {
 
 	ts := topo.Open()
 	defer ts.Close()
-
-	vtctl.WorkflowManager = workflow.NewManager(ts)
 
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)

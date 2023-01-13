@@ -172,9 +172,6 @@ func InitVtctld(ts *topo.Server) error {
 	// Init redirects for explorers
 	initExplorer(ts)
 
-	// Init workflow manager.
-	initWorkflowManager(ts)
-
 	// Setup reverse proxy for all vttablets through /vttablet/.
 	initVTTabletRedirection(ts)
 
