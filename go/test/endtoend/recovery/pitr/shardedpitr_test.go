@@ -523,7 +523,6 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		clusterInstance.VtTabletExtraArgs,
-		clusterInstance.EnableSemiSync,
 		clusterInstance.DefaultCharset)
 	tablet.Alias = tablet.VttabletProcess.TabletPath
 	tablet.VttabletProcess.SupportsBackup = true
