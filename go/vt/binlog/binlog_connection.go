@@ -136,7 +136,8 @@ func (bc *BinlogConnection) StartBinlogDumpFromPosition(ctx context.Context, bin
 	return c, e, nil
 }
 
-// streamEvents returns a channel on which events are streamed.
+// streamEvents returns a channel on which events are streamed and a channel on
+// which errors are propagated.
 func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.BinlogEvent, chan error) {
 	// FIXME(alainjobart) I think we can use a buffered channel for better performance.
 	eventChan := make(chan mysql.BinlogEvent)
@@ -147,6 +148,7 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 	go func() {
 		defer func() {
 			close(eventChan)
+			close(errChan)
 			bc.wg.Done()
 		}()
 		for {

@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"context"
@@ -298,6 +300,49 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	if err != want {
 		t.Errorf("wrong error, got %#v, want %#v", err, want)
 	}
+}
+
+// TestStreamerParseEventsGTIDPurged tests binlog streamer error
+// propagation generally, as well as testing specifically for
+// the error seen when the client needs GTIDs that have been
+// purged on the source.
+func TestStreamerParseEventsGTIDPurged(t *testing.T) {
+	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
+	expectedStreamErr := mysql.NewSQLError(mysql.ERMasterFatalReadingBinlog, mysql.SSUnknownSQLState,
+		"Cannot replicate because the master purged required binary logs.")
+
+	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
+		return nil
+	}
+	// Set mock mysql.ConnParams and dbconfig
+	mcp := &mysql.ConnParams{
+		DbName: "vt_test_keyspace",
+	}
+	dbcfgs := dbconfigs.New(mcp)
+
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		tmr := time.NewTimer(10 * time.Second)
+		defer tmr.Stop()
+		select {
+		case errs <- expectedStreamErr:
+		case <-tmr.C:
+			require.FailNow(t, "timed out sending error message")
+		}
+	}()
+
+	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
+	_, err := bls.parseEvents(context.Background(), events, errs)
+	require.Error(t, err)
+	sqlErr, ok := err.(*mysql.SQLError)
+	require.True(t, ok, "expected SQLError, got %T", err)
+	require.True(t, sqlErr.Num == mysql.ERMasterFatalReadingBinlog, "expected ERMasterFatalReadingBinlog (%d), got %d",
+		mysql.ERMasterFatalReadingBinlog, sqlErr.Num)
+
+	wg.Wait()
 }
 
 func TestStreamerParseEventsSendErrorXID(t *testing.T) {

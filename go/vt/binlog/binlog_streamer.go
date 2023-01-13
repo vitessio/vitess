@@ -231,6 +231,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	if err != nil {
 		return err
 	}
+
 	// parseEvents will loop until the events channel is closed, the
 	// service enters the SHUTTING_DOWN state, or an error occurs.
 	stopPos, err = bls.parseEvents(ctx, events, errs)
