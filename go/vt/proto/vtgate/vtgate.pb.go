@@ -998,6 +998,8 @@ type VStreamFlags struct {
 	// if specified, these cells (comma-separated) are used to pick source tablets from.
 	// defaults to the cell of the vtgate serving the VStream API.
 	Cells string `protobuf:"bytes,4,opt,name=cells,proto3" json:"cells,omitempty"`
+	CellPreference string `protobuf:"bytes,5,opt,name=cell_preference,proto3" json:"cell_preference,omitempty"`
+	TabletOrder string `protobuf:"bytes,6,opt,name=tablet_order,proto3" json:"tablet_order,omitempty"`
 }
 
 func (x *VStreamFlags) Reset() {
@@ -1056,6 +1058,20 @@ func (x *VStreamFlags) GetStopOnReshard() bool {
 func (x *VStreamFlags) GetCells() string {
 	if x != nil {
 		return x.Cells
+	}
+	return ""
+}
+
+func (x *VStreamFlags) GetCellPreference() string {
+	if x != nil {
+		return x.CellPreference
+	}
+	return ""
+}
+
+func (x *VStreamFlags) GetTabletOrder() string {
+	if x != nil {
+		return x.TabletOrder
 	}
 	return ""
 }

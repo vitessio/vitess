@@ -123,7 +123,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 				return nil, err
 			}
 		}
-		tp, err := discovery.NewTabletPicker(sourceTopo, cells, ct.source.Keyspace, ct.source.Shard, tabletTypesStr)
+		tp, err := discovery.NewTabletPicker(ctx, sourceTopo, cells, cell, ct.source.Keyspace, ct.source.Shard, tabletTypesStr, nil)
 		if err != nil {
 			return nil, err
 		}

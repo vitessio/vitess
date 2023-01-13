@@ -61,6 +61,16 @@ var (
 	muTabletPickerRetryDelay sync.Mutex
 	globalTPStats            *tabletPickerStats
 	inOrderHint              = "in_order:"
+
+	tabletPickerCellPreferenceMap = map[string]TabletPickerCellPreference{
+		"preferlocalwithalias": TabletPickerCellPreference_PreferLocalWithAlias,
+		"onlyspecified":        TabletPickerCellPreference_OnlySpecified,
+	}
+
+	tabletPickerTabletOrderMap = map[string]TabletPickerTabletOrder{
+		"any":     TabletPickerTabletOrder_Any,
+		"inorder": TabletPickerTabletOrder_InOrder,
+	}
 )
 
 // GetTabletPickerRetryDelay synchronizes changes to tabletPickerRetryDelay. Used in tests only at the moment
@@ -78,8 +88,26 @@ func SetTabletPickerRetryDelay(delay time.Duration) {
 }
 
 type TabletPickerOptions struct {
-	cellPref    *TabletPickerCellPreference
-	tabletOrder *TabletPickerTabletOrder
+	CellPref    TabletPickerCellPreference
+	TabletOrder TabletPickerTabletOrder
+}
+
+func ParseTabletPickerCellPreferenceString(str string) TabletPickerCellPreference {
+	if c, ok := tabletPickerCellPreferenceMap[strings.ToLower(str)]; ok {
+		return c
+	}
+
+	log.Infof("Could not parse tablet picker cell preference string: %s, returning default", str)
+	return TabletPickerCellPreference_PreferLocalWithAlias
+}
+
+func ParseTabletPickerTabletOrderString(str string) TabletPickerTabletOrder {
+	if o, ok := tabletPickerTabletOrderMap[strings.ToLower(str)]; ok {
+		return o
+	}
+
+	log.Infof("Could not parse tablet picker tablet order string: %s, returning default", str)
+	return TabletPickerTabletOrder_Any
 }
 
 type localCellInfo struct {
@@ -122,9 +150,6 @@ func NewTabletPicker(
 	if len(cells) == 0 {
 		missingFields = append(missingFields, "Cells")
 	}
-	if localCell == "" {
-		missingFields = append(missingFields, "Local Cell")
-	}
 	if len(missingFields) > 0 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION,
 			fmt.Sprintf("Missing required field(s) for tablet picker: %s", strings.Join(missingFields, ", ")))
@@ -132,11 +157,11 @@ func NewTabletPicker(
 
 	cellPref := TabletPickerCellPreference_PreferLocalWithAlias
 	if options != nil {
-		if options.cellPref != nil {
-			cellPref = *options.cellPref
+		if options.CellPref != "" {
+			cellPref = options.CellPref
 		}
-		if options.tabletOrder != nil {
-			switch *options.tabletOrder {
+		if options.TabletOrder != "" {
+			switch options.TabletOrder {
 			case TabletPickerTabletOrder_Any:
 				inOrder = false
 			case TabletPickerTabletOrder_InOrder:
@@ -147,17 +172,27 @@ func NewTabletPicker(
 
 	aliasCellMap := make(map[string]string)
 	if cellPref == TabletPickerCellPreference_PreferLocalWithAlias {
+		if localCell == "" {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "Cannot have local cell preference without local cell")
+		}
+
+		// Add local cell to the list of cells for tablet picking.
+		// This will be de-deped later if the local cell already exists in the original list - see: dedupeCells()
 		cells = append(cells, localCell)
 		aliasName := topo.GetAliasByCell(ctx, ts, localCell)
 
+		// If an alias exists
 		if aliasName != localCell {
 			alias, err := ts.GetCellsAlias(ctx, aliasName, false)
 			if err != nil {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, fmt.Sprintf("Error fetching local cell alias: %s", err.Error()))
 			}
-			cells = append(cells, alias.Cells...)
 
-			// Create a map of the cells to make lookup faster later.
+			// Add the aliasName to the list of cells for tablet picking.
+			cells = append(cells, aliasName)
+
+			// Create a map of the cells in the alias to make lookup faster later when we're giving preference to these.
+			// see prioritizeTablets()
 			for _, c := range alias.Cells {
 				aliasCellMap[c] = c
 			}
@@ -257,18 +292,7 @@ func (tp *TabletPicker) PickForStreaming(ctx context.Context) (*topodatapb.Table
 			candidates = append(sameCellCandidates, sameAliasCandidates...)
 			candidates = append(candidates, allOtherCandidates...)
 		} else if tp.inOrder {
-			// Sort candidates slice such that tablets appear in same tablet type order as in tp.tabletTypes
-			orderMap := map[topodatapb.TabletType]int{}
-			for i, t := range tp.tabletTypes {
-				orderMap[t] = i
-			}
-			sort.Slice(candidates, func(i, j int) bool {
-				if orderMap[candidates[i].Type] == orderMap[candidates[j].Type] {
-					// identical tablet types: randomize order of tablets for this type
-					return rand.Intn(2) == 0 // 50% chance
-				}
-				return orderMap[candidates[i].Type] < orderMap[candidates[j].Type]
-			})
+			candidates = tp.orderByTabletType(candidates)
 		} else {
 			// Randomize candidates
 			rand.Shuffle(len(candidates), func(i, j int) {
