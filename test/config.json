@@ -125,7 +125,7 @@
 			"Manual": false,
 			"Shard": "vtbackup_transform",
 			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
+			"Tags": [""]
 		},
 		"backup_transform_mysqlctld": {
 			"File": "unused.go",
@@ -364,17 +364,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"pitrtls": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "26",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
