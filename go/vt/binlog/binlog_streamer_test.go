@@ -95,6 +95,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -127,7 +128,7 @@ func TestStreamerParseEventsXID(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -158,6 +159,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -189,7 +191,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -201,6 +203,7 @@ func TestStreamerParseEventsCommit(t *testing.T) {
 
 func TestStreamerStop(t *testing.T) {
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
@@ -218,7 +221,7 @@ func TestStreamerStop(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error)
 	go func() {
-		_, err := bls.parseEvents(ctx, events)
+		_, err := bls.parseEvents(ctx, events, errs)
 		done <- err
 	}()
 
@@ -253,6 +256,7 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 	want := ErrClientEOF
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return io.EOF
@@ -267,7 +271,7 @@ func TestStreamerParseEventsClientEOF(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != want {
 		t.Errorf("wrong error, got %#v, want %#v", err, want)
 	}
@@ -277,6 +281,7 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	want := ErrServerEOF
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 	close(events)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
@@ -289,7 +294,7 @@ func TestStreamerParseEventsServerEOF(t *testing.T) {
 	dbcfgs := dbconfigs.New(mcp)
 
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != want {
 		t.Errorf("wrong error, got %#v, want %#v", err, want)
 	}
@@ -313,6 +318,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 	want := "send reply error: foobar"
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return fmt.Errorf("foobar")
@@ -328,7 +334,7 @@ func TestStreamerParseEventsSendErrorXID(t *testing.T) {
 
 	go sendTestEvents(events, input)
 
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -358,6 +364,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	want := "send reply error: foobar"
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return fmt.Errorf("foobar")
@@ -372,7 +379,7 @@ func TestStreamerParseEventsSendErrorCommit(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -398,6 +405,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	want := "can't parse binlog event, invalid data:"
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
@@ -412,7 +420,7 @@ func TestStreamerParseEventsInvalid(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -440,6 +448,7 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	want := "can't parse FORMAT_DESCRIPTION_EVENT:"
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
@@ -454,7 +463,7 @@ func TestStreamerParseEventsInvalidFormat(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -482,6 +491,7 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 	want := "got a real event before FORMAT_DESCRIPTION_EVENT:"
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
@@ -496,7 +506,7 @@ func TestStreamerParseEventsNoFormat(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -522,6 +532,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	want := "can't get query from binlog event:"
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
@@ -536,7 +547,7 @@ func TestStreamerParseEventsInvalidQuery(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -577,6 +588,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -623,7 +635,7 @@ func TestStreamerParseEventsRollback(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -648,6 +660,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -695,7 +708,7 @@ func TestStreamerParseEventsDMLWithoutBegin(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -723,6 +736,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -770,7 +784,7 @@ func TestStreamerParseEventsBeginWithoutCommit(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -799,6 +813,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -831,7 +846,7 @@ func TestStreamerParseEventsSetInsertID(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -859,6 +874,7 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	want := "can't parse INTVAR_EVENT:"
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
@@ -872,7 +888,7 @@ func TestStreamerParseEventsInvalidIntVar(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err == nil {
 		t.Errorf("expected error, got none")
 		return
@@ -904,6 +920,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -935,7 +952,7 @@ func TestStreamerParseEventsOtherDB(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -966,6 +983,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -997,7 +1015,7 @@ func TestStreamerParseEventsOtherDBBegin(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -1025,6 +1043,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	sendTransaction := func(eventToken *querypb.EventToken, statements []FullBinlogStatement) error {
 		return nil
@@ -1039,7 +1058,7 @@ func TestStreamerParseEventsBeginAgain(t *testing.T) {
 	before := binlogStreamerErrors.Counts()["ParseEvents"]
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 	after := binlogStreamerErrors.Counts()["ParseEvents"]
@@ -1068,6 +1087,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -1107,7 +1127,7 @@ func TestStreamerParseEventsMariadbBeginGTID(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
@@ -1135,6 +1155,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []*binlogdatapb.BinlogTransaction{
 		{
@@ -1166,7 +1187,7 @@ func TestStreamerParseEventsMariadbStandaloneGTID(t *testing.T) {
 	bls := NewStreamer(dbcfgs, nil, nil, mysql.Position{}, 0, (&got).sendTransaction)
 
 	go sendTestEvents(events, input)
-	if _, err := bls.parseEvents(context.Background(), events); err != ErrServerEOF {
+	if _, err := bls.parseEvents(context.Background(), events, errs); err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
 
