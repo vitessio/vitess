@@ -119,7 +119,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			MaxExtraRowsToCompare: *maxExtraRowsToCompare,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPKS:    *onlyPks,
+			OnlyPks:    *onlyPks,
 			DebugQuery: *debugQuery,
 			Format:     format,
 		},

@@ -97,6 +97,16 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	}
 }
 
+// NewTestVtctldServer returns a new VtctldServer for the given topo server
+// AND tmclient for use in tests. This should NOT be used in production.
+func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
+	return &VtctldServer{
+		ts:  ts,
+		tmc: tmc,
+		ws:  workflow.NewServer(ts, tmc),
+	}
+}
+
 func panicHandler(err *error) {
 	if x := recover(); x != nil {
 		*err = fmt.Errorf("uncaught panic: %v", x)

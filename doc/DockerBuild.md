@@ -31,7 +31,6 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     vitess$ docker pull vitess/bootstrap:mysql56   # MySQL Community Edition 5.6
     vitess$ docker pull vitess/bootstrap:percona57 # Percona Server 5.7
     vitess$ docker pull vitess/bootstrap:percona   # Percona Server
-    vitess$ docker pull vitess/bootstrap:mariadb   # MariaDB
     ```
 
     **Note:** If you have already downloaded the `vitess/bootstrap:<flavor>`
@@ -50,7 +49,6 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     vitess$ make docker_base_mysql56
     vitess$ make docker_base_percona57
     vitess$ make docker_base_percona
-    vitess$ make docker_base_mariadb
     ```
 
 1.  Build the `vitess/lite[:<flavor>]` image.
@@ -65,7 +63,6 @@ Then you can run our build script for the `lite` image which extracts the Vitess
     vitess$ make docker_lite_mysql56
     vitess$ make docker_lite_percona57
     vitess$ make docker_lite_percona
-    vitess$ make docker_lite_mariadb
     ```
 
 1.  Re-tag the image under your personal repository, then upload it.

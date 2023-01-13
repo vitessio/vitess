@@ -76,7 +76,7 @@ const (
 func TestTableMigrateMainflow(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	checkCellRouting(t, tme.wr, "cell1", map[string][]string{
 		"t1":     {"ks1.t1"},
@@ -492,7 +492,7 @@ func TestTableMigrateMainflow(t *testing.T) {
 func TestShardMigrateMainflow(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestShardMigrater(ctx, t, []string{"-40", "40-"}, []string{"-80", "80-"})
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	// Initial check
 	checkServedTypes(t, tme.ts, "ks:-40", 3)
@@ -789,7 +789,7 @@ func TestTableMigrateOneToManyKeepAllArtifacts(t *testing.T) {
 func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 	ctx := context.Background()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -979,7 +979,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 	var err error
 	ctx := context.Background()
 	tme := newTestTableMigraterCustom(ctx, t, []string{"0"}, []string{"-80", "80-"}, "select * %s")
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	wantdryRunReads := []string{
 		"Lock keyspace ks1",
@@ -1094,7 +1094,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 func TestMigrateFailJournal(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1191,7 +1191,7 @@ func TestMigrateFailJournal(t *testing.T) {
 func TestTableMigrateJournalExists(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1331,7 +1331,7 @@ func TestShardMigrateJournalExists(t *testing.T) {
 func TestTableMigrateCancel(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1383,7 +1383,7 @@ func TestTableMigrateCancel(t *testing.T) {
 func TestTableMigrateCancelDryRun(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	want := []string{
 		"Lock keyspace ks1",
@@ -1441,7 +1441,7 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 func TestTableMigrateNoReverse(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1542,7 +1542,7 @@ func TestTableMigrateNoReverse(t *testing.T) {
 func TestMigrateFrozen(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.expectNoPreviousJournals()
 	_, err := tme.wr.SwitchReads(ctx, tme.targetKeyspace, "test", []topodatapb.TabletType{topodatapb.TabletType_RDONLY}, nil, workflow.DirectionForward, false)
@@ -1584,7 +1584,7 @@ func TestMigrateFrozen(t *testing.T) {
 func TestMigrateNoStreamsFound(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.dbTargetClients[0].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 	tme.dbTargetClients[1].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
@@ -1600,7 +1600,7 @@ func TestMigrateNoStreamsFound(t *testing.T) {
 func TestMigrateDistinctSources(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	bls := &binlogdatapb.BinlogSource{
 		Keyspace: "ks2",
@@ -1632,7 +1632,7 @@ func TestMigrateDistinctSources(t *testing.T) {
 func TestMigrateMismatchedTables(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	bls := &binlogdatapb.BinlogSource{
 		Keyspace: "ks1",
@@ -1662,7 +1662,7 @@ func TestMigrateMismatchedTables(t *testing.T) {
 func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	tme.dbTargetClients[0].addQuery(streamInfoKs2, &sqltypes.Result{}, nil)
 
@@ -1677,7 +1677,7 @@ func TestTableMigrateAllShardsNotPresent(t *testing.T) {
 func TestMigrateNoTableWildcards(t *testing.T) {
 	ctx := context.Background()
 	tme := newTestTableMigrater(ctx, t)
-	defer tme.stopTablets(t)
+	defer tme.close(t)
 
 	// validate that no previous journals exist
 	tme.dbSourceClients[0].addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
