@@ -29,8 +29,6 @@ import (
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 var (
@@ -154,7 +152,11 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 		for {
 			event, err := bc.Conn.ReadBinlogEvent()
 			if err != nil {
-				errChan <- err
+				select {
+				case errChan <- err:
+				case <-ctx.Done():
+					return
+				}
 				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
 					// This is not necessarily an error. It could just be that we closed
@@ -169,7 +171,6 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 			select {
 			case eventChan <- event:
 			case <-ctx.Done():
-				errChan <- vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 				return
 			}
 		}
