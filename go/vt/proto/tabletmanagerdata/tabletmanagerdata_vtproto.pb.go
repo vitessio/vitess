@@ -4503,9 +4503,9 @@ func (m *VDiffReportOptions) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x10
 	}
-	if m.OnlyPKS {
+	if m.OnlyPks {
 		i--
-		if m.OnlyPKS {
+		if m.OnlyPks {
 			dAtA[i] = 1
 		} else {
 			dAtA[i] = 0
@@ -6416,7 +6416,7 @@ func (m *VDiffReportOptions) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	if m.OnlyPKS {
+	if m.OnlyPks {
 		n += 2
 	}
 	if m.DebugQuery {
@@ -15870,7 +15870,7 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 0 {
-				return fmt.Errorf("proto: wrong wireType = %d for field OnlyPKS", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field OnlyPks", wireType)
 			}
 			var v int
 			for shift := uint(0); ; shift += 7 {
@@ -15887,7 +15887,7 @@ func (m *VDiffReportOptions) UnmarshalVT(dAtA []byte) error {
 					break
 				}
 			}
-			m.OnlyPKS = bool(v != 0)
+			m.OnlyPks = bool(v != 0)
 		case 2:
 			if wireType != 0 {
 				return fmt.Errorf("proto: wrong wireType = %d for field DebugQuery", wireType)

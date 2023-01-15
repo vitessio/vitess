@@ -653,8 +653,9 @@ func (se *Engine) handleHTTPSchema(response http.ResponseWriter) {
 // doesn't reload.  Use SetTableForTests to set table schema.
 func NewEngineForTests() *Engine {
 	se := &Engine{
-		isOpen: true,
-		tables: make(map[string]*Table),
+		isOpen:    true,
+		tables:    make(map[string]*Table),
+		historian: newHistorian(false, nil),
 	}
 	return se
 }

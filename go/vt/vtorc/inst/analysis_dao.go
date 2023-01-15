@@ -63,11 +63,11 @@ type clusterAnalysis struct {
 }
 
 // GetReplicationAnalysis will check for replication problems (dead primary; unreachable primary; etc)
-func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
+func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAnalysisHints) ([]ReplicationAnalysis, error) {
 	result := []ReplicationAnalysis{}
 
 	// TODO(sougou); deprecate ReduceReplicationAnalysisCount
-	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, clusterName)
+	args := sqlutils.Args(config.Config.ReasonableReplicationLagSeconds, ValidSecondsFromSeenToLastAttemptedCheck(), config.Config.ReasonableReplicationLagSeconds, keyspace, shard)
 	query := `
 	SELECT
 		vitess_tablet.info AS tablet_info,
@@ -80,12 +80,12 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		vitess_keyspace.keyspace_type AS keyspace_type,
 		vitess_keyspace.durability_policy AS durability_policy,
 		primary_instance.read_only AS read_only,
+		MIN(primary_instance.hostname) IS NULL AS is_invalid,
 		MIN(primary_instance.data_center) AS data_center,
 		MIN(primary_instance.region) AS region,
 		MIN(primary_instance.physical_environment) AS physical_environment,
 		MIN(primary_instance.source_host) AS source_host,
 		MIN(primary_instance.source_port) AS source_port,
-		MIN(primary_instance.cluster_name) AS cluster_name,
 		MIN(primary_instance.binary_log_file) AS binary_log_file,
 		MIN(primary_instance.binary_log_pos) AS binary_log_pos,
 		MIN(primary_tablet.info) AS primary_tablet_info,
@@ -97,12 +97,6 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				0
 			)
 		) AS is_stale_binlog_coordinates,
-		MIN(
-			IFNULL(
-				cluster_domain_name.domain_name,
-				primary_instance.cluster_name
-			)
-		) AS cluster_domain,
 		MIN(
 			primary_instance.last_checked <= primary_instance.last_seen
 			and primary_instance.last_attempted_check <= primary_instance.last_seen + interval ? second
@@ -295,7 +289,7 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		JOIN vitess_keyspace ON (
 			vitess_tablet.keyspace = vitess_keyspace.keyspace
 		)
-		JOIN database_instance primary_instance ON (
+		LEFT JOIN database_instance primary_instance ON (
 			vitess_tablet.hostname = primary_instance.hostname
 			AND vitess_tablet.port = primary_instance.port
 		)
@@ -332,12 +326,10 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			AND replica_instance.port = replica_downtime.port
 			AND replica_downtime.downtime_active = 1
 		)
-		LEFT JOIN cluster_domain_name ON (
-			cluster_domain_name.cluster_name = primary_instance.cluster_name
-		)
 	WHERE
 		database_instance_maintenance.database_instance_maintenance_id IS NULL
-		AND ? IN ('', primary_instance.cluster_name)
+		AND ? IN ('', vitess_keyspace.keyspace)
+		AND ? IN ('', vitess_tablet.shard)
 	GROUP BY
 		vitess_tablet.hostname,
 		vitess_tablet.port
@@ -392,8 +384,8 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 			Type:    BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")
-		a.ClusterDetails.ClusterName = m.GetString("cluster_name")
-		a.ClusterDetails.ClusterDomain = m.GetString("cluster_domain")
+		a.ClusterDetails.Keyspace = m.GetString("keyspace")
+		a.ClusterDetails.Shard = m.GetString("shard")
 		a.GTIDMode = m.GetString("gtid_mode")
 		a.LastCheckValid = m.GetBool("is_last_check_valid")
 		a.LastCheckPartialSuccess = m.GetBool("last_check_partial_success")
@@ -441,18 +433,19 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 		a.IsReadOnly = m.GetUint("read_only") == 1
 
 		if !a.LastCheckValid {
-			analysisMessage := fmt.Sprintf("analysis: ClusterName: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToPrimary: %+v",
-				a.ClusterDetails.ClusterName, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
+			analysisMessage := fmt.Sprintf("analysis: Keyspace: %+v, Shard: %+v, IsPrimary: %+v, LastCheckValid: %+v, LastCheckPartialSuccess: %+v, CountReplicas: %+v, CountValidReplicas: %+v, CountValidReplicatingReplicas: %+v, CountLaggingReplicas: %+v, CountDelayedReplicas: %+v, CountReplicasFailingToConnectToPrimary: %+v",
+				a.ClusterDetails.Keyspace, a.ClusterDetails.Shard, a.IsPrimary, a.LastCheckValid, a.LastCheckPartialSuccess, a.CountReplicas, a.CountValidReplicas, a.CountValidReplicatingReplicas, a.CountLaggingReplicas, a.CountDelayedReplicas, a.CountReplicasFailingToConnectToPrimary,
 			)
 			if util.ClearToLog("analysis_dao", analysisMessage) {
 				log.Infof(analysisMessage)
 			}
 		}
-		if clusters[a.ClusterDetails.ClusterName] == nil {
-			clusters[a.ClusterDetails.ClusterName] = &clusterAnalysis{}
+		keyspaceShard := getKeyspaceShardName(a.ClusterDetails.Keyspace, a.ClusterDetails.Shard)
+		if clusters[keyspaceShard] == nil {
+			clusters[keyspaceShard] = &clusterAnalysis{}
 			if a.TabletType == topodatapb.TabletType_PRIMARY {
 				a.IsClusterPrimary = true
-				clusters[a.ClusterDetails.ClusterName].primaryKey = &a.AnalyzedInstanceKey
+				clusters[keyspaceShard].primaryKey = &a.AnalyzedInstanceKey
 			}
 			durabilityPolicy := m.GetString("durability_policy")
 			if durabilityPolicy == "" {
@@ -464,16 +457,20 @@ func GetReplicationAnalysis(clusterName string, hints *ReplicationAnalysisHints)
 				log.Errorf("can't get the durability policy %v - %v. Skipping keyspace - %v.", durabilityPolicy, err, a.AnalyzedKeyspace)
 				return nil
 			}
-			clusters[a.ClusterDetails.ClusterName].durability = durability
+			clusters[keyspaceShard].durability = durability
 		}
 		// ca has clusterwide info
-		ca := clusters[a.ClusterDetails.ClusterName]
+		ca := clusters[keyspaceShard]
 		if ca.hasClusterwideAction {
 			// We can only take one cluster level action at a time.
 			return nil
 		}
 		if ca.durability == nil {
 			// We failed to load the durability policy, so we shouldn't run any analysis
+			return nil
+		}
+		isInvalid := m.GetBool("is_invalid")
+		if isInvalid {
 			return nil
 		}
 		if a.IsClusterPrimary && !a.LastCheckValid && a.CountReplicas == 0 {

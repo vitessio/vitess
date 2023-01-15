@@ -151,23 +151,22 @@ func (st *SemTable) TableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 }
 
 // ReplaceTableSetFor replaces the given single TabletSet with the new *sqlparser.AliasedTableExpr
-func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) error {
+func (st *SemTable) ReplaceTableSetFor(id TableSet, t *sqlparser.AliasedTableExpr) {
 	if id.NumberOfTables() != 1 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier should represent single table: %v", id)
+		// This is probably a derived table
+		return
 	}
 	tblOffset := id.TableOffset()
 	if tblOffset > len(st.Tables) {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: tablet identifier greater than number of tables: %v, %d", id, len(st.Tables))
+		// This should not happen and is probably a bug, but the output query will still work fine
+		return
 	}
 	switch tbl := st.Tables[id.TableOffset()].(type) {
 	case *RealTable:
 		tbl.ASTNode = t
 	case *DerivedTable:
 		tbl.ASTNode = t
-	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: replacement not expected for : %T", tbl)
 	}
-	return nil
 }
 
 // TableInfoFor returns the table info for the table set. It should contains only single table.
@@ -311,22 +310,22 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 // SELECT foo FROM (SELECT id+42 as foo FROM user) as t
 // We need `foo` to be translated to `id+42` on the inside of the derived table
 func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
-	newExpr := sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			exp, err := vt.getExprFor(node.Name.String())
-			if err == nil {
-				cursor.Replace(exp)
-			} else {
-				// cloning the expression and removing the qualifier
-				col := *node
-				col.Qualifier = sqlparser.TableName{}
-				cursor.Replace(&col)
-			}
-			return false
+	newExpr := sqlparser.SafeRewrite(sqlparser.CloneExpr(expr), nil, func(cursor *sqlparser.Cursor) bool {
+		node, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
+		}
+		exp, err := vt.getExprFor(node.Name.String())
+		if err == nil {
+			cursor.Replace(exp)
+		} else {
+			// cloning the expression and removing the qualifier
+			col := *node
+			col.Qualifier = sqlparser.TableName{}
+			cursor.Replace(&col)
 		}
 		return true
-	}, nil)
+	})
 
 	return newExpr.(sqlparser.Expr), nil
 }

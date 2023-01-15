@@ -4,7 +4,7 @@ Usage of vttestserver:
       --app_pool_size int                                                Size of the connection pool for app connections (default 40)
       --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
+      --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
@@ -108,6 +108,7 @@ Usage of vttestserver:
       --tablet_manager_grpc_key string                                   the key to use to connect
       --tablet_manager_grpc_server_name string                           the server name to use to validate server certificate
       --tablet_manager_protocol string                                   Protocol to use to make tabletmanager RPCs to vttablets. (default "grpc")
+      --tablet_refresh_interval duration                                 Interval at which vtgate refreshes tablet information from topology server. (default 10s)
       --topo_consul_lock_delay duration                                  LockDelay for consul session. (default 15s)
       --topo_consul_lock_session_checks string                           List of checks for consul session. (default "serfHealth")
       --topo_consul_lock_session_ttl string                              TTL for consul session.
@@ -134,7 +135,6 @@ Usage of vttestserver:
       --vtgate_grpc_crl string                                           the server crl to use to validate server certificates when connecting
       --vtgate_grpc_key string                                           the key to use to connect
       --vtgate_grpc_server_name string                                   the server name to use to validate server certificate
-      --workflow_manager_init                                            Enable workflow manager
       --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup_backup_flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup_prepare_flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command

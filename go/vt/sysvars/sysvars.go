@@ -61,8 +61,6 @@ var (
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
 	QueryTimeout                = SystemVariable{Name: "query_timeout"}
-	TransactionIsolation        = SystemVariable{Name: "transaction_isolation", Default: off}
-	TxIsolation                 = SystemVariable{Name: "tx_isolation", Default: off}
 
 	// Online DDL
 	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
@@ -92,8 +90,6 @@ var (
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
 		QueryTimeout,
-		TransactionIsolation,
-		TxIsolation,
 	}
 
 	ReadOnly = []SystemVariable{
@@ -211,7 +207,9 @@ var (
 		{Name: "sql_warnings", IsBoolean: true},
 		{Name: "time_zone"},
 		{Name: "tmp_table_size", SupportSetVar: true},
+		{Name: "transaction_isolation"},
 		{Name: "transaction_prealloc_size"},
+		{Name: "tx_isolation"},
 		{Name: "unique_checks", IsBoolean: true, SupportSetVar: true},
 		{Name: "updatable_views_with_limit", IsBoolean: true, SupportSetVar: true},
 	}

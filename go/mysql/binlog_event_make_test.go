@@ -20,6 +20,7 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -366,6 +367,43 @@ func TestRowsEvent(t *testing.T) {
 	require.NoError(t, err, "NewRowsEvent().Rows() returned error: %v", err)
 	require.True(t, reflect.DeepEqual(gotRows, rows), "NewRowsEvent().Rows() got Rows:\n%v\nexpected:\n%v", gotRows, rows)
 
+	assert.NotZero(t, event.Timestamp())
+}
+
+func TestHeartbeatEvent(t *testing.T) {
+	// MySQL 5.6
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+	event := NewHeartbeatEvent(f, s)
+	require.NotNil(t, event)
+	assert.True(t, event.IsHeartbeat())
+	assert.Zero(t, event.Timestamp())
+}
+
+func TestRotateRotateEvent(t *testing.T) {
+	// MySQL 5.6
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+	event := NewRotateEvent(f, s, 456, "mysql-bin.000123")
+	require.NotNil(t, event)
+	assert.True(t, event.IsRotate())
+	nextFile, pos, err := event.NextLogFile(f)
+	assert.NoError(t, err)
+	assert.Equal(t, 456, int(pos))
+	assert.Equal(t, "mysql-bin.000123", nextFile)
+}
+
+func TestFakeRotateEvent(t *testing.T) {
+	// MySQL 5.6
+	f := NewMySQL56BinlogFormat()
+	s := NewFakeBinlogStream()
+	event := NewFakeRotateEvent(f, s, "mysql-bin.000123")
+	require.NotNil(t, event)
+	assert.True(t, event.IsRotate())
+	nextFile, pos, err := event.NextLogFile(f)
+	assert.NoError(t, err)
+	assert.Equal(t, 4, int(pos))
+	assert.Equal(t, "mysql-bin.000123", nextFile)
 }
 func TestLargeRowsEvent(t *testing.T) {
 	f := NewMySQL56BinlogFormat()

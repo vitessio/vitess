@@ -174,7 +174,7 @@ func (l *Lock) GetFields(ctx context.Context, vcursor VCursor, bindVars map[stri
 		Sql:           l.FieldQuery,
 		BindVariables: bindVars,
 	}}
-	qr, errs := vcursor.ExecuteMultiShard(ctx, rss, boundQuery, false, true)
+	qr, errs := vcursor.ExecuteMultiShard(ctx, l, rss, boundQuery, false, true)
 	if len(errs) > 0 {
 		return nil, vterrors.Aggregate(errs)
 	}

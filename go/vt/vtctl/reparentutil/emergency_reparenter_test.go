@@ -3489,6 +3489,49 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			shard:     "-",
 			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
+		}, {
+			name:                 "single replica failing to SetReplicationSource does not fail the promotion",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": assert.AnError,
+				},
+			},
+			newPrimaryTabletAlias: "zone1-0000000100",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
+			shouldErr: false,
 		},
 	}
 

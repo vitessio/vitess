@@ -115,7 +115,7 @@ type flavor interface {
 
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
-	sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error
+	sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos Position) error
 
 	// readBinlogEvent reads the next BinlogEvent from the connection.
 	readBinlogEvent(c *Conn) (BinlogEvent, error)
@@ -361,8 +361,8 @@ func (c *Conn) StartSQLThreadCommand() string {
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
-func (c *Conn) SendBinlogDumpCommand(serverID uint32, startPos Position) error {
-	return c.flavor.sendBinlogDumpCommand(c, serverID, startPos)
+func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, startPos Position) error {
+	return c.flavor.sendBinlogDumpCommand(c, serverID, binlogFilename, startPos)
 }
 
 // ReadBinlogEvent reads the next BinlogEvent. This must be used

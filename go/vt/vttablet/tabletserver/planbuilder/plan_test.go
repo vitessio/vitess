@@ -76,7 +76,7 @@ func TestPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName")
+				plan, err = Build(statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -113,7 +113,7 @@ func TestPlanInReservedConn(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName")
+				plan, err = Build(statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -164,7 +164,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem, "dbName")
+				plan, err := Build(statement, schem, "dbName", false)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -246,7 +246,7 @@ func TestLockPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, "dbName")
+				plan, err = Build(statement, testSchema, "dbName", false)
 			}
 
 			var out string
@@ -323,7 +323,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			lineno++
 			input := string(binput)
 			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
-				//fmt.Printf("%s\n", input)
+				// fmt.Printf("%s\n", input)
 				continue
 			}
 

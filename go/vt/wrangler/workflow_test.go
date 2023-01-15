@@ -289,7 +289,7 @@ func TestMoveTablesV2(t *testing.T) {
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	tme.expectNoPreviousJournals()
-	expectMoveTablesQueries(t, tme)
+	expectMoveTablesQueries(t, tme, p)
 	tme.expectNoPreviousJournals()
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
@@ -335,7 +335,7 @@ func TestMoveTablesV2Complete(t *testing.T) {
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	tme.expectNoPreviousJournals()
-	expectMoveTablesQueries(t, tme)
+	expectMoveTablesQueries(t, tme, p)
 	tme.expectNoPreviousJournals()
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
@@ -384,7 +384,7 @@ func TestMoveTablesV2Partial(t *testing.T) {
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	tme.expectNoPreviousJournals()
-	expectMoveTablesQueries(t, tme)
+	expectMoveTablesQueries(t, tme, p)
 
 	tme.expectNoPreviousJournals()
 	wf.params.TabletTypes = "RDONLY"
@@ -436,12 +436,12 @@ func TestMoveTablesV2Cancel(t *testing.T) {
 	}
 	tme := newTestTableMigrater(ctx, t)
 	defer tme.stopTablets(t)
-	expectMoveTablesQueries(t, tme)
+	expectMoveTablesQueries(t, tme, p)
 	wf, err := tme.wr.NewVReplicationWorkflow(ctx, MoveTablesWorkflow, p)
 	require.NoError(t, err)
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
-	expectMoveTablesQueries(t, tme)
+	expectMoveTablesQueries(t, tme, p)
 	validateRoutingRuleCount(ctx, t, wf.wr.ts, 4) // rules set up by test env
 
 	require.True(t, checkIfTableExistInVSchema(ctx, t, wf.wr.ts, "ks1", "t1"))
@@ -482,7 +482,7 @@ func TestReshardV2(t *testing.T) {
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	tme.expectNoPreviousJournals()
-	expectReshardQueries(t, tme)
+	expectReshardQueries(t, tme, p)
 	tme.expectNoPreviousJournals()
 	require.NoError(t, testSwitchForward(t, wf))
 	require.Equal(t, WorkflowStateAllSwitched, wf.CurrentState())
@@ -554,11 +554,19 @@ func TestReshardV2Cancel(t *testing.T) {
 	require.NotNil(t, wf)
 	require.Equal(t, WorkflowStateNotSwitched, wf.CurrentState())
 	tme.expectNoPreviousJournals()
-	expectReshardQueries(t, tme)
+	expectReshardQueries(t, tme, p)
 	require.NoError(t, wf.Cancel())
 }
 
-func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
+func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv, params *VReplicationWorkflowParams) {
+	vdiffDeleteQuery := fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+						where vd.keyspace = '%s' and vd.workflow = '%s'`,
+		params.TargetKeyspace, params.Workflow)
+	vdiffDeleteReverseQuery := fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+						inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+						where vd.keyspace = '%s' and vd.workflow = '%s_reverse'`,
+		params.SourceKeyspace, params.Workflow)
 
 	sourceQueries := []string{
 		"select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
@@ -578,6 +586,7 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
 		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
 		dbclient.addInvariant("select * from _vt.vreplication where id = 2", runningResult(2))
 		dbclient.addInvariant("insert into _vt.resharding_journal", noResult)
+		dbclient.addInvariant("alter table _vt.copy_state auto_increment = 1", noResult)
 	}
 
 	targetQueries := []string{
@@ -605,12 +614,25 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv) {
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
 	}
+	tme.tmeDB.AddQuery("USE `vt_ks`", noResult)
 	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
 	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
-
+	tme.tmeDB.AddQuery(vdiffDeleteQuery, noResult)
+	tme.tmeDB.AddQuery(vdiffDeleteReverseQuery, noResult)
+	tme.tmeDB.AddQuery("alter table _vt.copy_state auto_increment = 1", noResult)
+	tme.tmeDB.AddQuery("optimize table _vt.copy_state", noResult)
 }
 
-func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
+func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplicationWorkflowParams) {
+	vdiffDeleteQuery := fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+	inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+	where vd.keyspace = '%s' and vd.workflow = '%s'`,
+		params.TargetKeyspace, params.Workflow)
+	vdiffDeleteReverseQuery := fmt.Sprintf(`delete from vd, vdt, vdl using _vt.vdiff as vd inner join _vt.vdiff_table as vdt on (vd.id = vdt.vdiff_id)
+	inner join _vt.vdiff_log as vdl on (vd.id = vdl.vdiff_id)
+	where vd.keyspace = '%s' and vd.workflow = '%s_reverse'`,
+		params.SourceKeyspace, params.Workflow)
+
 	var query string
 	noResult := &sqltypes.Result{}
 	for _, dbclient := range tme.dbTargetClients {
@@ -676,6 +698,8 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 	tme.dbSourceClients[0].addInvariant("select pos, state, message from _vt.vreplication where id=2", state)
 	tme.dbSourceClients[1].addInvariant("select pos, state, message from _vt.vreplication where id=1", state)
 	tme.dbSourceClients[1].addInvariant("select pos, state, message from _vt.vreplication where id=2", state)
+	tme.tmeDB.AddQuery("USE `vt_ks1`", noResult)
+	tme.tmeDB.AddQuery("USE `vt_ks2`", noResult)
 	tme.tmeDB.AddQuery("drop table `vt_ks1`.`t1`", noResult)
 	tme.tmeDB.AddQuery("drop table `vt_ks1`.`t2`", noResult)
 	tme.tmeDB.AddQuery("drop table `vt_ks2`.`t1`", noResult)
@@ -684,5 +708,8 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv) {
 	tme.tmeDB.AddQuery("lock tables `t1` read,`t2` read", &sqltypes.Result{})
 	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
 	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 2", noResult)
-
+	tme.tmeDB.AddQuery(vdiffDeleteQuery, noResult)
+	tme.tmeDB.AddQuery(vdiffDeleteReverseQuery, noResult)
+	tme.tmeDB.AddQuery("alter table _vt.copy_state auto_increment = 1", noResult)
+	tme.tmeDB.AddQuery("optimize table _vt.copy_state", noResult)
 }

@@ -165,6 +165,7 @@ func TestVExec(t *testing.T) {
 +----------------------+----+--------------------------------+---------+-----------+------------------------------------------+`,
 	}
 	require.Equal(t, strings.Join(dryRunResults, "\n")+"\n\n\n\n\n", logger.String())
+	logger.Clear()
 }
 
 func TestWorkflowStatusUpdate(t *testing.T) {
@@ -364,6 +365,7 @@ func TestWorkflowListAll(t *testing.T) {
 	workflows, err = wr.ListAllWorkflows(ctx, keyspace, false)
 	require.Nil(t, err)
 	require.Equal(t, []string{workflow, "wrWorkflow2"}, workflows)
+	logger.Clear()
 }
 
 func TestVExecValidations(t *testing.T) {

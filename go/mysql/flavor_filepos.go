@@ -119,7 +119,7 @@ func (flv *filePosFlavor) startSQLThreadCommand() string {
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
+func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos Position) error {
 	rpos, ok := startPos.GTIDSet.(filePosGTID)
 	if !ok {
 		return fmt.Errorf("startPos.GTIDSet is wrong type - expected filePosGTID, got: %#v", startPos.GTIDSet)

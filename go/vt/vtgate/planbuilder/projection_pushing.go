@@ -300,7 +300,7 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 			return i, false, nil
 		}
 	}
-	expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+	sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	sel, isSel := rb.Select.(*sqlparser.Select)
 	if !isSel {
 		return 0, false, vterrors.VT12001(fmt.Sprintf("pushing projection '%s' on %T", sqlparser.String(expr), rb.Select))

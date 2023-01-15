@@ -30,7 +30,7 @@ var (
 	// GetTopologyPath makes a GetTopologyPath gRPC call to a vtctld.
 	GetTopologyPath = &cobra.Command{
 		Use:                   "GetTopologyPath <path>",
-		Short:                 "Gets the file located at the specified path in the topology server.",
+		Short:                 "Gets the value associated with the particular path (key) in the topology server.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetTopologyPath,
