@@ -658,7 +658,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 				chkres, chkerr := dbClient.ExecuteFetch(chkq, 1)
 				if chkerr == nil && chkres != nil && len(chkres.Rows) == 1 &&
 					strings.EqualFold(chkres.Rows[0][0].ToString(), sqlparser.String(alterReAdd)) {
-					log.Infof("duplicate deferred secondary index creation record already exists for %s table, assuming we're merging multiple source shards into a single target shard and skipping...", tableName)
+					log.Infof("Duplicate deferred secondary index creation record already exists for the %q table in the %q VReplication workflow; assuming we're merging multiple source shards into a single target shard and skipping...",
+						tableName, vr.WorkflowName)
 					return nil
 				}
 			}
