@@ -155,7 +155,6 @@ func (bc *BinlogConnection) streamEvents(ctx context.Context) (chan mysql.Binlog
 				select {
 				case errChan <- err:
 				case <-ctx.Done():
-					return
 				}
 				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.CRServerLost {
 					// CRServerLost = Lost connection to MySQL server during query
