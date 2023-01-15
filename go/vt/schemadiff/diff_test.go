@@ -738,3 +738,55 @@ func TestSchemaApplyError(t *testing.T) {
 		})
 	}
 }
+
+func TestDiffsHaveDependencies(t *testing.T) {
+	tt := []struct {
+		name            string
+		from            string
+		to              string
+		dependencyFound bool
+	}{
+		{
+			name: "table and view, no new dependency",
+			from: "create table t1(id int primary key); create view v1 as select id from t1",
+			to:   "create table t1(id int primary key, i int default null); create view v1 as select id, 7 from t1",
+		},
+		{
+			name: "new view from dual, no dependency",
+			from: "create table t1(id int primary key)",
+			to:   "create table t1(id int primary key); create view v1 as select 7 from dual",
+		},
+		{
+			name: "new view, no dependency",
+			from: "create table t1(id int primary key)",
+			to:   "create table t1(id int primary key); create view v1 as select id from t1",
+		},
+		{
+			name:            "new view and table, dependency",
+			from:            "create table t0(id int primary key)",
+			to:              "create table t0(id int primary key); create table t1(id int primary key); create view v1 as select id from t1",
+			dependencyFound: true,
+		},
+		{
+			name:            "introduce column with view dependency",
+			from:            "create table t1(id int primary key)",
+			to:              "create table t1(id int primary key, t text default null); create view v1 as select t from t1",
+			dependencyFound: true,
+		},
+	}
+	hints := &DiffHints{}
+	for _, tc := range tt {
+		t.Run(tc.name, func(t *testing.T) {
+			fromSchema, err := NewSchemaFromSQL(tc.from)
+			require.NoError(t, err)
+			toSchema, err := NewSchemaFromSQL(tc.to)
+			require.NoError(t, err)
+
+			diffs, err := fromSchema.Diff(toSchema, hints)
+			require.NoError(t, err)
+			dependencyFound, err := fromSchema.DiffsHaveDependencies(diffs)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.dependencyFound, dependencyFound)
+		})
+	}
+}

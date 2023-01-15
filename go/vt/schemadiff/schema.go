@@ -617,3 +617,23 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	}
 	return dup, nil
 }
+
+// DiffsHaveDependencies chceks whether there is an ordering importance to the given diffs, if these were to apply on this schema.
+// The function checks whether it is possible to apply any of the given diffs as the first change to this schema. If so, then there
+// is no ordering constraint. It's enough that a single diff cannot be applied, that the function determines there's an ordering constraint.
+// The function does not modify this schema.
+func (s *Schema) DiffsHaveDependencies(diffs []EntityDiff) (bool, error) {
+	for _, diff := range diffs {
+		_, err := s.Apply([]EntityDiff{diff})
+		if err == nil {
+			continue
+		}
+		switch err.(type) {
+		case *ViewDependencyUnresolvedError:
+			return true, nil
+		default:
+			return false, err
+		}
+	}
+	return false, nil
+}
