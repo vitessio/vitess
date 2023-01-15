@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"io"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
@@ -321,10 +320,7 @@ func TestStreamerParseEventsGTIDPurged(t *testing.T) {
 	}
 	dbcfgs := dbconfigs.New(mcp)
 
-	wg := sync.WaitGroup{}
-	wg.Add(1)
 	go func() {
-		defer wg.Done()
 		tmr := time.NewTimer(10 * time.Second)
 		defer tmr.Stop()
 		select {
@@ -341,8 +337,6 @@ func TestStreamerParseEventsGTIDPurged(t *testing.T) {
 	require.True(t, ok, "expected SQLError, got %T", err)
 	require.True(t, sqlErr.Num == mysql.ERMasterFatalReadingBinlog, "expected ERMasterFatalReadingBinlog (%d), got %d",
 		mysql.ERMasterFatalReadingBinlog, sqlErr.Num)
-
-	wg.Wait()
 }
 
 func TestStreamerParseEventsSendErrorXID(t *testing.T) {
