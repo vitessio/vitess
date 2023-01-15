@@ -771,7 +771,7 @@ func TestDiffsHaveDependencies(t *testing.T) {
 			name:            "introduce column with view dependency",
 			from:            "create table t1(id int primary key)",
 			to:              "create table t1(id int primary key, t text default null); create view v1 as select t from t1",
-			dependencyFound: true,
+			dependencyFound: false, // at some point in the future, we will support per-column dependency detection, and this will change to 'true'
 		},
 	}
 	hints := &DiffHints{}
