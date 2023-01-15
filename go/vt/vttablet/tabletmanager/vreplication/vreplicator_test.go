@@ -183,6 +183,12 @@ func TestPrimaryKeyEquivalentColumns(t *testing.T) {
 	}
 }
 
+// TestDeferSecondaryKeys confirms the behavior of the
+// --defer-secondary-keys MoveTables/Migrate, and Reshard
+// workflow/command flag.
+//  1. We drop the secondary keys
+//  2. We store the secondary key definitions for step 3
+//  3. We add the secondary keys back after the rows are copied
 func TestDeferSecondaryKeys(t *testing.T) {
 	ctx := context.Background()
 	tablet := addTablet(100)
@@ -432,6 +438,12 @@ func TestDeferSecondaryKeys(t *testing.T) {
 	}
 }
 
+// TestCancelledDeferSecondaryKeys tests that the ALTER
+// TABLE statement used to re-add secondary keys (when
+// the --defer-secondary-keys flag was used), after
+// copying all rows, is properly killed when the context
+// is cancelled -- e.g. due to the VReplication engine
+// closing for a tablet transition during a PRS.
 func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// Skip the test for MariaDB as it does not have
 	// performance_schema enabled by default.

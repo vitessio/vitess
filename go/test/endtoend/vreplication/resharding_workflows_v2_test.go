@@ -110,6 +110,11 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 		} else {
 			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
 		}
+		// Test new experimental --defer-secondary-keys flag
+		switch currentWorkflowType {
+		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
+			args = append(args, "--defer-secondary-keys")
+		}
 	}
 	if cells != "" {
 		args = append(args, "--cells", cells)

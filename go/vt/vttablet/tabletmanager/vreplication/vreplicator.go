@@ -78,6 +78,8 @@ const (
 	values(%a, %a, convert(%a using utf8mb4))`
 	sqlGetPostCopyActions = `select id, action from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a`
+	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where
+	action->>'$.type'=%a vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
 )
@@ -636,13 +638,30 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		// We're also NOT using a DBA connection here because we want to
 		// be sure that the commit fails if the instance is somehow in
 		// READ-ONLY mode.
-		dbClient := vr.vre.dbClientFactoryFiltered()
-		if err := dbClient.Connect(); err != nil {
+		dbClient, err := newVCopier(vr).newClientConnection(ctx)
+		if err != nil {
 			log.Errorf("unable to connect to the database when saving secondary keys for deferred creation: %v", err)
-			return err
+			return vterrors.Wrap(err, "unable to connect to the database when saving secondary keys for deferred creation")
 		}
 		defer dbClient.Close()
 		if _, err := dbClient.ExecuteFetch(insert, 1); err != nil {
+			// If we're doing a Reshard merge/consolidation (e.g. 3
+			// shards to 1) then we expect a duplicate key error here.
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERDupEntry &&
+				vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard) {
+				// Let's be sure that it's an SQL action with the same ALTER
+				chkq, chkerr := sqlparser.ParseAndBind(sqlGetPostCopyActionTaskByType, sqltypes.Int32BindVariable(int32(PostCopyActionSQL)),
+					sqltypes.Uint32BindVariable(vr.id), sqltypes.StringBindVariable(tableName))
+				if chkerr != nil {
+					return err
+				}
+				chkres, chkerr := dbClient.ExecuteFetch(chkq, 1)
+				if chkerr == nil && chkres != nil && len(chkres.Rows) == 1 &&
+					strings.EqualFold(chkres.Rows[0][0].ToString(), sqlparser.String(alterReAdd)) {
+					log.Infof("duplicate deferred secondary index creation record already exists for %s table, assuming we're merging multiple source shards into a single target shard and skipping...", tableName)
+					return nil
+				}
+			}
 			return err
 		}
 		if _, err := dbClient.ExecuteFetch(sqlparser.String(alterDrop), 1); err != nil {
@@ -686,14 +705,17 @@ func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName stri
 }
 
 func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
+	defer vr.stats.PhaseTimings.Record("postCopyActions", time.Now())
+
 	// Use a new DB client to avoid interfering with open transactions
 	// in the shared client as DDL includes an implied commit.
 	// We're also NOT using a DBA connection here because we want to be
 	// sure that the work fails if the instance is somehow in READ-ONLY
 	// mode.
-	dbClient := vr.vre.dbClientFactoryFiltered()
-	if err := dbClient.Connect(); err != nil {
-		return fmt.Errorf("unable to connect to the database when executing post copy actions: %v", err)
+	dbClient, err := newVCopier(vr).newClientConnection(ctx)
+	if err != nil {
+		log.Errorf("unable to connect to the database when executing post copy actions: %v", err)
+		return vterrors.Wrap(err, "unable to connect to the database when executing post copy actions")
 	}
 	defer dbClient.Close()
 
@@ -724,6 +746,11 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	// qr should never be nil, but check anyway to be extra safe.
 	if qr == nil || len(qr.Rows) == 0 {
 		return nil
+	}
+
+	if err := vr.insertLog(LogCopyStart, fmt.Sprintf("Executing %d post copy action(s) for %s table",
+		len(qr.Rows), tableName)); err != nil {
+		return err
 	}
 
 	// This could take hours so we start a monitoring goroutine to
@@ -856,6 +883,11 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		default:
 			return fmt.Errorf("unsupported post copy action type: %v", action.Type)
 		}
+	}
+
+	if err := vr.insertLog(LogCopyStart, fmt.Sprintf("Completed all post copy actions for %s table",
+		tableName)); err != nil {
+		return err
 	}
 
 	return nil

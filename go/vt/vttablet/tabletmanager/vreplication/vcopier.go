@@ -250,10 +250,19 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 				return err
 			}
 			if settings.DeferSecondaryKeys {
+				if err := vc.vr.insertLog(LogCopyStart, fmt.Sprintf("Copy phase temporarily dropping secondary keys for %d table(s)",
+					len(plan.TargetTables))); err != nil {
+					return err
+				}
 				for name := range plan.TargetTables {
 					if err := vc.vr.stashSecondaryKeys(ctx, name); err != nil {
 						return err
 					}
+				}
+				if err := vc.vr.insertLog(LogCopyStart,
+					fmt.Sprintf("Copy phase finished dropping secondary keys and saving post copy actions to restore them for %d table(s)",
+						len(plan.TargetTables))); err != nil {
+					return err
 				}
 			}
 		}
