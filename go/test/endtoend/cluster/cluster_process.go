@@ -669,7 +669,7 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	return vtgateProcInstance
 }
 
-// NewBareCluster instantiates a new cluster and does not assume existence of any of the binaries
+// NewBareCluster instantiates a new cluster and does not assume existence of any of the vitess processes
 func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
 	go cluster.CtrlCHandler()

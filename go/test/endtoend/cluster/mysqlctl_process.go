@@ -223,7 +223,7 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 }
 
-// CleanupFiles clean the mysql files to make sure we can start the same process again
+// Connect returns a new connection to the underlying MySQL server
 func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (*mysql.Conn, error) {
 	params := mysql.ConnParams{
 		Uname:      username,
