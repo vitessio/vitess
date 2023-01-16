@@ -27,7 +27,28 @@ import (
 	"strings"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
+
+var protoTime vttime.Time
+
+func DecodeRequestTime(from, to reflect.Type, data any) (any, error) {
+	if to != reflect.TypeOf(&protoTime) {
+		return data, nil
+	}
+
+	switch from.Kind() {
+	case reflect.Pointer:
+		switch from.Elem().Kind() {
+		case reflect.Struct:
+			if t, ok := data.(*vttime.Time); ok {
+				return t, nil
+			}
+		}
+	}
+
+	return data, nil
+}
 
 var status tabletmanagerdatapb.OnlineDDL_Status
 

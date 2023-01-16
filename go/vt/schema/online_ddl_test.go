@@ -30,6 +30,7 @@ import (
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
 func TestCreateUUID(t *testing.T) {
@@ -564,6 +565,79 @@ func TestFromJSON(t *testing.T) {
 						TabletAlias: &topodatapb.TabletAlias{
 							Cell: "zone1",
 							Uid:  101,
+						},
+					},
+				},
+			},
+		}
+
+		for _, test := range tests {
+			test := test
+
+			t.Run("", func(t *testing.T) {
+				actual, err := FromJSON([]byte(test.json))
+				if test.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				utils.MustMatch(t, test.expected, actual)
+			})
+		}
+	})
+
+	t.Run("request_time parsing", func(t *testing.T) {
+		tests := []testcase{
+			{
+				json: `{
+					"request_time": {
+						"seconds": 10,
+						"nanoseconds": 5
+					}
+				}`,
+				expected: &OnlineDDL{
+					RequestTime: 10e9 + 5,
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						RequestTime: &vttime.Time{
+							Seconds:     10,
+							Nanoseconds: 5,
+						},
+					},
+				},
+			},
+			{
+				json: fmt.Sprintf(
+					`{"time_created": %f}`,
+					3*1e9+2, // 3 seconds and 2 nanos
+				),
+				expected: &OnlineDDL{
+					RequestTime: 3e9 + 2,
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						RequestTime: &vttime.Time{
+							Seconds:     3,
+							Nanoseconds: 2,
+						},
+					},
+				},
+			},
+			{
+				json: fmt.Sprintf(
+					`{
+						"time_created": %f,
+						"request_time": {
+							"seconds": 10,
+							"nanoseconds": 5
+						}
+					}`,
+					3*1e9+2, // 3 seconds and 2 nanos
+				),
+				expected: &OnlineDDL{
+					RequestTime: 10e9 + 5,
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						RequestTime: &vttime.Time{
+							Seconds:     10,
+							Nanoseconds: 5,
 						},
 					},
 				},

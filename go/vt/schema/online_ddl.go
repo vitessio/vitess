@@ -28,7 +28,9 @@ import (
 
 	"github.com/mitchellh/mapstructure"
 
+	"vitess.io/vitess/go/protoutil"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema/internal/hooks"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -133,6 +135,7 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 	}
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			hooks.DecodeRequestTime,
 			hooks.DecodeStatus,
 			hooks.DecodeStrategy,
 		),
@@ -140,7 +143,7 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 		Squash: true,
 		MatchName: func(mapKey, fieldName string) bool {
 			switch mapKey {
-			case "tablet_alias":
+			case "tablet_alias", "request_time":
 				if strings.EqualFold(mapKey, fieldName) {
 					return true
 				} else if strings.EqualFold(camelcase(mapKey), camelcase(fieldName)) {
@@ -175,8 +178,23 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 	}
 	onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
 
-		onlineDDL.TabletAlias = topoproto.TabletAliasString(onlineDDL.OnlineDDL.TabletAlias)
+	if onlineDDL.RequestTime != 0 {
+		switch onlineDDL.OnlineDDL.RequestTime {
+		case nil:
+			// TODO: log warning
+			secs := onlineDDL.RequestTime / 1e9
+			nanos := (onlineDDL.RequestTime) - (secs * 1e9)
+
+			onlineDDL.OnlineDDL.RequestTime = &vttime.Time{
+				Seconds:     secs,
+				Nanoseconds: int32(nanos),
+			}
+		default:
+			// TODO: log warning
+		}
 	}
+
+	onlineDDL.RequestTime = protoutil.TimeFromProto(onlineDDL.OnlineDDL.RequestTime).UnixNano()
 
 	return onlineDDL, nil
 }
