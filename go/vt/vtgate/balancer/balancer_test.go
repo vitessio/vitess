@@ -20,6 +20,8 @@ import (
 	"strconv"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -378,5 +380,62 @@ func TestToplogyChanged(t *testing.T) {
 			t.Errorf("shuffle promoted wrong tablet from cell %s", tablets2[0].Tablet.Alias.Cell)
 		}
 	}
+}
 
+func TestAffinityShuffle(t *testing.T) {
+	balancer := NewTabletBalancer("affinity", "cell1", "")
+
+	ts1 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(1, "cell1", "host1"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts2 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(2, "cell1", "host2"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts3 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(3, "cell2", "host3"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	ts4 := &discovery.TabletHealth{
+		Tablet:  topo.NewTablet(4, "cell2", "host4"),
+		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Serving: true,
+		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
+	}
+
+	sameCellTablets := []*discovery.TabletHealth{ts1, ts2}
+	diffCellTablets := []*discovery.TabletHealth{ts3, ts4}
+	mixedTablets := []*discovery.TabletHealth{ts1, ts2, ts3, ts4}
+
+	// repeat shuffling 10 times and every time the same cell tablets should be in the front
+	for i := 0; i < 10; i++ {
+		balancer.ShuffleTablets(sameCellTablets)
+		assert.Len(t, sameCellTablets, 2, "Wrong number of TabletHealth")
+		assert.Equal(t, sameCellTablets[0].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
+		assert.Equal(t, sameCellTablets[1].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
+
+		balancer.ShuffleTablets(diffCellTablets)
+		assert.Len(t, diffCellTablets, 2, "should shuffle in only diff cell tablets")
+		assert.Contains(t, diffCellTablets, ts3, "diffCellTablets should contain %v", ts3)
+		assert.Contains(t, diffCellTablets, ts4, "diffCellTablets should contain %v", ts4)
+
+		balancer.ShuffleTablets(mixedTablets)
+		assert.Len(t, mixedTablets, 4, "should have 4 tablets, got %+v", mixedTablets)
+
+		assert.Contains(t, mixedTablets[0:2], ts1, "should have same cell tablets in the front, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[0:2], ts2, "should have same cell tablets in the front, got %+v", mixedTablets)
+
+		assert.Contains(t, mixedTablets[2:4], ts3, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+		assert.Contains(t, mixedTablets[2:4], ts4, "should have diff cell tablets in the rear, got %+v", mixedTablets)
+	}
 }
