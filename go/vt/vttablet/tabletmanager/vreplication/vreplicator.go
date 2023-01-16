@@ -79,7 +79,7 @@ const (
 	sqlGetPostCopyActions = `select id, action from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a`
 	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where
-	action->>'$.type'=%a vrepl_id=%a and table_name=%a`
+	action->>'$.type'=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
 )
@@ -659,7 +659,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 				chkres, chkerr := dbClient.ExecuteFetch(chkq, 1)
 				if chkerr == nil && chkres != nil && len(chkres.Rows) == 1 &&
 					strings.EqualFold(chkres.Rows[0][0].ToString(), sqlparser.String(alterReAdd)) {
-					log.Infof("Duplicate deferred secondary index creation record already exists for the %q table in the %q VReplication workflow; assuming we're merging multiple source shards into a single target shard and skipping...",
+					log.Infof("Duplicate deferred secondary index creation record already exists on the %q table in the %q VReplication workflow; assuming we're merging multiple source shards into a single target shard and skipping...",
 						tableName, vr.WorkflowName)
 					return nil
 				}
@@ -819,7 +819,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 
 		switch action.Type {
 		case PostCopyActionSQL:
-			log.Infof("Executing post copy SQL action for the %q table in the %q VReplication workflow: %s",
+			log.Infof("Executing post copy SQL action on the %q table in the %q VReplication workflow: %s",
 				tableName, vr.WorkflowName, action.Task)
 			// This will return an io.EOF / MySQL CRServerLost (errno 2013)
 			// error if it is killed by the monitoring goroutine.
