@@ -845,3 +845,18 @@ func TestJoinWithMergedRouteWithPredicate(t *testing.T) {
 
 	utils.AssertMatches(t, conn, "select t3.id7, t2.id3, t3.id6 from t1 join t3 on t1.id2 = t3.id5 join t2 on t3.id6 = t2.id3 where t1.id2 = 13", `[[INT64(8) INT64(5) INT64(5)]]`)
 }
+
+// TestIntervalWithMathFunctions tests that the Interval keyword can be used with math functions.
+func TestIntervalWithMathFunctions(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// Set the time zone explicitly to UTC, otherwise the output of FROM_UNIXTIME is going to be dependent
+	// on the time zone of the system.
+	utils.Exec(t, conn, "SET time_zone = '+00:00'")
+	utils.AssertMatches(t, conn, "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month", `[[CHAR("2020-12-01")]]`)
+	utils.AssertMatches(t, conn, "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)", `[[DATETIME("2023-01-08 13:48:42")]]`)
+}

@@ -5204,7 +5204,7 @@ function_call_keyword
   }
 
 interval_value:
-  INTERVAL simple_expr sql_id
+  INTERVAL bit_expr sql_id
   {
      $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
