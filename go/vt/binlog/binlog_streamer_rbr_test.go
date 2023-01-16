@@ -175,6 +175,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []fullBinlogTransaction{
 		{
@@ -263,7 +264,7 @@ func TestStreamerParseRBREvents(t *testing.T) {
 	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
@@ -420,6 +421,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	}
 
 	events := make(chan mysql.BinlogEvent)
+	errs := make(chan error)
 
 	want := []fullBinlogTransaction{
 		{
@@ -508,7 +510,7 @@ func TestStreamerParseRBRNameEscapes(t *testing.T) {
 	bls := NewStreamer(dbcfgs, se, nil, mysql.Position{}, 0, sendTransaction)
 
 	go sendTestEvents(events, input)
-	_, err := bls.parseEvents(context.Background(), events)
+	_, err := bls.parseEvents(context.Background(), events, errs)
 	if err != ErrServerEOF {
 		t.Errorf("unexpected error: %v", err)
 	}
