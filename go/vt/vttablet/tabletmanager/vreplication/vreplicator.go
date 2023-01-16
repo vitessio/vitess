@@ -646,24 +646,6 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		}
 		defer dbClient.Close()
 		if _, err := dbClient.ExecuteFetch(insert, 1); err != nil {
-			// If we're doing a Reshard merge/consolidation (e.g. 3
-			// shards to 1) then we expect a duplicate key error here.
-			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERDupEntry &&
-				vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard) {
-				// Let's be sure that it's an SQL action with the same ALTER
-				chkq, chkerr := sqlparser.ParseAndBind(sqlGetPostCopyActionTaskByType, sqltypes.Int32BindVariable(int32(PostCopyActionSQL)),
-					sqltypes.Uint32BindVariable(vr.id), sqltypes.StringBindVariable(tableName))
-				if chkerr != nil {
-					return err
-				}
-				chkres, chkerr := dbClient.ExecuteFetch(chkq, 1)
-				if chkerr == nil && chkres != nil && len(chkres.Rows) == 1 &&
-					strings.EqualFold(chkres.Rows[0][0].ToString(), sqlparser.String(alterReAdd)) {
-					log.Infof("Duplicate deferred secondary index creation record already exists on the %q table in the %q VReplication workflow; assuming we're merging multiple source shards into a single target shard and skipping...",
-						tableName, vr.WorkflowName)
-					return nil
-				}
-			}
 			return err
 		}
 		if _, err := dbClient.ExecuteFetch(sqlparser.String(alterDrop), 1); err != nil {

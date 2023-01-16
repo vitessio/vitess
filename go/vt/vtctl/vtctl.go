@@ -462,7 +462,7 @@ var commands = []commandGroup{
 				name:   "Reshard",
 				method: commandReshard,
 				params: "[--source_shards=<source_shards>] [--target_shards=<target_shards>] [--cells=<cells>] [--tablet_types=<source_tablet_types>] [--on-ddl=<ddl-action>] [--defer-secondary-keys] [--skip_schema_copy] <action> 'action must be one of the following: Create, Complete, Cancel, SwitchTraffic, ReverseTrafffic, Show, or Progress' <keyspace.workflow>",
-				help:   "Start a Resharding process. Example: Reshard --cells='zone1,alias1' --tablet_types='PRIMARY,REPLICA,RDONLY'  ks.workflow001 -- '0' '-80,80-'",
+				help:   "Start a Resharding process.",
 			},
 			{
 				name:   "MoveTables",
@@ -2273,6 +2273,15 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			vrwp.TargetShards = strings.Split(*targetShards, ",")
 			vrwp.SkipSchemaCopy = *skipSchemaCopy
 			vrwp.SourceKeyspace = target
+			// We can't properly handle secondary key deferral when
+			// doing Reshard merges/consolidations (e.g. going from
+			// 3 shards to 1) as you have N vreplication records
+			// and streams running on the same target shard for the
+			// same table.
+			if *deferNonPKeys && len(vrwp.TargetShards) < len(vrwp.SourceShards) {
+				wr.Logger().Printf("\nWARNING: --defer-secondary-keys flag ignored when performing shard merges.\n\n")
+				*deferNonPKeys = false
+			}
 		default:
 			return fmt.Errorf("unknown workflow type passed: %v", workflowType)
 		}
