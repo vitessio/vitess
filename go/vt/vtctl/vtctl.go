@@ -2275,7 +2275,7 @@ func commandVRWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfl
 			vrwp.SourceKeyspace = target
 			// We can't properly handle secondary key deferral when
 			// doing Reshard merges/consolidations (e.g. going from
-			// 3 shards to 1) as you have N vreplication records
+			// 2 shards to 1) as you have N vreplication records
 			// and streams running on the same target shard for the
 			// same table.
 			if *deferNonPKeys && len(vrwp.TargetShards) < len(vrwp.SourceShards) {
