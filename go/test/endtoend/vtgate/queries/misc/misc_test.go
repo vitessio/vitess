@@ -89,3 +89,15 @@ func TestInvalidDateTimeTimestampVals(t *testing.T) {
 	_, err = mcmp.ExecAllowAndCompareError(`select timestamp'2022'`)
 	require.Error(t, err)
 }
+
+// TestIntervalWithMathFunctions tests that the Interval keyword can be used with math functions.
+func TestIntervalWithMathFunctions(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Set the time zone explicitly to UTC, otherwise the output of FROM_UNIXTIME is going to be dependent
+	// on the time zone of the system.
+	mcmp.Exec("SET time_zone = '+00:00'")
+	mcmp.AssertMatches("select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month", `[[CHAR("2020-12-01")]]`)
+	mcmp.AssertMatches("select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)", `[[DATETIME("2023-01-08 13:48:42")]]`)
+}
