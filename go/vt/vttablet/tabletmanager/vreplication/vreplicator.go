@@ -140,7 +140,7 @@ type vreplicator struct {
 //	documentation for more info.
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
-		log.Warningf("the supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
+		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	return &vreplicator{
@@ -482,7 +482,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
 		_, err := dbClient.Execute(query)
 		if err != nil {
-			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
+			log.Warningf("Could not reset sql_mode on target using %s: %v", query, err)
 		}
 	}
 	vreplicationSQLMode := SQLMode
@@ -640,7 +640,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		// READ-ONLY mode.
 		dbClient, err := newVCopier(vr).newClientConnection(ctx)
 		if err != nil {
-			log.Errorf("unable to connect to the database when saving secondary keys for deferred creation: %v", err)
+			log.Errorf("Unable to connect to the database when saving secondary keys for deferred creation on the %q table in the %q VReplication workflow: %v",
+				tableName, vr.WorkflowName, err)
 			return vterrors.Wrap(err, "unable to connect to the database when saving secondary keys for deferred creation")
 		}
 		defer dbClient.Close()
@@ -715,7 +716,8 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	// mode.
 	dbClient, err := newVCopier(vr).newClientConnection(ctx)
 	if err != nil {
-		log.Errorf("unable to connect to the database when executing post copy actions: %v", err)
+		log.Errorf("Unable to connect to the database when executing post copy actions on the %q table in the %q VReplication workflow: %v",
+			tableName, vr.WorkflowName, err)
 		return vterrors.Wrap(err, "unable to connect to the database when executing post copy actions")
 	}
 	defer dbClient.Close()
@@ -787,10 +789,11 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	go func() {
 		select {
 		case <-ctx.Done():
-			log.Infof("Copy of %q table stopped when performing the following post copy action for the %q VReplication workflow: %+v",
+			log.Infof("Copy of the %q table stopped when performing the following post copy action in the %q VReplication workflow: %+v",
 				tableName, vr.WorkflowName, action)
 			if err := killAction(action); err != nil {
-				log.Errorf("Failed to kill post copy action for the %q VReplication workflow: %v", vr.WorkflowName, err)
+				log.Errorf("Failed to kill post copy action on the %q table in the %q VReplication workflow: %v",
+					tableName, vr.WorkflowName, err)
 			}
 			return
 		case <-done:
