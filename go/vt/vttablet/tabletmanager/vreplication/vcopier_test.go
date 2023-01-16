@@ -498,6 +498,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
+		"set foreign_key_checks=0;",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		// The next FF executes and updates the position before copying.
@@ -518,6 +519,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
+		"set foreign_key_checks=0;",
 		// copy of dst1 is done: delete from copy_state.
 		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
 		// All tables copied. Final catch up followed by Running state.
