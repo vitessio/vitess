@@ -233,10 +233,10 @@ const (
 	TransactionReadOnlyStr  = "transaction_read_only"
 
 	// Transaction isolation levels
-	ReadUncommittedStr = "READ-UNCOMMITTED"
-	ReadCommittedStr   = "READ-COMMITTED"
-	RepeatableReadStr  = "REPEATABLE-READ"
-	SerializableStr    = "SERIALIZABLE"
+	ReadUncommittedStr = "read-uncommitted"
+	ReadCommittedStr   = "read-committed"
+	RepeatableReadStr  = "repeatable-read"
+	SerializableStr    = "serializable"
 
 	// Transaction access mode
 	WithConsistentSnapshotStr = "with consistent snapshot"

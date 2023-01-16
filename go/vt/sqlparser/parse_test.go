@@ -1107,25 +1107,25 @@ var (
 		output: "set /* mixed list */ @@a = 3, names 'utf8', charset 'ascii', @@b = 4",
 	}, {
 		input:  "set session transaction isolation level repeatable read",
-		output: "set @@session.transaction_isolation = 'REPEATABLE-READ'",
+		output: "set @@session.transaction_isolation = 'repeatable-read'",
 	}, {
 		input:  "set transaction isolation level repeatable read",
-		output: "set @@transaction_isolation = 'REPEATABLE-READ'",
+		output: "set @@transaction_isolation = 'repeatable-read'",
 	}, {
 		input:  "set global transaction isolation level repeatable read",
-		output: "set @@global.transaction_isolation = 'REPEATABLE-READ'",
+		output: "set @@global.transaction_isolation = 'repeatable-read'",
 	}, {
 		input:  "set transaction isolation level repeatable read",
-		output: "set @@transaction_isolation = 'REPEATABLE-READ'",
+		output: "set @@transaction_isolation = 'repeatable-read'",
 	}, {
 		input:  "set transaction isolation level read committed",
-		output: "set @@transaction_isolation = 'READ-COMMITTED'",
+		output: "set @@transaction_isolation = 'read-committed'",
 	}, {
 		input:  "set transaction isolation level read uncommitted",
-		output: "set @@transaction_isolation = 'READ-UNCOMMITTED'",
+		output: "set @@transaction_isolation = 'read-uncommitted'",
 	}, {
 		input:  "set transaction isolation level serializable",
-		output: "set @@transaction_isolation = 'SERIALIZABLE'",
+		output: "set @@transaction_isolation = 'serializable'",
 	}, {
 		input:  "set transaction read write",
 		output: "set @@transaction_read_only = 'off'",
@@ -1134,7 +1134,7 @@ var (
 		output: "set @@transaction_read_only = 'on'",
 	}, {
 		input:  "set session transaction read only, isolation level serializable",
-		output: "set @@session.transaction_read_only = 'on', @@session.transaction_isolation = 'SERIALIZABLE'",
+		output: "set @@session.transaction_read_only = 'on', @@session.transaction_isolation = 'serializable'",
 	}, {
 		input:  "set tx_read_only = 1",
 		output: "set @@tx_read_only = 1",

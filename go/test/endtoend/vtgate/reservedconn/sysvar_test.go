@@ -437,7 +437,7 @@ func TestSysVarTxIsolation(t *testing.T) {
 	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
 
 	// setting to different value.
-	utils.Exec(t, conn, "set @@transaction_isolation = 'READ-COMMITTED'")
+	utils.Exec(t, conn, "set @@transaction_isolation = 'read-committed'")
 	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
 	// ensuring it goes to mysql
 	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
