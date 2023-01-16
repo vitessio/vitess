@@ -19,7 +19,6 @@ package vtgate
 import (
 	"context"
 	"fmt"
-	"math/rand"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -35,6 +34,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/balancer"
 	"vitess.io/vitess/go/vt/vtgate/buffer"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -51,7 +51,9 @@ var (
 	bufferImplementation = "keyspace_events"
 	initialTabletTimeout = 30 * time.Second
 	// retryCount is the number of times a query will be retried on error
-	retryCount = 2
+	retryCount          = 2
+	balancerMode        = "affinity"
+	balancerVtgateCells = ""
 )
 
 func init() {
@@ -59,6 +61,8 @@ func init() {
 		fs.StringVar(&CellsToWatch, "cells_to_watch", "", "comma-separated list of cells for watching tablets")
 		fs.StringVar(&bufferImplementation, "buffer_implementation", "keyspace_events", "Allowed values: healthcheck (legacy implementation), keyspace_events (default)")
 		fs.DurationVar(&initialTabletTimeout, "gateway_initial_tablet_timeout", 30*time.Second, "At startup, the tabletGateway will wait up to this duration to get at least one tablet per keyspace/shard/tablet type")
+		fs.StringVar(&balancerMode, "balancer_mode", "affinity", "Tablet balancer mode, one of affinity (default mode which prefers same-cell replicas) or balanced (attempt to evenly spread query load)")
+		fs.StringVar(&balancerVtgateCells, "balancer_vtgate_cells", "", "When in balanced mode, a comma-separated list of cells that contain vtgates")
 		fs.IntVar(&retryCount, "retry-count", 2, "retry count")
 	})
 }
@@ -82,6 +86,9 @@ type TabletGateway struct {
 
 	// buffer, if enabled, buffers requests during a detected PRIMARY failover.
 	buffer *buffer.Buffer
+
+	// balancer used for routing to tablets
+	balancer balancer.TabletBalancer
 }
 
 func createHealthCheck(ctx context.Context, retryDelay, timeout time.Duration, ts *topo.Server, cell, cellsToWatch string) discovery.HealthCheck {
@@ -110,6 +117,7 @@ func NewTabletGateway(ctx context.Context, hc discovery.HealthCheck, serv srvtop
 		statusAggregators: make(map[string]*TabletStatusAggregator),
 	}
 	gw.setupBuffering(ctx)
+	gw.setupBalancer(ctx)
 	gw.QueryService = queryservice.Wrap(nil, gw.withRetry)
 	return gw
 }
@@ -167,6 +175,23 @@ func (gw *TabletGateway) setupBuffering(ctx context.Context) {
 	default:
 		log.Exitf("unknown buffering implementation for TabletGateway: %q", bufferImplementation)
 	}
+}
+
+func (gw *TabletGateway) setupBalancer(ctx context.Context) {
+	gw.balancer = balancer.NewTabletBalancer(balancerMode, gw.localCell, balancerVtgateCells)
+
+	// subscribe to healthcheck updates so that the balancer can reset its allocation
+	hcChan := gw.hc.Subscribe()
+	go func(ctx context.Context, c chan *discovery.TabletHealth, balancer balancer.TabletBalancer) {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-hcChan:
+				balancer.TopologyChanged()
+			}
+		}
+	}(ctx, hcChan, gw.balancer)
 }
 
 // QueryServiceByAlias satisfies the Gateway interface
@@ -311,7 +336,8 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			err = vterrors.Errorf(vtrpcpb.Code_UNAVAILABLE, "no healthy tablet available for '%s'", target.String())
 			break
 		}
-		gw.shuffleTablets(gw.localCell, tablets)
+
+		gw.balancer.ShuffleTablets(tablets)
 
 		var th *discovery.TabletHealth
 		// skip tablets we tried before
@@ -379,53 +405,6 @@ func (gw *TabletGateway) getStatsAggregator(target *querypb.Target) *TabletStatu
 	aggr = NewTabletStatusAggregator(target.Keyspace, target.Shard, target.TabletType, key)
 	gw.statusAggregators[key] = aggr
 	return aggr
-}
-
-func (gw *TabletGateway) shuffleTablets(cell string, tablets []*discovery.TabletHealth) {
-	sameCell, diffCell, sameCellMax := 0, 0, -1
-	length := len(tablets)
-
-	// move all same cell tablets to the front, this is O(n)
-	for {
-		sameCellMax = diffCell - 1
-		sameCell = gw.nextTablet(cell, tablets, sameCell, length, true)
-		diffCell = gw.nextTablet(cell, tablets, diffCell, length, false)
-		// either no more diffs or no more same cells should stop the iteration
-		if sameCell < 0 || diffCell < 0 {
-			break
-		}
-
-		if sameCell < diffCell {
-			// fast forward the `sameCell` lookup to `diffCell + 1`, `diffCell` unchanged
-			sameCell = diffCell + 1
-		} else {
-			// sameCell > diffCell, swap needed
-			tablets[sameCell], tablets[diffCell] = tablets[diffCell], tablets[sameCell]
-			sameCell++
-			diffCell++
-		}
-	}
-
-	// shuffle in same cell tablets
-	for i := sameCellMax; i > 0; i-- {
-		swap := rand.Intn(i + 1)
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-
-	// shuffle in diff cell tablets
-	for i, diffCellMin := length-1, sameCellMax+1; i > diffCellMin; i-- {
-		swap := rand.Intn(i-sameCellMax) + diffCellMin
-		tablets[i], tablets[swap] = tablets[swap], tablets[i]
-	}
-}
-
-func (gw *TabletGateway) nextTablet(cell string, tablets []*discovery.TabletHealth, offset, length int, sameCell bool) int {
-	for ; offset < length; offset++ {
-		if (tablets[offset].Tablet.Alias.Cell == cell) == sameCell {
-			return offset
-		}
-	}
-	return -1
 }
 
 // TabletsCacheStatus returns a displayable version of the health check cache.
