@@ -35,17 +35,18 @@ func TestLastError(t *testing.T) {
 		require.False(t, le.shouldRetry())
 	})
 
-	t.Run("new long running error", func(t *testing.T) {
+	t.Run("new long running errors", func(t *testing.T) {
 		err2 := fmt.Errorf("test2")
 		le.record(err2)
 		require.True(t, le.shouldRetry())
 		for i := 1; i < 10; i++ {
 			le.record(err2)
+			time.Sleep(1 * time.Millisecond)
 		}
 		require.True(t, le.shouldRetry())
 		time.Sleep(150 * time.Millisecond)
 		le.record(err2)
-		require.False(t, le.shouldRetry())
+		require.True(t, le.shouldRetry())
 	})
 
 	t.Run("no error", func(t *testing.T) {
