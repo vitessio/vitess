@@ -433,30 +433,30 @@ func TestSysVarTxIsolation(t *testing.T) {
 	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
 	// ensuring it goes to mysql
 	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
-	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
+	// second run, ensuring it has the same value.
 	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
 
 	// setting to different value.
 	utils.Exec(t, conn, "set @@transaction_isolation = 'read-committed'")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("read-committed")]]`)
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
 	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `read-committed`)
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
 	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `read-committed`)
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
 
 	// changing setting to different value.
 	utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("read-uncommitted")]]`)
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
 	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `read-uncommitted`)
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
 	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `read-uncommitted`)
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
 
 	// changing setting to different value.
 	utils.Exec(t, conn, "set transaction isolation level serializable")
-	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("serializable")]]`)
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
 	// ensuring it goes to mysql
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `serializable`)
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
 	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
-	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `serializable`)
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
 }
