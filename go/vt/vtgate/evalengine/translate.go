@@ -487,6 +487,11 @@ func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertTyp
 		if err != nil {
 			return nil, err
 		}
+	case "BINARY", "DOUBLE", "REAL", "SIGNED", "SIGNED INTEGER", "UNSIGNED", "UNSIGNED INTEGER":
+		// Supported types for conv expression
+	default:
+		// For unsupported types, we should return an error on translation instead of returning an error on runtime.
+		return nil, convert.returnUnsupportedError()
 	}
 
 	return &convert, nil

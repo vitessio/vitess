@@ -860,3 +860,18 @@ func TestIntervalWithMathFunctions(t *testing.T) {
 	utils.AssertMatches(t, conn, "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month", `[[CHAR("2020-12-01")]]`)
 	utils.AssertMatches(t, conn, "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)", `[[DATETIME("2023-01-08 13:48:42")]]`)
 }
+
+// TestCast tests the queries that contain the cast function.
+func TestCast(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.AssertMatches(t, conn, "select cast('2023-01-07 12:34:56' as date) limit 1", `[[DATE("2023-01-07")]]`)
+	utils.AssertMatches(t, conn, "select cast('2023-01-07 12:34:56' as date)", `[[DATE("2023-01-07")]]`)
+	utils.AssertMatches(t, conn, "select cast('3.2' as float)", `[[FLOAT32(3.2)]]`)
+	utils.AssertMatches(t, conn, "select cast('3.2' as double)", `[[FLOAT64(3.2)]]`)
+	utils.AssertMatches(t, conn, "select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
+}
