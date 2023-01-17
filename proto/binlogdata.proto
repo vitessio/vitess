@@ -171,6 +171,11 @@ message Rule {
   // SourceUniqueKeyTargetColumns represents the names of columns in target table, mapped from the chosen unique
   // key on source tables (some columns may be renamed from source to target)
   string source_unique_key_target_columns = 7;
+
+  // ConvertIntToEnum lists any columns that are converted from an integral value into an enum.
+  // such columns need to have special transofrmation of the data, from an integral format into a
+  // string format. e.g. the value 0 needs to be converted to '0'.
+  map<string, bool> convert_int_to_enum = 8;
 }
 
 // Filter represents a list of ordered rules. The first
