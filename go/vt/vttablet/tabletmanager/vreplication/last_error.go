@@ -33,11 +33,13 @@ type lastError struct {
 	name           string
 	err            error
 	firstSeen      time.Time
+	lastSeen       time.Time
 	mu             sync.Mutex
 	maxTimeInError time.Duration // if error persists for this long, shouldRetry() will return false
 }
 
 func newLastError(name string, maxTimeInError time.Duration) *lastError {
+	log.Infof("Created last error %s:%s", name, maxTimeInError)
 	return &lastError{
 		name:           name,
 		maxTimeInError: maxTimeInError,
@@ -48,15 +50,27 @@ func (le *lastError) record(err error) {
 	le.mu.Lock()
 	defer le.mu.Unlock()
 	if err == nil {
+		log.Infof("resetting last error")
 		le.err = nil
 		le.firstSeen = time.Time{}
+		le.lastSeen = time.Time{}
 		return
 	}
 	if !vterrors.Equals(err, le.err) {
+		log.Infof("got new last error %+v for %s, was %+v", err, le.name, le.err)
 		le.firstSeen = time.Now()
+		le.lastSeen = time.Now()
 		le.err = err
+	} else {
+		// same error seen
+		log.Infof("got same last error for %s seen %+v, last seen at %s after %dms", le.name, le.err, le.lastSeen, int(time.Since(le.lastSeen).Milliseconds()))
+		if time.Since(le.lastSeen) > le.maxTimeInError {
+			// reset firstSeen, since it has been long enough since the last time we saw this error
+			log.Infof("resetting firstSeen for %s", le.name)
+			le.firstSeen = time.Now()
+		}
+		le.lastSeen = time.Now()
 	}
-	// The error is unchanged so we don't need to do anything
 }
 
 func (le *lastError) shouldRetry() bool {
