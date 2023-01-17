@@ -122,6 +122,7 @@ const (
 		WHERE
 			migration_status='queued'
 			AND reviewed_timestamp IS NOT NULL
+		ORDER BY id
 	`
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a
@@ -390,6 +391,7 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
+		ORDER BY id
 	`
 	sqlSelectQueuedUnreviewedMigrations = `SELECT
 			migration_uuid
@@ -397,6 +399,7 @@ const (
 		WHERE
 			migration_status='queued'
 			AND reviewed_timestamp IS NULL
+		ORDER BY id
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
@@ -456,7 +459,9 @@ const (
 			cancelled_timestamp,
 			component_throttled,
 			postpone_launch,
-			postpone_completion
+			postpone_completion,
+			is_immediate_operation,
+			reviewed_timestamp
 		FROM _vt.schema_migrations
 		WHERE
 			migration_uuid=%a

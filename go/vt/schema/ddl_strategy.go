@@ -35,6 +35,7 @@ const (
 	allowZeroInDateFlag    = "allow-zero-in-date"
 	postponeLaunchFlag     = "postpone-launch"
 	postponeCompletionFlag = "postpone-completion"
+	inOrderCompletionFlag  = "in-order-completion"
 	allowConcurrentFlag    = "allow-concurrent"
 	preferInstantDDL       = "prefer-instant-ddl"
 	fastRangeRotationFlag  = "fast-range-rotation"
@@ -156,6 +157,11 @@ func (setting *DDLStrategySetting) IsPostponeCompletion() bool {
 	return setting.hasFlag(postponeCompletionFlag)
 }
 
+// IsInOrderCompletion checks if strategy options include --in-order-completion
+func (setting *DDLStrategySetting) IsInOrderCompletion() bool {
+	return setting.hasFlag(inOrderCompletionFlag)
+}
+
 // IsAllowConcurrent checks if strategy options include --allow-concurrent
 func (setting *DDLStrategySetting) IsAllowConcurrent() bool {
 	return setting.hasFlag(allowConcurrentFlag)
@@ -194,6 +200,7 @@ func (setting *DDLStrategySetting) RuntimeOptions() []string {
 		case isFlag(opt, allowZeroInDateFlag):
 		case isFlag(opt, postponeLaunchFlag):
 		case isFlag(opt, postponeCompletionFlag):
+		case isFlag(opt, inOrderCompletionFlag):
 		case isFlag(opt, allowConcurrentFlag):
 		case isFlag(opt, preferInstantDDL):
 		case isFlag(opt, fastRangeRotationFlag):
