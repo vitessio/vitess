@@ -78,7 +78,7 @@ var (
 
 // BackupStats creates a new Stats for backup operations.
 //
-// It registers three stats with the Vitess stats package.
+// It registers the following metrics with the Vitess stats package.
 //
 //   - backup_bytes: number of bytes processed by an an operation for given
 //     component and implementation.
@@ -109,7 +109,7 @@ func BackupStats() Stats {
 
 // RestoreStats creates a new Stats for restore operations.
 //
-// It registers two stats with the Vitess stats package.
+// It registers the following metrics with the Vitess stats package.
 //
 //   - restore_bytes: number of bytes processed by an an operation for given
 //     component and implementation.
