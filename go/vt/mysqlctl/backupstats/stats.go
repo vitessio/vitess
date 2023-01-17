@@ -24,7 +24,7 @@ import (
 	vtstats "vitess.io/vitess/go/stats"
 )
 
-// Stats is a reporting interface meant to be shared amount backup and restore
+// Stats is a reporting interface meant to be shared among backup and restore
 // components.
 //
 // This interface is meant to give those components a way to reports stats
