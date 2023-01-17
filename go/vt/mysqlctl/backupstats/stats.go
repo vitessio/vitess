@@ -27,7 +27,7 @@ import (
 // Stats is a reporting interface meant to be shared among backup and restore
 // components.
 //
-// This interface is meant to give those components a way to reports stats
+// This interface is meant to give those components a way to report stats
 // without having to register their own stats or to import globally registered
 // stats. This way out-of-tree plugins can have a mechanism for reporting
 // stats, while the policies for those stats (metric names and labels, stat
