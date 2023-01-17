@@ -264,6 +264,12 @@ func TestSchemaChange(t *testing.T) {
 		dropT4Statement = `
 			DROP TABLE IF EXISTS t4_test
 		`
+		alterExtraColumn = `
+			ALTER TABLE t1_test ADD COLUMN extra_column int NOT NULL DEFAULT 0
+		`
+		createViewDependsOnExtraColumn = `
+			CREATE VIEW t1_test_view AS SELECT id, extra_column FROM t1_test
+		`
 	)
 
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
@@ -437,6 +443,38 @@ func TestSchemaChange(t *testing.T) {
 		})
 		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
+
+	t.Run("ALTER TABLE and CREATE VIEW that depends on changed table", func(t *testing.T) {
+		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
+		t1uuid = testOnlineDDLStatement(t, createParams(alterExtraColumn, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true))                // skip wait
+		v1uuid := testOnlineDDLStatement(t, createParams(createViewDependsOnExtraColumn, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
+
+		testAllowConcurrent(t, "t1", t1uuid, 1)
+		testAllowConcurrent(t, "v1", v1uuid, 1)
+		t.Run("expect table running, expect view ready", func(t *testing.T) {
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, v1uuid, normalWaitTime, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+			time.Sleep(ensureStateNotChangedTime)
+			// nothing should change
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, v1uuid, normalWaitTime, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+		})
+		t.Run("complete both", func(t *testing.T) {
+			onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
+		})
+		t.Run("expect table success", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+		t.Run("expect view success", func(t *testing.T) {
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, v1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, v1uuid, schema.OnlineDDLStatusComplete)
+		})
+		testTableCompletionTimes(t, t1uuid, v1uuid)
+	})
+
 	t.Run("ALTER both tables, elligible for concurrenct", func(t *testing.T) {
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
 		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
