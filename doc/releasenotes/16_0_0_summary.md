@@ -4,6 +4,7 @@
 
 - **[VReplication](#vreplication)**
   - [VStream Copy Resume](#vstream-copy-resume)
+  - [VDiff2 GA](#vdiff2-ga)
 
 ## Known Issues
 
@@ -14,6 +15,11 @@
 #### <a id="vstream-copy-resume"/>VStream Copy Resume
 
 In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
+
+#### <a id="vdiff2-ga"/>VDiff2 GA
+
+We are marking [VDiff v2](https://vitess.io/docs/16.0/reference/vreplication/vdiff2/) as Generally Available or production-ready in v16. We now recommend that you use v2 rather than v1 going forward. V1 will be deprecated and eventually removed in future releases.
+If you wish to use v1 for any reason, you will now need to specify the `--v1` flag.
 
 ### Tablet throttler
 
@@ -213,9 +219,18 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 - The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
 
-- `vtctlclient VExec` command was removed, having been deprecated since v13.
+- The `vtctlclient VExec` command was removed, having been deprecated since v12.
+
+- The `vtctlclient VReplicationExec` command has now been deprecated and will be removed in a future release. Please see [#12070](https://github.com/vitessio/vitess/pull/12070) for additional details.
 
 - `vtctlclient OnlineDDL ... [complete|retry|cancel|cancel-all]` returns empty result on success instead of number of shard affected.
+
+- VTTablet flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
+
+- vtbackup flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
+
+- The dead legacy Workflow Manager related code was removed in [#12085](https://github.com/vitessio/vitess/pull/12085). This included the following `vtctl` client commands: `WorkflowAction`, `WorkflowCreate`, `WorkflowWait`, `WorkflowStart`, `WorkflowStop`, `WorkflowTree`, `WorkflowDelete`.
+
 
 ### MySQL Compatibility
 
@@ -261,7 +276,7 @@ This will allow users to start a transaction with these characteristics.
 
 Vitess now supports views in sharded keyspace. Views are not created on the underlying database but are logically stored
 in vschema.
-Any query using view will get re-rewritten as derived table during query planning.
+Any query using a view will get re-written as a derived table during query planning.
 VSchema Example
 
 ```json
@@ -284,9 +299,9 @@ The flag `lock-shard-timeout` has been deprecated. Please use the newly introduc
 
 ### VTTestServer
 
-#### Improvement
+#### Performance Improvement
 
 Creating a database with vttestserver was taking ~45 seconds. This can be problematic in test environments where testcases do a lot of `create` and `drop` database.
 In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
-For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this values might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
+For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this value might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
 this shouldn't be a concern.

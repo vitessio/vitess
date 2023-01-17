@@ -378,8 +378,11 @@ release: docker_base
 	echo "git push origin v$(VERSION)"
 	echo "Also, don't forget the upload releases/v$(VERSION).tar.gz file to GitHub releases"
 
-do_release:
-	./tools/do_release.sh
+create_release:
+	./tools/create_release.sh
+
+back_to_dev_mode:
+	./tools/back_to_dev_mode.sh
 
 tools:
 	echo $$(date): Installing dependencies

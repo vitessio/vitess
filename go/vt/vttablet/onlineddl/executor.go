@@ -1088,8 +1088,8 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 		conn.ExecuteFetch(restoreSQLModeQuery, 0, false)
 	}
 	// Change sql_mode
-	changeSSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
-	if _, err := conn.ExecuteFetch(changeSSQLModeQuery, 0, false); err != nil {
+	changeSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
+	if _, err := conn.ExecuteFetch(changeSQLModeQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
 	return deferFunc, nil
@@ -2355,12 +2355,25 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 				return err
 			}
 		}
+		// Find conditions where the migration cannot take place:
+		switch onlineDDL.Strategy {
+		case schema.DDLStrategyMySQL:
+			strategySetting := onlineDDL.StrategySetting()
+			if strategySetting.IsPostponeCompletion() {
+				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--postpone-completion not supported in 'mysql' strategy"))
+			}
+			if strategySetting.IsAllowZeroInDateFlag() {
+				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--allow-zero-in-date not supported in 'mysql' strategy"))
+			}
+		}
+
 		// The review is complete. We've backfilled details on the migration row. We mark
 		// the migration as having been reviewed. The function scheduleNextMigration() will then
 		// have access to this row.
 		if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
@@ -3060,6 +3073,15 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 			defer e.migrationMutex.Unlock()
 
 			if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
+	case schema.DDLStrategyMySQL:
+		go func() {
+			e.migrationMutex.Lock()
+			defer e.migrationMutex.Unlock()
+
+			if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 				failMigration(err)
 			}
 		}()

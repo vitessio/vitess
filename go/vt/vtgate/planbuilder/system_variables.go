@@ -42,6 +42,7 @@ func (pc *sysvarPlanCache) initForSettings(systemVariables []sysvars.SystemVaria
 			boolean:            sysvar.IsBoolean,
 			identifierAsString: sysvar.IdentifierAsString,
 			supportSetVar:      sysvar.SupportSetVar,
+			storageCase:        sysvar.Case,
 		}
 
 		if sysvar.Default != "" {

@@ -271,10 +271,7 @@ func TestInitialThrottler(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	t.Run("validating OK response from disabled throttler", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet, false)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("enabling throttler with low threshold", func(t *testing.T) {
 		_, err := updateThrottlerConfig(true, false, unreasonablyLowThreshold.Seconds(), "", false)
@@ -288,10 +285,7 @@ func TestInitialThrottler(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("validating OK response from disabled throttler, again", func(t *testing.T) {
-		resp, err := throttleCheck(primaryTablet, false)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("enabling throttler, again", func(t *testing.T) {
 		_, err := updateThrottlerConfig(true, false, 0, "", true)
@@ -516,15 +510,8 @@ func TestRestoreDefaultQuery(t *testing.T) {
 		_, err := updateThrottlerConfig(true, false, throttlerThreshold.Seconds(), "", false)
 		assert.NoError(t, err)
 	})
-	t.Run("requesting heartbeats", func(t *testing.T) {
-		_ = warmUpHeartbeat(t)
-	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
-		time.Sleep(1 * time.Second)
-		resp, err := throttleCheck(primaryTablet, false)
-		require.NoError(t, err)
-		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
 	})
 	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
