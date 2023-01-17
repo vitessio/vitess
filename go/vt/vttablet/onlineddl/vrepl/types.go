@@ -94,8 +94,8 @@ func (c *Column) IsNumeric() bool {
 	return c.NumericPrecision > 0
 }
 
-// IsIntegral returns true if the column is some form of an integer
-func (c *Column) IsIntegral() bool {
+// IsIntegralType returns true if the column is some form of an integer
+func (c *Column) IsIntegralType() bool {
 	return schemadiff.IsIntegralType(c.DataType)
 }
 

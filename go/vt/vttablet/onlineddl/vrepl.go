@@ -420,7 +420,7 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
 			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 		}
-		if sourceColumn.IsIntegral() && mappedColumn.Type == vrepl.EnumColumnType {
+		if sourceColumn.IsIntegralType() && mappedColumn.Type == vrepl.EnumColumnType {
 			v.intToEnumMap[sourceColumn.Name] = true
 		}
 	}

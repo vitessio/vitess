@@ -940,7 +940,7 @@ type Rule struct {
 	SourceUniqueKeyTargetColumns string `protobuf:"bytes,7,opt,name=source_unique_key_target_columns,json=sourceUniqueKeyTargetColumns,proto3" json:"source_unique_key_target_columns,omitempty"`
 	// ConvertIntToEnum lists any columns that are converted from an integral value into an enum.
 	// such columns need to have special transofrmation of the data, from an integral format into a
-	// string format. e.g. the value 0 needs to be converted to '0'
+	// string format. e.g. the value 0 needs to be converted to '0'.
 	ConvertIntToEnum map[string]bool `protobuf:"bytes,8,rep,name=convert_int_to_enum,json=convertIntToEnum,proto3" json:"convert_int_to_enum,omitempty" protobuf_key:"bytes,1,opt,name=key,proto3" protobuf_val:"varint,2,opt,name=value,proto3"`
 }
 

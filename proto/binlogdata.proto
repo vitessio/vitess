@@ -174,7 +174,7 @@ message Rule {
 
   // ConvertIntToEnum lists any columns that are converted from an integral value into an enum.
   // such columns need to have special transofrmation of the data, from an integral format into a
-  // string format. e.g. the value 0 needs to be converted to '0'
+  // string format. e.g. the value 0 needs to be converted to '0'.
   map<string, bool> convert_int_to_enum = 8;
 }
 
