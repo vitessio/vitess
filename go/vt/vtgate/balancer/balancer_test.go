@@ -18,6 +18,7 @@ package balancer
 
 import (
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -154,6 +155,8 @@ func TestAllocateFlows(t *testing.T) {
 		},
 	}
 
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+
 	for _, c := range cases {
 		t.Logf("\n\nTest Case: %s\n\n", c.test)
 
@@ -176,14 +179,15 @@ func TestAllocateFlows(t *testing.T) {
 
 		// Run the balancer over each vtgate cell
 		for _, localCell := range vtGateCells {
-			b := tabletBalancer{isBalanced: true, localCell: localCell, vtGateCells: vtGateCells}
-			b.allocateFlows(tablets)
+			b := NewTabletBalancer("balanced", localCell, strings.Join(vtGateCells, ",")).(*tabletBalancer)
+			a := b.allocateFlows(tablets)
+			b.allocations[discovery.KeyFromTarget(target)] = a
 
-			t.Logf("Target Flows %v, Balancer: %s\n", expectedPerCell, b.print())
+			t.Logf("Target Flows %v, Balancer: %s XXX %d %v \n", expectedPerCell, b.print(), len(b.allocations), b.allocations)
 
 			// Accumulate all the output per tablet cell
 			outflowPerCell := make(map[string]int)
-			for _, outflow := range b.outflows {
+			for _, outflow := range a.Outflows {
 				for tabletCell, flow := range outflow {
 					if flow < 0 {
 						t.Errorf("balancer %v negative outflow", b.print())
@@ -196,15 +200,15 @@ func TestAllocateFlows(t *testing.T) {
 			for cell := range tabletsByCell {
 				expectedForCell := expectedPerCell[cell]
 
-				if !fuzzyEquals(b.inflows[cell], expectedForCell) || !fuzzyEquals(outflowPerCell[cell], expectedForCell) {
+				if !fuzzyEquals(a.Inflows[cell], expectedForCell) || !fuzzyEquals(outflowPerCell[cell], expectedForCell) {
 					t.Errorf("Balancer {%s} ExpectedPerCell {%v} did not allocate correct flow to cell %s: expected %d, inflow %d outflow %d",
-						b.print(), expectedPerCell, cell, expectedForCell, b.inflows[cell], outflowPerCell[cell])
+						b.print(), expectedPerCell, cell, expectedForCell, a.Inflows[cell], outflowPerCell[cell])
 				}
 			}
 
 			// Accumulate the allocations for all runs to compare what the system does as a whole
 			// when routing from all vtgate cells
-			for uid, flow := range b.allocation {
+			for uid, flow := range a.Allocation {
 				allocationPerTablet[uid] += flow
 			}
 		}
@@ -269,6 +273,7 @@ func TestBalancedShuffle(t *testing.T) {
 		},
 	}
 
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
 	for _, c := range cases {
 		t.Logf("\n\nTest Case: %s\n\n", c.test)
 
@@ -288,10 +293,10 @@ func TestBalancedShuffle(t *testing.T) {
 		// Run the algorithm a bunch of times to get a random enough sample
 		N := 1000000
 		for _, localCell := range vtGateCells {
-			b := tabletBalancer{isBalanced: true, localCell: localCell, vtGateCells: vtGateCells}
+			b := NewTabletBalancer("balanced", localCell, strings.Join(vtGateCells, ",")).(*tabletBalancer)
 
 			for i := 0; i < N/len(vtGateCells); i++ {
-				b.ShuffleTablets(tablets)
+				b.ShuffleTablets(target, tablets)
 				if i == 0 {
 					t.Logf("Target Flows %v, Balancer: %s\n", expectedPerCell, b.print())
 					t.Logf(b.print())
@@ -314,14 +319,18 @@ func TestBalancedShuffle(t *testing.T) {
 	}
 }
 
-func TestToplogyChanged(t *testing.T) {
+func TestTopologyChanged(t *testing.T) {
 	allTablets := []*discovery.TabletHealth{
 		createTestTablet("a"),
 		createTestTablet("a"),
 		createTestTablet("b"),
 		createTestTablet("b"),
 	}
-	b := tabletBalancer{isBalanced: true, localCell: "b", vtGateCells: []string{"a", "b"}}
+
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+
+	b := NewTabletBalancer("balanced", "b", "a,b").(*tabletBalancer)
+
 	N := 1
 
 	// initially create a slice of tablets with just the two in cell a
@@ -329,13 +338,14 @@ func TestToplogyChanged(t *testing.T) {
 	tablets = tablets[0:2]
 
 	for i := 0; i < N; i++ {
-		b.ShuffleTablets(tablets)
+		b.ShuffleTablets(target, tablets)
+		allocation, totalAllocation := b.getAllocation(target, tablets)
 
-		if b.totalAllocation != ALLOCATION/2 {
+		if totalAllocation != ALLOCATION/2 {
 			t.Errorf("totalAllocation mismatch %s", b.print())
 		}
 
-		if b.allocation[allTablets[0].Tablet.Alias.Uid] != ALLOCATION/4 {
+		if allocation[allTablets[0].Tablet.Alias.Uid] != ALLOCATION/4 {
 			t.Errorf("allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
 		}
 
@@ -348,13 +358,15 @@ func TestToplogyChanged(t *testing.T) {
 	// event to cause a reallocation
 	tablets2 := allTablets
 	for i := 0; i < N; i++ {
-		b.ShuffleTablets(tablets2)
+		b.ShuffleTablets(target, tablets2)
 
-		if b.totalAllocation != ALLOCATION/2 {
+		allocation, totalAllocation := b.getAllocation(target, tablets2)
+
+		if totalAllocation != ALLOCATION/2 {
 			t.Errorf("totalAllocation mismatch %s", b.print())
 		}
 
-		if b.allocation[allTablets[0].Tablet.Alias.Uid] != ALLOCATION/4 {
+		if allocation[allTablets[0].Tablet.Alias.Uid] != ALLOCATION/4 {
 			t.Errorf("allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
 		}
 
@@ -366,13 +378,15 @@ func TestToplogyChanged(t *testing.T) {
 	// Trigger toplogy changed event, now traffic should go to b
 	b.TopologyChanged()
 	for i := 0; i < N; i++ {
-		b.ShuffleTablets(tablets2)
+		b.ShuffleTablets(target, tablets2)
 
-		if b.totalAllocation != ALLOCATION/2 {
+		allocation, totalAllocation := b.getAllocation(target, tablets2)
+
+		if totalAllocation != ALLOCATION/2 {
 			t.Errorf("totalAllocation mismatch %s", b.print())
 		}
 
-		if b.allocation[allTablets[0].Tablet.Alias.Uid] != ALLOCATION/4 {
+		if allocation[allTablets[0].Tablet.Alias.Uid] != ALLOCATION/4 {
 			t.Errorf("allocation mismatch %s, cell %s", b.print(), allTablets[0].Tablet.Alias.Cell)
 		}
 
@@ -385,30 +399,32 @@ func TestToplogyChanged(t *testing.T) {
 func TestAffinityShuffle(t *testing.T) {
 	balancer := NewTabletBalancer("affinity", "cell1", "")
 
+	target := &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA}
+
 	ts1 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(1, "cell1", "host1"),
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Target:  target,
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ts2 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(2, "cell1", "host2"),
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Target:  target,
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ts3 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(3, "cell2", "host3"),
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Target:  target,
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
 
 	ts4 := &discovery.TabletHealth{
 		Tablet:  topo.NewTablet(4, "cell2", "host4"),
-		Target:  &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
+		Target:  target,
 		Serving: true,
 		Stats:   &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 	}
@@ -419,17 +435,17 @@ func TestAffinityShuffle(t *testing.T) {
 
 	// repeat shuffling 10 times and every time the same cell tablets should be in the front
 	for i := 0; i < 10; i++ {
-		balancer.ShuffleTablets(sameCellTablets)
+		balancer.ShuffleTablets(target, sameCellTablets)
 		assert.Len(t, sameCellTablets, 2, "Wrong number of TabletHealth")
 		assert.Equal(t, sameCellTablets[0].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
 		assert.Equal(t, sameCellTablets[1].Tablet.Alias.Cell, "cell1", "Wrong tablet cell")
 
-		balancer.ShuffleTablets(diffCellTablets)
+		balancer.ShuffleTablets(target, diffCellTablets)
 		assert.Len(t, diffCellTablets, 2, "should shuffle in only diff cell tablets")
 		assert.Contains(t, diffCellTablets, ts3, "diffCellTablets should contain %v", ts3)
 		assert.Contains(t, diffCellTablets, ts4, "diffCellTablets should contain %v", ts4)
 
-		balancer.ShuffleTablets(mixedTablets)
+		balancer.ShuffleTablets(target, mixedTablets)
 		assert.Len(t, mixedTablets, 4, "should have 4 tablets, got %+v", mixedTablets)
 
 		assert.Contains(t, mixedTablets[0:2], ts1, "should have same cell tablets in the front, got %+v", mixedTablets)

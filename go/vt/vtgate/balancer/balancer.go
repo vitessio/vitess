@@ -17,12 +17,14 @@ limitations under the License.
 package balancer
 
 import (
+	"encoding/json"
 	"fmt"
 	"math/rand"
 	"strings"
 	"sync"
 
 	"vitess.io/vitess/go/vt/discovery"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 /*
@@ -86,7 +88,7 @@ converge on the desired balanced query load.
 
 type TabletBalancer interface {
 	// Randomly shuffle the tablets into an order for routing queries
-	ShuffleTablets(tablets []*discovery.TabletHealth)
+	ShuffleTablets(target *querypb.Target, tablets []*discovery.TabletHealth)
 
 	// Callback when the topology changes to invalidate any cached state
 	TopologyChanged()
@@ -95,7 +97,12 @@ type TabletBalancer interface {
 func NewTabletBalancer(mode, localCell, vtGateCells string) TabletBalancer {
 	if mode == "balanced" {
 		vtgateCells := strings.Split(vtGateCells, ",")
-		return &tabletBalancer{isBalanced: true, localCell: localCell, vtGateCells: vtgateCells}
+		return &tabletBalancer{
+			isBalanced:  true,
+			localCell:   localCell,
+			vtGateCells: vtgateCells,
+			allocations: map[discovery.KeyspaceShardTabletType]*targetAllocation{},
+		}
 	}
 	return &tabletBalancer{isBalanced: false, localCell: localCell}
 }
@@ -104,6 +111,8 @@ type tabletBalancer struct {
 	//
 	// Configuration
 	//
+
+	// Balancer mode
 	isBalanced bool
 
 	// The local cell for the vtgate
@@ -112,32 +121,37 @@ type tabletBalancer struct {
 	// The set of cells that have vtgates
 	vtGateCells []string
 
-	// mu protects the data structures below
+	// mu protects the allocation map
 	mu sync.Mutex
 
 	//
-	// Data structures built during the algorithm, exposed in the object for unit testing purposes
+	// Allocations for balanced mode, calculated once per target and invalidated
+	// whenever the topology changes.
 	//
+	allocations map[discovery.KeyspaceShardTabletType]*targetAllocation
+}
 
+type targetAllocation struct {
 	// Target flow per cell based on the number of tablets discovered in the cell
-	//
-	// XXX CHANGE TO expected inflow per cell
-	target map[string]int
+	Target map[string]int // json:target
 
 	// Input flows allocated for each cell
-	inflows map[string]int
+	Inflows map[string]int
 
 	// Output flows from each vtgate cell to each target cell
-	outflows map[string]map[string]int
+	Outflows map[string]map[string]int
 
 	// Allocation routed to each tablet from the local cell used for ranking
-	allocation      map[uint32]int
-	totalAllocation int
+	Allocation map[uint32]int
+
+	// Total allocation which is basically 1,000,000 / len(vtgatecells)
+	TotalAllocation int
 }
 
 func (b *tabletBalancer) print() string {
-	return fmt.Sprintf("LocalCell: %s, VtGateCells: %s, outflows: %v, inflows: %v, allocation:%v, total:%v",
-		b.localCell, b.vtGateCells, b.outflows, b.inflows, b.allocation, b.totalAllocation)
+	allocations, _ := json.Marshal(&b.allocations)
+	return fmt.Sprintf("LocalCell: %s, VtGateCells: %s, allocations: %s",
+		b.localCell, b.vtGateCells, string(allocations))
 }
 
 // ShuffleTablets is the main entry point to the balancer.
@@ -147,12 +161,12 @@ func (b *tabletBalancer) print() string {
 // to the first tablet in the list, so the balancer ranking algoritm randomly
 // shuffles the list to break ties, then chooses a weighted random selection
 // based on the balance alorithm to promote to the first in the set.
-func (b *tabletBalancer) ShuffleTablets(tablets []*discovery.TabletHealth) {
+func (b *tabletBalancer) ShuffleTablets(target *querypb.Target, tablets []*discovery.TabletHealth) {
 
 	numTablets := len(tablets)
 
 	if b.isBalanced {
-		allocationMap, totalAllocation := b.getAllocation(tablets)
+		allocationMap, totalAllocation := b.getAllocation(target, tablets)
 
 		rand.Shuffle(numTablets, func(i, j int) { tablets[i], tablets[j] = tablets[j], tablets[i] })
 
@@ -187,28 +201,27 @@ func (b *tabletBalancer) TopologyChanged() {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
-	// Signal that the topology should be rebuilt
-	b.totalAllocation = 0
+	b.allocations = map[discovery.KeyspaceShardTabletType]*targetAllocation{}
 }
 
 // To stick with integer arithmetic, use 1,000,000 as the full load
 const ALLOCATION = 1000000
 
-func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) *targetAllocation {
+
+	a := targetAllocation{}
 
 	// Initialization: Set up some data structures and derived values
-	b.target = make(map[string]int)
-	b.inflows = make(map[string]int)
-	b.outflows = make(map[string]map[string]int)
-	b.allocation = make(map[uint32]int)
+	a.Target = make(map[string]int)
+	a.Inflows = make(map[string]int)
+	a.Outflows = make(map[string]map[string]int)
+	a.Allocation = make(map[uint32]int)
 	flowPerVtgateCell := ALLOCATION / len(b.vtGateCells)
 	flowPerTablet := ALLOCATION / len(allTablets)
 	cellExistsWithNoTablets := false
 
 	for _, th := range allTablets {
-		b.target[th.Tablet.Alias.Cell] += flowPerTablet
+		a.Target[th.Tablet.Alias.Cell] += flowPerTablet
 	}
 
 	//
@@ -217,16 +230,16 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
 	//
 	for _, cell := range b.vtGateCells {
 		outflow := map[string]int{}
-		target := b.target[cell]
+		target := a.Target[cell]
 
 		if target > 0 {
-			b.inflows[cell] += flowPerVtgateCell
+			a.Inflows[cell] += flowPerVtgateCell
 			outflow[cell] = flowPerVtgateCell
 		} else {
 			cellExistsWithNoTablets = true
 		}
 
-		b.outflows[cell] = outflow
+		a.Outflows[cell] = outflow
 	}
 
 	//
@@ -234,9 +247,9 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
 	//
 	underAllocated := make(map[string]int)
 	unbalancedFlow := 0
-	for cell, allocation := range b.target {
-		if b.inflows[cell] < allocation {
-			underAllocated[cell] = allocation - b.inflows[cell]
+	for cell, allocation := range a.Target {
+		if a.Inflows[cell] < allocation {
+			underAllocated[cell] = allocation - a.Inflows[cell]
 			unbalancedFlow += underAllocated[cell]
 		}
 	}
@@ -247,24 +260,24 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
 	//
 	if cellExistsWithNoTablets {
 		for _, vtgateCell := range b.vtGateCells {
-			target := b.target[vtgateCell]
+			target := a.Target[vtgateCell]
 			if target != 0 {
 				continue
 			}
 
 			for underAllocatedCell, underAllocatedFlow := range underAllocated {
 				allocation := flowPerVtgateCell * underAllocatedFlow / unbalancedFlow
-				b.inflows[underAllocatedCell] += allocation
-				b.outflows[vtgateCell][underAllocatedCell] += allocation
+				a.Inflows[underAllocatedCell] += allocation
+				a.Outflows[vtgateCell][underAllocatedCell] += allocation
 			}
 		}
 
 		// Recompute underallocated after these flows were assigned
 		unbalancedFlow = 0
 		underAllocated = make(map[string]int)
-		for cell, allocation := range b.target {
-			if b.inflows[cell] < allocation {
-				underAllocated[cell] = allocation - b.inflows[cell]
+		for cell, allocation := range a.Target {
+			if a.Inflows[cell] < allocation {
+				underAllocated[cell] = allocation - a.Inflows[cell]
 				unbalancedFlow += underAllocated[cell]
 			}
 		}
@@ -278,13 +291,13 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
 
 		// cells which are overallocated
 		overAllocated := make(map[string]int)
-		for cell, allocation := range b.target {
-			if b.inflows[cell] > allocation {
-				overAllocated[cell] = b.inflows[cell] - allocation
+		for cell, allocation := range a.Target {
+			if a.Inflows[cell] > allocation {
+				overAllocated[cell] = a.Inflows[cell] - allocation
 			}
 		}
 
-		// fmt.Printf("outflows %v over %v under %v\n", b.outflows, overAllocated, underAllocated)
+		// fmt.Printf("outflows %v over %v under %v\n", a.Outflows, overAllocated, underAllocated)
 
 		//
 		// For each overallocated cell, proportionally shift flow from targets that are overallocated
@@ -296,7 +309,7 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
 			for underAllocatedCell, underAllocatedFlow := range underAllocated {
 				for overAllocatedCell, overAllocatedFlow := range overAllocated {
 
-					currentFlow := b.outflows[vtgateCell][overAllocatedCell]
+					currentFlow := a.Outflows[vtgateCell][overAllocatedCell]
 					if currentFlow == 0 {
 						continue
 					}
@@ -307,16 +320,16 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
 					//
 					// Note that the operator order matters -- multiplications need to occur before divisions
 					// to avoid truncating the integer values.
-					shiftFlow := overAllocatedFlow * currentFlow * underAllocatedFlow / b.inflows[overAllocatedCell] / unbalancedFlow
+					shiftFlow := overAllocatedFlow * currentFlow * underAllocatedFlow / a.Inflows[overAllocatedCell] / unbalancedFlow
 
 					//fmt.Printf("shift %d %s %s -> %s (over %d current %d in %d under %d unbalanced %d) \n", shiftFlow, vtgateCell, overAllocatedCell, underAllocatedCell,
-					//	overAllocatedFlow, currentFlow, b.inflows[overAllocatedCell], underAllocatedFlow, unbalancedFlow)
+					//	overAllocatedFlow, currentFlow, a.Inflows[overAllocatedCell], underAllocatedFlow, unbalancedFlow)
 
-					b.outflows[vtgateCell][overAllocatedCell] -= shiftFlow
-					b.inflows[overAllocatedCell] -= shiftFlow
+					a.Outflows[vtgateCell][overAllocatedCell] -= shiftFlow
+					a.Inflows[overAllocatedCell] -= shiftFlow
 
-					b.inflows[underAllocatedCell] += shiftFlow
-					b.outflows[vtgateCell][underAllocatedCell] += shiftFlow
+					a.Inflows[underAllocatedCell] += shiftFlow
+					a.Outflows[vtgateCell][underAllocatedCell] += shiftFlow
 				}
 			}
 		}
@@ -326,23 +339,30 @@ func (b *tabletBalancer) allocateFlows(allTablets []*discovery.TabletHealth) {
 	// Finally, once the cell flows are all adjusted, figure out the local allocation to each
 	// tablet in the target cells
 	//
-	outflow := b.outflows[b.localCell]
+	outflow := a.Outflows[b.localCell]
 	for _, tablet := range allTablets {
 		cell := tablet.Tablet.Alias.Cell
 		flow := outflow[cell]
 		if flow > 0 {
-			b.allocation[tablet.Tablet.Alias.Uid] = flow * flowPerTablet / b.target[cell]
-			b.totalAllocation += flow * flowPerTablet / b.target[cell]
+			a.Allocation[tablet.Tablet.Alias.Uid] = flow * flowPerTablet / a.Target[cell]
+			a.TotalAllocation += flow * flowPerTablet / a.Target[cell]
 		}
 	}
+
+	return &a
 }
 
-// getAllocation builds the allocation map if needed and returns a copy
-func (b *tabletBalancer) getAllocation(tablets []*discovery.TabletHealth) (map[uint32]int, int) {
+// getAllocation builds the allocation map if needed and returns a copy of the map
+func (b *tabletBalancer) getAllocation(target *querypb.Target, tablets []*discovery.TabletHealth) (map[uint32]int, int) {
 
-	if b.totalAllocation == 0 {
-		b.allocateFlows(tablets)
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	allocation, exists := b.allocations[discovery.KeyFromTarget(target)]
+	if !exists {
+		allocation = b.allocateFlows(tablets)
+		b.allocations[discovery.KeyFromTarget(target)] = allocation
 	}
 
-	return b.allocation, b.totalAllocation
+	return allocation.Allocation, allocation.TotalAllocation
 }

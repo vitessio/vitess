@@ -337,7 +337,7 @@ func (gw *TabletGateway) withRetry(ctx context.Context, target *querypb.Target, 
 			break
 		}
 
-		gw.balancer.ShuffleTablets(tablets)
+		gw.balancer.ShuffleTablets(target, tablets)
 
 		var th *discovery.TabletHealth
 		// skip tablets we tried before
