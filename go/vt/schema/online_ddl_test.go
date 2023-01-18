@@ -659,4 +659,54 @@ func TestFromJSON(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("context parsing", func(t *testing.T) {
+		tests := []testcase{
+			{
+				json: `{"context": "abc123"}`,
+				expected: &OnlineDDL{
+					MigrationContext: "abc123",
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						MigrationContext: "abc123",
+					},
+				},
+			},
+			{
+				json: `{"migration_context": "abc123"}`,
+				expected: &OnlineDDL{
+					MigrationContext: "abc123",
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						MigrationContext: "abc123",
+					},
+				},
+			},
+			{
+				json: `{
+					"context": "abc123",
+					"migration_context": "def456"
+				}`,
+				expected: &OnlineDDL{
+					MigrationContext: "def456",
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						MigrationContext: "def456",
+					},
+				},
+			},
+		}
+
+		for _, test := range tests {
+			test := test
+
+			t.Run("", func(t *testing.T) {
+				actual, err := FromJSON([]byte(test.json))
+				if test.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				utils.MustMatch(t, test.expected, actual)
+			})
+		}
+	})
 }

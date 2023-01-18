@@ -143,7 +143,7 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 		Squash: true,
 		MatchName: func(mapKey, fieldName string) bool {
 			switch mapKey {
-			case "tablet_alias", "request_time":
+			case "tablet_alias", "request_time", "migration_context":
 				if strings.EqualFold(mapKey, fieldName) {
 					return true
 				} else if strings.EqualFold(camelcase(mapKey), camelcase(fieldName)) {
@@ -193,8 +193,16 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 			// TODO: log warning
 		}
 	}
-
 	onlineDDL.RequestTime = protoutil.TimeFromProto(onlineDDL.OnlineDDL.RequestTime).UnixNano()
+
+	if onlineDDL.MigrationContext != "" {
+		if onlineDDL.OnlineDDL.MigrationContext == "" {
+			onlineDDL.OnlineDDL.MigrationContext = onlineDDL.MigrationContext
+		}
+
+		// TODO: log warning
+	}
+	onlineDDL.MigrationContext = onlineDDL.OnlineDDL.MigrationContext
 
 	return onlineDDL, nil
 }

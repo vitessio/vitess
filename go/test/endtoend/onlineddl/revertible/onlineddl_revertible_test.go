@@ -310,7 +310,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true})
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, alterStatement, cluster.VtctlClientParams{DDLStrategy: ddlStrategy})
 		if expectError == "" {
 			assert.NoError(t, err)
 			uuid = output
