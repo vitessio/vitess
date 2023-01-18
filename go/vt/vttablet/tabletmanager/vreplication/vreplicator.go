@@ -78,6 +78,15 @@ const (
 	values(%a, %a, convert(%a using utf8mb4))`
 	sqlGetPostCopyActions = `select id, action from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a`
+	// sqlGetPostCopyActionsForTable gets a write lock on all post_copy_action
+	// rows for the table and should only be called from within an explicit
+	// multi-statement transaction in order to hold those locks until the
+	// related work is finished as this is a concurrency control mechanism.
+	sqlGetPostCopyActionsForTable = `select id, vrepl_id, action from _vt.post_copy_action where id in
+	(
+		select pca.id from _vt.post_copy_action pca inner join _vt.vreplication vr on (pca.vrepl_id = vr.id)
+		where table_name=%a
+	) for update`
 	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where
 	action->>'$.type'=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
@@ -117,7 +126,7 @@ type vreplicator struct {
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
-// Keyspce, Shard, Filter, OnDdl, ExternalMySql and StopAfterCopy.
+// Keyspace, Shard, Filter, OnDdl, ExternalMySql and StopAfterCopy.
 // The Filter consists of Rules. Each Rule has a Match and an (inner) Filter field.
 // The Match can be a table name or, if it begins with a "/", a wildcard.
 // The Filter can be empty: get all rows and columns.
@@ -649,6 +658,15 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 			return err
 		}
 		if _, err := dbClient.ExecuteFetch(sqlparser.String(alterDrop), 1); err != nil {
+			// If they've already been dropped, e.g. by another controller running on the tablet
+			// when doing a shard merge, then we can ignore the error.
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERCantDropFieldOrKey {
+				secondaryKeys, err := vr.getTableSecondaryKeys(ctx, tableName)
+				if err == nil && len(secondaryKeys) == 0 {
+					return nil
+				}
+			}
+
 			return err
 		}
 	}
@@ -704,27 +722,12 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	defer dbClient.Close()
 
-	// Save our connection ID so we can use it to easily KILL any
-	// running SQL action we may perform later if needed.
-	qr, err := dbClient.ExecuteFetch("select connection_id()", 1)
-	if err != nil {
-		return err
-	}
-	// qr should never be nil, but check anyway to be extra safe.
-	if qr == nil || len(qr.Rows) != 1 {
-		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(qr.Rows))
-	}
-	connID, err := qr.Rows[0][0].ToUint64()
-	if err != nil || connID == 0 {
-		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
-	}
-
 	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Uint32BindVariable(vr.id),
 		sqltypes.StringBindVariable(tableName))
 	if err != nil {
 		return err
 	}
-	qr, err = dbClient.ExecuteFetch(query, -1)
+	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
 	}
@@ -736,6 +739,34 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	if err := vr.insertLog(LogCopyStart, fmt.Sprintf("Executing %d post copy action(s) for %s table",
 		len(qr.Rows), tableName)); err != nil {
 		return err
+	}
+
+	// Save our connection ID so we can use it to easily KILL any
+	// running SQL action we may perform later if needed.
+	idqr, err := dbClient.ExecuteFetch("select connection_id()", 1)
+	if err != nil {
+		return err
+	}
+	// qr should never be nil, but check anyway to be extra safe.
+	if idqr == nil || len(idqr.Rows) != 1 {
+		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
+	}
+	connID, err := idqr.Rows[0][0].ToUint64()
+	if err != nil || connID == 0 {
+		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
+	}
+
+	deleteAction := func(dbc *vdbClient, vid uint32, id int64, tn string) error {
+		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Uint32BindVariable(vid),
+			sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
+		if err != nil {
+			return err
+		}
+		if _, err := dbc.ExecuteFetch(delq, 1); err != nil {
+			return fmt.Errorf("failed to delete post copy action for the %q table with id %d: %v",
+				tableName, id, err)
+		}
+		return nil
 	}
 
 	// This could take hours so we start a monitoring goroutine to
@@ -791,11 +822,68 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		default:
 		}
 		action = PostCopyAction{}
-		acv, err := row["action"].ToBytes()
+		actionBytes, err := row["action"].ToBytes()
 		if err != nil {
 			return err
 		}
-		if err := json.Unmarshal(acv, &action); err != nil {
+		if err := json.Unmarshal(actionBytes, &action); err != nil {
+			return err
+		}
+
+		// There can be multiple vreplicators/controllers running on
+		// the same tablet for the same table e.g. when doing shard
+		// merges. Let's check for that and if there are still others
+		// that have not finished the copy phase for the table, with
+		// the same action, then we skip executing it as an individual
+		// action on a table should only be done by the last vreplicator
+		// to finish. We use a transaction because we select matching
+		// rows with FOR UPDATE in order to serialize the execution of
+		// the post copy actions for the same workflow and table.
+		// This ensures that the actions are only performed once after
+		// all streams have completed the copy phase for the table.
+		_, err = dbClient.ExecuteFetch("start transaction", 1)
+		if err != nil {
+			return err
+		}
+		ctlq, err := sqlparser.ParseAndBind(sqlGetPostCopyActionsForTable, sqltypes.StringBindVariable(tableName))
+		if err != nil {
+			return err
+		}
+		ctlres, err := dbClient.ExecuteFetch(ctlq, -1)
+		if err != nil {
+			return fmt.Errorf("failed to get post copy actions for the %q table: %v", tableName, err)
+		}
+		if ctlres != nil && len(ctlres.Rows) > 1 {
+			// We have more than one planned post copy action on the table.
+			for _, row := range ctlres.Named().Rows {
+				ctlid, err := row["vrepl_id"].ToInt64()
+				if err != nil {
+					return err
+				}
+				ctlaction := row["action"].ToString()
+				// Let's make sure that it's a different controller/vreplicator
+				// and that the action is the same.
+				if ctlid != int64(vr.id) && ctlaction == string(actionBytes) {
+					// We know that there's another controller/vreplicator yet
+					// to finish its copy phase for the table and it will perform
+					// the same action on the same table when it completes, so we
+					// skip doing the action and simply delete our action record
+					// to mark this controller/vreplicator's post copy action work
+					// as being done for the table before it finishes the copy
+					// phase for the table.
+					id, err := row["id"].ToInt64()
+					if err != nil {
+						return err
+					}
+					if err := deleteAction(dbClient, vr.id, id, tableName); err != nil {
+						return err
+					}
+					break
+				}
+			}
+		}
+		_, err = dbClient.ExecuteFetch("commit", 1)
+		if err != nil {
 			return err
 		}
 
@@ -858,12 +946,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 			if err != nil {
 				return err
 			}
-			delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Uint32BindVariable(vr.id),
-				sqltypes.StringBindVariable(tableName), sqltypes.Int64BindVariable(id))
-			if err != nil {
-				return err
-			}
-			if _, err := dbClient.ExecuteFetch(delq, 1); err != nil {
+			if err := deleteAction(dbClient, vr.id, id, tableName); err != nil {
 				return err
 			}
 		default:
