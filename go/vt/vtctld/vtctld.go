@@ -20,9 +20,6 @@ package vtctld
 
 import (
 	"context"
-	"strings"
-	"net/http"
-
 
 	"github.com/spf13/pflag"
 
