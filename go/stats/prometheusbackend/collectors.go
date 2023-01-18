@@ -74,7 +74,7 @@ func newCountersWithSingleLabelCollector(c *stats.CountersWithSingleLabel, name 
 		desc: prometheus.NewDesc(
 			name,
 			c.Help(),
-			[]string{labelName},
+			[]string{normalizeMetric(labelName)},
 			nil),
 		vt: vt}
 
@@ -111,7 +111,7 @@ func newGaugesWithSingleLabelCollector(g *stats.GaugesWithSingleLabel, name stri
 		desc: prometheus.NewDesc(
 			name,
 			g.Help(),
-			[]string{labelName},
+			[]string{normalizeMetric(labelName)},
 			nil),
 		vt: vt}
 
@@ -266,7 +266,7 @@ func newTimingsCollector(t *stats.Timings, name string) {
 		desc: prometheus.NewDesc(
 			name,
 			t.Help(),
-			[]string{t.Label()},
+			[]string{normalizeMetric(t.Label())},
 			nil),
 	}
 

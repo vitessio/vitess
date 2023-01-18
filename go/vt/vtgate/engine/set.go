@@ -101,13 +101,6 @@ type (
 
 var unsupportedSQLModes = []string{"ANSI_QUOTES", "NO_BACKSLASH_ESCAPES", "PIPES_AS_CONCAT", "REAL_AS_FLOAT"}
 
-var isolationLevelToExecuteOptionIsolationLevel = map[string]querypb.ExecuteOptions_TransactionIsolation{
-	"REPEATABLE-READ":  querypb.ExecuteOptions_REPEATABLE_READ,
-	"READ-COMMITTED":   querypb.ExecuteOptions_READ_COMMITTED,
-	"READ-UNCOMMITTED": querypb.ExecuteOptions_READ_UNCOMMITTED,
-	"SERIALIZABLE":     querypb.ExecuteOptions_SERIALIZABLE,
-}
-
 var _ Primitive = (*Set)(nil)
 
 // RouteType implements the Primitive interface method.
@@ -260,7 +253,7 @@ func (svci *SysVarCheckAndIgnore) Execute(ctx context.Context, vcursor VCursor, 
 		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Unexpected error, DestinationKeyspaceID mapping to multiple shards: %v", svci.TargetDestination)
 	}
 	checkSysVarQuery := fmt.Sprintf("select 1 from dual where @@%s = %s", svci.Name, svci.Expr)
-	result, err := execShard(ctx, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	result, err := execShard(ctx, nil, vcursor, checkSysVarQuery, env.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		// Rather than returning the error, we will just log the error
 		// as the intention for executing the query it to validate the current setting and eventually ignore it anyways.
@@ -324,7 +317,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
@@ -336,7 +329,7 @@ func (svs *SysVarReservedConn) execSetStatement(ctx context.Context, vcursor VCu
 			BindVariables: env.BindVars,
 		}
 	}
-	_, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	_, errs := vcursor.ExecuteMultiShard(ctx, nil, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	return vterrors.Aggregate(errs)
 }
 
@@ -349,7 +342,7 @@ func (svs *SysVarReservedConn) checkAndUpdateSysVar(ctx context.Context, vcursor
 	if err != nil {
 		return false, err
 	}
-	qr, err := execShard(ctx, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
+	qr, err := execShard(ctx, nil, vcursor, sysVarExprValidationQuery, res.BindVars, rss[0], false /* rollbackOnError */, false /* canAutocommit */)
 	if err != nil {
 		return false, err
 	}
@@ -466,20 +459,6 @@ func (svss *SysVarSetAware) Execute(ctx context.Context, vcursor VCursor, env *e
 		// TODO (4127): This is a dangerous NOP.
 		noop := func(context.Context, bool) error { return nil }
 		err = svss.setBoolSysVar(ctx, env, noop)
-	case sysvars.TxIsolation.Name,
-		sysvars.TransactionIsolation.Name:
-		str, err := svss.evalAsString(env)
-		if err != nil {
-			return err
-		}
-		upperStr := strings.ToUpper(str)
-		out, ok := isolationLevelToExecuteOptionIsolationLevel[upperStr]
-		if !ok {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueForVar, "Variable '%s' can't be set to the value of '%s'", svss.Name, str)
-		}
-		vcursor.Session().SetTransactionIsolation(out)
-		vcursor.Session().SetSysVar(sysvars.TxIsolation.Name, fmt.Sprintf("'%s'", upperStr))
-		vcursor.Session().SetSysVar(sysvars.TransactionIsolation.Name, fmt.Sprintf("'%s'", upperStr))
 	case sysvars.SQLSelectLimit.Name:
 		intValue, err := svss.evalAsInt64(env)
 		if err != nil {

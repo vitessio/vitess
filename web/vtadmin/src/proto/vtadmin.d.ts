@@ -24092,8 +24092,8 @@ export namespace tabletmanagerdata {
     /** Properties of a VDiffReportOptions. */
     interface IVDiffReportOptions {
 
-        /** VDiffReportOptions only_p_k_s */
-        only_p_k_s?: (boolean|null);
+        /** VDiffReportOptions only_pks */
+        only_pks?: (boolean|null);
 
         /** VDiffReportOptions debug_query */
         debug_query?: (boolean|null);
@@ -24111,8 +24111,8 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.IVDiffReportOptions);
 
-        /** VDiffReportOptions only_p_k_s. */
-        public only_p_k_s: boolean;
+        /** VDiffReportOptions only_pks. */
+        public only_pks: boolean;
 
         /** VDiffReportOptions debug_query. */
         public debug_query: boolean;
@@ -32548,6 +32548,9 @@ export namespace vschema {
 
         /** Table column_list_authoritative */
         column_list_authoritative?: (boolean|null);
+
+        /** Table source */
+        source?: (string|null);
     }
 
     /** Represents a Table. */
@@ -32576,6 +32579,9 @@ export namespace vschema {
 
         /** Table column_list_authoritative. */
         public column_list_authoritative: boolean;
+
+        /** Table source. */
+        public source: string;
 
         /**
          * Creates a new Table instance using the specified properties.
@@ -51981,6 +51987,9 @@ export namespace binlogdata {
 
         /** Rule source_unique_key_target_columns */
         source_unique_key_target_columns?: (string|null);
+
+        /** Rule convert_int_to_enum */
+        convert_int_to_enum?: ({ [k: string]: boolean }|null);
     }
 
     /** Represents a Rule. */
@@ -52012,6 +52021,9 @@ export namespace binlogdata {
 
         /** Rule source_unique_key_target_columns. */
         public source_unique_key_target_columns: string;
+
+        /** Rule convert_int_to_enum. */
+        public convert_int_to_enum: { [k: string]: boolean };
 
         /**
          * Creates a new Rule instance using the specified properties.

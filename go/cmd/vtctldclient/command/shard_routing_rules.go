@@ -35,15 +35,20 @@ var (
 	// ApplyShardRoutingRules makes an ApplyShardRoutingRules gRPC call to a vtctld.
 	ApplyShardRoutingRules = &cobra.Command{
 		Use:                   "ApplyShardRoutingRules {--rules RULES | --rules-file RULES_FILE} [--cells=c1,c2,...] [--skip-rebuild] [--dry-run]",
-		Short:                 "Applies VSchema shard routing rules.",
+		Short:                 "Applies the provided shard routing rules.",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandApplyShardRoutingRules,
 	}
 	// GetShardRoutingRules makes a GetShardRoutingRules gRPC call to a vtctld.
 	GetShardRoutingRules = &cobra.Command{
-		Use:                   "GetShardRoutingRules",
-		Short:                 "Displays VSchema shard routing rules.",
+		Use:   "GetShardRoutingRules",
+		Short: "Displays the currently active shard routing rules as a JSON document.",
+		Long: `Displays the currently active shard routing rules as a JSON document.
+
+See the documentation on shard level migrations[1] for more information.
+
+[1]: https://vitess.io/docs/reference/vreplication/shardlevelmigrations/`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.NoArgs,
 		RunE:                  commandGetShardRoutingRules,

@@ -630,13 +630,22 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
-		"vtgate_queries_vtexplain": {
+		"vtgate_queries_vexplain": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vtexplain"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vexplain"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vtgate_queries_reference": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/reference"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_concurrentdml": {
@@ -1170,6 +1179,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+                "vreplication_mariadb_to_mysql": {
+                        "File": "unused.go",
+                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "10m"],
+                        "Command": [],
+                        "Manual": false,
+                        "Shard": "vreplication_across_db_versions",
+                        "RetryMax": 1,
+                        "Tags": []
+                },
 		"vreplication_migrate": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],

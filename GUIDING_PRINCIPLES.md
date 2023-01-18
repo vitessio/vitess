@@ -6,7 +6,7 @@ The Vitess project operates under the guiding principles described below. The [S
 
 *“To be the most performant, scalable, and available NewSQL storage system in the Cloud.”*
 
-Vitess can currently run on bare-metal. However, the trend is clear that applications are moving to the cloud. For the foreseeable future, we should continue to support the ability to run on bare-metal, because it will facilitate migration to the cloud.
+Vitess can currently run on bare-metal or in the cloud. However, the trend is clear that applications are moving to the cloud. For the foreseeable future, we should continue to support the ability to run on bare-metal, because it will facilitate migration to the cloud.
 
 The Vitess architecture is generic enough to accommodate any other RDBMS in the future. However, Vitess currently runs on MySQL and has many features that provide compatibility with it. Vitess should remain focused on MySQL until all frictions are removed for those who wish to migrate from MySQL to Vitess.
 

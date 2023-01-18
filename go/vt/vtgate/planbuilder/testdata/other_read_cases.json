@@ -24,7 +24,11 @@
       "QueryType": "EXPLAIN",
       "Original": "explain format=vitess select * from user",
       "Instructions": {
-        "OperatorType": "Rows"
+        "OperatorType": "Rows",
+        "Fields": {
+          "JSON": "VARCHAR"
+        },
+        "RowCount": 1
       }
     }
   },
@@ -80,52 +84,6 @@
         "Query": "explain select * from t",
         "SingleShardOnly": true
       }
-    }
-  },
-  {
-    "query": "explain format=vtexplain select * from user",
-    "v3-plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "explain format=vtexplain select * from user",
-      "Instructions": {
-        "OperatorType": "VTEXPLAIN",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "EXPLAIN",
-      "Original": "explain format=vtexplain select * from user",
-      "Instructions": {
-        "OperatorType": "VTEXPLAIN",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Unsharded",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select * from `user` where 1 != 1",
-            "Query": "select * from `user`",
-            "Table": "`user`"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "main.user"
-      ]
     }
   }
 ]

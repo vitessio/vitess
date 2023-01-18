@@ -42,7 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -669,7 +668,6 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		resp := make(map[string]any)
 		resp["activeReparents"] = !mysqlctl.DisableActiveReparents
 		resp["showStatus"] = enableRealtimeStats
-		resp["workflows"] = workflow.AvailableFactories()
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {
 			return fmt.Errorf("json error: %v", err)

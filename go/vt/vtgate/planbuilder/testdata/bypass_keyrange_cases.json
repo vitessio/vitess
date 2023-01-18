@@ -74,7 +74,7 @@
   {
     "comment": "insert bypass: not supported",
     "query": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
-    "plan": "INSERT not supported when targeting a key range: targetString"
+    "plan": "VT03023: INSERT not supported when targeting a key range: targetString"
   },
   {
     "comment": "bypass query for into outfile s3",
@@ -111,6 +111,7 @@
     }
   },
   {
+    "comment": "load data from s3 'x.txt' into table x",
     "query": "load data from s3 'x.txt' into table x",
     "plan": {
       "QueryType": "OTHER",
@@ -129,6 +130,7 @@
     }
   },
   {
+    "comment": "load data from s3 'x.txt'",
     "query": "load data from s3 'x.txt'",
     "plan": {
       "QueryType": "OTHER",

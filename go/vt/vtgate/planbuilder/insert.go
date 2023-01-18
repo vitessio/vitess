@@ -17,7 +17,6 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -27,7 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -36,8 +34,8 @@ import (
 
 // buildInsertPlan builds the route for an INSERT statement.
 func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
+	pb := newStmtAwarePrimitiveBuilder(vschema, newJointab(reservedVars), stmt)
 	ins := stmt.(*sqlparser.Insert)
-	pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
 	exprs := sqlparser.TableExprs{&sqlparser.AliasedTableExpr{Expr: ins.Table}}
 	rb, err := pb.processDMLTable(exprs, reservedVars, nil)
 	if err != nil {
@@ -46,12 +44,12 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 	// The table might have been routed to a different one.
 	ins.Table = exprs[0].(*sqlparser.AliasedTableExpr).Expr.(sqlparser.TableName)
 	if rb.eroute.TargetDestination != nil {
-		return nil, errors.New("unsupported: INSERT with a target destination")
+		return nil, vterrors.VT12001("INSERT with a target destination")
 	}
 
 	if len(pb.st.tables) != 1 {
 		// Unreachable.
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "multi-table insert statement in not supported in sharded keyspace")
+		return nil, vterrors.VT12001("multi-table INSERT statement in a sharded keyspace")
 	}
 	var vschemaTable *vindexes.Table
 	for _, tval := range pb.st.tables {
@@ -62,7 +60,7 @@ func buildInsertPlan(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedV
 		return buildInsertUnshardedPlan(ins, vschemaTable, reservedVars, vschema)
 	}
 	if ins.Action == sqlparser.ReplaceAct {
-		return nil, errors.New("unsupported: REPLACE INTO with sharded schema")
+		return nil, vterrors.VT12001("REPLACE INTO with sharded keyspace")
 	}
 	return buildInsertShardedPlan(ins, vschemaTable, reservedVars, vschema)
 }
@@ -81,7 +79,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 	switch insertValues := ins.Rows.(type) {
 	case *sqlparser.Select, *sqlparser.Union:
 		if eins.Table.AutoIncrement != nil {
-			return nil, errors.New("unsupported: auto-inc and select in insert")
+			return nil, vterrors.VT12001("auto-increment and SELECT in INSERT")
 		}
 		plan, err := subquerySelectPlan(ins, vschema, reservedVars, false)
 		if err != nil {
@@ -98,7 +96,7 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 	case sqlparser.Values:
 		rows = insertValues
 	default:
-		return nil, fmt.Errorf("BUG: unexpected construct in insert: %T", insertValues)
+		return nil, vterrors.VT13001(fmt.Sprintf("unexpected construct in INSERT: %T", insertValues))
 	}
 	if eins.Table.AutoIncrement == nil {
 		eins.Query = generateQuery(ins)
@@ -110,12 +108,12 @@ func buildInsertUnshardedPlan(ins *sqlparser.Insert, table *vindexes.Table, rese
 			if table.ColumnListAuthoritative {
 				populateInsertColumnlist(ins, table)
 			} else {
-				return nil, errors.New("column list required for tables with auto-inc columns")
+				return nil, vterrors.VT13001("column list required for tables with auto-inc columns")
 			}
 		}
 		for _, row := range rows {
 			if len(ins.Columns) != len(row) {
-				return nil, errors.New("column list doesn't match values")
+				return nil, vterrors.VT13001("column list does not match values")
 			}
 		}
 		if err := modifyForAutoinc(ins, eins); err != nil {
@@ -137,7 +135,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 	eins.Ignore = bool(ins.Ignore)
 	if ins.OnDup != nil {
 		if isVindexChanging(sqlparser.UpdateExprs(ins.OnDup), eins.Table.ColumnVindexes) {
-			return nil, errors.New("unsupported: DML cannot change vindex column")
+			return nil, vterrors.VT12001("DML cannot update vindex column")
 		}
 		eins.Ignore = true
 	}
@@ -158,7 +156,7 @@ func buildInsertShardedPlan(ins *sqlparser.Insert, table *vindexes.Table, reserv
 
 	for _, value := range rows {
 		if len(ins.Columns) != len(value) {
-			return nil, errors.New("column list doesn't match values")
+			return nil, vterrors.VT13001("column list does not match values")
 		}
 	}
 
@@ -207,7 +205,7 @@ func buildInsertSelectPlan(ins *sqlparser.Insert, table *vindexes.Table, reserve
 	// check if column list is provided if not, then vschema should be able to provide the column list.
 	if len(ins.Columns) == 0 {
 		if !table.ColumnListAuthoritative {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "insert should contain column list or the table should have authoritative columns in vschema")
+			return nil, vterrors.VT09004()
 		}
 		populateInsertColumnlist(ins, table)
 	}
@@ -274,7 +272,7 @@ func getStatementAndPlanner(
 		configuredPlanner, err = getConfiguredPlanner(vschema, buildUnionPlan, stmt, "")
 		selectStmt = stmt
 	default:
-		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: insert plan with %T", ins.Rows)
+		err = vterrors.VT12001(fmt.Sprintf("INSERT plan with %T", ins.Rows))
 	}
 
 	if err != nil {
@@ -286,7 +284,7 @@ func getStatementAndPlanner(
 
 func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStatement) error {
 	if len(ins.Columns) < selectStmt.GetColumnCount() {
-		return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
+		return vterrors.VT03006()
 	}
 	if len(ins.Columns) > selectStmt.GetColumnCount() {
 		sel := sqlparser.GetFirstSelect(selectStmt)
@@ -297,7 +295,7 @@ func checkColumnCounts(ins *sqlparser.Insert, selectStmt sqlparser.SelectStateme
 			}
 		}
 		if !hasStarExpr {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.WrongValueCountOnRow, "Column count doesn't match value count at row 1")
+			return vterrors.VT03006()
 		}
 	}
 	return nil
@@ -328,7 +326,7 @@ func extractColVindexOffsets(ins *sqlparser.Insert, colVindexes []*vindexes.Colu
 			colNum := findColumn(ins, col)
 			// sharding column values should be provided in the insert.
 			if colNum == -1 && idx == 0 {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "insert query does not have sharding column '%v' in the column list", col)
+				return nil, vterrors.VT09003(col)
 			}
 			vv[idx] = append(vv[idx], colNum)
 		}
@@ -417,7 +415,7 @@ func modifyForAutoinc(ins *sqlparser.Insert, eins *engine.Insert) error {
 		eins.Generate.Values = evalengine.NewTupleExpr(autoIncValues...)
 		return nil
 	}
-	return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected construct in insert: %T", ins.Rows)
+	return vterrors.VT13001(fmt.Sprintf("unexpected construct in INSERT: %T", ins.Rows))
 }
 
 // findOrAddColumn finds the position of a column in the insert. If it's

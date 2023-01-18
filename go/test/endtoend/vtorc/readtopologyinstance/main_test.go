@@ -103,7 +103,6 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, primaryInstance.HasReplicationCredentials)
 	assert.Equal(t, primaryInstance.ReplicationIOThreadState, inst.ReplicationThreadStateNoThread)
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
-	assert.Equal(t, fmt.Sprintf("%v:%v", keyspace.Name, shard0.Name), primaryInstance.ClusterName)
 
 	// insert an errant GTID in the replica
 	_, err = utils.RunSQL(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks")
@@ -159,5 +158,4 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.False(t, replicaInstance.HasReplicationFilters)
 	assert.LessOrEqual(t, int(replicaInstance.SecondsBehindPrimary.Int64), 1)
 	assert.False(t, replicaInstance.AllowTLS)
-	assert.Equal(t, fmt.Sprintf("%v:%v", keyspace.Name, shard0.Name), replicaInstance.ClusterName)
 }

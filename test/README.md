@@ -4,7 +4,7 @@ This document has a short outline of how tests are run in CI, how to add new tes
 
 ### Adding a new test
 
-Unit tests are run by the unit test runner, one per platform, currently mysql57, mysql80, mariadb101, mariadb102, mariadb103.
+Unit tests are run by the unit test runner, one per platform, currently mysql57, mysql80.
 The workflow first installs the required database server before calling `make unit_test`.
 
 To add a new end-to-end (e2e) test (also called _cluster end to end_ tests):

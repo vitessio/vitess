@@ -26,10 +26,11 @@ import (
 // vTableInfo is used to represent projected results, not real tables. It is used for
 // ORDER BY, GROUP BY and HAVING that need to access result columns
 type vTableInfo struct {
-	tableName   string
-	columnNames []string
-	cols        []sqlparser.Expr
-	tables      TableSet
+	tableName       string
+	columnNames     []string
+	cols            []sqlparser.Expr
+	tables          TableSet
+	isAuthoritative bool
 }
 
 var _ TableInfo = (*vTableInfo)(nil)
@@ -62,7 +63,7 @@ func (v *vTableInfo) matches(name sqlparser.TableName) bool {
 }
 
 func (v *vTableInfo) authoritative() bool {
-	return true
+	return v.isAuthoritative
 }
 
 func (v *vTableInfo) Name() (sqlparser.TableName, error) {
@@ -104,15 +105,16 @@ func (v *vTableInfo) getExprFor(s string) (sqlparser.Expr, error) {
 			return v.cols[i], nil
 		}
 	}
-	return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadFieldError, "Unknown column '%s' in 'field list'", s)
+	return nil, vterrors.VT03022(s, "field list")
 }
 
 func createVTableInfoForExpressions(expressions sqlparser.SelectExprs, tables []TableInfo, org originable) *vTableInfo {
-	cols, colNames, ts := selectExprsToInfos(expressions, tables, org)
+	cols, colNames, ts, isAuthoritative := selectExprsToInfos(expressions, tables, org)
 	return &vTableInfo{
-		columnNames: colNames,
-		cols:        cols,
-		tables:      ts,
+		columnNames:     colNames,
+		cols:            cols,
+		tables:          ts,
+		isAuthoritative: isAuthoritative,
 	}
 }
 
@@ -120,7 +122,8 @@ func selectExprsToInfos(
 	expressions sqlparser.SelectExprs,
 	tables []TableInfo,
 	org originable,
-) (cols []sqlparser.Expr, colNames []string, ts TableSet) {
+) (cols []sqlparser.Expr, colNames []string, ts TableSet, isAuthoritative bool) {
+	isAuthoritative = true
 	for _, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
@@ -139,6 +142,9 @@ func selectExprsToInfos(
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
 				ts = ts.Merge(table.getTableSet(org))
+				if !table.authoritative() {
+					isAuthoritative = false
+				}
 			}
 		}
 	}

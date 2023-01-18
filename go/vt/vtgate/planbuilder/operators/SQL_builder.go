@@ -17,13 +17,12 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"sort"
 	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
-	"vitess.io/vitess/go/vt/log"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -74,10 +73,7 @@ func (qb *queryBuilder) addTableExpr(
 		Hints:      hints,
 		Columns:    columnAliases,
 	}
-	err := qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
-	if err != nil {
-		log.Warningf("error in replacing table expression in semtable: %v", err)
-	}
+	qb.ctx.SemTable.ReplaceTableSetFor(tableID, elems)
 	sel.From = append(sel.From, elems)
 	qb.sel = sel
 	qb.tableNames = append(qb.tableNames, tableName)
@@ -165,18 +161,19 @@ func (qb *queryBuilder) joinOuterWith(other *queryBuilder, onCondition sqlparser
 }
 
 func (qb *queryBuilder) rewriteExprForDerivedTable(expr sqlparser.Expr, dtName string) {
-	sqlparser.Rewrite(expr, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			hasTable := qb.hasTable(node.Qualifier.Name.String())
-			if hasTable {
-				node.Qualifier = sqlparser.TableName{
-					Name: sqlparser.NewIdentifierCS(dtName),
-				}
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		col, ok := node.(*sqlparser.ColName)
+		if !ok {
+			return true, nil
+		}
+		hasTable := qb.hasTable(col.Qualifier.Name.String())
+		if hasTable {
+			col.Qualifier = sqlparser.TableName{
+				Name: sqlparser.NewIdentifierCS(dtName),
 			}
 		}
-		return true
-	}, nil)
+		return true, nil
+	}, expr)
 }
 
 func (qb *queryBuilder) hasTable(tableName string) bool {
@@ -240,12 +237,12 @@ func (h *Horizon) toSQL(qb *queryBuilder) error {
 	if err != nil {
 		return err
 	}
-	sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
-		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+	_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
 			removeKeyspaceFromSelectExpr(aliasedExpr)
 		}
-		return true
-	}, nil)
+		return true, nil
+	}, qb.sel)
 	return nil
 }
 
@@ -265,7 +262,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	case *sqlparser.Select:
 		toNode, ok := to.(*sqlparser.Select)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+			return vterrors.VT13001("AST did not match")
 		}
 		toNode.Distinct = node.Distinct
 		toNode.GroupBy = node.GroupBy
@@ -279,7 +276,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 	case *sqlparser.Union:
 		toNode, ok := to.(*sqlparser.Union)
 		if !ok {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "AST did not match")
+			return vterrors.VT13001("AST did not match")
 		}
 		err = stripDownQuery(node.Left, toNode.Left)
 		if err != nil {
@@ -291,7 +288,7 @@ func stripDownQuery(from, to sqlparser.SelectStatement) error {
 		}
 		toNode.OrderBy = node.OrderBy
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: this should not happen - we have covered all implementations of SelectStatement %T", from)
+		return vterrors.VT13001(fmt.Sprintf("this should not happen - we have covered all implementations of SelectStatement %T", from))
 	}
 	return nil
 }
@@ -347,7 +344,8 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		}
 		sel := qb.sel.(*sqlparser.Select) // we can only handle SELECT in derived tables at the moment
 		qb.sel = nil
-		opQuery := sqlparser.RemoveKeyspace(op.Query).(*sqlparser.Select)
+		sqlparser.RemoveKeyspace(op.Query)
+		opQuery := op.Query.(*sqlparser.Select)
 		sel.Limit = opQuery.Limit
 		sel.OrderBy = opQuery.OrderBy
 		sel.GroupBy = opQuery.GroupBy
@@ -369,16 +367,16 @@ func buildQuery(op ops.Operator, qb *queryBuilder) error {
 		if err != nil {
 			return err
 		}
-		sqlparser.Rewrite(qb.sel, func(cursor *sqlparser.Cursor) bool {
-			if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+		_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+			if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
 				removeKeyspaceFromSelectExpr(aliasedExpr)
 			}
-			return true
-		}, nil)
+			return true, nil
+		}, qb.sel)
 		return nil
 
 	default:
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "don't know how to turn %T into SQL", op)
+		return vterrors.VT13001(fmt.Sprintf("do not know how to turn %T into SQL", op))
 	}
 	return nil
 }

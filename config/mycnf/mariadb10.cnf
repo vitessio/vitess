@@ -1,0 +1,41 @@
+# This file is auto-included when MariaDB 10 is detected.
+
+# Semi-sync replication is required for automated unplanned failover
+# (when the primary goes away). Here we just load the plugin so it's
+# available if desired, but it's disabled at startup.
+#
+# VTTablet will enable semi-sync at the proper time when replication is set up,
+# or when a primary is promoted or demoted based on the durability policy configured.
+plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisync_slave.so
+
+# MariaDB 10 is unstrict by default in some versions.
+sql_mode = STRICT_TRANS_TABLES,NO_ENGINE_SUBSTITUTION
+
+# Enable strict mode so it's safe to compare sequence numbers across different server IDs.
+gtid_strict_mode = 1
+innodb_stats_persistent = 0
+
+# When semi-sync is enabled, don't allow fallback to async
+# if you get no ack, or have no replicas. This is necessary to
+# prevent alternate futures when doing a failover in response to
+# a primary that becomes unresponsive.
+rpl_semi_sync_master_timeout = 1000000000000000000
+rpl_semi_sync_master_wait_no_slave = 1
+
+# MariaDB 10 does not have crash safe binlogs by default.
+sync_binlog = 1
+expire_logs_days = 3
+# MariaDB 10 uses MIXED mode by default which is not supported by VReplication.
+binlog_format = ROW
+# MariaDB 10 does not support full replica binary logs by default, which we
+# need for backups and restores.
+log_slave_updates
+
+# Some MariaDB 10 versions set this to 1 hour, which can cause hidden replication lag and
+# unexpected Vitess issue as the mariadbd instance thinks it's caught up when it is not.
+slave_net_timeout = 60
+
+# In MariaDB 10 the default charset is latin1.
+character_set_server = utf8
+collation_server = utf8_general_ci
+

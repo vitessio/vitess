@@ -187,7 +187,7 @@ func filterResultForWarning(input string) string {
 	lines := strings.Split(input, "\n")
 	var result string
 	for _, line := range lines {
-		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff workflows") {
+		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
 		}
 		result = result + line + "\n"

@@ -116,8 +116,14 @@ type Handler interface {
 	// execute query.
 	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
+	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
+	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
+
+	// ComBinlogDump is called when a connection receives a ComBinlogDump request
+	ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error
+
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.

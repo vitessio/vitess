@@ -135,7 +135,7 @@ func renewLostInRecoveryDowntime() error {
 // expireLostInRecoveryDowntime expires downtime for servers who have been lost in recovery in the last,
 // but are now replicating.
 func expireLostInRecoveryDowntime() error {
-	instances, err := ReadLostInRecoveryInstances("")
+	instances, err := ReadLostInRecoveryInstances("", "")
 	if err != nil {
 		return err
 	}

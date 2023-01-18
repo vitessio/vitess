@@ -234,6 +234,10 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 	backendLatency := latency.Elapsed("backend")
 	instanceLatency := latency.Elapsed("instance")
 
+	if forceDiscovery {
+		log.Infof("Force discovered - %+v, err - %v", instance, err)
+	}
+
 	if instance == nil {
 		failedDiscoveriesCounter.Inc(1)
 		_ = discoveryMetrics.Append(&discovery.Metric{
@@ -253,10 +257,6 @@ func DiscoverInstance(instanceKey inst.InstanceKey, forceDiscovery bool) {
 				err)
 		}
 		return
-	}
-
-	if forceDiscovery {
-		log.Infof("Force discovered - %+v", instance)
 	}
 
 	_ = discoveryMetrics.Append(&discovery.Metric{
@@ -385,7 +385,6 @@ func ContinuousDiscovery() {
 			// Various periodic internal maintenance tasks
 			go func() {
 				if IsLeaderOrActive() {
-					go inst.InjectUnseenPrimaries()
 
 					go inst.ForgetLongUnseenInstances()
 					go inst.ForgetUnseenInstancesDifferentlyResolved()
@@ -395,7 +394,6 @@ func ContinuousDiscovery() {
 					go inst.ExpireMaintenance()
 					go inst.ExpireCandidateInstances()
 					go inst.ExpireHostnameUnresolve()
-					go inst.ExpireClusterDomainName()
 					go inst.ExpireAudit()
 					go inst.FlushNontrivialResolveCacheToDatabase()
 					go inst.ExpireStaleInstanceBinlogCoordinates()

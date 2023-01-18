@@ -390,7 +390,11 @@ var executorVSchema = `
 					"type": "VARCHAR"
 				}
 			]
-    	}
+    	},
+		"zip_detail": {
+			"type": "reference",
+			"source": "TestUnsharded.zip_detail"
+		}
 	}
 }
 `
@@ -428,7 +432,8 @@ var unshardedVSchema = `
 		"nrl_lu_idx": {},
 		"nv_lu_idx": {},
 		"lu_idx": {},
-		"simple": {}
+		"simple": {},
+		"zip_detail": {}
 	}
 }
 `

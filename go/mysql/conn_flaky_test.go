@@ -1161,7 +1161,15 @@ func (t testRun) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sq
 	panic("implement me")
 }
 
-func (t testRun) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
+func (t testRun) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	panic("implement me")
+}
+
+func (t testRun) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
+	panic("implement me")
+}
+
+func (t testRun) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error {
 	panic("implement me")
 }
 
@@ -1172,6 +1180,15 @@ func (t testRun) ComQuery(c *Conn, query string, callback func(*sqltypes.Result)
 	if strings.Contains(query, "panic") {
 		panic("test panic attack!")
 	}
+	if strings.Contains(query, "close before rows read") {
+		c.writeFields(selectRowsResult)
+		// We want to close the connection after the fields are written
+		// and read on the client. So we sleep for 100 milliseconds
+		time.Sleep(100 * time.Millisecond)
+		c.Close()
+		return nil
+	}
+
 	if strings.Contains(query, "twice") {
 		callback(selectRowsResult)
 	}
