@@ -76,6 +76,10 @@ The Table/Keyspace fields were deprecated in v15 and are now removed in the v16.
 
 The stat `QueryRowCounts` is removed in V16. `QueryRowsAffected` and `QueryRowsReturned` can be used instead to gather the same information.
 
+#### Deprecated Stats
+
+The stats `QueriesProcessed` and `QueriesRouted` are deprecated in V16. The same information can be inferred from the stats `QueriesProcessedByTable` and `QueriesRoutedByTable` respectively. These stats will be removed in the next release.
+
 #### Removed flag
 
 The following flag is removed in v16.0.0:
