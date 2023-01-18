@@ -133,19 +133,17 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 	defer bs.Close()
 
-	if p, ok := bs.(backupstorage.Parameterizer); ok {
-		// Scope stats to selected storage engine.
-		stats := params.Stats.Scope(
-			stats.Component(stats.BackupStorage),
-			stats.Implementation(
-				titleCase(backupstorage.BackupStorageImplementation),
-			),
-		)
-		bs = p.WithParams(backupstorage.Params{
-			Logger: params.Logger,
-			Stats:  stats,
-		})
-	}
+	// Scope bsStats to selected storage engine.
+	bsStats := params.Stats.Scope(
+		stats.Component(stats.BackupStorage),
+		stats.Implementation(
+			titleCase(backupstorage.BackupStorageImplementation),
+		),
+	)
+	bs = bs.WithParams(backupstorage.Params{
+		Logger: params.Logger,
+		Stats:  bsStats,
+	})
 
 	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
@@ -325,19 +323,17 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 	defer bs.Close()
 
-	if p, ok := bs.(backupstorage.Parameterizer); ok {
-		// Scope stats to selected storage engine.
-		stats := params.Stats.Scope(
-			stats.Component(backupstats.BackupStorage),
-			stats.Implementation(
-				titleCase(backupstorage.BackupStorageImplementation),
-			),
-		)
-		bs = p.WithParams(backupstorage.Params{
-			Logger: params.Logger,
-			Stats:  stats,
-		})
-	}
+	// Scope bsStats to selected storage engine.
+	bsStats := params.Stats.Scope(
+		stats.Component(backupstats.BackupStorage),
+		stats.Implementation(
+			titleCase(backupstorage.BackupStorageImplementation),
+		),
+	)
+	bs = bs.WithParams(backupstorage.Params{
+		Logger: params.Logger,
+		Stats:  bsStats,
+	})
 
 	// Backups are stored in a directory structure that starts with
 	// <keyspace>/<shard>

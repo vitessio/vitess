@@ -31,12 +31,6 @@ type Params struct {
 	Stats  backupstats.Stats
 }
 
-// Parameterizer gives BackupStorage components a way to opt in to receiving
-// Params without breaking the current API.
-type Parameterizer interface {
-	WithParams(Params) BackupStorage
-}
-
 // NoParams gives BackupStorage components way to log and generate stats
 // without doing nil checking.
 func NoParams() Params {

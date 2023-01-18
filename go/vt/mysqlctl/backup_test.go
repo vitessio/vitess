@@ -66,7 +66,6 @@ func TestBackupNoStats(t *testing.T) {
 	defer closer()
 
 	env.setStats(nil)
-	env.useBackupStorageWithParams(true)
 
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
@@ -80,8 +79,6 @@ func TestBackupNoStats(t *testing.T) {
 func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
-
-	env.useBackupStorageWithParams(true)
 
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
@@ -120,13 +117,6 @@ func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
-	// We're just testing that we don't get a nil dereference error.
-	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
-
-	env.useBackupStorageWithParams(true)
-
-	// We're now testing that backupstorage get parameterized with logger and
-	// scoped stats.
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
@@ -373,7 +363,6 @@ func TestRestoreNoStats(t *testing.T) {
 	defer closer()
 
 	env.setStats(nil)
-	env.useBackupStorageWithParams(true)
 
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.Nil(t, err, env.logger.Events)
@@ -388,8 +377,6 @@ func TestRestoreNoStats(t *testing.T) {
 func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
-
-	env.useBackupStorageWithParams(true)
 
 	_, err := Restore(env.ctx, env.restoreParams)
 	require.Nil(t, err, env.logger.Events)
@@ -414,16 +401,7 @@ func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
 	env, closer := createFakeBackupRestoreEnv(t)
 	defer closer()
 
-	// We're just testing that we don't get a nil dereference error.
 	_, err := Restore(env.ctx, env.restoreParams)
-	require.Nil(t, err, env.logger.Events)
-	require.Nil(t, env.mysqld.Shutdown(env.ctx, nil, false))
-
-	env.useBackupStorageWithParams(true)
-
-	// We're now testing that backupstorage get parameterized with logger and
-	// scoped stats.
-	_, err = Restore(env.ctx, env.restoreParams)
 	require.Nil(t, err, env.logger.Events)
 
 	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
@@ -450,7 +428,7 @@ func (f forTest) Less(i, j int) bool { return f[i].Base+f[i].Name < f[j].Base+f[
 type fakeBackupRestoreEnv struct {
 	backupEngine  *FakeBackupEngine
 	backupParams  BackupParams
-	backupStorage *FakeBackupStorageWithParams
+	backupStorage *FakeBackupStorage
 	ctx           context.Context
 	logger        *logutil.MemoryLogger
 	restoreParams RestoreParams
@@ -525,7 +503,7 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 	BackupRestoreEngineMap["fake"] = &testBackupEngine
 	backupEngineImplementation = "fake"
 
-	testBackupStorage := FakeBackupStorageWithParams{}
+	testBackupStorage := FakeBackupStorage{}
 	testBackupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
 		BackupHandles: []backupstorage.BackupHandle{
 			&FakeBackupHandle{
@@ -538,7 +516,7 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 	testBackupStorage.StartBackupReturn = FakeBackupStorageStartBackupReturn{&FakeBackupHandle{}, nil}
 	testBackupStorage.WithParamsReturn = &testBackupStorage
 
-	backupstorage.BackupStorageMap["fake"] = &testBackupStorage.FakeBackupStorage
+	backupstorage.BackupStorageMap["fake"] = &testBackupStorage
 	previousBackupStorageImplementation := backupstorage.BackupStorageImplementation
 	backupstorage.BackupStorageImplementation = "fake"
 
@@ -569,12 +547,4 @@ func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
 	fbe.backupParams.Stats = nil
 	fbe.restoreParams.Stats = nil
 	fbe.stats = nil
-}
-
-func (fbe *fakeBackupRestoreEnv) useBackupStorageWithParams(use bool) {
-	if use {
-		backupstorage.BackupStorageMap["fake"] = fbe.backupStorage
-	} else {
-		backupstorage.BackupStorageMap["fake"] = &fbe.backupStorage.FakeBackupStorage
-	}
 }

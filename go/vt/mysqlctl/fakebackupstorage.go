@@ -110,6 +110,8 @@ type FakeBackupStorage struct {
 	RemoveBackupReturne error
 	StartBackupCalls    []FakeBackupStorageStartBackupCall
 	StartBackupReturn   FakeBackupStorageStartBackupReturn
+	WithParamsCalls     []backupstorage.Params
+	WithParamsReturn    backupstorage.BackupStorage
 }
 
 type FakeBackupStorageListBackupsCall struct {
@@ -139,12 +141,6 @@ type FakeBackupStorageStartBackupReturn struct {
 	Err          error
 }
 
-type FakeBackupStorageWithParams struct {
-	FakeBackupStorage
-	WithParamsCalls  []backupstorage.Params
-	WithParamsReturn backupstorage.BackupStorage
-}
-
 func (fbs *FakeBackupStorage) ListBackups(ctx context.Context, dir string) ([]backupstorage.BackupHandle, error) {
 	fbs.ListBackupsCalls = append(fbs.ListBackupsCalls, FakeBackupStorageListBackupsCall{ctx, dir})
 	return fbs.ListBackupsReturn.BackupHandles, fbs.ListBackupsReturn.Err
@@ -165,7 +161,7 @@ func (fbs *FakeBackupStorage) Close() error {
 	return fbs.CloseReturn
 }
 
-func (fbswp *FakeBackupStorageWithParams) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
-	fbswp.WithParamsCalls = append(fbswp.WithParamsCalls, params)
-	return fbswp.WithParamsReturn
+func (fbs *FakeBackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	fbs.WithParamsCalls = append(fbs.WithParamsCalls, params)
+	return fbs.WithParamsReturn
 }
