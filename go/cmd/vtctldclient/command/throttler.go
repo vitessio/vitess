@@ -28,7 +28,7 @@ var (
 	// UpdateThrottlerConfig makes a UpdateThrottlerConfig gRPC call to a vtctld.
 	UpdateThrottlerConfig = &cobra.Command{
 		Use:                   "UpdateThrottlerConfig [--enable|--disable] [--threshold=<float64>] [--custom-query=<query>] [--check-as-check-self|--check-as-check-shard] <keyspace>",
-		Short:                 "Update the table throttler configuration for all cells and tablets of a given keyspace",
+		Short:                 "Update the tablet throttler configuration for all tablets in the given keyspace (across all cells)",
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandUpdateThrottlerConfig,

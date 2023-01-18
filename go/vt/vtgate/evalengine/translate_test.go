@@ -344,3 +344,37 @@ func TestEvaluateTuple(t *testing.T) {
 		})
 	}
 }
+
+// TestTranslationFailures tests that translation fails for functions that we don't support evaluation for.
+func TestTranslationFailures(t *testing.T) {
+	testcases := []struct {
+		expression  string
+		expectedErr string
+	}{
+		{
+			expression:  "cast('2023-01-07 12:34:56' as date)",
+			expectedErr: "Unsupported type conversion: DATE",
+		}, {
+			expression:  "cast('2023-01-07 12:34:56' as datetime(5))",
+			expectedErr: "Unsupported type conversion: DATETIME(5)",
+		}, {
+			expression:  "cast('3.4' as FLOAT)",
+			expectedErr: "Unsupported type conversion: FLOAT",
+		}, {
+			expression:  "cast('3.4' as FLOAT(3))",
+			expectedErr: "Unsupported type conversion: FLOAT(3)",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.expression, func(t *testing.T) {
+			// Given
+			stmt, err := sqlparser.Parse("select " + testcase.expression)
+			require.NoError(t, err)
+			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+			_, err = Translate(astExpr, LookupDefaultCollation(45))
+			require.EqualError(t, err, testcase.expectedErr)
+		})
+	}
+
+}

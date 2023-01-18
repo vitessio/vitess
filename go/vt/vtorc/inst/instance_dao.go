@@ -69,8 +69,6 @@ const (
 	GroupReplicationMemberStateError       = "ERROR"
 )
 
-// instanceKeyInformativeClusterName is a non-authoritative cache; used for auditing or general purpose.
-var instanceKeyInformativeClusterName *cache.Cache
 var forgetInstanceKeys *cache.Cache
 
 var accessDeniedCounter = metrics.NewCounter()
@@ -95,7 +93,6 @@ func init() {
 
 func initializeInstanceDao() {
 	config.WaitForConfigurationToBeLoaded()
-	instanceKeyInformativeClusterName = cache.New(time.Duration(config.Config.InstancePollSeconds/2)*time.Second, time.Second)
 	forgetInstanceKeys = cache.New(time.Duration(config.Config.InstancePollSeconds*3)*time.Second, time.Second)
 }
 
@@ -222,7 +219,6 @@ func ReadTopologyInstanceBufferable(instanceKey *InstanceKey, latency *stopwatch
 	if err != nil {
 		goto Cleanup
 	}
-	instance.ClusterName = GetClusterNameFromKeyspaceAndShard(tablet.Keyspace, tablet.Shard)
 
 	fullStatus, err = FullStatus(*instanceKey)
 	if err != nil {
@@ -458,8 +454,8 @@ Cleanup:
 	return nil, err
 }
 
-// GetClusterNameFromKeyspaceAndShard returns the cluster name from keyspace and shard
-func GetClusterNameFromKeyspaceAndShard(keyspace, shard string) string {
+// getKeyspaceShardName returns a single string having both the keyspace and shard
+func getKeyspaceShardName(keyspace, shard string) string {
 	return fmt.Sprintf("%v:%v", keyspace, shard)
 }
 
@@ -511,7 +507,6 @@ func ReadInstanceClusterAttributes(instance *Instance) (err error) {
 	var primaryOrGroupPrimaryExecutedGtidSet string
 	primaryOrGroupPrimaryDataFound := false
 
-	// Read the cluster_name of the _primary_ or _group_primary_ of our instance, derive it from there.
 	query := `
 			select
 					replication_depth,
@@ -608,7 +603,6 @@ func readInstanceRow(m sqlutils.RowMap) *Instance {
 	instance.SecondsBehindPrimary = m.GetNullInt64("replication_lag_seconds")
 	instance.ReplicationLagSeconds = m.GetNullInt64("replica_lag_seconds")
 	instance.SQLDelay = m.GetUint("sql_delay")
-	instance.ClusterName = m.GetString("cluster_name")
 	instance.DataCenter = m.GetString("data_center")
 	instance.Region = m.GetString("region")
 	instance.PhysicalEnvironment = m.GetString("physical_environment")
@@ -778,9 +772,10 @@ func ReadReplicaInstancesIncludingBinlogServerSubReplicas(primaryKey *InstanceKe
 }
 
 // ReadProblemInstances reads all instances with problems
-func ReadProblemInstances(clusterName string) ([](*Instance), error) {
+func ReadProblemInstances(keyspace string, shard string) ([](*Instance), error) {
 	condition := `
-			cluster_name LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			keyspace LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
+			and shard LIKE (CASE WHEN ? = '' THEN '%' ELSE ? END)
 			and (
 				(last_seen < last_checked)
 				or (unix_timestamp() - unix_timestamp(last_checked) > ?)
@@ -793,7 +788,7 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 			)
 		`
 
-	args := sqlutils.Args(clusterName, clusterName, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
+	args := sqlutils.Args(keyspace, keyspace, shard, shard, config.Config.InstancePollSeconds*5, config.Config.ReasonableReplicationLagSeconds, config.Config.ReasonableReplicationLagSeconds)
 	instances, err := readInstancesByCondition(condition, args, "")
 	if err != nil {
 		return instances, err
@@ -813,15 +808,16 @@ func ReadProblemInstances(clusterName string) ([](*Instance), error) {
 
 // ReadLostInRecoveryInstances returns all instances (potentially filtered by cluster)
 // which are currently indicated as downtimed due to being lost during a topology recovery.
-func ReadLostInRecoveryInstances(clusterName string) ([](*Instance), error) {
+func ReadLostInRecoveryInstances(keyspace string, shard string) ([](*Instance), error) {
 	condition := `
 		ifnull(
 			database_instance_downtime.downtime_active = 1
 			and database_instance_downtime.end_timestamp > now()
 			and database_instance_downtime.reason = ?, 0)
-		and ? IN ('', cluster_name)
+		and ? IN ('', keyspace)
+		and ? IN ('', shard)
 	`
-	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, clusterName), "cluster_name asc, replication_depth asc")
+	return readInstancesByCondition(condition, sqlutils.Args(DowntimeLostInRecoveryMessage, keyspace, shard), "keyspace asc, shard asc, replication_depth asc")
 }
 
 // readUnseenPrimaryKeys will read list of primaries that have never been seen, and yet whose replicas
@@ -860,46 +856,6 @@ func readUnseenPrimaryKeys() ([]InstanceKey, error) {
 	}
 
 	return res, nil
-}
-
-// InjectSeed: intented to be used to inject an instance upon startup, assuming it's not already known to vtorc.
-func InjectSeed(instanceKey *InstanceKey) error {
-	if instanceKey == nil {
-		return fmt.Errorf("InjectSeed: nil instanceKey")
-	}
-	clusterName := instanceKey.StringCode()
-	// minimal details:
-	instance := &Instance{Key: *instanceKey, Version: "Unknown", ClusterName: clusterName}
-	instance.SetSeed()
-	err := WriteInstance(instance, false, nil)
-	log.Infof("InjectSeed: %+v, %+v", *instanceKey, err)
-	_ = AuditOperation("inject-seed", instanceKey, "injected")
-	return err
-}
-
-// InjectUnseenPrimaries will review primaries of instances that are known to be replicating, yet which are not listed
-// in database_instance. Since their replicas are listed as replicating, we can assume that such primaries actually do
-// exist: we shall therefore inject them with minimal details into the database_instance table.
-func InjectUnseenPrimaries() error {
-
-	unseenPrimaryKeys, err := readUnseenPrimaryKeys()
-	if err != nil {
-		return err
-	}
-
-	operations := 0
-	for _, primaryKey := range unseenPrimaryKeys {
-		primaryKey := primaryKey
-		clusterName := primaryKey.StringCode()
-		// minimal details:
-		instance := Instance{Key: primaryKey, Version: "Unknown", ClusterName: clusterName}
-		if err := WriteInstance(&instance, false, nil); err == nil {
-			operations++
-		}
-	}
-
-	_ = AuditOperation("inject-unseen-primaries", nil, fmt.Sprintf("Operations: %d", operations))
-	return err
 }
 
 // ForgetUnseenInstancesDifferentlyResolved will purge instances which are invalid, and whose hostname
@@ -998,28 +954,27 @@ func ResolveUnknownPrimaryHostnameResolves() error {
 	return err
 }
 
-func GetClusterName(instanceKey *InstanceKey) (clusterName string, err error) {
-	if clusterName, found := instanceKeyInformativeClusterName.Get(instanceKey.StringCode()); found {
-		return clusterName.(string), nil
-	}
+// GetKeyspaceShardName gets the keyspace shard name for the given instance key
+func GetKeyspaceShardName(instanceKey *InstanceKey) (keyspace string, shard string, err error) {
 	query := `
 		select
-			ifnull(max(cluster_name), '') as cluster_name
+			keyspace,
+			shard
 		from
-			database_instance
+			vitess_tablet
 		where
 			hostname = ?
 			and port = ?
 			`
 	err = db.QueryVTOrc(query, sqlutils.Args(instanceKey.Hostname, instanceKey.Port), func(m sqlutils.RowMap) error {
-		clusterName = m.GetString("cluster_name")
-		instanceKeyInformativeClusterName.Set(instanceKey.StringCode(), clusterName, cache.DefaultExpiration)
+		keyspace = m.GetString("keyspace")
+		shard = m.GetString("shard")
 		return nil
 	})
 	if err != nil {
 		log.Error(err)
 	}
-	return clusterName, err
+	return keyspace, shard, err
 }
 
 // ReadOutdatedInstanceKeys reads and returns keys for all instances that are not up to date (i.e.
@@ -1176,7 +1131,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		"replication_lag_seconds",
 		"replica_lag_seconds",
 		"sql_delay",
-		"cluster_name",
 		"data_center",
 		"region",
 		"physical_environment",
@@ -1263,7 +1217,6 @@ func mkInsertOdkuForInstances(instances []*Instance, instanceWasActuallyFound bo
 		args = append(args, instance.SecondsBehindPrimary)
 		args = append(args, instance.ReplicationLagSeconds)
 		args = append(args, instance.SQLDelay)
-		args = append(args, instance.ClusterName)
 		args = append(args, instance.DataCenter)
 		args = append(args, instance.Region)
 		args = append(args, instance.PhysicalEnvironment)
@@ -1453,10 +1406,10 @@ func SnapshotTopologies() error {
 		_, err := db.ExecVTOrc(`
         	insert ignore into
         		database_instance_topology_history (snapshot_unix_timestamp,
-        			hostname, port, source_host, source_port, cluster_name, version)
+        			hostname, port, source_host, source_port, version)
         	select
         		UNIX_TIMESTAMP(NOW()),
-        		hostname, port, source_host, source_port, cluster_name, version
+        		hostname, port, source_host, source_port, version
 			from
 				database_instance
 				`,

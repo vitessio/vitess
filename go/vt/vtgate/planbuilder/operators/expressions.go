@@ -17,7 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -32,26 +31,29 @@ func BreakExpressionInLHSandRHS(
 	lhs semantics.TableSet,
 ) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
 	rewrittenExpr = sqlparser.CloneExpr(expr)
-	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			deps := ctx.SemTable.RecursiveDeps(node)
-			if deps.IsEmpty() {
-				err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unknown column. has the AST been copied?")
-				return false
-			}
-			if deps.IsSolvedBy(lhs) {
-				node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-				columns = append(columns, node)
-				bvName := node.CompliantName()
-				bvNames = append(bvNames, bvName)
-				arg := sqlparser.NewArgument(bvName)
-				// we are replacing one of the sides of the comparison with an argument,
-				// but we don't want to lose the type information we have, so we copy it over
-				ctx.SemTable.CopyExprInfo(node, arg)
-				cursor.Replace(arg)
-			}
+	_ = sqlparser.SafeRewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
+		node, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
 		}
+		deps := ctx.SemTable.RecursiveDeps(node)
+		if deps.IsEmpty() {
+			err = vterrors.VT13001("unknown column. has the AST been copied?")
+			return false
+		}
+		if !deps.IsSolvedBy(lhs) {
+			return true
+		}
+
+		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
+		columns = append(columns, node)
+		bvName := node.CompliantName()
+		bvNames = append(bvNames, bvName)
+		arg := sqlparser.NewArgument(bvName)
+		// we are replacing one of the sides of the comparison with an argument,
+		// but we don't want to lose the type information we have, so we copy it over
+		ctx.SemTable.CopyExprInfo(node, arg)
+		cursor.Replace(arg)
 		return true
 	})
 	if err != nil {

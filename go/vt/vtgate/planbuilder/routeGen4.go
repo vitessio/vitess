@@ -18,7 +18,6 @@ package planbuilder
 
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -186,7 +185,7 @@ func (rb *routeGen4) generateFieldQuery(sel sqlparser.SelectStatement, jt *joint
 // Rewrite implements the logicalPlan interface
 func (rb *routeGen4) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 0 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "route: wrong number of inputs")
+		return vterrors.VT13001("route: wrong number of inputs")
 	}
 	return nil
 }

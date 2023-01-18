@@ -8,10 +8,12 @@ Usage of vtbackup:
       --azblob_backup_storage_root string               Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
       --backup_engine_implementation string             Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup_storage_block_size int                   if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup_storage_compress                         if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
+      --backup_storage_compress                         if set, the backup files will be compressed. (default true)
       --backup_storage_implementation string            Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --ceph_backup_storage_config string               Path to JSON config file for ceph backup storage. (default "ceph_backup_config.json")
+      --compression-engine-name string                  compressor engine used for compression. (default "pargzip")
+      --compression-level int                           what level to pass to the compressor. (default 1)
       --concurrency int                                 (init restore parameter) how many concurrent files to restore at once (default 4)
       --consul_auth_static_file string                  JSON File to read the topos/tokens from.
       --db-credentials-file string                      db credentials file; send SIGHUP to reload this file
@@ -64,6 +66,9 @@ Usage of vtbackup:
       --detach                                          detached mode - run backups detached from the terminal
       --disable-redo-log                                Disable InnoDB redo log during replication-from-primary phase of backup.
       --emit_stats                                      If set, emit stats to push-based monitoring and stats backends
+      --external-compressor string                      command with arguments to use when compressing a backup.
+      --external-compressor-extension string            extension to use when using an external compressor.
+      --external-decompressor string                    command with arguments to use when decompressing a backup.
       --file_backup_storage_root string                 Root directory for the file backup storage.
       --gcs_backup_storage_bucket string                Google Cloud Storage bucket to use for backups.
       --gcs_backup_storage_root string                  Root prefix for all backup-related object names.
@@ -86,6 +91,7 @@ Usage of vtbackup:
       --keep-alive-timeout duration                     Wait until timeout elapses after a successful backup before shutting down.
       --keep_logs duration                              keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                     keep logs for this long (using mtime) (zero to keep forever)
+      --lock-timeout duration                           Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --log_backtrace_at traceLocation                  when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                  If non-empty, write log files in this directory
       --log_err_stacks                                  log stack traces for errors
@@ -119,7 +125,7 @@ Usage of vtbackup:
       --port int                                        port for the server
       --pprof strings                                   enable profiling
       --purge_logs_interval duration                    how often try to remove old logs (default 1h0m0s)
-      --remote_operation_timeout duration               time to wait for a remote operation (default 30s)
+      --remote_operation_timeout duration               time to wait for a remote operation (default 15s)
       --restart_before_backup                           Perform a mysqld clean/full restart after applying binlogs, but before taking the backup. Only makes sense to work around xtrabackup bugs.
       --s3_backup_aws_endpoint string                   endpoint of the S3 backend (region must be provided).
       --s3_backup_aws_region string                     AWS region to use. (default "us-east-1")

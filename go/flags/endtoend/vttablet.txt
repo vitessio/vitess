@@ -9,7 +9,7 @@ Usage of vttablet:
       --azblob_backup_storage_root string                                Root prefix for all backup-related Azure Blobs; this should exclude both initial and trailing '/' (e.g. just 'a/b' not '/a/b/').
       --backup_engine_implementation string                              Specifies which implementation to use for creating new backups (builtin or xtrabackup). Restores will always be done with whichever engine created a given backup. (default "builtin")
       --backup_storage_block_size int                                    if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000). (default 250000)
-      --backup_storage_compress                                          if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data. (default true)
+      --backup_storage_compress                                          if set, the backup files will be compressed. (default true)
       --backup_storage_implementation string                             Which backup storage implementation to use for creating and restoring backups.
       --backup_storage_number_blocks int                                 if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression. (default 2)
       --binlog_host string                                               PITR restore parameter: hostname/IP of binlog server.
@@ -160,6 +160,7 @@ Usage of vttablet:
       --keep_logs duration                                               keep logs for this long (using ctime) (zero to keep forever)
       --keep_logs_by_mtime duration                                      keep logs for this long (using mtime) (zero to keep forever)
       --lameduck-period duration                                         keep running at least this long after SIGTERM before stopping (default 50ms)
+      --lock-timeout duration                                            Maximum time for which a shard/keyspace lock can be acquired for (default 45s)
       --lock_tables_timeout duration                                     How long to keep the table locked before timing out (default 1m0s)
       --log_backtrace_at traceLocation                                   when logging hits line file:N, emit a stack trace (default :0)
       --log_dir string                                                   If non-empty, write log files in this directory
@@ -192,7 +193,7 @@ Usage of vttablet:
       --mysql_server_version string                                      MySQL server version to advertise.
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
-      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 1ns)
+      --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --opentsdb_uri string                                              URI of opentsdb /api/put method
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
@@ -238,11 +239,12 @@ Usage of vttablet:
       --queryserver-config-txpool-waiter-cap int                         query server transaction pool waiter limit, this is the maximum number of transactions that can be queued waiting to get a connection (default 5000)
       --queryserver-config-warn-result-size int                          query server result size warning threshold, warn if number of rows returned from vttablet for non-streaming queries exceeds this
       --queryserver-enable-settings-pool                                 Enable pooling of connections with modified system settings
+      --queryserver-enable-views                                         Enable views support in vttablet.
       --queryserver_enable_online_ddl                                    Enable online DDL. (default true)
       --redact-debug-ui-queries                                          redact full queries and bind variables from debug UI
       --relay_log_max_items int                                          Maximum number of rows for VReplication target buffering. (default 5000)
       --relay_log_max_size int                                           Maximum buffer size (in bytes) for VReplication target buffering. If single rows are larger than this, a single row is buffered at a time. (default 250000)
-      --remote_operation_timeout duration                                time to wait for a remote operation (default 30s)
+      --remote_operation_timeout duration                                time to wait for a remote operation (default 15s)
       --replication_connect_retry duration                               how long to wait in between replica reconnect attempts. Only precise to the second. (default 10s)
       --restore_concurrency int                                          (init restore parameter) how many concurrent files to restore at once (default 4)
       --restore_from_backup                                              (init restore parameter) will check BackupStorage for a recent backup at startup and start there

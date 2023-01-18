@@ -20,7 +20,6 @@ import (
 	"fmt"
 	"sync"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -43,6 +42,7 @@ func (pc *sysvarPlanCache) initForSettings(systemVariables []sysvars.SystemVaria
 			boolean:            sysvar.IsBoolean,
 			identifierAsString: sysvar.IdentifierAsString,
 			supportSetVar:      sysvar.SupportSetVar,
+			storageCase:        sysvar.Case,
 		}
 
 		if sysvar.Default != "" {
@@ -84,7 +84,7 @@ func (pc *sysvarPlanCache) Get(expr *sqlparser.SetExpr) (planFunc, error) {
 	pc.init()
 	pf, ok := pc.funcs[expr.Var.Name.Lowered()]
 	if !ok {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.UnknownSystemVariable, "Unknown system variable '%s'", sqlparser.String(expr))
+		return nil, vterrors.VT05006(sqlparser.String(expr))
 	}
 	return pf, nil
 }

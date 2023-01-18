@@ -161,6 +161,16 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select 1 from t1 join t5 using (b) having b = 12",
 		expSQL: "select 1 from t1 join t5 where t1.b = t5.b having t1.b = 12",
+	}, {
+		sql:    "select * from (select 12) as t",
+		expSQL: "select t.`12` from (select 12 from dual) as t",
+	}, {
+		sql:    "SELECT * FROM (SELECT *, 12 AS foo FROM t3) as results",
+		expSQL: "select * from (select *, 12 as foo from t3) as results",
+	}, {
+		// if we are only star-expanding authoritative tables, we don't need to stop the expansion
+		sql:    "SELECT * FROM (SELECT t2.*, 12 AS foo FROM t3, t2) as results",
+		expSQL: "select results.c1, results.c2, results.foo from (select t2.c1 as c1, t2.c2 as c2, 12 as foo from t3, t2) as results",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
@@ -179,7 +189,7 @@ func TestExpandStar(t *testing.T) {
 					}
 					for _, tbl := range st.ExpandedColumns {
 						for _, col := range tbl {
-							if sqlparser.EqualsExpr(aliasedExpr.Expr, col, nil) {
+							if sqlparser.Equals.Expr(aliasedExpr.Expr, col) {
 								found++
 								continue outer
 							}

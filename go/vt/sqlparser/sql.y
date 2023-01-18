@@ -184,6 +184,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
+  vexplainType 	  VExplainType
   intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
@@ -302,7 +303,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY DEALLOCATE
-%token <str> REVERT
+%token <str> REVERT QUERIES
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
@@ -322,7 +323,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL_TYPE NUMERIC
+%token <str> REAL DOUBLE FLOAT_TYPE FLOAT4_TYPE FLOAT8_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
@@ -381,7 +382,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN
+%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN VEXPLAIN PLAN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -405,6 +406,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
 %type <statement> prepare_statement
+%type <statement> vexplain_statement
 %type <statement> execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
@@ -429,6 +431,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
+%type <vexplainType> vexplain_type_opt
 %type <trimType> trim_type
 %type <frameUnitType> frame_units
 %type <argumentLessWindowExprType> argument_less_window_expr_type
@@ -543,7 +546,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
-%type <LengthScaleOption> float_length_opt decimal_length_opt
+%type <LengthScaleOption> double_length_opt float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -638,6 +641,7 @@ command:
 | savepoint_statement
 | release_statement
 | explain_statement
+| vexplain_statement
 | other_statement
 | flush_statement
 | do_statement
@@ -1457,7 +1461,7 @@ generated_always_opt:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: ColKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
   }
 | column_attribute_list_opt NULL
   {
@@ -1946,19 +1950,19 @@ text_literal_or_arg:
 keys:
   PRIMARY KEY
   {
-    $$ = colKeyPrimary
+    $$ = ColKeyPrimary
   }
 | UNIQUE
   {
-    $$ = colKeyUnique
+    $$ = ColKeyUnique
   }
 | UNIQUE KEY
   {
-    $$ = colKeyUniqueKey
+    $$ = ColKeyUniqueKey
   }
 | KEY
   {
-    $$ = colKey
+    $$ = ColKey
   }
 
 column_type:
@@ -2022,19 +2026,31 @@ int_type:
   }
 
 decimal_type:
-REAL float_length_opt
+REAL double_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
-| DOUBLE float_length_opt
+| DOUBLE double_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT8_TYPE double_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT_TYPE float_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT4_TYPE float_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
@@ -2198,7 +2214,7 @@ length_opt:
     $$ = NewIntLiteral($2)
   }
 
-float_length_opt:
+double_length_opt:
   {
     $$ = LengthScaleOption{}
   }
@@ -2207,6 +2223,18 @@ float_length_opt:
     $$ = LengthScaleOption{
         Length: NewIntLiteral($2),
         Scale: NewIntLiteral($4),
+    }
+  }
+
+float_length_opt:
+double_length_opt
+  {
+    $$ = $1
+  }
+| '(' INTEGRAL ')'
+  {
+    $$ = LengthScaleOption{
+        Length: NewIntLiteral($2),
     }
   }
 
@@ -4374,6 +4402,23 @@ explain_format_opt:
     $$ = AnalyzeType
   }
 
+vexplain_type_opt:
+  {
+    $$ = PlanVExplainType
+  }
+| PLAN
+  {
+    $$ = PlanVExplainType
+  }
+| ALL
+  {
+    $$ = AllVExplainType
+  }
+| QUERIES
+  {
+    $$ = QueriesVExplainType
+  }
+
 explain_synonyms:
   EXPLAIN
   {
@@ -4427,6 +4472,12 @@ explain_statement:
 | explain_synonyms comment_opt explain_format_opt explainable_statement
   {
     $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
+  }
+
+vexplain_statement:
+  VEXPLAIN comment_opt vexplain_type_opt explainable_statement
+  {
+    $$ = &VExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
   }
 
 other_statement:
@@ -5417,7 +5468,7 @@ function_call_keyword
   }
 
 interval_value:
-  INTERVAL simple_expr sql_id
+  INTERVAL bit_expr sql_id
   {
      $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
@@ -7725,6 +7776,7 @@ non_reserved_keyword:
 | PATH
 | PERSIST
 | PERSIST_ONLY
+| PLAN
 | PRECEDING
 | PREPARE
 | PRIVILEGE_CHECKS_USER
@@ -7738,6 +7790,7 @@ non_reserved_keyword:
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
 | PROCESSLIST
+| QUERIES
 | QUERY
 | RANDOM
 | RATIO
@@ -7820,6 +7873,7 @@ non_reserved_keyword:
 | TINYBLOB
 | TINYINT
 | TINYTEXT
+| TRADITIONAL
 | TRANSACTION
 | TREE
 | TRIGGER
@@ -7845,6 +7899,7 @@ non_reserved_keyword:
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
+| VEXPLAIN
 | VGTID_EXECUTED
 | VIEW
 | VINDEX
@@ -7862,6 +7917,7 @@ non_reserved_keyword:
 | VITESS_THROTTLED_APPS
 | VITESS_THROTTLER
 | VSCHEMA
+| VTEXPLAIN
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS

@@ -206,6 +206,14 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	return tmpProcess, tmpProcess.Start()
 }
 
+func (mysqlctl *MysqlctlProcess) BasePath() string {
+	return path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctl.TabletUID))
+}
+
+func (mysqlctl *MysqlctlProcess) BinaryLogsPath() string {
+	return path.Join(mysqlctl.BasePath(), "bin-logs")
+}
+
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
@@ -213,6 +221,16 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
+}
+
+// Connect returns a new connection to the underlying MySQL server
+func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (*mysql.Conn, error) {
+	params := mysql.ConnParams{
+		Uname:      username,
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctl.TabletUID), "/mysql.sock"),
+	}
+
+	return mysql.Connect(ctx, &params)
 }
 
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process

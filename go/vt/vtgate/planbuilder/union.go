@@ -17,12 +17,10 @@ limitations under the License.
 package planbuilder
 
 import (
-	"errors"
 	"fmt"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/mysql"
@@ -34,7 +32,7 @@ func buildUnionPlan(string) stmtPlanner {
 	return func(stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 		union := stmt.(*sqlparser.Union)
 		if union.With != nil {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: with expression in union statement")
+			return nil, vterrors.VT12001("WITH expression in UNION statement")
 		}
 		// For unions, create a pb with anonymous scope.
 		pb := newPrimitiveBuilder(vschema, newJointab(reservedVars))
@@ -98,26 +96,26 @@ func (pb *primitiveBuilder) processPart(part sqlparser.SelectStatement, reserved
 		return pb.processUnion(part, reservedVars, outer)
 	case *sqlparser.Select:
 		if part.SQLCalcFoundRows {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+			return vterrors.VT12001("SQL_CALC_FOUND_ROWS not supported with UNION")
 		}
 		return pb.processSelect(part, reservedVars, outer, "")
 	}
-	return fmt.Errorf("BUG: unexpected SELECT type: %T", part)
+	return vterrors.VT13001(fmt.Sprintf("unexpected SELECT type: %T", part))
 }
 
 // TODO (systay) we never use this as an actual error. we should rethink the return type
 func unionRouteMerge(left, right logicalPlan, us *sqlparser.Union) error {
 	lroute, ok := left.(*route)
 	if !ok {
-		return errors.New("unsupported: SELECT of UNION is non-trivial")
+		return vterrors.VT12001("SELECT of UNION is non-trivial")
 	}
 	rroute, ok := right.(*route)
 	if !ok {
-		return errors.New("unsupported: SELECT of UNION is non-trivial")
+		return vterrors.VT12001("SELECT of UNION is non-trivial")
 	}
 	mergeSuccess := lroute.MergeUnion(rroute, us.Distinct)
 	if !mergeSuccess {
-		return errors.New("unsupported: UNION cannot be executed as a single route")
+		return vterrors.VT12001("execute UNION as a single route")
 	}
 
 	lroute.Select = &sqlparser.Union{Left: lroute.Select, Right: us.Right, Distinct: us.Distinct}
@@ -133,7 +131,7 @@ func setLock(in logicalPlan, lock sqlparser.Lock) error {
 			node.Select.SetLock(lock)
 			return false, node, nil
 		case *sqlCalcFoundRows, *vindexFunc:
-			return false, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unreachable %T.locking", in)
+			return false, nil, vterrors.VT13001(fmt.Sprintf("unreachable %T.locking", in))
 		}
 		return true, plan, nil
 	})

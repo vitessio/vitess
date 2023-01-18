@@ -55,8 +55,8 @@ func TestDiffTables(t *testing.T) {
 		{
 			name:   "create",
 			to:     "create table t(id int primary key)",
-			diff:   "create table t (\n\tid int primary key\n)",
-			cdiff:  "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY\n)",
+			diff:   "create table t (\n\tid int,\n\tprimary key (id)\n)",
+			cdiff:  "CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			action: "create",
 			toName: "t",
 		},
@@ -411,10 +411,10 @@ func TestDiffSchemas(t *testing.T) {
 			name: "create table",
 			to:   "create table t(id int primary key)",
 			diffs: []string{
-				"create table t (\n\tid int primary key\n)",
+				"create table t (\n\tid int,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
-				"CREATE TABLE `t` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 		{
@@ -422,10 +422,10 @@ func TestDiffSchemas(t *testing.T) {
 			from: ";;; ; ;    ;;;",
 			to:   "create table t(id int primary key)",
 			diffs: []string{
-				"create table t (\n\tid int primary key\n)",
+				"create table t (\n\tid int,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
-				"CREATE TABLE `t` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 		{
@@ -444,13 +444,13 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t4(id int primary key); create table t2(id bigint primary key); create table t3(id int primary key)",
 			diffs: []string{
 				"drop table t1",
-				"alter table t2 modify column id bigint primary key",
-				"create table t4 (\n\tid int primary key\n)",
+				"alter table t2 modify column id bigint",
+				"create table t4 (\n\tid int,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t1`",
-				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint PRIMARY KEY",
-				"CREATE TABLE `t4` (\n\t`id` int PRIMARY KEY\n)",
+				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint",
+				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 		{
@@ -459,11 +459,11 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t1(id int primary key); create table t3(id int unsigned primary key);",
 			diffs: []string{
 				"drop table t2",
-				"create table t3 (\n\tid int unsigned primary key\n)",
+				"create table t3 (\n\tid int unsigned,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t2`",
-				"CREATE TABLE `t3` (\n\t`id` int unsigned PRIMARY KEY\n)",
+				"CREATE TABLE `t3` (\n\t`id` int unsigned,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 		{
@@ -486,17 +486,17 @@ func TestDiffSchemas(t *testing.T) {
 				"drop table t1a",
 				"drop table t2a",
 				"drop table t3a",
-				"create table t1b (\n\tid bigint primary key\n)",
-				"create table t2b (\n\tid int unsigned primary key\n)",
-				"create table t3b (\n\tid int primary key\n)",
+				"create table t1b (\n\tid bigint,\n\tprimary key (id)\n)",
+				"create table t2b (\n\tid int unsigned,\n\tprimary key (id)\n)",
+				"create table t3b (\n\tid int,\n\tprimary key (id)\n)",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t1a`",
 				"DROP TABLE `t2a`",
 				"DROP TABLE `t3a`",
-				"CREATE TABLE `t1b` (\n\t`id` bigint PRIMARY KEY\n)",
-				"CREATE TABLE `t2b` (\n\t`id` int unsigned PRIMARY KEY\n)",
-				"CREATE TABLE `t3b` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE TABLE `t1b` (\n\t`id` bigint,\n\tPRIMARY KEY (`id`)\n)",
+				"CREATE TABLE `t2b` (\n\t`id` int unsigned,\n\tPRIMARY KEY (`id`)\n)",
+				"CREATE TABLE `t3b` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 			},
 		},
 		{
@@ -505,13 +505,13 @@ func TestDiffSchemas(t *testing.T) {
 			to:   "create table t1b(id bigint primary key); create table t2b(id int unsigned primary key); create table t3b(id int primary key); ",
 			diffs: []string{
 				"drop table t3a",
-				"create table t1b (\n\tid bigint primary key\n)",
+				"create table t1b (\n\tid bigint,\n\tprimary key (id)\n)",
 				"rename table t1a to t3b",
 				"rename table t2a to t2b",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t3a`",
-				"CREATE TABLE `t1b` (\n\t`id` bigint PRIMARY KEY\n)",
+				"CREATE TABLE `t1b` (\n\t`id` bigint,\n\tPRIMARY KEY (`id`)\n)",
 				"RENAME TABLE `t1a` TO `t3b`",
 				"RENAME TABLE `t2a` TO `t2b`",
 			},
@@ -601,17 +601,17 @@ func TestDiffSchemas(t *testing.T) {
 			diffs: []string{
 				"drop table t1",
 				"drop view v1",
-				"alter table t2 modify column id bigint primary key",
+				"alter table t2 modify column id bigint",
 				"alter view v2 as select id from t2",
-				"create table t4 (\n\tid int primary key\n)",
+				"create table t4 (\n\tid int,\n\tprimary key (id)\n)",
 				"create view v0 as select * from v2, t2",
 			},
 			cdiffs: []string{
 				"DROP TABLE `t1`",
 				"DROP VIEW `v1`",
-				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint PRIMARY KEY",
+				"ALTER TABLE `t2` MODIFY COLUMN `id` bigint",
 				"ALTER VIEW `v2` AS SELECT `id` FROM `t2`",
-				"CREATE TABLE `t4` (\n\t`id` int PRIMARY KEY\n)",
+				"CREATE TABLE `t4` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
 				"CREATE VIEW `v0` AS SELECT * FROM `v2`, `t2`",
 			},
 		},
