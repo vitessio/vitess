@@ -685,21 +685,6 @@ func (vc *vcopier) fastForward(ctx context.Context, copyState map[string]*sqltyp
 	return newVPlayer(vc.vr, settings, copyState, pos, "fastforward").play(ctx)
 }
 
-func (vc *vcopier) newClientConnection(ctx context.Context) (*vdbClient, error) {
-	dbc := vc.vr.vre.dbClientFactoryFiltered()
-	if err := dbc.Connect(); err != nil {
-		return nil, vterrors.Wrap(err, "can't connect to database")
-	}
-	dbClient := newVDBClient(dbc, vc.vr.stats)
-	if _, err := vc.vr.setSQLMode(ctx, dbClient); err != nil {
-		return nil, vterrors.Wrap(err, "failed to set sql_mode")
-	}
-	if err := vc.vr.clearFKCheck(dbClient); err != nil {
-		return nil, vterrors.Wrap(err, "failed to clear foreign key check")
-	}
-	return dbClient, nil
-}
-
 func (vc *vcopier) newCopyWorkQueue(
 	parallelism int,
 	workerFactory func(context.Context) (*vcopierCopyWorker, error),
@@ -711,7 +696,7 @@ func (vc *vcopier) newCopyWorkQueue(
 func (vc *vcopier) newCopyWorkerFactory(parallelism int) func(context.Context) (*vcopierCopyWorker, error) {
 	if parallelism > 1 {
 		return func(ctx context.Context) (*vcopierCopyWorker, error) {
-			dbClient, err := vc.newClientConnection(ctx)
+			dbClient, err := vc.vr.newClientConnection(ctx)
 			if err != nil {
 				return nil, fmt.Errorf("failed to create new db client: %s", err.Error())
 			}

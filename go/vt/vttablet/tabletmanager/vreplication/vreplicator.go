@@ -647,7 +647,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		// We're also NOT using a DBA connection here because we want to
 		// be sure that the commit fails if the instance is somehow in
 		// READ-ONLY mode.
-		dbClient, err := newVCopier(vr).newClientConnection(ctx)
+		dbClient, err := vr.newClientConnection(ctx)
 		if err != nil {
 			log.Errorf("Unable to connect to the database when saving secondary keys for deferred creation on the %q table in the %q VReplication workflow: %v",
 				tableName, vr.WorkflowName, err)
@@ -714,7 +714,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	// We're also NOT using a DBA connection here because we want to be
 	// sure that the work fails if the instance is somehow in READ-ONLY
 	// mode.
-	dbClient, err := newVCopier(vr).newClientConnection(ctx)
+	dbClient, err := vr.newClientConnection(ctx)
 	if err != nil {
 		log.Errorf("Unable to connect to the database when executing post copy actions on the %q table in the %q VReplication workflow: %v",
 			tableName, vr.WorkflowName, err)
@@ -969,4 +969,19 @@ func (vr *vreplicator) supportsDeferredSecondaryKeys() bool {
 	return vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) ||
 		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Migrate) ||
 		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard)
+}
+
+func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, error) {
+	dbc := vr.vre.dbClientFactoryFiltered()
+	if err := dbc.Connect(); err != nil {
+		return nil, vterrors.Wrap(err, "can't connect to database")
+	}
+	dbClient := newVDBClient(dbc, vr.stats)
+	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
+		return nil, vterrors.Wrap(err, "failed to set sql_mode")
+	}
+	if err := vr.clearFKCheck(dbClient); err != nil {
+		return nil, vterrors.Wrap(err, "failed to clear foreign key check")
+	}
+	return dbClient, nil
 }
