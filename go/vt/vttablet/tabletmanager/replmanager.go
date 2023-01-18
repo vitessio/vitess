@@ -17,12 +17,11 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"os"
 	"path"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
@@ -163,7 +162,7 @@ func (rm *replManager) reset() {
 }
 
 // setReplicationStopped performs a best effort attempt of
-// remembering a decision to stop replication.
+// remembering a decision to stop replication but that decision is not preserved across restart of vttablets.
 func (rm *replManager) setReplicationStopped(stopped bool) {
 	if mysqlctl.DisableActiveReparents || disableReplicationManager {
 		return
@@ -179,7 +178,15 @@ func (rm *replManager) setReplicationStopped(stopped bool) {
 	} else {
 		rm.ticks.Start(rm.check)
 	}
+}
 
+// setReplicationPermanentlyStopped stops replication in a way that it is remembered across restarts of vttablets.
+func (rm *replManager) setReplicationPermanentlyStopped(stopped bool) {
+	if mysqlctl.DisableActiveReparents || disableReplicationManager {
+		return
+	}
+
+	rm.setReplicationStopped(stopped)
 	if rm.markerFile == "" {
 		return
 	}

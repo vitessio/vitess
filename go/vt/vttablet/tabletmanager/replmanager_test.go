@@ -17,12 +17,14 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
+	"os"
+	"path"
 	"testing"
 	"time"
 
-	"context"
-
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -79,6 +81,41 @@ func TestReplManagerSetReplicationStopped(t *testing.T) {
 	assert.True(t, tm.replManager.ticks.Running())
 	tm.replManager.setReplicationStopped(true)
 	assert.False(t, tm.replManager.ticks.Running())
+}
+
+func TestReplManagerSetReplicationPermanentlyStopped(t *testing.T) {
+	defer func(saved bool) { mysqlctl.DisableActiveReparents = saved }(mysqlctl.DisableActiveReparents)
+	mysqlctl.DisableActiveReparents = true
+
+	tm := &TabletManager{}
+	tm.replManager = newReplManager(context.Background(), tm, 100*time.Millisecond)
+	tm.replManager.markerFile = path.Join(os.TempDir(), "markerfile")
+	defer func() {
+		os.Remove(tm.replManager.markerFile)
+	}()
+
+	// DisableActiveReparents == true should result in no-op
+	mysqlctl.DisableActiveReparents = true
+	tm.replManager.setReplicationPermanentlyStopped(true)
+	assert.False(t, tm.replManager.ticks.Running())
+	checkIfMarkerFileExists(t, tm, false)
+	tm.replManager.setReplicationPermanentlyStopped(false)
+	assert.False(t, tm.replManager.ticks.Running())
+	checkIfMarkerFileExists(t, tm, false)
+
+	mysqlctl.DisableActiveReparents = false
+	tm.replManager.setReplicationPermanentlyStopped(false)
+	checkIfMarkerFileExists(t, tm, false)
+	assert.True(t, tm.replManager.ticks.Running())
+	tm.replManager.setReplicationPermanentlyStopped(true)
+	checkIfMarkerFileExists(t, tm, true)
+	assert.False(t, tm.replManager.ticks.Running())
+}
+
+func checkIfMarkerFileExists(t *testing.T, tm *TabletManager, exists bool) {
+	_, err := os.Stat(tm.replManager.markerFile)
+	fileExists := err == nil
+	require.Equal(t, exists, fileExists)
 }
 
 func TestReplManagerReset(t *testing.T) {

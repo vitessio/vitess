@@ -200,22 +200,16 @@ func (tm *TabletManager) StopReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
+	// From the StopReplication RPC we want to preserve the decision to stop replication across a restart as well
+	tm.replManager.setReplicationPermanentlyStopped(true)
 	return tm.stopReplicationLocked(ctx)
 }
 
 func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
-
-	// Remember that we were told to stop, so we don't try to
-	// restart ourselves (in replication_reporter).
-	tm.replManager.setReplicationStopped(true)
 	return tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
 }
 
 func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
-
-	// Remember that we were told to stop, so we don't try to
-	// restart ourselves (in replication_reporter).
-	tm.replManager.setReplicationStopped(true)
 	return tm.MysqlDaemon.StopIOThread(ctx)
 }
 
@@ -238,6 +232,8 @@ func (tm *TabletManager) StopReplicationMinimum(ctx context.Context, position st
 	if err := tm.MysqlDaemon.WaitSourcePos(waitCtx, pos); err != nil {
 		return "", err
 	}
+	// From the StopReplicationMinimum RPC we want to preserve the decision to stop replication across a restart as well
+	tm.replManager.setReplicationPermanentlyStopped(true)
 	if err := tm.stopReplicationLocked(ctx); err != nil {
 		return "", err
 	}
@@ -257,7 +253,8 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	}
 	defer tm.unlock()
 
-	tm.replManager.setReplicationStopped(false)
+	// From the StartReplicaion RPC we want to clear any previous decision to stop replication across a restart as well
+	tm.replManager.setReplicationPermanentlyStopped(false)
 	if err := tm.fixSemiSync(tm.Tablet().Type, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return err
 	}
@@ -405,7 +402,8 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
-	tm.replManager.setReplicationStopped(false)
+	// From the InitReplica RPC we want to clear any previous decision to stop replication across a restart as well
+	tm.replManager.setReplicationPermanentlyStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to primary.
 	// If we were a primary type, we need to switch back to replica settings.
@@ -752,7 +750,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 			}
 		}
 		// Clear replication sentinel flag for this replica
-		tm.replManager.setReplicationStopped(false)
+		tm.replManager.setReplicationPermanentlyStopped(false)
 	}
 
 	return nil
@@ -802,6 +800,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 				},
 			}, nil
 		}
+		tm.replManager.setReplicationStopped(true)
 		if err := tm.stopIOThreadLocked(ctx); err != nil {
 			return StopReplicationAndGetStatusResponse{
 				Status: &replicationdatapb.StopReplicationStatus{
@@ -819,6 +818,7 @@ func (tm *TabletManager) StopReplicationAndGetStatus(ctx context.Context, stopRe
 				},
 			}, nil
 		}
+		tm.replManager.setReplicationStopped(true)
 		if err := tm.stopReplicationLocked(ctx); err != nil {
 			return StopReplicationAndGetStatusResponse{
 				Status: &replicationdatapb.StopReplicationStatus{
