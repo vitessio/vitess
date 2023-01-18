@@ -812,6 +812,33 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	// in-order-completion
+	t.Run("in-order-completion: multiple drops for nonexistent tables and views", func(t *testing.T) {
+		u, err := schema.CreateOnlineDDLUUID()
+		require.NoError(t, err)
+
+		sqls := []string{
+			fmt.Sprintf("drop table if exists t4_%s", u),
+			fmt.Sprintf("drop view  if exists t1_%s", u),
+			fmt.Sprintf("drop table if exists t2_%s", u),
+			fmt.Sprintf("drop view  if exists t3_%s", u),
+		}
+		sql := strings.Join(sqls, ";")
+		var vuuids []string
+		t.Run("drop multiple tables and views, in-order-completion", func(t *testing.T) {
+			uuidList := testOnlineDDLStatement(t, createParams(sql, ddlStrategy+" --allow-concurrent --in-order-completion", "vtctl", "", "", true)) // skip wait
+			vuuids = strings.Split(uuidList, "\n")
+			assert.Equal(t, 4, len(vuuids))
+			for _, uuid := range vuuids {
+				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			}
+		})
+		require.Equal(t, 4, len(vuuids))
+		for i := range vuuids {
+			if i > 0 {
+				testTableCompletionTimes(t, vuuids[i-1], vuuids[i])
+			}
+		}
+	})
 	t.Run("in-order-completion: two new views, one depends on the other", func(t *testing.T) {
 		u, err := schema.CreateOnlineDDLUUID()
 		require.NoError(t, err)
