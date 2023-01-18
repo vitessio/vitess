@@ -41,17 +41,17 @@ func TestRestoreStats(t *testing.T) {
 }
 
 func TestScope(t *testing.T) {
-	bytes := stats.NewCountersWithMultiLabels("test_scope_bytes", "", labels)
-	count := stats.NewCountersWithMultiLabels("test_scope_count", "", labels)
-	durationNs := stats.NewCountersWithMultiLabels("test_scope_duration_ns", "", labels)
+	bytes := stats.NewCountersWithMultiLabels("TestScopeBytes", "", labels)
+	count := stats.NewCountersWithMultiLabels("TestScopeCount", "", labels)
+	durationNs := stats.NewCountersWithMultiLabels("TestScopeDurationNs", "", labels)
 
 	duration := 10 * time.Second
 
 	stats1 := newScopedStats(bytes, count, durationNs, nil)
 	path1 := strings.Join([]string{unscoped, unscoped, unscoped}, ".")
 
-	stats2 := stats1.Scope(Component(BackupEngine), Implementation("test"))
-	path2 := strings.Join([]string{BackupEngine.String(), "test", unscoped}, ".")
+	stats2 := stats1.Scope(Component(BackupEngine), Implementation("Test"))
+	path2 := strings.Join([]string{BackupEngine.String(), "Test", unscoped}, ".")
 
 	// New stats2 with new scope, let's test:
 	// - TimedIncrement on new stats1 increments stats1 scope but not stats2.
@@ -76,11 +76,11 @@ func TestScope(t *testing.T) {
 	// - We cannot rescope a ScopeType once it's been set.
 	// - We can scope a ScopeType that is not yet set.
 	stats3 := stats2.Scope(
-		Component(BackupStorage),      /* not rescoped, because Component already set on stats2. */
-		Implementation("test_change"), /* not rescoped, because Implementation already set on stats2 */
-		Operation("test"),             /* scoped, because Operation not yet set on stats2 */
+		Component(BackupStorage),     /* not rescoped, because Component already set on stats2. */
+		Implementation("TestChange"), /* not rescoped, because Implementation already set on stats2 */
+		Operation("Test"),            /* scoped, because Operation not yet set on stats2 */
 	)
-	path3 := strings.Join([]string{BackupEngine.String(), "test", "test"}, ".")
+	path3 := strings.Join([]string{BackupEngine.String(), "Test", "Test"}, ".")
 	stats3.TimedIncrement(duration)
 
 	require.Equal(t, 3, len(count.Counts()))

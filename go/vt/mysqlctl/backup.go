@@ -25,6 +25,9 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
@@ -93,6 +96,8 @@ var (
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
 	backupCompressBlocks = 2
+
+	titleCase = cases.Title(language.English).String
 )
 
 func init() {
@@ -132,7 +137,9 @@ func Backup(ctx context.Context, params BackupParams) error {
 		// Scope stats to selected storage engine.
 		stats := params.Stats.Scope(
 			stats.Component(stats.BackupStorage),
-			stats.Implementation(backupstorage.BackupStorageImplementation),
+			stats.Implementation(
+				titleCase(backupstorage.BackupStorageImplementation),
+			),
 		)
 		bs = p.WithParams(backupstorage.Params{
 			Logger: params.Logger,
@@ -153,7 +160,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 	beParams := params.Copy()
 	beParams.Stats = params.Stats.Scope(
 		stats.Component(stats.BackupEngine),
-		stats.Implementation(backupEngineImplementation),
+		stats.Implementation(titleCase(backupEngineImplementation)),
 	)
 	// Take the backup, and either AbortBackup or EndBackup.
 	usable, err := be.ExecuteBackup(ctx, beParams, bh)
@@ -177,7 +184,7 @@ func Backup(ctx context.Context, params BackupParams) error {
 
 	// The backup worked, so just return the finish error, if any.
 	stats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
-	params.Stats.Scope(stats.Operation("backup")).TimedIncrement(time.Since(startTs))
+	params.Stats.Scope(stats.Operation("Backup")).TimedIncrement(time.Since(startTs))
 	return finishErr
 }
 
@@ -322,7 +329,9 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		// Scope stats to selected storage engine.
 		stats := params.Stats.Scope(
 			stats.Component(backupstats.BackupStorage),
-			stats.Implementation(backupstorage.BackupStorageImplementation),
+			stats.Implementation(
+				titleCase(backupstorage.BackupStorageImplementation),
+			),
 		)
 		bs = p.WithParams(backupstorage.Params{
 			Logger: params.Logger,
@@ -382,7 +391,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	reParams := params.Copy()
 	reParams.Stats = params.Stats.Scope(
 		stats.Component(backupstats.BackupEngine),
-		stats.Implementation(backupEngineImplementation),
+		stats.Implementation(titleCase(backupEngineImplementation)),
 	)
 	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
@@ -465,7 +474,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 
 	stats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
-	params.Stats.Scope(stats.Operation("restore")).TimedIncrement(time.Since(startTs))
+	params.Stats.Scope(stats.Operation("Restore")).TimedIncrement(time.Since(startTs))
 	params.Logger.Infof("Restore: complete")
 	return manifest, nil
 }

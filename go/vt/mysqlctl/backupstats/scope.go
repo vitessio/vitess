@@ -34,14 +34,14 @@ type (
 
 const (
 	// ScopeComponent is used to specify the type of component, such as
-	// "backupengine" or "backupstorage".
+	// "BackupEngine" or "BackupStorage".
 	ScopeComponent ScopeType = iota
 	// ScopeImplementation is used to specify the specific component, such as
-	// "builtin" and "xtrabackup" in the case of a "backupengine" componenet.
+	// "Builtin" and "XtraBackup" in the case of a "BackupEngine" componenet.
 	ScopeImplementation
 	// ScopeOperation is used to specify the type of operation. Examples of
-	// high-level operations are "backup" and "restore", and examples of
-	// low-level operations like "read" and "write".
+	// high-level operations are "Backup" and "Restore", and examples of
+	// low-level operations like "Read" and "Write".
 	ScopeOperation
 )
 

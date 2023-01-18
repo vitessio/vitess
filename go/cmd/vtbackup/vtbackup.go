@@ -123,7 +123,7 @@ var (
 	keepAliveTimeout = 0 * time.Second
 	disableRedoLog   = false
 	durationByPhase  = stats.NewGaugesWithSingleLabel(
-		"duration_seconds",
+		"DurationByPhaseSeconds",
 		"How long it took vtbackup to perform each phase (in seconds).",
 		"phase",
 	)
@@ -271,7 +271,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err := mysqld.Init(initCtx, mycnf, initDBSQLFile); err != nil {
 		return fmt.Errorf("failed to initialize mysql data dir and start mysqld: %v", err)
 	}
-	durationByPhase.Set("initmysqld", int64(time.Since(initMysqldAt).Seconds()))
+	durationByPhase.Set("InitMySQLd", int64(time.Since(initMysqldAt).Seconds()))
 	// Shut down mysqld when we're done.
 	defer func() {
 		// Be careful not to use the original context, because we don't want to
@@ -329,7 +329,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 			return fmt.Errorf("backup failed: %v", err)
 		}
-		durationByPhase.Set("initialbackup", int64(time.Since(backupParams.BackupTime).Seconds()))
+		durationByPhase.Set("InitialBackup", int64(time.Since(backupParams.BackupTime).Seconds()))
 		log.Info("Initial backup successful.")
 		return nil
 	}
@@ -366,7 +366,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	default:
 		return fmt.Errorf("can't restore from backup: %v", err)
 	}
-	durationByPhase.Set("restorelastbackup", int64(time.Since(restoreAt).Seconds()))
+	durationByPhase.Set("RestoreLastBackup", int64(time.Since(restoreAt).Seconds()))
 
 	// Disable redo logging (if we can) before we start replication.
 	disabledRedoLog := false
@@ -435,7 +435,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 			// We're caught up on replication to at least the point the primary
 			// was at when this vtbackup run started.
 			log.Infof("Replication caught up to %v after %v", status.Position, time.Since(waitStartTime))
-			durationByPhase.Set("catchupreplication", int64(time.Since(waitStartTime).Seconds()))
+			durationByPhase.Set("CatchUpReplication", int64(time.Since(waitStartTime).Seconds()))
 			break
 		}
 		if !status.Healthy() {
@@ -483,7 +483,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.Start(ctx, mycnf); err != nil {
 			return fmt.Errorf("Could not start MySQL after full shutdown: %v", err)
 		}
-		durationByPhase.Set("restartbeforebackup", int64(time.Since(restartAt).Seconds()))
+		durationByPhase.Set("RestartBeforeBackup", int64(time.Since(restartAt).Seconds()))
 	}
 
 	// Now we can take a new backup.
@@ -491,7 +491,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err := mysqlctl.Backup(ctx, backupParams); err != nil {
 		return fmt.Errorf("error taking backup: %v", err)
 	}
-	durationByPhase.Set("takenewbackup", int64(time.Since(backupAt).Seconds()))
+	durationByPhase.Set("TakeNewBackup", int64(time.Since(backupAt).Seconds()))
 
 	// Return a non-zero exit code if we didn't meet the replication position
 	// goal, even though we took a backup that pushes the high-water mark up.

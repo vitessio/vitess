@@ -80,26 +80,26 @@ var (
 //
 // It registers the following metrics with the Vitess stats package.
 //
-//   - backup_bytes: number of bytes processed by an an operation for given
+//   - BackupBytes: number of bytes processed by an an operation for given
 //     component and implementation.
-//   - backup_count: number of times an operation has happened for given
+//   - BackupCount: number of times an operation has happened for given
 //     component and implementation.
-//   - backup_duration_nanoseconds: time spent on an operation for a given
+//   - BackupDurationNanoseconds: time spent on an operation for a given
 //     component and implementation.
 func BackupStats() Stats {
 	registerBackupStats.Do(func() {
 		backupBytes = stats.NewCountersWithMultiLabels(
-			"backup_bytes",
+			"BackupBytes",
 			"How many backup bytes processed.",
 			labels,
 		)
 		backupCount = stats.NewCountersWithMultiLabels(
-			"backup_count",
+			"BackupCount",
 			"How many backup operations have happened.",
 			labels,
 		)
 		backupDurationNs = stats.NewCountersWithMultiLabels(
-			"backup_duration_nanoseconds",
+			"BackupDurationNanoseconds",
 			"How much time has been spent on backup operations (in nanoseconds).",
 			labels,
 		)
@@ -111,26 +111,26 @@ func BackupStats() Stats {
 //
 // It registers the following metrics with the Vitess stats package.
 //
-//   - restore_bytes: number of bytes processed by an an operation for given
+//   - RestoreBytes: number of bytes processed by an an operation for given
 //     component and implementation.
-//   - restore_count: number of times an operation has happened for given
+//   - RestoreCount: number of times an operation has happened for given
 //     component and implementation.
-//   - restore_duration_nanoseconds: time spent on an operation for a given
+//   - RestoreDurationNanoseconds: time spent on an operation for a given
 //     component and implementation.
 func RestoreStats() Stats {
 	registerRestoreStats.Do(func() {
 		restoreBytes = stats.NewCountersWithMultiLabels(
-			"restore_bytes",
+			"RestoreBytes",
 			"How many restore bytes processed.",
 			labels,
 		)
 		restoreCount = stats.NewCountersWithMultiLabels(
-			"restore_count",
+			"RestoreCount",
 			"How many restore operations have happened.",
 			labels,
 		)
 		restoreDurationNs = stats.NewCountersWithMultiLabels(
-			"restore_duration_nanoseconds",
+			"RestoreDurationNanoseconds",
 			"How much time has been spent on restore operations (in nanoseconds).",
 			labels,
 		)

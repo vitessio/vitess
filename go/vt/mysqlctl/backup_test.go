@@ -56,7 +56,7 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeComponent)
 	require.Equal(t, backupstats.BackupEngine.String(), executeBackupStats.ScopeV[backupstats.ScopeComponent])
 	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeImplementation)
-	require.Equal(t, "fake", executeBackupStats.ScopeV[backupstats.ScopeImplementation])
+	require.Equal(t, "Fake", executeBackupStats.ScopeV[backupstats.ScopeImplementation])
 }
 
 // TestBackupNoStats tests that if BackupParams.Stats is nil, then Backup will
@@ -95,7 +95,7 @@ func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	require.Contains(t, storageStats.ScopeV, backupstats.ScopeComponent)
 	require.Equal(t, backupstats.BackupStorage.String(), storageStats.ScopeV[backupstats.ScopeComponent])
 	require.Contains(t, storageStats.ScopeV, backupstats.ScopeImplementation)
-	require.Equal(t, "fake", storageStats.ScopeV[backupstats.ScopeImplementation])
+	require.Equal(t, "Fake", storageStats.ScopeV[backupstats.ScopeImplementation])
 }
 
 // TestBackupEmitsStats tests that Backup emits stats.
@@ -363,7 +363,7 @@ func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
 	require.Contains(t, executeRestoreStats.ScopeV, backupstats.ScopeComponent)
 	require.Equal(t, backupstats.BackupEngine.String(), executeRestoreStats.ScopeV[backupstats.ScopeComponent])
 	require.Contains(t, executeRestoreStats.ScopeV, backupstats.ScopeImplementation)
-	require.Equal(t, "fake", executeRestoreStats.ScopeV[backupstats.ScopeImplementation])
+	require.Equal(t, "Fake", executeRestoreStats.ScopeV[backupstats.ScopeImplementation])
 }
 
 // TestRestoreNoStats tests that if RestoreParams.Stats is nil, then Restore will
@@ -404,7 +404,7 @@ func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	require.Contains(t, storageStats.ScopeV, backupstats.ScopeComponent)
 	require.Equal(t, backupstats.BackupStorage.String(), storageStats.ScopeV[backupstats.ScopeComponent])
 	require.Contains(t, storageStats.ScopeV, backupstats.ScopeImplementation)
-	require.Equal(t, "fake", storageStats.ScopeV[backupstats.ScopeImplementation])
+	require.Equal(t, "Fake", storageStats.ScopeV[backupstats.ScopeImplementation])
 }
 
 // TestRestoreTriesToParameterizeBackupStorage tests that Restore tries to pass

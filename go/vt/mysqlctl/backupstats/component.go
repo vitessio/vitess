@@ -28,9 +28,9 @@ const (
 func (c ComponentType) String() string {
 	switch c {
 	case BackupEngine:
-		return "backupengine"
+		return "BackupEngine"
 	case BackupStorage:
-		return "backupstorage"
+		return "BackupStorage"
 	}
-	return "other"
+	return "Other"
 }

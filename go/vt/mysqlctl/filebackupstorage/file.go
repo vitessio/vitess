@@ -114,7 +114,7 @@ func (fbh *FileBackupHandle) AddFile(ctx context.Context, filename string, files
 	if err != nil {
 		return nil, err
 	}
-	stat := fbh.fbs.params.Stats.Scope(stats.Operation("file:write"))
+	stat := fbh.fbs.params.Stats.Scope(stats.Operation("File:Write"))
 	return ioutil.NewMeteredWriteCloser(f, stat.TimedIncrementBytes), nil
 }
 
@@ -144,7 +144,7 @@ func (fbh *FileBackupHandle) ReadFile(ctx context.Context, filename string) (io.
 	if err != nil {
 		return nil, err
 	}
-	stat := fbh.fbs.params.Stats.Scope(stats.Operation("file:read"))
+	stat := fbh.fbs.params.Stats.Scope(stats.Operation("File:Read"))
 	return ioutil.NewMeteredReadCloser(f, stat.TimedIncrementBytes), nil
 }
 
