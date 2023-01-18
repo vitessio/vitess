@@ -4361,7 +4361,7 @@ function_call_keyword
   {
 	 $$ = &Default{ColName: $2}
   }
-| INTERVAL simple_expr sql_id
+| INTERVAL bit_expr sql_id
   {
 	// This rule prevents the usage of INTERVAL
 	// as a function. If support is needed for that,
