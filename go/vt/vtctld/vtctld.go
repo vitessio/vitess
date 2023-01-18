@@ -142,7 +142,7 @@ func InitVtctld(ts *topo.Server) error {
 		}
 	}
 
-	// Serve the REST API for the vtctld web app.
+	// Serve the REST API
 	initAPI(context.Background(), ts, actionRepo, healthCheck)
 
 	return nil

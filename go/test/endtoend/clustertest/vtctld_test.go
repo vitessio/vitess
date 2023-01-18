@@ -18,11 +18,9 @@ limitations under the License.
 package clustertest
 
 import (
-	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
-	"reflect"
 	"strings"
 	"testing"
 
@@ -51,35 +49,10 @@ func TestVtctldProcess(t *testing.T) {
 	healthCheckURL := fmt.Sprintf("http://%s:%d/debug/health/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 	testURL(t, healthCheckURL, "vtctld health check url")
 
-	url = fmt.Sprintf("http://%s:%d/api/topodata/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
-
-	testTopoDataAPI(t, url)
 	testListAllTablets(t)
 	testTabletStatus(t)
 	testExecuteAsDba(t)
 	testExecuteAsApp(t)
-}
-
-func testTopoDataAPI(t *testing.T, url string) {
-	resp, err := http.Get(url)
-	require.NoError(t, err)
-	defer resp.Body.Close()
-	assert.Equal(t, resp.StatusCode, 200)
-
-	resultMap := make(map[string]any)
-	respByte, err := io.ReadAll(resp.Body)
-	require.NoError(t, err)
-	err = json.Unmarshal(respByte, &resultMap)
-	require.NoError(t, err)
-
-	errorValue := reflect.ValueOf(resultMap["Error"])
-	assert.Empty(t, errorValue.String())
-
-	assert.Contains(t, resultMap, "Children")
-	children := reflect.ValueOf(resultMap["Children"])
-	childrenGot := fmt.Sprintf("%s", children)
-	assert.Contains(t, childrenGot, "global")
-	assert.Contains(t, childrenGot, clusterInstance.Cell)
 }
 
 func testListAllTablets(t *testing.T) {
