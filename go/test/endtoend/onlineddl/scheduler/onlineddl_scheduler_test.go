@@ -86,7 +86,7 @@ func parseTableName(t *testing.T, sql string) (tableName string) {
 		if err != nil && errors.Is(err, io.EOF) {
 			break
 		}
-		require.NoError(t, err)
+		require.NoErrorf(t, err, "parsing sql: [%v]", sql)
 		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
 		require.True(t, ok)
 		tableName = ddlStmt.GetTable().Name.String()
@@ -812,7 +812,28 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	// in-order-completion
-	t.Run("in-order-completion with migration dependencies", func(t *testing.T) {
+	t.Run("in-order-completion: two new views, one depends on the other", func(t *testing.T) {
+		u, err := schema.CreateOnlineDDLUUID()
+		require.NoError(t, err)
+		v2name := fmt.Sprintf("v2_%s", u)
+		createv2 := fmt.Sprintf("create view %s as select id from t1_test", v2name)
+		v1name := fmt.Sprintf("v1_%s", u)
+		createv1 := fmt.Sprintf("create view %s as select id from %s", v1name, v2name)
+
+		sql := fmt.Sprintf("%s; %s;", createv2, createv1)
+		var vuuids []string
+		t.Run("create two views, expect both complete", func(t *testing.T) {
+			uuidList := testOnlineDDLStatement(t, createParams(sql, ddlStrategy+" --allow-concurrent --in-order-completion", "vtctl", "", "", true)) // skip wait
+			vuuids = strings.Split(uuidList, "\n")
+			assert.Equal(t, 2, len(vuuids))
+			for _, uuid := range vuuids {
+				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			}
+		})
+		require.Equal(t, 2, len(vuuids))
+		testTableCompletionTimes(t, vuuids[0], vuuids[1])
+	})
+	t.Run("in-order-completion: new table column, new view depends on said column", func(t *testing.T) {
 		// The VIEW creation can only succeed when the ALTER has completed and the table has the new column
 		t1uuid = testOnlineDDLStatement(t, createParams(alterExtraColumn, ddlStrategy+" --allow-concurrent --postpone-completion --in-order-completion", "vtctl", "", "", true))                // skip wait
 		v1uuid := testOnlineDDLStatement(t, createParams(createViewDependsOnExtraColumn, ddlStrategy+" --allow-concurrent --postpone-completion --in-order-completion", "vtctl", "", "", true)) // skip wait
