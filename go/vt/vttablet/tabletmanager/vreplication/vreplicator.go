@@ -800,7 +800,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	go func() {
 		select {
-		case <-ctx.Done():
+		case <-vr.vre.ctx.Done():
 			log.Infof("Copy of the %q table stopped when performing the following post copy action in the %q VReplication workflow: %+v",
 				tableName, vr.WorkflowName, action)
 			if err := killAction(action); err != nil {
