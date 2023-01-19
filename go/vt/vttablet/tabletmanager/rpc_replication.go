@@ -343,14 +343,6 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 
 	// Enforce semi-sync after changing the tablet-type to PRIMARY. Otherwise, the
-	// get the current replication position
-	pos, err = tm.MysqlDaemon.PrimaryPosition()
-	log.Infof("current primary position is %s", mysql.EncodePosition(pos))
-	if err != nil {
-		return "", err
-	}
-
-	// Enforce semi-sync after changing the tablet-type to PRIMARY. Otherwise, the
 	// primary will hang while trying to create the database.
 	if err := tm.fixSemiSync(topodatapb.TabletType_PRIMARY, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return "", err
