@@ -34,6 +34,7 @@ func TestIsDirect(t *testing.T) {
 	assert.False(t, DDLStrategy("online").IsDirect())
 	assert.False(t, DDLStrategy("gh-ost").IsDirect())
 	assert.False(t, DDLStrategy("pt-osc").IsDirect())
+	assert.False(t, DDLStrategy("mysql").IsDirect())
 	assert.True(t, DDLStrategy("something").IsDirect())
 }
 
@@ -72,6 +73,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "pt-osc",
 			strategy:         DDLStrategyPTOSC,
+		},
+		{
+			strategyVariable: "mysql",
+			strategy:         DDLStrategyMySQL,
 		},
 		{
 			strategy: DDLStrategyDirect,

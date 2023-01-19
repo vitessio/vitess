@@ -94,9 +94,10 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	}
 
 	for i := range u.Sources {
+		// TODO copy-on-rewrite should be used here
 		predicate := sqlparser.CloneExpr(expr)
 		var err error
-		predicate = sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
+		predicate = sqlparser.SafeRewrite(predicate, nil, func(cursor *sqlparser.Cursor) bool {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
 				return err == nil
@@ -120,8 +121,8 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 				return false
 			}
 			cursor.Replace(ae.Expr)
-			return false
-		}, nil).(sqlparser.Expr)
+			return true
+		}).(sqlparser.Expr)
 		if err != nil {
 			return nil, err
 		}

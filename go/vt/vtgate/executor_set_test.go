@@ -156,25 +156,11 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set workload = 1",
 		err: "incorrect argument type to variable 'workload': INT64",
 	}, {
-		in: "set tx_isolation = 'read-committed'",
-		out: &vtgatepb.Session{
-			Autocommit:      true,
-			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED},
-			SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'", "tx_isolation": "'READ-COMMITTED'"},
-		},
+		in:  "set tx_isolation = 'read-committed'",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in: "set transaction_isolation = 'read-committed'",
-		out: &vtgatepb.Session{
-			Autocommit:      true,
-			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED},
-			SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'", "tx_isolation": "'READ-COMMITTED'"},
-		},
-	}, {
-		in:  "set transaction_isolation = 'read_committed'",
-		err: "Variable 'transaction_isolation' can't be set to the value of 'read_committed'",
-	}, {
-		in:  "set transaction_isolation = 'read committed'",
-		err: "Variable 'transaction_isolation' can't be set to the value of 'read committed'",
+		in:  "set transaction_isolation = 'read-committed'",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in:  "set transaction_mode = 'twopc', autocommit=1",
 		out: &vtgatepb.Session{Autocommit: true, TransactionMode: vtgatepb.TransactionMode_TWOPC},
@@ -227,40 +213,22 @@ func TestExecutorSet(t *testing.T) {
 		in:  "set transaction_read_only = 2",
 		err: "variable 'transaction_read_only' can't be set to the value: 2 is not a boolean",
 	}, {
-		in: "set session transaction isolation level repeatable read",
-		out: &vtgatepb.Session{
-			Autocommit:      true,
-			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_REPEATABLE_READ},
-			SystemVariables: map[string]string{"transaction_isolation": "'REPEATABLE-READ'", "tx_isolation": "'REPEATABLE-READ'"},
-		},
+		in:  "set session transaction isolation level repeatable read",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in: "set session transaction isolation level read committed",
-		out: &vtgatepb.Session{
-			Autocommit:      true,
-			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_COMMITTED},
-			SystemVariables: map[string]string{"transaction_isolation": "'READ-COMMITTED'", "tx_isolation": "'READ-COMMITTED'"},
-		},
+		in:  "set session transaction isolation level read committed",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in: "set session transaction isolation level read uncommitted",
-		out: &vtgatepb.Session{
-			Autocommit:      true,
-			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_READ_UNCOMMITTED},
-			SystemVariables: map[string]string{"transaction_isolation": "'READ-UNCOMMITTED'", "tx_isolation": "'READ-UNCOMMITTED'"},
-		},
+		in:  "set session transaction isolation level read uncommitted",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
-		in: "set session transaction isolation level serializable",
-		out: &vtgatepb.Session{
-			Autocommit:      true,
-			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE},
-			SystemVariables: map[string]string{"transaction_isolation": "'SERIALIZABLE'", "tx_isolation": "'SERIALIZABLE'"},
-		},
+		in:  "set session transaction isolation level serializable",
+		out: &vtgatepb.Session{Autocommit: true},
 	}, {
 		in: "set transaction isolation level serializable",
 		out: &vtgatepb.Session{
-			Autocommit:      true,
-			Options:         &querypb.ExecuteOptions{TransactionIsolation: querypb.ExecuteOptions_SERIALIZABLE},
-			SystemVariables: map[string]string{"transaction_isolation": "'SERIALIZABLE'", "tx_isolation": "'SERIALIZABLE'"},
-			Warnings:        []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}},
+			Autocommit: true,
+			Warnings:   []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}},
 		},
 	}, {
 		in:  "set transaction read only",
@@ -391,6 +359,10 @@ func TestExecutorSetOp(t *testing.T) {
 	}, {
 		in:     "set global client_found_rows = 1",
 		result: returnNoResult("client_found_rows", "int64"),
+	}, {
+		in:      "set tx_isolation = 'read-committed'",
+		sysVars: map[string]string{"tx_isolation": "'read-committed'"},
+		result:  returnResult("tx_isolation", "varchar", "read-committed"),
 	}}
 	for _, tcase := range testcases {
 		t.Run(tcase.in, func(t *testing.T) {
@@ -610,14 +582,12 @@ func TestExecutorSetAndSelect(t *testing.T) {
 	e.normalize = true
 
 	testcases := []struct {
-		sysVar        string
-		val           string
-		exp           string
-		expShardCount int
+		sysVar string
+		val    string
+		exp    string
 	}{{
-		sysVar:        "transaction_isolation",
-		exp:           `[[VARCHAR("REPEATABLE-READ")]]`,
-		expShardCount: 1, // query should reach the shard only in case of unset transaction isolation level.
+		sysVar: "transaction_isolation",
+		exp:    `[[VARCHAR("REPEATABLE-READ")]]`,
 	}, {
 		sysVar: "transaction_isolation",
 		val:    "READ-COMMITTED",
@@ -630,12 +600,19 @@ func TestExecutorSetAndSelect(t *testing.T) {
 		sysVar: "tx_isolation",
 		exp:    `[[VARCHAR("READ-UNCOMMITTED")]]`, // this returns the value set in previous query.
 	}}
-	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded})
+	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
 	for _, tcase := range testcases {
 		t.Run(fmt.Sprintf("%s-%s", tcase.sysVar, tcase.val), func(t *testing.T) {
 			sbc.ExecCount.Set(0) // reset the value
 
 			if tcase.val != "" {
+				// check query result for `select <new_setting> from dual where @@transaction_isolation != <new_setting>
+				// not always the check query is the first query, so setting it two times, as it will use one of those results.
+				sbc.SetResults([]*sqltypes.Result{
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // one for set prequeries
+					sqltypes.MakeTestResult(sqltypes.MakeTestFields(tcase.sysVar, "varchar"), tcase.val), // second for check query
+					sqltypes.MakeTestResult(nil)}) // third one for new set query
+
 				setQ := fmt.Sprintf("set %s = '%s'", tcase.sysVar, tcase.val)
 				_, err := e.Execute(context.Background(), "TestExecutorSetAndSelect", session, setQ, nil)
 				require.NoError(t, err)
@@ -648,7 +625,6 @@ func TestExecutorSetAndSelect(t *testing.T) {
 			qr, err := e.Execute(context.Background(), "TestExecutorSetAndSelect", session, selectQ, nil)
 			require.NoError(t, err)
 			assert.Equal(t, tcase.exp, fmt.Sprintf("%v", qr.Rows))
-			assert.EqualValues(t, tcase.expShardCount, sbc.ExecCount.Get())
 		})
 	}
 }

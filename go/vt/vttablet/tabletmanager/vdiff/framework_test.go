@@ -540,6 +540,11 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 
 	vdiffenv.opts = &tabletmanagerdatapb.VDiffOptions{
 		CoreOptions: &tabletmanagerdatapb.VDiffCoreOptions{},
+		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
+			Format:     "json",
+			OnlyPks:    true,
+			DebugQuery: true,
+		},
 	}
 
 	// vdiff.syncTargets. This actually happens after stopTargets.

@@ -70,6 +70,8 @@ type BinlogEvent interface {
 	IsRand() bool
 	// IsPreviousGTIDs returns true if this event is a PREVIOUS_GTIDS_EVENT.
 	IsPreviousGTIDs() bool
+	// IsHeartbeat returns true if this event is a HEARTBEAT_EVENT.
+	IsHeartbeat() bool
 	// IsSemiSyncAckRequested returns true if the source requests a semi-sync ack for this event
 	IsSemiSyncAckRequested() bool
 

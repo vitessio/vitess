@@ -30,7 +30,7 @@ type RewriteState bool
 func RewritePredicate(ast SQLNode) SQLNode {
 	for {
 		finishedRewrite := true
-		ast = Rewrite(ast, nil, func(cursor *Cursor) bool {
+		ast = SafeRewrite(ast, nil, func(cursor *Cursor) bool {
 			if e, isExpr := cursor.node.(Expr); isExpr {
 				rewritten, state := simplifyExpression(e)
 				if state == Changed {

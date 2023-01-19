@@ -153,6 +153,31 @@ var (
 	throttleCheckFlags       = &throttle.CheckFlags{}
 )
 
+type ConstraintType int
+
+const (
+	UnknownConstraintType ConstraintType = iota
+	CheckConstraintType
+	ForeignKeyConstraintType
+)
+
+var (
+	constraintIndicatorMap = map[int]string{
+		int(CheckConstraintType):      "chk",
+		int(ForeignKeyConstraintType): "fk",
+	}
+)
+
+func GetConstraintType(constraintInfo sqlparser.ConstraintInfo) ConstraintType {
+	if _, ok := constraintInfo.(*sqlparser.CheckConstraintDefinition); ok {
+		return CheckConstraintType
+	}
+	if _, ok := constraintInfo.(*sqlparser.ForeignKeyDefinition); ok {
+		return ForeignKeyConstraintType
+	}
+	return UnknownConstraintType
+}
+
 type mysqlVariables struct {
 	host           string
 	port           int
@@ -666,28 +691,42 @@ func (e *Executor) doesConnectionInfoMatch(ctx context.Context, connID int64, su
 	return len(rs.Rows) == 1, nil
 }
 
-// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
-func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
-	// Validate table does not participate in foreign key relationship:
+// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent or a child in at least one foreign key constraint
+func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context, schema string, table string) (bool, error) {
 	for _, fkQuery := range []string{selSelectCountFKParentConstraints, selSelectCountFKChildConstraints} {
 		query, err := sqlparser.ParseAndBind(fkQuery,
-			sqltypes.StringBindVariable(onlineDDL.Schema),
-			sqltypes.StringBindVariable(onlineDDL.Table),
+			sqltypes.StringBindVariable(schema),
+			sqltypes.StringBindVariable(table),
 		)
 		if err != nil {
-			return err
+			return false, err
 		}
 		r, err := e.execQuery(ctx, query)
 		if err != nil {
-			return err
+			return false, err
 		}
 		row := r.Named().Row()
 		if row == nil {
-			return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result from INFORMATION_SCHEMA.KEY_COLUMN_USAGE query: %s", query)
+			return false, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "unexpected result from INFORMATION_SCHEMA.KEY_COLUMN_USAGE query: %s", query)
 		}
 		countFKConstraints := row.AsInt64("num_fk_constraints", 0)
 		if countFKConstraints > 0 {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in FOREIGN KEY constraint. foreign key constraints are not supported in online DDL", onlineDDL.Table)
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
+func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
+	if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
+		// Validate table does not participate in foreign key relationship:
+		participates, err := e.tableParticipatesInForeignKeyRelationship(ctx, onlineDDL.Schema, onlineDDL.Table)
+		if err != nil {
+			return vterrors.Wrapf(err, "error while attempting to validate whether table %s participates in FOREIGN KEY constraint", onlineDDL.Table)
+		}
+		if participates {
+			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "table %s participates in a FOREIGN KEY constraint and FOREIGN KEY constraints are not supported in Online DDL unless the *experimental and unsafe* --unsafe-allow-foreign-keys strategy flag is specified", onlineDDL.Table)
 		}
 	}
 	return nil
@@ -1049,8 +1088,8 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 		conn.ExecuteFetch(restoreSQLModeQuery, 0, false)
 	}
 	// Change sql_mode
-	changeSSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
-	if _, err := conn.ExecuteFetch(changeSSQLModeQuery, 0, false); err != nil {
+	changeSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
+	if _, err := conn.ExecuteFetch(changeSQLModeQuery, 0, false); err != nil {
 		return deferFunc, err
 	}
 	return deferFunc, nil
@@ -1077,12 +1116,13 @@ func (e *Executor) initMigrationSQLMode(ctx context.Context, onlineDDL *schema.O
 // call the new constraint something like _vt_HOLD_394f9e6dfc3d11eca0390a43f95f28a3_20220706091048_chk_1_cps1okb4uafunfqusi2lp22u3,
 // which exceeds the 64 character limit for table names. Long story short, we also trim down <tablename> if the constraint seems
 // to be auto-generated.
-func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, hashExists map[string]bool, seed string, oldName string) string {
+func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, constraintType ConstraintType, hashExists map[string]bool, seed string, oldName string) string {
+	constraintIndicator := constraintIndicatorMap[int(constraintType)]
 	oldName = schemadiff.ExtractConstraintOriginalName(oldName)
-	autoGeneratedName := fmt.Sprintf("%s_chk_", onlineDDL.Table)
+	autoGeneratedName := fmt.Sprintf("%s_%s_", onlineDDL.Table, constraintIndicator)
 	if strings.HasPrefix(oldName, autoGeneratedName) {
 		// strip out table name
-		oldName = "chk_" + oldName[len(autoGeneratedName):]
+		oldName = constraintIndicator + "_" + oldName[len(autoGeneratedName):]
 	}
 
 	hash := textutil.UUIDv5Base36(onlineDDL.UUID, onlineDDL.Table, seed)
@@ -1094,7 +1134,7 @@ func (e *Executor) newConstraintName(onlineDDL *schema.OnlineDDL, hashExists map
 	maxAllowedNameLength := maxConstraintNameLength - len(suffix)
 	newName := oldName
 	if newName == "" {
-		newName = "chk" // start with something that looks consistent with MySQL's naming
+		newName = constraintIndicator // start with something that looks consistent with MySQL's naming
 	}
 	if len(newName) > maxAllowedNameLength {
 		newName = newName[0:maxAllowedNameLength]
@@ -1113,10 +1153,12 @@ func (e *Executor) validateAndEditCreateTableStatement(ctx context.Context, onli
 	validateWalk := func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
 		case *sqlparser.ForeignKeyDefinition:
-			return false, schema.ErrForeignKeyFound
+			if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
+				return false, schema.ErrForeignKeyFound
+			}
 		case *sqlparser.ConstraintDefinition:
 			oldName := node.Name.String()
-			newName := e.newConstraintName(onlineDDL, hashExists, sqlparser.CanonicalString(node.Details), oldName)
+			newName := e.newConstraintName(onlineDDL, GetConstraintType(node.Details), hashExists, sqlparser.CanonicalString(node.Details), oldName)
 			node.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
 		}
@@ -1146,7 +1188,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 			}
 		case *sqlparser.AddConstraintDefinition:
 			oldName := node.ConstraintDefinition.Name.String()
-			newName := e.newConstraintName(onlineDDL, hashExists, sqlparser.CanonicalString(node.ConstraintDefinition.Details), oldName)
+			newName := e.newConstraintName(onlineDDL, GetConstraintType(node.ConstraintDefinition.Details), hashExists, sqlparser.CanonicalString(node.ConstraintDefinition.Details), oldName)
 			node.ConstraintDefinition.Name = sqlparser.NewIdentifierCI(newName)
 			constraintMap[oldName] = newName
 		}
@@ -2313,12 +2355,25 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 				return err
 			}
 		}
+		// Find conditions where the migration cannot take place:
+		switch onlineDDL.Strategy {
+		case schema.DDLStrategyMySQL:
+			strategySetting := onlineDDL.StrategySetting()
+			if strategySetting.IsPostponeCompletion() {
+				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--postpone-completion not supported in 'mysql' strategy"))
+			}
+			if strategySetting.IsAllowZeroInDateFlag() {
+				e.failMigration(ctx, onlineDDL, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "--allow-zero-in-date not supported in 'mysql' strategy"))
+			}
+		}
+
 		// The review is complete. We've backfilled details on the migration row. We mark
 		// the migration as having been reviewed. The function scheduleNextMigration() will then
 		// have access to this row.
 		if err := e.updateMigrationTimestamp(ctx, "reviewed_timestamp", uuid); err != nil {
 			return err
 		}
+
 	}
 	return nil
 }
@@ -3018,6 +3073,15 @@ func (e *Executor) executeAlterDDLActionMigration(ctx context.Context, onlineDDL
 			defer e.migrationMutex.Unlock()
 
 			if err := e.ExecuteWithPTOSC(ctx, onlineDDL); err != nil {
+				failMigration(err)
+			}
+		}()
+	case schema.DDLStrategyMySQL:
+		go func() {
+			e.migrationMutex.Lock()
+			defer e.migrationMutex.Unlock()
+
+			if _, err := e.executeDirectly(ctx, onlineDDL); err != nil {
 				failMigration(err)
 			}
 		}()

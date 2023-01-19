@@ -61,7 +61,8 @@ func createOperatorFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.S
 	if sel.Where != nil {
 		exprs := sqlparser.SplitAndExpression(nil, sel.Where.Expr)
 		for _, expr := range exprs {
-			op, err = op.AddPredicate(ctx, sqlparser.RemoveKeyspaceFromColName(expr))
+			sqlparser.RemoveKeyspaceFromColName(expr)
+			op, err = op.AddPredicate(ctx, expr)
 			if err != nil {
 				return nil, err
 			}

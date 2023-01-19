@@ -207,6 +207,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 	}
 
 	var events <-chan mysql.BinlogEvent
+	var errs <-chan error
 	if bls.timestamp != 0 {
 		// MySQL 5.6 only: We are going to start reading the
 		// logs from the beginning of a binlog file. That is
@@ -214,7 +215,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		// contains the starting GTIDSet, and we will save
 		// that as the current position.
 		bls.usePreviousGTIDs = true
-		events, err = bls.conn.StartBinlogDumpFromBinlogBeforeTimestamp(ctx, bls.timestamp)
+		events, errs, err = bls.conn.StartBinlogDumpFromBinlogBeforeTimestamp(ctx, bls.timestamp)
 	} else if !bls.startPos.IsZero() {
 		// MySQL 5.6 only: we are starting from a random
 		// binlog position. It turns out we will receive a
@@ -223,16 +224,17 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 		// the starting position we pass in, it seems it is
 		// just the PREVIOUS_GTIDS_EVENT from the file we're reading.
 		// So we have to skip it.
-		events, err = bls.conn.StartBinlogDumpFromPosition(ctx, bls.startPos)
+		events, errs, err = bls.conn.StartBinlogDumpFromPosition(ctx, "", bls.startPos)
 	} else {
-		bls.startPos, events, err = bls.conn.StartBinlogDumpFromCurrent(ctx)
+		bls.startPos, events, errs, err = bls.conn.StartBinlogDumpFromCurrent(ctx)
 	}
 	if err != nil {
 		return err
 	}
+
 	// parseEvents will loop until the events channel is closed, the
 	// service enters the SHUTTING_DOWN state, or an error occurs.
-	stopPos, err = bls.parseEvents(ctx, events)
+	stopPos, err = bls.parseEvents(ctx, events, errs)
 	return err
 }
 
@@ -243,7 +245,7 @@ func (bls *Streamer) Stream(ctx context.Context) (err error) {
 // If the sendTransaction func returns io.EOF, parseEvents returns ErrClientEOF.
 // If the events channel is closed, parseEvents returns ErrServerEOF.
 // If the context is done, returns ctx.Err().
-func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) (mysql.Position, error) {
+func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent, errs <-chan error) (mysql.Position, error) {
 	var statements []FullBinlogStatement
 	var format mysql.BinlogFormat
 	var gtid mysql.GTID
@@ -297,6 +299,8 @@ func (bls *Streamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				log.Infof("reached end of binlog event stream")
 				return pos, ErrServerEOF
 			}
+		case err = <-errs:
+			return pos, err
 		case <-ctx.Done():
 			log.Infof("stopping early due to binlog Streamer service shutdown or client disconnect")
 			return pos, ctx.Err()

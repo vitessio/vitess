@@ -992,7 +992,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"Lock keyspace ks2",
 		"Stop writes on keyspace ks1, tables [t1,t2]:",
 		"\tKeyspace ks1, Shard 0 at Position MariaDB/5-456-892",
-		"Wait for VReplication on stopped streams to catchup for upto 1s",
+		"Wait for VReplication on stopped streams to catchup for up to 1s",
 		"Create reverse replication workflow test_reverse",
 		"Create journal entries on source databases",
 		"Enable writes on keyspace ks2 tables [t1,t2]",

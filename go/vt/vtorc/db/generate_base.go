@@ -754,6 +754,7 @@ DROP TABLE IF EXISTS vitess_tablet
 `,
 	`
 CREATE TABLE vitess_tablet (
+	alias varchar(256) NOT NULL,
 	hostname varchar(128) NOT NULL,
 	port smallint NOT NULL,
 	keyspace varchar(128) NOT NULL,
@@ -762,6 +763,7 @@ CREATE TABLE vitess_tablet (
 	tablet_type smallint(5) NOT NULL,
 	primary_timestamp timestamp NOT NULL,
 	info varchar(512) NOT NULL,
+	UNIQUE (alias),
 	PRIMARY KEY (hostname, port)
 )`,
 	`
