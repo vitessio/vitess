@@ -13222,19 +13222,19 @@ yydefault:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3379
 		{
-			yyVAL.replicationOption = &ReplicationOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
+			yyVAL.replicationOption = &ReplicationOption{Name: string(yyDollar[1].bytes), Value: mustAtoi(yylex, string(yyDollar[3].bytes))}
 		}
 	case 628:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3383
 		{
-			yyVAL.replicationOption = &ReplicationOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
+			yyVAL.replicationOption = &ReplicationOption{Name: string(yyDollar[1].bytes), Value: mustAtoi(yylex, string(yyDollar[3].bytes))}
 		}
 	case 629:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:3387
 		{
-			yyVAL.replicationOption = &ReplicationOption{Name: string(yyDollar[1].bytes), Value: string(yyDollar[3].bytes)}
+			yyVAL.replicationOption = &ReplicationOption{Name: string(yyDollar[1].bytes), Value: mustAtoi(yylex, string(yyDollar[3].bytes))}
 		}
 	case 630:
 		yyDollar = yyS[yypt-1 : yypt+1]

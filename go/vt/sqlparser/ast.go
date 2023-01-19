@@ -24,6 +24,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"sync"
 	"unicode"
@@ -212,6 +213,16 @@ func stringIsUnbrokenQuote(s string, quoteChar byte) bool {
 		}
 	}
 	return true
+}
+
+// mustAtoi converts the string into an integer, by using strconv.atoi, and returns the result. If any errors are
+// encountered, it registers a parsing error with |yylex|.
+func mustAtoi(yylex interface{}, s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		yylex.(*Tokenizer).Error(fmt.Sprintf("unable to parse integer from string '%s'", s))
+	}
+	return i
 }
 
 // ParseTokenizer is a raw interface to parse from the given tokenizer.
@@ -3332,7 +3343,7 @@ func (s *ChangeReplicationSource) Format(buf *TrackedBuffer) {
 		}
 		buf.WriteString(strings.ToLower(option.Name))
 		buf.WriteString(" = ")
-		buf.WriteString(fmt.Sprintf("%s", option.Value))
+		buf.WriteString(fmt.Sprintf("%v", option.Value))
 	}
 }
 

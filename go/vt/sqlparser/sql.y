@@ -3377,15 +3377,15 @@ replication_option:
   }
 | SOURCE_PORT '=' INTEGRAL
   {
-    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
 | SOURCE_CONNECT_RETRY '=' INTEGRAL
   {
-    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
 | SOURCE_RETRY_COUNT '=' INTEGRAL
   {
-    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
   }
 
 replication_filter_option_list:
