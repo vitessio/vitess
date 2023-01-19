@@ -519,6 +519,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	tablet := addTablet(100)
 	defer deleteTablet(tablet)
 	filter := &binlogdatapb.Filter{
@@ -598,7 +599,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 
 	// Cancel the context while the ALTER is running/blocked
 	// and wait for it to be KILLed off.
-	cancel()
+	playerEngine.cancel()
 	wg.Wait()
 
 	_, err = dbaconn.ExecuteFetch("unlock tables", 1)

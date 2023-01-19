@@ -800,6 +800,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	go func() {
 		select {
+		// Only cancel an ongoing ALTER if the engine is closing.
 		case <-vr.vre.ctx.Done():
 			log.Infof("Copy of the %q table stopped when performing the following post copy action in the %q VReplication workflow: %+v",
 				tableName, vr.WorkflowName, action)
@@ -816,6 +817,9 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 
 	for _, row := range qr.Named().Rows {
 		select {
+		// Stop any further actions if the vreplicator's context is
+		// cancelled -- most likely due to hitting the
+		// vreplication_copy_phase_duration
 		case <-ctx.Done():
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
