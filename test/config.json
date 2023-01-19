@@ -972,15 +972,6 @@
 			"RetryMax": 2,
 			"Tags": []
 		},
-		"web_test": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vttest_sample": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtcombo"],
