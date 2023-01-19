@@ -41,7 +41,7 @@ func TestVtctldListAllTablets(t *testing.T) {
 	url := fmt.Sprintf("http://%s:%d/api/keyspaces/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 	testURL(t, url, "keyspace url")
 
-	healthCheckURL := fmt.Sprintf("http://%s:%d/debug/health/", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
+	healthCheckURL := fmt.Sprintf("http://%s:%d/debug/health", clusterInstance.Hostname, clusterInstance.VtctldHTTPPort)
 	testURL(t, healthCheckURL, "vtctld health check url")
 
 	testListAllTablets(t)
