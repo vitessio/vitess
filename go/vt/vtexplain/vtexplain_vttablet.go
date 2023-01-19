@@ -691,6 +691,10 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		result = &sqltypes.Result{
 			RowsAffected: 1,
 		}
+	case sqlparser.StmtUse:
+		result = &sqltypes.Result{}
+	case sqlparser.StmtDDL:
+		result = &sqltypes.Result{}
 	default:
 		return fmt.Errorf("unsupported query %s", query)
 	}

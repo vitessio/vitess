@@ -273,7 +273,7 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
 
-	err := tablet.VttabletProcess.CreateDB(keyspaceName)
+	err := tablet.VttabletProcess.CreateDBWithSuperReadOnly(keyspaceName)
 	require.Nil(t, err)
 
 	// Start tablets
