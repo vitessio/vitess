@@ -61,7 +61,7 @@ const (
 	// built from this Wikipedia dataset:
 	//
 	//     https://dumps.wikimedia.org/archive/enwiki/20080103/enwiki-20080103-pages-articles.xml.bz2
-	defaultDataURL = "https://www.dropbox.com/s/raw/smmgifsooy5qytd/enwiki-20080103-pages-articles.ibd.tar.zst"
+	defaultDataURL = "https://github.com/vitessio/vitess-resources/releases/download/testdata-v1.0/enwiki-20080103-pages-articles.ibd.tar.zst"
 
 	// By default, don't limit how many bytes we input into compression.
 	defaultMaxBytes int64 = 0
