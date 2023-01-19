@@ -18,6 +18,7 @@ package vreplication
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -220,7 +221,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		require.NoError(t, err)
 	}()
 	vr := newVReplicator(id, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
-	getActionsSQLf := "select action from _vt.post_copy_action where vrepl_id=%d and table_name='%s'"
+	getActionsSQLf := "select action from _vt.post_copy_action where table_name='%s'"
 	getCurrentDDL := func(tableName string) string {
 		req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
 		sd, err := env.Mysqld.GetSchema(ctx, dbName, req)
@@ -245,6 +246,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		wantStashErr          string
 		wantExecErr           string
 		expectFinalSchemaDiff bool
+		postStashHook         func() error
 	}{
 		{
 			name:         "0SK",
@@ -307,6 +309,46 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			initialDDL:   "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2), key c2 (c2))",
 			strippedDDL:  "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2))",
 			actionDDL:    "alter table %s.t1 add key c2 (c2)",
+			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
+		},
+		{
+			name:        "3FPK1SK_ShardMerge",
+			tableName:   "t1",
+			initialDDL:  "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2), key c2 (c2))",
+			strippedDDL: "create table t1 (id int not null, c1 varchar(10) not null, c2 varchar(10) not null, primary key (id,c1,c2))",
+			actionDDL:   "alter table %s.t1 add key c2 (c2)",
+			postStashHook: func() error {
+				myid := id + 1000
+				// Insert second vreplication record to simulate a second controller/vreplicator
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.vreplication (id, workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name) values (%d, 'test', '', '', 99999, 99999, 0, 0, 'Running', '%s')",
+					myid, dbName), 1)
+				if err != nil {
+					return err
+				}
+				myvr := newVReplicator(myid, bls, vsclient, stats, dbClient, env.Mysqld, playerEngine)
+				myvr.WorkflowType = int32(binlogdatapb.VReplicationWorkflowType_Reshard)
+				// Insert second post copy action record to simulate a shard merge where you
+				// have N controllers/replicators running for the same table on the tablet.
+				// This forces a second row, which would otherwise not get created beacause
+				// when this is called there's no secondary keys to stash anymore.
+				addlAction, err := json.Marshal(PostCopyAction{
+					Type: PostCopyActionSQL,
+					Task: fmt.Sprintf("alter table %s.t1 add key c2 (c2)", dbName),
+				})
+				if err != nil {
+					return err
+				}
+				_, err = dbClient.ExecuteFetch(fmt.Sprintf("insert into _vt.post_copy_action (vrepl_id, table_name, action) values (%d, 't1', '%s')",
+					myid, string(addlAction)), 1)
+				if err != nil {
+					return err
+				}
+				err = myvr.execPostCopyActions(ctx, "t1")
+				if err != nil {
+					return err
+				}
+				return nil
+			},
 			WorkflowType: int32(binlogdatapb.VReplicationWorkflowType_Reshard),
 		},
 		{
@@ -383,6 +425,14 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				require.NoError(t, err)
 			}()
 
+			confirmNoSecondaryKeys := func() {
+				// Confirm that the table now has no secondary keys.
+				tcase.strippedDDL = removeVersionDifferences(tcase.strippedDDL)
+				currentDDL := getCurrentDDL(tcase.tableName)
+				require.True(t, strings.EqualFold(stripCruft(tcase.strippedDDL), stripCruft(currentDDL)),
+					"Expected: %s\n     Got: %s", forError(tcase.strippedDDL), forError(currentDDL))
+			}
+
 			// If the table has any secondary keys, drop them and
 			// store an ALTER TABLE statement to re-add them after
 			// the table is copied.
@@ -392,17 +442,21 @@ func TestDeferSecondaryKeys(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+			confirmNoSecondaryKeys()
 
-			// Confirm that the table now has no secondary keys.
-			tcase.strippedDDL = removeVersionDifferences(tcase.strippedDDL)
-			currentDDL := getCurrentDDL(tcase.tableName)
-			require.True(t, strings.EqualFold(stripCruft(tcase.strippedDDL), stripCruft(currentDDL)),
-				"Expected: %s\n     Got: %s", forError(tcase.strippedDDL), forError(currentDDL))
+			if tcase.postStashHook != nil {
+				err = tcase.postStashHook()
+				require.NoError(t, err)
+
+				// We should still NOT have any secondary keys because there's still
+				// a running controller/vreplicator in the copy phase.
+				confirmNoSecondaryKeys()
+			}
 
 			// If we expect post-copy SQL actions, then ensure
 			// that the stored DDL matches what we expect.
 			if tcase.actionDDL != "" {
-				res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tcase.tableName), 1)
+				res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, tcase.tableName), 1)
 				require.Equal(t, 1, len(res.Rows))
 				require.NoError(t, err)
 				val, err := res.Rows[0][0].ToBytes()
@@ -430,18 +484,19 @@ func TestDeferSecondaryKeys(t *testing.T) {
 				// order in the table schema.
 				if !tcase.expectFinalSchemaDiff {
 					currentDDL := getCurrentDDL(tcase.tableName)
-					sdiff, err := schemadiff.DiffCreateTablesQueries(tcase.initialDDL, currentDDL, diffHints)
+					sdiff, err := schemadiff.DiffCreateTablesQueries(currentDDL, tcase.initialDDL, diffHints)
 					require.NoError(t, err)
-					require.Nil(t, sdiff)
+					require.Nil(t, sdiff, "Expected no schema difference but got: %s", sdiff.CanonicalStatementString())
 				}
 			}
 
-			// Confirm that the post copy action record is deleted when there's
+			// Confirm that the post copy action record(s) are deleted when there's
 			// no exec error or conversely that it still exists when there was
 			// one.
-			res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, id, tcase.tableName), 1)
+			res, err := dbClient.ExecuteFetch(fmt.Sprintf(getActionsSQLf, tcase.tableName), expectedPostCopyActionRecs)
 			require.NoError(t, err)
-			require.Equal(t, expectedPostCopyActionRecs, len(res.Rows))
+			require.Equal(t, expectedPostCopyActionRecs, len(res.Rows),
+				"Expected %d post copy action records, got %d", expectedPostCopyActionRecs, len(res.Rows))
 		})
 	}
 }

@@ -82,10 +82,10 @@ const (
 	// rows for the table and should only be called from within an explicit
 	// multi-statement transaction in order to hold those locks until the
 	// related work is finished as this is a concurrency control mechanism.
-	sqlGetPostCopyActionsForTable = `select id, vrepl_id, action from _vt.post_copy_action where id in
+	sqlGetAndLockPostCopyActionsForTable = `select id, vrepl_id, action from _vt.post_copy_action where id in
 	(
 		select pca.id from _vt.post_copy_action pca inner join _vt.vreplication vr on (pca.vrepl_id = vr.id)
-		where table_name=%a
+		where pca.table_name=%a
 	) for update`
 	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where
 	action->>'$.type'=%a and vrepl_id=%a and table_name=%a`
@@ -666,7 +666,6 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 					return nil
 				}
 			}
-
 			return err
 		}
 	}
@@ -756,7 +755,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
 	}
 
-	deleteAction := func(dbc *vdbClient, vid uint32, id int64, tn string) error {
+	deleteAction := func(dbc *vdbClient, id int64, vid uint32, tn string) error {
 		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Uint32BindVariable(vid),
 			sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
 		if err != nil {
@@ -821,6 +820,10 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
+		id, err := row["id"].ToInt64()
+		if err != nil {
+			return err
+		}
 		action = PostCopyAction{}
 		actionBytes, err := row["action"].ToBytes()
 		if err != nil {
@@ -841,29 +844,30 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		// the post copy actions for the same workflow and table.
 		// This ensures that the actions are only performed once after
 		// all streams have completed the copy phase for the table.
+		redundant := false
 		_, err = dbClient.ExecuteFetch("start transaction", 1)
 		if err != nil {
 			return err
 		}
-		ctlq, err := sqlparser.ParseAndBind(sqlGetPostCopyActionsForTable, sqltypes.StringBindVariable(tableName))
+		vrsq, err := sqlparser.ParseAndBind(sqlGetAndLockPostCopyActionsForTable, sqltypes.StringBindVariable(tableName))
 		if err != nil {
 			return err
 		}
-		ctlres, err := dbClient.ExecuteFetch(ctlq, -1)
+		vrsres, err := dbClient.ExecuteFetch(vrsq, -1)
 		if err != nil {
 			return fmt.Errorf("failed to get post copy actions for the %q table: %v", tableName, err)
 		}
-		if ctlres != nil && len(ctlres.Rows) > 1 {
+		if vrsres != nil && len(vrsres.Rows) > 1 {
 			// We have more than one planned post copy action on the table.
-			for _, row := range ctlres.Named().Rows {
-				ctlid, err := row["vrepl_id"].ToInt64()
+			for _, row := range vrsres.Named().Rows {
+				vrid, err := row["vrepl_id"].ToUint64()
 				if err != nil {
 					return err
 				}
 				ctlaction := row["action"].ToString()
 				// Let's make sure that it's a different controller/vreplicator
 				// and that the action is the same.
-				if ctlid != int64(vr.id) && ctlaction == string(actionBytes) {
+				if uint32(vrid) != vr.id && strings.EqualFold(ctlaction, string(actionBytes)) {
 					// We know that there's another controller/vreplicator yet
 					// to finish its copy phase for the table and it will perform
 					// the same action on the same table when it completes, so we
@@ -871,13 +875,10 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 					// to mark this controller/vreplicator's post copy action work
 					// as being done for the table before it finishes the copy
 					// phase for the table.
-					id, err := row["id"].ToInt64()
-					if err != nil {
+					if err := deleteAction(dbClient, id, vr.id, tableName); err != nil {
 						return err
 					}
-					if err := deleteAction(dbClient, vr.id, id, tableName); err != nil {
-						return err
-					}
+					redundant = true
 					break
 				}
 			}
@@ -885,6 +886,10 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		_, err = dbClient.ExecuteFetch("commit", 1)
 		if err != nil {
 			return err
+		}
+		if redundant {
+			// Skip this action as it will be executed by a later vreplicator.
+			continue
 		}
 
 		switch action.Type {
@@ -942,11 +947,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 					return failedAlterErr
 				}
 			}
-			id, err := row["id"].ToInt64()
-			if err != nil {
-				return err
-			}
-			if err := deleteAction(dbClient, vr.id, id, tableName); err != nil {
+			if err := deleteAction(dbClient, id, vr.id, tableName); err != nil {
 				return err
 			}
 		default:
