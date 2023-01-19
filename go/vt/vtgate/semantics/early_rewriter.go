@@ -144,6 +144,7 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 //
 // This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
 func rewriteHavingAndOrderBy(node, parent sqlparser.SQLNode) {
+	// TODO - clean up and comment this mess
 	sel, isSel := parent.(*sqlparser.Select)
 	if !isSel {
 		return

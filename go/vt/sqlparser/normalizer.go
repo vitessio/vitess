@@ -82,7 +82,7 @@ func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
 		_, isDerived := parent.(*DerivedTable)
 		var tmp bool
 		tmp, nz.inDerived = nz.inDerived, isDerived
-		_ = SafeRewrite(node, nz.walkSelectDown, nz.walkSelectUp)
+		_ = SafeRewrite(node, nz.walkDownSelect, nz.walkUpSelect)
 		// Don't continue
 		nz.inDerived = tmp
 		return false
@@ -100,8 +100,8 @@ func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
-// walkSelectDown normalizes the AST in Select mode.
-func (nz *normalizer) walkSelectDown(node, parent SQLNode) bool {
+// walkDownSelect normalizes the AST in Select mode.
+func (nz *normalizer) walkDownSelect(node, parent SQLNode) bool {
 	switch node := node.(type) {
 	case *Select:
 		_, isDerived := parent.(*DerivedTable)
@@ -110,7 +110,10 @@ func (nz *normalizer) walkSelectDown(node, parent SQLNode) bool {
 		}
 		var tmp bool
 		tmp, nz.inDerived = nz.inDerived, isDerived
-		_ = SafeRewrite(node, nz.walkSelectDown, nz.walkSelectUp)
+		// initiating a new AST walk here means that we might change something while walking down on the tree,
+		// but since we are only changing literals, we can be safe that we are not changing the SELECT struct,
+		// only something much further down, and that should be safe
+		_ = SafeRewrite(node, nz.walkDownSelect, nz.walkUpSelect)
 		// Don't continue
 		nz.inDerived = tmp
 		return false
@@ -132,8 +135,8 @@ func (nz *normalizer) walkSelectDown(node, parent SQLNode) bool {
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
-// walkSelectUp normalizes the Literals in Select mode.
-func (nz *normalizer) walkSelectUp(cursor *Cursor) bool {
+// walkUpSelect normalizes the Literals in Select mode.
+func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
 	if nz.err != nil {
 		return false
 	}

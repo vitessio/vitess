@@ -185,18 +185,19 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	return qp, nil
 }
 
-func (ar *AggrRewriter) RewritePre() func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
+// RewriteDown stops the walker from entering inside aggregation functions
+func (ar *AggrRewriter) RewriteDown() func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
 	return func(node, _ sqlparser.SQLNode) bool {
 		if ar.Err != nil {
-			return false
+			return true
 		}
 		_, ok := node.(sqlparser.AggrFunc)
 		return !ok
 	}
 }
 
-// RewritePost will go through an expression, add aggregations to the QP, and rewrite them to use column offset
-func (ar *AggrRewriter) RewritePost() func(*sqlparser.Cursor) bool {
+// RewriteUp will go through an expression, add aggregations to the QP, and rewrite them to use column offset
+func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
 	return func(cursor *sqlparser.Cursor) bool {
 		if ar.Err != nil {
 			return false

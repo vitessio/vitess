@@ -267,7 +267,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 
 	if hp.sel.Having != nil {
 		rewriter := hp.qp.AggrRewriter(ctx)
-		sqlparser.SafeRewrite(hp.sel.Having.Expr, rewriter.RewritePre(), rewriter.RewritePost())
+		sqlparser.SafeRewrite(hp.sel.Having.Expr, rewriter.RewriteDown(), rewriter.RewriteUp())
 		if rewriter.Err != nil {
 			return nil, rewriter.Err
 		}
