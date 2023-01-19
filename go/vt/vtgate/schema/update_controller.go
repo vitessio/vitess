@@ -86,7 +86,7 @@ func (u *updateController) consume() {
 func checkIfWeShouldIgnoreKeyspace(err error) bool {
 	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 	if sqlErr.Num == mysql.ERBadDb || sqlErr.Num == mysql.ERNoSuchTable {
-		// if we are missing the db or table, not point in retrying
+		// if we are missing the db or table, no point in retrying
 		return true
 	}
 	return false
@@ -108,6 +108,18 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 				}
 				if !found {
 					item.Stats.TableSchemaChanged = append(item.Stats.TableSchemaChanged, table)
+				}
+			}
+			for _, view := range u.queue.items[i].Stats.ViewSchemaChanged {
+				found := false
+				for _, itemView := range item.Stats.ViewSchemaChanged {
+					if itemView == view {
+						found = true
+						break
+					}
+				}
+				if !found {
+					item.Stats.ViewSchemaChanged = append(item.Stats.ViewSchemaChanged, view)
 				}
 			}
 		}
@@ -134,11 +146,11 @@ func (u *updateController) add(th *discovery.TabletHealth) {
 	}
 
 	// If the keyspace schema is loaded and there is no schema change detected. Then there is nothing to process.
-	if len(th.Stats.TableSchemaChanged) == 0 && u.loaded {
+	if len(th.Stats.TableSchemaChanged) == 0 && len(th.Stats.ViewSchemaChanged) == 0 && u.loaded {
 		return
 	}
 
-	if len(th.Stats.TableSchemaChanged) > 0 && u.ignore {
+	if (len(th.Stats.TableSchemaChanged) > 0 || len(th.Stats.ViewSchemaChanged) > 0) && u.ignore {
 		// we got an update for this keyspace - we need to stop ignoring it, and reload everything
 		u.ignore = false
 		u.loaded = false

@@ -41,6 +41,8 @@ import (
 type (
 	keyspaceStr  = string
 	tableNameStr = string
+	viewNameStr  = string
+	viewDefStr   = string
 
 	// Tracker contains the required fields to perform schema tracking.
 	Tracker struct {
@@ -49,6 +51,7 @@ type (
 
 		mu     sync.Mutex
 		tables *tableMap
+		views  *viewMap
 		ctx    context.Context
 		signal func() // a function that we'll call whenever we have new schema data
 
@@ -77,6 +80,7 @@ func NewTracker(ch chan *discovery.TabletHealth, user string) *Tracker {
 		ctx:          ctx,
 		ch:           ch,
 		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
+		views:        &viewMap{m: map[keyspaceStr]map[viewNameStr]viewDefStr{}},
 		tracked:      map[keyspaceStr]*updateController{},
 		consumeDelay: defaultConsumeDelay,
 	}
@@ -84,10 +88,16 @@ func NewTracker(ch chan *discovery.TabletHealth, user string) *Tracker {
 
 // LoadKeyspace loads the keyspace schema.
 func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	res, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
+	ftRes, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
 	if err != nil {
 		return err
 	}
+	// TODO: only do it if views are enabled
+	fvRes, err := conn.Execute(t.ctx, target, mysql.FetchViews, nil, 0, 0, nil)
+	if err != nil {
+		return err
+	}
+
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// We must clear out any previous schema before loading it here as this is called
@@ -95,9 +105,15 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	// clearing out the previous schema we can end up with duplicate entries when the
 	// tablet is simply restarted or potentially when we elect a new primary.
 	t.clearKeyspaceTables(target.Keyspace)
-	t.updateTables(target.Keyspace, res)
+	t.updateTables(target.Keyspace, ftRes)
+	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(ftRes.Rows))
+
+	// Similarly for Views
+	t.clearKeyspaceViews(target.Keyspace)
+	t.updateViews(target.Keyspace, fvRes)
+	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(fvRes.Rows))
+
 	t.tracked[target.Keyspace].setLoaded(true)
-	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(res.Rows))
 	return nil
 }
 
@@ -178,7 +194,18 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 	return m
 }
 
-func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
+func (t *Tracker) updateSchema(th *discovery.TabletHealth) (success bool) {
+	if th.Stats.TableSchemaChanged != nil {
+		success = t.updatedTableSchema(th)
+	}
+	if !success || th.Stats.ViewSchemaChanged == nil {
+		return
+	}
+	// there is view definition change in the tablet
+	return t.updatedViewSchema(th)
+}
+
+func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 	tablesUpdated := th.Stats.TableSchemaChanged
 	tables, err := sqltypes.BuildBindVariable(tablesUpdated)
 	if err != nil {
@@ -222,6 +249,47 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 		cols := t.tables.get(keyspace, tbl)
 
 		t.tables.set(keyspace, tbl, append(cols, col))
+	}
+}
+
+func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
+	viewsUpdated := th.Stats.ViewSchemaChanged
+	views, err := sqltypes.BuildBindVariable(viewsUpdated)
+	if err != nil {
+		log.Errorf("failed to read updated views from TabletHealth: %v", err)
+		return false
+	}
+	bv := map[string]*querypb.BindVariable{"viewNames": views}
+	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedViews, bv, 0, 0, nil)
+	if err != nil {
+		t.tracked[th.Target.Keyspace].setLoaded(false)
+		// TODO: optimize for the views that got errored out.
+		log.Warningf("error fetching new views definition for %v", viewsUpdated, err)
+		code := vterrors.Code(err)
+		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
+			log.Warning(aclErrorMessageLog)
+		}
+		return false
+	}
+
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	// first we empty all prior schema. deleted tables will not show up in the result,
+	// so this is the only chance to delete
+	for _, view := range viewsUpdated {
+		t.views.delete(th.Target.Keyspace, view)
+	}
+	t.updateViews(th.Target.Keyspace, res)
+	return true
+
+}
+
+func (t *Tracker) updateViews(keyspace string, res *sqltypes.Result) {
+	for _, row := range res.Rows {
+		viewName := row[0].ToString()
+		viewDef := row[1].ToString()
+		t.views.set(keyspace, viewName, viewDef)
 	}
 }
 
@@ -275,11 +343,46 @@ func (tm *tableMap) delete(ks, tbl string) {
 	delete(m, tbl)
 }
 
+type viewMap struct {
+	m map[keyspaceStr]map[viewNameStr]viewDefStr
+}
+
+func (vm *viewMap) set(ks, tbl, sel string) {
+	m := vm.m[ks]
+	if m == nil {
+		m = make(map[tableNameStr]viewDefStr)
+		vm.m[ks] = m
+	}
+	m[tbl] = sel
+}
+
+func (vm *viewMap) get(ks, tbl string) viewDefStr {
+	m := vm.m[ks]
+	if m == nil {
+		return ""
+	}
+	return m[tbl]
+}
+
+func (vm *viewMap) delete(ks, tbl string) {
+	m := vm.m[ks]
+	if m == nil {
+		return
+	}
+	delete(m, tbl)
+}
+
 // This empties out any previous schema for for all tables in a keyspace.
 // You should call this before initializing/loading a keyspace of the same
 // name in the cache.
 func (t *Tracker) clearKeyspaceTables(ks string) {
 	if t.tables != nil && t.tables.m != nil {
 		delete(t.tables.m, ks)
+	}
+}
+
+func (t *Tracker) clearKeyspaceViews(ks string) {
+	if t.views != nil && t.views.m != nil {
+		delete(t.views.m, ks)
 	}
 }
