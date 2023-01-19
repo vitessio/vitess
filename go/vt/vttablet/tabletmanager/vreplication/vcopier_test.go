@@ -547,6 +547,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"begin",
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
+		"/delete from _vt.post_copy_action",
 		"commit",
 	))
 }
@@ -1645,6 +1646,7 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 		"begin",
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
+		"/delete from _vt.post_copy_action",
 		"commit",
 	))
 }

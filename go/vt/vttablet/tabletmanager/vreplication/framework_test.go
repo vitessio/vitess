@@ -469,6 +469,7 @@ func expectDeleteQueries(t *testing.T) {
 	expectNontxQueries(t, qh.Expect(
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
+		"/delete from _vt.post_copy_action",
 	))
 }
 
