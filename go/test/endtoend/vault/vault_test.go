@@ -285,9 +285,6 @@ func initializeClusterLate(t *testing.T) {
 				require.NoError(t, err)
 			}
 		}
-		/*query := fmt.Sprintf("create database %s;", dbName)
-		_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
-		require.NoError(t, err)*/
 
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)
