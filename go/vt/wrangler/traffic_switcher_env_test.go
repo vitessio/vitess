@@ -536,6 +536,7 @@ func (tme *testShardMigraterEnv) expectDeleteReverseVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("delete from _vt.post_copy_action where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 }
 
@@ -582,6 +583,7 @@ func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("delete from _vt.post_copy_action where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 }
 

@@ -525,7 +525,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		// Legacy vreplication won't create this table. So, ignore schema errors.
+		if _, err := withDDL.ExecIgnore(vre.ctx, delQuery, dbClient.ExecuteFetch); err != nil {
+			return nil, err
+		}
+		delQuery, err = plan.delPostCopyAction.GenerateQuery(bv, nil)
+		if err != nil {
+			return nil, err
+		}
 		if _, err := withDDL.ExecIgnore(vre.ctx, delQuery, dbClient.ExecuteFetch); err != nil {
 			return nil, err
 		}

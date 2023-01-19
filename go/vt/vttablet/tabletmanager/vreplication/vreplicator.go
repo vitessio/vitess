@@ -84,7 +84,7 @@ const (
 	// related work is finished as this is a concurrency control mechanism.
 	sqlGetAndLockPostCopyActionsForTable = `select id, vrepl_id, action from _vt.post_copy_action where id in
 	(
-		select pca.id from _vt.post_copy_action pca inner join _vt.vreplication vr on (pca.vrepl_id = vr.id)
+		select pca.id from _vt.post_copy_action as pca inner join _vt.vreplication as vr on (pca.vrepl_id = vr.id)
 		where pca.table_name=%a
 	) for update`
 	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where

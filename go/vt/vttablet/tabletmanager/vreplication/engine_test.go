@@ -250,6 +250,7 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1)", testDMLResponse, nil)
 	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1)", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.post_copy_action where vrepl_id in (1)", nil, nil)
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	qr, err = vre.Exec("delete from _vt.vreplication where id = 1")
@@ -279,6 +280,7 @@ func TestEngineExec(t *testing.T) {
 	dbClient.ExpectRequest("begin", nil, nil)
 	dbClient.ExpectRequest("delete from _vt.vreplication where id in (1, 2)", testDMLResponse, nil)
 	dbClient.ExpectRequest("delete from _vt.copy_state where vrepl_id in (1, 2)", nil, nil)
+	dbClient.ExpectRequest("delete from _vt.post_copy_action where vrepl_id in (1, 2)", nil, nil)
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	_, err = vre.Exec("delete from _vt.vreplication where id > 1")
