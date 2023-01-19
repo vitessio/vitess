@@ -681,7 +681,6 @@ func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 	} else {
 		err = createDirectory(cluster.CurrentVTDATAROOT, 0700)
 		if err != nil {
-			fmt.Printf("err in creating file : %s", err.Error())
 			log.Infof("err in creating file : %s", err.Error())
 		}
 	}

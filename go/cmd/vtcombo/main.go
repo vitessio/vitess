@@ -190,7 +190,6 @@ func main() {
 
 	servenv.Init()
 	tabletenv.Init()
-	//time.Sleep(10 * time.Second)
 	mysqld := &vtcomboMysqld{}
 	var cnf *mysqlctl.Mycnf
 	if *startMysql {
