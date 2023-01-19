@@ -17,6 +17,7 @@ limitations under the License.
 package tabletserver
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -36,8 +37,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
-
-	"context"
 
 	"google.golang.org/protobuf/proto"
 
@@ -90,6 +89,8 @@ type healthStreamer struct {
 	conns                  *connpool.Pool
 	initSuccess            bool
 	signalWhenSchemaChange bool
+
+	views map[string]string
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
@@ -122,6 +123,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		ticks:                  newTimer,
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
+		views:                  map[string]string{},
 	}
 }
 
@@ -344,6 +346,43 @@ func (hs *healthStreamer) reload() error {
 		}
 	}
 
+	tables, err := getChangedTableNames(ctx, conn)
+	if err != nil {
+		return err
+	}
+
+	views, err := hs.getChangedViewNames(ctx, conn)
+	if err != nil {
+		return err
+	}
+
+	// no change detected
+	if len(tables) == 0 && len(views) == 0 {
+		return nil
+	}
+
+	hs.state.RealtimeStats.TableSchemaChanged = tables
+	hs.state.RealtimeStats.ViewSchemaChanged = views
+	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
+	hs.broadCastToClients(shr)
+	hs.state.RealtimeStats.TableSchemaChanged = nil
+	hs.state.RealtimeStats.ViewSchemaChanged = nil
+
+	return nil
+}
+
+func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
+	for _, query := range mysql.VTDatabaseInit {
+		_, err := conn.Exec(hs.ctx, query, 1, false)
+		if err != nil {
+			return false, err
+		}
+	}
+
+	return true, nil
+}
+
+func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
 	var tables []string
 	var tableNames []string
 
@@ -360,14 +399,14 @@ func (hs *healthStreamer) reload() error {
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	err = conn.Stream(ctx, mysql.DetectSchemaChange, callback, alloc, bufferSize, 0)
+	err := conn.Stream(ctx, mysql.DetectSchemaChange, callback, alloc, bufferSize, 0)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// If no change detected, then return
 	if len(tables) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(tableNames, ", "))
@@ -377,40 +416,71 @@ func (hs *healthStreamer) reload() error {
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer conn.Exec(ctx, "rollback", 1, false)
 
 	_, err = conn.Exec(ctx, del, 1, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = conn.Exec(ctx, upd, 1, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	_, err = conn.Exec(ctx, "commit", 1, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
-
-	hs.state.RealtimeStats.TableSchemaChanged = tables
-	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
-	hs.broadCastToClients(shr)
-	hs.state.RealtimeStats.TableSchemaChanged = nil
-
-	return nil
+	return tables, nil
 }
 
-func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
-	for _, query := range mysql.VTDatabaseInit {
-		_, err := conn.Exec(hs.ctx, query, 1, false)
-		if err != nil {
-			return false, err
+func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
+	var changedViews []string
+	views := map[string]string{}
+
+	callback := func(qr *sqltypes.Result) error {
+		for _, row := range qr.Rows {
+			viewName := row[0].ToString()
+			lastUpdTime := row[1].ToString()
+			views[viewName] = lastUpdTime
 		}
+
+		return nil
+	}
+	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
+	bufferSize := 1000
+	err := conn.Stream(ctx, mysql.SelectAllViews, callback, alloc, bufferSize, 0)
+	if err != nil {
+		return nil, err
 	}
 
-	return true, nil
+	// If no change detected, then return
+	if len(views) == 0 && len(hs.views) == 0 {
+		return nil, nil
+	}
+
+	for viewName, lastUpdTime := range views {
+		t, exists := hs.views[viewName]
+		if !exists { // new view added
+			changedViews = append(changedViews, viewName)
+			continue
+		}
+		if t != lastUpdTime { // view updated
+			changedViews = append(changedViews, viewName)
+		}
+		delete(hs.views, viewName)
+	}
+
+	// views deleted
+	for viewName := range hs.views {
+		changedViews = append(changedViews, viewName)
+	}
+
+	// update hs.views with latest view info
+	hs.views = views
+
+	return changedViews, nil
 }

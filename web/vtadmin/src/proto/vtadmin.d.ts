@@ -30834,6 +30834,9 @@ export namespace query {
 
         /** RealtimeStats table_schema_changed */
         table_schema_changed?: (string[]|null);
+
+        /** RealtimeStats view_schema_changed */
+        view_schema_changed?: (string[]|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -30865,6 +30868,9 @@ export namespace query {
 
         /** RealtimeStats table_schema_changed. */
         public table_schema_changed: string[];
+
+        /** RealtimeStats view_schema_changed. */
+        public view_schema_changed: string[];
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
