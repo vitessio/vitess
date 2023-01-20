@@ -84,9 +84,6 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
-
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
