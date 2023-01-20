@@ -29,20 +29,19 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/log"
-
+	"github.com/PuerkitoBio/goquery"
 	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-	"vitess.io/vitess/go/vt/schema"
-
-	"github.com/PuerkitoBio/goquery"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 const (
@@ -294,6 +293,57 @@ func waitForWorkflowState(t *testing.T, vc *VitessCluster, ksWorkflow string, wa
 				ksWorkflow, wantState, extraRequirements, workflowStateTimeout, output)
 		default:
 			time.Sleep(defaultTick)
+		}
+	}
+}
+
+// confirmTablesHaveSecondaryKeys confirms that the tables provided
+// as a CSV have secondary keys. This is useful when testing the
+// --defer-secondary-keys flag to confirm that the secondary keys
+// were re-added by the time the workflow hits the running phase.
+// For a Reshard workflow, where no tables are specififed, pass
+// an empty string for the tables and all tables in the target
+// keyspace will be checked.
+func confirmTablesHaveSecondaryKeys(t *testing.T, tablets []*cluster.VttabletProcess, ksName string, tables string) {
+	require.NotNil(t, tablets)
+	require.NotNil(t, tablets[0])
+	var tableArr []string
+	if strings.TrimSpace(tables) != "" {
+		tableArr = strings.Split(tables, ",")
+	}
+	if len(tableArr) == 0 { // We don't specify any for Reshard.
+		// In this case we check all of them.
+		res, err := tablets[0].QueryTablet("show tables", ksName, true)
+		require.NoError(t, err)
+		require.NotNil(t, res)
+		for _, row := range res.Rows {
+			tableArr = append(tableArr, row[0].ToString())
+		}
+	}
+	for _, tablet := range tablets {
+		for _, table := range tableArr {
+			if schema.IsInternalOperationTableName(table) {
+				continue
+			}
+			table := strings.TrimSpace(table)
+			secondaryKeys := 0
+			res, err := tablet.QueryTablet(fmt.Sprintf("show create table %s", sqlescape.EscapeID(table)), ksName, true)
+			require.NoError(t, err)
+			require.NotNil(t, res)
+			row := res.Named().Row()
+			tableSchema := row["Create Table"].ToString()
+			parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+			require.NoError(t, err)
+			createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+			require.True(t, ok)
+			require.NotNil(t, createTable)
+			require.NotNil(t, createTable.GetTableSpec())
+			for _, index := range createTable.GetTableSpec().Indexes {
+				if !index.Info.Primary {
+					secondaryKeys++
+				}
+			}
+			require.Greater(t, secondaryKeys, 0, "Table %s does not have any secondary keys", table)
 		}
 	}
 }
