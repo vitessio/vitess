@@ -70,19 +70,19 @@ If your application is searching for specific errors, you might need to update y
 #### Logstats Table and Keyspace removed
 
 Information about which tables are used is now reported by the field TablesUsed added in v15, that is a string array, listing all tables and which keyspace they are in.
-The Table/Keyspace fields were deprecated in v15 and are now removed in the v16.0.0 release of Vitess.
+The Table/Keyspace fields were deprecated in v15 and are now removed in the v16 release of Vitess.
 
 #### Removed Stats
 
-The stat `QueryRowCounts` is removed in V16. `QueryRowsAffected` and `QueryRowsReturned` can be used instead to gather the same information.
+The stat `QueryRowCounts` is removed in v16. `QueryRowsAffected` and `QueryRowsReturned` can be used instead to gather the same information.
 
 #### Deprecated Stats
 
-The stats `QueriesProcessed` and `QueriesRouted` are deprecated in V16. The same information can be inferred from the stats `QueriesProcessedByTable` and `QueriesRoutedByTable` respectively. These stats will be removed in the next release.
+The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16. The same information can be inferred from the stats `QueriesProcessedByTable` and `QueriesRoutedByTable` respectively. These stats will be removed in the next release.
 
 #### Removed flag
 
-The following flag is removed in v16.0.0:
+The following flag is removed in v16:
 - `enable_semi_sync`
 
 #### <a id="lock-timeout-introduction"/> `lock-timeout` and `remote_operation_timeout` Changes
@@ -227,7 +227,7 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 ### Deprecations and Removals
 
-- The V3 planner is deprecated as of the v16.0.0 release, and will be removed in the V17 release of Vitess.
+- The V3 planner is deprecated as of the v16 release, and will be removed in the v17 release of Vitess.
 
 - The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
 
