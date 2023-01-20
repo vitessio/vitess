@@ -82,7 +82,8 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
-	if durability == "semi_sync" {
+	// enable_semi_sync is removed in v16 and shouldn't be set on any release v16+
+	if durability == "semi_sync" && clusterInstance.VtTabletMajorVersion <= 15 {
 		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
 	}
 
