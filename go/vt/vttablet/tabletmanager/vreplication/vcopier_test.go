@@ -178,7 +178,7 @@ func testPlayerCopyCharPK(t *testing.T) {
 		`update dst set val=3 where idc='a\0' and ('a\0') <= ('a\0')`,
 		"insert into dst(idc,val) values ('c\\0',2)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"idc\\" type:BINARY} rows:{lengths:2 values:\\"c\\\\x00\\"}'.*`,
-		"/delete from _vt.copy_state.*dst",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running",
 	))
 
@@ -301,7 +301,7 @@ func testPlayerCopyVarcharPKCaseInsensitive(t *testing.T) {
 		upd1.Then(upd2.Eventually())
 		return upd2
 	}).Then(qh.Immediately(
-		"/delete from _vt.copy_state.*dst",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
 	)))
 
@@ -412,7 +412,7 @@ func testPlayerCopyVarcharCompositePKCaseSensitiveCollation(t *testing.T) {
 		"insert into dst(id,idc,idc2,val) values (1,'c','c',2)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"idc\\" type:VARBINARY} fields:{name:\\"idc2\\" type:VARBINARY} rows:{lengths:1 lengths:1 lengths:1 values:\\"1cc\\"}'.*`,
 		// Wrap-up.
-		"/delete from _vt.copy_state.*dst",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
 	))
 
@@ -498,8 +498,9 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
+		"set foreign_key_checks=0;",
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		// The next FF executes and updates the position before copying.
 		"set foreign_key_checks=0;",
 		"begin",
@@ -518,8 +519,9 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 	)).Then(qh.Immediately(
+		"set foreign_key_checks=0;",
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst2",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
 		// All tables copied. Final catch up followed by Running state.
 		"set foreign_key_checks=1;",
 		"/update _vt.vreplication set state='Running'",
@@ -545,6 +547,7 @@ func testPlayerCopyTablesWithFK(t *testing.T) {
 		"begin",
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
+		"/delete from _vt.post_copy_action",
 		"commit",
 	))
 }
@@ -616,13 +619,13 @@ func testPlayerCopyTables(t *testing.T) {
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} rows:{lengths:1 values:\\"2\\"}'.*`,
 		"commit",
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		// The next FF executes and updates the position before copying.
 		"begin",
 		"/update _vt.vreplication set pos=",
 		"commit",
 		// Nothing to copy from yes. Delete from copy_state.
-		"/delete from _vt.copy_state.*yes",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*yes",
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
 	))
@@ -768,7 +771,7 @@ func testPlayerCopyBigTable(t *testing.T) {
 		return upd3
 	}).Then(qh.Eventually(
 		// Wrap-up.
-		"/delete from _vt.copy_state.*dst",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		// Copy is done. Go into running state.
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
@@ -898,7 +901,7 @@ func testPlayerCopyWildcardRule(t *testing.T) {
 		return upd3
 	}).Then(qh.Immediately(
 		// Wrap-up.
-		"/delete from _vt.copy_state.*src",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*src",
 		// Copy is done. Go into running state.
 		"/update _vt.vreplication set state='Running'",
 	)))
@@ -1054,13 +1057,13 @@ func testPlayerCopyTableContinuation(t *testing.T) {
 	)).Then(qh.Eventually(
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id1\\" type:INT32} fields:{name:\\"id2\\" type:INT32} rows:{lengths:2 lengths:1 values:\\"126\\"}'.*`,
 	)).Then(qh.Immediately(
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		"insert into not_copied(id,val) values (1,'bbb')",
 	)).Then(qh.Eventually(
 		// Copy again. There should be no events for catchup.
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\\"id\\\" type:INT32} rows:{lengths:1 values:\\\"1\\\"}'.*`,
 	)).Then(qh.Immediately(
-		"/delete from _vt.copy_state.*not_copied",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*not_copied",
 		"/update _vt.vreplication set state='Running'",
 	)))
 
@@ -1171,7 +1174,7 @@ func testPlayerCopyWildcardTableContinuation(t *testing.T) {
 		return expect.Then(qh.Immediately("insert into dst(id,val) values (3,'uncopied'), (4,'new')"))
 	}).Then(qh.Immediately(
 		`/insert into _vt.copy_state .*`,
-		"/delete from _vt.copy_state.*dst",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
 	)))
 
@@ -1263,7 +1266,7 @@ func TestPlayerCopyWildcardTableContinuationWithOptimizeInserts(t *testing.T) {
 		// Copy
 		"insert into dst(id,val) values (3,'uncopied'), (4,'new')",
 		`/insert into _vt.copy_state .*`,
-		"/delete from _vt.copy_state.*dst",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst",
 		"/update _vt.vreplication set state='Running'",
 	))
 	expectData(t, "dst", [][]string{
@@ -1381,7 +1384,7 @@ func testPlayerCopyTablesStopAfterCopy(t *testing.T) {
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		// All tables copied. Stop vreplication because we requested it.
 		"/update _vt.vreplication set state='Stopped'",
 	)))
@@ -1467,7 +1470,7 @@ func testPlayerCopyTableCancel(t *testing.T) {
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		// All tables copied. Go into running state.
 		"/update _vt.vreplication set state='Running'",
 	)))
@@ -1545,11 +1548,11 @@ func testPlayerCopyTablesWithGeneratedColumn(t *testing.T) {
 		"insert into dst1(id,val,val3,id2) values (1,'aaa','aaa1',10), (2,'bbb','bbb2',20)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > '.*`,
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		"insert into dst2(val3,val,id2) values ('aaa1','aaa',10), ('bbb2','bbb',20)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:<name:\\"id\\" type:INT32 > rows:<lengths:1 values:\\"2\\" > '.*`,
 		// copy of dst2 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst2",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst2",
 		"/update _vt.vreplication set state",
 	))
 
@@ -1625,7 +1628,7 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 		"commit",
 	)).Then(qh.Immediately(
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		// All tables copied. Final catch up followed by Running state.
 		"/update _vt.vreplication set state='Running'",
 	)))
@@ -1643,6 +1646,7 @@ func testCopyTablesWithInvalidDates(t *testing.T) {
 		"begin",
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
+		"/delete from _vt.post_copy_action",
 		"commit",
 	))
 }
@@ -1713,7 +1717,7 @@ func testCopyInvisibleColumns(t *testing.T) {
 		"insert into dst1(id,id2,inv1,inv2) values (1,10,100,1000), (2,20,200,2000)",
 		`/insert into _vt.copy_state \(lastpk, vrepl_id, table_name\) values \('fields:{name:\\"id\\" type:INT32} fields:{name:\\"inv1\\" type:INT32} rows:{lengths:1 lengths:3 values:\\"2200\\"}'.*`,
 		// copy of dst1 is done: delete from copy_state.
-		"/delete from _vt.copy_state.*dst1",
+		"/delete cs, pca from _vt.copy_state as cs left join _vt.post_copy_action as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name.*dst1",
 		"/update _vt.vreplication set state='Running'",
 	))
 

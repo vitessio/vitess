@@ -199,7 +199,7 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 /* tablet streams */
 
 func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
-	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name=%s and workflow != %s",
+	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow != %s",
 		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
 	if constraint != "" {
 		query += fmt.Sprintf(" and %s", constraint)
@@ -238,6 +238,11 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 			return nil, err
 		}
 
+		deferSecondaryKeys, err := row["defer_secondary_keys"].ToBool()
+		if err != nil {
+			return nil, err
+		}
+
 		var bls binlogdatapb.BinlogSource
 		rowBytes, err := row["source"].ToBytes()
 		if err != nil {
@@ -263,12 +268,13 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		}
 
 		tabletStreams = append(tabletStreams, &VReplicationStream{
-			ID:              uint32(id),
-			Workflow:        workflowName,
-			BinlogSource:    &bls,
-			Position:        pos,
-			WorkflowType:    binlogdatapb.VReplicationWorkflowType(workflowType),
-			WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
+			ID:                 uint32(id),
+			Workflow:           workflowName,
+			BinlogSource:       &bls,
+			Position:           pos,
+			WorkflowType:       binlogdatapb.VReplicationWorkflowType(workflowType),
+			WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
+			DeferSecondaryKeys: deferSecondaryKeys,
 		})
 	}
 	return tabletStreams, nil
@@ -574,7 +580,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 			}
 
 			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "",
-				int64(vrs.WorkflowType), int64(vrs.WorkflowSubType))
+				int64(vrs.WorkflowType), int64(vrs.WorkflowSubType), vrs.DeferSecondaryKeys)
 		}
 
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())
