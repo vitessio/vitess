@@ -42,7 +42,6 @@ type (
 	keyspaceStr  = string
 	tableNameStr = string
 	viewNameStr  = string
-	viewDefStr   = string
 
 	// Tracker contains the required fields to perform schema tracking.
 	Tracker struct {
@@ -68,7 +67,7 @@ const defaultConsumeDelay = 1 * time.Second
 const aclErrorMessageLog = "Table ACL might be enabled, --schema_change_signal_user needs to be passed to VTGate for schema tracking to work. Check 'schema tracking' docs on vitess.io"
 
 // NewTracker creates the tracker object.
-func NewTracker(ch chan *discovery.TabletHealth, user string) *Tracker {
+func NewTracker(ch chan *discovery.TabletHealth, user string, enableViews bool) *Tracker {
 	ctx := context.Background()
 	// Set the caller on the context if the user is provided.
 	// This user that will be sent down to vttablet calls.
@@ -76,30 +75,43 @@ func NewTracker(ch chan *discovery.TabletHealth, user string) *Tracker {
 		ctx = callerid.NewContext(ctx, nil, callerid.NewImmediateCallerID(user))
 	}
 
-	return &Tracker{
+	t := &Tracker{
 		ctx:          ctx,
 		ch:           ch,
 		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
-		views:        &viewMap{m: map[keyspaceStr]map[viewNameStr]viewDefStr{}},
 		tracked:      map[keyspaceStr]*updateController{},
 		consumeDelay: defaultConsumeDelay,
 	}
+
+	if enableViews {
+		t.views = &viewMap{m: map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement{}}
+	}
+	return t
 }
 
 // LoadKeyspace loads the keyspace schema.
 func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
-	ftRes, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
+	err := t.loadTables(conn, target)
 	if err != nil {
 		return err
 	}
-	// TODO: only do it if views are enabled
-	fvRes, err := conn.Execute(t.ctx, target, mysql.FetchViews, nil, 0, 0, nil)
+	err = t.loadViews(conn, target)
 	if err != nil {
 		return err
 	}
 
+	t.tracked[target.Keyspace].setLoaded(true)
+	return nil
+}
+
+func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Target) error {
+	ftRes, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
+	if err != nil {
+		return err
+	}
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
 	// We must clear out any previous schema before loading it here as this is called
 	// whenever a shard's primary tablet starts and sends the initial signal. Without
 	// clearing out the previous schema we can end up with duplicate entries when the
@@ -108,12 +120,28 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 	t.updateTables(target.Keyspace, ftRes)
 	log.Infof("finished loading schema for keyspace %s. Found %d columns in total across the tables", target.Keyspace, len(ftRes.Rows))
 
-	// Similarly for Views
+	return nil
+}
+
+func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Target) error {
+	if t.views == nil {
+		// This happens only when views are not enabled.
+		return nil
+	}
+
+	fvRes, err := conn.Execute(t.ctx, target, mysql.FetchViews, nil, 0, 0, nil)
+	if err != nil {
+		return err
+	}
+
+	// We must clear out any previous view definition before loading it here as this is called
+	// whenever a shard's primary tablet starts and sends the initial signal. Without
+	// clearing out the previous view definition we can end up with duplicate entries when the
+	// tablet is simply restarted or potentially when we elect a new primary.
 	t.clearKeyspaceViews(target.Keyspace)
 	t.updateViews(target.Keyspace, fvRes)
 	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(fvRes.Rows))
 
-	t.tracked[target.Keyspace].setLoaded(true)
 	return nil
 }
 
@@ -192,6 +220,17 @@ func (t *Tracker) Tables(ks string) map[string][]vindexes.Column {
 	}
 
 	return m
+}
+
+// Views returns all known views in the keyspace with their definition.
+func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.views == nil {
+		return nil
+	}
+	return t.views.m[ks]
 }
 
 func (t *Tracker) updateSchema(th *discovery.TabletHealth) (success bool) {
@@ -343,23 +382,42 @@ func (tm *tableMap) delete(ks, tbl string) {
 	delete(m, tbl)
 }
 
-type viewMap struct {
-	m map[keyspaceStr]map[viewNameStr]viewDefStr
+// This empties out any previous schema for for all tables in a keyspace.
+// You should call this before initializing/loading a keyspace of the same
+// name in the cache.
+func (t *Tracker) clearKeyspaceTables(ks string) {
+	if t.tables != nil && t.tables.m != nil {
+		delete(t.tables.m, ks)
+	}
 }
 
-func (vm *viewMap) set(ks, tbl, sel string) {
+type viewMap struct {
+	m map[keyspaceStr]map[viewNameStr]sqlparser.SelectStatement
+}
+
+func (vm *viewMap) set(ks, tbl, sql string) {
 	m := vm.m[ks]
 	if m == nil {
-		m = make(map[tableNameStr]viewDefStr)
+		m = make(map[tableNameStr]sqlparser.SelectStatement)
 		vm.m[ks] = m
+	}
+	stmt, err := sqlparser.Parse(sql)
+	if err != nil {
+		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
+		return
+	}
+	sel, ok := stmt.(sqlparser.SelectStatement)
+	if !ok {
+		log.Warningf("ignoring view '%s', view definition is not a select query: %T", tbl, stmt)
+		return
 	}
 	m[tbl] = sel
 }
 
-func (vm *viewMap) get(ks, tbl string) viewDefStr {
+func (vm *viewMap) get(ks, tbl string) sqlparser.SelectStatement {
 	m := vm.m[ks]
 	if m == nil {
-		return ""
+		return nil
 	}
 	return m[tbl]
 }
@@ -370,15 +428,6 @@ func (vm *viewMap) delete(ks, tbl string) {
 		return
 	}
 	delete(m, tbl)
-}
-
-// This empties out any previous schema for for all tables in a keyspace.
-// You should call this before initializing/loading a keyspace of the same
-// name in the cache.
-func (t *Tracker) clearKeyspaceTables(ks string) {
-	if t.tables != nil && t.tables.m != nil {
-		delete(t.tables.m, ks)
-	}
 }
 
 func (t *Tracker) clearKeyspaceViews(ks string) {
