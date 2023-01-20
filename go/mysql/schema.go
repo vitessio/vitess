@@ -131,10 +131,10 @@ order by table_name, ordinal_position`
 	SelectAllViews = `SELECT TABLE_NAME, UPDATED_AT FROM _vt.views`
 
 	// FetchUpdatedViews queries fetches information about updated views
-	FetchUpdatedViews = `SELECT TABLE_NAME, VIEW_DEFINITION, CREATE_STATEMENT FROM _VT.VIEWS WHERE TABLE_NAME IN ::viewNames`
+	FetchUpdatedViews = `SELECT TABLE_NAME, VIEW_DEFINITION, CREATE_STATEMENT FROM _vt.views WHERE TABLE_NAME IN ::viewNames`
 
 	// FetchViews queries fetches all views
-	FetchViews = `SELECT TABLE_NAME, VIEW_DEFINITION, CREATE_STATEMENT FROM _VT.VIEWS`
+	FetchViews = `SELECT TABLE_NAME, VIEW_DEFINITION, CREATE_STATEMENT FROM _vt.views`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to
