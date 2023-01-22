@@ -24,8 +24,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Operator, rewrite.TreeIdentity, error) {
@@ -75,7 +73,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 			continue
 		}
 
-		return nil, rewrite.SameTree, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+		return nil, rewrite.SameTree, vterrors.VT12001("cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {
@@ -335,32 +333,34 @@ func rewriteColumnsInSubqueryOpForJoin(
 	resultInnerOp := innerOp
 	var rewriteError error
 	// go over the entire expression in the subquery
-	sqlparser.Rewrite(subQueryInner.ExtractedSubquery.Original, func(cursor *sqlparser.Cursor) bool {
-		sqlNode := cursor.Node()
-		switch node := sqlNode.(type) {
-		case *sqlparser.ColName:
-			// check whether the column name belongs to the other side of the join tree
-			if ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultInnerOp)) {
-				// get the bindVariable for that column name and replace it in the subquery
-				bindVar := ctx.ReservedVars.ReserveColName(node)
-				cursor.Replace(sqlparser.NewArgument(bindVar))
-				// check whether the bindVariable already exists in the joinVars of the other tree
-				_, alreadyExists := outerTree.Vars[bindVar]
-				if alreadyExists {
-					return false
-				}
-				// if it does not exist, then push this as an output column there and add it to the joinVars
-				offset, err := resultInnerOp.AddColumn(ctx, node)
-				if err != nil {
-					rewriteError = err
-					return false
-				}
-				outerTree.Vars[bindVar] = offset
-				return false
-			}
+	sqlparser.SafeRewrite(subQueryInner.ExtractedSubquery.Original, nil, func(cursor *sqlparser.Cursor) bool {
+		node, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
 		}
+
+		// check whether the column name belongs to the other side of the join tree
+		if !ctx.SemTable.RecursiveDeps(node).IsSolvedBy(TableID(resultInnerOp)) {
+			return true
+		}
+
+		// get the bindVariable for that column name and replace it in the subquery
+		bindVar := ctx.ReservedVars.ReserveColName(node)
+		cursor.Replace(sqlparser.NewArgument(bindVar))
+		// check whether the bindVariable already exists in the joinVars of the other tree
+		_, alreadyExists := outerTree.Vars[bindVar]
+		if alreadyExists {
+			return true
+		}
+		// if it does not exist, then push this as an output column there and add it to the joinVars
+		offset, err := resultInnerOp.AddColumn(ctx, node)
+		if err != nil {
+			rewriteError = err
+			return false
+		}
+		outerTree.Vars[bindVar] = offset
 		return true
-	}, nil)
+	})
 
 	// update the dependencies for the subquery by removing the dependencies from the innerOp
 	tableSet := ctx.SemTable.Direct[subQueryInner.ExtractedSubquery.Subquery]
@@ -380,7 +380,7 @@ func createCorrelatedSubqueryOp(
 ) (*CorrelatedSubQueryOp, error) {
 	newOuter, err := RemovePredicate(ctx, extractedSubquery, outerOp)
 	if err != nil {
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "exists sub-queries are only supported with AND clause")
+		return nil, vterrors.VT12001("EXISTS sub-queries are only supported with AND clause")
 	}
 
 	resultOuterOp := newOuter
@@ -389,40 +389,43 @@ func createCorrelatedSubqueryOp(
 	var lhsCols []*sqlparser.ColName
 	for _, pred := range preds {
 		var rewriteError error
-		sqlparser.Rewrite(pred, func(cursor *sqlparser.Cursor) bool {
-			switch node := cursor.Node().(type) {
-			case *sqlparser.ColName:
-				nodeDeps := ctx.SemTable.RecursiveDeps(node)
-				if nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
-					// check whether the bindVariable already exists in the map
-					// we do so by checking that the column names are the same and their recursive dependencies are the same
-					// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
-					for colName, bindVar := range bindVars {
-						if ctx.SemTable.EqualsExpr(node, colName) {
-							cursor.Replace(sqlparser.NewArgument(bindVar))
-							return false
-						}
-					}
+		sqlparser.SafeRewrite(pred, nil, func(cursor *sqlparser.Cursor) bool {
+			node, ok := cursor.Node().(*sqlparser.ColName)
+			if !ok {
+				return true
+			}
 
-					// get the bindVariable for that column name and replace it in the predicate
-					bindVar := ctx.ReservedVars.ReserveColName(node)
+			nodeDeps := ctx.SemTable.RecursiveDeps(node)
+			if !nodeDeps.IsSolvedBy(TableID(resultOuterOp)) {
+				return true
+			}
+
+			// check whether the bindVariable already exists in the map
+			// we do so by checking that the column names are the same and their recursive dependencies are the same
+			// so the column names `user.a` and `a` would be considered equal as long as both are bound to the same table
+			for colName, bindVar := range bindVars {
+				if ctx.SemTable.EqualsExpr(node, colName) {
 					cursor.Replace(sqlparser.NewArgument(bindVar))
-					// store it in the map for future comparisons
-					bindVars[node] = bindVar
-
-					// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-					offset, err := resultOuterOp.AddColumn(ctx, node)
-					if err != nil {
-						rewriteError = err
-						return false
-					}
-					lhsCols = append(lhsCols, node)
-					vars[bindVar] = offset
-					return false
+					return true
 				}
 			}
+
+			// get the bindVariable for that column name and replace it in the predicate
+			bindVar := ctx.ReservedVars.ReserveColName(node)
+			cursor.Replace(sqlparser.NewArgument(bindVar))
+			// store it in the map for future comparisons
+			bindVars[node] = bindVar
+
+			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
+			offset, err := resultOuterOp.AddColumn(ctx, node)
+			if err != nil {
+				rewriteError = err
+				return true
+			}
+			lhsCols = append(lhsCols, node)
+			vars[bindVar] = offset
 			return true
-		}, nil)
+		})
 		if rewriteError != nil {
 			return nil, rewriteError
 		}

@@ -18,8 +18,8 @@ package planbuilder
 
 import (
 	"bytes"
+	"fmt"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -99,7 +99,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 					return false, err
 				}
 			default:
-				return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected SELECT type: %T", node)
+				return false, vterrors.VT13001(fmt.Sprintf("unexpected SELECT type: %T", node))
 			}
 			sqi := subqueryInfo{
 				ast:  node,
@@ -136,7 +136,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 			continue
 		}
 		if sqi.origin != nil {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+			return nil, nil, nil, vterrors.VT12001("cross-shard correlated subquery")
 		}
 
 		sqName, hasValues := pb.jt.GenerateSubqueryVars()
@@ -195,7 +195,7 @@ func (pb *primitiveBuilder) findOrigin(expr sqlparser.Expr, reservedVars *sqlpar
 	return pullouts, highestOrigin, expr, nil
 }
 
-var dummyErr = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "dummy")
+var dummyErr = vterrors.VT13001("dummy")
 
 func hasSubquery(node sqlparser.SQLNode) bool {
 	has := false

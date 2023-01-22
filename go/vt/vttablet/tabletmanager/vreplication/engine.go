@@ -49,6 +49,7 @@ const (
 	reshardingJournalTableName = "_vt.resharding_journal"
 	vreplicationTableName      = "_vt.vreplication"
 	copyStateTableName         = "_vt.copy_state"
+	postCopyActionTableName    = "_vt.post_copy_action"
 
 	createReshardingJournalTable = `create table if not exists _vt.resharding_journal(
   id bigint,
@@ -67,15 +68,26 @@ const (
   add column id bigint unsigned not null auto_increment first,
   drop primary key, add primary key(id),
   add key (vrepl_id, table_name)`
+
+	createPostCopyAction = `create table if not exists _vt.post_copy_action(
+  id bigint not null auto_increment,
+  vrepl_id int,
+  table_name varbinary(128),
+  action JSON,
+  unique key (vrepl_id, table_name),
+  primary key(id))`
+
+	throttlerVReplicationAppName = "vreplication"
+	throttlerOnlineDDLAppName    = "online-ddl"
+)
+
+const (
+	PostCopyActionNone PostCopyActionType = iota
+	PostCopyActionSQL
 )
 
 var withDDL *withddl.WithDDL
 var withDDLInitialQueries []string
-
-const (
-	throttlerVReplicationAppName = "vreplication"
-	throttlerOnlineDDLAppName    = "online-ddl"
-)
 
 func init() {
 	allddls := append([]string{}, binlogplayer.CreateVReplicationTable()...)
@@ -83,6 +95,7 @@ func init() {
 	allddls = append(allddls, createReshardingJournalTable, createCopyState)
 	allddls = append(allddls, createVReplicationLogTable)
 	allddls = append(allddls, alterCopyState)
+	allddls = append(allddls, createPostCopyAction)
 	withDDL = withddl.New(allddls)
 
 	withDDLInitialQueries = append(withDDLInitialQueries, binlogplayer.WithDDLInitialQueries...)
@@ -133,12 +146,24 @@ type Engine struct {
 	ec        *externalConnector
 
 	throttlerClient *throttle.Client
+
+	// This should only be set in Test Engines in order to short
+	// curcuit functions as needed in unit tests. It's automatically
+	// enabled in NewSimpleTestEngine. This should NOT be used in
+	// production.
+	shortcircuit bool
 }
 
 type journalEvent struct {
 	journal      *binlogdatapb.Journal
 	participants map[string]int
 	shardGTIDs   map[string]*binlogdatapb.ShardGtid
+}
+
+type PostCopyActionType int
+type PostCopyAction struct {
+	Type PostCopyActionType `json:"type"`
+	Task string             `json:"task"`
 }
 
 // NewEngine creates a new Engine.
@@ -184,6 +209,24 @@ func NewTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, db
 		dbName:                  dbname,
 		journaler:               make(map[string]*journalEvent),
 		ec:                      newExternalConnector(externalConfig),
+	}
+	return vre
+}
+
+// NewSimpleTestEngine creates a new Engine for testing that can
+// also short curcuit functions as needed.
+func NewSimpleTestEngine(ts *topo.Server, cell string, mysqld mysqlctl.MysqlDaemon, dbClientFactoryFiltered func() binlogplayer.DBClient, dbClientFactoryDba func() binlogplayer.DBClient, dbname string, externalConfig map[string]*dbconfigs.DBConfigs) *Engine {
+	vre := &Engine{
+		controllers:             make(map[int]*controller),
+		ts:                      ts,
+		cell:                    cell,
+		mysqld:                  mysqld,
+		dbClientFactoryFiltered: dbClientFactoryFiltered,
+		dbClientFactoryDba:      dbClientFactoryDba,
+		dbName:                  dbname,
+		journaler:               make(map[string]*journalEvent),
+		ec:                      newExternalConnector(externalConfig),
+		shortcircuit:            true,
 	}
 	return vre
 }
@@ -482,7 +525,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		if err != nil {
 			return nil, err
 		}
-		// Legacy vreplication won't create this table. So, ignore schema errors.
+		if _, err := withDDL.ExecIgnore(vre.ctx, delQuery, dbClient.ExecuteFetch); err != nil {
+			return nil, err
+		}
+		delQuery, err = plan.delPostCopyAction.GenerateQuery(bv, nil)
+		if err != nil {
+			return nil, err
+		}
 		if _, err := withDDL.ExecIgnore(vre.ctx, delQuery, dbClient.ExecuteFetch); err != nil {
 			return nil, err
 		}
@@ -652,8 +701,9 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 
 		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 64)
 		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 64)
+		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType, workflowSubType)
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType, workflowSubType, deferSecondaryKeys)
 		qr, err := withDDL.Exec(vre.ctx, ig.String(), dbClient.ExecuteFetch, dbClient.ExecuteFetch)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)
@@ -720,6 +770,10 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		return err
 	}
 	defer vre.wg.Done()
+
+	if vre.shortcircuit {
+		return nil
+	}
 
 	dbClient := vre.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {

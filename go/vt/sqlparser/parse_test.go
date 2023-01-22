@@ -851,6 +851,12 @@ var (
 		input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
 		output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
 	}, {
+		input:  "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)",
+		output: "select DATE_ADD(min(FROM_UNIXTIME(1673444922)), interval (-DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1) DAY) from dual",
+	}, {
+		input:  "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month",
+		output: "select '2020-01-01' + interval (month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month)) - 1) month from dual",
+	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
 		input:  "select /* Dual */ 1 from Dual",
@@ -1453,6 +1459,18 @@ var (
 	}, {
 		input:  "create table a (\n\ta float not null default -2.1\n)",
 		output: "create table a (\n\ta float not null default -2.1\n)",
+	}, {
+		input:  "create table a (\n\ta float(24) not null default -1\n)",
+		output: "create table a (\n\ta float(24) not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float(24,10) not null default -1\n)",
+		output: "create table a (\n\ta float(24,10) not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float4 not null default -1\n)",
+		output: "create table a (\n\ta float4 not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float8 not null default -1\n)",
+		output: "create table a (\n\ta float8 not null default -1\n)",
 	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
 		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
@@ -2123,6 +2141,15 @@ var (
 		input: "explain select * from t",
 	}, {
 		input: "explain format = traditional select * from t",
+	}, {
+		input: "vexplain queries select * from t",
+	}, {
+		input: "vexplain all select * from t",
+	}, {
+		input: "vexplain plan select * from t",
+	}, {
+		input:  "vexplain select * from t",
+		output: "vexplain plan select * from t",
 	}, {
 		input: "explain analyze select * from t",
 	}, {

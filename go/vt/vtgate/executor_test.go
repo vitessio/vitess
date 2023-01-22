@@ -910,7 +910,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on TestExecutor.garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
+	wantErr = "VT05005: table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show vschema vindexes on user"
@@ -941,7 +941,7 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show vschema vindexes on garbage"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	wantErr = "table 'garbage' does not exist in keyspace 'TestExecutor'"
+	wantErr = "VT05005: table 'garbage' does not exist in keyspace 'TestExecutor'"
 	assert.EqualError(t, err, wantErr, query)
 
 	query = "show warnings"
@@ -1049,17 +1049,17 @@ func TestExecutorShow(t *testing.T) {
 	query = "show vschema tables"
 	session = NewSafeSession(&vtgatepb.Session{TargetString: "no_such_keyspace"})
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "Unknown database 'no_such_keyspace' in vschema"
+	want = "VT05003: unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 
 	query = "show vitess_migrations"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "Unknown database 'no_such_keyspace' in vschema"
+	want = "VT05003: unknown database 'no_such_keyspace' in vschema"
 	assert.EqualError(t, err, want, query)
 
 	query = "show vitess_migrations from ks like '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90'"
 	_, err = executor.Execute(ctx, "TestExecute", session, query, nil)
-	want = "Unknown database 'ks' in vschema"
+	want = "VT05003: unknown database 'ks' in vschema"
 	assert.EqualError(t, err, want, query)
 }
 
@@ -1117,7 +1117,7 @@ func TestExecutorUse(t *testing.T) {
 	}
 
 	_, err = executor.Execute(ctx, "TestExecute", NewSafeSession(&vtgatepb.Session{}), "use UnexistentKeyspace", nil)
-	require.EqualError(t, err, "unknown database 'UnexistentKeyspace'")
+	require.EqualError(t, err, "VT05003: unknown database 'UnexistentKeyspace' in vschema")
 }
 
 func TestExecutorComment(t *testing.T) {
@@ -2104,30 +2104,24 @@ func TestExecutorOtherRead(t *testing.T) {
 	}
 }
 
-func TestExecutorExplain(t *testing.T) {
+func TestExecutorVExplain(t *testing.T) {
 	executor, _, _, _ := createExecutorEnv()
 	executor.normalize = true
 	logChan := QueryLogger.Subscribe("Test")
 	defer QueryLogger.Unsubscribe(logChan)
 
 	bindVars := map[string]*querypb.BindVariable{}
-	result, err := executorExec(executor, "explain format = vitess select * from user", bindVars)
+	result, err := executorExec(executor, "vexplain plan select * from user", bindVars)
 	require.NoError(t, err)
 
 	require.Equal(t,
-		`[[VARCHAR("Route") VARCHAR("Scatter") VARCHAR("TestExecutor") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("select * from `+"`user`"+`")]]`,
+		`[[VARCHAR("{\n\t\"OperatorType\": \"Route\",\n\t\"Variant\": \"Scatter\",\n\t\"Keyspace\": {\n\t\t\"Name\": \"TestExecutor\",\n\t\t\"Sharded\": true\n\t},\n\t\"FieldQuery\": \"select * from `+"`user`"+` where 1 != 1\",\n\t\"Query\": \"select * from `+"`user`"+`\",\n\t\"Table\": \"`+"`user`"+`\"\n}")]]`,
 		fmt.Sprintf("%v", result.Rows))
 
-	result, err = executorExec(executor, "explain format = vitess select 42", bindVars)
+	result, err = executorExec(executor, "vexplain plan select 42", bindVars)
 	require.NoError(t, err)
-	expected :=
-		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] ` +
-			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`
-	require.Equal(t,
-		`[[VARCHAR("Projection") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")] `+
-			`[VARCHAR("└─ SingleRow") VARCHAR("") VARCHAR("") VARCHAR("") VARCHAR("UNKNOWN") VARCHAR("")]]`,
-		expected,
-		fmt.Sprintf("%v", result.Rows), fmt.Sprintf("%v", result.Rows))
+	expected := `[[VARCHAR("{\n\t\"OperatorType\": \"Projection\",\n\t\"Expressions\": [\n\t\t\"INT64(42) as 42\"\n\t],\n\t\"Inputs\": [\n\t\t{\n\t\t\t\"OperatorType\": \"SingleRow\"\n\t\t}\n\t]\n}")]]`
+	require.Equal(t, expected, fmt.Sprintf("%v", result.Rows))
 }
 
 func TestExecutorOtherAdmin(t *testing.T) {
@@ -2317,7 +2311,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	sbc1WantQueries := []*querypb.BoundQuery{{
 		Sql: "select @@sql_mode orig, '' new", BindVariables: emptyBV,
 	}, {
-		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+		Sql: "set sql_mode = ''", BindVariables: emptyBV,
 	}, {
 		Sql: "savepoint a", BindVariables: emptyBV,
 	}, {
@@ -2329,7 +2323,7 @@ func TestExecutorSavepointInTxWithReservedConn(t *testing.T) {
 	}}
 
 	sbc2WantQueries := []*querypb.BoundQuery{{
-		Sql: "set @@sql_mode = ''", BindVariables: emptyBV,
+		Sql: "set sql_mode = ''", BindVariables: emptyBV,
 	}, {
 		Sql: "savepoint a", BindVariables: emptyBV,
 	}, {
@@ -2446,7 +2440,7 @@ func TestExecutorCallProc(t *testing.T) {
 			if tc.hasNoKeyspaceErr {
 				assert.EqualError(t, err, errNoKeyspace.Error())
 			} else if tc.unshardedOnlyErr {
-				require.EqualError(t, err, "CALL is not supported for sharded database")
+				require.EqualError(t, err, "CALL is not supported for sharded keyspace")
 			} else {
 				assert.NoError(t, err)
 			}
@@ -2499,14 +2493,14 @@ func TestExecutorDescHash(t *testing.T) {
 	require.NoError(t, err)
 }
 
-func TestExecutorVtExplain(t *testing.T) {
+func TestExecutorVExplainQueries(t *testing.T) {
 	executor, _, _, sbclookup := createExecutorEnv()
 	session := NewAutocommitSession(&vtgatepb.Session{})
 
 	sbclookup.SetResults([]*sqltypes.Result{
 		sqltypes.MakeTestResult(sqltypes.MakeTestFields("name|user_id", "varchar|int64"), "apa|1", "apa|2"),
 	})
-	qr, err := executor.Execute(ctx, "TestExecutorVtExplain", session, "explain format=vtexplain select * from user where name = 'apa'", nil)
+	qr, err := executor.Execute(ctx, "TestExecutorVExplainQueries", session, "vexplain queries select * from user where name = 'apa'", nil)
 	require.NoError(t, err)
 	txt := fmt.Sprintf("%v\n", qr.Rows)
 	lookupQuery := "select `name`, user_id from name_user_map where `name` in"
@@ -2515,7 +2509,7 @@ func TestExecutorVtExplain(t *testing.T) {
 	// Test the streaming side as well
 	var results []sqltypes.Row
 	session = NewAutocommitSession(&vtgatepb.Session{})
-	err = executor.StreamExecute(ctx, "TestExecutorVtExplain", session, "explain format=vtexplain select * from user where name = 'apa'", nil, func(result *sqltypes.Result) error {
+	err = executor.StreamExecute(ctx, "TestExecutorVExplainQueries", session, "vexplain queries select * from user where name = 'apa'", nil, func(result *sqltypes.Result) error {
 		results = append(results, result.Rows...)
 		return nil
 	})

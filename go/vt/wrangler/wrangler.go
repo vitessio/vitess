@@ -22,6 +22,7 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -53,6 +54,8 @@ type Wrangler struct {
 	// VExecFunc is a test-only fixture that allows us to short circuit vexec commands.
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
+	// Limt the number of concurrent background goroutines if needed.
+	sem *sync2.Semaphore
 }
 
 // New creates a new Wrangler object.
@@ -62,6 +65,18 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 		ts:       ts,
 		tmc:      tmc,
 		vtctld:   grpcvtctldserver.NewVtctldServer(ts),
+		sourceTs: ts,
+	}
+}
+
+// NewTestWrangler creates a new Wrangler object for use in tests. This should NOT be used
+// in production.
+func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
+	return &Wrangler{
+		logger:   logger,
+		ts:       ts,
+		tmc:      tmc,
+		vtctld:   grpcvtctldserver.NewTestVtctldServer(ts, tmc),
 		sourceTs: ts,
 	}
 }

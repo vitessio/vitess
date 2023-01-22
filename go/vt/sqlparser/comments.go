@@ -44,8 +44,8 @@ const (
 	DirectiveAllowHashJoin = "ALLOW_HASH_JOIN"
 	// DirectiveQueryPlanner lets the user specify per query which planner should be used
 	DirectiveQueryPlanner = "PLANNER"
-	// DirectiveVtexplainRunDMLQueries tells explain format = vtexplain that it is okay to also run the query.
-	DirectiveVtexplainRunDMLQueries = "EXECUTE_DML_QUERIES"
+	// DirectiveVExplainRunDMLQueries tells vexplain queries/all that it is okay to also run the query.
+	DirectiveVExplainRunDMLQueries = "EXECUTE_DML_QUERIES"
 	// DirectiveConsolidator enables the query consolidator.
 	DirectiveConsolidator = "CONSOLIDATOR"
 )

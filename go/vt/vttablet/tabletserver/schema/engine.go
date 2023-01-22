@@ -601,8 +601,8 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	return se.tables[tableName.String()]
 }
 
-// GetSchema returns the current The Tables are a shared
-// data structure and must be treated as read-only.
+// GetSchema returns the current schema. The Tables are a
+// shared data structure and must be treated as read-only.
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
@@ -653,8 +653,9 @@ func (se *Engine) handleHTTPSchema(response http.ResponseWriter) {
 // doesn't reload.  Use SetTableForTests to set table schema.
 func NewEngineForTests() *Engine {
 	se := &Engine{
-		isOpen: true,
-		tables: make(map[string]*Table),
+		isOpen:    true,
+		tables:    make(map[string]*Table),
+		historian: newHistorian(false, nil),
 	}
 	return se
 }

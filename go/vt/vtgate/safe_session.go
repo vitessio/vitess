@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -398,11 +399,11 @@ func (session *SafeSession) AppendOrUpdate(shardSession *vtgatepb.Session_ShardS
 	// that needs to be stored as shard session.
 	if session.autocommitState == autocommitted && shardSession.TransactionId != 0 {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] unexpected 'autocommitted' state in transaction")
+		return vterrors.VT13001("unexpected 'autocommitted' state in transaction")
 	}
 	if !(session.Session.InTransaction || session.Session.InReservedConn) {
 		// Should be unreachable
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] current session neither in transaction nor in reserved connection")
+		return vterrors.VT13001("current session is neither in transaction nor in reserved connection")
 	}
 	session.autocommitState = notAutocommittable
 
@@ -597,10 +598,10 @@ func (session *SafeSession) SetPreQueries() []string {
 	first := true
 	for _, k := range keys {
 		if first {
-			preQuery.WriteString(fmt.Sprintf("set @@%s = %s", k, sysVars[k]))
+			preQuery.WriteString(fmt.Sprintf("set %s = %s", k, sysVars[k]))
 			first = false
 		} else {
-			preQuery.WriteString(fmt.Sprintf(", @@%s = %s", k, sysVars[k]))
+			preQuery.WriteString(fmt.Sprintf(", %s = %s", k, sysVars[k]))
 		}
 	}
 	return []string{preQuery.String()}
@@ -746,13 +747,13 @@ func removeShard(tabletAlias *topodatapb.TabletAlias, sessions []*vtgatepb.Sessi
 	for i, session := range sessions {
 		if proto.Equal(session.TabletAlias, tabletAlias) {
 			if session.TransactionId != 0 {
-				return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] removing shard session when in transaction")
+				return nil, vterrors.VT13001("removing shard session when in transaction")
 			}
 			idx = i
 		}
 	}
 	if idx == -1 {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] tried to remove missing shard")
+		return nil, vterrors.VT13001("tried to remove missing shard")
 	}
 	return append(sessions[:idx], sessions[idx+1:]...), nil
 }
@@ -888,7 +889,7 @@ func (session *SafeSession) EnableLogging() {
 	session.logging = &executeLogger{}
 }
 
-func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv map[string]*querypb.BindVariable) {
+func (l *executeLogger) log(primitive engine.Primitive, target *querypb.Target, gateway srvtopo.Gateway, query string, begin bool, bv map[string]*querypb.BindVariable) {
 	if l == nil {
 		return
 	}
@@ -898,12 +899,11 @@ func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv
 	l.lastID++
 	if begin {
 		l.entries = append(l.entries, engine.ExecuteEntry{
-			ID:         id,
-			Keyspace:   target.Keyspace,
-			Shard:      target.Shard,
-			TabletType: target.TabletType,
-			Cell:       target.Cell,
-			Query:      "begin",
+			ID:        id,
+			Target:    target,
+			Gateway:   gateway,
+			Query:     "begin",
+			FiredFrom: primitive,
 		})
 	}
 	ast, err := sqlparser.Parse(query)
@@ -920,12 +920,11 @@ func (l *executeLogger) log(target *querypb.Target, query string, begin bool, bv
 	}
 
 	l.entries = append(l.entries, engine.ExecuteEntry{
-		ID:         id,
-		Keyspace:   target.Keyspace,
-		Shard:      target.Shard,
-		TabletType: target.TabletType,
-		Cell:       target.Cell,
-		Query:      q,
+		ID:        id,
+		Target:    target,
+		Gateway:   gateway,
+		Query:     q,
+		FiredFrom: primitive,
 	})
 }
 

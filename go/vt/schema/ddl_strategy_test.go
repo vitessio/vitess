@@ -34,6 +34,7 @@ func TestIsDirect(t *testing.T) {
 	assert.False(t, DDLStrategy("online").IsDirect())
 	assert.False(t, DDLStrategy("gh-ost").IsDirect())
 	assert.False(t, DDLStrategy("pt-osc").IsDirect())
+	assert.False(t, DDLStrategy("mysql").IsDirect())
 	assert.True(t, DDLStrategy("something").IsDirect())
 }
 
@@ -49,6 +50,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		isAllowConcurrent    bool
 		fastOverRevertible   bool
 		fastRangeRotation    bool
+		allowForeignKeys     bool
 		runtimeOptions       string
 		err                  error
 	}{
@@ -71,6 +73,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "pt-osc",
 			strategy:         DDLStrategyPTOSC,
+		},
+		{
+			strategyVariable: "mysql",
+			strategy:         DDLStrategyMySQL,
 		},
 		{
 			strategy: DDLStrategyDirect,
@@ -145,22 +151,32 @@ func TestParseDDLStrategy(t *testing.T) {
 			runtimeOptions:    "",
 			fastRangeRotation: true,
 		},
+		{
+			strategyVariable: "vitess --unsafe-allow-foreign-keys",
+			strategy:         DDLStrategyVitess,
+			options:          "--unsafe-allow-foreign-keys",
+			runtimeOptions:   "",
+			allowForeignKeys: true,
+		},
 	}
 	for _, ts := range tt {
-		setting, err := ParseDDLStrategy(ts.strategyVariable)
-		assert.NoError(t, err)
-		assert.Equal(t, ts.strategy, setting.Strategy)
-		assert.Equal(t, ts.options, setting.Options)
-		assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
-		assert.Equal(t, ts.isSingleton, setting.IsSingleton())
-		assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
-		assert.Equal(t, ts.isPostponeLaunch, setting.IsPostponeLaunch())
-		assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
-		assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
-		assert.Equal(t, ts.fastRangeRotation, setting.IsFastRangeRotationFlag())
+		t.Run(ts.strategyVariable, func(t *testing.T) {
+			setting, err := ParseDDLStrategy(ts.strategyVariable)
+			assert.NoError(t, err)
+			assert.Equal(t, ts.strategy, setting.Strategy)
+			assert.Equal(t, ts.options, setting.Options)
+			assert.Equal(t, ts.isDeclarative, setting.IsDeclarative())
+			assert.Equal(t, ts.isSingleton, setting.IsSingleton())
+			assert.Equal(t, ts.isPostponeCompletion, setting.IsPostponeCompletion())
+			assert.Equal(t, ts.isPostponeLaunch, setting.IsPostponeLaunch())
+			assert.Equal(t, ts.isAllowConcurrent, setting.IsAllowConcurrent())
+			assert.Equal(t, ts.fastOverRevertible, setting.IsPreferInstantDDL())
+			assert.Equal(t, ts.fastRangeRotation, setting.IsFastRangeRotationFlag())
+			assert.Equal(t, ts.allowForeignKeys, setting.IsAllowForeignKeysFlag())
 
-		runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
-		assert.Equal(t, ts.runtimeOptions, runtimeOptions)
+			runtimeOptions := strings.Join(setting.RuntimeOptions(), " ")
+			assert.Equal(t, ts.runtimeOptions, runtimeOptions)
+		})
 	}
 	{
 		_, err := ParseDDLStrategy("other")

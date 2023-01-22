@@ -2258,7 +2258,7 @@ func TestKeyDestRangeQuery(t *testing.T) {
 	primarySession.TargetString = "TestExecutor[-]"
 	_, err := executorExec(executor, insertInput, nil)
 
-	require.EqualError(t, err, "INSERT not supported when targeting a key range: TestExecutor[-]")
+	require.EqualError(t, err, "VT03023: INSERT not supported when targeting a key range: TestExecutor[-]")
 
 	primarySession.TargetString = ""
 }
@@ -2474,7 +2474,7 @@ func TestReservedConnDML(t *testing.T) {
 	require.NoError(t, err)
 
 	wantQueries = append(wantQueries,
-		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
 		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)
@@ -2489,7 +2489,7 @@ func TestReservedConnDML(t *testing.T) {
 	sbc.EphemeralShardErr = mysql.NewSQLError(mysql.CRServerGone, mysql.SSNetError, "connection gone")
 	// as the first time the query fails due to connection loss i.e. reserved conn lost. It will be recreated to set statement will be executed again.
 	wantQueries = append(wantQueries,
-		&querypb.BoundQuery{Sql: "set @@default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
+		&querypb.BoundQuery{Sql: "set default_week_format = 1", BindVariables: map[string]*querypb.BindVariable{}},
 		&querypb.BoundQuery{Sql: "insert into `simple`() values ()", BindVariables: map[string]*querypb.BindVariable{}})
 	_, err = executor.Execute(ctx, "TestReservedConnDML", session, "insert into `simple`() values ()", nil)
 	require.NoError(t, err)

@@ -106,13 +106,13 @@ type TableOption struct {
 type ColumnKeyOption int
 
 const (
-	colKeyNone ColumnKeyOption = iota
-	colKeyPrimary
-	colKeySpatialKey
-	colKeyFulltextKey
-	colKeyUnique
-	colKeyUniqueKey
-	colKey
+	ColKeyNone ColumnKeyOption = iota
+	ColKeyPrimary
+	ColKeySpatialKey
+	ColKeyFulltextKey
+	ColKeyUnique
+	ColKeyUniqueKey
+	ColKey
 )
 
 // ReferenceAction indicates the action takes by a referential constraint e.g.
@@ -215,97 +215,101 @@ func (ct *ColumnType) DescribeType() string {
 
 // SQLType returns the sqltypes type code for the given column
 func (ct *ColumnType) SQLType() querypb.Type {
-	switch strings.ToLower(ct.Type) {
-	case keywordStrings[TINYINT]:
-		if ct.Unsigned {
+	return SQLTypeToQueryType(ct.Type, ct.Unsigned)
+}
+
+func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
+	switch keywordVals[strings.ToLower(typeName)] {
+	case TINYINT:
+		if unsigned {
 			return sqltypes.Uint8
 		}
 		return sqltypes.Int8
-	case keywordStrings[SMALLINT]:
-		if ct.Unsigned {
+	case SMALLINT:
+		if unsigned {
 			return sqltypes.Uint16
 		}
 		return sqltypes.Int16
-	case keywordStrings[MEDIUMINT]:
-		if ct.Unsigned {
+	case MEDIUMINT:
+		if unsigned {
 			return sqltypes.Uint24
 		}
 		return sqltypes.Int24
-	case keywordStrings[INT], keywordStrings[INTEGER]:
-		if ct.Unsigned {
+	case INT, INTEGER:
+		if unsigned {
 			return sqltypes.Uint32
 		}
 		return sqltypes.Int32
-	case keywordStrings[BIGINT]:
-		if ct.Unsigned {
+	case BIGINT:
+		if unsigned {
 			return sqltypes.Uint64
 		}
 		return sqltypes.Int64
-	case keywordStrings[BOOL], keywordStrings[BOOLEAN]:
+	case BOOL, BOOLEAN:
 		return sqltypes.Uint8
-	case keywordStrings[TEXT]:
+	case TEXT:
 		return sqltypes.Text
-	case keywordStrings[TINYTEXT]:
+	case TINYTEXT:
 		return sqltypes.Text
-	case keywordStrings[MEDIUMTEXT]:
+	case MEDIUMTEXT:
 		return sqltypes.Text
-	case keywordStrings[LONGTEXT]:
+	case LONGTEXT:
 		return sqltypes.Text
-	case keywordStrings[BLOB]:
+	case BLOB:
 		return sqltypes.Blob
-	case keywordStrings[TINYBLOB]:
+	case TINYBLOB:
 		return sqltypes.Blob
-	case keywordStrings[MEDIUMBLOB]:
+	case MEDIUMBLOB:
 		return sqltypes.Blob
-	case keywordStrings[LONGBLOB]:
+	case LONGBLOB:
 		return sqltypes.Blob
-	case keywordStrings[CHAR]:
+	case CHAR:
 		return sqltypes.Char
-	case keywordStrings[VARCHAR]:
+	case VARCHAR:
 		return sqltypes.VarChar
-	case keywordStrings[BINARY]:
+	case BINARY:
 		return sqltypes.Binary
-	case keywordStrings[VARBINARY]:
+	case VARBINARY:
 		return sqltypes.VarBinary
-	case keywordStrings[DATE]:
+	case DATE:
 		return sqltypes.Date
-	case keywordStrings[TIME]:
+	case TIME:
 		return sqltypes.Time
-	case keywordStrings[DATETIME]:
+	case DATETIME:
 		return sqltypes.Datetime
-	case keywordStrings[TIMESTAMP]:
+	case TIMESTAMP:
 		return sqltypes.Timestamp
-	case keywordStrings[YEAR]:
+	case YEAR:
 		return sqltypes.Year
-	case keywordStrings[FLOAT_TYPE]:
+	case FLOAT_TYPE, FLOAT4_TYPE:
 		return sqltypes.Float32
-	case keywordStrings[DOUBLE]:
+	case DOUBLE, FLOAT8_TYPE:
 		return sqltypes.Float64
-	case keywordStrings[DECIMAL]:
+	case DECIMAL, DECIMAL_TYPE:
 		return sqltypes.Decimal
-	case keywordStrings[BIT]:
+	case BIT:
 		return sqltypes.Bit
-	case keywordStrings[ENUM]:
+	case ENUM:
 		return sqltypes.Enum
-	case keywordStrings[SET]:
+	case SET:
 		return sqltypes.Set
-	case keywordStrings[JSON]:
+	case JSON:
 		return sqltypes.TypeJSON
-	case keywordStrings[GEOMETRY]:
+	case GEOMETRY:
 		return sqltypes.Geometry
-	case keywordStrings[POINT]:
+	case POINT:
 		return sqltypes.Geometry
-	case keywordStrings[LINESTRING]:
+	case LINESTRING:
 		return sqltypes.Geometry
-	case keywordStrings[POLYGON]:
+	case POLYGON:
 		return sqltypes.Geometry
-	case keywordStrings[GEOMETRYCOLLECTION]:
+	case GEOMETRYCOLLECTION:
 		return sqltypes.Geometry
-	case keywordStrings[MULTIPOINT]:
+	case MULTIPOINT:
 		return sqltypes.Geometry
-	case keywordStrings[MULTILINESTRING]:
+	case MULTILINESTRING:
 		return sqltypes.Geometry
-	case keywordStrings[MULTIPOLYGON]:
+	case MULTIPOLYGON:
 		return sqltypes.Geometry
 	}
 	return sqltypes.Null
@@ -439,7 +443,7 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	tmp := Rewrite(root, replaceExpr(from, to), nil)
+	tmp := SafeRewrite(root, stopWalking, replaceExpr(from, to))
 
 	expr, success := tmp.(Expr)
 	if !success {
@@ -450,16 +454,20 @@ func ReplaceExpr(root, from, to Expr) Expr {
 	return expr
 }
 
+func stopWalking(e SQLNode, _ SQLNode) bool {
+	switch e.(type) {
+	case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
+		return false
+	default:
+		return true
+	}
+}
+
 func replaceExpr(from, to Expr) func(cursor *Cursor) bool {
 	return func(cursor *Cursor) bool {
 		if cursor.Node() == from {
 			cursor.Replace(to)
 		}
-		switch cursor.Node().(type) {
-		case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
-			return false
-		}
-
 		return true
 	}
 }
@@ -1676,6 +1684,20 @@ func (ty ExplainType) ToString() string {
 }
 
 // ToString returns the type as a string
+func (ty VExplainType) ToString() string {
+	switch ty {
+	case PlanVExplainType:
+		return PlanStr
+	case QueriesVExplainType:
+		return QueriesStr
+	case AllVExplainType:
+		return AllVExplainStr
+	default:
+		return "Unknown VExplainType"
+	}
+}
+
+// ToString returns the type as a string
 func (ty IntervalTypes) ToString() string {
 	switch ty {
 	case IntervalYear:
@@ -1817,7 +1839,7 @@ func (ty ShowCommandType) ToString() string {
 	case StatusSession:
 		return StatusSessionStr
 	case Table:
-		return TableStr
+		return TablesStr
 	case TableStatus:
 		return TableStatusStr
 	case Trigger:
@@ -2127,21 +2149,22 @@ func defaultRequiresParens(ct *ColumnType) bool {
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
-func RemoveKeyspaceFromColName(expr Expr) Expr {
-	return RemoveKeyspace(expr).(Expr) // This hard cast is safe because we do not change the type the input
+func RemoveKeyspaceFromColName(expr Expr) {
+	RemoveKeyspace(expr)
 }
 
 // RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
-func RemoveKeyspace(in SQLNode) SQLNode {
-	return Rewrite(in, nil, func(cursor *Cursor) bool {
-		switch col := cursor.Node().(type) {
+func RemoveKeyspace(in SQLNode) {
+	// Walk will only return an error if we return an error from the inner func. safe to ignore here
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch col := node.(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}
-		return true
-	})
+		return true, nil
+	}, in)
 }
 
 func convertStringToInt(integer string) int {
