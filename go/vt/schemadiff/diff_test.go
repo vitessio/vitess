@@ -53,6 +53,16 @@ func TestDiffTables(t *testing.T) {
 			toName:   "t",
 		},
 		{
+			name:     "change of columns, boolean type",
+			from:     "create table t(id int primary key)",
+			to:       "create table t(id int primary key, i int, b boolean)",
+			diff:     "alter table t add column i int, add column b tinyint(1)",
+			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int, ADD COLUMN `b` tinyint(1)",
+			action:   "alter",
+			fromName: "t",
+			toName:   "t",
+		},
+		{
 			name:   "create",
 			to:     "create table t(id int primary key)",
 			diff:   "create table t (\n\tid int,\n\tprimary key (id)\n)",

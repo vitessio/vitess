@@ -437,6 +437,27 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
+		// Normalize boolean to tinyint(1). Otherwise we get a diff if the desired schema has a boolean column because
+		// "show create table" reports it as a tinyint(1).
+		if col.Type.Type == "boolean" {
+			col.Type.Type = "tinyint"
+			col.Type.Length = &sqlparser.Literal{
+				Type: sqlparser.IntVal,
+				Val:  "1",
+			}
+
+			if col.Type.Options.Default != nil {
+				defaultVal := "0"
+				if col.Type.Options.Default.(sqlparser.BoolVal) {
+					defaultVal = "1"
+				}
+				col.Type.Options.Default = &sqlparser.Literal{
+					Type: sqlparser.StrVal,
+					Val:  defaultVal,
+				}
+			}
+		}
+
 		if _, ok := floatTypes[col.Type.Type]; ok {
 			// First, normalize the actual type
 			switch col.Type.Type {
