@@ -219,7 +219,7 @@ func (s *Schema) normalize() error {
 	// we stop when we have been unable to find a table in an iteration.
 	fkParents := map[string]bool{}
 	iterationLevel := 0
-	for ; ; iterationLevel++ {
+	for {
 		handledAnyTablesInIteration := false
 		for _, t := range s.tables {
 			name := t.Name()
@@ -251,6 +251,7 @@ func (s *Schema) normalize() error {
 		if !handledAnyTablesInIteration {
 			break
 		}
+		iterationLevel++
 	}
 	for _, t := range s.tables {
 		if fkParents[t.Name()] {
@@ -262,7 +263,7 @@ func (s *Schema) normalize() error {
 	// - then we only want views that depend on 1st level views or on tables. These are 2nd level views.
 	// - etc.
 	// we stop when we have been unable to find a view in an iteration.
-	for ; ; iterationLevel++ {
+	for {
 		handledAnyViewsInIteration := false
 		for _, v := range s.views {
 			name := v.Name()
@@ -284,6 +285,7 @@ func (s *Schema) normalize() error {
 		if !handledAnyViewsInIteration {
 			break
 		}
+		iterationLevel++
 	}
 	if len(s.sorted) != len(s.tables)+len(s.views) {
 		// We have leftover tables or views. This can happen if the schema definition is invalid:
@@ -324,7 +326,7 @@ func (s *Schema) normalize() error {
 	// Now validate foreign key columns:
 	// - referenced table columns must exist
 	// - foreign key columns must match in count and type to referenced table columns
-	// - referenced table as an appropriate index over referenced columns
+	// - referenced table has an appropriate index over referenced columns
 	for _, t := range s.tables {
 		if len(t.TableSpec.Constraints) == 0 {
 			continue
