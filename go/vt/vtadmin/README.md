@@ -1,7 +1,6 @@
 # VTAdmin
 
-VTAdmin is an experimental replacement for the vtctld2 web UI, that also allows
-users to manage multiple Vitess clusters from a single API and web UI.
+VTAdmin is web UI and API that allows users to manage multiple Vitess clusters at once.
 
 For a more detailed writeup, refer to the [original RFC](https://github.com/vitessio/vitess/issues/7117).
 

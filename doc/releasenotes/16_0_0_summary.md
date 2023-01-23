@@ -41,6 +41,24 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 
 ### Breaking Changes
 
+#### vtctld UI Removal
+In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
+
+However, the vtctld HTTP API will remain at `{$vtctld_web_port}/api`.
+
+#### vtctld Flag Deprecation & Deletions
+With the removal of the vtctld UI, the following vtctld flags have been deprecated:
+- `--vtctld_show_topology_crud`: This was a flag that controlled the display of CRUD topology actions in the vtctld UI. The UI is removed, so this flag is no longer necessary.
+
+The following deprecated flags have also been removed:
+- `--enable_realtime_stats`
+- `--enable_vtctld_ui`
+- `--web_dir`
+- `--web_dir2`
+- `--workflow_manager_init`
+- `--workflow_manager_use_election`
+- `--workflow_manager_disable`
+
 #### Orchestrator Integration Deletion
 
 Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
