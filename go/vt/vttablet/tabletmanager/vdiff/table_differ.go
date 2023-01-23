@@ -432,7 +432,7 @@ func (td *tableDiffer) setupRowSorters() {
 	}
 }
 
-func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, onlyPks bool, maxExtraRowsToCompare int64) (*DiffReport, error) {
+func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onlyPks bool, maxExtraRowsToCompare int64) (*DiffReport, error) {
 	dbClient := td.wd.ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -493,8 +493,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare *int64, debug, on
 				return nil, err
 			}
 		}
-		*rowsToCompare--
-		if *rowsToCompare < 0 {
+		rowsToCompare--
+		if rowsToCompare < 0 {
 			log.Infof("Stopping vdiff, specified limit reached")
 			return dr, nil
 		}

@@ -104,10 +104,11 @@ order by table_name, ordinal_position`
 
 	// Views
 	CreateViewsTable = `CREATE TABLE IF NOT EXISTS _vt.views (
-  	TABLE_NAME varchar(64) NOT NULL,
-  	VIEW_DEFINITION longtext NOT NULL,
-  	CREATE_STATEMENT longtext NOT NULL,
-  	PRIMARY KEY (TABLE_NAME))`
+	TABLE_NAME varchar(64) NOT NULL,
+	VIEW_DEFINITION longtext NOT NULL,
+	CREATE_STATEMENT longtext NOT NULL,
+	UPDATED_AT TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (TABLE_NAME))`
 
 	InsertIntoViewsTable = `INSERT INTO _vt.views (
 	TABLE_NAME,
@@ -126,6 +127,8 @@ order by table_name, ordinal_position`
 	DeleteFromViewsTable = `DELETE FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
 
 	SelectFromViewsTable = `SELECT TABLE_NAME FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
+
+	SelectAllViews = `SELECT TABLE_NAME, UPDATED_AT FROM _vt.views`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to

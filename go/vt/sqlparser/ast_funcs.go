@@ -281,9 +281,9 @@ func SQLTypeToQueryType(typeName string, unsigned bool) querypb.Type {
 		return sqltypes.Timestamp
 	case YEAR:
 		return sqltypes.Year
-	case FLOAT_TYPE:
+	case FLOAT_TYPE, FLOAT4_TYPE:
 		return sqltypes.Float32
-	case DOUBLE:
+	case DOUBLE, FLOAT8_TYPE:
 		return sqltypes.Float64
 	case DECIMAL, DECIMAL_TYPE:
 		return sqltypes.Decimal
@@ -443,7 +443,7 @@ func NewWhere(typ WhereType, expr Expr) *Where {
 // and replaces it with to. If from matches root,
 // then to is returned.
 func ReplaceExpr(root, from, to Expr) Expr {
-	tmp := Rewrite(root, replaceExpr(from, to), nil)
+	tmp := SafeRewrite(root, stopWalking, replaceExpr(from, to))
 
 	expr, success := tmp.(Expr)
 	if !success {
@@ -454,16 +454,20 @@ func ReplaceExpr(root, from, to Expr) Expr {
 	return expr
 }
 
+func stopWalking(e SQLNode, _ SQLNode) bool {
+	switch e.(type) {
+	case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
+		return false
+	default:
+		return true
+	}
+}
+
 func replaceExpr(from, to Expr) func(cursor *Cursor) bool {
 	return func(cursor *Cursor) bool {
 		if cursor.Node() == from {
 			cursor.Replace(to)
 		}
-		switch cursor.Node().(type) {
-		case *ExistsExpr, *Literal, *Subquery, *ValuesFuncExpr, *Default:
-			return false
-		}
-
 		return true
 	}
 }
@@ -2145,21 +2149,22 @@ func defaultRequiresParens(ct *ColumnType) bool {
 }
 
 // RemoveKeyspaceFromColName removes the Qualifier.Qualifier on all ColNames in the expression tree
-func RemoveKeyspaceFromColName(expr Expr) Expr {
-	return RemoveKeyspace(expr).(Expr) // This hard cast is safe because we do not change the type the input
+func RemoveKeyspaceFromColName(expr Expr) {
+	RemoveKeyspace(expr)
 }
 
 // RemoveKeyspace removes the Qualifier.Qualifier on all ColNames in the AST
-func RemoveKeyspace(in SQLNode) SQLNode {
-	return Rewrite(in, nil, func(cursor *Cursor) bool {
-		switch col := cursor.Node().(type) {
+func RemoveKeyspace(in SQLNode) {
+	// Walk will only return an error if we return an error from the inner func. safe to ignore here
+	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
+		switch col := node.(type) {
 		case *ColName:
 			if !col.Qualifier.Qualifier.IsEmpty() {
 				col.Qualifier.Qualifier = NewIdentifierCS("")
 			}
 		}
-		return true
-	})
+		return true, nil
+	}, in)
 }
 
 func convertStringToInt(integer string) int {

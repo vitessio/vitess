@@ -54,10 +54,6 @@ func (dummyRes DummySQLResult) RowsAffected() (int64, error) {
 	return 1, nil
 }
 
-func IsSQLite() bool {
-	return config.Config.IsSQLite()
-}
-
 // OpenTopology returns the DB instance for the vtorc backed database
 func OpenVTOrc() (db *sql.DB, err error) {
 	var fromCache bool
@@ -73,11 +69,8 @@ func OpenVTOrc() (db *sql.DB, err error) {
 	return db, err
 }
 
-func translateStatement(statement string) (string, error) {
-	if IsSQLite() {
-		statement = sqlutils.ToSqlite3Dialect(statement)
-	}
-	return statement, nil
+func translateStatement(statement string) string {
+	return sqlutils.ToSqlite3Dialect(statement)
 }
 
 // registerVTOrcDeployment updates the vtorc_metadata table upon successful deployment
@@ -102,30 +95,8 @@ func deployStatements(db *sql.DB, queries []string) error {
 	if err != nil {
 		log.Fatal(err.Error())
 	}
-	// Ugly workaround ahead.
-	// Origin of this workaround is the existence of some "timestamp NOT NULL," column definitions,
-	// where in NO_ZERO_IN_DATE,NO_ZERO_DATE sql_mode are invalid (since default is implicitly "0")
-	// This means installation of vtorc fails on such configured servers, and in particular on 5.7
-	// where this setting is the dfault.
-	// For purpose of backwards compatability, what we do is force sql_mode to be more relaxed, create the schemas
-	// along with the "invalid" definition, and then go ahead and fix those definitions via following ALTER statements.
-	// My bad.
-	originalSQLMode := ""
-	if config.Config.IsMySQL() {
-		_ = tx.QueryRow(`select @@session.sql_mode`).Scan(&originalSQLMode)
-		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_DATE', '')`); err != nil {
-			log.Fatal(err.Error())
-		}
-		if _, err := tx.Exec(`set @@session.sql_mode=REPLACE(@@session.sql_mode, 'NO_ZERO_IN_DATE', '')`); err != nil {
-			log.Fatal(err.Error())
-		}
-	}
 	for _, query := range queries {
-		query, err := translateStatement(query)
-		if err != nil {
-			log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
-			return err
-		}
+		query = translateStatement(query)
 		if _, err := tx.Exec(query); err != nil {
 			if strings.Contains(err.Error(), "syntax error") {
 				log.Fatalf("Cannot initiate vtorc: %+v; query=%+v", err, query)
@@ -144,15 +115,19 @@ func deployStatements(db *sql.DB, queries []string) error {
 			}
 		}
 	}
-	if config.Config.IsMySQL() {
-		if _, err := tx.Exec(`set session sql_mode=?`, originalSQLMode); err != nil {
-			log.Fatal(err.Error())
-		}
-	}
 	if err := tx.Commit(); err != nil {
 		log.Fatal(err.Error())
 	}
 	return nil
+}
+
+// ClearVTOrcDatabase is used to clear the VTOrc database. This function is meant to be used by tests to clear the
+// database to get a clean slate without starting a new one.
+func ClearVTOrcDatabase() {
+	db, _, _ := sqlutils.GetSQLiteDB(config.Config.SQLite3DataFile)
+	if db != nil {
+		_ = initVTOrcDB(db)
+	}
 }
 
 // initVTOrcDB attempts to create/upgrade the vtorc backend database. It is created once in the
@@ -160,14 +135,11 @@ func deployStatements(db *sql.DB, queries []string) error {
 func initVTOrcDB(db *sql.DB) error {
 	log.Info("Initializing vtorc")
 	log.Info("Migrating database schema")
-	_ = deployStatements(db, generateSQLBase)
-	_ = deployStatements(db, generateSQLPatches)
+	_ = deployStatements(db, vtorcBackend)
 	_ = registerVTOrcDeployment(db)
 
-	if IsSQLite() {
-		_, _ = ExecVTOrc(`PRAGMA journal_mode = WAL`)
-		_, _ = ExecVTOrc(`PRAGMA synchronous = NORMAL`)
-	}
+	_, _ = ExecVTOrc(`PRAGMA journal_mode = WAL`)
+	_, _ = ExecVTOrc(`PRAGMA synchronous = NORMAL`)
 
 	return nil
 }
@@ -175,10 +147,7 @@ func initVTOrcDB(db *sql.DB) error {
 // execInternal
 func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
 	var err error
-	query, err = translateStatement(query)
-	if err != nil {
-		return nil, err
-	}
+	query = translateStatement(query)
 	res, err := sqlutils.ExecNoPrepare(db, query, args...)
 	return res, err
 }
@@ -186,10 +155,7 @@ func execInternal(db *sql.DB, query string, args ...any) (sql.Result, error) {
 // ExecVTOrc will execute given query on the vtorc backend database.
 func ExecVTOrc(query string, args ...any) (sql.Result, error) {
 	var err error
-	query, err = translateStatement(query)
-	if err != nil {
-		return nil, err
-	}
+	query = translateStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return nil, err
@@ -200,11 +166,7 @@ func ExecVTOrc(query string, args ...any) (sql.Result, error) {
 
 // QueryVTOrcRowsMap
 func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
-		return err
-	}
+	query = translateStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err
@@ -215,11 +177,7 @@ func QueryVTOrcRowsMap(query string, onRow func(sqlutils.RowMap) error) error {
 
 // QueryVTOrc
 func QueryVTOrc(query string, argsArray []any, onRow func(sqlutils.RowMap) error) error {
-	query, err := translateStatement(query)
-	if err != nil {
-		log.Fatalf("Cannot query vtorc: %+v; query=%+v", err, query)
-		return err
-	}
+	query = translateStatement(query)
 	db, err := OpenVTOrc()
 	if err != nil {
 		return err

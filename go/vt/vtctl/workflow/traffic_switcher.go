@@ -226,7 +226,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		// NB: changing the whitespace of this query breaks tests for now.
 		// (TODO:@ajm188) extend FakeDBClient to be less whitespace-sensitive on
 		// expected queries.
-		query := fmt.Sprintf("select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(primary.DbName()))
+		query := fmt.Sprintf("select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow=%s and db_name=%s", encodeString(workflow), encodeString(primary.DbName()))
 		p3qr, err := tmc.VReplicationExec(ctx, primary.Tablet, query)
 		if err != nil {
 			return nil, err

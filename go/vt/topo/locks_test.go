@@ -58,11 +58,27 @@ func TestGetLockTimeout(t *testing.T) {
 			lockTimeoutValue:            "33s",
 			remoteOperationTimeoutValue: "22s",
 			expectedLockTimeout:         33 * time.Second,
+		}, {
+			description:                 "remote operation timeout flag specified to the default",
+			lockTimeoutValue:            "",
+			remoteOperationTimeoutValue: "15s",
+			expectedLockTimeout:         15 * time.Second,
+		}, {
+			description:                 "lock-timeout flag specified to the default",
+			lockTimeoutValue:            "45s",
+			remoteOperationTimeoutValue: "33s",
+			expectedLockTimeout:         45 * time.Second,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.description, func(t *testing.T) {
+			oldLockTimeout := LockTimeout
+			oldRemoteOpsTimeout := RemoteOperationTimeout
+			defer func() {
+				LockTimeout = oldLockTimeout
+				RemoteOperationTimeout = oldRemoteOpsTimeout
+			}()
 			var args []string
 			if tt.lockTimeoutValue != "" {
 				args = append(args, "--lock-timeout", tt.lockTimeoutValue)

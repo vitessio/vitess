@@ -120,6 +120,7 @@ type VRepl struct {
 	revertibleNotes string
 	filterQuery     string
 	enumToTextMap   map[string]string
+	intToEnumMap    map[string]bool
 	bls             *binlogdatapb.BinlogSource
 
 	parser *vrepl.AlterTableParser
@@ -139,6 +140,7 @@ func NewVRepl(workflow, keyspace, shard, dbName, sourceTable, targetTable, alter
 		alterQuery:     alterQuery,
 		parser:         vrepl.NewAlterTableParser(),
 		enumToTextMap:  map[string]string{},
+		intToEnumMap:   map[string]bool{},
 		convertCharset: map[string](*binlogdatapb.CharsetConversion){},
 	}
 }
@@ -418,6 +420,9 @@ func (v *VRepl) analyzeTables(ctx context.Context, conn *dbconnpool.DBConnection
 			v.targetSharedColumns.SetEnumToTextConversion(mappedColumn.Name, sourceColumn.EnumValues)
 			v.enumToTextMap[sourceColumn.Name] = sourceColumn.EnumValues
 		}
+		if sourceColumn.IsIntegralType() && mappedColumn.Type == vrepl.EnumColumnType {
+			v.intToEnumMap[sourceColumn.Name] = true
+		}
 	}
 
 	v.droppedNoDefaultColumnNames = vrepl.GetNoDefaultColumnNames(v.droppedSourceNonGeneratedColumns)
@@ -467,6 +472,8 @@ func (v *VRepl) generateFilterQuery(ctx context.Context) error {
 		}
 		switch {
 		case sourceCol.EnumToTextConversion:
+			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
+		case v.intToEnumMap[name]:
 			sb.WriteString(fmt.Sprintf("CONCAT(%s)", escapeName(name)))
 		case sourceCol.Type == vrepl.JSONColumnType:
 			sb.WriteString(fmt.Sprintf("convert(%s using utf8mb4)", escapeName(name)))
@@ -533,6 +540,9 @@ func (v *VRepl) analyzeBinlogSource(ctx context.Context) {
 	if len(v.enumToTextMap) > 0 {
 		rule.ConvertEnumToText = v.enumToTextMap
 	}
+	if len(v.intToEnumMap) > 0 {
+		rule.ConvertIntToEnum = v.intToEnumMap
+	}
 
 	bls.Filter.Rules = append(bls.Filter.Rules, rule)
 	v.bls = bls
@@ -556,7 +566,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		int64(binlogdatapb.VReplicationWorkflowType_OnlineDDL), int64(binlogdatapb.VReplicationWorkflowSubType_None))
+		int64(binlogdatapb.VReplicationWorkflowType_OnlineDDL), int64(binlogdatapb.VReplicationWorkflowSubType_None), false)
 
 	return ig.String(), nil
 }

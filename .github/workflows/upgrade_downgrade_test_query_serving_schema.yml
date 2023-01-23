@@ -14,7 +14,7 @@ jobs:
   get_previous_release:
     if: always()
     name: Get latest release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -34,7 +34,7 @@ jobs:
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - get_previous_release
 
@@ -110,7 +110,7 @@ jobs:
         sudo rm -rf /etc/mysql
         # Install mysql80
         sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
         echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
         sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update

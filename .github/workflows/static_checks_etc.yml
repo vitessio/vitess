@@ -7,7 +7,7 @@ on:
 jobs:
   build:
     name: Static Code Checks Etc
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
       - name: Skip CI

@@ -47,3 +47,7 @@ var charsetTypes = map[string]bool{
 	"enum":       true,
 	"set":        true,
 }
+
+func IsIntegralType(columnType string) bool {
+	return integralTypes[columnType]
+}

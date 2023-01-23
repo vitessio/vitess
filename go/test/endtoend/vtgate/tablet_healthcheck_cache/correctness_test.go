@@ -201,7 +201,6 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		clusterInstance.VtTabletExtraArgs,
-		clusterInstance.EnableSemiSync,
 		clusterInstance.DefaultCharset)
 
 	// wait for mysqld to be ready

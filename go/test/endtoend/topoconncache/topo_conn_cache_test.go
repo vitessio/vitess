@@ -149,7 +149,6 @@ func addCellback(t *testing.T) {
 			hostname,
 			clusterInstance.TmpDirectory,
 			commonTabletArg,
-			true,
 			clusterInstance.DefaultCharset,
 		)
 		tablet.VttabletProcess.SupportsBackup = true

@@ -73,16 +73,8 @@ var (
 	// but none of them are complete.
 	ErrNoCompleteBackup = errors.New("backup(s) found but none are complete")
 
-	// backupStorageHook contains the hook name to use to process
-	// backup files. If not set, we will not process the files. It is
-	// only used at backup time. Then it is put in the manifest,
-	// and when decoding a backup, it is read from the manifest,
-	// and used as the transform hook name again.
-	backupStorageHook string
-
 	// backupStorageCompress can be set to false to not use gzip
-	// on the backups. Usually would be set if a hook is used, and
-	// the hook compresses the data.
+	// on the backups.
 	backupStorageCompress = true
 
 	// backupCompressBlockSize is the splitting size for each
@@ -104,9 +96,7 @@ func init() {
 }
 
 func registerBackupFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&backupStorageHook, "backup_storage_hook", backupStorageHook, "if set, we send the contents of the backup files through this hook.")
-	_ = fs.MarkDeprecated("backup_storage_hook", "consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
-	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data.")
+	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
 	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
 	fs.IntVar(&backupCompressBlocks, "backup_storage_number_blocks", backupCompressBlocks, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
 }

@@ -66,7 +66,7 @@ func TestMigrateTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -107,11 +107,11 @@ func TestMissingTables(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1,tyt,t2,txt", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
 	require.EqualError(t, err, "table(s) not found in source keyspace sourceks: tyt,txt")
-	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
+	err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
 	require.NoError(t, err)
 }
 
@@ -167,7 +167,7 @@ func TestMoveTablesAllAndExclude(t *testing.T) {
 			env.tmc.expectVRQuery(200, insertPrefix, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
-			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, "", defaultOnDDL, nil)
+			err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "", "", "", tcase.allTables, tcase.excludeTables, true, false, "", false, false, "", defaultOnDDL, nil)
 			require.NoError(t, err)
 			require.EqualValues(t, tcase.want, targetTables(env))
 		})
@@ -201,7 +201,7 @@ func TestMoveTablesStopFlags(t *testing.T) {
 		env.tmc.expectVRQuery(200, mzSelectIDQuery, &sqltypes.Result{})
 		// -auto_start=false is tested by NOT expecting the update query which sets state to RUNNING
 		err = env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-			"", false, "", false, true, "", false, "", defaultOnDDL, nil)
+			"", false, "", false, true, "", false, false, "", defaultOnDDL, nil)
 		require.NoError(t, err)
 		env.tmc.verifyQueries(t)
 	})
@@ -227,7 +227,7 @@ func TestMigrateVSchema(t *testing.T) {
 	env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 	ctx := context.Background()
-	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, "", defaultOnDDL, nil)
+	err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", `{"t1":{}}`, "", "", false, "", true, false, "", false, false, "", defaultOnDDL, nil)
 	require.NoError(t, err)
 	vschema, err := env.wr.ts.GetSrvVSchema(ctx, env.cell)
 	require.NoError(t, err)
@@ -1785,7 +1785,7 @@ func TestMaterializerOneToOne(t *testing.T) {
 				`rules:{match:\\"t2\\" filter:\\"select.*t3\\"} `+
 				`rules:{match:\\"t4\\"}`+
 				`}', `)+
-			`'', [0-9]*, [0-9]*, 'zone1', 'primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0`+
+			`'', [0-9]*, [0-9]*, 'zone1', 'primary,rdonly', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false`+
 			`\)`+eol,
 		&sqltypes.Result{},
 	)
@@ -1818,9 +1818,9 @@ func TestMaterializerManyToOne(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"-80\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"-80\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
 			`, `+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"80-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"80-\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -2031,7 +2031,7 @@ func TestMaterializerDeploySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -2069,7 +2069,7 @@ func TestMaterializerCopySchema(t *testing.T) {
 	env.tmc.expectVRQuery(
 		200,
 		insertPrefix+
-			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0\)`+
+			`\('workflow', 'keyspace:\\"sourceks\\" shard:\\"0\\" filter:{rules:{match:\\"t1\\" filter:\\"select.*t1\\"} rules:{match:\\"t2\\" filter:\\"select.*t3\\"}}', '', [0-9]*, [0-9]*, '', '', [0-9]*, 0, 'Stopped', 'vt_targetks', 0, 0, false\)`+
 			eol,
 		&sqltypes.Result{},
 	)
@@ -2828,7 +2828,7 @@ func TestMoveTablesDDLFlag(t *testing.T) {
 			env.tmc.expectVRQuery(200, mzUpdateQuery, &sqltypes.Result{})
 
 			err := env.wr.MoveTables(ctx, "workflow", "sourceks", "targetks", "t1", "",
-				"", false, "", false, true, "", false, "", onDDLAction, nil)
+				"", false, "", false, true, "", false, false, "", onDDLAction, nil)
 			require.NoError(t, err)
 		})
 	}

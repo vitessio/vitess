@@ -106,8 +106,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
 			"--disable_active_reparents",
 		}
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{

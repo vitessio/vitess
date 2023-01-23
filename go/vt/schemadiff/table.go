@@ -562,6 +562,8 @@ func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
 }
 
 func (c *CreateTableEntity) normalizeKeys() {
+	c.normalizePrimaryKeyColumns()
+
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names

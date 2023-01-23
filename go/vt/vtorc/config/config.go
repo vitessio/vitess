@@ -162,21 +162,11 @@ func newConfiguration() *Configuration {
 }
 
 func (config *Configuration) postReadAdjustments() error {
-	if config.IsSQLite() && config.SQLite3DataFile == "" {
+	if config.SQLite3DataFile == "" {
 		return fmt.Errorf("SQLite3DataFile must be set")
 	}
 
 	return nil
-}
-
-// TODO: Simplify the callers and delete this function
-func (config *Configuration) IsSQLite() bool {
-	return true
-}
-
-// TODO: Simplify the callers and delete this function
-func (config *Configuration) IsMySQL() bool {
-	return false
 }
 
 // read reads configuration from given file, or silently skips if the file does not exist.
