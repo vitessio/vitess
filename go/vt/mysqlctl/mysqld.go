@@ -697,8 +697,15 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 	}
 
 	if initDBSQLFile == "" { // default to built-in
-		if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitDB)); err != nil {
-			return fmt.Errorf("failed to initialize mysqld: %v", err)
+		if mysqld.capabilities.isMySQLLike() {
+			if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitDB)); err != nil {
+				return fmt.Errorf("failed to initialize mysqld: %v", err)
+			}
+		} else {
+			// it is mariaDB
+			if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitMariaDB)); err != nil {
+				return fmt.Errorf("failed to initialize mariadb mysqld: %v", err)
+			}
 		}
 		return nil
 	}
