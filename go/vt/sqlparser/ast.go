@@ -3332,7 +3332,40 @@ func (s *ChangeReplicationSource) Format(buf *TrackedBuffer) {
 		}
 		buf.WriteString(strings.ToLower(option.Name))
 		buf.WriteString(" = ")
-		buf.WriteString(option.Value)
+		buf.WriteString(fmt.Sprintf("%v", option.Value))
+	}
+}
+
+// ChangeReplicationFilter represents a "CHANGE REPLICATION FILTER" statement.
+// https://dev.mysql.com/doc/refman/8.0/en/change-replication-filter.html
+type ChangeReplicationFilter struct {
+	Options []*ReplicationOption
+}
+
+var _ Statement = (*ChangeReplicationFilter)(nil)
+
+func (*ChangeReplicationFilter) iStatement() {}
+
+func (c *ChangeReplicationFilter) Format(buf *TrackedBuffer) {
+	buf.WriteString("change replication filter ")
+	for i, option := range c.Options {
+		if i > 0 {
+			buf.WriteString(", ")
+		}
+		buf.WriteString(strings.ToLower(option.Name))
+		buf.WriteString(" = (")
+		switch value := option.Value.(type) {
+		case TableNames:
+			for i, tableName := range value {
+				if i > 0 {
+					buf.WriteString(", ")
+				}
+				buf.WriteString(tableName.String())
+			}
+		default:
+			panic(fmt.Sprintf("unexpected option value type: %T", option.Value))
+		}
+		buf.WriteString(")")
 	}
 }
 
@@ -3340,7 +3373,7 @@ func (s *ChangeReplicationSource) Format(buf *TrackedBuffer) {
 // See https://dev.mysql.com/doc/refman/8.0/en/change-replication-source-to.html for available options.
 type ReplicationOption struct {
 	Name  string
-	Value string
+	Value interface{}
 }
 
 // StartReplica represents a "START REPLICA" statement.
@@ -3365,6 +3398,23 @@ func (*StopReplica) iStatement() {}
 
 func (r *StopReplica) Format(buf *TrackedBuffer) {
 	buf.WriteString("stop replica")
+}
+
+// ResetReplica represents a "RESET REPLICA" statement.
+// https://dev.mysql.com/doc/refman/8.0/en/reset-replica.html
+type ResetReplica struct {
+	All bool
+}
+
+var _ Statement = (*ResetReplica)(nil)
+
+func (*ResetReplica) iStatement() {}
+
+func (r *ResetReplica) Format(buf *TrackedBuffer) {
+	buf.WriteString("reset replica")
+	if r.All {
+		buf.WriteString(" all")
+	}
 }
 
 // OtherRead represents a DESCRIBE, or EXPLAIN statement.

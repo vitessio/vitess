@@ -53,8 +53,30 @@ var (
 			output: "change replication source to source_host = Host",
 		},
 		{
-			input:  "change replication source to SOURCE_HOST = 'host', SOURCE_PASSWORD='PaSSword', SOURCE_PORT=12345, source_user='root'",
-			output: "change replication source to source_host = host, source_password = PaSSword, source_port = 12345, source_user = root",
+			input:  "change replication source to SOURCE_HOST = 'host', SOURCE_PASSWORD='PaSSword', SOURCE_PORT=12345, source_user='root', SOURCE_CONNECT_RETRY=60, SOURCE_RETRY_COUNT=3",
+			output: "change replication source to source_host = host, source_password = PaSSword, source_port = 12345, source_user = root, source_connect_retry = 60, source_retry_count = 3",
+		},
+		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(table1)",
+			output: "change replication filter replicate_do_table = (table1)",
+		},
+		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(table1, db.table2, db.table3)",
+			output: "change replication filter replicate_do_table = (table1, db.table2, db.table3)",
+		},
+		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(db1.t1, db2.t2), REPLICATE_IGNORE_TABLE=(t1)",
+			output: "change replication filter replicate_do_table = (db1.t1, db2.t2), replicate_ignore_table = (t1)",
+		},
+		{
+			input:  "change replication filter REPLICATE_DO_TABLE=(db1.t1, db2.t2), REPLICATE_IGNORE_TABLE=(db1.t1, db2.t2)",
+			output: "change replication filter replicate_do_table = (db1.t1, db2.t2), replicate_ignore_table = (db1.t1, db2.t2)",
+		},
+		{
+			input: "reset replica",
+		},
+		{
+			input: "reset replica all",
 		},
 		{
 			input:  "create database `db1` charset 'utf8mb4' collate 'utf8_bin';",
@@ -3701,6 +3723,12 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
+		input: "CHANGE REPLICATION FILTER",
+		err:   "syntax error",
+	}, {
+		input: "change replication filter REPLICATE_DO_TABLE=()",
+		err:   "syntax error",
+	}, {
 		input: "CHANGE REPLICATION SOURCE TO",
 		err:   "syntax error",
 	}, {
@@ -5893,20 +5921,20 @@ var (
 		input:  "drop table dual",
 		output: "syntax error at position 16 near 'dual'",
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN begin1: BEGIN END begin2; END",
-		output: "End-label begin2 without match at position 59 near 'begin2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN begin1: BEGIN END begin2; END",
+		output:       "End-label begin2 without match at position 59 near 'begin2'",
 		excludeMulti: true,
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN loop1: LOOP BEGIN END; END LOOP loop2; END",
-		output: "End-label loop2 without match at position 72 near 'loop2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN loop1: LOOP BEGIN END; END LOOP loop2; END",
+		output:       "End-label loop2 without match at position 72 near 'loop2'",
 		excludeMulti: true,
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN repeat1: REPEAT BEGIN END; UNTIL a > 7 END REPEAT repeat2; END",
-		output: "End-label repeat2 without match at position 92 near 'repeat2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN repeat1: REPEAT BEGIN END; UNTIL a > 7 END REPEAT repeat2; END",
+		output:       "End-label repeat2 without match at position 92 near 'repeat2'",
 		excludeMulti: true,
 	}, {
-		input:  "CREATE PROCEDURE testproc() BEGIN while1: WHILE a > 7 DO BEGIN END; END WHILE while2; END",
-		output: "End-label while2 without match at position 85 near 'while2'",
+		input:        "CREATE PROCEDURE testproc() BEGIN while1: WHILE a > 7 DO BEGIN END; END WHILE while2; END",
+		output:       "End-label while2 without match at position 85 near 'while2'",
 		excludeMulti: true,
 	},
 	}

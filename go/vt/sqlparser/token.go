@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -294,6 +295,7 @@ var keywords = map[string]int{
 	"fetch":                         FETCH,
 	"fields":                        FIELDS,
 	"file":                          FILE,
+	"filter":                        FILTER,
 	"first":                         FIRST,
 	"first_value":                   FIRST_VALUE,
 	"fixed":                         FIXED,
@@ -506,8 +508,11 @@ var keywords = map[string]int{
 	"repeatable":                    REPEATABLE,
 	"replace":                       REPLACE,
 	"replica":                       REPLICA,
+	"replicate_do_table":            REPLICATE_DO_TABLE,
+	"replicate_ignore_table":        REPLICATE_IGNORE_TABLE,
 	"replication":                   REPLICATION,
 	"require":                       REQUIRE,
+	"reset":                         RESET,
 	"resignal":                      RESIGNAL,
 	"restrict":                      RESTRICT,
 	"return":                        RETURN,
@@ -545,9 +550,11 @@ var keywords = map[string]int{
 	"slow":                          SLOW,
 	"smallint":                      SMALLINT,
 	"source":                        SOURCE,
+	"source_connect_retry":          SOURCE_CONNECT_RETRY,
 	"source_host":                   SOURCE_HOST,
 	"source_password":               SOURCE_PASSWORD,
 	"source_port":                   SOURCE_PORT,
+	"source_retry_count":            SOURCE_RETRY_COUNT,
 	"source_user":                   SOURCE_USER,
 	"spatial":                       SPATIAL,
 	"specific":                      SPECIFIC,
@@ -1320,4 +1327,14 @@ func digitVal(ch uint16) int {
 
 func isDigit(ch uint16) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+// mustAtoi converts the string into an integer, by using strconv.atoi, and returns the result. If any errors are
+// encountered, it registers a parsing error with |yylex|.
+func mustAtoi(yylex yyLexer, s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		yylex.Error(fmt.Sprintf("unable to parse integer from string '%s'", s))
+	}
+	return i
 }

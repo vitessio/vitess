@@ -270,7 +270,9 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> OPTIMIZER_COSTS RELAY SLOW USER_RESOURCES NO_WRITE_TO_BINLOG CHANNEL
 
 // Replication Tokens
-%token <bytes> REPLICA SOURCE STOP SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT
+%token <bytes> REPLICA SOURCE STOP RESET FILTER
+%token <bytes> SOURCE_HOST SOURCE_USER SOURCE_PASSWORD SOURCE_PORT SOURCE_CONNECT_RETRY SOURCE_RETRY_COUNT
+%token <bytes> REPLICATE_DO_TABLE REPLICATE_IGNORE_TABLE
 
 // Transaction Tokens
 %token <bytes> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT WORK RELEASE CHAIN
@@ -416,7 +418,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <expr> where_expression_opt
 %type <expr> condition
 %type <boolVal> boolean_value
-%type <boolean> enforced_opt
+%type <boolean> all_opt enforced_opt
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr
@@ -512,8 +514,8 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <indexOption> index_option
 %type <indexOptions> index_option_list index_option_list_opt
 %type <flushOption> flush_option
-%type <replicationOptions> replication_option_list
-%type <replicationOption> replication_option
+%type <replicationOptions> replication_option_list replication_filter_option_list
+%type <replicationOption> replication_option replication_filter_option
 %type <str> relay_logs_attribute
 %type <constraintInfo> constraint_info check_constraint_info
 %type <partDefs> partition_definitions
@@ -3327,6 +3329,10 @@ replication_statement:
   {
     $$ = &ChangeReplicationSource{Options: $5}
   }
+| CHANGE REPLICATION FILTER replication_filter_option_list
+  {
+    $$ = &ChangeReplicationFilter{Options: $4}
+  }
 | START REPLICA
   {
     $$ = &StartReplica{}
@@ -3335,6 +3341,16 @@ replication_statement:
   {
     $$ = &StopReplica{}
   }
+| RESET REPLICA all_opt
+  {
+    $$ = &ResetReplica{All: $3}
+  }
+
+all_opt:
+  { $$ = false }
+| ALL
+  { $$ = true }
+
 
 replication_option_list:
   replication_option
@@ -3361,7 +3377,35 @@ replication_option:
   }
 | SOURCE_PORT '=' INTEGRAL
   {
-    $$ = &ReplicationOption{Name: string($1), Value: string($3)}
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
+  }
+| SOURCE_CONNECT_RETRY '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
+  }
+| SOURCE_RETRY_COUNT '=' INTEGRAL
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: mustAtoi(yylex, string($3))}
+  }
+
+replication_filter_option_list:
+  replication_filter_option
+  {
+    $$ = []*ReplicationOption{$1}
+  }
+| replication_filter_option_list ',' replication_filter_option
+ {
+   $$ = append($$, $3)
+ }
+
+replication_filter_option:
+  REPLICATE_DO_TABLE '=' '(' table_name_list ')'
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: $4}
+  }
+| REPLICATE_IGNORE_TABLE '=' '(' table_name_list ')'
+  {
+    $$ = &ReplicationOption{Name: string($1), Value: $4}
   }
 
 index_definition:
@@ -8013,6 +8057,7 @@ non_reserved_keyword:
 | EXPIRE
 | EXTENDED
 | FIELDS
+| FILTER
 | FIXED
 | FLUSH
 | FOLLOWING
@@ -8112,8 +8157,11 @@ non_reserved_keyword:
 | REPAIR
 | REPEATABLE
 | REPLICA
+| REPLICATE_DO_TABLE
+| REPLICATE_IGNORE_TABLE
 | REPLICATION
 | REQUIRE_ROW_FORMAT
+| RESET
 | RESOURCE
 | RESPECT
 | RESTART
@@ -8140,9 +8188,11 @@ non_reserved_keyword:
 | SLAVE
 | SLOW
 | SOURCE
+| SOURCE_CONNECT_RETRY
 | SOURCE_HOST
 | SOURCE_PASSWORD
 | SOURCE_PORT
+| SOURCE_RETRY_COUNT
 | SOURCE_USER
 | SRID
 | START
