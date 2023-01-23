@@ -18,11 +18,14 @@ package sharded
 
 import (
 	"context"
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
 
@@ -37,86 +40,11 @@ var (
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
 	Cell            = "test"
-	SchemaSQL       = `
-create table t2(
-	id3 bigint,
-	id4 bigint,
-	primary key(id3)
-) Engine=InnoDB;
+	//go:embed schema.sql
+	SchemaSQL string
 
-create table t2_id4_idx(
-	id bigint not null auto_increment,
-	id4 bigint,
-	id3 bigint,
-	primary key(id),
-	key idx_id4(id4)
-) Engine=InnoDB;
-
-create table t8(
-	id8 bigint,
-	testId bigint,
-	primary key(id8)
-) Engine=InnoDB;
-`
-
-	VSchema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "unicode_loose_xxhash" : {
-	  "type": "unicode_loose_xxhash"
-    },
-    "unicode_loose_md5" : {
-	  "type": "unicode_loose_md5"
-    },
-    "hash": {
-      "type": "hash"
-    },
-    "xxhash": {
-      "type": "xxhash"
-    },
-    "t2_id4_idx": {
-      "type": "lookup_hash",
-      "params": {
-        "table": "t2_id4_idx",
-        "from": "id4",
-        "to": "id3",
-        "autocommit": "true"
-      },
-      "owner": "t2"
-    }
-  },
-  "tables": {
-    "t2": {
-      "column_vindexes": [
-        {
-          "column": "id3",
-          "name": "hash"
-        },
-        {
-          "column": "id4",
-          "name": "t2_id4_idx"
-        }
-      ]
-    },
-    "t2_id4_idx": {
-      "column_vindexes": [
-        {
-          "column": "id4",
-          "name": "hash"
-        }
-      ]
-    },
-    "t8": {
-      "column_vindexes": [
-        {
-          "column": "id8",
-          "name": "hash"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed vschema.json
+	VSchema string
 )
 
 func TestMain(m *testing.M) {
@@ -290,6 +218,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	utils.AssertMatchesNoOrder(t, conn, `select id from new_table_tracked join t8`, `[[INT64(0)] [INT64(1)]]`)
 }
 
+// TestNewView validates that view tracking works as expected.
 func TestNewView(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
@@ -310,4 +239,28 @@ func TestNewView(t *testing.T) {
 	qr := utils.Exec(t, conn, selQuery)
 	// selecting it through the view.
 	utils.AssertMatches(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestViewAndTable validates that new column added in table is present in the view definition
+func TestViewAndTable(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// insert some data
+	_ = utils.Exec(t, conn, "alter table t8 add column new_col varchar(50)")
+	time.Sleep(2 * time.Second)
+
+	_ = utils.Exec(t, conn, "insert into t8(id8, new_col) values (1, 'V')")
+	defer utils.Exec(t, conn, "delete from t8")
+
+	// create a view with t8, having the new column.
+	_ = utils.Exec(t, conn, "create view t8_view as select * from t8")
+	time.Sleep(2 * time.Second)
+
+	// executing the query directly
+	qr := utils.Exec(t, conn, "select * from t8_view")
+	// validate that field name should have new_col
+	assert.Contains(t, fmt.Sprintf("%v", qr.Fields), "new_col")
 }
