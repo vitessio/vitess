@@ -238,12 +238,13 @@ func (t *Tracker) Views(ks string) map[string]sqlparser.SelectStatement {
 	return t.views.m[ks]
 }
 
-func (t *Tracker) updateSchema(th *discovery.TabletHealth) (success bool) {
+func (t *Tracker) updateSchema(th *discovery.TabletHealth) bool {
+	success := true
 	if th.Stats.TableSchemaChanged != nil {
 		success = t.updatedTableSchema(th)
 	}
 	if !success || th.Stats.ViewSchemaChanged == nil {
-		return
+		return success
 	}
 	// there is view definition change in the tablet
 	return t.updatedViewSchema(th)

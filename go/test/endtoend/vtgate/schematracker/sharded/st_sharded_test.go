@@ -19,6 +19,7 @@ package sharded
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
@@ -138,8 +139,16 @@ func TestMain(m *testing.M) {
 			SchemaSQL: SchemaSQL,
 			VSchema:   VSchema,
 		}
-		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--vschema_ddl_authorized_users", "%", "--schema_change_signal_user", "userData1"}
-		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
+		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal",
+			"--vschema_ddl_authorized_users", "%",
+			"--schema_change_signal_user", "userData1",
+			"--enable-views"}
+		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal",
+			"--queryserver-config-schema-change-signal-interval", "0.1",
+			"--queryserver-config-strict-table-acl",
+			"--queryserver-config-acl-exempt-acl", "userData1",
+			"--table-acl-config", "dummy.json",
+			"--queryserver-enable-views"}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
@@ -279,4 +288,26 @@ func TestDMLOnNewTable(t *testing.T) {
 	utils.Exec(t, conn, `insert into t8(id8) values(2)`)
 	defer utils.Exec(t, conn, `delete from t8`)
 	utils.AssertMatchesNoOrder(t, conn, `select id from new_table_tracked join t8`, `[[INT64(0)] [INT64(1)]]`)
+}
+
+func TestNewView(t *testing.T) {
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// insert some data
+	_ = utils.Exec(t, conn, "insert into t2 (id3, id4) values (1, 10), (2, 20), (3, 30)")
+	defer utils.Exec(t, conn, "delete from t2")
+
+	selQuery := "select sum(id4) from t2 where id4 > 10"
+
+	// create a view
+	_ = utils.Exec(t, conn, "create view test_view as "+selQuery)
+	time.Sleep(2 * time.Second)
+
+	// executing the query directly
+	qr := utils.Exec(t, conn, selQuery)
+	// selecting it through the view.
+	utils.AssertMatches(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows))
 }
