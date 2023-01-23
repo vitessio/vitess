@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -1326,4 +1327,14 @@ func digitVal(ch uint16) int {
 
 func isDigit(ch uint16) bool {
 	return '0' <= ch && ch <= '9'
+}
+
+// mustAtoi converts the string into an integer, by using strconv.atoi, and returns the result. If any errors are
+// encountered, it registers a parsing error with |yylex|.
+func mustAtoi(yylex yyLexer, s string) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		yylex.Error(fmt.Sprintf("unable to parse integer from string '%s'", s))
+	}
+	return i
 }
