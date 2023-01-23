@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"github.com/stretchr/testify/require"
 
@@ -71,6 +72,7 @@ func TestMain(m *testing.M) {
 			"--vschema_ddl_authorized_users", "%",
 			"--schema_change_signal_user", "userData1",
 			"--enable-views"}
+		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal",
 			"--queryserver-config-schema-change-signal-interval", "0.1",
 			"--queryserver-config-strict-table-acl",
@@ -248,10 +250,11 @@ func TestViewAndTable(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	// insert some data
+	// add a new column to the table t8
 	_ = utils.Exec(t, conn, "alter table t8 add column new_col varchar(50)")
 	time.Sleep(2 * time.Second)
 
+	// insert some data
 	_ = utils.Exec(t, conn, "insert into t8(id8, new_col) values (1, 'V')")
 	defer utils.Exec(t, conn, "delete from t8")
 
@@ -259,8 +262,22 @@ func TestViewAndTable(t *testing.T) {
 	_ = utils.Exec(t, conn, "create view t8_view as select * from t8")
 	time.Sleep(2 * time.Second)
 
-	// executing the query directly
+	// executing the view query
 	qr := utils.Exec(t, conn, "select * from t8_view")
 	// validate that field name should have new_col
 	assert.Contains(t, fmt.Sprintf("%v", qr.Fields), "new_col")
+
+	// add another column to the table t8
+	_ = utils.Exec(t, conn, "alter table t8 add column additional_col bigint")
+	time.Sleep(2 * time.Second)
+
+	// executing the query on t8 table
+	qr = utils.Exec(t, conn, "select * from t8")
+	// validate that field name should have additional_col
+	assert.Contains(t, fmt.Sprintf("%v", qr.Fields), "additional_col")
+
+	// executing the query on view
+	qr = utils.Exec(t, conn, "select * from t8_view")
+	// validate that field name should not have additional_col
+	assert.NotContains(t, fmt.Sprintf("%v", qr.Fields), "additional_col")
 }
