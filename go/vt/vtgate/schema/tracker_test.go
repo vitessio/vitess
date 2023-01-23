@@ -308,3 +308,127 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.NotNil(t, ks2.reloadKeyspace, "ks2 needs to be initialized")
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }
+
+func TestViewsTracking(t *testing.T) {
+	target := &querypb.Target{Cell: "aa", Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
+	fields := sqltypes.MakeTestFields("table_name|view_definition|create_statement", "varchar|text|text")
+
+	type delta struct {
+		result  *sqltypes.Result
+		updView []string
+	}
+	var (
+		d0 = delta{
+			result: sqltypes.MakeTestResult(fields,
+				"prior|select 1 from tbl|create view prior as select 1 from tbl"),
+			updView: []string{"prior"},
+		}
+
+		d1 = delta{
+			result: sqltypes.MakeTestResult(fields,
+				"t1|select 1 from tbl1|create view t1 as select 1 from tbl1",
+				"t2|select 1 from tbl2|create view t2 as select 1 from tbl2"),
+			updView: []string{"t1", "t2"},
+		}
+
+		d2 = delta{
+			result: sqltypes.MakeTestResult(fields,
+				"t1|select 1 from tbl1|create view t1 as select 1 from tbl1",
+				"t2|select 1,2 from tbl2|create view t2 as select 1,2 from tbl2",
+				"t3|select 1 from tbl3|create view t3 as select 1 from tbl3"),
+			updView: []string{"prior", "t1", "t2", "t3"},
+		}
+
+		d3 = delta{
+			result: sqltypes.MakeTestResult(fields,
+				"t4|select 1 from tbl4|create view t4 as select 1 from tbl4"),
+			updView: []string{"t4"},
+		}
+	)
+
+	testcases := []struct {
+		vName  string
+		deltas []delta
+		exp    map[string]string
+	}{{
+		vName:  "new views",
+		deltas: []delta{d0, d1},
+		exp: map[string]string{
+			"t1":    "select 1 from tbl1",
+			"t2":    "select 1 from tbl2",
+			"prior": "select 1 from tbl"},
+	}, {
+		vName:  "delete t1 and prior, updated t2 and new t3",
+		deltas: []delta{d0, d1, d2},
+		exp: map[string]string{
+			"t2": "select 1, 2 from tbl2",
+			"t3": "select 1 from tbl3"},
+	}, {
+		vName:  "new t4",
+		deltas: []delta{d0, d1, d2, d3},
+		exp: map[string]string{
+			"t2": "select 1, 2 from tbl2",
+			"t3": "select 1 from tbl3",
+			"t4": "select 1 from tbl4"},
+	}}
+	for i, tcase := range testcases {
+		t.Run(fmt.Sprintf("%d - %s", i, tcase.vName), func(t *testing.T) {
+			sbc := sandboxconn.NewSandboxConn(tablet)
+			ch := make(chan *discovery.TabletHealth)
+			tracker := NewTracker(ch, "", true)
+			tracker.tables = nil // making tables map nil - so load keyspace does not try to load the tables information.
+			tracker.consumeDelay = 1 * time.Millisecond
+			tracker.Start()
+			defer tracker.Stop()
+
+			results := []*sqltypes.Result{{}}
+			for _, d := range tcase.deltas {
+				for _, deltaRow := range d.result.Rows {
+					same := false
+					for _, row := range results[0].Rows {
+						// emulating here that if view definition is same, then we do not send the update.
+						// tracker will think that the view is dropped.
+						if row[0].String() == deltaRow[0].String() && row[1].String() == deltaRow[1].String() {
+							same = true
+							break
+						}
+					}
+					if !same {
+						results[0].Rows = append(results[0].Rows, deltaRow)
+					}
+				}
+			}
+
+			sbc.SetResults(results)
+			sbc.Queries = nil
+
+			wg := sync.WaitGroup{}
+			wg.Add(1)
+			tracker.RegisterSignalReceiver(func() {
+				wg.Done()
+			})
+
+			for _, d := range tcase.deltas {
+				ch <- &discovery.TabletHealth{
+					Conn:    sbc,
+					Tablet:  tablet,
+					Target:  target,
+					Serving: true,
+					Stats:   &querypb.RealtimeStats{ViewSchemaChanged: d.updView},
+				}
+			}
+
+			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
+
+			require.Equal(t, 1, len(sbc.StringQueries()))
+
+			_, keyspacePresent := tracker.tracked[target.Keyspace]
+			require.Equal(t, true, keyspacePresent)
+
+			for k, v := range tcase.exp {
+				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews("ks", k)), "mismatch for table: ", k)
+			}
+		})
+	}
+}

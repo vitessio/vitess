@@ -105,6 +105,11 @@ func (t *Tracker) LoadKeyspace(conn queryservice.QueryService, target *querypb.T
 }
 
 func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Target) error {
+	if t.tables == nil {
+		// this can only happen in testing
+		return nil
+	}
+
 	ftRes, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
 	if err != nil {
 		return err
@@ -382,7 +387,7 @@ func (tm *tableMap) delete(ks, tbl string) {
 	delete(m, tbl)
 }
 
-// This empties out any previous schema for for all tables in a keyspace.
+// This empties out any previous schema for all tables in a keyspace.
 // You should call this before initializing/loading a keyspace of the same
 // name in the cache.
 func (t *Tracker) clearKeyspaceTables(ks string) {
@@ -434,4 +439,12 @@ func (t *Tracker) clearKeyspaceViews(ks string) {
 	if t.views != nil && t.views.m != nil {
 		delete(t.views.m, ks)
 	}
+}
+
+// GetViews returns the view statement for the given keyspace and view name.
+func (t *Tracker) GetViews(ks string, tbl string) sqlparser.SelectStatement {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return t.views.get(ks, tbl)
 }
