@@ -282,7 +282,7 @@ func (e *ForeignKeyColumnCountMismatchError) Error() string {
 		e.ReferencedColumnCount, sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table), e.ColumnCount)
 }
 
-type MismatchingForeignKeyColumnTypeError struct {
+type ForeignKeyColumnTypeMismatchError struct {
 	Table            string
 	Constraint       string
 	Column           string
@@ -290,7 +290,7 @@ type MismatchingForeignKeyColumnTypeError struct {
 	ReferencedColumn string
 }
 
-func (e *MismatchingForeignKeyColumnTypeError) Error() string {
+func (e *ForeignKeyColumnTypeMismatchError) Error() string {
 	return fmt.Sprintf("mismatching column type %s.%s and %s.%s referenced by foreign key constraint %s in table %s",
 		sqlescape.EscapeID(e.ReferencedTable),
 		sqlescape.EscapeID(e.ReferencedColumn),

@@ -362,7 +362,7 @@ func (s *Schema) normalize() error {
 					return &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
 				}
 				if !colTypeEqualForForeignKey(coveredColumn.Type, referencedColumn.Type) {
-					return &MismatchingForeignKeyColumnTypeError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+					return &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
 				}
 			}
 
