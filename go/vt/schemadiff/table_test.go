@@ -1556,6 +1556,12 @@ func TestValidate(t *testing.T) {
 			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t", Constraint: "f", Column: "z"},
 		},
 		{
+			name:      "mismatching column count in foreign key",
+			from:      "create table t (id int primary key, i int, constraint f foreign key (i) references parent(id, z))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &ForeignKeyColumnCountMismatchError{Table: "t", Constraint: "f", ColumnCount: 1, ReferencedTable: "parent", ReferencedColumnCount: 2},
+		},
+		{
 			name:  "change with constraints with uppercase columns",
 			from:  "CREATE TABLE `Machine` (id int primary key, `a` int, `B` int, CONSTRAINT `chk` CHECK (`B` >= `a`))",
 			alter: "ALTER TABLE `Machine` MODIFY COLUMN `id` bigint primary key",
