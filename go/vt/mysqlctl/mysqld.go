@@ -696,6 +696,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		return err
 	}
 
+	log.Infof("initDBSQLFile: %s", initDBSQLFile)
 	if initDBSQLFile == "" { // default to built-in
 		if mysqld.capabilities.isMySQLLike() {
 			if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitDB)); err != nil {

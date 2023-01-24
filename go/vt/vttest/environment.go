@@ -92,6 +92,9 @@ type Environment interface {
 	// any temporary data in the environment. Environments that can
 	// last through several test runs do not need to implement it.
 	TearDown() error
+
+	// IsSQLFlavor retruns the flavor or SQL Server running
+	IsSQLFlavor() bool
 }
 
 // LocalTestEnv is an Environment implementation for local testing
@@ -144,15 +147,29 @@ func (env *LocalTestEnv) BinaryPath(binary string) string {
 
 // MySQLManager implements MySQLManager for LocalTestEnv
 func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
+	// maria db doesn't recognize super-read-only, therefore we have separate sql for that.
+	var initFile = path.Join(os.Getenv("VTROOT"), "config/init_db.sql")
+	if !env.IsSQLFlavor() {
+		initFile = path.Join(os.Getenv("VTROOT"), "config/init_maria_db.sql")
+	}
 	return &Mysqlctl{
 		Binary:    env.BinaryPath("mysqlctl"),
-		InitFile:  path.Join(os.Getenv("VTROOT"), "config/init_testserver_db.sql"),
+		InitFile:  initFile,
 		Directory: env.TmpPath,
 		Port:      env.PortForProtocol("mysql", ""),
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),
 		Env:       env.EnvVars(),
 		UID:       1,
 	}, nil
+}
+
+func (env *LocalTestEnv) IsSQLFlavor() bool {
+	for _, val := range env.Env {
+		if strings.Contains(val, "MYSQL_FLAVOR=MySQL") {
+			return true
+		}
+	}
+	return false
 }
 
 // TopoManager implements TopoManager for LocalTestEnv

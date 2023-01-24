@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/tlstest"
 )
 
@@ -236,17 +237,39 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
+	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
+	if isSQL, err := isSQLFlavor(); err == nil {
+		if !isSQL {
+			initFile = path.Join(os.Getenv("VTROOT"), "config/init_maria_db.sql")
+		}
+	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
 		LogDirectory: tmpDirectory,
-		InitDBFile:   path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"),
+		InitDBFile:   initFile,
 	}
 	mysqlctl.MySQLPort = mySQLPort
 	mysqlctl.TabletUID = tabletUID
 	mysqlctl.InitMysql = initMySQL
 	mysqlctl.SecureTransport = false
 	return mysqlctl
+}
+
+func isSQLFlavor() (bool, error) {
+	versionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return false, err
+	}
+	flavor, _, err := mysqlctl.ParseVersionString(versionStr)
+	if err != nil {
+		return false, err
+	}
+	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
