@@ -65,9 +65,9 @@ func TestTabletInitialBackup(t *testing.T) {
 	ver, err := getVTExecVersion("vttablet")
 	require.NoError(t, err)
 	if ver > 15 {
-		_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+		err := primary.VttabletProcess.CreateDB("testDB")
 		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-		_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+		err = replica1.VttabletProcess.CreateDB("testDB")
 		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 	}
 

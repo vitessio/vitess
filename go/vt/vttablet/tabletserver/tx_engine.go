@@ -19,6 +19,7 @@ package tabletserver
 import (
 	"context"
 	"fmt"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -155,6 +156,7 @@ func (te *TxEngine) transition(state txEngineState) {
 	}
 
 	log.Infof("TxEngine transition: %v", state)
+	log.Infof("call stack: %s", debug.Stack())
 	switch te.state {
 	case AcceptingReadOnly, AcceptingReadAndWrite:
 		te.shutdownLocked()
