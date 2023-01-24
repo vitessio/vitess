@@ -1611,6 +1611,18 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key f (i), constraint f foreign key (i) references parent(id))",
 		},
 		{
+			name:  "add foreign key and index, no implicit index",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add key i_idx (i), add constraint f foreign key (i) references parent(id)",
+			to:    "create table t (id int primary key, i int, key i_idx (i), constraint f foreign key (i) references parent(id))",
+		},
+		{
+			name:  "add foreign key and extended index, no implicit index",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t add key i_id_idx (i, id), add constraint f foreign key (i) references parent(id)",
+			to:    "create table t (id int primary key, i int, key i_id_idx (i, id), constraint f foreign key (i) references parent(id))",
+		},
+		{
 			name:      "add foreign key, implicitly add index, fail duplicate key name",
 			from:      "create table t (id int primary key, i int, key f(id, i))",
 			alter:     "alter table t add constraint f foreign key (i) references parent(id)",
@@ -1898,6 +1910,11 @@ func TestNormalize(t *testing.T) {
 			name: "creates an index for unnamed foreign key constraints",
 			from: "create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
 			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
+		},
+		{
+			name: "does not add index since one already defined for foreign key constraint",
+			from: "create table t1 (id int primary key, i int, key i_idx (i), foreign key (i) references parent(id))",
+			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i_idx` (`i`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
 			name: "uses KEY for indexes",
