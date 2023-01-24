@@ -2183,9 +2183,6 @@ func (c *CreateTableEntity) validate() error {
 				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
 			}
 		}
-		if !c.columnsCoveredByInOrderIndex(fk.Source) {
-			return &MissingForeignKeyIndexError{Table: c.Name(), Constraint: cs.Name.String()}
-		}
 	}
 	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {

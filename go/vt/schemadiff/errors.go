@@ -301,18 +301,6 @@ func (e *ForeignKeyColumnTypeMismatchError) Error() string {
 	)
 }
 
-type MissingForeignKeyIndexError struct {
-	Table      string
-	Constraint string
-}
-
-func (e *MissingForeignKeyIndexError) Error() string {
-	return fmt.Sprintf("missing index for foreign key constraint %s in table %s",
-		sqlescape.EscapeID(e.Constraint),
-		sqlescape.EscapeID(e.Table),
-	)
-}
-
 type MissingForeignKeyReferencedIndexError struct {
 	Table           string
 	Constraint      string
