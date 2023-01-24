@@ -122,7 +122,7 @@ func (c *cowGen) basicMethod(t types.Type, basic *types.Basic, spi generatorSPI)
 	stmts = append(stmts,
 		jen.If(jen.Id("c").Dot("cursor").Dot("stop")).Block(jen.Return(jen.Id("n"), jen.False())),
 		ifNotNil("c.pre", jen.Id("c.pre").Params(jen.Id("n"), jen.Id("parent"))),
-		ifNotNil("c.post", jen.List(jen.Id("out"), jen.Id("changed")).Op("=").Id("c.postVisit").Params(jen.Id("n"), jen.Id("parent"))).
+		ifNotNil("c.post", jen.List(jen.Id("out"), jen.Id("changed")).Op("=").Id("c.postVisit").Params(jen.Id("n"), jen.Id("parent"), jen.Id("changed"))).
 			Else().Block(jen.Id("out = n")),
 		jen.Return(),
 	)
@@ -285,7 +285,7 @@ func (c *cowGen) visitStruct(t types.Type, strct *types.Struct, spi generatorSPI
 
 	var fields []jen.Code
 	out := "out"
-	changed := "changed"
+	changed := "res"
 	var fieldSetters []jen.Code
 	kopy := jen.Id(changed).Op(":=")
 	if ref {
@@ -350,7 +350,11 @@ func (c *cowGen) visitStruct(t types.Type, strct *types.Struct, spi generatorSPI
 
 	}
 
-	fieldSetters = append(fieldSetters, jen.Id(out).Op("=").Op("&").Id(changed))
+	fieldSetters = append(fieldSetters,
+		jen.Id(out).Op("=").Op("&").Id(changed),
+		ifNotNil("c.cloned", jen.Id("c.cloned").Params(jen.Id("n, out"))),
+		jen.Id("changed").Op("=").True(),
+	)
 	ifChanged := jen.If(cond).Block(fieldSetters...)
 
 	var stmts []jen.Code
@@ -361,7 +365,7 @@ func (c *cowGen) visitStruct(t types.Type, strct *types.Struct, spi generatorSPI
 	// handle all fields with CloneAble types
 	var visitChildren []jen.Code
 	visitChildren = append(visitChildren, fields...)
-	if len(fieldSetters) > 2 /*we add two statements always*/ {
+	if len(fieldSetters) > 4 /*we add three statements always*/ {
 		visitChildren = append(visitChildren, ifChanged)
 	}
 
@@ -381,5 +385,5 @@ func (c *cowGen) visitStruct(t types.Type, strct *types.Struct, spi generatorSPI
 }
 
 func ifPostNotNilVisit(out string) *jen.Statement {
-	return ifNotNil("c.post", jen.List(jen.Id(out), jen.Id("changed")).Op("=").Id("c").Dot("postVisit").Params(jen.Id(out), jen.Id("parent")))
+	return ifNotNil("c.post", jen.List(jen.Id(out), jen.Id("changed")).Op("=").Id("c").Dot("postVisit").Params(jen.Id(out), jen.Id("parent"), jen.Id("changed")))
 }

@@ -122,7 +122,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 				return
 			}
 			cursor.Replace(ae.Expr)
-		}).(sqlparser.Expr)
+		}, nil).(sqlparser.Expr)
 		if err != nil {
 			return nil, err
 		}

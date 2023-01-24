@@ -51,25 +51,35 @@ type (
 // When a node is replaced, all the ancestors of the node are cloned,
 // so that the original syntax tree remains untouched
 //
+// The `cloned` function will be called for all nodes that are cloned
+// or replaced, to give the user a chance to copy any metadata that
+// needs copying.
+//
 // Only fields that refer to AST nodes are considered children;
 // i.e., fields of basic types (strings, []byte, etc.) are ignored.
-func CopyOnRewrite(node SQLNode, pre func(node, parent SQLNode) bool, post func(cursor *CopyOnWriteCursor)) SQLNode {
-	parent := &RootNode{node}
-
-	cow := cow{pre: pre, post: post, cursor: CopyOnWriteCursor{}}
-	out, _ := cow.copyOnRewriteSQLNode(node, parent)
+func CopyOnRewrite(
+	node SQLNode,
+	pre func(node, parent SQLNode) bool,
+	post func(cursor *CopyOnWriteCursor),
+	cloned func(before, after SQLNode),
+) SQLNode {
+	cow := cow{pre: pre, post: post, cursor: CopyOnWriteCursor{}, cloned: cloned}
+	out, _ := cow.copyOnRewriteSQLNode(node, nil)
 	return out
 }
 
-func (c *cow) postVisit(node, parent SQLNode) (SQLNode, bool) {
+func (c *cow) postVisit(node, parent SQLNode, changed bool) (SQLNode, bool) {
 	c.cursor.node = node
 	c.cursor.parent = parent
 	c.cursor.replaced = nil
 	c.post(&c.cursor)
 	if c.cursor.replaced != nil {
+		if c.cloned != nil {
+			c.cloned(node, c.cursor.replaced)
+		}
 		return c.cursor.replaced, true
 	}
-	return node, false
+	return node, changed
 }
 
 // StopTreeWalk aborts the current tree walking. No more nodes will be visited, and the rewriter will exit out early
