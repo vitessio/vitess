@@ -33,6 +33,7 @@ __debug_bin
 
 # C build dirs
 **/build
+!go/vt/vtadmin/web/build
 
 # generated protobuf files
 /go/vt/.proto.tmp

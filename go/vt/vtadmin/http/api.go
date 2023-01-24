@@ -41,7 +41,13 @@ type Options struct {
 	DisableCompression bool
 	// DisableDebug specifies whether to omit the /debug/pprof/* and /debug/env
 	// routes.
-	DisableDebug        bool
+	DisableDebug bool
+
+	// DisableWeb specifies whether to disable the web interface.
+	// This should be true when running VTAdmin as a standalone HTTP/gRPC API,
+	// as when running vtadmin-web and vtadmin-api as separate components.
+	DisableWeb bool
+
 	ExperimentalOptions struct {
 		TabletURLTmpl string
 	}

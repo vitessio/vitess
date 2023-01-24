@@ -453,6 +453,10 @@ client_go_gen: install_k8s-code-generator
 vtadmin_web_install:
 	cd web/vtadmin && npm install
 
+# Builds the vtadmin-web front-end files that are embedded in the vtadmin binary. 
+vtadmin_web_embed: vtadmin_web_install
+	./tools/vtadmin_web_embed.sh
+
 # Generate JavaScript/TypeScript bindings for vtadmin-web from the Vitess .proto files.
 # Eventually, we'll want to call this target as part of the standard `make proto` target.
 # While vtadmin-web is new and unstable, however, we can keep it out of the critical build path.
