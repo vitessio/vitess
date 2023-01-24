@@ -40,6 +40,13 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	// How many times to retry tablet selection before we
+	// give up and return an error message that the user
+	// can see and act upon if needed.
+	tabletPickerRetries = 5
+)
+
 // controller is created by Engine. Members are initialized upfront.
 // There is no mutex within a controller becaust its members are
 // either read-only or self-synchronized.
@@ -206,7 +213,9 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
-		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
+		tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
+		defer tpCancel()
+		tablet, err = ct.tabletPicker.PickForStreaming(tpCtx)
 		if err != nil {
 			select {
 			case <-ctx.Done():
