@@ -46,18 +46,8 @@ jobs:
           # node-version should match package.json
           node-version: '16.13.0'
 
-<<<<<<< HEAD
-      - name: Install dependencies
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        run: cd ./web/vtadmin && npm ci
-
-      - name: Build front-end
-        if: steps.skip-workflow.outputs.skip-workflow == 'false'
-        run: cd ./web/vtadmin && npm run build
-=======
       - name: Build front-end and validate embedded files
         run: tools/check_vtadmin_web_embed.sh
->>>>>>> d9d6d72a71754bdcf0e47f514a4b10d831c69a9c
 
     # Cancel pending and in-progress runs of this workflow if a newer ref is pushed to CI.
     concurrency: 
