@@ -957,7 +957,6 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatemen
 	}
 
 	// We do this to make sure there is no shared state between uses of this AST
-	// todo copy-on-rewrite!
 	statement = sqlparser.CloneSelectStatement(statement)
 	sqlparser.SafeRewrite(statement, nil, func(cursor *sqlparser.Cursor) bool {
 		col, ok := cursor.Node().(*sqlparser.ColName)
