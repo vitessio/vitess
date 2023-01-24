@@ -3247,7 +3247,7 @@ func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JSONObjectParam) formatFast(buf *TrackedBuffer) {
+func (node *JSONObjectParam) formatFast(buf *TrackedBuffer) {
 	node.Key.formatFast(buf)
 	buf.WriteString(", ")
 	node.Value.formatFast(buf)

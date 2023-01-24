@@ -2477,7 +2477,7 @@ func (node *JSONObjectExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node JSONObjectParam) Format(buf *TrackedBuffer) {
+func (node *JSONObjectParam) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v, %v", node.Key, node.Value)
 }
 
