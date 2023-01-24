@@ -47,7 +47,8 @@ func TestEnsureDB(t *testing.T) {
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
 	require.NoError(t, err, "No error expected.")
 
-	// It is still NOT_SERVING because the db is read-only.
+	// Once promoted to primary during vschema/engine.go we change tablet to ReadWrite, hence promoting
+	// tablet to SERVING status.
 	assert.Equal(t, "SERVING", tablet.VttabletProcess.GetTabletStatus())
 	status := tablet.VttabletProcess.GetStatusDetails()
 	assert.Contains(t, status, "healthy")

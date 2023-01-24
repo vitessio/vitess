@@ -126,10 +126,6 @@ func CreateTablet(
 		if err := tm.ChangeType(ctx, topodatapb.TabletType_PRIMARY /* semi-sync */, false); err != nil {
 			return fmt.Errorf("TabletExternallyReparented failed on primary %v: %v", topoproto.TabletAliasString(alias), err)
 		}
-		/*log.Infof("setting super read only to false for test purpose %v", topoproto.TabletAliasString(alias))
-		if err := tm.MysqlDaemon.SetReadOnly(false); err != nil {
-			return fmt.Errorf("failed on set super read only on %v: %v", topoproto.TabletAliasString(alias), err)
-		}*/
 	}
 	controller.AddStatusHeader()
 	controller.AddStatusPart()
