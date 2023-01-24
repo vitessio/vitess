@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -223,8 +223,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJSONKeysExpr(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
-	case JSONObjectParam:
-		return CloneJSONObjectParam(in)
+	case *JSONObjectParam:
+		return CloneRefOfJSONObjectParam(in)
 	case *JSONOverlapsExpr:
 		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
@@ -1577,9 +1577,15 @@ func CloneRefOfJSONObjectExpr(n *JSONObjectExpr) *JSONObjectExpr {
 	return &out
 }
 
-// CloneJSONObjectParam creates a deep clone of the input.
-func CloneJSONObjectParam(n JSONObjectParam) JSONObjectParam {
-	return *CloneRefOfJSONObjectParam(&n)
+// CloneRefOfJSONObjectParam creates a deep clone of the input.
+func CloneRefOfJSONObjectParam(n *JSONObjectParam) *JSONObjectParam {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Key = CloneExpr(n.Key)
+	out.Value = CloneExpr(n.Value)
+	return &out
 }
 
 // CloneRefOfJSONOverlapsExpr creates a deep clone of the input.
@@ -4047,17 +4053,6 @@ func CloneSliceOfRefOfJSONObjectParam(n []*JSONObjectParam) []*JSONObjectParam {
 		res[i] = CloneRefOfJSONObjectParam(x)
 	}
 	return res
-}
-
-// CloneRefOfJSONObjectParam creates a deep clone of the input.
-func CloneRefOfJSONObjectParam(n *JSONObjectParam) *JSONObjectParam {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Key = CloneExpr(n.Key)
-	out.Value = CloneExpr(n.Value)
-	return &out
 }
 
 // CloneSliceOfRefOfJtColumnDefinition creates a deep clone of the input.
