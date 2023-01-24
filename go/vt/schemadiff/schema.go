@@ -763,12 +763,18 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 func (s *Schema) ValidateViewReferences() error {
 	var allerrors error
 	availableColumns := map[string]map[string]struct{}{}
-	for _, table := range s.Tables() {
-		availableColumns[table.Name()] = map[string]struct{}{}
-		for _, col := range table.TableSpec.Columns {
-			availableColumns[table.Name()][col.Name.Lowered()] = struct{}{}
+
+	for _, e := range s.Entities() {
+		entityColumns, err := s.getEntityColumnNames(e.Name())
+		if err != nil {
+			return err
+		}
+		availableColumns[e.Name()] = map[string]struct{}{}
+		for _, col := range entityColumns {
+			availableColumns[e.Name()][col.Lowered()] = struct{}{}
 		}
 	}
+
 	// Add dual table with no explicit columns for dual style expressions in views.
 	availableColumns["dual"] = map[string]struct{}{}
 
@@ -927,4 +933,52 @@ func verifyQualifiedColumn(view *CreateViewEntity, availableColumns map[string]m
 		Table:  tableName,
 		Column: node.Name.String(),
 	}
+}
+
+// getTableColumnNames returns the names of columns in given table.
+func (s *Schema) getEntityColumnNames(entityName string) (columnNames []*sqlparser.IdentifierCI, err error) {
+	entity := s.Entity(entityName)
+	if entity == nil {
+		if strings.ToLower(entityName) == "dual" {
+			// this is fine. DUAL does not exist but is allowed
+			return nil, nil
+		}
+		return nil, &EntityNotFoundError{Name: entityName}
+	}
+	// The entity is either a table or a view
+	switch entity := entity.(type) {
+	case *CreateTableEntity:
+		return s.getTableColumnNames(entity), nil
+	case *CreateViewEntity:
+		return s.getViewColumnNames(entity)
+	}
+	return nil, &EntityNotFoundError{Name: entityName}
+}
+
+// getTableColumnNames returns the names of columns in given table.
+func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlparser.IdentifierCI) {
+	for _, c := range t.TableSpec.Columns {
+		columnNames = append(columnNames, &c.Name)
+	}
+	return columnNames
+}
+
+// getViewColumnNames returns the names of aliased columns returned by a given view.
+func (s *Schema) getViewColumnNames(v *CreateViewEntity) (columnNames []*sqlparser.IdentifierCI, err error) {
+	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.AliasedExpr:
+			if node.As.String() != "" {
+				columnNames = append(columnNames, &node.As)
+			} else {
+				name := sqlparser.NewIdentifierCI(sqlparser.String(node.Expr))
+				columnNames = append(columnNames, &name)
+			}
+		}
+		return true, nil
+	}, v.Select.GetColumns())
+	if err != nil {
+		return nil, err
+	}
+	return columnNames, nil
 }

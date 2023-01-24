@@ -328,3 +328,11 @@ func (e *InvalidColumnReferencedInViewError) Error() string {
 		return fmt.Sprintf("view %s references unqualified but non existing column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
 	}
 }
+
+type EntityNotFoundError struct {
+	Name string
+}
+
+func (e *EntityNotFoundError) Error() string {
+	return fmt.Sprintf("entity %s not found", sqlescape.EscapeID(e.Name))
+}
