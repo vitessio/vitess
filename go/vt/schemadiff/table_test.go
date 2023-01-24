@@ -2016,6 +2016,10 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 			indexes: []string{"abx", "abcdx"},
 		},
 		{
+			columns: []string{"A", "B"},
+			indexes: []string{"abx", "abcdx"},
+		},
+		{
 			columns: []string{"a", "b", "c"},
 			indexes: []string{"abcdx"},
 		},
@@ -2047,14 +2051,14 @@ func TestIndexesCoveringForeignKeyColumns(t *testing.T) {
 	require.NoError(t, err)
 	tableColumns := map[string]sqlparser.IdentifierCI{}
 	for _, col := range c.CreateTable.TableSpec.Columns {
-		tableColumns[col.Name.String()] = col.Name
+		tableColumns[col.Name.Lowered()] = col.Name
 	}
 	for _, ts := range tt {
 		name := strings.Join(ts.columns, ",")
 		t.Run(name, func(t *testing.T) {
 			columns := sqlparser.Columns{}
 			for _, colName := range ts.columns {
-				col, ok := tableColumns[colName]
+				col, ok := tableColumns[strings.ToLower(colName)]
 				require.True(t, ok)
 				columns = append(columns, col)
 			}

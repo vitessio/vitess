@@ -2121,7 +2121,7 @@ func indexCoversColumnsInOrder(index *sqlparser.IndexDefinition, columns sqlpars
 	for i, col := range columns {
 		// the index must cover same columns, in order, wih possibly more columns covered than requested.
 		indexCol := index.Columns[i]
-		if col.String() != indexCol.Column.String() {
+		if !strings.EqualFold(col.String(), indexCol.Column.String()) {
 			return false
 		}
 	}
