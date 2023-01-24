@@ -829,7 +829,9 @@ func TestSchemaChange(t *testing.T) {
 			vuuids = strings.Split(uuidList, "\n")
 			assert.Equal(t, 4, len(vuuids))
 			for _, uuid := range vuuids {
-				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			}
 		})
 		require.Equal(t, 4, len(vuuids))
@@ -854,7 +856,9 @@ func TestSchemaChange(t *testing.T) {
 			vuuids = strings.Split(uuidList, "\n")
 			assert.Equal(t, 2, len(vuuids))
 			for _, uuid := range vuuids {
-				onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			}
 		})
 		require.Equal(t, 2, len(vuuids))
