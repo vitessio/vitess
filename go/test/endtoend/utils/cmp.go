@@ -132,8 +132,9 @@ func (mcmp *MySQLCompare) AssertContainsError(query, expected string) {
 func (mcmp *MySQLCompare) AssertMatchesNoOrder(query, expected string) {
 	mcmp.t.Helper()
 	qr := mcmp.Exec(query)
-	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(mcmp.t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+	if err := utils.RowsEqualsStr(expected, qr.Rows); err != nil {
+		mcmp.t.Errorf("for query [%s] %v", query, err)
+	}
 }
 
 // AssertMatchesNoOrderInclColumnNames executes the given query against both Vitess and MySQL.
@@ -142,8 +143,9 @@ func (mcmp *MySQLCompare) AssertMatchesNoOrder(query, expected string) {
 func (mcmp *MySQLCompare) AssertMatchesNoOrderInclColumnNames(query, expected string) {
 	mcmp.t.Helper()
 	qr := mcmp.ExecWithColumnCompare(query)
-	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(mcmp.t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+	if err := utils.RowsEqualsStr(expected, qr.Rows); err != nil {
+		mcmp.t.Errorf("for query [%s] %v", query, err)
+	}
 }
 
 // AssertIsEmpty executes the given query against both Vitess and MySQL and ensures
