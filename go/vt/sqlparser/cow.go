@@ -16,21 +16,6 @@ limitations under the License.
 
 package sqlparser
 
-type (
-	CopyOnWriteCursor struct {
-		node     SQLNode
-		parent   SQLNode
-		replaced SQLNode
-		stop     bool
-	}
-	cow struct {
-		pre    func(node, parent SQLNode) bool
-		post   func(cursor *CopyOnWriteCursor)
-		cloned func(old, new SQLNode)
-		cursor CopyOnWriteCursor
-	}
-)
-
 // CopyOnRewrite traverses a syntax tree recursively, starting with root,
 // and calling pre and post for each node as described below.
 // Rewrite returns a syntax tree, where some nodes can be shared with the
@@ -68,20 +53,6 @@ func CopyOnRewrite(
 	return out
 }
 
-func (c *cow) postVisit(node, parent SQLNode, changed bool) (SQLNode, bool) {
-	c.cursor.node = node
-	c.cursor.parent = parent
-	c.cursor.replaced = nil
-	c.post(&c.cursor)
-	if c.cursor.replaced != nil {
-		if c.cloned != nil {
-			c.cloned(node, c.cursor.replaced)
-		}
-		return c.cursor.replaced, true
-	}
-	return node, changed
-}
-
 // StopTreeWalk aborts the current tree walking. No more nodes will be visited, and the rewriter will exit out early
 func (c *CopyOnWriteCursor) StopTreeWalk() {
 	c.stop = true
@@ -103,3 +74,32 @@ func (c *CopyOnWriteCursor) Parent() SQLNode {
 func (c *CopyOnWriteCursor) Replace(n SQLNode) {
 	c.replaced = n
 }
+
+func (c *cow) postVisit(node, parent SQLNode, changed bool) (SQLNode, bool) {
+	c.cursor.node = node
+	c.cursor.parent = parent
+	c.cursor.replaced = nil
+	c.post(&c.cursor)
+	if c.cursor.replaced != nil {
+		if c.cloned != nil {
+			c.cloned(node, c.cursor.replaced)
+		}
+		return c.cursor.replaced, true
+	}
+	return node, changed
+}
+
+type (
+	CopyOnWriteCursor struct {
+		node     SQLNode
+		parent   SQLNode
+		replaced SQLNode
+		stop     bool
+	}
+	cow struct {
+		pre    func(node, parent SQLNode) bool
+		post   func(cursor *CopyOnWriteCursor)
+		cloned func(old, new SQLNode)
+		cursor CopyOnWriteCursor
+	}
+)
