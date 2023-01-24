@@ -1917,7 +1917,7 @@ func (cmp *Comparator) RefOfColumnDefinition(a, b *ColumnDefinition) bool {
 		return false
 	}
 	return cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.ColumnType(a.Type, b.Type)
+		cmp.RefOfColumnType(a.Type, b.Type)
 }
 
 // RefOfColumnType does deep equals between the two objects.
@@ -6475,18 +6475,6 @@ func (cmp *Comparator) SliceOfRefOfWhen(a, b []*When) bool {
 	return true
 }
 
-// ColumnType does deep equals between the two objects.
-func (cmp *Comparator) ColumnType(a, b ColumnType) bool {
-	return a.Type == b.Type &&
-		a.Unsigned == b.Unsigned &&
-		a.Zerofill == b.Zerofill &&
-		cmp.RefOfColumnTypeOptions(a.Options, b.Options) &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
-		cmp.RefOfLiteral(a.Scale, b.Scale) &&
-		cmp.ColumnCharset(a.Charset, b.Charset) &&
-		cmp.SliceOfString(a.EnumValues, b.EnumValues)
-}
-
 // RefOfColumnTypeOptions does deep equals between the two objects.
 func (cmp *Comparator) RefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 	if a == b {
@@ -6653,7 +6641,7 @@ func (cmp *Comparator) RefOfJtPathColDef(a, b *JtPathColDef) bool {
 	}
 	return a.JtColExists == b.JtColExists &&
 		cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.ColumnType(a.Type, b.Type) &&
+		cmp.RefOfColumnType(a.Type, b.Type) &&
 		cmp.Expr(a.Path, b.Path) &&
 		cmp.RefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
 		cmp.RefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse)

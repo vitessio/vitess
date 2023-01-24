@@ -879,7 +879,7 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 func (col *ColumnDefinition) formatFast(buf *TrackedBuffer) {
 	col.Name.formatFast(buf)
 	buf.WriteByte(' ')
-	(&col.Type).formatFast(buf)
+	col.Type.formatFast(buf)
 }
 
 // formatFast returns a canonical string representation of the type and all relevant options

@@ -1762,8 +1762,7 @@ type TableSpec struct {
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
 	Name IdentifierCI
-	// TODO: Should this not be a reference?
-	Type ColumnType
+	Type *ColumnType
 }
 
 // ColumnType represents a sql type in a CREATE TABLE statement
@@ -2558,7 +2557,7 @@ type (
 	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
 	JtPathColDef struct {
 		Name            IdentifierCI
-		Type            ColumnType
+		Type            *ColumnType
 		JtColExists     bool
 		Path            Expr
 		EmptyOnResponse *JtOnResponse

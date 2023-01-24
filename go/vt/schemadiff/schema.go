@@ -315,7 +315,7 @@ func (s *Schema) normalize() error {
 			return err
 		}
 	}
-	colTypeEqualForForeignKey := func(a, b sqlparser.ColumnType) bool {
+	colTypeEqualForForeignKey := func(a, b *sqlparser.ColumnType) bool {
 		return a.Type == b.Type &&
 			a.Unsigned == b.Unsigned &&
 			a.Zerofill == b.Zerofill &&
