@@ -62,17 +62,16 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	_, err := getVTExecVersion("vttablet")
+	ver, err := getVTExecVersion("vttablet")
 	require.NoError(t, err)
-	//if ver > 15 {
-	//_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	//require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-	//_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
-	//require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
-	//}
+	if ver > 15 {
+		_, err := primary.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+		_, err = replica1.VttabletProcess.QueryTablet(vtInsertTest, keyspaceName, true)
+		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
+	}
 
 	// Restore the Tablets
-
 	restore(t, primary, "replica", "NOT_SERVING")
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented
