@@ -149,7 +149,7 @@ func (se *Engine) syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnect
 		}
 		return conn.ExecuteFetch(query, maxRows, wantFields)
 	}
-	var rsroHook sidecardb.ReSetSuperReadOnlyHook = func(ctx context.Context) (err error) {
+	var _ sidecardb.ReSetSuperReadOnlyHook = func(ctx context.Context) (err error) {
 		log.Infof("resetting hook for super read only...")
 		if _, err := dbaConn.ExecuteFetch("SET GLOBAL super_read_only='ON'", 1, false); err != nil {
 			log.Infof("Not able to set super_read_only user... This can cause errant GTIDs in future.")
@@ -157,7 +157,7 @@ func (se *Engine) syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnect
 		}
 		return nil
 	}
-	var sroHook sidecardb.SetSuperReadOnlyHook = func(ctx context.Context) (needsReset bool, err error) {
+	var _ sidecardb.SetSuperReadOnlyHook = func(ctx context.Context) (needsReset bool, err error) {
 		if !dbaConn.IsMariaDB() {
 			if err := dbaConn.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
 				log.Infof("Not able to select super_read_only.")
@@ -178,7 +178,7 @@ func (se *Engine) syncVTDatabase(ctx context.Context, conn *dbconnpool.DBConnect
 		return false, nil
 	}
 	log.Infof("before sidecardb.Init")
-	if err := sidecardb.Init(ctx, exec, sroHook, rsroHook); err != nil {
+	if err := sidecardb.Init(ctx, exec, nil, nil); err != nil {
 		log.Errorf("Error in sidecardb.Init: %+v", err)
 		// temporary logging, to be deleted in v17
 		if strings.Contains(err.Error(), "--read-only") {
