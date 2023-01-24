@@ -145,11 +145,17 @@ func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
 // MysqlCtldProcessInstance returns a Mysqlctld handle for mysqlctld process
 // configured with the given Config.
 func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctldProcess {
+	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
+	if isSQL, err := isSQLFlavor(); err == nil {
+		if !isSQL {
+			initFile = path.Join(os.Getenv("VTROOT"), "config/init_maria_db.sql")
+		}
+	}
 	mysqlctld := &MysqlctldProcess{
 		Name:         "mysqlctld",
 		Binary:       "mysqlctld",
 		LogDirectory: tmpDirectory,
-		InitDBFile:   path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"),
+		InitDBFile:   initFile,
 	}
 	mysqlctld.MySQLPort = mySQLPort
 	mysqlctld.TabletUID = tabletUID
