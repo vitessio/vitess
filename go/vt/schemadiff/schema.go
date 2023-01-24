@@ -24,6 +24,8 @@ import (
 	"sort"
 	"strings"
 
+	"go.uber.org/multierr"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -307,6 +309,11 @@ func (s *Schema) normalize() error {
 				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
 			}
 		}
+	}
+
+	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
+	if err := s.ValidateViewReferences(); err != nil {
+		return err
 	}
 
 	// Validate table definitions
@@ -749,4 +756,175 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 		return nil, err
 	}
 	return dup, nil
+}
+
+// TODO
+
+func (s *Schema) ValidateViewReferences() error {
+	var allerrors error
+	availableColumns := map[string]map[string]struct{}{}
+	for _, table := range s.Tables() {
+		availableColumns[table.Name()] = map[string]struct{}{}
+		for _, col := range table.TableSpec.Columns {
+			availableColumns[table.Name()][col.Name.Lowered()] = struct{}{}
+		}
+	}
+	// Add dual table with no explicit columns for dual style expressions in views.
+	availableColumns["dual"] = map[string]struct{}{}
+
+	for _, view := range s.Views() {
+		// First gather all referenced tables and table aliases
+		tableAliases := map[string]string{}
+		tableReferences := map[string]struct{}{}
+		err := gatherTableInformationForView(view, availableColumns, tableReferences, tableAliases)
+		allerrors = multierr.Append(allerrors, err)
+
+		// Now we can walk the view again and check each column expression
+		// to see if there's an existing column referenced.
+		err = gatherColumnReferenceInformationForView(view, availableColumns, tableReferences, tableAliases)
+		allerrors = multierr.Append(allerrors, err)
+	}
+	return allerrors
+}
+
+func gatherTableInformationForView(view *CreateViewEntity, availableColumns map[string]map[string]struct{}, tableReferences map[string]struct{}, tableAliases map[string]string) error {
+	var allerrors error
+	tableErrors := make(map[string]struct{})
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.AliasedTableExpr:
+			aliased := sqlparser.GetTableName(node.Expr).String()
+			if aliased == "" {
+				return true, nil
+			}
+
+			if _, ok := availableColumns[aliased]; !ok {
+				if _, ok := tableErrors[aliased]; ok {
+					// Only show a missing table reference once per view.
+					return true, nil
+				}
+				err := &InvalidColumnReferencedInViewError{
+					View:  view.Name(),
+					Table: aliased,
+				}
+				allerrors = multierr.Append(allerrors, err)
+				tableErrors[aliased] = struct{}{}
+				return true, nil
+			}
+			tableReferences[aliased] = struct{}{}
+			if node.As.String() != "" {
+				tableAliases[node.As.String()] = aliased
+			}
+		}
+		return true, nil
+	}, view.Select)
+	if err != nil {
+		// parsing error. Forget about any view dependency issues we may have found. This is way more important
+		return err
+	}
+	return allerrors
+}
+
+func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableColumns map[string]map[string]struct{}, tableReferences map[string]struct{}, tableAliases map[string]string) error {
+	var allerrors error
+	qualifiedColumnErrors := make(map[string]map[string]struct{})
+	unqualifiedColumnErrors := make(map[string]struct{})
+
+	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		switch node := node.(type) {
+		case *sqlparser.ColName:
+			if node.Qualifier.IsEmpty() {
+				err := verifyUnqualifiedColumn(view, availableColumns, tableReferences, node.Name, unqualifiedColumnErrors)
+				allerrors = multierr.Append(allerrors, err)
+			} else {
+				err := verifyQualifiedColumn(view, availableColumns, tableAliases, node, qualifiedColumnErrors)
+				allerrors = multierr.Append(allerrors, err)
+			}
+		}
+		return true, nil
+	}, view.Select)
+	if err != nil {
+		// parsing error. Forget about any view dependency issues we may have found. This is way more important
+		return err
+	}
+	return allerrors
+}
+
+func verifyUnqualifiedColumn(view *CreateViewEntity, availableColumns map[string]map[string]struct{}, tableReferences map[string]struct{}, nodeName sqlparser.IdentifierCI, unqualifiedColumnErrors map[string]struct{}) error {
+	// In case we have a non-qualified column reference, it needs
+	// to be unique across all referenced tables if it is supposed
+	// to work.
+	columnFound := false
+	for table := range tableReferences {
+		cols, ok := availableColumns[table]
+		if !ok {
+			// We already dealt with an error for a missing table reference
+			// earlier, so we can ignore it at this point here.
+			return nil
+		}
+		_, columnInTable := cols[nodeName.Lowered()]
+		if !columnInTable {
+			continue
+		}
+		if columnFound {
+			// We already have seen the column before in another table, so
+			// if we see it again here, that's an error case.
+			if _, ok := unqualifiedColumnErrors[nodeName.Lowered()]; ok {
+				return nil
+			}
+			unqualifiedColumnErrors[nodeName.Lowered()] = struct{}{}
+			return &InvalidColumnReferencedInViewError{
+				View:      view.Name(),
+				Column:    nodeName.String(),
+				NonUnique: true,
+			}
+		}
+		columnFound = true
+	}
+
+	// If we've seen the desired column here once, we're all good
+	if columnFound {
+		return nil
+	}
+
+	if _, ok := unqualifiedColumnErrors[nodeName.Lowered()]; ok {
+		return nil
+	}
+	unqualifiedColumnErrors[nodeName.Lowered()] = struct{}{}
+	return &InvalidColumnReferencedInViewError{
+		View:   view.Name(),
+		Column: nodeName.String(),
+	}
+}
+
+func verifyQualifiedColumn(view *CreateViewEntity, availableColumns map[string]map[string]struct{}, tableAliases map[string]string, node *sqlparser.ColName, columnErrors map[string]map[string]struct{}) error {
+	tableName := node.Qualifier.Name.String()
+	if aliased, ok := tableAliases[tableName]; ok {
+		tableName = aliased
+	}
+	cols, ok := availableColumns[tableName]
+	if !ok {
+		// Already dealt with missing tables earlier on, we don't have
+		// any error to add here.
+		return nil
+	}
+	_, ok = cols[node.Name.Lowered()]
+	if ok {
+		// Found the column in the table, all good.
+		return nil
+	}
+
+	if _, ok := columnErrors[tableName]; !ok {
+		columnErrors[tableName] = make(map[string]struct{})
+	}
+
+	if _, ok := columnErrors[tableName][node.Name.Lowered()]; ok {
+		return nil
+	}
+	columnErrors[tableName][node.Name.Lowered()] = struct{}{}
+	return &InvalidColumnReferencedInViewError{
+		View:   view.Name(),
+		Table:  tableName,
+		Column: node.Name.String(),
+	}
 }

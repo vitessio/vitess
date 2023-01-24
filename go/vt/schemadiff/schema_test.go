@@ -79,7 +79,7 @@ var toSQL = "CREATE TABLE `t1` (\n\t`id` int\n);\nCREATE TABLE `t2` (\n\t`id` in
 func TestNewSchemaFromQueries(t *testing.T) {
 	schema, err := NewSchemaFromQueries(createQueries)
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	assert.Equal(t, expectSortedNames, schema.EntityNames())
 	assert.Equal(t, expectSortedTableNames, schema.TableNames())
@@ -89,7 +89,7 @@ func TestNewSchemaFromQueries(t *testing.T) {
 func TestNewSchemaFromSQL(t *testing.T) {
 	schema, err := NewSchemaFromSQL(strings.Join(createQueries, ";"))
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	assert.Equal(t, expectSortedNames, schema.EntityNames())
 	assert.Equal(t, expectSortedTableNames, schema.TableNames())
@@ -140,7 +140,7 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 func TestToSQL(t *testing.T) {
 	schema, err := NewSchemaFromQueries(createQueries)
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	sql := schema.ToSQL()
 	assert.Equal(t, toSQL, sql)
@@ -149,7 +149,7 @@ func TestToSQL(t *testing.T) {
 func TestCopy(t *testing.T) {
 	schema, err := NewSchemaFromQueries(createQueries)
 	assert.NoError(t, err)
-	assert.NotNil(t, schema)
+	require.NotNil(t, schema)
 
 	schemaClone := schema.copy()
 	assert.Equal(t, schema, schemaClone)

@@ -308,3 +308,23 @@ type ViewDependencyUnresolvedError struct {
 func (e *ViewDependencyUnresolvedError) Error() string {
 	return fmt.Sprintf("view %s has unresolved/loop dependencies", sqlescape.EscapeID(e.View))
 }
+
+type InvalidColumnReferencedInViewError struct {
+	View      string
+	Table     string
+	Column    string
+	NonUnique bool
+}
+
+func (e *InvalidColumnReferencedInViewError) Error() string {
+	switch {
+	case e.Column == "":
+		return fmt.Sprintf("view %s references non-existing table %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table))
+	case e.Table != "":
+		return fmt.Sprintf("view %s references non existing column %s.%s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column))
+	case e.NonUnique:
+		return fmt.Sprintf("view %s references unqualified but non unique column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
+	default:
+		return fmt.Sprintf("view %s references unqualified but non existing column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
+	}
+}
