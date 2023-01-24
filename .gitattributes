@@ -1,6 +1,10 @@
+<<<<<<< HEAD
 web/vtadmin/src/proto/** linguist-generated=true
 web/vtadmin/src/proto/*.js -diff
 web/vtadmin/src/proto/*.ts -diff
 go/vt/proto/** linguist-generated=true
 go/vt/proto/*/*.pb.go -diff
 go/vt/sqlparser/sql.go linguist-generated=true -diff
+=======
+go/vt/vtadmin/web/build/**/* linguist-generated=true
+>>>>>>> d9d6d72a71754bdcf0e47f514a4b10d831c69a9c

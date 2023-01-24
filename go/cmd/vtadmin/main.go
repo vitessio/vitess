@@ -174,6 +174,7 @@ func main() {
 	// HTTP server flags
 	rootCmd.Flags().BoolVar(&httpOpts.DisableCompression, "http-no-compress", false, "whether to disable compression of HTTP API responses")
 	rootCmd.Flags().BoolVar(&httpOpts.DisableDebug, "http-no-debug", false, "whether to disable /debug/pprof/* and /debug/env HTTP endpoints")
+	rootCmd.Flags().BoolVar(&httpOpts.DisableWeb, "http-no-web", false, "whether to disable the web interface")
 	rootCmd.Flags().Var(&debug.OmitEnv, "http-debug-omit-env", "name of an environment variable to omit from /debug/env, if http debug endpoints are enabled. specify multiple times to omit multiple env vars")
 	rootCmd.Flags().Var(&debug.SanitizeEnv, "http-debug-sanitize-env", "name of an environment variable to sanitize in /debug/env, if http debug endpoints are enabled. specify multiple times to sanitize multiple env vars")
 	rootCmd.Flags().StringVar(&opts.MetricsEndpoint, "http-metrics-endpoint", "/metrics",
