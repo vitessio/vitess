@@ -85,6 +85,7 @@ const (
 	alterSchemaMigrationsCutoverAttempts               = "ALTER TABLE _vt.schema_migrations add column cutover_attempts int unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsTableImmediateOperation       = "ALTER TABLE _vt.schema_migrations add column is_immediate_operation tinyint unsigned NOT NULL DEFAULT 0"
 	alterSchemaMigrationsReviewedTimestamp             = "ALTER TABLE _vt.schema_migrations add column reviewed_timestamp timestamp NULL DEFAULT NULL"
+	alterSchemaMigrationsCompletedTimestampResolution  = "ALTER TABLE _vt.schema_migrations modify completed_timestamp timestamp(6) NULL DEFAULT NULL"
 
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
@@ -107,7 +108,7 @@ const (
 		reverted_uuid,
 		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(), %a, %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
@@ -180,13 +181,13 @@ const (
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
-			started_timestamp =IFNULL(started_timestamp,  NOW()),
-			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
+			started_timestamp =IFNULL(started_timestamp,  NOW(6)),
+			liveness_timestamp=IFNULL(liveness_timestamp, NOW(6))
 		WHERE
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationTimestamp = `UPDATE _vt.schema_migrations
-			SET %s=NOW()
+			SET %s=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -416,7 +417,7 @@ const (
 	`
 	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
 		SET
-			completed_timestamp=NOW()
+			completed_timestamp=NOW(6)
 		WHERE
 			migration_status='failed'
 			AND cleanup_timestamp IS NULL
@@ -686,4 +687,5 @@ var ApplyDDL = []string{
 	alterSchemaMigrationsCutoverAttempts,
 	alterSchemaMigrationsTableImmediateOperation,
 	alterSchemaMigrationsReviewedTimestamp,
+	alterSchemaMigrationsCompletedTimestampResolution,
 }
