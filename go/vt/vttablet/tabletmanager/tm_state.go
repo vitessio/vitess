@@ -290,8 +290,6 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		returnErr = vterrors.Wrapf(err, errStr)
 	}
 
-	ts.tm.replManager.SetTabletType(ts.tablet.Type)
-
 	if ts.tm.UpdateStream != nil {
 		if topo.IsRunningUpdateStream(ts.tablet.Type) {
 			ts.tm.UpdateStream.Enable()

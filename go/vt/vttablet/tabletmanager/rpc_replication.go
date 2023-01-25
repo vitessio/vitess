@@ -201,18 +201,10 @@ func (tm *TabletManager) StopReplication(ctx context.Context) error {
 }
 
 func (tm *TabletManager) stopReplicationLocked(ctx context.Context) error {
-
-	// Remember that we were told to stop, so we don't try to
-	// restart ourselves (in replication_reporter).
-	tm.replManager.setReplicationStopped(true)
 	return tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
 }
 
 func (tm *TabletManager) stopIOThreadLocked(ctx context.Context) error {
-
-	// Remember that we were told to stop, so we don't try to
-	// restart ourselves (in replication_reporter).
-	tm.replManager.setReplicationStopped(true)
 	return tm.MysqlDaemon.StopIOThread(ctx)
 }
 
@@ -254,7 +246,6 @@ func (tm *TabletManager) StartReplication(ctx context.Context, semiSync bool) er
 	}
 	defer tm.unlock()
 
-	tm.replManager.setReplicationStopped(false)
 	if err := tm.fixSemiSync(tm.Tablet().Type, convertBoolToSemiSyncAction(semiSync)); err != nil {
 		return err
 	}
@@ -295,7 +286,6 @@ func (tm *TabletManager) ResetReplication(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	tm.replManager.setReplicationStopped(true)
 	return tm.MysqlDaemon.ResetReplication(ctx)
 }
 
@@ -306,9 +296,6 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 		return "", err
 	}
 	defer tm.unlock()
-
-	// Initializing as primary implies undoing any previous "do not replicate".
-	tm.replManager.reset()
 
 	if setSuperReadOnly {
 		// Setting super_read_only off so that we can run the DDL commands
@@ -401,8 +388,6 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err != nil {
 		return err
 	}
-
-	tm.replManager.setReplicationStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to primary.
 	// If we were a primary type, we need to switch back to replica settings.
@@ -588,7 +573,6 @@ func (tm *TabletManager) ResetReplicationParameters(ctx context.Context) error {
 	}
 	defer tm.unlock()
 
-	tm.replManager.setReplicationStopped(true)
 	err := tm.MysqlDaemon.StopReplication(tm.hookExtraEnv())
 	if err != nil {
 		return err
@@ -748,8 +732,6 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 				return err
 			}
 		}
-		// Clear replication sentinel flag for this replica
-		tm.replManager.setReplicationStopped(false)
 	}
 
 	return nil
@@ -864,17 +846,6 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	}
 	defer tm.unlock()
 
-	// SetTabletType only stops the replication manager ticks since we are going to promote this tablet
-	// to primary. We should do this before making any changes to MySQL, otherwise any replication manager
-	// tick would change the replication source, etc settings back.
-	tm.replManager.SetTabletType(topodatapb.TabletType_PRIMARY)
-	defer func() {
-		// If PromoteReplica was successful, then this would be a no-op, since we have already stopped
-		// the replication manager ticks. But, in case we are unsuccessful, we must restart the ticks
-		// so, we call SetTabletType as a deferred call.
-		tm.replManager.SetTabletType(tm.Tablet().Type)
-	}()
-
 	pos, err := tm.MysqlDaemon.Promote(tm.hookExtraEnv())
 	if err != nil {
 		return "", err
@@ -888,11 +859,6 @@ func (tm *TabletManager) PromoteReplica(ctx context.Context, semiSync bool) (str
 	if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_PRIMARY, DBActionSetReadWrite, SemiSyncActionNone); err != nil {
 		return "", err
 	}
-
-	// Clear replication sentinel flag for this primary,
-	// or we might block replication the next time we demote it
-	// here, we do not want to start the health ticks, so we should use reset.
-	tm.replManager.reset()
 	return mysql.EncodePosition(pos), nil
 }
 
