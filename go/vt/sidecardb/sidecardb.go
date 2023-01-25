@@ -160,8 +160,15 @@ func Init(ctx context.Context, exec Exec) error {
 		ctx:  ctx,
 		exec: exec,
 	}
-	if err := si.createVTDatabase(); err != nil {
+	dbExists, err := si.doesVTDatabaseExist()
+	if err != nil {
 		return err
+	}
+	if !dbExists {
+		if err := si.createVTDatabase(); err != nil {
+			return err
+		}
+		si.dbCreated = true
 	}
 
 	if _, err := si.setCurrentDatabase(SidecarDBName); err != nil {
@@ -178,6 +185,26 @@ func Init(ctx context.Context, exec Exec) error {
 		}
 	}
 	return nil
+}
+
+func (si *vtSchemaInit) doesVTDatabaseExist() (bool, error) {
+	rs, err := si.exec(si.ctx, ShowVTDatabasesQuery, 2, false, false)
+	if err != nil {
+		log.Error(err)
+		return false, err
+	}
+
+	switch len(rs.Rows) {
+	case 0:
+		log.Infof("doesVTDatabaseExist: not found")
+		return false, nil
+	case 1:
+		log.Infof("doesVTDatabaseExist: found")
+		return true, nil
+	default:
+		log.Errorf("found too many rows for _vt: %d", len(rs.Rows))
+		return false, fmt.Errorf("found too many rows for _vt: %d", len(rs.Rows))
+	}
 }
 
 func (si *vtSchemaInit) createVTDatabase() error {
