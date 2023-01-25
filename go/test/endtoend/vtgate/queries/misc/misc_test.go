@@ -200,4 +200,6 @@ func TestOuterJoinWithPredicate(t *testing.T) {
 
 	mcmp.AssertMatches("select A.id1, B.id2 from t1 as A left join t1 as B on A.id1*10 = B.id2 WHERE B.id2 BETWEEN 20 AND 30",
 		`[[INT64(2) INT64(20)] [INT64(3) INT64(30)]]`)
+	mcmp.AssertMatches("select A.id1, B.id2 from t1 as A left join t1 as B on A.id1*10 = B.id2 WHERE B.id2 NOT BETWEEN 20 AND 30",
+		`[[INT64(0) INT64(0)] [INT64(1) INT64(10)] [INT64(4) INT64(40)]]`)
 }

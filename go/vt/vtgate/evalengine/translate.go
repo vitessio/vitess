@@ -571,7 +571,7 @@ func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr
 }
 
 func translateBetweenExpr(node *sqlparser.BetweenExpr, lookup TranslationLookup) (Expr, error) {
-	// x BETWEEN a AND b => x >= a AND c <= b
+	// x BETWEEN a AND b => x >= a AND x <= b
 	from := &sqlparser.ComparisonExpr{
 		Operator: sqlparser.GreaterEqualOp,
 		Left:     node.Left,
@@ -582,6 +582,13 @@ func translateBetweenExpr(node *sqlparser.BetweenExpr, lookup TranslationLookup)
 		Left:     node.Left,
 		Right:    node.To,
 	}
+
+	if !node.IsBetween {
+		// x NOT BETWEEN a AND b  => x < a AND x > b
+		from.Operator = sqlparser.LessThanOp
+		to.Operator = sqlparser.GreaterThanOp
+	}
+
 	return translateExpr(sqlparser.AndExpressions(from, to), lookup)
 }
 
