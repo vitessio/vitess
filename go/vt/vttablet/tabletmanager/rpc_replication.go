@@ -44,6 +44,7 @@ var disableReplicationManager bool
 func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&setSuperReadOnly, "use_super_read_only", setSuperReadOnly, "Set super_read_only flag when performing planned failover.")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
+	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
 }
 
 func init() {
