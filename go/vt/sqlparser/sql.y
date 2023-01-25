@@ -323,7 +323,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL_TYPE NUMERIC
+%token <str> REAL DOUBLE FLOAT_TYPE FLOAT4_TYPE FLOAT8_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
@@ -1461,7 +1461,7 @@ generated_always_opt:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: ColKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
   }
 | column_attribute_list_opt NULL
   {
@@ -1950,19 +1950,19 @@ text_literal_or_arg:
 keys:
   PRIMARY KEY
   {
-    $$ = colKeyPrimary
+    $$ = ColKeyPrimary
   }
 | UNIQUE
   {
-    $$ = colKeyUnique
+    $$ = ColKeyUnique
   }
 | UNIQUE KEY
   {
-    $$ = colKeyUniqueKey
+    $$ = ColKeyUniqueKey
   }
 | KEY
   {
-    $$ = colKey
+    $$ = ColKey
   }
 
 column_type:
@@ -2038,7 +2038,19 @@ REAL double_length_opt
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
+| FLOAT8_TYPE double_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
 | FLOAT_TYPE float_length_opt
+  {
+    $$ = ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT4_TYPE float_length_opt
   {
     $$ = ColumnType{Type: string($1)}
     $$.Length = $2.Length
@@ -5456,7 +5468,7 @@ function_call_keyword
   }
 
 interval_value:
-  INTERVAL simple_expr sql_id
+  INTERVAL bit_expr sql_id
   {
      $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }

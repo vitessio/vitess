@@ -131,7 +131,7 @@ func (mysqlFlavor) startSQLThreadCommand() string {
 }
 
 // sendBinlogDumpCommand is part of the Flavor interface.
-func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error {
+func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos Position) error {
 	gtidSet, ok := startPos.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
 		return vterrors.Errorf(vtrpc.Code_INTERNAL, "startPos.GTIDSet is wrong type - expected Mysql56GTIDSet, got: %#v", startPos.GTIDSet)
@@ -139,7 +139,7 @@ func (mysqlFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Posi
 
 	// Build the command.
 	sidBlock := gtidSet.SIDBlock()
-	return c.WriteComBinlogDumpGTID(serverID, "", 4, 0, sidBlock)
+	return c.WriteComBinlogDumpGTID(serverID, binlogFilename, 4, 0, sidBlock)
 }
 
 // resetReplicationCommands is part of the Flavor interface.

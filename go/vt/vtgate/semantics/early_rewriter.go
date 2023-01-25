@@ -40,7 +40,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		if node.Type != sqlparser.HavingClause {
 			return nil
 		}
-		rewriteHavingAndOrderBy(cursor, node)
+		rewriteHavingAndOrderBy(node, cursor.Parent())
 	case sqlparser.SelectExprs:
 		_, isSel := cursor.Parent().(*sqlparser.Select)
 		if !isSel {
@@ -57,7 +57,7 @@ func (r *earlyRewriter) down(cursor *sqlparser.Cursor) error {
 		}
 	case sqlparser.OrderBy:
 		r.clause = "order clause"
-		rewriteHavingAndOrderBy(cursor, node)
+		rewriteHavingAndOrderBy(node, cursor.Parent())
 	case *sqlparser.OrExpr:
 		newNode := rewriteOrFalse(*node)
 		if newNode != nil {
@@ -143,49 +143,52 @@ func (r *earlyRewriter) expandStar(cursor *sqlparser.Cursor, node sqlparser.Sele
 //     HAVING/ORDER BY clause is inside an aggregation function
 //
 // This is a fucking weird scoping rule, but it's what MySQL seems to do... ¯\_(ツ)_/¯
-func rewriteHavingAndOrderBy(cursor *sqlparser.Cursor, node sqlparser.SQLNode) {
-	sel, isSel := cursor.Parent().(*sqlparser.Select)
+func rewriteHavingAndOrderBy(node, parent sqlparser.SQLNode) {
+	// TODO - clean up and comment this mess
+	sel, isSel := parent.(*sqlparser.Select)
 	if !isSel {
 		return
 	}
-	sqlparser.Rewrite(node, func(inner *sqlparser.Cursor) bool {
-		switch col := inner.Node().(type) {
-		case *sqlparser.Subquery:
-			return false
-		case *sqlparser.ColName:
-			if !col.Qualifier.IsEmpty() {
+
+	sqlparser.SafeRewrite(node, func(node, _ sqlparser.SQLNode) bool {
+		_, isSubQ := node.(*sqlparser.Subquery)
+		return !isSubQ
+	}, func(cursor *sqlparser.Cursor) bool {
+		col, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return true
+		}
+		if !col.Qualifier.IsEmpty() {
+			return true
+		}
+		_, parentIsAggr := cursor.Parent().(sqlparser.AggrFunc)
+		for _, e := range sel.SelectExprs {
+			ae, ok := e.(*sqlparser.AliasedExpr)
+			if !ok || !ae.As.Equal(col.Name) {
+				continue
+			}
+			_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
+			if parentIsAggr && aliasPointsToAggr {
 				return false
 			}
-			_, parentIsAggr := inner.Parent().(sqlparser.AggrFunc)
-			for _, e := range sel.SelectExprs {
-				ae, ok := e.(*sqlparser.AliasedExpr)
-				if !ok {
-					continue
-				}
-				if ae.As.Equal(col.Name) {
-					_, aliasPointsToAggr := ae.Expr.(sqlparser.AggrFunc)
-					if parentIsAggr && aliasPointsToAggr {
-						return false
-					}
 
-					safeToRewrite := true
-					sqlparser.Rewrite(ae.Expr, func(cursor *sqlparser.Cursor) bool {
-						switch cursor.Node().(type) {
-						case *sqlparser.ColName:
-							safeToRewrite = false
-						case sqlparser.AggrFunc:
-							return false
-						}
-						return true
-					}, nil)
-					if safeToRewrite {
-						inner.Replace(ae.Expr)
-					}
+			safeToRewrite := true
+			_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+				switch node.(type) {
+				case *sqlparser.ColName:
+					safeToRewrite = false
+					return false, nil
+				case sqlparser.AggrFunc:
+					return false, nil
 				}
+				return true, nil
+			}, ae.Expr)
+			if safeToRewrite {
+				cursor.Replace(ae.Expr)
 			}
 		}
 		return true
-	}, nil)
+	})
 }
 
 func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.Expr, error) {
@@ -230,16 +233,17 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 // realCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
 func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
-	return sqlparser.Rewrite(sqlparser.CloneExpr(expr), func(cursor *sqlparser.Cursor) bool {
-		switch exp := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			newColName := *exp
-			if union {
-				newColName.Qualifier = sqlparser.TableName{}
-			}
-			cursor.Replace(&newColName)
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		exp, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return
 		}
-		return true
+
+		newColName := *exp
+		if union {
+			newColName.Qualifier = sqlparser.TableName{}
+		}
+		cursor.Replace(&newColName)
 	}, nil).(sqlparser.Expr)
 }
 

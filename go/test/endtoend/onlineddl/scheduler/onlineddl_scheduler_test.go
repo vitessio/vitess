@@ -17,8 +17,10 @@ limitations under the License.
 package scheduler
 
 import (
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"strings"
@@ -26,6 +28,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -35,6 +38,29 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+const (
+	anyErrorIndicator = "<any-error-of-any-kind>"
+)
+
+type testOnlineDDLStatementParams struct {
+	ddlStatement     string
+	ddlStrategy      string
+	executeStrategy  string
+	expectHint       string
+	expectError      string
+	skipWait         bool
+	migrationContext string
+}
+
+type testRevertMigrationParams struct {
+	revertUUID       string
+	executeStrategy  string
+	ddlStrategy      string
+	migrationContext string
+	expectError      string
+	skipWait         bool
+}
 
 var (
 	clusterInstance *cluster.LocalProcessCluster
@@ -50,49 +76,50 @@ var (
 	cell                  = "zone1"
 	schemaChangeDirectory = ""
 	overrideVtctlParams   *cluster.VtctlClientParams
-	ddlStrategy           = "vitess"
-	t1Name                = "t1_test"
-	t2Name                = "t2_test"
-	createT1Statement     = `
-		CREATE TABLE t1_test (
-			id bigint(20) not null,
-			hint_col varchar(64) not null default 'just-created',
-			PRIMARY KEY (id)
-		) ENGINE=InnoDB
-	`
-	createT2Statement = `
-		CREATE TABLE t2_test (
-			id bigint(20) not null,
-			hint_col varchar(64) not null default 'just-created',
-			PRIMARY KEY (id)
-		) ENGINE=InnoDB
-	`
-	createT1IfNotExistsStatement = `
-		CREATE TABLE IF NOT EXISTS t1_test (
-			id bigint(20) not null,
-			hint_col varchar(64) not null default 'should_not_appear',
-			PRIMARY KEY (id)
-		) ENGINE=InnoDB
-	`
-	trivialAlterT1Statement = `
-		ALTER TABLE t1_test ENGINE=InnoDB;
-	`
-	trivialAlterT2Statement = `
-		ALTER TABLE t2_test ENGINE=InnoDB;
-	`
-	instantAlterT1Statement = `
-		ALTER TABLE t1_test ADD COLUMN i0 INT NOT NULL DEFAULT 0;
-	`
-	dropT1Statement = `
-		DROP TABLE IF EXISTS t1_test
-	`
-	dropT3Statement = `
-		DROP TABLE IF EXISTS t3_test
-	`
-	dropT4Statement = `
-		DROP TABLE IF EXISTS t4_test
-	`
 )
+
+func parseTableName(t *testing.T, sql string) (tableName string) {
+	// ddlStatement could possibly be composed of multiple DDL statements
+	tokenizer := sqlparser.NewStringTokenizer(sql)
+	for {
+		stmt, err := sqlparser.ParseNextStrictDDL(tokenizer)
+		if err != nil && errors.Is(err, io.EOF) {
+			break
+		}
+		require.NoError(t, err)
+		ddlStmt, ok := stmt.(sqlparser.DDLStatement)
+		require.True(t, ok)
+		tableName = ddlStmt.GetTable().Name.String()
+		if tableName == "" {
+			tbls := ddlStmt.AffectedTables()
+			require.NotEmpty(t, tbls)
+			tableName = tbls[0].Name.String()
+		}
+		require.NotEmptyf(t, tableName, "could not parse table name from SQL: %s", sqlparser.String(ddlStmt))
+	}
+	require.NotEmptyf(t, tableName, "could not parse table name from SQL: %s", sql)
+	return tableName
+}
+
+// testOnlineDDLStatement runs an online DDL, ALTER statement
+func TestParseTableName(t *testing.T) {
+	sqls := []string{
+		`ALTER TABLE t1_test ENGINE=InnoDB`,
+		`ALTER TABLE t1_test ENGINE=InnoDB;`,
+		`DROP TABLE IF EXISTS t1_test`,
+		`
+			ALTER TABLE stress_test ENGINE=InnoDB;
+			ALTER TABLE stress_test ENGINE=InnoDB;
+			ALTER TABLE stress_test ENGINE=InnoDB;
+		`,
+	}
+
+	for _, sql := range sqls {
+		t.Run(sql, func(t *testing.T) {
+			parseTableName(t, sql)
+		})
+	}
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -165,12 +192,79 @@ func TestSchemaChange(t *testing.T) {
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
+	ddlStrategy := "vitess"
+
+	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
+		return &testOnlineDDLStatementParams{
+			ddlStatement:    ddlStatement,
+			ddlStrategy:     ddlStrategy,
+			executeStrategy: executeStrategy,
+			expectHint:      expectHint,
+			expectError:     expectError,
+			skipWait:        skipWait,
+		}
+	}
+
+	createRevertParams := func(revertUUID string, ddlStrategy string, executeStrategy string, expectError string, skipWait bool) *testRevertMigrationParams {
+		return &testRevertMigrationParams{
+			revertUUID:      revertUUID,
+			executeStrategy: executeStrategy,
+			ddlStrategy:     ddlStrategy,
+			expectError:     expectError,
+			skipWait:        skipWait,
+		}
+	}
+
 	mysqlVersion := onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
 	_, capableOf, _ := mysql.GetFlavor(mysqlVersion, nil)
 
-	var t1uuid string
-	var t2uuid string
+	var (
+		t1uuid string
+		t2uuid string
+
+		t1Name            = "t1_test"
+		t2Name            = "t2_test"
+		createT1Statement = `
+			CREATE TABLE t1_test (
+				id bigint(20) not null,
+				hint_col varchar(64) not null default 'just-created',
+				PRIMARY KEY (id)
+			) ENGINE=InnoDB
+		`
+		createT2Statement = `
+			CREATE TABLE t2_test (
+				id bigint(20) not null,
+				hint_col varchar(64) not null default 'just-created',
+				PRIMARY KEY (id)
+			) ENGINE=InnoDB
+		`
+		createT1IfNotExistsStatement = `
+			CREATE TABLE IF NOT EXISTS t1_test (
+				id bigint(20) not null,
+				hint_col varchar(64) not null default 'should_not_appear',
+				PRIMARY KEY (id)
+			) ENGINE=InnoDB
+		`
+		trivialAlterT1Statement = `
+			ALTER TABLE t1_test ENGINE=InnoDB;
+		`
+		trivialAlterT2Statement = `
+			ALTER TABLE t2_test ENGINE=InnoDB;
+		`
+		instantAlterT1Statement = `
+			ALTER TABLE t1_test ADD COLUMN i0 INT NOT NULL DEFAULT 0;
+		`
+		dropT1Statement = `
+			DROP TABLE IF EXISTS t1_test
+		`
+		dropT3Statement = `
+			DROP TABLE IF EXISTS t3_test
+		`
+		dropT4Statement = `
+			DROP TABLE IF EXISTS t4_test
+		`
+	)
 
 	testReadTimestamp := func(t *testing.T, uuid string, timestampColumn string) (timestamp string) {
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
@@ -211,20 +305,20 @@ func TestSchemaChange(t *testing.T) {
 	// CREATE
 	t.Run("CREATE TABLEs t1, t1", func(t *testing.T) {
 		{ // The table does not exist
-			t1uuid = testOnlineDDLStatement(t, createT1Statement, ddlStrategy, "vtgate", "just-created", "", false)
+			t1uuid = testOnlineDDLStatement(t, createParams(createT1Statement, ddlStrategy, "vtgate", "just-created", "", false))
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, t1Name, true)
 		}
 		{
 			// The table does not exist
-			t2uuid = testOnlineDDLStatement(t, createT2Statement, ddlStrategy, "vtgate", "just-created", "", false)
+			t2uuid = testOnlineDDLStatement(t, createParams(createT2Statement, ddlStrategy, "vtgate", "just-created", "", false))
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, t2Name, true)
 		}
 		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 	t.Run("Postpone launch CREATE", func(t *testing.T) {
-		t1uuid = testOnlineDDLStatement(t, createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(createT1IfNotExistsStatement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true)) // skip wait
 		time.Sleep(2 * time.Second)
 		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 		require.NotNil(t, rs)
@@ -248,7 +342,7 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	t.Run("Postpone launch ALTER", func(t *testing.T) {
-		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-launch", "vtgate", "", "", true)) // skip wait
 		time.Sleep(2 * time.Second)
 		rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
 		require.NotNil(t, rs)
@@ -295,8 +389,8 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	t.Run("ALTER both tables non-concurrent", func(t *testing.T) {
-		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
-		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
+		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
 
 		t.Run("wait for t1 complete", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -313,8 +407,8 @@ func TestSchemaChange(t *testing.T) {
 		testTableSequentialTimes(t, t1uuid, t2uuid)
 	})
 	t.Run("ALTER both tables non-concurrent, postponed", func(t *testing.T) {
-		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true) // skip wait
-		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true)) // skip wait
+		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" -postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		testAllowConcurrent(t, "t1", t1uuid, 0)
 		t.Run("expect t1 running, t2 queued", func(t *testing.T) {
@@ -345,8 +439,8 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("ALTER both tables, elligible for concurrenct", func(t *testing.T) {
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
-		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true) // skip wait
-		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
+		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" --allow-concurrent --postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		testAllowConcurrent(t, "t2", t2uuid, 1)
@@ -382,8 +476,8 @@ func TestSchemaChange(t *testing.T) {
 		onlineddl.ThrottleAllMigrations(t, &vtParams)
 		defer onlineddl.UnthrottleAllMigrations(t, &vtParams)
 		// ALTER TABLE is allowed to run concurrently when no other ALTER is busy with copy state. Our tables are tiny so we expect to find both migrations running
-		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
-		t2uuid = testOnlineDDLStatement(t, trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true)) // skip wait
+		t2uuid = testOnlineDDLStatement(t, createParams(trivialAlterT2Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		testAllowConcurrent(t, "t2", t2uuid, 1)
@@ -427,8 +521,8 @@ func TestSchemaChange(t *testing.T) {
 		testTableCompletionTimes(t, t2uuid, t1uuid)
 	})
 	t.Run("REVERT both tables concurrent, postponed", func(t *testing.T) {
-		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
-		t2uuid = testRevertMigration(t, t2uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
+		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true))
+		t2uuid = testRevertMigration(t, createRevertParams(t2uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true))
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		t.Run("expect both migrations to run", func(t *testing.T) {
@@ -464,8 +558,8 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	t.Run("concurrent REVERT vs two non-concurrent DROPs", func(t *testing.T) {
-		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true)
-		drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
+		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", true))
+		drop3uuid := testOnlineDDLStatement(t, createParams(dropT3Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
 
 		testAllowConcurrent(t, "t1", t1uuid, 1)
 		testAllowConcurrent(t, "drop3", drop3uuid, 0)
@@ -474,7 +568,7 @@ func TestSchemaChange(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
-		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy, "vtgate", "", "", true) // skip wait
+		drop1uuid := testOnlineDDLStatement(t, createParams(dropT1Statement, ddlStrategy, "vtgate", "", "", true)) // skip wait
 		t.Run("drop3 complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, drop3uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
@@ -502,9 +596,9 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	t.Run("non-concurrent REVERT vs three concurrent drops", func(t *testing.T) {
-		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -postpone-completion", "vtgate", "", true)
-		drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true)                      // skip wait
-		drop4uuid := testOnlineDDLStatement(t, dropT4Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true) // skip wait
+		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" -postpone-completion", "vtgate", "", true))
+		drop3uuid := testOnlineDDLStatement(t, createParams(dropT3Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true))                      // skip wait
+		drop4uuid := testOnlineDDLStatement(t, createParams(dropT4Statement, ddlStrategy+" -allow-concurrent -postpone-completion", "vtgate", "", "", true)) // skip wait
 
 		testAllowConcurrent(t, "drop3", drop3uuid, 1)
 		t.Run("expect t1 migration to run", func(t *testing.T) {
@@ -512,7 +606,7 @@ func TestSchemaChange(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
-		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true) // skip wait
+		drop1uuid := testOnlineDDLStatement(t, createParams(dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true)) // skip wait
 		testAllowConcurrent(t, "drop1", drop1uuid, 1)
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
@@ -552,7 +646,7 @@ func TestSchemaChange(t *testing.T) {
 			checkTable(t, t1Name, false)
 		})
 		t.Run("revert t1 drop", func(t *testing.T) {
-			revertDrop3uuid := testRevertMigration(t, drop1uuid, ddlStrategy+" -allow-concurrent", "vtgate", "", true)
+			revertDrop3uuid := testRevertMigration(t, createRevertParams(drop1uuid, ddlStrategy+" -allow-concurrent", "vtgate", "", true))
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertDrop3uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertDrop3uuid, schema.OnlineDDLStatusComplete)
@@ -560,19 +654,19 @@ func TestSchemaChange(t *testing.T) {
 		})
 	})
 	t.Run("conflicting migration does not block other queued migrations", func(t *testing.T) {
-		t1uuid = testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", false) // skip wait
+		t1uuid = testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtgate", "", "", false)) // skip wait
 		t.Run("trivial t1 migration", func(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 			checkTable(t, t1Name, true)
 		})
 
-		t1uuid = testRevertMigration(t, t1uuid, ddlStrategy+" -postpone-completion", "vtgate", "", true)
+		t1uuid = testRevertMigration(t, createRevertParams(t1uuid, ddlStrategy+" -postpone-completion", "vtgate", "", true))
 		t.Run("expect t1 revert migration to run", func(t *testing.T) {
 			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 		})
-		drop1uuid := testOnlineDDLStatement(t, dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true) // skip wait
+		drop1uuid := testOnlineDDLStatement(t, createParams(dropT1Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", true)) // skip wait
 		t.Run("t1drop blocked", func(t *testing.T) {
 			time.Sleep(ensureStateNotChangedTime)
 			// drop1 migration should block. It can run concurrently to t1, but conflicts on table name
@@ -589,7 +683,7 @@ func TestSchemaChange(t *testing.T) {
 		t.Run("t3drop complete", func(t *testing.T) {
 			// drop3 migration should not block. It can run concurrently to t1, and does not conflict
 			// even though t1drop is blocked! This is the heart of this test
-			drop3uuid := testOnlineDDLStatement(t, dropT3Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", false)
+			drop3uuid := testOnlineDDLStatement(t, createParams(dropT3Statement, ddlStrategy+" -allow-concurrent", "vtgate", "", "", false))
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, drop3uuid, schema.OnlineDDLStatusComplete)
 		})
 		t.Run("cancel drop1", func(t *testing.T) {
@@ -619,7 +713,7 @@ func TestSchemaChange(t *testing.T) {
 		defer func() { overrideVtctlParams = nil }()
 		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
 		t.Run("start and fail migration", func(t *testing.T) {
-			executedUUID := testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtctl", "", "", true) // skip wait
+			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" -postpone-completion", "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)
 			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
 			// let's cancel it
@@ -631,7 +725,7 @@ func TestSchemaChange(t *testing.T) {
 
 		// now, we submit the exact same migratoin again: same UUID, same migration context.
 		t.Run("resubmit migration", func(t *testing.T) {
-			executedUUID := testOnlineDDLStatement(t, trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true) // skip wait
+			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true)) // skip wait
 			require.Equal(t, uuid, executedUUID)
 
 			// expect it to complete
@@ -652,7 +746,7 @@ func TestSchemaChange(t *testing.T) {
 	require.NoError(t, err)
 	if instantDDLCapable {
 		t.Run("INSTANT DDL: postpone-completion", func(t *testing.T) {
-			t1uuid := testOnlineDDLStatement(t, instantAlterT1Statement, ddlStrategy+" --prefer-instant-ddl --postpone-completion", "vtgate", "", "", true)
+			t1uuid := testOnlineDDLStatement(t, createParams(instantAlterT1Statement, ddlStrategy+" --prefer-instant-ddl --postpone-completion", "vtgate", "", "", true))
 
 			t.Run("expect t1 queued", func(t *testing.T) {
 				// we want to validate that the migration remains queued even after some time passes. It must not move beyond 'queued'
@@ -669,21 +763,479 @@ func TestSchemaChange(t *testing.T) {
 			})
 		})
 	}
+	// 'mysql' strategy
+	t.Run("mysql strategy", func(t *testing.T) {
+		t.Run("declarative", func(t *testing.T) {
+			t1uuid = testOnlineDDLStatement(t, createParams(createT1Statement, "mysql --declarative", "vtgate", "just-created", "", false))
+
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+			checkTable(t, t1Name, true)
+		})
+
+		t.Run("fail postpone-completion", func(t *testing.T) {
+			t1uuid := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, "mysql --postpone-completion", "vtgate", "", "", true))
+
+			// --postpone-completion not supported in mysql strategy
+			time.Sleep(ensureStateNotChangedTime)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusFailed)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusFailed)
+		})
+		t.Run("trivial", func(t *testing.T) {
+			t1uuid := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, "mysql", "vtgate", "", "", true))
+
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+
+			rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				artifacts := row.AsString("artifacts", "-")
+				assert.Empty(t, artifacts)
+			}
+		})
+		t.Run("instant", func(t *testing.T) {
+			t1uuid := testOnlineDDLStatement(t, createParams(instantAlterT1Statement, "mysql", "vtgate", "", "", true))
+
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, t1uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
+		})
+	})
+}
+
+func TestSingleton(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	require.Equal(t, 1, len(shards))
+
+	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, migrationContext string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
+		return &testOnlineDDLStatementParams{
+			ddlStatement:     ddlStatement,
+			ddlStrategy:      ddlStrategy,
+			executeStrategy:  executeStrategy,
+			migrationContext: migrationContext,
+			expectHint:       expectHint,
+			expectError:      expectError,
+			skipWait:         skipWait,
+		}
+	}
+
+	createRevertParams := func(revertUUID string, ddlStrategy string, executeStrategy string, migrationContext string, expectError string, skipWait bool) *testRevertMigrationParams {
+		return &testRevertMigrationParams{
+			revertUUID:       revertUUID,
+			executeStrategy:  executeStrategy,
+			ddlStrategy:      ddlStrategy,
+			migrationContext: migrationContext,
+			expectError:      expectError,
+			skipWait:         skipWait,
+		}
+	}
+
+	var (
+		tableName                         = `stress_test`
+		onlineSingletonDDLStrategy        = "online --singleton"
+		onlineSingletonContextDDLStrategy = "online --singleton-context"
+		createStatement                   = `
+		CREATE TABLE stress_test (
+			id bigint(20) not null,
+			rand_val varchar(32) null default '',
+			hint_col varchar(64) not null default 'just-created',
+			created_timestamp timestamp not null default current_timestamp,
+			updates int unsigned not null default 0,
+			PRIMARY KEY (id),
+			key created_idx(created_timestamp),
+			key updates_idx(updates)
+		) ENGINE=InnoDB
+	`
+		// We will run this query with "gh-ost --max-load=Threads_running=1"
+		alterTableThrottlingStatement = `
+		ALTER TABLE stress_test DROP COLUMN created_timestamp
+	`
+		multiAlterTableThrottlingStatement = `
+		ALTER TABLE stress_test ENGINE=InnoDB;
+		ALTER TABLE stress_test ENGINE=InnoDB;
+		ALTER TABLE stress_test ENGINE=InnoDB;
+	`
+		// A trivial statement which must succeed and does not change the schema
+		alterTableTrivialStatement = `
+		ALTER TABLE stress_test ENGINE=InnoDB
+	`
+		dropStatement = `
+		DROP TABLE stress_test
+	`
+		dropNonexistentTableStatement = `
+		DROP TABLE IF EXISTS t_non_existent
+	`
+		multiDropStatements = `DROP TABLE IF EXISTS t1; DROP TABLE IF EXISTS t2; DROP TABLE IF EXISTS t3;`
+	)
+
+	var uuids []string
+	// CREATE
+	t.Run("CREATE TABLE", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDLStatement(t, createParams(createStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert CREATE TABLE", func(t *testing.T) {
+		// The table existed, so it will now be dropped (renamed)
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtgate", "", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+	t.Run("revert revert CREATE TABLE", func(t *testing.T) {
+		// Table was dropped (renamed) so it will now be restored
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtgate", "", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+
+	var throttledUUID string
+	t.Run("throttled migration", func(t *testing.T) {
+		throttledUUID = testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtgate", "", "hint_col", "", false))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
+	})
+	t.Run("failed singleton migration, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtgate", "", "hint_col", "rejected", true))
+		assert.Empty(t, uuid)
+	})
+	t.Run("failed singleton migration, vtctl", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterTableThrottlingStatement, "gh-ost --singleton --max-load=Threads_running=1", "vtctl", "", "hint_col", "rejected", true))
+		assert.Empty(t, uuid)
+	})
+	t.Run("failed revert migration", func(t *testing.T) {
+		uuid := testRevertMigration(t, createRevertParams(throttledUUID, onlineSingletonDDLStrategy, "vtgate", "", "rejected", true))
+		assert.Empty(t, uuid)
+	})
+	t.Run("terminate throttled migration", func(t *testing.T) {
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, throttledUUID, true)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, throttledUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, throttledUUID, schema.OnlineDDLStatusCancelled)
+	})
+	t.Run("successful gh-ost alter, vtctl", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, "gh-ost --singleton", "vtctl", "", "hint_col", "", false))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+	})
+	t.Run("successful gh-ost alter, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, "gh-ost --singleton", "vtgate", "", "hint_col", "", false))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+	})
+
+	t.Run("successful online alter, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, onlineSingletonDDLStrategy, "vtgate", "", "hint_col", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
+		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
+		checkTable(t, tableName, true)
+	})
+	t.Run("revert ALTER TABLE, vttablet", func(t *testing.T) {
+		// The table existed, so it will now be dropped (renamed)
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vtctl", "", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+
+	var throttledUUIDs []string
+	// singleton-context
+	t.Run("throttled migrations, singleton-context", func(t *testing.T) {
+		uuidList := testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "gh-ost --singleton-context --max-load=Threads_running=1", "vtctl", "", "hint_col", "", false))
+		throttledUUIDs = strings.Split(uuidList, "\n")
+		assert.Equal(t, 3, len(throttledUUIDs))
+		for _, uuid := range throttledUUIDs {
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+		}
+	})
+	t.Run("failed migrations, singleton-context", func(t *testing.T) {
+		_ = testOnlineDDLStatement(t, createParams(multiAlterTableThrottlingStatement, "gh-ost --singleton-context --max-load=Threads_running=1", "vtctl", "", "hint_col", "rejected", false))
+	})
+	t.Run("terminate throttled migrations", func(t *testing.T) {
+		for _, uuid := range throttledUUIDs {
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady, schema.OnlineDDLStatusRunning)
+			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
+		}
+		time.Sleep(2 * time.Second)
+		for _, uuid := range throttledUUIDs {
+			uuid = strings.TrimSpace(uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		}
+	})
+
+	t.Run("successful multiple statement, singleton-context, vtctl", func(t *testing.T) {
+		uuidList := testOnlineDDLStatement(t, createParams(multiDropStatements, onlineSingletonContextDDLStrategy, "vtctl", "", "", "", false))
+		uuidSlice := strings.Split(uuidList, "\n")
+		assert.Equal(t, 3, len(uuidSlice))
+		for _, uuid := range uuidSlice {
+			uuid = strings.TrimSpace(uuid)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		}
+	})
+
+	//DROP
+
+	t.Run("online DROP TABLE", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(dropStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+	t.Run("revert DROP TABLE", func(t *testing.T) {
+		// This will recreate the table (well, actually, rename it back into place)
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], onlineSingletonDDLStrategy, "vttablet", "", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+	})
+
+	t.Run("fail concurrent singleton, vtgate", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(alterTableTrivialStatement, "vitess --postpone-completion --singleton", "vtgate", "", "hint_col", "", true))
+		uuids = append(uuids, uuid)
+		_ = testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --singleton", "vtgate", "", "hint_col", "rejected", true))
+		onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+	})
+	t.Run("fail concurrent singleton-context with revert", func(t *testing.T) {
+		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion --singleton-context", "vtctl", "rev:ctx", "", false))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusRunning)
+		// revert is running
+		_ = testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "rejected", true))
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
+	})
+	t.Run("success concurrent singleton-context with no-context revert", func(t *testing.T) {
+		revertUUID := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1], "vitess --allow-concurrent --postpone-completion", "vtctl", "rev:ctx", "", false))
+		onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusRunning)
+		// revert is running but has no --singleton-context. Our next migration should be able to run.
+		uuid := testOnlineDDLStatement(t, createParams(dropNonexistentTableStatement, "vitess --allow-concurrent --singleton-context", "vtctl", "migrate:ctx", "", "", false))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckCancelMigration(t, &vtParams, shards, revertUUID, true)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, revertUUID, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
+	})
+}
+func TestForeignKeys(t *testing.T) {
+	defer cluster.PanicHandler(t)
+
+	var (
+		createStatements = []string{
+			`
+			CREATE TABLE parent_table (
+					id INT NOT NULL,
+					parent_hint_col INT NOT NULL DEFAULT 0,
+					PRIMARY KEY (id)
+			)
+		`,
+			`
+			CREATE TABLE child_table (
+				id INT NOT NULL auto_increment,
+				parent_id INT,
+				child_hint_col INT NOT NULL DEFAULT 0,
+				PRIMARY KEY (id),
+				KEY parent_id_idx (parent_id),
+				CONSTRAINT child_parent_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE
+			)
+		`,
+			`
+			CREATE TABLE child_nofk_table (
+				id INT NOT NULL auto_increment,
+				parent_id INT,
+				child_hint_col INT NOT NULL DEFAULT 0,
+				PRIMARY KEY (id),
+				KEY parent_id_idx (parent_id)
+			)
+		`,
+		}
+		insertStatements = []string{
+			"insert into parent_table (id) values(43)",
+			"insert into child_table (id, parent_id) values(1,43)",
+			"insert into child_table (id, parent_id) values(2,43)",
+			"insert into child_table (id, parent_id) values(3,43)",
+			"insert into child_table (id, parent_id) values(4,43)",
+		}
+		ddlStrategy        = "online --allow-zero-in-date"
+		ddlStrategyAllowFK = ddlStrategy + " --unsafe-allow-foreign-keys"
+	)
+
+	type testCase struct {
+		name             string
+		sql              string
+		allowForeignKeys bool
+		expectHint       string
+	}
+	var testCases = []testCase{
+		{
+			name:             "modify parent, not allowed",
+			sql:              "alter table parent_table engine=innodb",
+			allowForeignKeys: false,
+		},
+		{
+			name:             "modify child, not allowed",
+			sql:              "alter table child_table engine=innodb",
+			allowForeignKeys: false,
+		},
+		{
+			name:             "add foreign key to child, not allowed",
+			sql:              "alter table child_table add CONSTRAINT another_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+			allowForeignKeys: false,
+		},
+		{
+			name:             "add foreign key to table which wasn't a child before, not allowed",
+			sql:              "alter table child_nofk_table add CONSTRAINT new_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+			allowForeignKeys: false,
+		},
+		{
+			// on vanilla MySQL, this migration ends with the child_table referencing the old, original table, and not to the new table now called parent_table.
+			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
+			// However, this tests is still valid in the sense that it lets us modify the parent table in the first place.
+			name:             "modify parent, trivial",
+			sql:              "alter table parent_table engine=innodb",
+			allowForeignKeys: true,
+			expectHint:       "parent_hint_col",
+		},
+		{
+			// on vanilla MySQL, this migration ends with two tables, the original and the new child_table, both referencing parent_table. This has
+			// the unwanted property of then limiting actions on the parent_table based on what rows exist or do not exist on the now stale old
+			// child table.
+			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
+			// However, this tests is still valid in the sense that it lets us modify the child table in the first place.
+			// A valid use case: using FOREIGN_KEY_CHECKS=0  at all times.
+			name:             "modify child, trivial",
+			sql:              "alter table child_table engine=innodb",
+			allowForeignKeys: true,
+			expectHint:       "REFERENCES `parent_table`",
+		},
+		{
+			// on vanilla MySQL, this migration ends with two tables, the original and the new child_table, both referencing parent_table. This has
+			// the unwanted property of then limiting actions on the parent_table based on what rows exist or do not exist on the now stale old
+			// child table.
+			// This is a fundamental foreign key limitation, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/
+			// However, this tests is still valid in the sense that it lets us modify the child table in the first place.
+			// A valid use case: using FOREIGN_KEY_CHECKS=0  at all times.
+			name:             "add foreign key to child",
+			sql:              "alter table child_table add CONSTRAINT another_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+			allowForeignKeys: true,
+			expectHint:       "another_fk",
+		},
+		{
+			name:             "add foreign key to table which wasn't a child before",
+			sql:              "alter table child_nofk_table add CONSTRAINT new_fk FOREIGN KEY (parent_id) REFERENCES parent_table(id) ON DELETE CASCADE",
+			allowForeignKeys: true,
+			expectHint:       "new_fk",
+		},
+	}
+
+	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
+		return &testOnlineDDLStatementParams{
+			ddlStatement:    ddlStatement,
+			ddlStrategy:     ddlStrategy,
+			executeStrategy: executeStrategy,
+			expectHint:      expectHint,
+			expectError:     expectError,
+			skipWait:        skipWait,
+		}
+	}
+
+	testStatement := func(t *testing.T, sql string, ddlStrategy string, expectHint string, expectError bool) (uuid string) {
+		errorHint := ""
+		if expectError {
+			errorHint = anyErrorIndicator
+		}
+		return testOnlineDDLStatement(t, createParams(sql, ddlStrategy, "vtctl", expectHint, errorHint, false))
+	}
+	for _, testcase := range testCases {
+		t.Run(testcase.name, func(t *testing.T) {
+			t.Run("create tables", func(t *testing.T) {
+				for _, statement := range createStatements {
+					t.Run(statement, func(t *testing.T) {
+						uuid := testStatement(t, statement, ddlStrategyAllowFK, "", false)
+						onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+					})
+				}
+			})
+			t.Run("populate tables", func(t *testing.T) {
+				for _, statement := range insertStatements {
+					t.Run(statement, func(t *testing.T) {
+						onlineddl.VtgateExecQuery(t, &vtParams, statement, "")
+					})
+				}
+			})
+			var uuid string
+			t.Run("run migration", func(t *testing.T) {
+				if testcase.allowForeignKeys {
+					uuid = testStatement(t, testcase.sql, ddlStrategyAllowFK, testcase.expectHint, false)
+					onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				} else {
+					uuid = testStatement(t, testcase.sql, ddlStrategy, "", true)
+					if uuid != "" {
+						onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+					}
+				}
+			})
+			t.Run("cleanup", func(t *testing.T) {
+				var artifacts []string
+				if uuid != "" {
+					rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+					require.NotNil(t, rs)
+					row := rs.Named().Row()
+					require.NotNil(t, row)
+
+					artifacts = textutil.SplitDelimitedList(row.AsString("artifacts", ""))
+				}
+
+				artifacts = append(artifacts, "child_table", "child_nofk_table", "parent_table")
+				// brute force drop all tables. In MySQL 8.0 you can do a single `DROP TABLE ... <list of all tables>`
+				// which auto-resovled order. But in 5.7 you can't.
+				droppedTables := map[string]bool{}
+				for range artifacts {
+					for _, artifact := range artifacts {
+						if droppedTables[artifact] {
+							continue
+						}
+						statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", artifact)
+						_, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, statement, cluster.VtctlClientParams{DDLStrategy: "direct", SkipPreflight: true})
+						if err == nil {
+							droppedTables[artifact] = true
+						}
+					}
+				}
+				statement := fmt.Sprintf("DROP TABLE IF EXISTS %s", strings.Join(artifacts, ","))
+				t.Run(statement, func(t *testing.T) {
+					testStatement(t, statement, "direct", "", false)
+				})
+			})
+		})
+	}
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
-func testOnlineDDLStatement(t *testing.T, ddlStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) (uuid string) {
-	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
+func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) (uuid string) {
+	strategySetting, err := schema.ParseDDLStrategy(params.ddlStrategy)
 	require.NoError(t, err)
 
-	stmt, err := sqlparser.Parse(ddlStatement)
-	require.NoError(t, err)
-	ddlStmt, ok := stmt.(sqlparser.DDLStatement)
-	require.True(t, ok)
-	tableName := ddlStmt.GetTable().Name.String()
+	tableName := parseTableName(t, params.ddlStatement)
 
-	if executeStrategy == "vtgate" {
-		result := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, ddlStatement, expectError)
+	if params.executeStrategy == "vtgate" {
+		require.Empty(t, params.migrationContext, "explicit migration context not supported in vtgate. Test via vtctl")
+		result := onlineddl.VtgateExecDDL(t, &vtParams, params.ddlStrategy, params.ddlStatement, params.expectError)
 		if result != nil {
 			row := result.Named().Row()
 			if row != nil {
@@ -691,39 +1243,48 @@ func testOnlineDDLStatement(t *testing.T, ddlStatement string, ddlStrategy strin
 			}
 		}
 	} else {
-		params := &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true}
+		vtctlParams := &cluster.VtctlClientParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext, SkipPreflight: true}
 		if overrideVtctlParams != nil {
-			params = overrideVtctlParams
+			vtctlParams = overrideVtctlParams
 		}
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, ddlStatement, *params)
-		if expectError == "" {
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, params.ddlStatement, *vtctlParams)
+		switch params.expectError {
+		case anyErrorIndicator:
+			if err != nil {
+				// fine. We got any error.
+				t.Logf("expected any error, got this error: %v", err)
+				return
+			}
+			uuid = output
+		case "":
 			assert.NoError(t, err)
 			uuid = output
-		} else {
+		default:
 			assert.Error(t, err)
-			assert.Contains(t, output, expectError)
+			assert.Contains(t, output, params.expectError)
 		}
 	}
 	uuid = strings.TrimSpace(uuid)
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	if !strategySetting.Strategy.IsDirect() && !skipWait {
+	if !strategySetting.Strategy.IsDirect() && !params.skipWait && uuid != "" {
 		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
-	if expectError == "" && expectHint != "" {
-		checkMigratedTable(t, tableName, expectHint)
+	if params.expectError == "" && params.expectHint != "" {
+		checkMigratedTable(t, tableName, params.expectHint)
 	}
 	return uuid
 }
 
 // testRevertMigration reverts a given migration
-func testRevertMigration(t *testing.T, revertUUID string, ddlStrategy, executeStrategy string, expectError string, skipWait bool) (uuid string) {
-	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", revertUUID)
-	if executeStrategy == "vtgate" {
-		result := onlineddl.VtgateExecDDL(t, &vtParams, ddlStrategy, revertQuery, expectError)
+func testRevertMigration(t *testing.T, params *testRevertMigrationParams) (uuid string) {
+	revertQuery := fmt.Sprintf("revert vitess_migration '%s'", params.revertUUID)
+	if params.executeStrategy == "vtgate" {
+		require.Empty(t, params.migrationContext, "explicit migration context not supported in vtgate. Test via vtctl")
+		result := onlineddl.VtgateExecDDL(t, &vtParams, params.ddlStrategy, revertQuery, params.expectError)
 		if result != nil {
 			row := result.Named().Row()
 			if row != nil {
@@ -731,22 +1292,22 @@ func testRevertMigration(t *testing.T, revertUUID string, ddlStrategy, executeSt
 			}
 		}
 	} else {
-		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true})
-		if expectError == "" {
+		output, err := clusterInstance.VtctlclientProcess.ApplySchemaWithOutput(keyspaceName, revertQuery, cluster.VtctlClientParams{DDLStrategy: params.ddlStrategy, MigrationContext: params.migrationContext, SkipPreflight: true})
+		if params.expectError == "" {
 			assert.NoError(t, err)
 			uuid = output
 		} else {
 			assert.Error(t, err)
-			assert.Contains(t, output, expectError)
+			assert.Contains(t, output, params.expectError)
 		}
 	}
 
-	if expectError == "" {
+	if params.expectError == "" {
 		uuid = strings.TrimSpace(uuid)
 		fmt.Println("# Generated UUID (for debug purposes):")
 		fmt.Printf("<%s>\n", uuid)
 	}
-	if !skipWait {
+	if !params.skipWait {
 		time.Sleep(time.Second * 20)
 	}
 	return uuid

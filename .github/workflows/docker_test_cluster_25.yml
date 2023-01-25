@@ -4,7 +4,7 @@ jobs:
 
   build:
     name: Docker Test Cluster 25
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
 
     steps:
     - name: Skip CI

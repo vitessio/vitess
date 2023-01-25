@@ -18,6 +18,11 @@ package mysql
 
 import (
 	"encoding/binary"
+	"hash/crc32"
+)
+
+const (
+	FlagLogEventArtificial = 0x20
 )
 
 // This file contains utility methods to create binlog replication
@@ -100,7 +105,12 @@ func (s *FakeBinlogStream) Packetize(f BinlogFormat, typ byte, flags uint16, dat
 	}
 
 	result := make([]byte, length)
-	binary.LittleEndian.PutUint32(result[0:4], s.Timestamp)
+	switch typ {
+	case eRotateEvent, eHeartbeatEvent:
+		// timestamp remains zero
+	default:
+		binary.LittleEndian.PutUint32(result[0:4], s.Timestamp)
+	}
 	result[4] = typ
 	binary.LittleEndian.PutUint32(result[5:9], s.ServerID)
 	binary.LittleEndian.PutUint32(result[9:13], uint32(length))
@@ -109,6 +119,13 @@ func (s *FakeBinlogStream) Packetize(f BinlogFormat, typ byte, flags uint16, dat
 		binary.LittleEndian.PutUint16(result[17:19], flags)
 	}
 	copy(result[f.HeaderLength:], data)
+
+	switch f.ChecksumAlgorithm {
+	case BinlogChecksumAlgCRC32:
+		checksum := crc32.ChecksumIEEE(result[0 : length-4])
+		binary.LittleEndian.PutUint32(result[length-4:], checksum)
+	}
+
 	return result
 }
 
@@ -157,12 +174,38 @@ func NewRotateEvent(f BinlogFormat, s *FakeBinlogStream, position uint64, filena
 		len(filename)
 	data := make([]byte, length)
 	binary.LittleEndian.PutUint64(data[0:8], position)
+	copy(data[8:], filename)
 
 	ev := s.Packetize(f, eRotateEvent, 0, data)
-	ev[0] = 0
-	ev[1] = 0
-	ev[2] = 0
-	ev[3] = 0
+	return NewMysql56BinlogEvent(ev)
+}
+
+func NewFakeRotateEvent(f BinlogFormat, s *FakeBinlogStream, filename string) BinlogEvent {
+	length := 8 + // position
+		len(filename)
+	data := make([]byte, length)
+	binary.LittleEndian.PutUint64(data[0:8], 4)
+	copy(data[8:], filename)
+
+	ev := s.Packetize(f, eRotateEvent, FlagLogEventArtificial, data)
+	return NewMysql56BinlogEvent(ev)
+}
+
+// NewHeartbeatEvent returns a HeartbeatEvent.
+// see https://dev.mysql.com/doc/internals/en/heartbeat-event.html
+func NewHeartbeatEvent(f BinlogFormat, s *FakeBinlogStream) BinlogEvent {
+	ev := s.Packetize(f, eHeartbeatEvent, 0, []byte{})
+	return NewMysql56BinlogEvent(ev)
+}
+
+// NewHeartbeatEvent returns a HeartbeatEvent.
+// see https://dev.mysql.com/doc/internals/en/heartbeat-event.html
+func NewHeartbeatEventWithLogFile(f BinlogFormat, s *FakeBinlogStream, filename string) BinlogEvent {
+	length := len(filename)
+	data := make([]byte, length)
+	copy(data, filename)
+
+	ev := s.Packetize(f, eHeartbeatEvent, 0, data)
 	return NewMysql56BinlogEvent(ev)
 }
 

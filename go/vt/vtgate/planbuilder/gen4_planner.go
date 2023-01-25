@@ -408,21 +408,21 @@ func gen4DeleteStmtPlanner(
 	return newPlanResult(plan.Primitive(), operators.TablesUsed(op)...), nil
 }
 
-func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) (err error) {
+func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) error {
 	// Rewrite routed tables
-	_ = sqlparser.Rewrite(stmt, func(cursor *sqlparser.Cursor) bool {
-		aliasTbl, isAlias := cursor.Node().(*sqlparser.AliasedTableExpr)
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		aliasTbl, isAlias := node.(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return err == nil
+			return true, nil
 		}
 		tableName, ok := aliasTbl.Expr.(sqlparser.TableName)
 		if !ok {
-			return err == nil
+			return true, nil
 		}
 		var vschemaTable *vindexes.Table
 		vschemaTable, _, _, _, _, err = vschema.FindTableOrVindex(tableName)
 		if err != nil {
-			return false
+			return false, err
 		}
 
 		if vschemaTable.Name.String() != tableName.Name.String() {
@@ -435,9 +435,8 @@ func rewriteRoutedTables(stmt sqlparser.Statement, vschema plancontext.VSchema) 
 			aliasTbl.Expr = tableName
 		}
 
-		return err == nil
-	}, nil)
-	return
+		return true, nil
+	}, stmt)
 }
 
 func setLockOnAllSelect(plan logicalPlan) {

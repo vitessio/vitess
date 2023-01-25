@@ -56,7 +56,7 @@ type BackupParams struct {
 	// Concurrency is the value of -concurrency flag given to Backup command
 	// It determines how many files are processed in parallel
 	Concurrency int
-	// Extra env variables for pre-backup and post-backup transform hooks
+	// Extra env variables used while stopping and starting mysqld
 	HookExtraEnv map[string]string
 	// TopoServer, Keyspace and Shard are used to discover primary tablet
 	TopoServer *topo.Server

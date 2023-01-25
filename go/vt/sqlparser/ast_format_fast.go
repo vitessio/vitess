@@ -1031,35 +1031,35 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			ct.Options.SecondaryEngineAttribute.formatFast(buf)
 		}
-		if ct.Options.KeyOpt == colKeyPrimary {
+		if ct.Options.KeyOpt == ColKeyPrimary {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[PRIMARY])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKeyUnique {
+		if ct.Options.KeyOpt == ColKeyUnique {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[UNIQUE])
 		}
-		if ct.Options.KeyOpt == colKeyUniqueKey {
+		if ct.Options.KeyOpt == ColKeyUniqueKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[UNIQUE])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKeySpatialKey {
+		if ct.Options.KeyOpt == ColKeySpatialKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[SPATIAL])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKeyFulltextKey {
+		if ct.Options.KeyOpt == ColKeyFulltextKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[FULLTEXT])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKey {
+		if ct.Options.KeyOpt == ColKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
@@ -3247,7 +3247,7 @@ func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JSONObjectParam) formatFast(buf *TrackedBuffer) {
+func (node *JSONObjectParam) formatFast(buf *TrackedBuffer) {
 	node.Key.formatFast(buf)
 	buf.WriteString(", ")
 	node.Value.formatFast(buf)

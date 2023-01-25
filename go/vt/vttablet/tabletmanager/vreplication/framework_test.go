@@ -167,6 +167,11 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createPostCopyAction); err != nil {
+			fmt.Fprintf(os.Stderr, "%v", err)
+			return 1
+		}
+
 		if err := env.Mysqld.ExecuteSuperQuery(context.Background(), createVReplicationLogTable); err != nil {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
@@ -464,6 +469,7 @@ func expectDeleteQueries(t *testing.T) {
 	expectNontxQueries(t, qh.Expect(
 		"/delete from _vt.vreplication",
 		"/delete from _vt.copy_state",
+		"/delete from _vt.post_copy_action",
 	))
 }
 

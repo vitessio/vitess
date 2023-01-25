@@ -45,7 +45,7 @@ import (
 )
 
 func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	_ = subFlags.Bool("v2", false, "Use VDiff2")
+	_ = subFlags.Bool("v1", false, "Use legacy VDiff v1")
 
 	timeout := subFlags.Duration("filtered_replication_wait_time", 30*time.Second, "Specifies the maximum time to wait, in seconds, for filtered replication to catch up on primary migrations. The migration will be cancelled on a timeout.")
 	maxRows := subFlags.Int64("limit", math.MaxInt64, "Max rows to stop comparing after")
@@ -76,7 +76,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 	var action vdiff.VDiffAction
 	var actionArg string
 
-	usage := fmt.Errorf("usage: VDiff -- --v2 <keyspace>.<workflow> %s [%s|<UUID>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
+	usage := fmt.Errorf("usage: VDiff -- <keyspace>.<workflow> %s [%s|<UUID>]", strings.Join(*(*[]string)(unsafe.Pointer(&vdiff.Actions)), "|"), strings.Join(vdiff.ActionArgs, "|"))
 	switch subFlags.NArg() {
 	case 1: // for backward compatibility with vdiff1
 		action = vdiff.CreateAction
@@ -119,7 +119,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 			MaxExtraRowsToCompare: *maxExtraRowsToCompare,
 		},
 		ReportOptions: &tabletmanagerdatapb.VDiffReportOptions{
-			OnlyPKS:    *onlyPks,
+			OnlyPks:    *onlyPks,
 			DebugQuery: *debugQuery,
 			Format:     format,
 		},
@@ -142,13 +142,13 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
 			if err != nil {
-				return fmt.Errorf("can only show a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+				return fmt.Errorf("can only show a specific vdiff, please provide a valid UUID; view all with: VDiff -- %s.%s show all", keyspace, workflowName)
 			}
 		}
 	case vdiff.StopAction, vdiff.ResumeAction:
 		vdiffUUID, err = uuid.Parse(actionArg)
 		if err != nil {
-			return fmt.Errorf("can only %s a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", action, keyspace, workflowName)
+			return fmt.Errorf("can only %s a specific vdiff, please provide a valid UUID; view all with: VDiff -- %s.%s show all", action, keyspace, workflowName)
 		}
 	case vdiff.DeleteAction:
 		switch actionArg {
@@ -156,7 +156,7 @@ func commandVDiff2(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.F
 		default:
 			vdiffUUID, err = uuid.Parse(actionArg)
 			if err != nil {
-				return fmt.Errorf("can only delete a specific vdiff, please provide a valid UUID; view all with: VDiff -- --v2 %s.%s show all", keyspace, workflowName)
+				return fmt.Errorf("can only delete a specific vdiff, please provide a valid UUID; view all with: VDiff -- %s.%s show all", keyspace, workflowName)
 			}
 		}
 	default:

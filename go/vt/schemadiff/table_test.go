@@ -43,6 +43,7 @@ func TestCreateTableDiff(t *testing.T) {
 		fulltext   int
 		colrename  int
 		constraint int
+		charset    int
 	}{
 		{
 			name: "identical",
@@ -189,43 +190,43 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "reorder column, far jump",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int)",
 			to:    "create table t2 (a int, b int, c int, d int, id int primary key)",
-			diff:  "alter table t1 modify column id int primary key after d",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
+			diff:  "alter table t1 modify column id int after d",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int AFTER `d`",
 		},
 		{
 			name:  "reorder column, far jump with case sentivity",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int)",
 			to:    "create table t2 (a int, B int, c int, d int, id int primary key)",
-			diff:  "alter table t1 modify column B int, modify column id int primary key after d",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `B` int, MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
+			diff:  "alter table t1 modify column B int, modify column id int after d",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `B` int, MODIFY COLUMN `id` int AFTER `d`",
 		},
 		{
 			name:  "reorder column, far jump, another reorder",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int)",
 			to:    "create table t2 (a int, c int, b int, d int, id int primary key)",
-			diff:  "alter table t1 modify column c int after a, modify column id int primary key after d",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
+			diff:  "alter table t1 modify column c int after a, modify column id int after d",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, MODIFY COLUMN `id` int AFTER `d`",
 		},
 		{
 			name:  "reorder column, far jump, another reorder 2",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int)",
 			to:    "create table t2 (c int, a int, b int, d int, id int primary key)",
-			diff:  "alter table t1 modify column c int first, modify column id int primary key after d",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int FIRST, MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
+			diff:  "alter table t1 modify column c int first, modify column id int after d",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int FIRST, MODIFY COLUMN `id` int AFTER `d`",
 		},
 		{
 			name:  "reorder column, far jump, another reorder 3",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int, e int, f int)",
 			to:    "create table t2 (a int, c int, b int, d int, id int primary key, e int, f int)",
-			diff:  "alter table t1 modify column c int after a, modify column id int primary key after d",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, MODIFY COLUMN `id` int PRIMARY KEY AFTER `d`",
+			diff:  "alter table t1 modify column c int after a, modify column id int after d",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `c` int AFTER `a`, MODIFY COLUMN `id` int AFTER `d`",
 		},
 		{
 			name:  "reorder column, far jump, another reorder, removed columns",
 			from:  "create table t1 (id int primary key, a int, b int, c int, d int, e int, f int, g int)",
 			to:    "create table t2 (a int, c int, f int, e int, id int primary key, g int)",
-			diff:  "alter table t1 drop column b, drop column d, modify column f int after c, modify column id int primary key after e",
-			cdiff: "ALTER TABLE `t1` DROP COLUMN `b`, DROP COLUMN `d`, MODIFY COLUMN `f` int AFTER `c`, MODIFY COLUMN `id` int PRIMARY KEY AFTER `e`",
+			diff:  "alter table t1 drop column b, drop column d, modify column f int after c, modify column id int after e",
+			cdiff: "ALTER TABLE `t1` DROP COLUMN `b`, DROP COLUMN `d`, MODIFY COLUMN `f` int AFTER `c`, MODIFY COLUMN `id` int AFTER `e`",
 		},
 		{
 			name:  "two reorders",
@@ -337,8 +338,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "modify column primary key",
 			from:  "create table t1 (`id` int)",
 			to:    "create table t2 (id int primary key)",
-			diff:  "alter table t1 modify column id int primary key",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int PRIMARY KEY",
+			diff:  "alter table t1 add primary key (id)",
+			cdiff: "ALTER TABLE `t1` ADD PRIMARY KEY (`id`)",
 		},
 		{
 			name:  "added primary key",
@@ -381,6 +382,11 @@ func TestCreateTableDiff(t *testing.T) {
 			to:    "create table t2 (`id` int, i int, primary key(id, i),key i_idx(`i`))",
 			diff:  "alter table t1 drop primary key, add primary key (id, i)",
 			cdiff: "ALTER TABLE `t1` DROP PRIMARY KEY, ADD PRIMARY KEY (`id`, `i`)",
+		},
+		{
+			name: "alternative primary key definition, no diff",
+			from: "create table t1 (`id` int primary key, i int)",
+			to:   "create table t2 (`id` int, i int, primary key (id))",
 		},
 		{
 			name: "reordered key, no diff",
@@ -967,7 +973,57 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 100",
 		},
 		{
-			name:  `change table charset`,
+			name:  "apply table charset",
+			from:  "create table t (id int, primary key(id))",
+			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			diff:  "alter table t charset utf8mb4",
+			cdiff: "ALTER TABLE `t` CHARSET utf8mb4",
+		},
+		{
+			name:    "ignore empty table charset",
+			from:    "create table t (id int, primary key(id))",
+			to:      "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore empty table charset and collate",
+			from:    "create table t (id int, primary key(id))",
+			to:      "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore empty table collate",
+			from:    "create table t (id int, primary key(id))",
+			to:      "create table t (id int, primary key(id)) COLLATE utf8mb4_0900_ai_ci",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore empty table charset and collate in target",
+			from:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:      "create table t (id int, primary key(id))",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore dropped collate",
+			from:    "create table t (id int, primary key(id)) COLLATE utf8mb4_0900_ai_ci",
+			to:      "create table t (id int, primary key(id))",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore table charset",
+			from:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8",
+			to:      "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			charset: TableCharsetCollateIgnoreAlways,
+		},
+		{
+			name:  "change table charset",
+			from:  "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8",
+			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			diff:  "alter table t charset utf8mb4",
+			cdiff: "ALTER TABLE `t` CHARSET utf8mb4",
+		},
+		{
+			name:  `change table charset and columns`,
 			from:  "create table t (id int primary key, t1 varchar(128) default null, t2 varchar(128) not null, t3 tinytext charset latin1, t4 tinytext charset latin1) default charset=utf8",
 			to:    "create table t (id int primary key, t1 varchar(128) not null, t2 varchar(128) not null, t3 tinytext, t4 tinytext charset latin1) default charset=utf8mb4",
 			diff:  "alter table t modify column t1 varchar(128) not null, modify column t2 varchar(128) not null, modify column t3 tinytext, charset utf8mb4",
@@ -977,8 +1033,8 @@ func TestCreateTableDiff(t *testing.T) {
 			name:  "normalized unsigned attribute",
 			from:  "create table t1 (id int primary key)",
 			to:    "create table t1 (id int unsigned primary key)",
-			diff:  "alter table t1 modify column id int unsigned primary key",
-			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int unsigned PRIMARY KEY",
+			diff:  "alter table t1 modify column id int unsigned",
+			cdiff: "ALTER TABLE `t1` MODIFY COLUMN `id` int unsigned",
 		},
 		{
 			name:  "normalized ENGINE InnoDB value",
@@ -1054,6 +1110,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.ConstraintNamesStrategy = ts.constraint
 			hints.ColumnRenameStrategy = ts.colrename
 			hints.FullTextKeyStrategy = ts.fulltext
+			hints.TableCharsetCollateStrategy = ts.charset
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))
@@ -1161,6 +1218,66 @@ func TestValidate(t *testing.T) {
 			to:    "create table t (id int primary key, i int, key i_idx(i))",
 		},
 		{
+			name:      "invalid table definition: primary key, same columns",
+			from:      "create table t (id int primary key, i int, primary key (id))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
+		},
+		{
+			name:      "invalid table definition: primary key, different column",
+			from:      "create table t (id int primary key, i int, primary key (i))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
+		},
+		{
+			name:  "add primary key",
+			from:  "create table t (id int, i int)",
+			alter: "alter table t add primary key(id)",
+			to:    "create table t (id int, i int, primary key (id))",
+		},
+		{
+			name:  "add primary key with existing key",
+			from:  "create table t (id int, i int, key i_idx (i))",
+			alter: "alter table t add primary key(id)",
+			to:    "create table t (id int, i int, primary key (id), key i_idx (i))",
+		},
+		{
+			name:  "modify into primary key",
+			from:  "create table t (id int, i int)",
+			alter: "alter table t modify id int primary key",
+			to:    "create table t (id int, i int, primary key (id))",
+		},
+		{
+			name:  "modify a primary key column",
+			from:  "create table t (id int primary key, i int)",
+			alter: "alter table t modify id bigint primary key",
+			to:    "create table t (id bigint, i int, primary key (id))",
+		},
+		{
+			name:  "modify a primary key column 2",
+			from:  "create table t (id int, i int, primary key (id))",
+			alter: "alter table t modify id bigint primary key",
+			to:    "create table t (id bigint, i int, primary key (id))",
+		},
+		{
+			name:      "fail modify another column to primary key",
+			from:      "create table t (id int primary key, i int)",
+			alter:     "alter table t modify i int primary key",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
+		},
+		{
+			name:      "fail add another primary key column",
+			from:      "create table t (id int primary key, i int)",
+			alter:     "alter table t add column i2 int primary key",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
+		},
+		{
+			name:      "fail add another primary key",
+			from:      "create table t (id int primary key, i int)",
+			alter:     "alter table t add primary key (i)",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
+		},
+		{
 			name:  "add key, column case",
 			from:  "create table t (id int primary key, i int)",
 			alter: "alter table t add key i_idx(I)",
@@ -1249,6 +1366,18 @@ func TestValidate(t *testing.T) {
 			from:      "create table t (id int primary key, i1 int, i2 int, i4 int)",
 			alter:     "alter table t add key i12_idx(i1, i2), add key i32_idx(i3, i2), add key i21_idx(i2, i1)",
 			expectErr: &InvalidColumnInKeyError{Table: "t", Column: "i3", Key: "i32_idx"},
+		},
+		{
+			name:      "multiple primary keys",
+			from:      "create table t (id int primary key, i1 int, i2 int, primary key (i1))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
+		},
+		{
+			name:      "multiple primary keys for same column",
+			from:      "create table t (id int primary key, i1 int, i2 int, primary key (id))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &DuplicateKeyNameError{Table: "t", Key: "PRIMARY"},
 		},
 		// partitions
 		{
@@ -1479,10 +1608,16 @@ func TestValidate(t *testing.T) {
 			expectErr: &InvalidColumnInForeignKeyConstraintError{Table: "t", Constraint: "f", Column: "z"},
 		},
 		{
+			name:      "mismatching column count in foreign key",
+			from:      "create table t (id int primary key, i int, constraint f foreign key (i) references parent(id, z))",
+			alter:     "alter table t engine=innodb",
+			expectErr: &ForeignKeyColumnCountMismatchError{Table: "t", Constraint: "f", ColumnCount: 1, ReferencedTable: "parent", ReferencedColumnCount: 2},
+		},
+		{
 			name:  "change with constraints with uppercase columns",
-			from:  "CREATE TABLE `Machine` (id int primary key, `a` int, `B` int, PRIMARY KEY (`id`), CONSTRAINT `chk` CHECK (`B` >= `a`))",
+			from:  "CREATE TABLE `Machine` (id int primary key, `a` int, `B` int, CONSTRAINT `chk` CHECK (`B` >= `a`))",
 			alter: "ALTER TABLE `Machine` MODIFY COLUMN `id` bigint primary key",
-			to:    "CREATE TABLE `Machine` (id bigint primary key, `a` int, `B` int, PRIMARY KEY (`id`), CONSTRAINT `chk` CHECK (`B` >= `a`))",
+			to:    "CREATE TABLE `Machine` (id bigint primary key, `a` int, `B` int, CONSTRAINT `chk` CHECK (`B` >= `a`))",
 		},
 	}
 	hints := DiffHints{}
@@ -1503,8 +1638,12 @@ func TestValidate(t *testing.T) {
 			a := &AlterTableEntityDiff{from: from, alterTable: alterTable}
 			applied, err := from.Apply(a)
 			if ts.expectErr != nil {
+				appliedCanonicalStatementString := ""
+				if applied != nil {
+					appliedCanonicalStatementString = applied.Create().CanonicalStatementString()
+				}
 				assert.Error(t, err)
-				assert.EqualError(t, err, ts.expectErr.Error())
+				assert.EqualErrorf(t, err, ts.expectErr.Error(), "applied: %v", appliedCanonicalStatementString)
 			} else {
 				assert.NoError(t, err)
 				assert.NotNil(t, applied)
@@ -1536,173 +1675,178 @@ func TestNormalize(t *testing.T) {
 	}{
 		{
 			name: "basic table",
+			from: "create table t (id int, i int, primary key (id))",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "basic table, primary key",
 			from: "create table t (id int primary key, i int)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes default null",
-			from: "create table t (id int primary key, i int default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			from: "create table t (id int, i int default null, primary key (id))",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "keeps not exist",
 			from: "create table if not exists t (id int primary key, i int)",
-			to:   "CREATE TABLE IF NOT EXISTS `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE IF NOT EXISTS `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "timestamp null",
 			from: "create table t (id int primary key, t timestamp null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`t` timestamp NULL\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t` timestamp NULL,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "timestamp default null",
 			from: "create table t (id int primary key, t timestamp default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`t` timestamp NULL\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`t` timestamp NULL,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "uses lowercase type",
 			from: "create table t (id INT primary key, i INT default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes default signed",
 			from: "create table t (id int signed primary key, i int signed)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "does not remove tinyint(1) size",
 			from: "create table t (id int primary key, i tinyint(1) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` tinyint(1)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes other tinyint size",
 			from: "create table t (id int primary key, i tinyint(2) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` tinyint\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` tinyint,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes int size",
 			from: "create table t (id int primary key, i int(1) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes bigint size",
 			from: "create table t (id int primary key, i bigint(1) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` bigint\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` bigint,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "keeps zerofill",
 			from: "create table t (id int primary key, i int zerofill default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int zerofill\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int zerofill,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes int sizes case insensitive",
 			from: "create table t (id int primary key, i INT(11) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes float size with correct type",
 			from: "create table t (id int primary key, f float(24) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` float\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` float,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes float size with correct type",
 			from: "create table t (id int primary key, f float(25) default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` double,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "normalizes real type to double",
 			from: "create table t (id int primary key, f real default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` double,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "normalizes float4 type to float",
 			from: "create table t (id int primary key, f float4 default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` float\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` float,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "normalizes float8 type to double",
 			from: "create table t (id int primary key, f float8 default null)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`f` double\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`f` double,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "removes matching charset",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4) charset utf8mb4",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4",
 		},
 		{
 			name: "removes matching case insensitive charset",
 			from: "create table t (id int signed primary key, v varchar(255) charset UTF8MB4) charset utf8mb4",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4",
 		},
 		{
 			name: "removes matching collation if default",
 			from: "create table t (id int signed primary key, v varchar(255) collate utf8mb4_0900_ai_ci) collate utf8mb4_0900_ai_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) COLLATE utf8mb4_0900_ai_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) COLLATE utf8mb4_0900_ai_ci",
 		},
 		{
 			name: "removes matching collation case insensitive if default",
 			from: "create table t (id int signed primary key, v varchar(255) collate UTF8MB4_0900_AI_CI) collate utf8mb4_0900_ai_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) COLLATE utf8mb4_0900_ai_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) COLLATE utf8mb4_0900_ai_ci",
 		},
 		{
 			name: "removes matching charset & collation if default",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_0900_ai_ci) charset utf8mb4 collate utf8mb4_0900_ai_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci",
 		},
 		{
 			name: "sets collation for non default collation at table level",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4) charset utf8mb4 collate utf8mb4_0900_bin",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255) COLLATE utf8mb4_0900_ai_ci\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255) COLLATE utf8mb4_0900_ai_ci,\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
 		},
 		{
 			name: "does not add collation for a non default collation at table level",
 			from: "create table t (id int signed primary key, v varchar(255)) charset utf8mb4 collate utf8mb4_0900_bin",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
 		},
 		{
 			name: "cleans up collation at the column level if it matches the tabel level and both are given",
 			from: "create table t (id int signed primary key, v varchar(255) collate utf8mb4_0900_bin) charset utf8mb4 collate utf8mb4_0900_bin",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
 		},
 		{
 			name: "cleans up charset and collation at the column level if it matches the tabel level and both are given",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_0900_bin) charset utf8mb4 collate utf8mb4_0900_bin",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
 		},
 		{
 			name: "keeps existing collation even if default for non default collation at table level",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_0900_ai_ci) charset utf8mb4 collate utf8mb4_0900_bin",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255) COLLATE utf8mb4_0900_ai_ci\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255) COLLATE utf8mb4_0900_ai_ci,\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
 		},
 		{
 			name: "keeps existing collation even if another non default collation",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb4 collate utf8mb4_german2_ci) charset utf8mb4 collate utf8mb4_0900_bin",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255) COLLATE utf8mb4_german2_ci\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255) COLLATE utf8mb4_german2_ci,\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_bin",
 		},
 		{
 			name: "maps utf8 to utf8mb3",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_general_ci) charset utf8 collate utf8_general_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_general_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_general_ci",
 		},
 		{
 			name: "lowercase table options for charset and collation",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8 collate utf8_general_ci) charset UTF8 collate UTF8_GENERAL_CI",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_general_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_general_ci",
 		},
 		{
 			name: "drops existing collation if it matches table default at column level for non default charset",
 			from: "create table t (id int signed primary key, v varchar(255) charset utf8mb3 collate utf8_unicode_ci) charset utf8mb3 collate utf8_unicode_ci",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`v` varchar(255)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_unicode_ci",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`v` varchar(255),\n\tPRIMARY KEY (`id`)\n) CHARSET utf8mb3,\n  COLLATE utf8mb3_unicode_ci",
 		},
 		{
 			name: "correct case table options for engine",
 			from: "create table t (id int signed primary key) engine innodb",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY\n) ENGINE InnoDB",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n) ENGINE InnoDB",
 		},
 		{
 			name: "correct case for engine in partitions",
 			from: "create table a (id int not null primary key) engine InnoDB, charset utf8mb4, collate utf8mb4_0900_ai_ci partition by range (`id`) (partition `p10` values less than(10) engine innodb)",
-			to:   "CREATE TABLE `a` (\n\t`id` int NOT NULL PRIMARY KEY\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci\nPARTITION BY RANGE (`id`)\n(PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
+			to:   "CREATE TABLE `a` (\n\t`id` int NOT NULL,\n\tPRIMARY KEY (`id`)\n) ENGINE InnoDB,\n  CHARSET utf8mb4,\n  COLLATE utf8mb4_0900_ai_ci\nPARTITION BY RANGE (`id`)\n(PARTITION `p10` VALUES LESS THAN (10) ENGINE InnoDB)",
 		},
 		{
 			name: "generates a name for a key with proper casing",
@@ -1722,42 +1866,42 @@ func TestNormalize(t *testing.T) {
 		{
 			name: "generates a name for foreign key constraints",
 			from: "create table t1 (id int primary key, i int, foreign key (i) references parent(id))",
-			to:   "CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`i` int,\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
+			to:   "CREATE TABLE `t1` (\n\t`id` int,\n\t`i` int,\n\tPRIMARY KEY (`id`),\n\tCONSTRAINT `t1_ibfk_1` FOREIGN KEY (`i`) REFERENCES `parent` (`id`)\n)",
 		},
 		{
 			name: "uses KEY for indexes",
 			from: "create table t (id int primary key, i1 int, index i1_idx(i1))",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`)\n)",
 		},
 		{
 			name: "drops default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using btree)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`)\n)",
 		},
 		{
 			name: "does not drop non-default index type",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) using hash)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) USING hash\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`) USING hash\n)",
 		},
 		{
 			name: "drops default index visibility",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) visible)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`)\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`)\n)",
 		},
 		{
 			name: "drops non-default index visibility",
 			from: "create table t (id int primary key, i1 int, key i1_idx(i1) invisible)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int,\n\tKEY `i1_idx` (`i1`) INVISIBLE\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`),\n\tKEY `i1_idx` (`i1`) INVISIBLE\n)",
 		},
 		{
 			name: "drops default column visibility",
 			from: "create table t (id int primary key, i1 int visible)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int,\n\tPRIMARY KEY (`id`)\n)",
 		},
 		{
 			name: "drops non-default column visibility",
 			from: "create table t (id int primary key, i1 int invisible)",
-			to:   "CREATE TABLE `t` (\n\t`id` int PRIMARY KEY,\n\t`i1` int INVISIBLE\n)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int INVISIBLE,\n\tPRIMARY KEY (`id`)\n)",
 		},
 	}
 	for _, ts := range tt {

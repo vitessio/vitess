@@ -185,6 +185,10 @@ func (ev filePosFakeEvent) IsPreviousGTIDs() bool {
 	return false
 }
 
+func (ev filePosFakeEvent) IsHeartbeat() bool {
+	return false
+}
+
 func (ev filePosFakeEvent) IsTableMap() bool {
 	return false
 }

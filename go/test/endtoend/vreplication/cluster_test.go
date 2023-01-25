@@ -417,7 +417,6 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
 		options,
-		false,
 		vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)

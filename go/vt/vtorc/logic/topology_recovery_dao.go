@@ -39,7 +39,8 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 		process.ThisHostname,
 		util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
-		analysisEntry.ClusterDetails.ClusterName,
+		analysisEntry.ClusterDetails.Keyspace,
+		analysisEntry.ClusterDetails.Shard,
 		analysisEntry.CountReplicas,
 		analysisEntry.IsActionableRecovery,
 	)
@@ -59,7 +60,8 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					processing_node_hostname,
 					processcing_node_token,
 					analysis,
-					cluster_name,
+					keyspace,
+					shard,
 					count_affected_replicas,
 					is_actionable,
 					start_active_period
@@ -68,6 +70,7 @@ func AttemptFailureDetectionRegistration(analysisEntry *inst.ReplicationAnalysis
 					?,
 					1,
 					0,
+					?,
 					?,
 					?,
 					?,
@@ -125,7 +128,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					processing_node_hostname,
 					processcing_node_token,
 					analysis,
-					cluster_name,
+					keyspace,
+					shard,
 					count_affected_replicas,
 					last_detection_id
 				) values (
@@ -141,6 +145,7 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 					?,
 					?,
 					?,
+					?,
 					(select ifnull(max(detection_id), 0) from topology_failure_detection where hostname=? and port=?)
 				)
 			`,
@@ -149,7 +154,8 @@ func writeTopologyRecovery(topologyRecovery *TopologyRecovery) (*TopologyRecover
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 		process.ThisHostname, util.ProcessToken.Hash,
 		string(analysisEntry.Analysis),
-		analysisEntry.ClusterDetails.ClusterName,
+		analysisEntry.ClusterDetails.Keyspace,
+		analysisEntry.ClusterDetails.Shard,
 		analysisEntry.CountReplicas,
 		analysisEntry.AnalyzedInstanceKey.Hostname, analysisEntry.AnalyzedInstanceKey.Port,
 	)
@@ -191,14 +197,14 @@ func AttemptRecoveryRegistration(analysisEntry *inst.ReplicationAnalysis, failIf
 	if failIfClusterInActiveRecovery {
 		// Let's check if this cluster has just experienced a failover and is still in active period.
 		// If so, we reject recovery registration to avoid flapping.
-		recoveries, err := ReadInActivePeriodClusterRecovery(analysisEntry.ClusterDetails.ClusterName)
+		recoveries, err := ReadInActivePeriodClusterRecovery(analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard)
 		if err != nil {
 			log.Error(err)
 			return nil, err
 		}
 		if len(recoveries) > 0 {
 			_ = RegisterBlockedRecoveries(analysisEntry, recoveries)
-			errMsg := fmt.Sprintf("AttemptRecoveryRegistration: cluster %+v has recently experienced a failover (of %+v) and is in active period. It will not be failed over again. You may acknowledge the failure on this cluster (-c ack-cluster-recoveries) or on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.ClusterDetails.ClusterName, recoveries[0].AnalysisEntry.AnalyzedInstanceKey, recoveries[0].AnalysisEntry.AnalyzedInstanceKey)
+			errMsg := fmt.Sprintf("AttemptRecoveryRegistration: keyspace %+v shard %+v has recently experienced a failover (of %+v) and is in active period. It will not be failed over again. You may acknowledge the failure on this cluster (-c ack-cluster-recoveries) or on %+v (-c ack-instance-recoveries) to remove this blockage", analysisEntry.ClusterDetails.Keyspace, analysisEntry.ClusterDetails.Shard, recoveries[0].AnalysisEntry.AnalyzedInstanceKey, recoveries[0].AnalysisEntry.AnalyzedInstanceKey)
 			log.Errorf(errMsg)
 			return nil, fmt.Errorf(errMsg)
 		}
@@ -248,7 +254,8 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 				into blocked_topology_recovery (
 					hostname,
 					port,
-					cluster_name,
+					keyspace,
+					shard,
 					analysis,
 					last_blocked_timestamp,
 					blocking_recovery_id
@@ -257,17 +264,20 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 					?,
 					?,
 					?,
+					?,
 					NOW(),
 					?
 				)
 				on duplicate key update
-					cluster_name=values(cluster_name),
+					keyspace=values(keyspace),
+					shard=values(shard),
 					analysis=values(analysis),
 					last_blocked_timestamp=values(last_blocked_timestamp),
 					blocking_recovery_id=values(blocking_recovery_id)
 			`, analysisEntry.AnalyzedInstanceKey.Hostname,
 			analysisEntry.AnalyzedInstanceKey.Port,
-			analysisEntry.ClusterDetails.ClusterName,
+			analysisEntry.ClusterDetails.Keyspace,
+			analysisEntry.ClusterDetails.Shard,
 			string(analysisEntry.Analysis),
 			recovery.ID,
 		)
@@ -446,7 +456,8 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
       ifnull(successor_port, 0) as successor_port,
       ifnull(successor_alias, '') as successor_alias,
       analysis,
-      cluster_name,
+      keyspace,
+	  shard,
       count_affected_replicas,
       participating_instances,
       lost_replicas,
@@ -478,7 +489,8 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceKey.Hostname = m.GetString("hostname")
 		topologyRecovery.AnalysisEntry.AnalyzedInstanceKey.Port = m.GetInt("port")
 		topologyRecovery.AnalysisEntry.Analysis = inst.AnalysisCode(m.GetString("analysis"))
-		topologyRecovery.AnalysisEntry.ClusterDetails.ClusterName = m.GetString("cluster_name")
+		topologyRecovery.AnalysisEntry.ClusterDetails.Keyspace = m.GetString("keyspace")
+		topologyRecovery.AnalysisEntry.ClusterDetails.Shard = m.GetString("shard")
 		topologyRecovery.AnalysisEntry.CountReplicas = m.GetUint("count_affected_replicas")
 
 		topologyRecovery.SuccessorKey = &inst.InstanceKey{}
@@ -511,12 +523,13 @@ func readRecoveries(whereCondition string, limit string, args []any) ([]*Topolog
 
 // ReadInActivePeriodClusterRecovery reads recoveries (possibly complete!) that are in active period.
 // (may be used to block further recoveries on this cluster)
-func ReadInActivePeriodClusterRecovery(clusterName string) ([]*TopologyRecovery, error) {
+func ReadInActivePeriodClusterRecovery(keyspace string, shard string) ([]*TopologyRecovery, error) {
 	whereClause := `
 		where
 			in_active_period=1
-			and cluster_name=?`
-	return readRecoveries(whereClause, ``, sqlutils.Args(clusterName))
+			and keyspace=?
+			and shard=?`
+	return readRecoveries(whereClause, ``, sqlutils.Args(keyspace, shard))
 }
 
 // ReadInActivePeriodSuccessorInstanceRecovery reads completed recoveries for a given instance, where said instance
@@ -531,16 +544,12 @@ func ReadInActivePeriodSuccessorInstanceRecovery(instanceKey *inst.InstanceKey) 
 }
 
 // ReadRecentRecoveries reads latest recovery entries from topology_recovery
-func ReadRecentRecoveries(clusterName string, unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
+func ReadRecentRecoveries(unacknowledgedOnly bool, page int) ([]*TopologyRecovery, error) {
 	whereConditions := []string{}
 	whereClause := ""
 	args := sqlutils.Args()
 	if unacknowledgedOnly {
 		whereConditions = append(whereConditions, `acknowledged=0`)
-	}
-	if clusterName != "" {
-		whereConditions = append(whereConditions, `cluster_name=?`)
-		args = append(args, clusterName)
 	}
 	if len(whereConditions) > 0 {
 		whereClause = fmt.Sprintf("where %s", strings.Join(whereConditions, " and "))

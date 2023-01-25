@@ -45,7 +45,7 @@ func TestCreateViewDDL(t *testing.T) {
 	require.NoError(t, err)
 
 	// validate the row in _vt.views.
-	qr, err := client.Execute("select * from _vt.views", nil)
+	qr, err := client.Execute("select table_name, view_definition, create_statement from _vt.views", nil)
 	require.NoError(t, err)
 	require.Equal(t,
 		`[[VARCHAR("vitess_view") TEXT("select * from vitess_a") TEXT("create view vitess_view as select * from vitess_a")]]`,
@@ -60,7 +60,7 @@ func TestCreateViewDDL(t *testing.T) {
 	require.NoError(t, err)
 
 	// validate the row in _vt.views.
-	qr, err = client.Execute("select * from _vt.views", nil)
+	qr, err = client.Execute("select table_name, view_definition, create_statement from _vt.views", nil)
 	require.NoError(t, err)
 	require.Equal(t,
 		`[[VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
@@ -91,7 +91,7 @@ func TestAlterViewDDL(t *testing.T) {
 	require.NoError(t, err)
 
 	// validate the row in _vt.views.
-	qr, err := client.Execute("select * from _vt.views", nil)
+	qr, err := client.Execute("select table_name, view_definition, create_statement from _vt.views", nil)
 	require.NoError(t, err)
 	require.Equal(t,
 		`[[VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,

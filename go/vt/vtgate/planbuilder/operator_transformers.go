@@ -412,11 +412,11 @@ func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) 
 		return
 	}
 	sqr := &subQReplacer{subqueryToReplace: extractedSubqueries}
-	sqlparser.Rewrite(sel, sqr.replacer, nil)
+	sqlparser.SafeRewrite(sel, nil, sqr.replacer)
 	for sqr.replaced {
 		// to handle subqueries inside subqueries, we need to do this again and again until no replacements are left
 		sqr.replaced = false
-		sqlparser.Rewrite(sel, sqr.replacer, nil)
+		sqlparser.SafeRewrite(sel, nil, sqr.replacer)
 	}
 }
 
@@ -766,7 +766,7 @@ func (sqr *subQReplacer) replacer(cursor *sqlparser.Cursor) bool {
 		if ext.GetArgName() == replaceByExpr.GetArgName() {
 			cursor.Replace(ext.Original)
 			sqr.replaced = true
-			return false
+			return true
 		}
 	}
 	return true

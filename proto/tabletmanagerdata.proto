@@ -531,7 +531,7 @@ message VDiffPickerOptions {
 
 // options that only influence how vdiff differences are reported
 message VDiffReportOptions {
-  bool only_p_k_s = 1;
+  bool only_pks = 1;
   bool debug_query = 2;
   string format = 3;
 }

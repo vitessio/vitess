@@ -328,7 +328,9 @@ func TestTableMigrateMainflow(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 	cancelMigration := func() {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
@@ -627,10 +629,10 @@ func TestShardMigrateMainflow(t *testing.T) {
 	checkJournals()
 
 	stopStreams := func() {
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
 	stopStreams()
 
@@ -640,7 +642,9 @@ func TestShardMigrateMainflow(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 	cancelMigration := func() {
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
@@ -826,6 +830,7 @@ func testTableMigrateOneToMany(t *testing.T, keepData, keepRoutingRules bool) {
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 
 	createReverseVReplication := func() {
@@ -992,7 +997,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		"Lock keyspace ks2",
 		"Stop writes on keyspace ks1, tables [t1,t2]:",
 		"\tKeyspace ks1, Shard 0 at Position MariaDB/5-456-892",
-		"Wait for VReplication on stopped streams to catchup for upto 1s",
+		"Wait for VReplication on stopped streams to catchup for up to 1s",
 		"Create reverse replication workflow test_reverse",
 		"Create journal entries on source databases",
 		"Enable writes on keyspace ks2 tables [t1,t2]",
@@ -1048,6 +1053,7 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid34, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 
 	createReverseVReplication := func() {
@@ -1078,8 +1084,10 @@ func TestTableMigrateOneToManyDryRun(t *testing.T) {
 		tme.dbTargetClients[1].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid1, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (1)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("delete from _vt.vreplication where id in (1)", &sqltypes.Result{}, nil)
 		tme.dbTargetClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (1)", &sqltypes.Result{}, nil)
+		tme.dbTargetClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (1)", &sqltypes.Result{}, nil)
 	}
 	deleteTargetVReplication()
 
@@ -1148,7 +1156,9 @@ func TestMigrateFailJournal(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 
 	createReverseVReplication := func() {
@@ -1356,7 +1366,9 @@ func TestTableMigrateCancel(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 	cancelMigration := func() {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
@@ -1416,7 +1428,9 @@ func TestTableMigrateCancelDryRun(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 	cancelMigration := func() {
 		tme.dbTargetClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks2' and workflow = 'test'", resultid12, nil)
@@ -1494,7 +1508,9 @@ func TestTableMigrateNoReverse(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 
 	createReverseVReplication := func() {
@@ -1915,10 +1931,10 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 	checkJournals()
 
 	stopStreams := func() {
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
-		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)
 	}
 	stopStreams()
 
@@ -1928,7 +1944,9 @@ func TestShardMigrateNoAvailableTabletsForReverseReplication(t *testing.T) {
 		tme.dbSourceClients[0].addQuery("delete from _vt.vreplication where id in (3)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.vreplication where id in (3, 4)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[0].addQuery("delete from _vt.copy_state where vrepl_id in (3)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[0].addQuery("delete from _vt.post_copy_action where vrepl_id in (3)", &sqltypes.Result{}, nil)
 		tme.dbSourceClients[1].addQuery("delete from _vt.copy_state where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
+		tme.dbSourceClients[1].addQuery("delete from _vt.post_copy_action where vrepl_id in (3, 4)", &sqltypes.Result{}, nil)
 	}
 	cancelMigration := func() {
 		tme.dbSourceClients[0].addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow != 'test_reverse'", &sqltypes.Result{}, nil)

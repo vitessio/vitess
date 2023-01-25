@@ -800,11 +800,6 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
-// SetTransactionIsolation implements the SessionActions interface
-func (vc *vcursorImpl) SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation) {
-	vc.safeSession.GetOrCreateOptions().TransactionIsolation = isolation
-}
-
 // SetPlannerVersion implements the SessionActions interface
 func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v

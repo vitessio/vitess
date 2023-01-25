@@ -11,7 +11,7 @@ jobs:
   get_previous_release:
     if: always()
     name: Get a recent LTS release
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
@@ -33,7 +33,7 @@ jobs:
     timeout-minutes: 40
     if: always() && (needs.get_previous_release.result == 'success')
     name: Run Upgrade Downgrade Test
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     needs:
       - get_previous_release
 
@@ -117,26 +117,12 @@ jobs:
         sudo rm -rf /etc/mysql
 
         # Install MySQL 8.0
-        ####
-        ## Temporarily pin the MySQL version at 8.0.29 as Vitess 14.0.1 does not have the fix to support
-        ## backups of 8.0.30+. See: https://github.com/vitessio/vitess/pull/10847
-        ## TODO: remove this pin once the above fixes are included in a v14 release (will be in v14.0.2) OR
-        ##       Vitess 16.0.0-SNAPSHOT becomes the dev version on vitessio/main
-        #sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
-        #wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.20-1_all.deb
-        #echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
-        #sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
-        #sudo apt-get update
-        #sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
-        ####
-        wget -c https://cdn.mysql.com/archives/mysql-8.0/mysql-common_8.0.28-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-core_8.0.28-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client-plugins_8.0.28-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-client_8.0.28-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server-core_8.0.28-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-server_8.0.28-1ubuntu20.04_amd64.deb \
-                https://cdn.mysql.com/archives/mysql-8.0/mysql-community-client_8.0.28-1ubuntu20.04_amd64.deb
-        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y ./mysql-*.deb
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
+        sudo apt-get update
+        sudo DEBIAN_FRONTEND="noninteractive" apt-get install -y mysql-server mysql-client
 
         # Install everything else we need, and configure
         sudo apt-get install -y make unzip g++ etcd curl git wget eatmydata grep

@@ -103,8 +103,6 @@ func TestMain(m *testing.M) {
 			"--gc_purge_check_interval", gcPurgeCheckInterval.String(),
 			"--table_gc_lifecycle", "hold,purge,evac,drop",
 		}
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{

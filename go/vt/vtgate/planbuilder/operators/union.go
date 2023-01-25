@@ -94,33 +94,34 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	}
 
 	for i := range u.Sources {
-		predicate := sqlparser.CloneExpr(expr)
 		var err error
-		predicate = sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
+		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
-				return err == nil
+				return
 			}
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
 				err = vterrors.VT13001("cannot push predicates on concatenate, missing columns from the UNION")
-				return false
+				cursor.StopTreeWalk()
+				return
 			}
 
 			var sel *sqlparser.Select
 			sel, err = u.GetSelectFor(i)
 			if err != nil {
-				return false
+				cursor.StopTreeWalk()
+				return
 			}
 
 			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
 				err = vterrors.VT12001("pushing non-aliased expression predicates on concatenate")
-				return false
+				cursor.StopTreeWalk()
+				return
 			}
 			cursor.Replace(ae.Expr)
-			return false
 		}, nil).(sqlparser.Expr)
 		if err != nil {
 			return nil, err

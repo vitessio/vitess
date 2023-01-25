@@ -302,7 +302,7 @@ func addExpressionToRoute(ctx *plancontext.PlanningContext, rb *routeGen4, expr 
 			return i, false, nil
 		}
 	}
-	expr.Expr = sqlparser.RemoveKeyspaceFromColName(expr.Expr)
+	sqlparser.RemoveKeyspaceFromColName(expr.Expr)
 	sel, isSel := rb.Select.(*sqlparser.Select)
 	if !isSel {
 		return 0, false, vterrors.VT12001(fmt.Sprintf("pushing projection '%s' on %T", sqlparser.String(expr), rb.Select))
@@ -330,10 +330,7 @@ func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *sema
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
 	if isDerivedTable {
-		expr.Expr, err = semantics.RewriteDerivedTableExpression(expr.Expr, ti)
-		if err != nil {
-			return err
-		}
+		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, ti)
 	}
 	return nil
 }
