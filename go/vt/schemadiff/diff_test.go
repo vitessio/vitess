@@ -667,7 +667,6 @@ func TestDiffSchemas(t *testing.T) {
 					// validate schema1 unaffected by Apply
 					assert.Equal(t, schema1SQL, schema1.ToSQL())
 
-					require.NotNil(t, schema2)
 					appliedDiff, err := schema2.Diff(applied, hints)
 					require.NoError(t, err)
 					assert.Empty(t, appliedDiff)
