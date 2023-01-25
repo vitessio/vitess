@@ -113,6 +113,7 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
+	go.uber.org/multierr v1.8.0
 	golang.org/x/exp v0.0.0-20221114191408-850992195362
 )
 
@@ -184,7 +185,6 @@ require (
 	github.com/tidwall/pretty v1.2.0 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
-	go.uber.org/multierr v1.8.0 // indirect
 	go.uber.org/zap v1.23.0 // indirect
 	go4.org/intern v0.0.0-20220617035311-6925f38cc365 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20220617031537-928513b29760 // indirect
