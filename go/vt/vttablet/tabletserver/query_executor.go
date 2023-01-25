@@ -659,12 +659,9 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 
 	isTemporaryTable := false
 	switch stmt := qre.plan.FullStmt.(type) {
-	case *sqlparser.CreateTable:
-		isTemporaryTable = stmt.IsTemporary()
-	case *sqlparser.DropTable:
+	case sqlparser.DDLStatement:
 		isTemporaryTable = stmt.IsTemporary()
 	}
-
 	if !isTemporaryTable {
 		// Temporary tables are limited to the session creating them. There is no need to Reload()
 		// the table because other connections will not be able to see the table anyway.
