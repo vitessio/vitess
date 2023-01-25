@@ -300,3 +300,17 @@
   "FullQuery": "create temporary table a (\n\tid bigint primary key\n)",
   "NeedsReservedConn": true
 }
+
+# temporary table with ddl statement only partially parsed
+"create temporary table x"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "x",
+      "Role": 2
+    }
+  ],
+  "NeedsReservedConn": true
+}
