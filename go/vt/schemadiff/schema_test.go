@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"sort"
 	"strings"
 	"testing"
 
@@ -387,6 +388,11 @@ func TestGetEntityColumnNames(t *testing.T) {
 		"create view v4 as select 1 as `ok` from dual",
 		"create view v5 as select 1 as `ok` from DUAL",
 		"create view v6 as select ok as `ok` from v5",
+		"create view v7 as select * from t1",
+		"create view v8 as select * from v7",
+		"create view v9 as select * from v8, v6",
+		"create view va as select * from v6, v8",
+		"create view vb as select *, now() from v8",
 	}
 
 	schema, err := NewSchemaFromQueries(queries)
@@ -402,15 +408,37 @@ func TestGetEntityColumnNames(t *testing.T) {
 		"v4": []string{"ok"},
 		"v5": []string{"ok"},
 		"v6": []string{"ok"},
+		"v7": []string{"id", "state", "some"},
+		"v8": []string{"id", "state", "some"},
+		"v9": []string{"id", "state", "some", "ok"},
+		"va": []string{"ok", "id", "state", "some"},
+		"vb": []string{"id", "state", "some", "now()"},
 	}
-	for tbl, expectNames := range expectedColNames {
-		identifiers, err := schema.getEntityColumnNames(tbl)
-		assert.NoError(t, err)
-		names := []string{}
-		for _, ident := range identifiers {
-			names = append(names, ident.String())
-		}
-		assert.Equal(t, expectNames, names)
+	entities := schema.Entities()
+	require.Equal(t, len(entities), len(expectedColNames))
+
+	tcmap := tablesColumnsMap{}
+	// we test by order of dependency:
+	for _, e := range entities {
+		tbl := e.Name()
+		t.Run(tbl, func(t *testing.T) {
+			identifiers, err := schema.getEntityColumnNames(tbl, tcmap)
+			assert.NoError(t, err)
+			names := []string{}
+			for _, ident := range identifiers {
+				names = append(names, ident.String())
+			}
+			// compare columns. We disregard order.
+			expectNames := expectedColNames[tbl][:]
+			sort.Strings(names)
+			sort.Strings(expectNames)
+			assert.Equal(t, expectNames, names)
+			// emulate the logic that fills known columns for known entities:
+			tcmap[tbl] = map[string]struct{}{}
+			for _, name := range names {
+				tcmap[tbl][name] = struct{}{}
+			}
+		})
 	}
 }
 
@@ -578,18 +606,45 @@ func TestViewReferences(t *testing.T) {
 			},
 		},
 		{
-			name: "valid *",
+			name: "valid star",
 			queries: []string{
 				"create table t1(id int primary key, c char(5))",
 				"create view v1 as select * from t1 where id > 0",
 			},
 		},
 		{
-			name: "valid *, cascaded",
+			name: "valid star, cascaded",
 			queries: []string{
 				"create table t1(id int primary key, c char(5))",
 				"create view v1 as select t1.* from t1 where id > 0",
 				"create view v2 as select * from v1 where id > 0",
+			},
+		},
+		{
+			name: "valid star, two tables, cascaded",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, ts timestamp)",
+				"create view v1 as select t1.* from t1, t2 where t1.id > 0",
+				"create view v2 as select * from v1 where c > 0",
+			},
+		},
+		{
+			name: "valid two star, two tables, cascaded",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, ts timestamp)",
+				"create view v1 as select t1.*, t2.* from t1, t2 where t1.id > 0",
+				"create view v2 as select * from v1 where c > 0 and ts is not null",
+			},
+		},
+		{
+			name: "valid unqualified star, cascaded",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create table t2(id int primary key, ts timestamp)",
+				"create view v1 as select * from t1, t2 where t1.id > 0",
+				"create view v2 as select * from v1 where c > 0 and ts is not null",
 			},
 		},
 	}
