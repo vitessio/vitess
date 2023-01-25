@@ -237,6 +237,15 @@ func (e *InvalidColumnInCheckConstraintError) Error() string {
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
 }
 
+type ForeignKeyDependencyUnresolvedError struct {
+	Table string
+}
+
+func (e *ForeignKeyDependencyUnresolvedError) Error() string {
+	return fmt.Sprintf("table %s has unresolved/loop foreign key dependencies",
+		sqlescape.EscapeID(e.Table))
+}
+
 type InvalidColumnInForeignKeyConstraintError struct {
 	Table      string
 	Constraint string
@@ -244,8 +253,52 @@ type InvalidColumnInForeignKeyConstraintError struct {
 }
 
 func (e *InvalidColumnInForeignKeyConstraintError) Error() string {
-	return fmt.Sprintf("invalid column %s referenced by foreign key constraint %s in table %s",
+	return fmt.Sprintf("invalid column %s covered by foreign key constraint %s in table %s",
 		sqlescape.EscapeID(e.Column), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type InvalidReferencedColumnInForeignKeyConstraintError struct {
+	Table            string
+	Constraint       string
+	ReferencedTable  string
+	ReferencedColumn string
+}
+
+func (e *InvalidReferencedColumnInForeignKeyConstraintError) Error() string {
+	return fmt.Sprintf("invalid column %s.%s referenced by foreign key constraint %s in table %s",
+		sqlescape.EscapeID(e.ReferencedTable), sqlescape.EscapeID(e.ReferencedColumn), sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table))
+}
+
+type ForeignKeyColumnCountMismatchError struct {
+	Table                 string
+	Constraint            string
+	ColumnCount           int
+	ReferencedTable       string
+	ReferencedColumnCount int
+}
+
+func (e *ForeignKeyColumnCountMismatchError) Error() string {
+	return fmt.Sprintf("mismatching column count %d referenced by foreign key constraint %s in table %s. Expected %d",
+		e.ReferencedColumnCount, sqlescape.EscapeID(e.Constraint), sqlescape.EscapeID(e.Table), e.ColumnCount)
+}
+
+type ForeignKeyColumnTypeMismatchError struct {
+	Table            string
+	Constraint       string
+	Column           string
+	ReferencedTable  string
+	ReferencedColumn string
+}
+
+func (e *ForeignKeyColumnTypeMismatchError) Error() string {
+	return fmt.Sprintf("mismatching column type %s.%s and %s.%s referenced by foreign key constraint %s in table %s",
+		sqlescape.EscapeID(e.ReferencedTable),
+		sqlescape.EscapeID(e.ReferencedColumn),
+		sqlescape.EscapeID(e.Table),
+		sqlescape.EscapeID(e.Column),
+		sqlescape.EscapeID(e.Constraint),
+		sqlescape.EscapeID(e.Table),
+	)
 }
 
 type ViewDependencyUnresolvedError struct {

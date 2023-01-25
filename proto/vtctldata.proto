@@ -93,6 +93,8 @@ message MaterializeSettings {
   repeated string source_shards = 12;
   // OnDdl specifies the action to be taken when a DDL is encountered.
   string on_ddl = 13;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
+  bool defer_secondary_keys = 14;
 }
 
 /* Data types for VtctldServer */

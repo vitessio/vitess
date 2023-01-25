@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -626,12 +626,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfJSONObjectExpr(a, b)
-	case JSONObjectParam:
-		b, ok := inB.(JSONObjectParam)
+	case *JSONObjectParam:
+		b, ok := inB.(*JSONObjectParam)
 		if !ok {
 			return false
 		}
-		return cmp.JSONObjectParam(a, b)
+		return cmp.RefOfJSONObjectParam(a, b)
 	case *JSONOverlapsExpr:
 		b, ok := inB.(*JSONOverlapsExpr)
 		if !ok {
@@ -2747,8 +2747,14 @@ func (cmp *Comparator) RefOfJSONObjectExpr(a, b *JSONObjectExpr) bool {
 	return cmp.SliceOfRefOfJSONObjectParam(a.Params, b.Params)
 }
 
-// JSONObjectParam does deep equals between the two objects.
-func (cmp *Comparator) JSONObjectParam(a, b JSONObjectParam) bool {
+// RefOfJSONObjectParam does deep equals between the two objects.
+func (cmp *Comparator) RefOfJSONObjectParam(a, b *JSONObjectParam) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	return cmp.Expr(a.Key, b.Key) &&
 		cmp.Expr(a.Value, b.Value)
 }
@@ -6611,18 +6617,6 @@ func (cmp *Comparator) SliceOfRefOfJSONObjectParam(a, b []*JSONObjectParam) bool
 		}
 	}
 	return true
-}
-
-// RefOfJSONObjectParam does deep equals between the two objects.
-func (cmp *Comparator) RefOfJSONObjectParam(a, b *JSONObjectParam) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return cmp.Expr(a.Key, b.Key) &&
-		cmp.Expr(a.Value, b.Value)
 }
 
 // SliceOfRefOfJtColumnDefinition does deep equals between the two objects.

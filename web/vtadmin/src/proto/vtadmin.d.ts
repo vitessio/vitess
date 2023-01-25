@@ -33588,6 +33588,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings on_ddl */
         on_ddl?: (string|null);
+
+        /** MaterializeSettings defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -33637,6 +33640,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings on_ddl. */
         public on_ddl: string;
+
+        /** MaterializeSettings defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.

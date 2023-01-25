@@ -424,6 +424,7 @@ const (
 	ErSPNotVarArg                   = 1414
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
+	ERDupIndex                      = 1831
 	ERInnodbReadOnly                = 1874
 
 	// already exists

@@ -30,19 +30,19 @@ func BreakExpressionInLHSandRHS(
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
 ) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
-	rewrittenExpr = sqlparser.CloneExpr(expr)
-	_ = sqlparser.SafeRewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
+	rewrittenExpr = sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		node, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
-			return true
+			return
 		}
 		deps := ctx.SemTable.RecursiveDeps(node)
 		if deps.IsEmpty() {
 			err = vterrors.VT13001("unknown column. has the AST been copied?")
-			return false
+			cursor.StopTreeWalk()
+			return
 		}
 		if !deps.IsSolvedBy(lhs) {
-			return true
+			return
 		}
 
 		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
@@ -54,8 +54,8 @@ func BreakExpressionInLHSandRHS(
 		// but we don't want to lose the type information we have, so we copy it over
 		ctx.SemTable.CopyExprInfo(node, arg)
 		cursor.Replace(arg)
-		return true
-	})
+	}, nil).(sqlparser.Expr)
+
 	if err != nil {
 		return nil, nil, nil, err
 	}
