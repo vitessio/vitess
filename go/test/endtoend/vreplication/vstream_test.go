@@ -216,9 +216,10 @@ func insertRow(keyspace, table string, id int) {
 }
 
 type numEvents struct {
-	numRowEvents, numJournalEvents              int64
-	numLessThan80Events, numGreaterThan80Events int64
-	numLessThan40Events, numGreaterThan40Events int64
+	numRowEvents, numJournalEvents int64
+	// BACKPORT: Feature is not needed https://github.com/vitessio/vitess/pull/8598
+	// numLessThan80Events, numGreaterThan80Events int64
+	// numLessThan40Events, numGreaterThan40Events int64
 }
 
 // tests the StopOnReshard flag
@@ -290,13 +291,13 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	var ne numEvents
 	go func() {
 		var reader vtgateconn.VStreamReader
-		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
 		require.NoError(t, err)
 		connect := false
 		numErrors := 0
 		for {
 			if connect { // if vtgate returns a transient error try reconnecting from the last seen vgtid
-				reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+				reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_MASTER, vgtid, filter, flags)
 				require.NoError(t, err)
 				connect = false
 			}
@@ -309,17 +310,18 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 					case binlogdatapb.VEventType_VGTID:
 						vgtid = ev.Vgtid
 					case binlogdatapb.VEventType_ROW:
-						shard := ev.RowEvent.Shard
-						switch shard {
-						case "-80":
-							ne.numLessThan80Events++
-						case "80-":
-							ne.numGreaterThan80Events++
-						case "-40":
-							ne.numLessThan40Events++
-						case "40-":
-							ne.numGreaterThan40Events++
-						}
+						// BACKPORT: https://github.com/vitessio/vitess/pull/8598
+						// shard := ev.RowEvent.Shard
+						// switch shard {
+						// case "-80":
+						// 	ne.numLessThan80Events++
+						// case "80-":
+						// 	ne.numGreaterThan80Events++
+						// case "-40":
+						// 	ne.numLessThan40Events++
+						// case "40-":
+						// 	ne.numGreaterThan40Events++
+						// }
 						ne.numRowEvents++
 					case binlogdatapb.VEventType_JOURNAL:
 						ne.numJournalEvents++
@@ -372,18 +374,20 @@ func TestVStreamStopOnReshardTrue(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, true, 1000)
 	require.Greater(t, ne.numJournalEvents, int64(0))
 	require.NotZero(t, ne.numRowEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.Zero(t, ne.numLessThan40Events)
-	require.Zero(t, ne.numGreaterThan40Events)
+	// BACKPORT: Feature not needed https://github.com/vitessio/vitess/pull/8598
+	// require.NotZero(t, ne.numLessThan80Events)
+	// require.NotZero(t, ne.numGreaterThan80Events)
+	// require.Zero(t, ne.numLessThan40Events)
+	// require.Zero(t, ne.numGreaterThan40Events)
 }
 
 func TestVStreamStopOnReshardFalse(t *testing.T) {
 	ne := testVStreamStopOnReshardFlag(t, false, 2000)
 	require.Equal(t, int64(0), ne.numJournalEvents)
 	require.NotZero(t, ne.numRowEvents)
-	require.NotZero(t, ne.numLessThan80Events)
-	require.NotZero(t, ne.numGreaterThan80Events)
-	require.NotZero(t, ne.numLessThan40Events)
-	require.NotZero(t, ne.numGreaterThan40Events)
+	// BACKPORT: Feature not needed https://github.com/vitessio/vitess/pull/8598
+	// require.NotZero(t, ne.numLessThan80Events)
+	// require.NotZero(t, ne.numGreaterThan80Events)
+	// require.NotZero(t, ne.numLessThan40Events)
+	// require.NotZero(t, ne.numGreaterThan40Events)
 }
