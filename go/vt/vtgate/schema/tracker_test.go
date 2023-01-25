@@ -309,16 +309,17 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }
 
+type delta struct {
+	result  *sqltypes.Result
+	updView []string
+}
+
 // TestViewsTracking tests that the tracker is able to track views.
 func TestViewsTracking(t *testing.T) {
 	target := &querypb.Target{Cell: "aa", Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
 	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
 	fields := sqltypes.MakeTestFields("table_name|view_definition|create_statement", "varchar|text|text")
 
-	type delta struct {
-		result  *sqltypes.Result
-		updView []string
-	}
 	var (
 		d0 = delta{
 			result: sqltypes.MakeTestResult(fields,
@@ -383,25 +384,7 @@ func TestViewsTracking(t *testing.T) {
 			tracker.Start()
 			defer tracker.Stop()
 
-			results := []*sqltypes.Result{{}}
-			for _, d := range tcase.deltas {
-				for _, deltaRow := range d.result.Rows {
-					same := false
-					for _, row := range results[0].Rows {
-						// emulating here that if view definition is same, then we do not send the update.
-						// tracker will think that the view is dropped.
-						if row[0].String() == deltaRow[0].String() && row[1].String() == deltaRow[1].String() {
-							same = true
-							break
-						}
-					}
-					if !same {
-						results[0].Rows = append(results[0].Rows, deltaRow)
-					}
-				}
-			}
-
-			sbc.SetResults(results)
+			sbc.SetResults(getResultSet(tcase.deltas))
 			sbc.Queries = nil
 
 			wg := sync.WaitGroup{}
@@ -421,7 +404,6 @@ func TestViewsTracking(t *testing.T) {
 			}
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-
 			require.Equal(t, 1, len(sbc.StringQueries()))
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
@@ -432,4 +414,26 @@ func TestViewsTracking(t *testing.T) {
 			}
 		})
 	}
+}
+
+// getResultSet goes over the results and return the distinct rows
+func getResultSet(deltas []delta) []*sqltypes.Result {
+	rows := deltas[0].result.Rows
+	for _, d := range deltas[1:] {
+		for _, deltaRow := range d.result.Rows {
+			same := false
+			for _, row := range rows {
+				// emulating here that if view definition is same, then we do not send the update.
+				// tracker will think that the view is dropped.
+				if row[0].String() == deltaRow[0].String() && row[1].String() == deltaRow[1].String() {
+					same = true
+					break
+				}
+			}
+			if !same {
+				rows = append(rows, deltaRow)
+			}
+		}
+	}
+	return []*sqltypes.Result{{Fields: deltas[0].result.Fields, Rows: rows}}
 }

@@ -235,12 +235,11 @@ func TestNewView(t *testing.T) {
 
 	// create a view
 	_ = utils.Exec(t, conn, "create view test_view as "+selQuery)
-	time.Sleep(2 * time.Second)
 
 	// executing the query directly
 	qr := utils.Exec(t, conn, selQuery)
 	// selecting it through the view.
-	utils.AssertMatches(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows))
+	utils.AssertMatchesWithTimeout(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows), 100*time.Millisecond, 5*time.Second, "test_view not in vschema tables")
 }
 
 // TestViewAndTable validates that new column added in table is present in the view definition
@@ -252,7 +251,8 @@ func TestViewAndTable(t *testing.T) {
 
 	// add a new column to the table t8
 	_ = utils.Exec(t, conn, "alter table t8 add column new_col varchar(50)")
-	time.Sleep(2 * time.Second)
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, KeyspaceName, "t8", "new_col")
+	require.NoError(t, err)
 
 	// insert some data
 	_ = utils.Exec(t, conn, "insert into t8(id8, new_col) values (1, 'V')")
@@ -260,24 +260,17 @@ func TestViewAndTable(t *testing.T) {
 
 	// create a view with t8, having the new column.
 	_ = utils.Exec(t, conn, "create view t8_view as select * from t8")
-	time.Sleep(2 * time.Second)
 
-	// executing the view query
-	qr := utils.Exec(t, conn, "select * from t8_view")
-	// validate that field name should have new_col
-	assert.Contains(t, fmt.Sprintf("%v", qr.Fields), "new_col")
+	// executing the view query, with the new column in the select field.
+	utils.AssertMatchesWithTimeout(t, conn, "select new_col from t8_view", `[[VARCHAR("V")]]`, 100*time.Millisecond, 5*time.Second, "t8_view not in vschema tables")
 
 	// add another column to the table t8
 	_ = utils.Exec(t, conn, "alter table t8 add column additional_col bigint")
-	time.Sleep(2 * time.Second)
-
-	// executing the query on t8 table
-	qr = utils.Exec(t, conn, "select * from t8")
-	// validate that field name should have additional_col
-	assert.Contains(t, fmt.Sprintf("%v", qr.Fields), "additional_col")
+	err = utils.WaitForColumn(t, clusterInstance.VtgateProcess, KeyspaceName, "t8", "additional_col")
+	require.NoError(t, err)
 
 	// executing the query on view
-	qr = utils.Exec(t, conn, "select * from t8_view")
+	qr := utils.Exec(t, conn, "select * from t8_view")
 	// validate that field name should not have additional_col
 	assert.NotContains(t, fmt.Sprintf("%v", qr.Fields), "additional_col")
 }

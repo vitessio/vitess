@@ -180,85 +180,56 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 
 // TestViewUpdate tests the update of the view handled as expected.
 func TestViewsUpdates(t *testing.T) {
+	// receives a input from a shard and what views are updated.
 	type input struct {
 		shard       string
 		viewUpdates []string
 	}
+	// test will receive multiple inputs and then find the consolidated view updates.
+	// if able to receive results successfully, then signal is made to the consumer.
 	type testCase struct {
+		desc                         string
 		updateViews                  []string
 		signalExpected, initExpected int
 		inputs                       []input
-		delay                        time.Duration
+		delay                        time.Duration // this causes a delay between inputs
 		init, initFail, updateFail   bool
 	}
 	tests := []testCase{{
-		inputs: []input{{
-			shard:       "-80",
-			viewUpdates: []string{"a"},
-		}, {
-			shard:       "80-",
-			viewUpdates: []string{"a"},
-		}},
+		desc:           "received same view updates from shards",
+		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
 		updateViews:    []string{"a"},
 		signalExpected: 1,
 	}, {
-		inputs: []input{{
-			shard:       "0",
-			viewUpdates: []string{"a"},
-		}, {
-			shard:       "0",
-			viewUpdates: []string{"b"},
-		}},
+		desc:           "received different view updates from shards",
+		inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"b"}}},
 		updateViews:    []string{"a", "b"},
 		signalExpected: 1,
 	}, {
-		inputs: []input{{
-			shard:       "0",
-			viewUpdates: []string{"a"},
-		}, {
-			shard:       "0",
-			viewUpdates: []string{"b"},
-		}},
+		desc:           "delay between inputs - different signals from each input",
+		inputs:         []input{{shard: "0", viewUpdates: []string{"a"}}, {shard: "0", viewUpdates: []string{"b"}}},
 		updateViews:    []string{"b"},
 		signalExpected: 2,
 		delay:          10 * time.Millisecond,
 	}, {
-		inputs: []input{{
-			shard: "0",
-		}, {
-			shard: "0",
-		}},
+		desc:   "no change - no signal",
+		inputs: []input{{shard: "0"}, {shard: "0"}},
 	}, {
-		inputs: []input{{
-			shard:       "-80",
-			viewUpdates: []string{"a"},
-		}, {
-			shard:       "80-",
-			viewUpdates: []string{"a"},
-		}},
+		desc:           "initialization did not happen - full views load over only updated views",
+		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
 		signalExpected: 1,
 		initExpected:   1,
 		init:           true,
 	}, {
-		inputs: []input{{
-			shard:       "-80",
-			viewUpdates: []string{"a"},
-		}, {
-			shard:       "80-",
-			viewUpdates: []string{"a"},
-		}},
+		desc:           "initialization did not happen - full view load failed - no signal",
+		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"a"}}},
 		signalExpected: 0,
 		initExpected:   1,
 		init:           true,
 		initFail:       true,
 	}, {
-		inputs: []input{{
-			shard:       "-80",
-			viewUpdates: []string{"a"},
-		}, {
-			shard:       "80-",
-			viewUpdates: []string{"b"},
-		}},
+		desc:           "updated views failed - no signal",
+		inputs:         []input{{shard: "-80", viewUpdates: []string{"a"}}, {shard: "80-", viewUpdates: []string{"b"}}},
 		updateViews:    []string{"a", "b"},
 		signalExpected: 0,
 		updateFail:     true,
