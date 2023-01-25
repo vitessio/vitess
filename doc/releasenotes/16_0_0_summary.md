@@ -39,6 +39,21 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 - A server restored to a point in time remains in `DRAINED` tablet type, and does not join the replication stream (thus, "frozen" in time).
 - It is possible to take incremental backups from different tablets. It is OK to have overlaps in incremental backup contents. The restore process chooses a valid path, and is valid as long as there are no gaps in the backed up binary log content.
 
+
+### Structured Logging Flag
+
+In [PR #11960](https://github.com/vitessio/vitess/pull/11960/) we introduced a new flag `structured-logging`. This flag stops the `glog` usage and use [`PlanetScale Log`](https://github.com/planetscale/log) instead.
+
+The flag is available in these components:
+
+- mysqlctl
+- mysqlctld
+- vtctld
+- vtgate
+- vtorc
+- vttablet
+- vttestserver
+
 ### Breaking Changes
 
 #### vtctld UI Removal
