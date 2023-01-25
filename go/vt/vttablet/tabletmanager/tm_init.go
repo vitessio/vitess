@@ -97,7 +97,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 
-	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "DEPRECATED (init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
+	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 	fs.MarkDeprecated("init_populate_metadata", "this flag is no longer being used and will be removed in future versions")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 }
@@ -408,13 +408,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		// of updating the tablet state and initializing replication.
 		return nil
 	}
-	log.Infof("calling initializeReplication")
 	// We should be re-read the tablet from tabletManager and use the type specified there.
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
 	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
 	tm.tmState.Open()
-	log.Infof("TabletManager End")
 	return err
 }
 

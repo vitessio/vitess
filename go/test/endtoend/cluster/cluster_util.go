@@ -100,16 +100,15 @@ func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string,
 		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
 		// but eventually it will catch up and if not caught up in required time, testcase will fail
 		qr, _ := vttablet.VttabletProcess.QueryTablet("select * from "+tableName, ksName, true)
-		if qr != nil && len(qr.Rows) == expectedRows {
-			return
-		}
 		if qr != nil {
+			if len(qr.Rows) == expectedRows {
+				return
+			}
 			lastNumRowsFound = len(qr.Rows)
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	s := fmt.Sprintf("Want %d rows, got %d, in %s (%s.%s)", expectedRows, lastNumRowsFound, vttablet.Alias, ksName, tableName)
-	assert.Fail(t, s)
+	require.Equalf(t, expectedRows, lastNumRowsFound, "unexpected number of rows in %s (%s.%s)", vttablet.Alias, ksName, tableName)
 }
 
 // VerifyRowsInTablet Verify total number of rows in a tablet

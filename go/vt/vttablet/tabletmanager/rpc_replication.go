@@ -326,11 +326,9 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	if err := tm.MysqlDaemon.ExecuteSuperQueryList(ctx, []string{cmd}); err != nil {
 		return "", err
 	}
-	log.Infof("InitPrimary: %s", cmd)
 
 	// get the current replication position
 	pos, err := tm.MysqlDaemon.PrimaryPosition()
-	log.Infof("current primary position is %s", mysql.EncodePosition(pos))
 	if err != nil {
 		return "", err
 	}
@@ -388,12 +386,10 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err != nil {
 		return err
 	}
-	log.Infof("decoding position %s", pos.String())
 	ti, err := tm.TopoServer.GetTablet(ctx, parent)
 	if err != nil {
 		return err
 	}
-	log.Infof("setReplicationStopped")
 	tm.replManager.setReplicationStopped(false)
 
 	// If using semi-sync, we need to enable it before connecting to primary.
@@ -407,16 +403,13 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 		return err
 	}
 
-	log.Infof("SetReplicationPosition to %s", position)
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	log.Infof("SetReplicationSource to %s", ti.Tablet.Alias.String())
 	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
 		return err
 	}
 
-	log.Infof("WaitForReparentJournal to %s", position)
 	// wait until we get the replicated row, or our context times out
 	return tm.MysqlDaemon.WaitForReparentJournal(ctx, timeCreatedNS)
 }

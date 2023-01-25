@@ -113,6 +113,7 @@ func (ts *tmState) Open() {
 }
 
 func (ts *tmState) Close() {
+	log.Infof("Calling taState.Close()")
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
@@ -255,7 +256,6 @@ func (ts *tmState) UpdateTablet(update func(tablet *topodatapb.Tablet)) {
 }
 
 func (ts *tmState) updateLocked(ctx context.Context) error {
-	log.Infof("Calling taState.updateLocked()")
 	span, ctx := trace.NewSpan(ctx, "tmState.update")
 	defer span.Finish()
 	ts.publishForDisplay()

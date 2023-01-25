@@ -24,7 +24,6 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"runtime/debug"
 	"strconv"
 	"strings"
 	"time"
@@ -239,7 +238,7 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	if !on {
 		newState = "ReadWrite"
 	}
-	log.Infof("SetReadOnly setting connection setting to : %s\n%s", newState, debug.Stack())
+	log.Infof("SetReadOnly setting connection setting to : %s", newState)
 
 	query := "SET GLOBAL read_only = "
 	if on {

@@ -86,3 +86,31 @@ func TestAll(t *testing.T) {
 	require.True(t, MatchesVTInitQuery(SelectCurrentDatabaseQuery))
 	require.True(t, MatchesVTInitQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication"))
 }
+
+// test the logic that confirms that the user defined schema's table name and qualifier are valid
+func TestValidateSchema(t *testing.T) {
+	type testCase struct {
+		testName  string
+		name      string
+		schema    string
+		mustError bool
+	}
+	testCases := []testCase{
+		{"valid", "t1", "create table if not exists _vt.t1(i int)", false},
+		{"no if not exists", "t1", "create table _vt.t1(i int)", true},
+		{"invalid table name", "t2", "create table if not exists _vt.t1(i int)", true},
+		{"invalid table name", "t1", "create table if not exists _vt.t2(i int)", true},
+		{"invalid qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
+		{"invalid qualifier", "t1", "create table if not exists t1(i int)", true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.testName, func(t *testing.T) {
+			err := validateSchemaDefinition(tc.name, tc.schema)
+			if tc.mustError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

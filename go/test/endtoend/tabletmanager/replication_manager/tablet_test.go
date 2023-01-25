@@ -165,7 +165,7 @@ func waitForSourcePort(ctx context.Context, t *testing.T, tablet cluster.Vttable
 }
 
 func getSidecarDbDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
-	vars := primaryTablet.VttabletProcess.GetVars()
+	vars := tablet.GetVars()
 	val, ok := vars["SidecarDbDDLQueryCount"]
 	if !ok {
 		return 0, fmt.Errorf("SidecarDbDDLQueryCount not found in debug/vars")

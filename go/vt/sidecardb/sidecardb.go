@@ -26,6 +26,11 @@ import (
 	"runtime"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+
 	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -36,6 +41,7 @@ import (
 )
 
 const (
+	SidecarDBName              = "_vt"
 	CreateVTDatabaseQuery      = "create database if not exists _vt"
 	UseVTDatabaseQuery         = "use _vt"
 	ShowVTDatabasesQuery       = "SHOW DATABASES LIKE '_vt'"
@@ -71,6 +77,29 @@ func init() {
 	ddlCount = stats.NewCounter("SidecarDbDDLQueryCount", "Number of create/upgrade queries executed")
 }
 
+func validateSchemaDefinition(name, schema string) error {
+	stmt, err := sqlparser.ParseStrictDDL(schema)
+	if err != nil {
+		return err
+	}
+	createTable, ok := stmt.(*sqlparser.CreateTable)
+	if !ok {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
+	}
+	tableName := createTable.Table.Name.String()
+	qualifier := createTable.Table.Qualifier.String()
+	if qualifier != SidecarDBName {
+		return fmt.Errorf("database qualifier for %s is %s, not %s", name, qualifier, SidecarDBName)
+	}
+	if tableName != name {
+		return fmt.Errorf("table in file name for %s does not match the table specified:%s in it", name, tableName)
+	}
+	if !createTable.IfNotExists {
+		return fmt.Errorf("if not exists is not defined on table %s", name)
+	}
+	return nil
+}
+
 func initSchemaFiles() {
 	err := fs.WalkDir(schemaLocation, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
@@ -86,6 +115,9 @@ func initSchemaFiles() {
 			schema, err := schemaLocation.ReadFile(path)
 			if err != nil {
 				panic(err)
+			}
+			if err := validateSchemaDefinition(name, string(schema)); err != nil {
+				return err
 			}
 			vtTables = append(vtTables, &vtTable{name: name, module: module, path: path, schema: string(schema)})
 		}
@@ -129,25 +161,11 @@ func Init(ctx context.Context, exec Exec) error {
 		exec: exec,
 	}
 
-	dbExists, err := si.doesVTDatabaseExist()
-	if err != nil {
+	if _, err := si.setCurrentDatabase(SidecarDBName); err != nil {
 		return err
 	}
-	if !dbExists {
-		if err := si.createVTDatabase(); err != nil {
-			return err
-		}
-		si.dbCreated = true
-	}
 
-	currentDatabase, err := si.setCurrentDatabase("_vt")
-	if err != nil {
-		return err
-	}
-	// nolint
-	defer si.setCurrentDatabase(currentDatabase)
-
-	if err = si.loadExistingTables(); err != nil {
+	if err := si.loadExistingTables(); err != nil {
 		return err
 	}
 
@@ -167,25 +185,6 @@ func (si *vtSchemaInit) createVTDatabase() error {
 	}
 	log.Infof("createVTDatabase: %s", CreateVTDatabaseQuery)
 	return nil
-}
-func (si *vtSchemaInit) doesVTDatabaseExist() (bool, error) {
-	rs, err := si.exec(si.ctx, ShowVTDatabasesQuery, 2, false, false)
-	if err != nil {
-		log.Error(err)
-		return false, err
-	}
-
-	switch len(rs.Rows) {
-	case 0:
-		log.Infof("doesVTDatabaseExist: not found")
-		return false, nil
-	case 1:
-		log.Infof("doesVTDatabaseExist: found")
-		return true, nil
-	default:
-		log.Errorf("found too many rows for _vt: %d", len(rs.Rows))
-		return false, fmt.Errorf("found too many rows for _vt: %d", len(rs.Rows))
-	}
 }
 
 // sets db of current connection, returning the currently selected database
@@ -234,7 +233,7 @@ func stripCharset(schema string) string {
 // finds diff that needs to be applied to current table schema to get the desired one. Will be an empty string if they match.
 // could be a create statement if the table does not exist or an alter if table exists but has a different schema
 func (si *vtSchemaInit) findTableSchemaDiff(current, desired string) (string, error) {
-	// todo: can we fix schemadiff to avoid the need for this?
+	// todo: remove once this is fixed in schemadiff
 	current = stripCharset(current)
 
 	hints := &schemadiff.DiffHints{}
@@ -243,12 +242,15 @@ func (si *vtSchemaInit) findTableSchemaDiff(current, desired string) (string, er
 		return "", err
 	}
 
-	tableAlterSQL := diff.CanonicalStatementString()
-	if strings.Contains(tableAlterSQL, "ALTER") {
+	var tableAlterSQL string
+	if diff != nil {
+		tableAlterSQL = diff.CanonicalStatementString()
+
 		// temp logging, should be removed in v17
 		log.Infof("alter sql %s", tableAlterSQL)
 		log.Infof("current schema %s", current)
 	}
+
 	return tableAlterSQL, nil
 }
 
@@ -277,7 +279,7 @@ func (si *vtSchemaInit) createOrUpgradeTable(table *vtTable) error {
 		tableAlterSQL = desiredTableSchema
 	}
 
-	if strings.TrimSpace(tableAlterSQL) != "" {
+	if tableAlterSQL != "" {
 		if !si.dbCreated {
 			// We use CreateVTDatabaseQuery to also create the first binlog entry when a primary comes up.
 			// That statement doesn't make it to the replicas, so we run the query again so that it is replicated
@@ -289,7 +291,8 @@ func (si *vtSchemaInit) createOrUpgradeTable(table *vtTable) error {
 		}
 		_, err = si.exec(ctx, tableAlterSQL, 1, false, true)
 		if err != nil {
-			if strings.Contains(err.Error(), "already exists") {
+			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERTableExists {
 				// should never come here
 				log.Infof("table %s already exists", table)
 				return nil

@@ -84,6 +84,7 @@ type VitessCluster struct {
 	Vtctld        *cluster.VtctldProcess
 	Vtctl         *cluster.VtctlProcess
 	VtctlClient   *cluster.VtctlClientProcess
+	VtctldClient  *cluster.VtctldClientProcess
 }
 
 // Cell represents a Vitess cell within the test cluster
@@ -341,7 +342,8 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 
 	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
 	require.NotNil(t, vc.VtctlClient)
-
+	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
+	require.NotNil(t, vc.VtctldClient)
 	return vc
 }
 

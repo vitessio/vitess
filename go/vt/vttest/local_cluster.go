@@ -518,6 +518,8 @@ func (db *LocalCluster) createVTSchema() error {
 func (db *LocalCluster) createDatabases() error {
 	log.Info("Creating databases in cluster...")
 
+	// The tablets created in vttest do not follow the same tablet init process, so we need to explicitly create
+	// the sidecar database tables
 	if err := db.createVTSchema(); err != nil {
 		return err
 	}

@@ -60,7 +60,6 @@ import (
 
 func TestTabletServerHealthz(t *testing.T) {
 	db, tsv := setupTabletServerTest(t, "")
-
 	defer tsv.StopService()
 	defer db.Close()
 

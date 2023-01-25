@@ -388,7 +388,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 	}
 
 	query := fmt.Sprintf("select count(distinct table_name) from _vt.copy_state where vrepl_id=%d", vr.id)
-	qr, err := vr.dbClient.ExecuteFetch(query, 10000)
+	qr, err := vr.dbClient.ExecuteFetch(query, maxRows)
 	if err != nil {
 		return settings, numTablesToCopy, err
 	}
@@ -537,7 +537,7 @@ func (vr *vreplicator) updateTimeThrottled(componentThrottled ComponentName) err
 		if err != nil {
 			return err
 		}
-		if _, err := vr.dbClient.ExecuteFetch(update, 10000); err != nil {
+		if _, err := vr.dbClient.ExecuteFetch(update, maxRows); err != nil {
 			return fmt.Errorf("error %v updating time throttled", err)
 		}
 		return nil
@@ -550,7 +550,7 @@ func (vr *vreplicator) updateHeartbeatTime(tm int64) error {
 	if err != nil {
 		return err
 	}
-	if _, err := vr.dbClient.ExecuteFetch(update, 10000); err != nil {
+	if _, err := vr.dbClient.ExecuteFetch(update, maxRows); err != nil {
 		return fmt.Errorf("error %v updating time", err)
 	}
 	return nil

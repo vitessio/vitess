@@ -397,7 +397,7 @@ BenchmarkCompressLz4Builtin
 
 ## Refactor
 
-### vtttablet _vt sidecar schema maintenance refactor
+### vttablet _vt sidecar schema maintenance refactor
 
 v16 changes the way we maintain the _vt schema. Instead of using `withddl` introduced in #6348 we use a declarative
 approach. This is made possible by `schemadiff` which was created initially for Online DDL's declarative strategy.
