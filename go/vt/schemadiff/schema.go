@@ -760,8 +760,6 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	return dup, nil
 }
 
-// TODO
-
 func (s *Schema) ValidateViewReferences() error {
 	var allerrors error
 	availableColumns := tablesColumnsMap{}
