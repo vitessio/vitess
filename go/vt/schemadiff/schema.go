@@ -35,6 +35,9 @@ type Schema struct {
 
 	named  map[string]Entity
 	sorted []Entity
+
+	foreignKeyParents  []*CreateTableEntity // subset of tables
+	foreignKeyChildren []*CreateTableEntity // subset of tables
 }
 
 // newEmptySchema is used internally to initialize a Schema object
@@ -44,6 +47,9 @@ func newEmptySchema() *Schema {
 		views:  []*CreateViewEntity{},
 		named:  map[string]Entity{},
 		sorted: []Entity{},
+
+		foreignKeyParents:  []*CreateTableEntity{},
+		foreignKeyChildren: []*CreateTableEntity{},
 	}
 	return schema
 }
@@ -122,6 +128,18 @@ func NewSchemaFromSQL(sql string) (*Schema, error) {
 	return NewSchemaFromStatements(statements)
 }
 
+// getForeignKeyParentTableNames analyzes a CREATE TABLE definition and extracts all referened foreign key tables names.
+// A table name may appear twice in the result output, it it is referenced by more than one foreign key
+func getForeignKeyParentTableNames(createTable *sqlparser.CreateTable) (names []string, err error) {
+	for _, cs := range createTable.TableSpec.Constraints {
+		if check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition); ok {
+			parentTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
+			names = append(names, parentTableName)
+		}
+	}
+	return names, err
+}
+
 // getViewDependentTableNames analyzes a CREATE VIEW definition and extracts all tables/views read by this view
 func getViewDependentTableNames(createView *sqlparser.CreateView) (names []string, err error) {
 	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -175,10 +193,6 @@ func (s *Schema) normalize() error {
 	// If a view v1 depends on v2, then v2 must come before v1, even though v1
 	// precedes v2 alphabetically
 	dependencyLevels := make(map[string]int, len(s.tables)+len(s.views))
-	for _, t := range s.tables {
-		s.sorted = append(s.sorted, t)
-		dependencyLevels[t.Name()] = 0
-	}
 
 	allNamesFoundInLowerLevel := func(names []string, level int) bool {
 		for _, name := range names {
@@ -198,12 +212,58 @@ func (s *Schema) normalize() error {
 		return true
 	}
 
+	// We now iterate all tables. We iterate "dependency levels":
+	// - first we want all tables that don't have foreign keys or which only reference themselves
+	// - then we only want tables that reference 1st level tables. these are 2nd level tables
+	// - etc.
+	// we stop when we have been unable to find a table in an iteration.
+	fkParents := map[string]bool{}
+	iterationLevel := 0
+	for {
+		handledAnyTablesInIteration := false
+		for _, t := range s.tables {
+			name := t.Name()
+			if _, ok := dependencyLevels[name]; ok {
+				// already handled; skip
+				continue
+			}
+			// Not handled. Is this view dependent on already handled objects?
+			referencedTableNames, err := getForeignKeyParentTableNames(t.CreateTable)
+			if err != nil {
+				return err
+			}
+			if len(referencedTableNames) > 0 {
+				s.foreignKeyChildren = append(s.foreignKeyChildren, t)
+			}
+			nonSelfReferenceNames := []string{}
+			for _, referencedTableName := range referencedTableNames {
+				if referencedTableName != name {
+					nonSelfReferenceNames = append(nonSelfReferenceNames, referencedTableName)
+				}
+				fkParents[referencedTableName] = true
+			}
+			if allNamesFoundInLowerLevel(nonSelfReferenceNames, iterationLevel) {
+				s.sorted = append(s.sorted, t)
+				dependencyLevels[t.Name()] = iterationLevel
+				handledAnyTablesInIteration = true
+			}
+		}
+		if !handledAnyTablesInIteration {
+			break
+		}
+		iterationLevel++
+	}
+	for _, t := range s.tables {
+		if fkParents[t.Name()] {
+			s.foreignKeyParents = append(s.foreignKeyParents, t)
+		}
+	}
 	// We now iterate all views. We iterate "dependency levels":
 	// - first we want all views that only depend on tables. These are 1st level views.
 	// - then we only want views that depend on 1st level views or on tables. These are 2nd level views.
 	// - etc.
 	// we stop when we have been unable to find a view in an iteration.
-	for iterationLevel := 1; ; iterationLevel++ {
+	for {
 		handledAnyViewsInIteration := false
 		for _, v := range s.views {
 			name := v.Name()
@@ -225,17 +285,90 @@ func (s *Schema) normalize() error {
 		if !handledAnyViewsInIteration {
 			break
 		}
+		iterationLevel++
 	}
 	if len(s.sorted) != len(s.tables)+len(s.views) {
-		// We have leftover views. This can happen if the schema definition is invalid:
+		// We have leftover tables or views. This can happen if the schema definition is invalid:
+		// - a table's foreign key references a nonexistent table
+		// - two or more tables have circular FK dependency
 		// - a view depends on a nonexistent table
-		// - two views have a circular dependency
+		// - two or more views have a circular dependency
+		for _, t := range s.tables {
+			if _, ok := dependencyLevels[t.Name()]; !ok {
+				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We return the first one.
+				return &ForeignKeyDependencyUnresolvedError{Table: t.Name()}
+			}
+		}
 		for _, v := range s.views {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We return the first one.
 				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
 			}
+		}
+	}
+
+	// Validate table definitions
+	for _, t := range s.tables {
+		if err := t.validate(); err != nil {
+			return err
+		}
+	}
+	colTypeEqualForForeignKey := func(a, b sqlparser.ColumnType) bool {
+		return a.Type == b.Type &&
+			a.Unsigned == b.Unsigned &&
+			a.Zerofill == b.Zerofill &&
+			sqlparser.Equals.ColumnCharset(a.Charset, b.Charset) &&
+			sqlparser.Equals.SliceOfString(a.EnumValues, b.EnumValues)
+	}
+
+	// Now validate foreign key columns:
+	// - referenced table columns must exist
+	// - foreign key columns must match in count and type to referenced table columns
+	// - referenced table has an appropriate index over referenced columns
+	for _, t := range s.tables {
+		if len(t.TableSpec.Constraints) == 0 {
+			continue
+		}
+
+		tableColumns := map[string]*sqlparser.ColumnDefinition{}
+		for _, col := range t.CreateTable.TableSpec.Columns {
+			colName := col.Name.Lowered()
+			tableColumns[colName] = col
+		}
+
+		for _, cs := range t.TableSpec.Constraints {
+			check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+			if !ok {
+				continue
+			}
+			referencedTableName := check.ReferenceDefinition.ReferencedTable.Name.String()
+			referencedTable := s.Table(referencedTableName) // we know this exists because we validated foreign key dependencies earlier on
+
+			referencedColumns := map[string]*sqlparser.ColumnDefinition{}
+			for _, col := range referencedTable.CreateTable.TableSpec.Columns {
+				colName := col.Name.Lowered()
+				referencedColumns[colName] = col
+			}
+			// Thanks to table validation, we already know the foreign key covered columns count is equal to the
+			// referenced table column count. Now ensure their types are identical
+			for i, col := range check.Source {
+				coveredColumn, ok := tableColumns[col.Lowered()]
+				if !ok {
+					return &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()}
+				}
+				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Lowered()
+				referencedColumn, ok := referencedColumns[referencedColumnName]
+				if !ok {
+					return &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+				}
+				if !colTypeEqualForForeignKey(coveredColumn.Type, referencedColumn.Type) {
+					return &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+				}
+			}
+
+			// TODO(shlomi): find a valid index
 		}
 	}
 	return nil

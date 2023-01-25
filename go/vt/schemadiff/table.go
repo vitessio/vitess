@@ -863,6 +863,12 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 				// skip
 			case "AVG_ROW_LENGTH":
 				// skip. MyISAM only, not interesting
+			case "CHARSET":
+				switch hints.TableCharsetCollateStrategy {
+				case TableCharsetCollateStrict:
+					tableOption = &sqlparser.TableOption{String: ""}
+					// in all other strategies we ignore the charset
+				}
 			case "CHECKSUM":
 				tableOption = &sqlparser.TableOption{Value: sqlparser.NewIntLiteral("0")}
 			case "COLLATE":
@@ -930,6 +936,18 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 				// options are different.
 				// However, we don't automatically apply these changes. It depends on the option!
 				switch strings.ToUpper(t1Option.Name) {
+				case "CHARSET", "COLLATE":
+					switch hints.TableCharsetCollateStrategy {
+					case TableCharsetCollateStrict:
+						alterTableOptions = append(alterTableOptions, t2Option)
+					case TableCharsetCollateIgnoreEmpty:
+						if t1Option.String != "" && t2Option.String != "" {
+							alterTableOptions = append(alterTableOptions, t2Option)
+						}
+						// if one is empty, we ignore
+					case TableCharsetCollateIgnoreAlways:
+						// ignore always
+					}
 				case "AUTO_INCREMENT":
 					switch hints.AutoIncrementStrategy {
 					case AutoIncrementApplyAlways:
@@ -961,6 +979,12 @@ func (c *CreateTableEntity) diffOptions(alterTable *sqlparser.AlterTable,
 	for _, t2Option := range t2Options {
 		if _, ok := t1OptionsMap[t2Option.Name]; !ok {
 			switch strings.ToUpper(t2Option.Name) {
+			case "CHARSET", "COLLATE":
+				switch hints.TableCharsetCollateStrategy {
+				case TableCharsetCollateStrict:
+					alterTableOptions = append(alterTableOptions, t2Option)
+					// in all other strategies we ignore the charset
+				}
 			case "AUTO_INCREMENT":
 				switch hints.AutoIncrementStrategy {
 				case AutoIncrementApplyAlways, AutoIncrementApplyHigher:
@@ -2130,17 +2154,22 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
-	// validate all columns referenced by foreign key constraints do in fact exist
+	// validate all columns used by foreign key constraints do in fact exist,
+	// and that there exists an index over those columns
 	for _, cs := range c.CreateTable.TableSpec.Constraints {
 		check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
 		if !ok {
 			continue
+		}
+		if len(check.Source) != len(check.ReferenceDefinition.ReferencedColumns) {
+			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(check.Source), ReferencedTable: check.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(check.ReferenceDefinition.ReferencedColumns)}
 		}
 		for _, col := range check.Source {
 			if !columnExists[col.Lowered()] {
 				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
 			}
 		}
+		// TODO(shlomi): find a valid index
 	}
 	// validate all columns referenced by constraint checks do in fact exist
 	for _, cs := range c.CreateTable.TableSpec.Constraints {

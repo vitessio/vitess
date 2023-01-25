@@ -169,7 +169,6 @@ func main() {
 
 	// vtctld UI requires the cell flag
 	flags.Set("cell", tpb.Cells[0])
-	flags.Set("enable_realtime_stats", "true")
 	if flags.Lookup("log_dir") == nil {
 		flags.Set("log_dir", "$VTDATAROOT/tmp")
 	}
