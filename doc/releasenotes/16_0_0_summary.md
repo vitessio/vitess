@@ -39,6 +39,11 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 - A server restored to a point in time remains in `DRAINED` tablet type, and does not join the replication stream (thus, "frozen" in time).
 - It is possible to take incremental backups from different tablets. It is OK to have overlaps in incremental backup contents. The restore process chooses a valid path, and is valid as long as there are no gaps in the backed up binary log content.
 
+### Replication manager removal and VTOrc becomes compulsory
+VTOrc is now a compulsory component of Vitess starting from v16. If the users want VTOrc to manage replication, then they must run VTOrc.
+Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
+The flag `disable-replication-manager` is deprecated and will be removed in a later release.
+
 ### Breaking Changes
 
 #### vtctld UI Removal
