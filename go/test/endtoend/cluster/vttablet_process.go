@@ -118,7 +118,15 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
 	if vttablet.EnableSemiSync {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--enable_semi_sync")
+		var majorVersion int
+		majorVersion, err = GetMajorVersion("vttablet")
+		if err != nil {
+			return err
+		}
+		// enable_semi_sync is removed in v16 and shouldn't be set on any release v16+
+		if majorVersion <= 15 {
+			vttablet.proc.Args = append(vttablet.proc.Args, "--enable_semi_sync")
+		}
 	}
 	if vttablet.DbFlavor != "" {
 		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
