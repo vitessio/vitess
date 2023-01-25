@@ -134,6 +134,10 @@ func TestMain(m *testing.M) {
 			}
 		}
 
+		if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+			return 1, err
+		}
+
 		return m.Run(), nil
 	}()
 

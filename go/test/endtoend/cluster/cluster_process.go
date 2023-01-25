@@ -250,6 +250,22 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	return
 }
 
+// StartVTOrc starts a VTOrc instance
+func (cluster *LocalProcessCluster) StartVTOrc(keyspace string) error {
+	// Start vtorc
+	vtorcProcess := cluster.NewVTOrcProcess(VTOrcConfiguration{})
+	err := vtorcProcess.Setup()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if keyspace != "" {
+		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters_to_watch="%s"`, keyspace))
+	}
+	cluster.VTOrcProcesses = append(cluster.VTOrcProcesses, vtorcProcess)
+	return nil
+}
+
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"
 func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, replicaCount int, rdonly bool) error {
 	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly)
@@ -425,6 +441,13 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Infof("Done creating keyspace: %v ", keyspace.Name)
+
+	err = cluster.StartVTOrc(keyspace.Name)
+	if err != nil {
+		log.Errorf("Error starting VTOrc - %v", err)
+		return err
+	}
+
 	return
 }
 

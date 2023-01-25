@@ -71,6 +71,7 @@ type ClusterConfig struct {
 	tabletPortBase       int
 	tabletGrpcPortBase   int
 	tabletMysqlPortBase  int
+	vtorcPort            int
 
 	vreplicationCompressGTID bool
 }
@@ -84,6 +85,7 @@ type VitessCluster struct {
 	Vtctld        *cluster.VtctldProcess
 	Vtctl         *cluster.VtctlProcess
 	VtctlClient   *cluster.VtctlClientProcess
+	VTOrcProcess  *cluster.VTOrcProcess
 }
 
 // Cell represents a Vitess cell within the test cluster
@@ -128,6 +130,29 @@ func setTempVtDataRoot() string {
 	_ = os.Setenv("VTDATAROOT", vtdataroot)
 	fmt.Printf("VTDATAROOT is %s\n", vtdataroot)
 	return vtdataroot
+}
+
+// StartVTOrc starts a VTOrc instance
+func (vc *VitessCluster) StartVTOrc(keyspace string) error {
+	// Start vtorc
+	base := cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
+	base.Binary = "vtorc"
+	vtorcProcess := &cluster.VTOrcProcess{
+		VtctlProcess: *base,
+		LogDir:       vc.ClusterConfig.tmpDir,
+		Config:       cluster.VTOrcConfiguration{},
+		Port:         vc.ClusterConfig.vtorcPort,
+	}
+	err := vtorcProcess.Setup()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if keyspace != "" {
+		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters_to_watch="%s"`, keyspace))
+	}
+	vc.VTOrcProcess = vtorcProcess
+	return nil
 }
 
 // setVtMySQLRoot creates the root directory if it does not exist
@@ -285,6 +310,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
+		vtorcPort:           basePort + 1600,
 		charset:             "utf8mb4",
 	}
 }
@@ -519,6 +545,11 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
+
+	if err := vc.StartVTOrc(keyspace.Name); err != nil {
+		return err
+	}
+
 	return nil
 }
 
