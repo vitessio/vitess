@@ -231,6 +231,21 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 	return false, nil
 }
 
+// IsSuperReadOnly return true if the instance is super read only
+func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'super_read_only'")
+	if err != nil {
+		return true, err
+	}
+	if len(qr.Rows) != 1 {
+		return true, errors.New("no super_read_only variable in mysql")
+	}
+	if qr.Rows[0][1].ToString() == "ON" {
+		return true, nil
+	}
+	return false, nil
+}
+
 // SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	// temp logging, to be removed in v17

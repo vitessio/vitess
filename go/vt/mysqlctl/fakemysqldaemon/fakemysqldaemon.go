@@ -366,6 +366,11 @@ func (fmd *FakeMysqlDaemon) IsReadOnly() (bool, error) {
 	return fmd.ReadOnly, nil
 }
 
+// IsSuperReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) IsSuperReadOnly() (bool, error) {
+	return fmd.SuperReadOnly, nil
+}
+
 // SetReadOnly is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	fmd.ReadOnly = on
