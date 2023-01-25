@@ -45,6 +45,8 @@ func init() {
 	}
 }
 
+// TestSidecarDB launches a Vitess cluster and ensures that the expected _vt tables are created. We also drop/alter
+// tables and ensure the next tablet init will recreate the _vt database to the desired schema
 func TestSidecarDB(t *testing.T) {
 	cells := []string{"zone1"}
 

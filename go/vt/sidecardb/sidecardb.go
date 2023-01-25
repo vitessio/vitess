@@ -160,6 +160,9 @@ func Init(ctx context.Context, exec Exec) error {
 		ctx:  ctx,
 		exec: exec,
 	}
+	if err := si.createVTDatabase(); err != nil {
+		return err
+	}
 
 	if _, err := si.setCurrentDatabase(SidecarDBName); err != nil {
 		return err
