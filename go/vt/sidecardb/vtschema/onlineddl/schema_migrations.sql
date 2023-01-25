@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS _vt.schema_migrations
     `ready_timestamp`                 timestamp        NULL     DEFAULT NULL,
     `started_timestamp`               timestamp        NULL     DEFAULT NULL,
     `liveness_timestamp`              timestamp        NULL     DEFAULT NULL,
-    `completed_timestamp`             timestamp        NULL     DEFAULT NULL,
+    `completed_timestamp`             timestamp(6)     NULL     DEFAULT NULL,
     `cleanup_timestamp`               timestamp        NULL     DEFAULT NULL,
     `migration_status`                varchar(128)     NOT NULL,
     `log_path`                        varchar(1024)    NOT NULL,
