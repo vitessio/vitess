@@ -639,6 +639,8 @@ github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/sftp v1.13.1/go.mod h1:3HaPG6Dq1ILlpPZRO0HVMrsydcdLt6HRDccSgb87qRg=
+github.com/planetscale/log v0.0.0-20221118170849-fb599bc35c50 h1:yf0iVpE57riOj2+cLr6Fy6qX6eCLc5RLK3Kc70apP6c=
+github.com/planetscale/log v0.0.0-20221118170849-fb599bc35c50/go.mod h1:SE8Q9QtLD8tfq8bM7rGLJnnWfmxt6mTXGkfGbft1vJI=
 github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a h1:y0OpQ4+5tKxeh9+H+2cVgASl9yMZYV9CILinKOiKafA=
 github.com/planetscale/pargzip v0.0.0-20201116224723-90c7fc03ea8a/go.mod h1:GJFUzQuXIoB2Kjn1ZfDhJr/42D5nWOqRcIQVgCxTuIE=
 github.com/planetscale/vtprotobuf v0.3.0 h1:oMrOdDFHS1ADc0dHtC2EApxiM5xd0cQkZeibm0WgXiQ=
@@ -703,6 +705,8 @@ github.com/sirupsen/logrus v1.7.0/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic
 github.com/sirupsen/logrus v1.8.1/go.mod h1:yWOB1SBYBC5VeMP7gHvWumXLIWorT60ONWic61uBYv0=
 github.com/sjmudd/stopwatch v0.1.1 h1:x45OvxFB5OtCkjvYtzRF5fWB857Jzjjk84Oyd5C5ebw=
 github.com/sjmudd/stopwatch v0.1.1/go.mod h1:BLw0oIQJ1YLXBO/q9ufK/SgnKBVIkC2qrm6uy78Zw6U=
+github.com/slok/noglog v0.2.0 h1:1czu4l2EoJ8L92UwdSXXa1Y+c5TIjFAFm2P+mjej95E=
+github.com/slok/noglog v0.2.0/go.mod h1:TfKxwpEZPT+UA83bQ6RME146k0MM4e8mwHLf6bhcGDI=
 github.com/smartystreets/assertions v0.0.0-20190116191733-b6c0e53d7304/go.mod h1:OnSkiWE9lh6wB0YB77sQom3nweQdgAjqCqsofrRNTgc=
 github.com/smartystreets/goconvey v0.0.0-20181108003508-044398e4856c/go.mod h1:XDJAKZRPZ1CvBcN2aX5YOUTYGHki24fSF0Iv48Ibg0s=
 github.com/soheilhy/cmux v0.1.4/go.mod h1:IM3LyeVVIOuxMH7sFAkER9+bJ4dT7Ms6E4xg4kGIyLM=

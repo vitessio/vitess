@@ -113,6 +113,9 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	github.com/openark/golib v0.0.0-20210531070646-355f37940af8
+	github.com/planetscale/log v0.0.0-20221118170849-fb599bc35c50
+	github.com/slok/noglog v0.2.0
+	go.uber.org/zap v1.23.0
 	golang.org/x/exp v0.0.0-20221114191408-850992195362
 )
 
@@ -185,7 +188,6 @@ require (
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.10.0 // indirect
 	go.uber.org/multierr v1.8.0 // indirect
-	go.uber.org/zap v1.23.0 // indirect
 	go4.org/intern v0.0.0-20220617035311-6925f38cc365 // indirect
 	go4.org/unsafe/assume-no-moving-gc v0.0.0-20220617031537-928513b29760 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20221114191408-850992195362 // indirect
@@ -204,3 +206,5 @@ require (
 	sigs.k8s.io/json v0.0.0-20221116044647-bc3834ca7abd // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.2.3 // indirect
 )
+
+replace github.com/google/glog => github.com/planetscale/noglog v0.2.1-0.20210421230640-bea75fcd2e8e
