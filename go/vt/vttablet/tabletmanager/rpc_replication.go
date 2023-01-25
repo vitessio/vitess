@@ -505,7 +505,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 			}
 		}
 	} else {
-		if err := tm.MysqlDaemon.SetReadOnly(true); err != nil {
+		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
 			return nil, err
 		}
 	}

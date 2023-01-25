@@ -331,7 +331,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	if sourceIsPrimary {
 		if !readOnly {
 			params.Logger.Infof("turning primary read-only before backup")
-			if err = params.Mysqld.SetReadOnly(true); err != nil {
+			if err = params.Mysqld.SetSuperReadOnly(true); err != nil {
 				return false, vterrors.Wrap(err, "can't set read-only status")
 			}
 		}
@@ -386,8 +386,14 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 
 	// And set read-only mode
 	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
-		return usable, err
+	if !readOnly {
+		if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
+			return usable, err
+		}
+	} else {
+		if err := params.Mysqld.SetSuperReadOnly(readOnly); err != nil {
+			return usable, err
+		}
 	}
 
 	// Restore original mysqld state that we saved above.
