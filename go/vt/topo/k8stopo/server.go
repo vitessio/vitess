@@ -32,6 +32,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 
 	"vitess.io/vitess/go/vt/servenv"
 
@@ -96,6 +97,9 @@ type Server struct {
 	// memberIndexer is the cache of tree data
 	memberIndexer cache.Indexer
 
+	// the watcher is used to handle update events
+	watchGroup *watchGroup
+
 	// namespace is the Kubernetes namespace to be used for all resources
 	namespace string
 
@@ -134,7 +138,35 @@ func (s *Server) syncTree() error {
 	indexers["by_parent"] = indexByParent
 
 	s.memberIndexer, s.memberInformer = cache.NewIndexerInformer(listwatch, &vtv1beta1.VitessTopoNode{}, 0,
-		cache.ResourceEventHandlerFuncs{}, indexers)
+		cache.ResourceEventHandlerFuncs{
+			AddFunc: func(obj any) {
+				vtn, ok := obj.(*vtv1beta1.VitessTopoNode)
+				if !ok {
+					log.Errorf("unexpected object type: %T", obj)
+					return
+				}
+
+				s.watchGroup.onAddUpdate(vtn)
+			},
+			UpdateFunc: func(_, obj any) {
+				vtn, ok := obj.(*vtv1beta1.VitessTopoNode)
+				if !ok {
+					log.Errorf("unexpected object type: %T", obj)
+					return
+				}
+
+				s.watchGroup.onAddUpdate(vtn)
+			},
+			DeleteFunc: func(obj any) {
+				vtn, ok := obj.(*vtv1beta1.VitessTopoNode)
+				if !ok {
+					log.Errorf("unexpected object type: %T", obj)
+					return
+				}
+
+				s.watchGroup.onDelete(vtn)
+			},
+		}, indexers)
 
 	// Start indexer
 	go s.memberInformer.Run(s.stopChan)
@@ -216,7 +248,10 @@ func NewServer(_, root string) (*Server, error) {
 		vtKubeClient:   vtKubeClientset,
 		resourceClient: vtKubeClientset.TopoV1beta1().VitessTopoNodes(namespace),
 		root:           root,
-		stopChan:       make(chan struct{}),
+		watchGroup: &watchGroup{
+			watchers: &sync.Map{},
+		},
+		stopChan: make(chan struct{}),
 	}
 
 	// Sync cache

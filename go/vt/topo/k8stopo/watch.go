@@ -18,9 +18,8 @@ package k8stopo
 
 import (
 	"context"
-
-	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/tools/cache"
+	"path"
+	"strings"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -31,7 +30,7 @@ import (
 func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <-chan *topo.WatchData, error) {
 	log.Info("Starting Kubernetes topo Watch on ", filePath)
 
-	current := &topo.WatchData{}
+	nodePath := path.Join(s.root, filePath)
 
 	// get current
 	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
@@ -41,88 +40,131 @@ func (s *Server) Watch(ctx context.Context, filePath string) (*topo.WatchData, <
 	if err != nil {
 		return nil, nil, err
 	}
-	current.Contents = contents
-	current.Version = ver
+	current := &topo.WatchData{
+		Contents: contents,
+		Version:  ver,
+	}
 
 	// Create the changes channel
 	changes := make(chan *topo.WatchData, 10)
 
-	// Create a signal channel for non-interrupt shutdowns
-	gracefulShutdown := make(chan struct{})
+	// create a context that will be canceled when the watched node is deleted
+	deleteCtx, deleted := context.WithCancel(context.Background())
 
-	resource, err := s.buildFileResource(filePath, []byte{})
-	if err != nil {
-		return nil, nil, err
-	}
+	log.Infof("Starting watch on %q", nodePath)
+	removeWatcher := s.watchGroup.addWatcher(&exactWatcher{
+		nodePath: nodePath,
+		addUpdateFunc: func(vtn *vtv1beta1.VitessTopoNode) {
+			contents, err := unpackValue([]byte(vtn.Data.Value))
+			if err != nil {
+				log.Errorf("Error unpacking value for %v: %v", vtn.Name, err)
+			}
+			changes <- &topo.WatchData{
+				Contents: contents,
+				Version:  KubernetesVersion(vtn.GetResourceVersion()),
+			}
+		},
+		deleteFunc: func(vtn *vtv1beta1.VitessTopoNode) {
+			deleted()
+		},
+	})
 
-	// Create the informer / indexer to watch the single resource
-	restClient := s.vtKubeClient.TopoV1beta1().RESTClient()
-	listwatch := cache.NewListWatchFromClient(restClient, "vitesstoponodes", s.namespace, fields.OneTermEqualSelector("metadata.name", resource.Name))
-
-	// set up index funcs
-	indexers := cache.Indexers{}
-	indexers["by_parent"] = indexByParent
-
-	_, memberInformer := cache.NewIndexerInformer(listwatch, &vtv1beta1.VitessTopoNode{}, 0,
-		cache.ResourceEventHandlerFuncs{
-			AddFunc: func(obj any) {
-				vtn := obj.(*vtv1beta1.VitessTopoNode)
-				out, err := unpackValue([]byte(vtn.Data.Value))
-				if err != nil {
-					changes <- &topo.WatchData{Err: err}
-					close(gracefulShutdown)
-				} else {
-					changes <- &topo.WatchData{
-						Contents: out,
-						Version:  KubernetesVersion(vtn.GetResourceVersion()),
-					}
-				}
-			},
-			UpdateFunc: func(oldObj, newObj any) {
-				vtn := newObj.(*vtv1beta1.VitessTopoNode)
-				out, err := unpackValue([]byte(vtn.Data.Value))
-				if err != nil {
-					changes <- &topo.WatchData{Err: err}
-					close(gracefulShutdown)
-				} else {
-					changes <- &topo.WatchData{
-						Contents: out,
-						Version:  KubernetesVersion(vtn.GetResourceVersion()),
-					}
-				}
-			},
-			DeleteFunc: func(obj any) {
-				vtn := obj.(*vtv1beta1.VitessTopoNode)
-				changes <- &topo.WatchData{Err: topo.NewError(topo.NoNode, vtn.Name)}
-				close(gracefulShutdown)
-			},
-		}, indexers)
-
-	// create control chan for informer and start it
-	informerChan := make(chan struct{})
-	go memberInformer.Run(informerChan)
-
-	// Handle interrupts
-	go closeOnDone(ctx, filePath, informerChan, gracefulShutdown, changes)
+	// Handle interrupts and deletes
+	go closeOnDone(ctx, deleteCtx.Done(), filePath, changes, removeWatcher)
 
 	return current, changes, nil
 }
 
-func closeOnDone(ctx context.Context, filePath string, informerChan chan struct{}, gracefulShutdown chan struct{}, changes chan *topo.WatchData) {
+func closeOnDone(ctx context.Context, deleteChan <-chan struct{}, filePath string, changes chan *topo.WatchData, cleanup func()) {
 	select {
 	case <-ctx.Done():
 		if err := ctx.Err(); err != nil && err == context.Canceled {
 			changes <- &topo.WatchData{Err: topo.NewError(topo.Interrupted, filePath)}
 		}
-	case <-gracefulShutdown:
+	case <-deleteChan:
+		changes <- &topo.WatchData{
+			Err: topo.NewError(topo.NoNode, filePath),
+		}
 	}
-	close(informerChan)
+
+	cleanup()
 	close(changes)
 }
 
 // WatchRecursive is part of the topo.Conn interface.
-func (s *Server) WatchRecursive(_ context.Context, path string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
-	// Kubernetes doesn't seem to provide a primitive that watches a prefix
-	// or directory, so this likely can never be implemented.
-	return nil, nil, topo.NewError(topo.NoImplementation, path)
+func (s *Server) WatchRecursive(ctx context.Context, dirpath string) ([]*topo.WatchDataRecursive, <-chan *topo.WatchDataRecursive, error) {
+	log.Info("Starting recursive Kubernetes topo Watch on ", dirpath)
+
+	nodePathPrefix := path.Join(s.root, dirpath)
+	if !strings.HasSuffix(nodePathPrefix, "/") {
+		nodePathPrefix = nodePathPrefix + "/"
+	}
+
+	// get current
+	initialCtx, initialCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
+	defer initialCancel()
+
+	Kvs, err := s.List(initialCtx, dirpath)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var currentWD []*topo.WatchDataRecursive
+	for _, kv := range Kvs {
+		currentWD = append(currentWD, &topo.WatchDataRecursive{
+			Path: string(kv.Key),
+			WatchData: topo.WatchData{
+				Contents: kv.Value,
+				Version:  kv.Version,
+			},
+		})
+	}
+
+	// Create the changes channel
+	changes := make(chan *topo.WatchDataRecursive, 10)
+
+	// add a watcher for any changes that match the prefix
+	removeWatcher := s.watchGroup.addWatcher(&prefixWatcher{
+		nodePathPrefix: nodePathPrefix,
+		addUpdateFunc: func(vtn *vtv1beta1.VitessTopoNode) {
+			contents, err := unpackValue([]byte(vtn.Data.Value))
+			if err != nil {
+				log.Errorf("Error unpacking value for %v: %v", vtn.Name, err)
+			}
+			changes <- &topo.WatchDataRecursive{
+				Path: vtn.Name,
+				WatchData: topo.WatchData{
+					Contents: contents,
+					Version:  KubernetesVersion(vtn.GetResourceVersion()),
+				},
+			}
+		},
+		deleteFunc: func(vtn *vtv1beta1.VitessTopoNode) {
+			changes <- &topo.WatchDataRecursive{
+				Path: vtn.Name,
+				WatchData: topo.WatchData{
+					Err: topo.NewError(topo.NoNode, vtn.Name),
+				},
+			}
+		},
+	})
+
+	// Handle interrupts
+	go closeRecursiveOnDone(ctx, nodePathPrefix, changes, removeWatcher)
+
+	return currentWD, changes, nil
+}
+
+func closeRecursiveOnDone(ctx context.Context, filePath string, changes chan *topo.WatchDataRecursive, cleanup func()) {
+	<-ctx.Done()
+	if err := ctx.Err(); err != nil && err == context.Canceled {
+		changes <- &topo.WatchDataRecursive{
+			WatchData: topo.WatchData{
+				Err: topo.NewError(topo.Interrupted, filePath),
+			},
+		}
+	}
+
+	close(changes)
+	cleanup()
 }

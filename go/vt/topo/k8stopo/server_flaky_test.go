@@ -79,7 +79,13 @@ func TestKubernetesTopo(t *testing.T) {
 	if err != nil {
 		t.Fatal("Unable to start k3s", err)
 	}
-	defer killK3s()
+	defer (func() {
+		killK3s()
+		err := c.Wait()
+		if err != nil {
+			t.Log("k3s exited with error", err)
+		}
+	})()
 
 	// Wait for server to be ready
 	for {
@@ -102,7 +108,8 @@ func TestKubernetesTopo(t *testing.T) {
 
 		crd := &extensionsv1.CustomResourceDefinition{}
 
-		kubeyaml.NewYAMLOrJSONDecoder(crdFile, 2048).Decode(crd)
+		err = kubeyaml.NewYAMLOrJSONDecoder(crdFile, 2048).Decode(crd)
+		require.NoError(t, err)
 
 		_, err = apiextensionsClientSet.ApiextensionsV1().CustomResourceDefinitions().Create(context.TODO(), crd, metav1.CreateOptions{})
 		if err != nil {
