@@ -178,6 +178,7 @@ func TestMultipleUpdatesFromDifferentShards(t *testing.T) {
 	}
 }
 
+// TestViewUpdate tests the update of the view handled as expected.
 func TestViewsUpdates(t *testing.T) {
 	type input struct {
 		shard       string

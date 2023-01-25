@@ -97,6 +97,8 @@ func (u *updateController) getItemFromQueueLocked() *discovery.TabletHealth {
 	itemsCount := len(u.queue.items)
 	// Only when we want to update selected tables.
 	if u.loaded {
+		// We are trying to minimize the vttablet calls here by merging all the table/view changes received into a single changed item
+		// with all the table and view names.
 		for i := 1; i < itemsCount; i++ {
 			for _, table := range u.queue.items[i].Stats.TableSchemaChanged {
 				found := false

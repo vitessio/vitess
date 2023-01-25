@@ -309,6 +309,7 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
 }
 
+// TestViewsTracking tests that the tracker is able to track views.
 func TestViewsTracking(t *testing.T) {
 	target := &querypb.Target{Cell: "aa", Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
 	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}

@@ -139,10 +139,11 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return err
 	}
 
+	t.mu.Lock()
+	defer t.mu.Unlock()
 	// We must clear out any previous view definition before loading it here as this is called
 	// whenever a shard's primary tablet starts and sends the initial signal. Without
-	// clearing out the previous view definition we can end up with duplicate entries when the
-	// tablet is simply restarted or potentially when we elect a new primary.
+	// clearing out the previous view definition removes any dropped views.
 	t.clearKeyspaceViews(target.Keyspace)
 	t.updateViews(target.Keyspace, fvRes)
 	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(fvRes.Rows))
