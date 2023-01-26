@@ -451,7 +451,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 
 		errCh := make(chan error, 1)
 		go func() {
-			tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
+			_ = tabletConn.StreamHealth(ctx, func(shr *querypb.StreamHealthResponse) error {
 				var err error
 				if ctx.Err() != nil {
 					err = fmt.Errorf("context has ended")
