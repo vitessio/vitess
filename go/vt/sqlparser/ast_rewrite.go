@@ -1556,6 +1556,11 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ColumnDefinition).Type = newNode.(*ColumnType)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
