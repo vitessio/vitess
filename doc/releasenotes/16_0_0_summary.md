@@ -356,3 +356,39 @@ Creating a database with vttestserver was taking ~45 seconds. This can be proble
 In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
 For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this value might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
 this shouldn't be a concern.
+
+## Minor changes
+
+### Backup compression benchmarks
+
+Compression benchmarks have been added to the `mysqlctl` package.
+
+The benchmarks fetch and compress a ~6 GiB tar file containing 3 InnoDB files using different built-in and external compressors.
+
+Here are sample results from a 2020-era Mac M1 with 16 GiB of memory:
+
+```sh
+$ go test -bench=BenchmarkCompress ./go/vt/mysqlctl -run=NONE -timeout=12h -benchtime=1x -v
+goos: darwin
+goarch: arm64
+pkg: vitess.io/vitess/go/vt/mysqlctl
+BenchmarkCompressLz4Builtin
+    compression_benchmark_test.go:310: downloading data from https://www.dropbox.com/s/raw/smmgifsooy5qytd/enwiki-20080103-pages-articles.ibd.tar.zst
+    BenchmarkCompressLz4Builtin-8                  1        11737493087 ns/op        577.98 MB/s             2.554 compression-ratio
+    BenchmarkCompressPargzipBuiltin
+    BenchmarkCompressPargzipBuiltin-8              1        31083784040 ns/op        218.25 MB/s             2.943 compression-ratio
+    BenchmarkCompressPgzipBuiltin
+    BenchmarkCompressPgzipBuiltin-8                1        13325299680 ns/op        509.11 MB/s             2.910 compression-ratio
+    BenchmarkCompressZstdBuiltin
+    BenchmarkCompressZstdBuiltin-8                 1        18683863911 ns/op        363.09 MB/s             3.150 compression-ratio
+    BenchmarkCompressZstdExternal
+    BenchmarkCompressZstdExternal-8                1        10795487675 ns/op        628.41 MB/s             3.093 compression-ratio
+    BenchmarkCompressZstdExternalFast4
+    BenchmarkCompressZstdExternalFast4-8           1        7139319009 ns/op         950.23 MB/s             2.323 compression-ratio
+    BenchmarkCompressZstdExternalT0
+    BenchmarkCompressZstdExternalT0-8              1        4393860434 ns/op        1543.97 MB/s             3.093 compression-ratio
+    BenchmarkCompressZstdExternalT4
+    BenchmarkCompressZstdExternalT4-8              1        4389559744 ns/op        1545.49 MB/s             3.093 compression-ratio
+    PASS
+    cleaning up "/var/folders/96/k7gzd7q10zdb749vr02q7sjh0000gn/T/ee7d47b45ef09786c54fa2d7354d2a68.dat"
+```
