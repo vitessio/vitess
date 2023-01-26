@@ -1,118 +1,316 @@
-"create table a(abcd)"
+"create table a(abcd bigint)"
 {
-  "Action": "create"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create table a (\n\tabcd bigint\n)"
 }
 
 "drop  table b"
 {
-  "Action": "drop"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop table b"
 }
 
 "drop table b.c"
 {
-  "Action": "drop"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop table b.c"
 }
 
-"alter table c alter foo"
+"alter table c add column foo bigint"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table c add column foo bigint"
 }
 
 "alter table c comment 'aa'"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table c comment 'aa'"
 }
 
 "alter table b.c comment 'aa'"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b.c comment 'aa'"
 }
 
 "drop index a on b"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b drop key a"
 }
 
 "drop index a on b.c"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "c",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b.c drop key a"
 }
 
 "drop index a on b lock=none"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table b drop key a, lock none"
 }
 
 "rename table a to b"
 {
-  "Action": "rename"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "rename table a to b"
 }
 
 "rename table c.a to c.b"
 {
-  "Action": "rename"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "rename table c.a to c.b"
 }
+
 
 "alter table a rename b"
 {
-  "Action": "rename"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a rename b"
 }
 
 "alter table a rename to b"
 {
-  "Action": "rename"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a rename b"
 }
+
 
 "alter table c.a rename to c.b"
 {
-  "Action": "rename"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    },
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table c.a rename c.b"
 }
 
-"create view a asdasd"
+"create view a as select * from asdasd"
 {
-  "Action": "create"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create view a as select * from asdasd"
 }
 
+# syntax error
 "alter view c as foo"
-{
-  "Action": "alter"
-}
+"syntax error at position 20 near 'foo'"
 
 "drop  view b"
 {
-  "Action": "drop"
-}
-
-"select * from a"
-{
-  "Action": ""
-}
-
-"syntax error"
-{
-  "Action": ""
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "b",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "drop view b"
 }
 
 "alter table a reorganize partition b into (partition c values less than (1000), partition d values less than (maxvalue))"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a reorganize partition b into (partition c values less than (1000), partition d values less than maxvalue)"
 }
 
 "alter table a partition by range (id) (partition p0 values less than (10), partition p1 values less than (maxvalue))"
 {
-  "Action": "alter"
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "alter table a \npartition by range (id)\n(partition p0 values less than (10),\n partition p1 values less than maxvalue)"
 }
 
 # truncate
 "truncate a"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "truncate table a"
 }
 
 # truncate
 "truncate table a"
 {
   "PlanID": "DDL",
-  "TableName": "a"
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "truncate table a"
+}
+
+# create a temporary table
+"create temporary table a(id bigint primary key)"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "a",
+      "Role": 2
+    }
+  ],
+  "FullQuery": "create temporary table a (\n\tid bigint primary key\n)",
+  "NeedsReservedConn": true
+}
+
+# temporary table with ddl statement only partially parsed
+"create temporary table x"
+{
+  "PlanID": "DDL",
+  "TableName": "",
+  "Permissions": [
+    {
+      "TableName": "x",
+      "Role": 2
+    }
+  ],
+  "NeedsReservedConn": true
 }

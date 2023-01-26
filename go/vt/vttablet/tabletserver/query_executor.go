@@ -652,20 +652,27 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		}
 	}
 
-	defer func() {
-		// Call se.Reload() with includeStats=false as obtaining table
-		// size stats involves joining `information_schema.tables`,
-		// which can be very costly on systems with a large number of
-		// tables.
-		//
-		// Instead of synchronously recalculating table size stats
-		// after every DDL, let them be outdated until the periodic
-		// schema reload fixes it.
-		if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
-			log.Errorf("failed to reload schema %v", err)
-		}
-	}()
-
+	isTemporaryTable := false
+	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
+		isTemporaryTable = ddlStmt.IsTemporary()
+	}
+	if !isTemporaryTable {
+		// Temporary tables are limited to the session creating them. There is no need to Reload()
+		// the table because other connections will not be able to see the table anyway.
+		defer func() {
+			// Call se.Reload() with includeStats=false as obtaining table
+			// size stats involves joining `information_schema.tables`,
+			// which can be very costly on systems with a large number of
+			// tables.
+			//
+			// Instead of synchronously recalculating table size stats
+			// after every DDL, let them be outdated until the periodic
+			// schema reload fixes it.
+			if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
+				log.Errorf("failed to reload schema %v", err)
+			}
+		}()
+	}
 	sql := qre.query
 	// If FullQuery is not nil, then the DDL query was fully parsed
 	// and we should use the ast to generate the query instead.
