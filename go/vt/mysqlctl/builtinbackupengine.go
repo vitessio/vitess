@@ -64,10 +64,10 @@ var (
 	builtinBackupProgress = 5 * time.Second
 
 	// Controls the size of blocks read from disk during backups.
-	builtinBackupFileReadBufferSize = 0
+	builtinBackupFileReadBufferSize uint
 
 	// Controls the size of blocks written to disk during restores.
-	builtinBackupFileWriteBufferSize = 2 * 1024 * 1024 /* 2 MiB */
+	builtinBackupFileWriteBufferSize uint = 2 * 1024 * 1024 /* 2 MiB */
 
 	// Controls the byte block size of writes to backupstorage during backups.
 	// The backupstorage may be a physical file, network, or something else.
@@ -137,8 +137,8 @@ func init() {
 func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&BuiltinBackupMysqldTimeout, "builtinbackup_mysqld_timeout", BuiltinBackupMysqldTimeout, "how long to wait for mysqld to shutdown at the start of the backup.")
 	fs.DurationVar(&builtinBackupProgress, "builtinbackup_progress", builtinBackupProgress, "how often to send progress updates when backing up large files.")
-	fs.IntVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files from disk in blocks of this many bytes. Golang defaults are used when set to 0.")
-	fs.IntVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files to disk in blocks of this many bytes.")
+	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files from disk in blocks of this many bytes. Golang defaults are used when set to 0.")
+	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files to disk in blocks of this many bytes.")
 }
 
 // isIncrementalBackup is a convenience function to check whether the params indicate an incremental backup request
@@ -726,7 +726,7 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	}
 
 	if builtinBackupFileReadBufferSize > 0 {
-		reader = bufio.NewReaderSize(br, builtinBackupFileReadBufferSize)
+		reader = bufio.NewReaderSize(br, int(builtinBackupFileReadBufferSize))
 	}
 
 	// Copy from the source file to writer (optional gzip,
@@ -932,7 +932,7 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	bp := newBackupReader(name, 0, source)
 	go bp.ReportProgress(builtinBackupProgress, params.Logger)
 
-	dst := bufio.NewWriterSize(dstFile, builtinBackupFileWriteBufferSize)
+	dst := bufio.NewWriterSize(dstFile, int(builtinBackupFileWriteBufferSize))
 	var reader io.Reader = bp
 
 	// Create the external read pipe, if any.
