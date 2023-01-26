@@ -1298,9 +1298,11 @@ func (c *cow) copyOnRewriteRefOfColumnDefinition(n *ColumnDefinition, parent SQL
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		if changedName {
+		_Type, changedType := c.copyOnRewriteRefOfColumnType(n.Type, n)
+		if changedName || changedType {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
+			res.Type, _ = _Type.(*ColumnType)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)
