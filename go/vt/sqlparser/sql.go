@@ -6672,7 +6672,7 @@ type yySymType struct {
 	identifierCI      IdentifierCI
 	joinCondition     *JoinCondition
 	databaseOption    DatabaseOption
-	columnType        ColumnType
+	columnType        *ColumnType
 	columnCharset     ColumnCharset
 	yys               int
 }
@@ -11001,61 +11001,61 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1992
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 311:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:1996
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 312:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2000
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 313:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2004
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 314:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2008
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 315:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2012
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 316:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2016
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 317:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2020
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 318:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2024
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 319:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2030
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -11063,7 +11063,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2036
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -11071,7 +11071,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2042
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -11079,7 +11079,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2048
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -11087,7 +11087,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2054
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -11095,7 +11095,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2060
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -11103,7 +11103,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2066
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 			yyVAL.columnType.Length = yyDollar[2].LengthScaleOption.Length
 			yyVAL.columnType.Scale = yyDollar[2].LengthScaleOption.Scale
 		}
@@ -11111,37 +11111,37 @@ yydefault:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2074
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 327:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2078
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 328:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2082
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 329:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2086
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 330:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2090
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 331:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2096
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].columnCharset}
 		}
 	case 332:
 		yyDollar = yyS[yypt-3 : yypt+1]
@@ -11149,139 +11149,139 @@ yydefault:
 		{
 			// CHAR BYTE is an alias for binary. See also:
 			// https://dev.mysql.com/doc/refman/8.0/en/string-type-syntax.html
-			yyVAL.columnType = ColumnType{Type: "binary", Length: yyDollar[2].literalUnion()}
+			yyVAL.columnType = &ColumnType{Type: "binary", Length: yyDollar[2].literalUnion()}
 		}
 	case 333:
 		yyDollar = yyS[yypt-3 : yypt+1]
 //line sql.y:2106
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion(), Charset: yyDollar[3].columnCharset}
 		}
 	case 334:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2110
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 335:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2114
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Length: yyDollar[2].literalUnion()}
 		}
 	case 336:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2118
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
 		}
 	case 337:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2122
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
 		}
 	case 338:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2126
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
 		}
 	case 339:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:2130
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), Charset: yyDollar[2].columnCharset}
 		}
 	case 340:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2134
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 341:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2138
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 342:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2142
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 343:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2146
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 344:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2150
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 345:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2154
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].columnCharset}
 		}
 	case 346:
 		yyDollar = yyS[yypt-5 : yypt+1]
 //line sql.y:2159
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].columnCharset}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str), EnumValues: yyDollar[3].strs, Charset: yyDollar[5].columnCharset}
 		}
 	case 347:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2165
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 348:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2169
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 349:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2173
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 350:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2177
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 351:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2181
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 352:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2185
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 353:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2189
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 354:
 		yyDollar = yyS[yypt-1 : yypt+1]
 //line sql.y:2193
 		{
-			yyVAL.columnType = ColumnType{Type: string(yyDollar[1].str)}
+			yyVAL.columnType = &ColumnType{Type: string(yyDollar[1].str)}
 		}
 	case 355:
 		yyDollar = yyS[yypt-1 : yypt+1]

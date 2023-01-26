@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"encoding/json"
 	"fmt"
 	"math"
 	"sort"
@@ -26,8 +27,10 @@ import (
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -70,6 +73,24 @@ const (
 	SQLMode          = "NO_AUTO_VALUE_ON_ZERO"
 	StrictSQLMode    = "STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO"
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
+
+	sqlCreatePostCopyAction = `insert into _vt.post_copy_action(vrepl_id, table_name, action)
+	values(%a, %a, convert(%a using utf8mb4))`
+	sqlGetPostCopyActions = `select id, action from _vt.post_copy_action where vrepl_id=%a and
+	table_name=%a`
+	// sqlGetPostCopyActionsForTable gets a write lock on all post_copy_action
+	// rows for the table and should only be called from within an explicit
+	// multi-statement transaction in order to hold those locks until the
+	// related work is finished as this is a concurrency control mechanism.
+	sqlGetAndLockPostCopyActionsForTable = `select id, vrepl_id, action from _vt.post_copy_action where id in
+	(
+		select pca.id from _vt.post_copy_action as pca inner join _vt.vreplication as vr on (pca.vrepl_id = vr.id)
+		where pca.table_name=%a
+	) for update`
+	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where
+	action->>'$.type'=%a and vrepl_id=%a and table_name=%a`
+	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
+	table_name=%a and id=%a`
 )
 
 type ComponentName string
@@ -105,7 +126,7 @@ type vreplicator struct {
 }
 
 // newVReplicator creates a new vreplicator. The valid fields from the source are:
-// Keyspce, Shard, Filter, OnDdl, ExternalMySql and StopAfterCopy.
+// Keyspace, Shard, Filter, OnDdl, ExternalMySql and StopAfterCopy.
 // The Filter consists of Rules. Each Rule has a Match and an (inner) Filter field.
 // The Match can be a table name or, if it begins with a "/", a wildcard.
 // The Filter can be empty: get all rows and columns.
@@ -128,7 +149,7 @@ type vreplicator struct {
 //	documentation for more info.
 func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
-		log.Warningf("the supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
+		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
 	}
 	return &vreplicator{
@@ -470,7 +491,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 		query := fmt.Sprintf(setSQLModeQueryf, vr.originalSQLMode)
 		_, err := dbClient.Execute(query)
 		if err != nil {
-			log.Warningf("could not reset sql_mode on target using %s: %v", query, err)
+			log.Warningf("Could not reset sql_mode on target using %s: %v", query, err)
 		}
 	}
 	vreplicationSQLMode := SQLMode
@@ -557,4 +578,415 @@ func recalculatePKColsInfoByColumnNames(uniqueKeyColumnNames []string, colInfos 
 		pkColInfos[i].IsPK = isPKMap[pkColInfos[i].Name]
 	}
 	return pkColInfos
+}
+
+// stashSecondaryKeys temporarily DROPs all secondary keys from the table schema
+// and stashes an ALTER TABLE statement that will be used to recreate them at the
+// end of the copy phase.
+func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string) error {
+	if !vr.supportsDeferredSecondaryKeys() {
+		return fmt.Errorf("deferring secondary key creation is not supported for %s workflows",
+			binlogdatapb.VReplicationWorkflowType_name[vr.WorkflowType])
+	}
+	secondaryKeys, err := vr.getTableSecondaryKeys(ctx, tableName)
+	if err != nil {
+		return err
+	}
+	if len(secondaryKeys) > 0 {
+		alterDrop := &sqlparser.AlterTable{
+			Table: sqlparser.TableName{
+				Qualifier: sqlparser.NewIdentifierCS(vr.dbClient.DBName()),
+				Name:      sqlparser.NewIdentifierCS(tableName),
+			},
+		}
+		alterReAdd := &sqlparser.AlterTable{
+			Table: sqlparser.TableName{
+				Qualifier: sqlparser.NewIdentifierCS(vr.dbClient.DBName()),
+				Name:      sqlparser.NewIdentifierCS(tableName),
+			},
+		}
+		for _, secondaryKey := range secondaryKeys {
+			// Primary should never happen. Fulltext keys are
+			// not supported for deferral and retained during
+			// the copy phase as they have some unique
+			// behaviors and constraints:
+			// - Adding a fulltext key requires a full table
+			//   rebuild to add the internal FTS_DOC_ID field
+			//   to each record.
+			// - You can not add/remove multiple fulltext keys
+			//   in a single ALTER statement.
+			if secondaryKey.Info.Primary || secondaryKey.Info.Fulltext {
+				continue
+			}
+			alterDrop.AlterOptions = append(alterDrop.AlterOptions,
+				&sqlparser.DropKey{
+					Name: secondaryKey.Info.Name,
+					Type: sqlparser.NormalKeyType,
+				},
+			)
+			alterReAdd.AlterOptions = append(alterReAdd.AlterOptions,
+				&sqlparser.AddIndexDefinition{
+					IndexDefinition: secondaryKey,
+				},
+			)
+		}
+		action, err := json.Marshal(PostCopyAction{
+			Type: PostCopyActionSQL,
+			Task: sqlparser.String(alterReAdd),
+		})
+		if err != nil {
+			return err
+		}
+		insert, err := sqlparser.ParseAndBind(sqlCreatePostCopyAction, sqltypes.Uint32BindVariable(vr.id),
+			sqltypes.StringBindVariable(tableName), sqltypes.StringBindVariable(string(action)))
+		if err != nil {
+			return err
+		}
+		// Use a new DB client to avoid interfering with open transactions
+		// in the shared client as DDL includes an implied commit.
+		// We're also NOT using a DBA connection here because we want to
+		// be sure that the commit fails if the instance is somehow in
+		// READ-ONLY mode.
+		dbClient, err := vr.newClientConnection(ctx)
+		if err != nil {
+			log.Errorf("Unable to connect to the database when saving secondary keys for deferred creation on the %q table in the %q VReplication workflow: %v",
+				tableName, vr.WorkflowName, err)
+			return vterrors.Wrap(err, "unable to connect to the database when saving secondary keys for deferred creation")
+		}
+		defer dbClient.Close()
+		if _, err := dbClient.ExecuteFetch(insert, 1); err != nil {
+			return err
+		}
+		if _, err := dbClient.ExecuteFetch(sqlparser.String(alterDrop), 1); err != nil {
+			// If they've already been dropped, e.g. by another controller running on the tablet
+			// when doing a shard merge, then we can ignore the error.
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Num == mysql.ERCantDropFieldOrKey {
+				secondaryKeys, err := vr.getTableSecondaryKeys(ctx, tableName)
+				if err == nil && len(secondaryKeys) == 0 {
+					return nil
+				}
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (vr *vreplicator) getTableSecondaryKeys(ctx context.Context, tableName string) ([]*sqlparser.IndexDefinition, error) {
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{tableName}}
+	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
+	if err != nil {
+		return nil, err
+	}
+	// schema should never be nil, but check to be extra safe.
+	if schema == nil || len(schema.TableDefinitions) != 1 {
+		return nil, fmt.Errorf("unexpected number of table definitions returned from GetSchema call for table %q: %d",
+			tableName, len(schema.TableDefinitions))
+	}
+	tableSchema := schema.TableDefinitions[0].Schema
+	var secondaryKeys []*sqlparser.IndexDefinition
+	parsedDDL, err := sqlparser.ParseStrictDDL(tableSchema)
+	if err != nil {
+		return secondaryKeys, err
+	}
+	createTable, ok := parsedDDL.(*sqlparser.CreateTable)
+	// createTable or createTable.TableSpec should never be nil
+	// if it was a valid cast, but check to be extra safe.
+	if !ok || createTable == nil || createTable.GetTableSpec() == nil {
+		return nil, fmt.Errorf("could not determine CREATE TABLE statement from table schema %q", tableSchema)
+	}
+
+	for _, index := range createTable.GetTableSpec().Indexes {
+		if !index.Info.Primary {
+			secondaryKeys = append(secondaryKeys, index)
+		}
+	}
+	return secondaryKeys, err
+}
+
+func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string) error {
+	defer vr.stats.PhaseTimings.Record("postCopyActions", time.Now())
+
+	// Use a new DB client to avoid interfering with open transactions
+	// in the shared client as DDL includes an implied commit.
+	// We're also NOT using a DBA connection here because we want to be
+	// sure that the work fails if the instance is somehow in READ-ONLY
+	// mode.
+	dbClient, err := vr.newClientConnection(ctx)
+	if err != nil {
+		log.Errorf("Unable to connect to the database when executing post copy actions on the %q table in the %q VReplication workflow: %v",
+			tableName, vr.WorkflowName, err)
+		return vterrors.Wrap(err, "unable to connect to the database when executing post copy actions")
+	}
+	defer dbClient.Close()
+
+	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Uint32BindVariable(vr.id),
+		sqltypes.StringBindVariable(tableName))
+	if err != nil {
+		return err
+	}
+	qr, err := dbClient.ExecuteFetch(query, -1)
+	if err != nil {
+		return err
+	}
+	// qr should never be nil, but check anyway to be extra safe.
+	if qr == nil || len(qr.Rows) == 0 {
+		return nil
+	}
+
+	if err := vr.insertLog(LogCopyStart, fmt.Sprintf("Executing %d post copy action(s) for %s table",
+		len(qr.Rows), tableName)); err != nil {
+		return err
+	}
+
+	// Save our connection ID so we can use it to easily KILL any
+	// running SQL action we may perform later if needed.
+	idqr, err := dbClient.ExecuteFetch("select connection_id()", 1)
+	if err != nil {
+		return err
+	}
+	// qr should never be nil, but check anyway to be extra safe.
+	if idqr == nil || len(idqr.Rows) != 1 {
+		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
+	}
+	connID, err := idqr.Rows[0][0].ToUint64()
+	if err != nil || connID == 0 {
+		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
+	}
+
+	deleteAction := func(dbc *vdbClient, id int64, vid uint32, tn string) error {
+		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Uint32BindVariable(vid),
+			sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
+		if err != nil {
+			return err
+		}
+		if _, err := dbc.ExecuteFetch(delq, 1); err != nil {
+			return fmt.Errorf("failed to delete post copy action for the %q table with id %d: %v",
+				tableName, id, err)
+		}
+		return nil
+	}
+
+	// This could take hours so we start a monitoring goroutine to
+	// listen for context cancellation, which would indicate that
+	// the controller is stopping due to engine shutdown (tablet
+	// shutdown or transition). If that happens we attempt to KILL
+	// the running ALTER statement using a DBA connection.
+	// If we don't do this then we could e.g. cause a PRS to fail as
+	// the running ALTER will block setting [super_]read_only.
+	// A failed/killed ALTER will be tried again when the copy
+	// phase starts up again on the (new) PRIMARY.
+	var action PostCopyAction
+	done := make(chan struct{})
+	defer close(done)
+	killAction := func(ak PostCopyAction) error {
+		// If we're executing an SQL query then KILL the
+		// connection being used to execute it.
+		if ak.Type == PostCopyActionSQL {
+			if connID < 1 {
+				return fmt.Errorf("invalid connection ID found (%d) when attempting to kill %q", connID, ak.Task)
+			}
+			killdbc := vr.vre.dbClientFactoryDba()
+			if err := killdbc.Connect(); err != nil {
+				return fmt.Errorf("unable to connect to the database when attempting to kill %q: %v", ak.Task, err)
+			}
+			defer killdbc.Close()
+			_, err = killdbc.ExecuteFetch(fmt.Sprintf("kill %d", connID), 1)
+			return err
+		}
+		// We may support non-SQL actions in the future.
+		return nil
+	}
+	go func() {
+		select {
+		// Only cancel an ongoing ALTER if the engine is closing.
+		case <-vr.vre.ctx.Done():
+			log.Infof("Copy of the %q table stopped when performing the following post copy action in the %q VReplication workflow: %+v",
+				tableName, vr.WorkflowName, action)
+			if err := killAction(action); err != nil {
+				log.Errorf("Failed to kill post copy action on the %q table in the %q VReplication workflow: %v",
+					tableName, vr.WorkflowName, err)
+			}
+			return
+		case <-done:
+			// We're done, so no longer need to listen for cancellation.
+			return
+		}
+	}()
+
+	for _, row := range qr.Named().Rows {
+		select {
+		// Stop any further actions if the vreplicator's context is
+		// cancelled -- most likely due to hitting the
+		// vreplication_copy_phase_duration
+		case <-ctx.Done():
+			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
+		default:
+		}
+		id, err := row["id"].ToInt64()
+		if err != nil {
+			return err
+		}
+		action = PostCopyAction{}
+		actionBytes, err := row["action"].ToBytes()
+		if err != nil {
+			return err
+		}
+		if err := json.Unmarshal(actionBytes, &action); err != nil {
+			return err
+		}
+
+		// There can be multiple vreplicators/controllers running on
+		// the same tablet for the same table e.g. when doing shard
+		// merges. Let's check for that and if there are still others
+		// that have not finished the copy phase for the table, with
+		// the same action, then we skip executing it as an individual
+		// action on a table should only be done by the last vreplicator
+		// to finish. We use a transaction because we select matching
+		// rows with FOR UPDATE in order to serialize the execution of
+		// the post copy actions for the same workflow and table.
+		// This ensures that the actions are only performed once after
+		// all streams have completed the copy phase for the table.
+		redundant := false
+		_, err = dbClient.ExecuteFetch("start transaction", 1)
+		if err != nil {
+			return err
+		}
+		vrsq, err := sqlparser.ParseAndBind(sqlGetAndLockPostCopyActionsForTable, sqltypes.StringBindVariable(tableName))
+		if err != nil {
+			return err
+		}
+		vrsres, err := dbClient.ExecuteFetch(vrsq, -1)
+		if err != nil {
+			return fmt.Errorf("failed to get post copy actions for the %q table: %v", tableName, err)
+		}
+		if vrsres != nil && len(vrsres.Rows) > 1 {
+			// We have more than one planned post copy action on the table.
+			for _, row := range vrsres.Named().Rows {
+				vrid, err := row["vrepl_id"].ToUint64()
+				if err != nil {
+					return err
+				}
+				ctlaction := row["action"].ToString()
+				// Let's make sure that it's a different controller/vreplicator
+				// and that the action is the same.
+				if uint32(vrid) != vr.id && strings.EqualFold(ctlaction, string(actionBytes)) {
+					// We know that there's another controller/vreplicator yet
+					// to finish its copy phase for the table and it will perform
+					// the same action on the same table when it completes, so we
+					// skip doing the action and simply delete our action record
+					// to mark this controller/vreplicator's post copy action work
+					// as being done for the table before it finishes the copy
+					// phase for the table.
+					if err := deleteAction(dbClient, id, vr.id, tableName); err != nil {
+						return err
+					}
+					redundant = true
+					break
+				}
+			}
+		}
+		_, err = dbClient.ExecuteFetch("commit", 1)
+		if err != nil {
+			return err
+		}
+		if redundant {
+			// Skip this action as it will be executed by a later vreplicator.
+			continue
+		}
+
+		switch action.Type {
+		case PostCopyActionSQL:
+			log.Infof("Executing post copy SQL action on the %q table in the %q VReplication workflow: %s",
+				tableName, vr.WorkflowName, action.Task)
+			// This will return an io.EOF / MySQL CRServerLost (errno 2013)
+			// error if it is killed by the monitoring goroutine.
+			if _, err := dbClient.ExecuteFetch(action.Task, -1); err != nil {
+				failedAlterErr := err
+				// It's possible that we previously executed the ALTER but
+				// the subsequent DELETE of the post_copy_action record failed.
+				// For example, the context could be cancelled in-between.
+				// It's also possible that the user has modified the schema on
+				// the target side.
+				// If we get a duplicate key/index error then let's see if the
+				// index definitions that we would have added already exist in
+				// the table schema and if so move forward and delete the
+				// post_copy_action record.
+				if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERDupKeyName {
+					stmt, err := sqlparser.ParseStrictDDL(action.Task)
+					if err != nil {
+						return failedAlterErr
+					}
+					alterStmt, ok := stmt.(*sqlparser.AlterTable)
+					if !ok {
+						return failedAlterErr
+					}
+					currentSKs, err := vr.getTableSecondaryKeys(ctx, tableName)
+					if err != nil {
+						return failedAlterErr
+					}
+					if len(currentSKs) < len(alterStmt.AlterOptions) {
+						return failedAlterErr
+					}
+					for _, alterOption := range alterStmt.AlterOptions {
+						addKey, ok := alterOption.(*sqlparser.AddIndexDefinition)
+						if !ok {
+							return failedAlterErr
+						}
+						found := false
+						for _, currentSK := range currentSKs {
+							if sqlparser.Equals.RefOfIndexDefinition(addKey.IndexDefinition, currentSK) {
+								found = true
+								break
+							}
+						}
+						if !found {
+							return failedAlterErr
+						}
+					}
+					// All of the keys we wanted to add in the ALTER already
+					// exist in the live table schema.
+				} else {
+					return failedAlterErr
+				}
+			}
+			if err := deleteAction(dbClient, id, vr.id, tableName); err != nil {
+				return err
+			}
+		default:
+			return fmt.Errorf("unsupported post copy action type: %v", action.Type)
+		}
+	}
+
+	if err := vr.insertLog(LogCopyStart, fmt.Sprintf("Completed all post copy actions for %s table",
+		tableName)); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// supportsDeferredSecondaryKeys tells you if related work should be done
+// for the workflow. Deferring secondary index generation is only supported
+// with MoveTables, Migrate, and Reshard.
+func (vr *vreplicator) supportsDeferredSecondaryKeys() bool {
+	return vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_MoveTables) ||
+		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Migrate) ||
+		vr.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_Reshard)
+}
+
+func (vr *vreplicator) newClientConnection(ctx context.Context) (*vdbClient, error) {
+	dbc := vr.vre.dbClientFactoryFiltered()
+	if err := dbc.Connect(); err != nil {
+		return nil, vterrors.Wrap(err, "can't connect to database")
+	}
+	dbClient := newVDBClient(dbc, vr.stats)
+	if _, err := vr.setSQLMode(ctx, dbClient); err != nil {
+		return nil, vterrors.Wrap(err, "failed to set sql_mode")
+	}
+	if err := vr.clearFKCheck(dbClient); err != nil {
+		return nil, vterrors.Wrap(err, "failed to clear foreign key check")
+	}
+	return dbClient, nil
 }

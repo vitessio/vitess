@@ -18,6 +18,7 @@ package schema
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -27,9 +28,8 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
@@ -82,6 +82,7 @@ type Engine struct {
 	tableFileSizeGauge      *stats.GaugesWithSingleLabel
 	tableAllocatedSizeGauge *stats.GaugesWithSingleLabel
 	innoDbReadRowsCounter   *stats.Counter
+	SchemaReloadTimings     *servenv.TimingsWrapper
 }
 
 // NewEngine creates a new Engine.
@@ -102,6 +103,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
+	se.SchemaReloadTimings = env.Exporter().NewTimings("SchemaReload", "time taken to reload the schema", "type")
 
 	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
 	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -325,8 +327,10 @@ func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, includeSta
 
 // reload reloads the schema. It can also be used to initialize it.
 func (se *Engine) reload(ctx context.Context, includeStats bool) error {
+	start := time.Now()
 	defer func() {
 		se.env.LogError()
+		se.SchemaReloadTimings.Record("SchemaReload", start)
 	}()
 
 	conn, err := se.conns.Get(ctx, nil)
@@ -601,8 +605,8 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	return se.tables[tableName.String()]
 }
 
-// GetSchema returns the current The Tables are a shared
-// data structure and must be treated as read-only.
+// GetSchema returns the current schema. The Tables are a
+// shared data structure and must be treated as read-only.
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()

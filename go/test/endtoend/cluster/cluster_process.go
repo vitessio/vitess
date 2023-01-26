@@ -117,8 +117,6 @@ type LocalProcessCluster struct {
 
 	VtctldExtraArgs []string
 
-	EnableSemiSync bool
-
 	// mutex added to handle the parallel teardowns
 	mx                *sync.Mutex
 	teardownCompleted bool
@@ -359,7 +357,6 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync,
 				cluster.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			if cluster.ReusingVTDATAROOT {
@@ -500,7 +497,6 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync,
 				cluster.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			if cluster.ReusingVTDATAROOT {
@@ -614,7 +610,6 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync,
 				cluster.DefaultCharset)
 		}
 
@@ -1168,7 +1163,6 @@ func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttabl
 		cluster.Hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
-		cluster.EnableSemiSync,
 		cluster.DefaultCharset)
 }
 
@@ -1188,7 +1182,6 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 		hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
-		cluster.EnableSemiSync,
 		cluster.DefaultCharset)
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup
