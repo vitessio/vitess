@@ -109,6 +109,12 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 		return newTxThrottler(&txThrottlerConfig{enabled: false})
 	}
 
+	for _, tabletType := range config.TxThrottlerTabletTypes {
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			return nil, fmt.Errorf("PRIMARY tablet type is not supported")
+		}
+	}
+
 	var throttlerConfig throttlerdatapb.Configuration
 	if err := prototext.Unmarshal([]byte(config.TxThrottlerConfig), &throttlerConfig); err != nil {
 		return nil, err
@@ -122,6 +128,7 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 	return newTxThrottler(&txThrottlerConfig{
 		enabled:          true,
 		topoServer:       topoServer,
+		tabletConfig:     config,
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
 	})
@@ -136,6 +143,7 @@ type txThrottlerConfig struct {
 	enabled bool
 
 	topoServer      *topo.Server
+	tabletConfig    *tabletenv.TabletConfig
 	throttlerConfig *throttlerdatapb.Configuration
 	// healthCheckCells stores the cell names in which running vttablets will be monitored for
 	// replication lag.
@@ -166,6 +174,8 @@ type TopologyWatcherInterface interface {
 
 // txThrottlerState holds the state of an open TxThrottler object.
 type txThrottlerState struct {
+	tabletConfig *tabletenv.TabletConfig
+
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
 	throttleMu      sync.Mutex
@@ -283,7 +293,8 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string
 		return nil, err
 	}
 	result := &txThrottlerState{
-		throttler: t,
+		tabletConfig: config.tabletConfig,
+		throttler:    t,
 	}
 	createTxThrottlerHealthCheck(config, result, cell)
 
@@ -351,14 +362,12 @@ func (ts *txThrottlerState) deallocateResources() {
 
 // StatsUpdate updates the health of a tablet with the given healthcheck.
 func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
-	// Ignore PRIMARY and RDONLY stats.
-	// We currently do not monitor RDONLY tablets for replication lag. RDONLY tablets are not
-	// candidates for becoming primary during failover, and it's acceptable to serve somewhat
-	// stale date from these.
-	// TODO(erez): If this becomes necessary, we can add a configuration option that would
-	// determine whether we consider RDONLY tablets here, as well.
-	if tabletStats.Target.TabletType != topodatapb.TabletType_REPLICA {
-		return
+	// Monitor tablets for replication lag if they have a tablet
+	// type specified by the --tx_throttler_tablet_types flag.
+	for _, expectedTabletType := range ts.tabletConfig.TxThrottlerTabletTypes {
+		if tabletStats.Target.TabletType == expectedTabletType {
+			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
+			break
+		}
 	}
-	ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
 }

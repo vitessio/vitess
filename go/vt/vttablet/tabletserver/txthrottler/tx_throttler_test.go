@@ -115,6 +115,7 @@ func TestEnabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
 	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
+	config.TxThrottlerTabletTypes = []topodatapb.TabletType{topodatapb.TabletType_REPLICA}
 
 	throttler, err := tryCreateTxThrottler(config, ts)
 	if err != nil {
