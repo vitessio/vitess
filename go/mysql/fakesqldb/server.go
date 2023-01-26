@@ -98,7 +98,7 @@ type DB struct {
 	// rejectedData maps tolower(query) to an error.
 	rejectedData map[string]error
 	// patternData is a map of regexp queries to results.
-	patternData map[string]exprResult
+	patternData map[string]ExprResult
 	// queryCalled keeps track of how many times a query was called.
 	queryCalled map[string]int
 	// querylog keeps track of all called queries
@@ -135,11 +135,11 @@ type ExpectedResult struct {
 	BeforeFunc func()
 }
 
-type exprResult struct {
-	queryPattern string
-	expr         *regexp.Regexp
-	result       *sqltypes.Result
-	err          string
+type ExprResult struct {
+	QueryPattern string
+	Expr         *regexp.Regexp
+	Result       *sqltypes.Result
+	Err          string
 }
 
 // ExpectedExecuteFetch defines for an expected query the to be faked output.
@@ -172,7 +172,7 @@ func New(t testing.TB) *DB {
 		queryCalled:              make(map[string]int),
 		connections:              make(map[uint32]*mysql.Conn),
 		queryPatternUserCallback: make(map[*regexp.Regexp]func(string)),
-		patternData:              make(map[string]exprResult),
+		patternData:              make(map[string]ExprResult),
 	}
 
 	db.Handler = db
@@ -398,15 +398,15 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 	// Check query patterns from AddQueryPattern().
 	for _, pat := range db.patternData {
-		if pat.expr.MatchString(query) || strings.Contains(query, pat.queryPattern) {
-			userCallback, ok := db.queryPatternUserCallback[pat.expr]
+		if pat.Expr.MatchString(query) || strings.Contains(query, pat.QueryPattern) {
+			userCallback, ok := db.queryPatternUserCallback[pat.Expr]
 			if ok {
 				userCallback(query)
 			}
-			if pat.err != "" {
-				return fmt.Errorf(pat.err)
+			if pat.Err != "" {
+				return fmt.Errorf(pat.Err)
 			}
-			return callback(pat.result)
+			return callback(pat.Result)
 		}
 	}
 
@@ -557,7 +557,7 @@ func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Resu
 	result := *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.patternData[queryPattern] = exprResult{queryPattern: queryPattern, expr: expr, result: &result}
+	db.patternData[queryPattern] = ExprResult{QueryPattern: queryPattern, Expr: expr, Result: &result}
 }
 
 // RejectQueryPattern allows a query pattern to be rejected with an error
@@ -565,19 +565,19 @@ func (db *DB) RejectQueryPattern(queryPattern, error string) {
 	expr := regexp.MustCompile("(?is)^" + queryPattern + "$")
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.patternData[queryPattern] = exprResult{queryPattern: queryPattern, expr: expr, err: error}
+	db.patternData[queryPattern] = ExprResult{QueryPattern: queryPattern, Expr: expr, Err: error}
 }
 
 // ClearQueryPattern removes all query patterns set up
 func (db *DB) ClearQueryPattern() {
-	db.patternData = make(map[string]exprResult)
+	db.patternData = make(map[string]ExprResult)
 }
 
 // AddQueryPatternWithCallback is similar to AddQueryPattern: in addition it calls the provided callback function
 // The callback can be used to set user counters/variables for testing specific usecases
 func (db *DB) AddQueryPatternWithCallback(queryPattern string, expectedResult *sqltypes.Result, callback func(string)) {
 	db.AddQueryPattern(queryPattern, expectedResult)
-	db.queryPatternUserCallback[db.patternData[queryPattern].expr] = callback
+	db.queryPatternUserCallback[db.patternData[queryPattern].Expr] = callback
 }
 
 // DeleteQuery deletes query from the fake DB.
@@ -779,4 +779,49 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 		),
 		cols...,
 	))
+}
+
+func (db *DB) GetRejectedQueryResult(key string) error {
+	// check if we should reject it.
+	if err, ok := db.rejectedData[key]; ok {
+		return err
+	}
+
+	return nil
+}
+
+func (db *DB) GetQueryResult(key string) *ExpectedResult {
+	// Check explicit queries from AddQuery().
+	result, ok := db.data[key]
+	if ok {
+		return result
+	}
+	return nil
+}
+
+func (db *DB) GetQueryPatternResult(key string) (ExprResult, bool) {
+	for _, pat := range db.patternData {
+		if pat.Expr.MatchString(key) || strings.Contains(key, pat.QueryPattern) {
+			return pat, true
+			/*userCallback, ok := db.queryPatternUserCallback[pat.expr]
+			if ok {
+				userCallback(query)
+			}
+			if pat.err != "" {
+				return fmt.Errorf(pat.err)
+			}
+			return callback(pat.result)*/
+		}
+	}
+
+	return ExprResult{}, false
+}
+
+func (db *DB) GetQueryPatternUserCallBack(exp *regexp.Regexp) (func(string), bool) {
+	userCallback, ok := db.queryPatternUserCallback[exp]
+	if ok {
+		return userCallback, true
+	}
+
+	return nil, false
 }

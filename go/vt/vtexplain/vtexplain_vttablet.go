@@ -494,16 +494,44 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	// return the pre-computed results for any schema introspection queries
 	tEnv := t.vte.getGlobalTabletEnv()
 	result := tEnv.getResult(query)
-	emptyResult := &sqltypes.Result{}
-	if sidecardb.MatchesVTInitQuery(query) {
+	//emptyResult := &sqltypes.Result{}
+	fmt.Printf("query: %s\n", query)
+	/*if sidecardb.MatchesVTInitQuery(query) {
 		return callback(emptyResult)
 	}
-	if strings.HasPrefix(query, "use _vt") || strings.HasPrefix(query, "CREATE TABLE _vt") || strings.HasPrefix(query, "ALTER TABLE _vt") || strings.HasPrefix(query, "CREATE TABLE IF NOT EXISTS _vt") {
+	if //strings.HasPrefix(query, "use `fakesqldb`") ||
+	strings.HasPrefix(query, "use _vt") ||
+		strings.HasPrefix(query, "CREATE TABLE _vt") ||
+		strings.HasPrefix(query, "ALTER TABLE _vt") ||
+		strings.HasPrefix(query, "CREATE TABLE IF NOT EXISTS _vt") {
 		return callback(emptyResult)
-	}
+	}*/
 	if result != nil {
 		return callback(result)
 	}
+
+	if err := t.db.GetRejectedQueryResult(query); err != nil {
+		return err
+	}
+
+	if result := t.db.GetQueryResult(query); result != nil {
+		if f := result.BeforeFunc; f != nil {
+			f()
+		}
+		return callback(result.Result)
+	}
+
+	if pat, ok := t.db.GetQueryPatternResult(query); ok {
+		userCallback, ok := t.db.GetQueryPatternUserCallBack(pat.Expr)
+		if ok {
+			userCallback(query)
+		}
+		if pat.Err != "" {
+			return fmt.Errorf(pat.Err)
+		}
+		return callback(pat.Result)
+	}
+
 	switch sqlparser.Preview(query) {
 	case sqlparser.StmtSelect:
 		// Parse the select statement to figure out the table and columns
