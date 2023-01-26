@@ -202,6 +202,7 @@ type Executor struct {
 
 	initMutex      sync.Mutex
 	migrationMutex sync.Mutex
+	submitMutex    sync.Mutex // used when submitting migrations
 	// ownedRunningMigrations lists UUIDs owned by this executor (consider this a map[string]bool)
 	// A UUID listed in this map stands for a migration that is executing, and that this executor can control.
 	// Migrations found to be running which are not listed in this map will either:
@@ -4594,6 +4595,9 @@ func (e *Executor) SubmitMigration(
 	if !e.isOpen {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
+	e.submitMutex.Lock()
+	defer e.submitMutex.Unlock()
+
 	log.Infof("SubmitMigration: request to submit migration with statement: %0.50s...", sqlparser.CanonicalString(stmt))
 	if ddlStmt, ok := stmt.(sqlparser.DDLStatement); ok {
 		// This validation should have taken place on submission. However, the query may have mutated
@@ -4607,6 +4611,31 @@ func (e *Executor) SubmitMigration(
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)
 	}
+
+	// Is there already a migration by this same UUID?
+	storedMigration, _, err := e.readMigration(ctx, onlineDDL.UUID)
+	if err != nil && err != ErrMigrationNotFound {
+		return nil, vterrors.Wrapf(err, "while checking whether migration %s exists", onlineDDL.UUID)
+	}
+	if storedMigration != nil {
+		log.Infof("SubmitMigration: migration %s already exists with migration_context=%s, table=%s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.Table)
+		// A migration already exists with the same UUID. This is fine, we allow re-submitting migrations
+		// with the same UUID, as we provide idempotency.
+		// So we will _mostly_ ignore the request: we will not submit a new migration. However, we will do
+		// these things:
+
+		// 1. Check that the requested submmited migration macthes the existing one's migration-context, otherwise
+		//    this doesn't seem right, not the idempotency we were looking for
+		if storedMigration.MigrationContext != onlineDDL.MigrationContext {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "migration rejected: found migration %s with different context: %s than submmitted migration's context: %s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.MigrationContext)
+		}
+		// 2. Possibly, the existing migration is in 'failed' or 'cancelled' state, in which case this
+		//    resubmission should retry the migration.
+		return e.RetryMigration(ctx, onlineDDL.UUID)
+	}
+
+	// OK, this is a new UUID
+
 	_, actionStr, err := onlineDDL.GetActionStr()
 	if err != nil {
 		return nil, err
@@ -4695,23 +4724,6 @@ func (e *Executor) SubmitMigration(
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
 	defer e.triggerNextCheckInterval()
-
-	// The query was a INSERT IGNORE because we allow a recurring submission of same migration.
-	// However, let's validate that the duplication (identified via UUID) was intentional.
-	storedMigration, _, err := e.readMigration(ctx, onlineDDL.UUID)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "unexpected error reading written migration %v", onlineDDL.UUID)
-	}
-	if storedMigration.MigrationContext != onlineDDL.MigrationContext {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "migration rejected: found migration %s with different context: %s than submmitted migration's context: %s", onlineDDL.UUID, storedMigration.MigrationContext, onlineDDL.MigrationContext)
-	}
-
-	// Finally, possibly this migration already existed, and this is a resubmission of same UUID.
-	// possibly, the existing migration is in 'failed' or 'cancelled' state, in which case this
-	// resubmission should retry the migration.
-	if _, err := e.RetryMigration(ctx, onlineDDL.UUID); err != nil {
-		return result, err
-	}
 
 	return result, nil
 }
