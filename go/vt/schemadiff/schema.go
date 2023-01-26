@@ -768,6 +768,7 @@ func (s *Schema) ValidateViewReferences() error {
 		entityColumns, err := s.getEntityColumnNames(e.Name(), availableColumns)
 		if err != nil {
 			errs = multierr.Append(errs, err)
+			continue
 		}
 		availableColumns[e.Name()] = map[string]struct{}{}
 		for _, col := range entityColumns {
