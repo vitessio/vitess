@@ -783,3 +783,48 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 		cols...,
 	))
 }
+
+func (db *DB) GetRejectedQueryResult(key string) error {
+	// check if we should reject it.
+	if err, ok := db.rejectedData[key]; ok {
+		return err
+	}
+
+	return nil
+}
+
+func (db *DB) GetQueryResult(key string) *ExpectedResult {
+	// Check explicit queries from AddQuery().
+	result, ok := db.data[key]
+	if ok {
+		return result
+	}
+	return nil
+}
+
+func (db *DB) GetQueryPatternResult(key string) (ExprResult, bool) {
+	for _, pat := range db.patternData {
+		if pat.Expr.MatchString(key) || strings.Contains(key, pat.QueryPattern) {
+			return pat, true
+			/*userCallback, ok := db.queryPatternUserCallback[pat.expr]
+			if ok {
+				userCallback(query)
+			}
+			if pat.err != "" {
+				return fmt.Errorf(pat.err)
+			}
+			return callback(pat.result)*/
+		}
+	}
+
+	return ExprResult{}, false
+}
+
+func (db *DB) GetQueryPatternUserCallBack(exp *regexp.Regexp) (func(string), bool) {
+	userCallback, ok := db.queryPatternUserCallback[exp]
+	if ok {
+		return userCallback, true
+	}
+
+	return nil, false
+}

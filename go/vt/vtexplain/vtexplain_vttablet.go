@@ -501,6 +501,29 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	if result != nil {
 		return callback(result)
 	}
+
+	if err := t.db.GetRejectedQueryResult(query); err != nil {
+		return err
+	}
+
+	if result := t.db.GetQueryResult(query); result != nil {
+		if f := result.BeforeFunc; f != nil {
+			f()
+		}
+		return callback(result.Result)
+	}
+
+	if pat, ok := t.db.GetQueryPatternResult(query); ok {
+		userCallback, ok := t.db.GetQueryPatternUserCallBack(pat.Expr)
+		if ok {
+			userCallback(query)
+		}
+		if pat.Err != "" {
+			return fmt.Errorf(pat.Err)
+		}
+		return callback(pat.Result)
+	}
+
 	switch sqlparser.Preview(query) {
 	case sqlparser.StmtSelect:
 		// Parse the select statement to figure out the table and columns
