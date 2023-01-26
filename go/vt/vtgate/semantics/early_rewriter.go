@@ -233,11 +233,10 @@ func (r *earlyRewriter) rewriteOrderByExpr(node *sqlparser.Literal) (sqlparser.E
 // realCloneOfColNames clones all the expressions including ColName.
 // Since sqlparser.CloneRefOfColName does not clone col names, this method is needed.
 func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
-	// todo copy-on-rewrite!
-	return sqlparser.SafeRewrite(sqlparser.CloneExpr(expr), nil, func(cursor *sqlparser.Cursor) bool {
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		exp, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
-			return true
+			return
 		}
 
 		newColName := *exp
@@ -245,8 +244,7 @@ func realCloneOfColNames(expr sqlparser.Expr, union bool) sqlparser.Expr {
 			newColName.Qualifier = sqlparser.TableName{}
 		}
 		cursor.Replace(&newColName)
-		return true
-	}).(sqlparser.Expr)
+	}, nil).(sqlparser.Expr)
 }
 
 func rewriteOrFalse(orExpr sqlparser.OrExpr) sqlparser.Expr {

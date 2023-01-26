@@ -43,6 +43,7 @@ func TestCreateTableDiff(t *testing.T) {
 		fulltext   int
 		colrename  int
 		constraint int
+		charset    int
 	}{
 		{
 			name: "identical",
@@ -972,7 +973,57 @@ func TestCreateTableDiff(t *testing.T) {
 			cdiff:   "ALTER TABLE `t1` AUTO_INCREMENT 100",
 		},
 		{
-			name:  `change table charset`,
+			name:  "apply table charset",
+			from:  "create table t (id int, primary key(id))",
+			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			diff:  "alter table t charset utf8mb4",
+			cdiff: "ALTER TABLE `t` CHARSET utf8mb4",
+		},
+		{
+			name:    "ignore empty table charset",
+			from:    "create table t (id int, primary key(id))",
+			to:      "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore empty table charset and collate",
+			from:    "create table t (id int, primary key(id))",
+			to:      "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore empty table collate",
+			from:    "create table t (id int, primary key(id))",
+			to:      "create table t (id int, primary key(id)) COLLATE utf8mb4_0900_ai_ci",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore empty table charset and collate in target",
+			from:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4 COLLATE utf8mb4_0900_ai_ci",
+			to:      "create table t (id int, primary key(id))",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore dropped collate",
+			from:    "create table t (id int, primary key(id)) COLLATE utf8mb4_0900_ai_ci",
+			to:      "create table t (id int, primary key(id))",
+			charset: TableCharsetCollateIgnoreEmpty,
+		},
+		{
+			name:    "ignore table charset",
+			from:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8",
+			to:      "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			charset: TableCharsetCollateIgnoreAlways,
+		},
+		{
+			name:  "change table charset",
+			from:  "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8",
+			to:    "create table t (id int, primary key(id)) DEFAULT CHARSET = utf8mb4",
+			diff:  "alter table t charset utf8mb4",
+			cdiff: "ALTER TABLE `t` CHARSET utf8mb4",
+		},
+		{
+			name:  `change table charset and columns`,
 			from:  "create table t (id int primary key, t1 varchar(128) default null, t2 varchar(128) not null, t3 tinytext charset latin1, t4 tinytext charset latin1) default charset=utf8",
 			to:    "create table t (id int primary key, t1 varchar(128) not null, t2 varchar(128) not null, t3 tinytext, t4 tinytext charset latin1) default charset=utf8mb4",
 			diff:  "alter table t modify column t1 varchar(128) not null, modify column t2 varchar(128) not null, modify column t3 tinytext, charset utf8mb4",
@@ -1059,6 +1110,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.ConstraintNamesStrategy = ts.constraint
 			hints.ColumnRenameStrategy = ts.colrename
 			hints.FullTextKeyStrategy = ts.fulltext
+			hints.TableCharsetCollateStrategy = ts.charset
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))

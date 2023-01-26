@@ -647,12 +647,12 @@ func (cached *ColumnDefinition) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(128)
+		size += int64(48)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
-	// field Type vitess.io/vitess/go/vt/sqlparser.ColumnType
-	size += cached.Type.CachedSize(false)
+	// field Type *vitess.io/vitess/go/vt/sqlparser.ColumnType
+	size += cached.Type.CachedSize(true)
 	return size
 }
 func (cached *ColumnType) CachedSize(alloc bool) int64 {
@@ -2272,12 +2272,12 @@ func (cached *JtPathColDef) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(176)
+		size += int64(80)
 	}
 	// field Name vitess.io/vitess/go/vt/sqlparser.IdentifierCI
 	size += cached.Name.CachedSize(false)
-	// field Type vitess.io/vitess/go/vt/sqlparser.ColumnType
-	size += cached.Type.CachedSize(false)
+	// field Type *vitess.io/vitess/go/vt/sqlparser.ColumnType
+	size += cached.Type.CachedSize(true)
 	// field Path vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.Path.(cachedObject); ok {
 		size += cc.CachedSize(true)
