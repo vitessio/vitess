@@ -24,8 +24,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,7 +114,7 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
-	if err := utils.RowsEqualsStr(expected, qr.Rows); err != nil {
+	if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
 		t.Errorf("for query: [%s] %v", query, err)
 	}
 }

@@ -27,7 +27,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/test/utils"
 )
 
 type MySQLCompare struct {
@@ -132,7 +131,7 @@ func (mcmp *MySQLCompare) AssertContainsError(query, expected string) {
 func (mcmp *MySQLCompare) AssertMatchesNoOrder(query, expected string) {
 	mcmp.t.Helper()
 	qr := mcmp.Exec(query)
-	if err := utils.RowsEqualsStr(expected, qr.Rows); err != nil {
+	if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
 		mcmp.t.Errorf("for query [%s] %v", query, err)
 	}
 }
@@ -143,7 +142,7 @@ func (mcmp *MySQLCompare) AssertMatchesNoOrder(query, expected string) {
 func (mcmp *MySQLCompare) AssertMatchesNoOrderInclColumnNames(query, expected string) {
 	mcmp.t.Helper()
 	qr := mcmp.ExecWithColumnCompare(query)
-	if err := utils.RowsEqualsStr(expected, qr.Rows); err != nil {
+	if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
 		mcmp.t.Errorf("for query [%s] %v", query, err)
 	}
 }

@@ -14,11 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package utils
+package sqltypes
 
 import (
 	"fmt"
 	"testing"
+
+	"github.com/stretchr/testify/require"
 )
 
 var TestRows = []string{
@@ -159,14 +161,8 @@ var TestRows = []string{
 func TestRowParsing(t *testing.T) {
 	for _, r := range TestRows {
 		output, err := ParseRows(r)
-		if err != nil {
-			t.Errorf("failed to parse %s: %v", r, err)
-			continue
-		}
-
+		require.NoError(t, err)
 		outputstr := fmt.Sprintf("%v", output)
-		if r != outputstr {
-			t.Errorf("did not rountrip:\ninput:  %s\noutput: %s", r, outputstr)
-		}
+		require.Equal(t, r, outputstr, "did not roundtrip")
 	}
 }
