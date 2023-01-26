@@ -104,6 +104,9 @@ func TestTranslateSimplification(t *testing.T) {
 		{"ifnull(null, 23)", ok(`CASE WHEN NULL IS NULL THEN INT64(23) ELSE NULL`), ok(`INT64(23)`)},
 		{"nullif(1, 1)", ok(`CASE WHEN INT64(1) = INT64(1) THEN NULL ELSE INT64(1)`), ok(`NULL`)},
 		{"nullif(1, 2)", ok(`CASE WHEN INT64(1) = INT64(2) THEN NULL ELSE INT64(1)`), ok(`INT64(1)`)},
+		{"12 between 5 and 20", ok("(INT64(12) >= INT64(5)) AND (INT64(12) <= INT64(20))"), ok(`INT64(1)`)},
+		{"12 not between 5 and 20", ok("(INT64(12) < INT64(5)) OR (INT64(12) > INT64(20))"), ok(`INT64(0)`)},
+		{"2 not between 5 and 20", ok("(INT64(2) < INT64(5)) OR (INT64(2) > INT64(20))"), ok(`INT64(1)`)},
 	}
 
 	for _, tc := range testCases {

@@ -584,9 +584,10 @@ func translateBetweenExpr(node *sqlparser.BetweenExpr, lookup TranslationLookup)
 	}
 
 	if !node.IsBetween {
-		// x NOT BETWEEN a AND b  => x < a AND x > b
+		// x NOT BETWEEN a AND b  => x < a OR x > b
 		from.Operator = sqlparser.LessThanOp
 		to.Operator = sqlparser.GreaterThanOp
+		return translateExpr(&sqlparser.OrExpr{Left: from, Right: to}, lookup)
 	}
 
 	return translateExpr(sqlparser.AndExpressions(from, to), lookup)
