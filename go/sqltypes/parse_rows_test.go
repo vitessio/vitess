@@ -166,3 +166,22 @@ func TestRowParsing(t *testing.T) {
 		require.Equal(t, r, outputstr, "did not roundtrip")
 	}
 }
+
+func TestRowsEquals(t *testing.T) {
+	var cases = []struct {
+		left, right string
+	}{
+		{"[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]", "[[INT64(1)] [INT64(2)] [INT64(2)] [INT64(1)]]"},
+	}
+
+	for _, tc := range cases {
+		left, err := ParseRows(tc.left)
+		require.NoError(t, err)
+
+		right, err := ParseRows(tc.right)
+		require.NoError(t, err)
+
+		err = RowsEquals(left, right)
+		require.NoError(t, err)
+	}
+}

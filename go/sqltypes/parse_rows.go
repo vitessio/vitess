@@ -146,6 +146,7 @@ func RowsEquals(want, got []Row) error {
 			if reflect.DeepEqual(aa, bb) {
 				matched[i] = true
 				ok = true
+				break
 			}
 		}
 		if !ok {
