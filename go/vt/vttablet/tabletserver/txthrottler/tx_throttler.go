@@ -370,7 +370,7 @@ func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
 	for _, expectedTabletType := range ts.tabletConfig.TxThrottlerTabletTypes {
 		if tabletStats.Target.TabletType == expectedTabletType {
 			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
-			break
+			return
 		}
 	}
 }
