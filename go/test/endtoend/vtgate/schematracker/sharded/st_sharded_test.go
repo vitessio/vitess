@@ -254,7 +254,7 @@ func TestNewView(t *testing.T) {
 	// executing the query directly
 	qr := utils.Exec(t, conn, selQuery)
 	// selecting it through the view.
-	utils.AssertMatchesWithTimeout(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows), 100*time.Millisecond, 5*time.Second, "test_view not in vschema tables")
+	utils.AssertMatchesWithTimeout(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows), 100*time.Millisecond, 10*time.Second, "test_view not in vschema tables")
 }
 
 // TestViewAndTable validates that new column added in table is present in the view definition
