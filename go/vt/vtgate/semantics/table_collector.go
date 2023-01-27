@@ -87,7 +87,8 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 		isInfSchema := sqlparser.SystemSchema(t.Qualifier.String())
 		var err error
 		tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
-		if err != nil {
+		if err != nil && !isInfSchema {
+			// if we are dealing with a system table, it might not be available in the vschema, but that is OK
 			return err
 		}
 		if tbl == nil && vindex != nil {
