@@ -429,8 +429,24 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	key := KeyFromTablet(tablet)
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
+	defer func() {
+		// We want to be sure it's gone from the secondary maps
+		// even if it's already gone from the authoritative map.
+		key := KeyFromTablet(tablet)
+		// delete from map by keyspace.shard.tabletType
+		ths, ok := hc.healthData[key]
+		if !ok {
+			log.Warningf("We have no health data for target: %v", key)
+			return
+		}
+		delete(ths, tabletAlias)
+		// delete from healthy list
+		healthy, ok := hc.healthy[key]
+		if ok && len(healthy) > 0 {
+			hc.recomputeHealthy(key)
+		}
+	}()
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
@@ -441,18 +457,6 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// which will call finalizeConn, which will close the connection.
 	th.cancelFunc()
 	delete(hc.healthByAlias, tabletAlias)
-	// delete from map by keyspace.shard.tabletType
-	ths, ok := hc.healthData[key]
-	if !ok {
-		log.Warningf("We have no health data for target: %v", key)
-		return
-	}
-	delete(ths, tabletAlias)
-	// delete from healthy list
-	healthy, ok := hc.healthy[key]
-	if ok && len(healthy) > 0 {
-		hc.recomputeHealthy(key)
-	}
 }
 
 func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
