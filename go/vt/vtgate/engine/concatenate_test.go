@@ -21,8 +21,6 @@ import (
 	"errors"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -120,7 +118,7 @@ func TestConcatenate_NoErrors(t *testing.T) {
 			qr, err := wrapStreamExecute(concatenate, &noopVCursor{}, nil, true)
 			if tc.expectedError == "" {
 				require.NoError(t, err)
-				require.NoError(t, utils.RowsEquals(tc.expectedResult.Rows, qr.Rows))
+				require.NoError(t, sqltypes.RowsEquals(tc.expectedResult.Rows, qr.Rows))
 			} else {
 				require.Error(t, err)
 				require.Contains(t, err.Error(), tc.expectedError)
