@@ -82,10 +82,6 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 	clusterInstance := cluster.NewCluster(cells[0], Hostname)
 	keyspace := &cluster.Keyspace{Name: KeyspaceName}
 
-	if durability == "semi_sync" {
-		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--enable_semi_sync")
-	}
-
 	// Start topo server
 	err := clusterInstance.StartTopo()
 	require.NoError(t, err, "Error starting topo")
@@ -129,7 +125,7 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 		// the replication manager to silently fix the replication in case ERS or PRS mess up. All the
 		// tests in this test suite should work irrespective of this flag. Each run of ERS, PRS should be
 		// setting up the replication correctly.
-		"--disable_active_reparents")
+		"--disable-replication-manager")
 
 	// Initialize Cluster
 	err = clusterInstance.SetupCluster(keyspace, []cluster.Shard{*shard})
@@ -218,7 +214,6 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 			"--track_schema_versions=true",
 			"--queryserver_enable_online_ddl=false",
 		},
-		clusterInstance.EnableSemiSync,
 		clusterInstance.DefaultCharset)
 	tablet.VttabletProcess.SupportsBackup = supportsBackup
 

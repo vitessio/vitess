@@ -18,9 +18,11 @@ package wrangler
 
 import (
 	"fmt"
+	"sync"
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -44,8 +46,8 @@ import (
 )
 
 const (
-	streamInfoQuery    = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
-	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
+	streamInfoQuery    = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
+	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)"
 )
 
@@ -74,6 +76,7 @@ type testMigraterEnv struct {
 	sourceKeyRanges []*topodatapb.KeyRange
 	targetKeyRanges []*topodatapb.KeyRange
 	tmeDB           *fakesqldb.DB
+	mu              sync.Mutex
 }
 
 // testShardMigraterEnv has some convenience functions for adding expected queries.
@@ -105,6 +108,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer("cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
+	tme.wr.sem = sync2.NewSemaphore(1, 1)
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
@@ -201,7 +205,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 				},
 			}
 			streamInfoRows = append(streamInfoRows, fmt.Sprintf("%d|%v|||", j+1, bls))
-			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
+			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0||||0", j+1, now, now))
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbTargetClients[i].addInvariant(streamInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -209,12 +213,12 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 			"int64|varchar|varchar|varchar|varchar"),
 			streamInfoRows...))
 		tme.dbTargetClients[i].addInvariant(streamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type",
-			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64"),
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
 			streamExtInfoRows...))
 		tme.dbTargetClients[i].addInvariant(reverseStreamExtInfoKs2, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type",
-			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64"),
+			"id|source|pos|stop_pos|max_replication_lag|state|db_name|time_updated|transaction_timestamp|time_heartbeat|time_throttled|component_throttled|message|tags|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|int64|int64|int64|varchar|varchar|int64|int64|int64|int64|int64|varchar|varchar|int64|int64|int64"),
 			streamExtInfoRows...))
 	}
 
@@ -267,6 +271,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
+	tme.wr.sem = sync2.NewSemaphore(1, 0)
 
 	tabletID := 10
 	for _, shard := range sourceShards {
@@ -356,19 +361,19 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 					}},
 				},
 			}
-			rows = append(rows, fmt.Sprintf("%d|%v||||0|0", j+1, bls))
-			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY|0|0", j+1, bls))
+			rows = append(rows, fmt.Sprintf("%d|%v||||0|0|0", j+1, bls))
+			rowsRdOnly = append(rows, fmt.Sprintf("%d|%v|||RDONLY|0|0|0", j+1, bls))
 			streamExtInfoRows = append(streamExtInfoRows, fmt.Sprintf("%d|||||Running|vt_ks1|%d|%d|0|0|||", j+1, now, now))
 			tme.dbTargetClients[i].addInvariant(fmt.Sprintf(copyStateQuery, j+1, j+1), noResult)
 		}
 		tme.dbTargetClients[i].addInvariant(streamInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
-			"int64|varchar|varchar|varchar|varchar|int64|int64"),
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 			rows...),
 		)
 		tme.dbTargetClients[i].addInvariant(streamInfoKs+"-rdonly", sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
-			"int64|varchar|varchar|varchar|varchar|int64|int64"),
+			"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+			"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 			rowsRdOnly...),
 		)
 		tme.dbTargetClients[i].addInvariant(streamExtInfoKs, sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -394,6 +399,8 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 }
 
 func (tme *testMigraterEnv) startTablets(t *testing.T) {
+	tme.mu.Lock()
+	defer tme.mu.Unlock()
 	allPrimarys := append(tme.sourcePrimaries, tme.targetPrimaries...)
 	for _, primary := range allPrimarys {
 		primary.StartActionLoop(t, tme.wr)
@@ -428,6 +435,8 @@ func (tme *testMigraterEnv) stopTablets(t *testing.T) {
 }
 
 func (tme *testMigraterEnv) createDBClients(ctx context.Context, t *testing.T) {
+	tme.mu.Lock()
+	defer tme.mu.Unlock()
 	for _, primary := range tme.sourcePrimaries {
 		dbclient := newFakeDBClient(primary.Tablet.Alias.String())
 		tme.dbSourceClients = append(tme.dbSourceClients, dbclient)
@@ -527,6 +536,7 @@ func (tme *testShardMigraterEnv) expectDeleteReverseVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("delete from _vt.post_copy_action where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 }
 
@@ -573,6 +583,7 @@ func (tme *testShardMigraterEnv) expectDeleteTargetVReplication() {
 		dbclient.addQuery("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test'", resultid12, nil)
 		dbclient.addQuery("delete from _vt.vreplication where id in (1, 2)", &sqltypes.Result{}, nil)
 		dbclient.addQuery("delete from _vt.copy_state where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
+		dbclient.addQuery("delete from _vt.post_copy_action where vrepl_id in (1, 2)", &sqltypes.Result{}, nil)
 	}
 }
 
@@ -591,4 +602,20 @@ func (tme *testShardMigraterEnv) expectNoPreviousJournals() {
 	for _, dbclient := range tme.dbSourceClients {
 		dbclient.addQueryRE(tsCheckJournals, &sqltypes.Result{}, nil)
 	}
+}
+
+func (tme *testMigraterEnv) close(t *testing.T) {
+	tme.mu.Lock()
+	defer tme.mu.Unlock()
+	tme.stopTablets(t)
+	for _, dbclient := range tme.dbSourceClients {
+		dbclient.Close()
+	}
+	for _, dbclient := range tme.dbTargetClients {
+		dbclient.Close()
+	}
+	tme.tmeDB.CloseAllConnections()
+	tme.ts.Close()
+	tme.wr.tmc.Close()
+	tme.wr = nil
 }

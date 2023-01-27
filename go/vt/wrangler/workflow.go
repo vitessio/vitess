@@ -66,6 +66,9 @@ type VReplicationWorkflowParams struct {
 	SkipSchemaCopy             bool
 	AutoStart, StopAfterCopy   bool
 
+	// MoveTables/Migrate and Reshard specific
+	DeferSecondaryKeys bool
+
 	// Migrate specific
 	ExternalCluster string
 }
@@ -430,14 +433,14 @@ func (vrw *VReplicationWorkflow) initMoveTables() error {
 	return vrw.wr.MoveTables(vrw.ctx, vrw.params.Workflow, vrw.params.SourceKeyspace, vrw.params.TargetKeyspace,
 		vrw.params.Tables, vrw.params.Cells, vrw.params.TabletTypes, vrw.params.AllTables, vrw.params.ExcludeTables,
 		vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.ExternalCluster, vrw.params.DropForeignKeys,
-		vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards)
+		vrw.params.DeferSecondaryKeys, vrw.params.SourceTimeZone, vrw.params.OnDDL, vrw.params.SourceShards)
 }
 
 func (vrw *VReplicationWorkflow) initReshard() error {
 	log.Infof("In VReplicationWorkflow.initReshard() for %+v", vrw)
 	return vrw.wr.Reshard(vrw.ctx, vrw.params.TargetKeyspace, vrw.params.Workflow, vrw.params.SourceShards,
 		vrw.params.TargetShards, vrw.params.SkipSchemaCopy, vrw.params.Cells, vrw.params.TabletTypes,
-		vrw.params.OnDDL, vrw.params.AutoStart, vrw.params.StopAfterCopy)
+		vrw.params.OnDDL, vrw.params.AutoStart, vrw.params.StopAfterCopy, vrw.params.DeferSecondaryKeys)
 }
 
 func (vrw *VReplicationWorkflow) switchReads() (*[]string, error) {
@@ -731,8 +734,21 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 // account to be sure that we don't execute the writes if READ_ONLY is set on
 // the MySQL instance.
 func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
+	if wr.sem != nil {
+		if !wr.sem.TryAcquire() {
+			log.Warningf("Deferring work to optimize the copy_state table on %q due to hitting the maximum concurrent background job limit.",
+				tablet.Alias.String())
+			return
+		}
+	}
 	go func() {
-		ctx := context.Background()
+		defer func() {
+			if wr.sem != nil {
+				wr.sem.Release()
+			}
+		}()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
 		sqlOptimizeTable := "optimize table _vt.copy_state"
 		if _, err := wr.tmc.ExecuteFetchAsAllPrivs(ctx, tablet, &tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest{
 			Query:   []byte(sqlOptimizeTable),

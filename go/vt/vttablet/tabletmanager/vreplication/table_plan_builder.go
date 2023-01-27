@@ -233,12 +233,13 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 		}
 		sendRule.Filter = query
 		tablePlan := &TablePlan{
-			TargetName:     tableName,
-			SendRule:       sendRule,
-			Lastpk:         lastpk,
-			Stats:          stats,
-			EnumValuesMap:  enumValuesMap,
-			ConvertCharset: rule.ConvertCharset,
+			TargetName:       tableName,
+			SendRule:         sendRule,
+			Lastpk:           lastpk,
+			Stats:            stats,
+			EnumValuesMap:    enumValuesMap,
+			ConvertCharset:   rule.ConvertCharset,
+			ConvertIntToEnum: rule.ConvertIntToEnum,
 		}
 
 		return tablePlan, nil
@@ -316,6 +317,7 @@ func buildTablePlan(tableName string, rule *binlogdatapb.Rule, colInfos []*Colum
 	tablePlan.SendRule = sendRule
 	tablePlan.EnumValuesMap = enumValuesMap
 	tablePlan.ConvertCharset = rule.ConvertCharset
+	tablePlan.ConvertIntToEnum = rule.ConvertIntToEnum
 	return tablePlan, nil
 }
 

@@ -117,8 +117,6 @@ type LocalProcessCluster struct {
 
 	VtctldExtraArgs []string
 
-	EnableSemiSync bool
-
 	// mutex added to handle the parallel teardowns
 	mx                *sync.Mutex
 	teardownCompleted bool
@@ -359,7 +357,6 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync,
 				cluster.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			if cluster.ReusingVTDATAROOT {
@@ -500,7 +497,6 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync,
 				cluster.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			if cluster.ReusingVTDATAROOT {
@@ -614,7 +610,6 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 				cluster.Hostname,
 				cluster.TmpDirectory,
 				cluster.VtTabletExtraArgs,
-				cluster.EnableSemiSync,
 				cluster.DefaultCharset)
 		}
 
@@ -669,8 +664,8 @@ func (cluster *LocalProcessCluster) NewVtgateInstance() *VtgateProcess {
 	return vtgateProcInstance
 }
 
-// NewCluster instantiates a new cluster
-func NewCluster(cell string, hostname string) *LocalProcessCluster {
+// NewBareCluster instantiates a new cluster and does not assume existence of any of the vitess processes
+func NewBareCluster(cell string, hostname string) *LocalProcessCluster {
 	cluster := &LocalProcessCluster{Cell: cell, Hostname: hostname, mx: new(sync.Mutex), DefaultCharset: "utf8mb4"}
 	go cluster.CtrlCHandler()
 
@@ -689,12 +684,18 @@ func NewCluster(cell string, hostname string) *LocalProcessCluster {
 	_ = os.Setenv("VTDATAROOT", cluster.CurrentVTDATAROOT)
 	log.Infof("Created cluster on %s. ReusingVTDATAROOT=%v", cluster.CurrentVTDATAROOT, cluster.ReusingVTDATAROOT)
 
+	rand.Seed(time.Now().UTC().UnixNano())
+	return cluster
+}
+
+// NewCluster instantiates a new cluster
+func NewCluster(cell string, hostname string) *LocalProcessCluster {
+	cluster := NewBareCluster(cell, hostname)
+
 	err := cluster.populateVersionInfo()
 	if err != nil {
 		log.Errorf("Error populating version information - %v", err)
 	}
-
-	rand.Seed(time.Now().UTC().UnixNano())
 	return cluster
 }
 
@@ -1162,7 +1163,6 @@ func (cluster *LocalProcessCluster) VtprocessInstanceFromVttablet(tablet *Vttabl
 		cluster.Hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
-		cluster.EnableSemiSync,
 		cluster.DefaultCharset)
 }
 
@@ -1182,7 +1182,6 @@ func (cluster *LocalProcessCluster) StartVttablet(tablet *Vttablet, servingStatu
 		hostname,
 		cluster.TmpDirectory,
 		cluster.VtTabletExtraArgs,
-		cluster.EnableSemiSync,
 		cluster.DefaultCharset)
 
 	tablet.VttabletProcess.SupportsBackup = supportBackup

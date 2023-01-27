@@ -1653,6 +1653,7 @@ func TestPlayerDDL(t *testing.T) {
 	expectDBClientQueries(t, qh.Expect(
 		"alter table t1 add column val2 varchar(128)",
 		"/update _vt.vreplication set message='Duplicate",
+		"/update _vt.vreplication set state='Error', message='Duplicate",
 	))
 	cancel()
 
@@ -2901,7 +2902,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	if pos == "" {
 		pos = primaryPosition(t)
 	}
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0, false)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

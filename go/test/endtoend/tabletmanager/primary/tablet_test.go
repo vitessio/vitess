@@ -89,8 +89,6 @@ func TestMain(m *testing.M) {
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
 		}
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{

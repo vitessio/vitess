@@ -587,7 +587,6 @@ func TestAddQueryStats(t *testing.T) {
 		expectedQueryTimes        string
 		expectedQueryRowsAffected string
 		expectedQueryRowsReturned string
-		expectedQueryRowCounts    string
 		expectedQueryErrorCounts  string
 	}{
 		{
@@ -603,7 +602,6 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{}`,
 			expectedQueryRowsReturned: `{"A.Select": 15}`,
-			expectedQueryRowCounts:    `{"A.Select": 0}`,
 			expectedQueryErrorCounts:  `{"A.Select": 0}`,
 		}, {
 			name:                      "select into query",
@@ -618,7 +616,6 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{"A.Select": 15}`,
 			expectedQueryRowsReturned: `{"A.Select": 0}`,
-			expectedQueryRowCounts:    `{"A.Select": 15}`,
 			expectedQueryErrorCounts:  `{"A.Select": 0}`,
 		}, {
 			name:                      "error",
@@ -633,7 +630,6 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{}`,
 			expectedQueryRowsReturned: `{"A.Select": 0}`,
-			expectedQueryRowCounts:    `{"A.Select": 0}`,
 			expectedQueryErrorCounts:  `{"A.Select": 1}`,
 		}, {
 			name:                      "insert query",
@@ -648,7 +644,6 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:        `{"A.Insert": 10}`,
 			expectedQueryRowsAffected: `{"A.Insert": 15}`,
 			expectedQueryRowsReturned: `{}`,
-			expectedQueryRowCounts:    `{"A.Insert": 15}`,
 			expectedQueryErrorCounts:  `{"A.Insert": 0}`,
 		},
 	}
@@ -666,7 +661,6 @@ func TestAddQueryStats(t *testing.T) {
 			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
-			assert.Equal(t, testcase.expectedQueryRowCounts, qe.queryRowCounts.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
 		})
 	}
@@ -698,7 +692,7 @@ func TestPlanPoolUnsafe(t *testing.T) {
 		t.Run(tcase.name, func(t *testing.T) {
 			statement, err := sqlparser.Parse(tcase.query)
 			require.NoError(t, err)
-			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName")
+			plan, err := planbuilder.Build(statement, map[string]*schema.Table{}, "dbName", false)
 			// Plan building will not fail, but it will mark that reserved connection is needed.
 			// checking plan is valid will fail.
 			require.NoError(t, err)

@@ -225,6 +225,9 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	} else if dbType == "mysql" && majorVersion == "8.0" {
 		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
+	} else if dbType == "mariadb" && majorVersion == "10.10" {
+		versionFile = "mariadb-10.10.2-linux-systemd-x86_64.tar.gz"
+		url = "https://ftp.osuosl.org/pub/mariadb/mariadb-10.10.2/bintar-linux-systemd-x86_64/" + versionFile
 	} else {
 		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
 	}
@@ -414,7 +417,6 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
 		options,
-		false,
 		vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)
@@ -439,7 +441,9 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 // AddShards creates shards given list of comma-separated keys with specified tablets in each shard
 func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) error {
 	if value, exists := opts["DBTypeVersion"]; exists {
-		setupDBTypeVersion(t, value)
+		if resetFunc := setupDBTypeVersion(t, value); resetFunc != nil {
+			defer resetFunc()
+		}
 	}
 
 	arrNames := strings.Split(names, ",")
@@ -694,7 +698,10 @@ func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing
 	return commit, rollback
 }
 
-func setupDBTypeVersion(t *testing.T, value string) {
+// setupDBTypeVersion will perform any work needed to enable a specific
+// database type and version if not already installed. It returns a
+// function to reset any environment changes made.
+func setupDBTypeVersion(t *testing.T, value string) func() {
 	details := strings.Split(value, "-")
 	if len(details) != 2 {
 		t.Fatalf("Invalid database details: %s", value)
@@ -709,21 +716,23 @@ func setupDBTypeVersion(t *testing.T, value string) {
 	}
 	if dbTypeMajorVersion == dbVersionInUse {
 		t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
-	} else {
-		path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
-		// Set the root path and create it if needed
-		if err := setVtMySQLRoot(path); err != nil {
-			t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
-		}
-		defer unsetVtMySQLRoot()
-		// Download and extract the version artifact if needed
-		if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
-			t.Fatalf("Could not download %s, error: %v", majorVersion, err)
-		}
-		// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
-		if err := setDBFlavor(); err != nil {
-			t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
-		}
-		defer unsetDBFlavor()
+		return func() {}
+	}
+	path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
+	// Set the root path and create it if needed
+	if err := setVtMySQLRoot(path); err != nil {
+		t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
+	}
+	// Download and extract the version artifact if needed
+	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
+		t.Fatalf("Could not download %s, error: %v", majorVersion, err)
+	}
+	// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
+	if err := setDBFlavor(); err != nil {
+		t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
+	}
+	return func() {
+		unsetDBFlavor()
+		unsetVtMySQLRoot()
 	}
 }

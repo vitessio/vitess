@@ -65,10 +65,10 @@ import (
 )
 
 var (
-	errNoKeyspace     = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+	errNoKeyspace     = vterrors.VT09005()
 	defaultTabletType = topodatapb.TabletType_PRIMARY
 
-	// TODO: @rafael - These two counters should be deprecated in favor of the ByTable ones. They are kept for now for backwards compatibility.
+	// TODO: @rafael - These two counters should be deprecated in favor of the ByTable ones in v17+. They are kept for now for backwards compatibility.
 	queriesProcessed = stats.NewCountersWithSingleLabel("QueriesProcessed", "Queries processed at vtgate by plan type", "Plan")
 	queriesRouted    = stats.NewCountersWithSingleLabel("QueriesRouted", "Queries routed from vtgate to vttablet by plan type", "Plan")
 
@@ -322,8 +322,6 @@ func (e *Executor) StreamExecute(
 		}
 
 		// 5: Log and add statistics
-		logStats.Keyspace = plan.Instructions.GetKeyspaceName()
-		logStats.Table = plan.Instructions.GetTableName()
 		logStats.TablesUsed = plan.TablesUsed
 		logStats.TabletType = vc.TabletType().String()
 		logStats.ExecuteTime = time.Since(execStart)
@@ -527,10 +525,6 @@ func ifReadAfterWriteExist(session *SafeSession, f func(*vtgatepb.ReadAfterWrite
 	}
 }
 
-func (e *Executor) destinationExec(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, dest key.Destination, destKeyspace string, destTabletType topodatapb.TabletType, logStats *logstats.LogStats, ignoreMaxMemoryRows bool) (*sqltypes.Result, error) {
-	return e.resolver.Execute(ctx, sql, bindVars, destKeyspace, destTabletType, dest, safeSession, safeSession.Options, logStats, false /* canAutocommit */, ignoreMaxMemoryRows)
-}
-
 func (e *Executor) handleBegin(ctx context.Context, safeSession *SafeSession, logStats *logstats.LogStats, stmt sqlparser.Statement) (*sqltypes.Result, error) {
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)
@@ -622,7 +616,7 @@ func (e *Executor) executeSPInAllSessions(ctx context.Context, safeSession *Safe
 			})
 			queries = append(queries, &querypb.BoundQuery{Sql: sql})
 		}
-		qr, errs = e.ExecuteMultiShard(ctx, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows)
+		qr, errs = e.ExecuteMultiShard(ctx, nil, rss, queries, safeSession, false /*autocommit*/, ignoreMaxMemoryRows)
 		err := vterrors.Aggregate(errs)
 		if err != nil {
 			return nil, err
@@ -1294,13 +1288,13 @@ func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, 
 }
 
 // ExecuteMultiShard implements the IExecutor interface
-func (e *Executor) ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error) {
-	return e.scatterConn.ExecuteMultiShard(ctx, rss, queries, session, autocommit, ignoreMaxMemoryRows)
+func (e *Executor) ExecuteMultiShard(ctx context.Context, primitive engine.Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, session *SafeSession, autocommit bool, ignoreMaxMemoryRows bool) (qr *sqltypes.Result, errs []error) {
+	return e.scatterConn.ExecuteMultiShard(ctx, primitive, rss, queries, session, autocommit, ignoreMaxMemoryRows)
 }
 
 // StreamExecuteMulti implements the IExecutor interface
-func (e *Executor) StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
-	return e.scatterConn.StreamExecuteMulti(ctx, query, rss, vars, session, autocommit, callback)
+func (e *Executor) StreamExecuteMulti(ctx context.Context, primitive engine.Primitive, query string, rss []*srvtopo.ResolvedShard, vars []map[string]*querypb.BindVariable, session *SafeSession, autocommit bool, callback func(reply *sqltypes.Result) error) []error {
+	return e.scatterConn.StreamExecuteMulti(ctx, primitive, query, rss, vars, session, autocommit, callback)
 }
 
 // ExecuteLock implements the IExecutor interface

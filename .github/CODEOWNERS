@@ -7,7 +7,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /.github/workflows/ @deepthi @frouioui @mattlord @rohit-nayak-ps
 /config/mycnf/ @deepthi @shlomi-noach @mattlord
 /doc/ @deepthi @frouioui @GuptaManan100 @rsajwani
-/docker/ @deepthi @derekperkins @dkhenry @mattlord
+/docker/ @deepthi @derekperkins @dkhenry @mattlord @GuptaManan100 @frouioui
 /examples/compose @shlomi-noach @GuptaManan100 @frouioui
 /examples/demo @mattlord @rohit-nayak-ps
 /examples/local @rohit-nayak-ps @frouioui @mattlord @GuptaManan100
@@ -30,6 +30,7 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/tools/ @frouioui @systay
 /go/vt/dbconnpool @harshit-gangal @mattlord
 /go/vt/discovery @deepthi @frouioui
+/go/vt/discovery/*tablet_picker* @rohit-nayak-ps @mattlord
 /go/vt/mysqlctl @deepthi @mattlord @rsajwani
 /go/vt/proto @deepthi @harshit-gangal @mattlord
 /go/vt/proto/vtadmin @ajm188 @notfelineit
@@ -52,6 +53,9 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /go/vt/vterrors @harshit-gangal @systay
 /go/vt/vtexplain @systay @harshit-gangal
 /go/vt/vtgate @harshit-gangal @systay @frouioui @GuptaManan100
+/go/vt/vtgate/endtoend/*vstream* @rohit-nayak-ps @mattlord
+/go/vt/vtgate/planbuilder @harshit-gangal @systay @frouioui @GuptaManan100 @arthurschreiber
+/go/vt/vtgate/*vstream* @rohit-nayak-ps @mattlord
 /go/vt/vtorc @deepthi @shlomi-noach @GuptaManan100 @rsajwani
 /go/vt/vttablet/*conn* @harshit-gangal @systay
 /go/vt/vttablet/endtoend @harshit-gangal @mattlord @rohit-nayak-ps @systay
@@ -75,4 +79,3 @@ go.sum @ajm188 @deepthi @harshit-gangal @mattlord @rohit-nayak-ps @systay @froui
 /tools/ @frouioui @rohit-nayak-ps
 /web/vtadmin @ajm188 @notfelineit
 /web/vtadmin/src/proto @deepthi @harshit-gangal @mattlord
-/web/vtctld2 @notfelineit @rohit-nayak-ps

@@ -357,6 +357,26 @@ func testMetricsHandler(t *testing.T) *httptest.ResponseRecorder {
 	return response
 }
 
+func TestPrometheusLabels(t *testing.T) {
+	m1 := stats.NewCountersWithSingleLabel("ThisIsMetric1", "helpstring1", "ThisIsALabel")
+	m1.Add("labelvalue1", 420)
+
+	m2 := stats.NewCountersWithMultiLabels("ThisIsMetric2", "helpstring2", []string{"ThisIsALabel"})
+	m2.Add([]string{"labelvalue2"}, 420)
+
+	response := testMetricsHandler(t)
+
+	expect := []string{
+		"namespace_this_is_metric1{this_is_a_label=\"labelvalue1\"} 420",
+		"namespace_this_is_metric2{this_is_a_label=\"labelvalue2\"} 420",
+	}
+	for _, line := range expect {
+		if !strings.Contains(response.Body.String(), line) {
+			t.Fatalf("Expected result to contain %s, got %s", line, response.Body.String())
+		}
+	}
+}
+
 func TestMain(m *testing.M) {
 	Init(namespace)
 	os.Exit(m.Run())

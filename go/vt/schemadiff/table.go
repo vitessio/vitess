@@ -435,6 +435,30 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
+		if _, ok := floatTypes[col.Type.Type]; ok {
+			// First, normalize the actual type
+			switch col.Type.Type {
+			case "float4":
+				col.Type.Type = "float"
+			case "float8", "real":
+				col.Type.Type = "double"
+			}
+
+			if col.Type.Length != nil && col.Type.Scale == nil && col.Type.Length.Type == sqlparser.IntVal {
+				if l, err := strconv.ParseInt(col.Type.Length.Val, 10, 64); err == nil {
+					// See https://dev.mysql.com/doc/refman/8.0/en/floating-point-types.html, but the docs are
+					// subtly wrong. We use a float for a precision of 24, not a double as the documentation
+					// mentioned. Validated against the actual behavior of MySQL.
+					if l <= 24 {
+						col.Type.Type = "float"
+					} else {
+						col.Type.Type = "double"
+					}
+				}
+				col.Type.Length = nil
+			}
+		}
+
 		if _, ok := charsetTypes[col.Type.Type]; ok {
 			// If the charset is explicitly configured and it mismatches, we don't normalize
 			// anything for charsets or collations and move on.
@@ -508,7 +532,36 @@ func (c *CreateTableEntity) normalizePartitionOptions() {
 	}
 }
 
+func newPrimaryKeyIndexDefinitionSingleColumn(name sqlparser.IdentifierCI) *sqlparser.IndexDefinition {
+	index := &sqlparser.IndexDefinition{
+		Info: &sqlparser.IndexInfo{
+			Name:    sqlparser.NewIdentifierCI("PRIMARY"),
+			Type:    "PRIMARY KEY",
+			Primary: true,
+			Unique:  true,
+		},
+		Columns: []*sqlparser.IndexColumn{{Column: name}},
+	}
+	return index
+}
+
+func (c *CreateTableEntity) normalizePrimaryKeyColumns() {
+	// normalize PRIMARY KEY:
+	// `create table t (id int primary key)`
+	// should turn into:
+	// `create table t (id int, primary key (id))`
+	// Also, PRIMARY KEY must come first before all other keys
+	for _, col := range c.CreateTable.TableSpec.Columns {
+		if col.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+			c.CreateTable.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(col.Name)}, c.CreateTable.TableSpec.Indexes...)
+			col.Type.Options.KeyOpt = sqlparser.ColKeyNone
+		}
+	}
+}
+
 func (c *CreateTableEntity) normalizeKeys() {
+	c.normalizePrimaryKeyColumns()
+
 	// let's ensure all keys have names
 	keyNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
@@ -1484,6 +1537,17 @@ func heuristicallyDetectColumnRenames(
 	return dropColumns, addColumns, renameColumns
 }
 
+// primaryKeyColumns returns the columns covered by an existing PRIMARY KEY, or nil if there isn't
+// a PRIMARY KEY
+func (c *CreateTableEntity) primaryKeyColumns() []*sqlparser.IndexColumn {
+	for _, existingIndex := range c.CreateTable.TableSpec.Indexes {
+		if existingIndex.Info.Primary {
+			return existingIndex.Columns
+		}
+	}
+	return nil
+}
+
 // Create implements Entity interface
 func (c *CreateTableEntity) Create() EntityDiff {
 	return &CreateTableEntityDiff{to: c, createTable: c.CreateTable}
@@ -1732,6 +1796,12 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					return &ApplyDuplicateColumnError{Table: c.Name(), Column: addedCol.Name.String()}
 				}
 			}
+			// if this column has the PRIMARY KEY option, verify there isn't already a PRIMARY KEY
+			if addedCol.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+				if cols := c.primaryKeyColumns(); cols != nil {
+					return &DuplicateKeyNameError{Table: c.Name(), Key: "PRIMARY"}
+				}
+			}
 			c.TableSpec.Columns = append(c.TableSpec.Columns, addedCol)
 			// see if we need to position it anywhere other than end of table
 			if err := reorderColumn(len(c.TableSpec.Columns)-1, opt.First, opt.After); err != nil {
@@ -1755,6 +1825,24 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if !found {
 				return &ApplyColumnNotFoundError{Table: c.Name(), Column: opt.NewColDefinition.Name.String()}
 			}
+			// if this column has the PRIMARY KEY option:
+			// - validate there isn't already a PRIMARY KEY for other columns
+			// - if there isn't any PRIMARY KEY, create one
+			// - if there exists a PRIMARY KEY for exactly this column, noop
+			if opt.NewColDefinition.Type.Options.KeyOpt == sqlparser.ColKeyPrimary {
+				cols := c.primaryKeyColumns()
+				if cols == nil {
+					// add primary key
+					c.CreateTable.TableSpec.Indexes = append([]*sqlparser.IndexDefinition{newPrimaryKeyIndexDefinitionSingleColumn(opt.NewColDefinition.Name)}, c.CreateTable.TableSpec.Indexes...)
+				} else {
+					if len(cols) == 1 && strings.EqualFold(cols[0].Column.String(), opt.NewColDefinition.Name.String()) {
+						// existing PK is exactly this column. Nothing to do
+					} else {
+						return &DuplicateKeyNameError{Table: c.Name(), Key: "PRIMARY"}
+					}
+				}
+			}
+			opt.NewColDefinition.Type.Options.KeyOpt = sqlparser.ColKeyNone
 		case *sqlparser.RenameColumn:
 			// we expect the column to exist
 			found := false
@@ -1969,6 +2057,18 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 	return colNames
 }
 
+func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
+	keyNames := map[string]bool{}
+	for _, key := range c.CreateTable.TableSpec.Indexes {
+		name := key.Info.Name
+		if _, ok := keyNames[name.Lowered()]; ok {
+			return &DuplicateKeyNameError{Table: c.Name(), Key: name.String()}
+		}
+		keyNames[name.Lowered()] = true
+	}
+	return nil
+}
+
 // validate checks that the table structure is valid:
 // - all columns referenced by keys exist
 func (c *CreateTableEntity) validate() error {
@@ -2030,17 +2130,22 @@ func (c *CreateTableEntity) validate() error {
 			}
 		}
 	}
-	// validate all columns referenced by foreign key constraints do in fact exist
+	// validate all columns used by foreign key constraints do in fact exist,
+	// and that there exists an index over those columns
 	for _, cs := range c.CreateTable.TableSpec.Constraints {
 		check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
 		if !ok {
 			continue
+		}
+		if len(check.Source) != len(check.ReferenceDefinition.ReferencedColumns) {
+			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(check.Source), ReferencedTable: check.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(check.ReferenceDefinition.ReferencedColumns)}
 		}
 		for _, col := range check.Source {
 			if !columnExists[col.Lowered()] {
 				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
 			}
 		}
+		// TODO(shlomi): find a valid index
 	}
 	// validate all columns referenced by constraint checks do in fact exist
 	for _, cs := range c.CreateTable.TableSpec.Constraints {
@@ -2064,6 +2169,10 @@ func (c *CreateTableEntity) validate() error {
 				return &InvalidColumnInCheckConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: referencedColName}
 			}
 		}
+	}
+	// validate no two keys have same name
+	if err := c.validateDuplicateKeyNameError(); err != nil {
+		return err
 	}
 
 	if partition := c.CreateTable.TableSpec.PartitionOption; partition != nil {

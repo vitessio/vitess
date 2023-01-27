@@ -945,12 +945,7 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, vterrors.NewErrorf(
-			vtrpcpb.Code_NOT_FOUND,
-			vterrors.BadDb,
-			"Unknown database '%s' in vschema",
-			keyspace,
-		)
+		return nil, vterrors.VT05003(keyspace)
 	}
 	table := ks.Tables[tablename]
 	if table == nil {
@@ -1040,14 +1035,15 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatemen
 	}
 
 	// We do this to make sure there is no shared state between uses of this AST
+	// todo copy-on-rewrite!
 	statement = sqlparser.CloneSelectStatement(statement)
-	sqlparser.Rewrite(statement, func(cursor *sqlparser.Cursor) bool {
+	sqlparser.SafeRewrite(statement, nil, func(cursor *sqlparser.Cursor) bool {
 		col, ok := cursor.Node().(*sqlparser.ColName)
 		if ok {
 			cursor.Replace(sqlparser.NewColNameWithQualifier(col.Name.String(), col.Qualifier))
 		}
 		return true
-	}, nil)
+	})
 	return statement
 }
 
@@ -1105,12 +1101,7 @@ func (vschema *VSchema) FindVindex(keyspace, name string) (Vindex, error) {
 	}
 	ks, ok := vschema.Keyspaces[keyspace]
 	if !ok {
-		return nil, vterrors.NewErrorf(
-			vtrpcpb.Code_NOT_FOUND,
-			vterrors.BadDb,
-			"Unknown database '%s' in vschema",
-			keyspace,
-		)
+		return nil, vterrors.VT05003(keyspace)
 	}
 	return ks.Vindexes[name], nil
 }

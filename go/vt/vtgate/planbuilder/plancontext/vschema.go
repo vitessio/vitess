@@ -65,6 +65,9 @@ type VSchema interface {
 
 	// IsShardRoutingEnabled returns true if partial shard routing is enabled
 	IsShardRoutingEnabled() bool
+
+	// IsViewsEnabled returns true if Vitess manages the views.
+	IsViewsEnabled() bool
 }
 
 // PlannerNameToVersion returns the numerical representation of the planner

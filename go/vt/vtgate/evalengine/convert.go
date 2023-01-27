@@ -39,6 +39,10 @@ type (
 )
 
 func (c *ConvertExpr) unsupported() {
+	throwEvalError(c.returnUnsupportedError())
+}
+
+func (c *ConvertExpr) returnUnsupportedError() error {
 	var err error
 	switch {
 	case c.HasLength && c.HasScale:
@@ -48,7 +52,7 @@ func (c *ConvertExpr) unsupported() {
 	default:
 		err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s", c.Type)
 	}
-	throwEvalError(err)
+	return err
 }
 
 func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
@@ -86,15 +90,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv, result *EvalResult) {
 	case "FLOAT":
 		if c.HasLength {
 			switch p := c.Length; {
-			case p <= 24:
-				c.unsupported()
-			case p <= 53:
-				result.makeFloat()
-			default:
+			case p > 53:
 				throwEvalError(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision %d specified for 'CONVERT'. Maximum is 53.", p))
 			}
-		} else {
-			c.unsupported()
 		}
 		c.unsupported()
 	case "SIGNED", "SIGNED INTEGER":

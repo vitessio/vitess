@@ -122,7 +122,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropForeignKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
+	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -249,6 +249,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		ExternalCluster:       externalCluster,
 		SourceShards:          sourceShards,
 		OnDdl:                 onDDL,
+		DeferSecondaryKeys:    deferSecondaryKeys,
 	}
 	if sourceTimeZone != "" {
 		ms.SourceTimeZone = sourceTimeZone
@@ -1310,7 +1311,9 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 		}
 		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes,
 			int64(mz.ms.MaterializationIntent),
-			int64(workflowSubType))
+			int64(workflowSubType),
+			mz.ms.DeferSecondaryKeys,
+		)
 	}
 	return ig.String(), nil
 }

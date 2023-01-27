@@ -1,60 +1,37 @@
 Usage of vtexplain:
-      --alsologtostderr                              log to standard error as well as files
-      --batch-interval duration                      Interval between logical time slots. (default 10ms)
-      --dbname string                                Optional database target to override normal routing
-      --default_tablet_type topodatapb.TabletType    The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
-      --execution-mode string                        The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
-  -h, --help                                         display usage and exit
-      --keep_logs duration                           keep logs for this long (using ctime) (zero to keep forever)
-      --keep_logs_by_mtime duration                  keep logs for this long (using mtime) (zero to keep forever)
-      --ks-shard-map string                          JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
-      --ks-shard-map-file string                     File containing json blob of keyspace name -> shard name -> ShardReference object
-      --log_backtrace_at traceLocation               when logging hits line file:N, emit a stack trace (default :0)
-      --log_dir string                               If non-empty, write log files in this directory
-      --log_err_stacks                               log stack traces for errors
-      --log_queries_to_file string                   Enable query logging to the specified file
-      --log_rotate_max_size uint                     size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
-      --logtostderr                                  log to standard error instead of files
-      --message_stream_grace_period duration         the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent. (default 30s)
-      --mysql-server-pool-conn-read-buffers          If set, the server will pool incoming connection read buffers
-      --mysql_allow_clear_text_without_tls           If set, the server will allow the use of a clear text password over non-SSL connections.
-      --mysql_auth_server_impl string                Which auth server implementation to use. Options: none, ldap, clientcert, static, vault. (default "static")
-      --mysql_default_workload string                Default session workload (OLTP, OLAP, DBA) (default "OLTP")
-      --mysql_server_bind_address string             Binds on this address when listening to MySQL binary protocol. Useful to restrict listening to 'localhost' only for instance.
-      --mysql_server_port int                        If set, also listen for MySQL binary protocol connections on this port. (default -1)
-      --mysql_server_query_timeout duration          mysql query timeout (default 0s)
-      --mysql_server_read_timeout duration           connection read timeout (default 0s)
-      --mysql_server_require_secure_transport        Reject insecure connections but only if mysql_server_ssl_cert and mysql_server_ssl_key are provided
-      --mysql_server_socket_path string              This option specifies the Unix socket file to use when listening for local connections. By default it will be empty and it won't listen to a unix socket
-      --mysql_server_ssl_ca string                   Path to ssl CA for mysql server plugin SSL. If specified, server will require and validate client certs.
-      --mysql_server_ssl_cert string                 Path to the ssl cert for mysql server plugin SSL
-      --mysql_server_ssl_crl string                  Path to ssl CRL for mysql server plugin SSL
-      --mysql_server_ssl_key string                  Path to ssl key for mysql server plugin SSL
-      --mysql_server_ssl_server_ca string            path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
-      --mysql_server_tls_min_version string          Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql_server_version string                  MySQL server version to advertise.
-      --mysql_server_write_timeout duration          connection write timeout (default 0s)
-      --mysql_slow_connect_warn_threshold duration   Warn if it takes more than the given threshold for a mysql connection to establish (default 0s)
-      --mysql_tcp_version string                     Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")
-      --normalize                                    Whether to enable vtgate normalization
-      --output-mode string                           Output in human-friendly text or json (default "text")
-      --planner-version string                       Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4
-      --pprof strings                                enable profiling
-      --proxy_protocol                               Enable HAProxy PROXY protocol on MySQL listener socket
-      --purge_logs_interval duration                 how often try to remove old logs (default 1h0m0s)
-      --querylog-buffer-size int                     Maximum number of buffered query logs before throttling log output (default 10)
-      --replication-mode string                      The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
-      --schema string                                The SQL table schema
-      --schema-file string                           Identifies the file that contains the SQL table schema
-      --security_policy string                       the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
-      --shards int                                   Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
-      --sql string                                   A list of semicolon-delimited SQL commands to analyze
-      --sql-file string                              Identifies the file that contains the SQL commands to analyze
-      --sql-max-length-errors int                    truncate queries in error logs to the given length (default unlimited)
-      --sql-max-length-ui int                        truncate queries in debug UIs to the given length (default 512) (default 512)
-      --stderrthreshold severity                     logs at or above this threshold go to stderr (default 1)
-      --v Level                                      log level for V logs
-  -v, --version                                      print binary version
-      --vmodule moduleSpec                           comma-separated list of pattern=N settings for file-filtered logging
-      --vschema string                               Identifies the VTGate routing schema
-      --vschema-file string                          Identifies the VTGate routing schema file
+      --alsologtostderr                             log to standard error as well as files
+      --batch-interval duration                     Interval between logical time slots. (default 10ms)
+      --dbname string                               Optional database target to override normal routing
+      --default_tablet_type topodatapb.TabletType   The default tablet type to set for queries, when one is not explicitly selected. (default PRIMARY)
+      --execution-mode string                       The execution mode to simulate -- must be set to multi, legacy-autocommit, or twopc (default "multi")
+  -h, --help                                        display usage and exit
+      --keep_logs duration                          keep logs for this long (using ctime) (zero to keep forever)
+      --keep_logs_by_mtime duration                 keep logs for this long (using mtime) (zero to keep forever)
+      --ks-shard-map string                         JSON map of keyspace name -> shard name -> ShardReference object. The inner map is the same as the output of FindAllShardsInKeyspace
+      --ks-shard-map-file string                    File containing json blob of keyspace name -> shard name -> ShardReference object
+      --log_backtrace_at traceLocation              when logging hits line file:N, emit a stack trace (default :0)
+      --log_dir string                              If non-empty, write log files in this directory
+      --log_err_stacks                              log stack traces for errors
+      --log_rotate_max_size uint                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
+      --logtostderr                                 log to standard error instead of files
+      --mysql_server_version string                 MySQL server version to advertise.
+      --normalize                                   Whether to enable vtgate normalization
+      --output-mode string                          Output in human-friendly text or json (default "text")
+      --planner-version string                      Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner
+      --pprof strings                               enable profiling
+      --purge_logs_interval duration                how often try to remove old logs (default 1h0m0s)
+      --replication-mode string                     The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")
+      --schema string                               The SQL table schema
+      --schema-file string                          Identifies the file that contains the SQL table schema
+      --security_policy string                      the name of a registered security policy to use for controlling access to URLs - empty means allow all for anyone (built-in policies: deny-all, read-only)
+      --shards int                                  Number of shards per keyspace. Passing --ks-shard-map/--ks-shard-map-file causes this flag to be ignored. (default 2)
+      --sql string                                  A list of semicolon-delimited SQL commands to analyze
+      --sql-file string                             Identifies the file that contains the SQL commands to analyze
+      --sql-max-length-errors int                   truncate queries in error logs to the given length (default unlimited)
+      --sql-max-length-ui int                       truncate queries in debug UIs to the given length (default 512) (default 512)
+      --stderrthreshold severity                    logs at or above this threshold go to stderr (default 1)
+      --v Level                                     log level for V logs
+  -v, --version                                     print binary version
+      --vmodule moduleSpec                          comma-separated list of pattern=N settings for file-filtered logging
+      --vschema string                              Identifies the VTGate routing schema
+      --vschema-file string                         Identifies the VTGate routing schema file

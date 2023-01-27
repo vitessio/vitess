@@ -84,9 +84,6 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
-
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
@@ -159,8 +156,7 @@ func waitForSourcePort(ctx context.Context, t *testing.T, tablet cluster.Vttable
 	for time.Now().Before(timeout) {
 		// Check that initially replication is setup correctly on the replica tablet
 		replicaStatus, err := tmcGetReplicationStatus(ctx, tablet.GrpcPort)
-		require.NoError(t, err)
-		if replicaStatus.SourcePort == expectedPort {
+		if err == nil && replicaStatus.SourcePort == expectedPort {
 			return nil
 		}
 		time.Sleep(300 * time.Millisecond)

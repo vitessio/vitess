@@ -62,9 +62,9 @@ type (
 		StreamExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
 
 		// Shard-level functions.
-		ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
-		ExecuteStandalone(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
-		StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
+		ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
+		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
+		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
@@ -171,12 +171,12 @@ type (
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
 
-		// VtExplainLogging enables logging of all interactions to the tablets so
-		// EXPLAIN `format=vtexplain` can report what's being done
-		VtExplainLogging()
+		// VExplainLogging enables logging of all interactions to the tablets so
+		// VEXPLAIN QUERIES/ALL can report what's being done
+		VExplainLogging()
 
-		// GetVTExplainLogs retrieves the vttablet interaction logs
-		GetVTExplainLogs() []ExecuteEntry
+		// GetVExplainLogs retrieves the vttablet interaction logs
+		GetVExplainLogs() []ExecuteEntry
 
 		// SetCommitOrder sets the commit order for the shard session in respect of the type of vindex lookup.
 		// This is used to select the right shard session to perform the vindex lookup query.
@@ -191,9 +191,6 @@ type (
 		// InTransaction returns true if the session has already opened transaction or
 		// will start a transaction on the query execution.
 		InTransaction() bool
-
-		// SetTransactionIsolation sets the transaction isolation level for any new transaction on the session.
-		SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation)
 	}
 
 	// Match is used to check if a Primitive matches
