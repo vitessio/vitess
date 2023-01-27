@@ -35,8 +35,8 @@ the replicas found in these cells for replication lag.
 * *tx-throttler-tablet-types*
 
 A comma separated list of tablet types. The throttler will only monitor tablets
-with these types. Only REPLICA and/or RDONLY types are supported. The default
-is REPLICA.
+with these types. Only `replica` and/or `rdonly` types are supported. The default
+is `replica`.
 
 # Caveats and Known Issues
 * The throttler keeps trying to explore the maximum rate possible while keeping
