@@ -68,12 +68,17 @@ func TestLookupUniqueWithAutocommit(t *testing.T) {
 	utils.AssertMatches(t, conn2, "select id from t10_id_to_keyspace_id_idx order by id asc", "[[INT64(1)] [INT64(2)]]")
 	utils.AssertMatches(t, conn, "select id from t10 where id = 2", "[[INT64(2)]]")
 
-	utils.Exec(t, conn, "savepoint sp_foobar")
-
 	utils.Exec(t, conn, "insert into t10(id, sharding_key) VALUES (3, 1)")
 
 	utils.AssertMatches(t, conn2, "select id from t10_id_to_keyspace_id_idx order by id asc", "[[INT64(1)] [INT64(2)] [INT64(3)]]")
 	utils.AssertMatches(t, conn, "select id from t10 where id = 3", "[[INT64(3)]]")
+
+	utils.Exec(t, conn, "savepoint sp_foobar")
+
+	utils.Exec(t, conn, "insert into t10(id, sharding_key) VALUES (4, 1)")
+
+	utils.AssertMatches(t, conn2, "select id from t10_id_to_keyspace_id_idx order by id asc", "[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]")
+	utils.AssertMatches(t, conn, "select id from t10 where id = 4", "[[INT64(4)]]")
 }
 
 func TestUnownedLookupInsertChecksKeyspaceIdsAreMatching(t *testing.T) {
