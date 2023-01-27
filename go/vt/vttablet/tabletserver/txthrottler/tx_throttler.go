@@ -110,8 +110,11 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 	}
 
 	for _, tabletType := range config.TxThrottlerTabletTypes {
-		if tabletType == topodatapb.TabletType_PRIMARY {
-			return nil, fmt.Errorf("PRIMARY tablet type is not supported")
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+			continue
+		default:
+			return nil, fmt.Errorf("%q tablet type is not supported", tabletType)
 		}
 	}
 

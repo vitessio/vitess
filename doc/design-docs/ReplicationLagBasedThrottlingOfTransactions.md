@@ -30,13 +30,13 @@ If this is not specified a [default](https://github.com/vitessio/vitess/tree/mai
 * *tx-throttler-healthcheck-cells*
 
 A comma separated list of datacenter cells. The throttler will only monitor
-the non-PRIMARY replicas found in these cells for replication lag.
+the replicas found in these cells for replication lag.
 
 * *tx-throttler-tablet-types*
 
 A comma separated list of tablet types. The throttler will only monitor tablets
-with this type. PRIMARY is unsupported and will return an error. REPLICA is
-the default.
+with these types. Only REPLICA and/or RDONLY types are supported. The default
+is REPLICA.
 
 # Caveats and Known Issues
 * The throttler keeps trying to explore the maximum rate possible while keeping
