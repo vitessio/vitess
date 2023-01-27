@@ -370,7 +370,7 @@ func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlpar
 		return nil, err
 	}
 	bindVars := map[string]*querypb.BindVariable{
-		"TABLE_NAME": viewNamesBV,
+		"table_name": viewNamesBV,
 	}
 
 	existErr := qre.checkViewExists(conn, stmt, bindVars, viewsMap, viewNames)

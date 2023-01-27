@@ -70,15 +70,27 @@ func TestMain(m *testing.M) {
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal",
 			"--vschema_ddl_authorized_users", "%",
-			"--schema_change_signal_user", "userData1",
-			"--enable-views"}
+			"--schema_change_signal_user", "userData1"}
 		clusterInstance.VtGatePlannerVersion = planbuilder.Gen4
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal",
 			"--queryserver-config-schema-change-signal-interval", "0.1",
 			"--queryserver-config-strict-table-acl",
 			"--queryserver-config-acl-exempt-acl", "userData1",
-			"--table-acl-config", "dummy.json",
-			"--queryserver-enable-views"}
+			"--table-acl-config", "dummy.json"}
+
+		vtgateVer, err := cluster.GetMajorVersion("vtgate")
+		if err != nil {
+			return 1
+		}
+		vttabletVer, err := cluster.GetMajorVersion("vttablet")
+		if err != nil {
+			return 1
+		}
+		if vtgateVer >= 16 && vttabletVer >= 16 {
+			clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable-views")
+			clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-views")
+		}
+
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 0, false)
 		if err != nil {
 			return 1
@@ -222,6 +234,9 @@ func TestDMLOnNewTable(t *testing.T) {
 
 // TestNewView validates that view tracking works as expected.
 func TestNewView(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vttablet")
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
@@ -244,6 +259,9 @@ func TestNewView(t *testing.T) {
 
 // TestViewAndTable validates that new column added in table is present in the view definition
 func TestViewAndTable(t *testing.T) {
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vtgate")
+	utils.SkipIfBinaryIsBelowVersion(t, 16, "vttablet")
+
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &vtParams)
 	require.NoError(t, err)
