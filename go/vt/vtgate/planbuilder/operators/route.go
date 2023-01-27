@@ -61,6 +61,8 @@ type (
 
 		// Routes that have been merged into this one.
 		MergedWith []*Route
+
+		Routing Routing
 	}
 
 	// VindexPlusPredicates is a struct used to store all the predicates that the vindex can be used to query
@@ -90,6 +92,16 @@ type (
 		VindexCost int
 		IsUnique   bool
 		OpCode     engine.Opcode
+	}
+
+	Routing interface {
+		UpdateRoutingParams(rp *engine.RoutingParameters)
+		Merge(other Routing) Routing
+		Clone() Routing
+		UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error
+		CanMerge(other Routing) bool
+		// AddQueryTablePredicates(ctx *plancontext.PlanningContext, qt *QueryTable) error
+		// OpCode() engine.Opcode
 	}
 )
 
@@ -143,6 +155,12 @@ func (r *Route) Inputs() []ops.Operator {
 
 func (r *Route) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
 	r.SeenPredicates = append(r.SeenPredicates, expr)
+	if r.Routing != nil {
+		err := r.Routing.UpdateRoutingLogic(ctx, expr)
+		if err != nil {
+			return err
+		}
+	}
 	return r.tryImprovingVindex(ctx, expr)
 }
 

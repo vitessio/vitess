@@ -164,16 +164,20 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 		vindex = op.Selected.FoundVindex
 		values = op.Selected.Values
 	}
+	rp := &engine.RoutingParameters{
+		Opcode:              op.RouteOpCode,
+		Keyspace:            op.Keyspace,
+		Vindex:              vindex,
+		Values:              values,
+		SysTableTableName:   op.SysTableTableName,
+		SysTableTableSchema: op.SysTableTableSchema,
+	}
+	if op.Routing != nil {
+		op.Routing.UpdateRoutingParams(rp)
+	}
 	return &engine.Route{
-		TableName: strings.Join(tableNames, ", "),
-		RoutingParameters: &engine.RoutingParameters{
-			Opcode:              op.RouteOpCode,
-			Keyspace:            op.Keyspace,
-			Vindex:              vindex,
-			Values:              values,
-			SysTableTableName:   op.SysTableTableName,
-			SysTableTableSchema: op.SysTableTableSchema,
-		},
+		TableName:         strings.Join(tableNames, ", "),
+		RoutingParameters: rp,
 	}, nil
 }
 

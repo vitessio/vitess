@@ -472,6 +472,10 @@ func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute
 		MergedWith:          []*Route{bRoute},
 	}
 
+	if aRoute.Routing != nil && bRoute.Routing != nil {
+		r.Routing = aRoute.Routing.Merge(bRoute.Routing)
+	}
+
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
 		r.Selected = aRoute.Selected
 	}
@@ -521,6 +525,17 @@ func tryMerge(
 		if tree != nil || err != nil {
 			return tree, err
 		}
+	}
+
+	if !sameKeyspace {
+		// if the two queries are not even going to the same keyspaces, we are not going to be able to merge them
+		return nil, nil
+	}
+
+	if aRoute.Routing != nil &&
+		bRoute.Routing != nil &&
+		!aRoute.Routing.CanMerge(bRoute.Routing) {
+		return nil, nil
 	}
 
 	switch aRoute.RouteOpCode {
