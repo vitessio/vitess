@@ -79,4 +79,5 @@ FLUSH PRIVILEGES;
 RESET SLAVE ALL;
 RESET MASTER;
 
+# custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
 # add custom sql here

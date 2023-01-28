@@ -92,9 +92,12 @@ func TestMain(m *testing.M) {
 		sql := string(initDb)
 		// Since password update is DML we need to insert it before we disable
 		// super-read-only therefore doing the split below.
-		spilltedString := strings.Split(sql, "# add custom sql here")
-		firstPart := spilltedString[0] + cluster.GetPasswordUpdateSQL(localCluster)
-		sql = firstPart + spilltedString[1]
+		splitString := strings.Split(sql, "# add custom sql here")
+		if len(splitString) < 2 {
+			return 1, fmt.Errorf("missing `# add custom sql here` in init_db.sql file")
+		}
+		firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
+		sql = firstPart + splitString[1]
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {
@@ -136,6 +139,8 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
+		// For downgrade / upgrade test, tablet version < 16 will not have super read only code handling
+		// Therefore we are explicitly setting super-read-only to `false` here.
 		if vtTabletVersion <= 15 {
 			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
 				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {

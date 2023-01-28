@@ -121,6 +121,9 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	// Since password update is DML we need to insert it before we disable
 	// super-read-only therefore doing the split below.
 	splitString := strings.Split(sql, "# add custom sql here")
+	if len(splitString) < 2 {
+		return 1, fmt.Errorf("missing `# add custom sql here` in init_db.sql file")
+	}
 	firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
 	sql = firstPart + splitString[1]
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")

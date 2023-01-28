@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
+
 	"vitess.io/vitess/go/vt/proto/vttest"
 
 	// we use gRPC everywhere, so import the vtgate client.
@@ -92,9 +94,6 @@ type Environment interface {
 	// any temporary data in the environment. Environments that can
 	// last through several test runs do not need to implement it.
 	TearDown() error
-
-	// IsSQLFlavor retruns the flavor or SQL Server running
-	IsSQLFlavor() bool
 }
 
 // LocalTestEnv is an Environment implementation for local testing
@@ -149,7 +148,7 @@ func (env *LocalTestEnv) BinaryPath(binary string) string {
 func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
 	// maria db doesn't recognize super-read-only, therefore we have separate sql for that.
 	var initFile = path.Join(os.Getenv("VTROOT"), "config/init_db.sql")
-	if !env.IsSQLFlavor() {
+	if isRunningMariaDB() {
 		initFile = path.Join(os.Getenv("VTROOT"), "config/init_maria_db.sql")
 	}
 	return &Mysqlctl{
@@ -163,12 +162,19 @@ func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLMan
 	}, nil
 }
 
-func (env *LocalTestEnv) IsSQLFlavor() bool {
-	for _, val := range env.Env {
-		if strings.Contains(val, "MYSQL_FLAVOR=MySQL") {
-			return true
-		}
+func isRunningMariaDB() bool {
+	mysqldVersionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return false
 	}
+	flavor, _, err := mysqlctl.ParseVersionString(mysqldVersionStr)
+	if err != nil {
+		return false
+	}
+	if flavor == mysqlctl.FlavorMariaDB {
+		return true
+	}
+
 	return false
 }
 

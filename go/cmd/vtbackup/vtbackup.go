@@ -294,7 +294,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}
 	// In initial_backup mode, just take a backup of this empty database.
 	if initialBackup {
-		log.Infof("inside initialBackup creating initial binlog entry.")
+		log.Infof("Inside initialBackup creating initial binlog entry.")
 		// Take a backup of this empty DB without restoring anything.
 		// First, initialize it the way InitShardPrimary would, so this backup
 		// produces a result that can be used to skip InitShardPrimary entirely.

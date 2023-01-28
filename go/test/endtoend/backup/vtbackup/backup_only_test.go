@@ -64,6 +64,7 @@ func TestTabletInitialBackup(t *testing.T) {
 
 	ver, err := getVTExecVersion("vttablet")
 	require.NoError(t, err)
+	// For all version above v15, each replica will start in super-read-only mode.
 	if ver > 15 {
 		err := primary.VttabletProcess.CreateDB("testDB")
 		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
@@ -382,7 +383,7 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 	}
 }
 
-// insert should not work for any of the replicas and primary
+// Get the version of `vttablet` in the cluster.
 func getVTExecVersion(binaryName string) (int, error) {
 	vtTabletVersion := 0
 	vtTabletVersion, err := cluster.GetMajorVersion(binaryName)

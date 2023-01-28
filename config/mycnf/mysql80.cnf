@@ -28,7 +28,7 @@ plugin-load = rpl_semi_sync_master=semisync_master.so;rpl_semi_sync_slave=semisy
 loose_rpl_semi_sync_master_timeout = 1000000000000000000
 loose_rpl_semi_sync_master_wait_no_slave = 1
 
-# In order to protect against any errand GTIDs we will start mysql instance
-# as super-read-only mode.
+# In order to protect against any errand GTIDs we will start the mysql instance
+# in super-read-only mode.
 super-read-only
 

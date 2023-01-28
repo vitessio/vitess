@@ -98,6 +98,9 @@ func TestMainImpl(m *testing.M) {
 		// Since password update is DML we need to insert it before we disable
 		// super-read-only therefore doing the split below.
 		splitString := strings.Split(sql, "# add custom sql here")
+		if len(splitString) < 2 {
+			return 1, fmt.Errorf("missing `# add custom sql here` in init_db.sql file")
+		}
 		firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
 
 		// https://github.com/vitessio/vitess/issues/8315

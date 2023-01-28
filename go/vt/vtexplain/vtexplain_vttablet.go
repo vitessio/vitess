@@ -502,10 +502,12 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		return callback(result)
 	}
 
+	// If query is part of rejected list then return error right away.
 	if err := t.db.GetRejectedQueryResult(query); err != nil {
 		return err
 	}
 
+	// If query is expected to have a specific result then return the result.
 	if result := t.db.GetQueryResult(query); result != nil {
 		if f := result.BeforeFunc; f != nil {
 			f()
@@ -513,6 +515,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		return callback(result.Result)
 	}
 
+	// return result if query is part of defined pattern.
 	if pat, ok := t.db.GetQueryPatternResult(query); ok {
 		userCallback, ok := t.db.GetQueryPatternUserCallBack(pat.Expr)
 		if ok {
@@ -714,10 +717,6 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 		result = &sqltypes.Result{
 			RowsAffected: 1,
 		}
-	case sqlparser.StmtUse:
-		result = &sqltypes.Result{}
-	case sqlparser.StmtDDL:
-		result = &sqltypes.Result{}
 	default:
 		return fmt.Errorf("unsupported query %s", query)
 	}
