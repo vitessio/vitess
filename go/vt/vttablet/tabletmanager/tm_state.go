@@ -98,7 +98,7 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 }
 
 func (ts *tmState) Open() {
-	log.Infof("Calling taState.Open()")
+	log.Infof("In tmState.Open()")
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.isOpen {
@@ -113,7 +113,7 @@ func (ts *tmState) Open() {
 }
 
 func (ts *tmState) Close() {
-	log.Infof("Calling taState.Close()")
+	log.Infof("In tmState.Close()")
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 

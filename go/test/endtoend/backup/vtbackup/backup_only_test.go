@@ -143,7 +143,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
-	// even though we change the value of compression it won't effect
+	// even though we change the value of compression it won't affect
 	// decompression since it gets its value from MANIFEST file, created
 	// as part of backup.
 	mysqlctl.CompressionEngineName = "lz4"

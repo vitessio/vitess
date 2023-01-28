@@ -1022,7 +1022,7 @@
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestSidecarDB"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vreplication_cellalias",
+			"Shard": "schemadiff_vrepl",
 			"RetryMax": 2,
 			"Tags": []
 		},

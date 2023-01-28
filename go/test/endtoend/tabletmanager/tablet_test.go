@@ -53,6 +53,7 @@ func TestEnsureDB(t *testing.T) {
 	assert.Contains(t, status, "read-only")
 
 	// Switch to read-write and verify that we go serving.
+	// Note: for TabletExternallyReparented, we expect SetReadWrite to be called by the user
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
 	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")

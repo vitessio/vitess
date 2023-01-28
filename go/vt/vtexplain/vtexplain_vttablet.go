@@ -105,7 +105,7 @@ var _ queryservice.QueryService = (*explainTablet)(nil)
 
 func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
-	sidecardb.AddVTSchemaInitQueries(db)
+	sidecardb.AddSidecarDBSchemaInitQueries(db)
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
@@ -495,10 +495,7 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	tEnv := t.vte.getGlobalTabletEnv()
 	result := tEnv.getResult(query)
 	emptyResult := &sqltypes.Result{}
-	if sidecardb.MatchesVTInitQuery(query) {
-		return callback(emptyResult)
-	}
-	if strings.HasPrefix(query, "use _vt") || strings.HasPrefix(query, "CREATE TABLE _vt") || strings.HasPrefix(query, "ALTER TABLE _vt") || strings.HasPrefix(query, "CREATE TABLE IF NOT EXISTS _vt") {
+	if sidecardb.MatchesSidecarDBInitQuery(query) {
 		return callback(emptyResult)
 	}
 	if result != nil {

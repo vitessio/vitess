@@ -535,9 +535,8 @@ func waitForFilePosition(t *testing.T, clusterInstance *cluster.LocalProcessClus
 			return
 		}
 		if d := time.Since(start); d > timeout {
-			log.Infof("waitForFilePosition timed out, primary %s, replica %s",
+			require.FailNowf(t, "waitForFilePosition timed out, primary %s, replica %s",
 				primaryStatus.PrimaryStatus.FilePosition, replicaStatus.ReplicationStatus.FilePosition)
-			return
 		}
 		time.Sleep(100 * time.Millisecond)
 	}

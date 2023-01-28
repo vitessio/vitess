@@ -30,30 +30,30 @@ import (
 func TestAll(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	AddVTSchemaInitQueries(db)
+	AddSidecarDBSchemaInitQueries(db)
 
 	ctx := context.Background()
 	cp := db.ConnParams()
 	conn, err := cp.Connect(ctx)
 	require.NoError(t, err)
-	exec := func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error) {
-		if useVT {
-			if _, err := conn.ExecuteFetch(UseVTDatabaseQuery, maxRows, wantFields); err != nil {
+	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if _, err := conn.ExecuteFetch(UseSidecarDatabaseQuery, maxRows, true); err != nil {
 				return nil, err
 			}
 		}
-		return conn.ExecuteFetch(query, maxRows, wantFields)
+		return conn.ExecuteFetch(query, maxRows, true)
 	}
 
-	// tests init on empty _vt
+	// tests init on empty db
 	require.Equal(t, int64(0), GetDDLCount())
 	err = Init(ctx, exec)
 	require.NoError(t, err)
-	require.Equal(t, int64(len(vtTables)), GetDDLCount())
+	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
 
-	// tests init on already inited _vt
+	// tests init on already inited db
 	var tables []string
-	for _, table := range vtTables {
+	for _, table := range sidecarTables {
 		tables = append(tables, table.name)
 	}
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -64,10 +64,10 @@ func TestAll(t *testing.T) {
 	db.AddQuery(GetCurrentTablesQuery, result)
 	err = Init(ctx, exec)
 	require.NoError(t, err)
-	require.Equal(t, int64(len(vtTables)), GetDDLCount())
+	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
 
 	// tests misc paths not covered above
-	si := &vtSchemaInit{
+	si := &schemaInit{
 		ctx:  ctx,
 		exec: exec,
 	}
@@ -82,9 +82,9 @@ func TestAll(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, currentDB, "currentDB")
 
-	require.False(t, MatchesVTInitQuery("abc"))
-	require.True(t, MatchesVTInitQuery(SelectCurrentDatabaseQuery))
-	require.True(t, MatchesVTInitQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication"))
+	require.False(t, MatchesSidecarDBInitQuery("abc"))
+	require.True(t, MatchesSidecarDBInitQuery(SelectCurrentDatabaseQuery))
+	require.True(t, MatchesSidecarDBInitQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication"))
 }
 
 // test the logic that confirms that the user defined schema's table name and qualifier are valid

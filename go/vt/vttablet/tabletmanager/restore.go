@@ -206,7 +206,7 @@ func (tm *TabletManager) restoreDataLocked(ctx context.Context, logger logutil.L
 	}
 	if !ok {
 		params.Logger.Infof("Attempting to restore, but mysqld already contains data. Assuming vttablet was just restarted.")
-		return nil //todo: is this ok?
+		return nil
 	}
 	// We should not become primary after restore, because that would incorrectly
 	// start a new primary term, and it's likely our data dir will be out of date.

@@ -302,8 +302,10 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
-		cmd := mysqlctl.GenerateInitialBinLogEntry()
-		_ = mysqld.ExecuteSuperQueryList(ctx, []string{cmd})
+		cmd := mysqlctl.GenerateInitialBinlogEntry()
+		if err := mysqld.ExecuteSuperQueryList(ctx, []string{cmd}); err != nil {
+			return err
+		}
 
 		backupParams.BackupTime = time.Now()
 		// Now we're ready to take the backup.
@@ -387,8 +389,6 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err != nil {
 		return err
 	}
-
-	log.Infof("takeBackup: primary position is: %s", primaryPos.String())
 
 	// Remember the time when we fetched the primary position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it

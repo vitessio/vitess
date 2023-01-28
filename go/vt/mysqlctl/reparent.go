@@ -32,10 +32,10 @@ import (
 	"context"
 )
 
-// GenerateInitialBinLogEntry is used to create a binlog entry when a primary comes up and we need to get a
+// GenerateInitialBinlogEntry is used to create a binlog entry when a primary comes up and we need to get a
 // MySQL position so that we can set it as the starting position for replicas to do MySQL Replication from.
-func GenerateInitialBinLogEntry() string {
-	return sidecardb.CreateVTDatabaseQuery
+func GenerateInitialBinlogEntry() string {
+	return sidecardb.CreateSidecarDatabaseQuery
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
@@ -64,7 +64,7 @@ func (mysqld *Mysqld) WaitForReparentJournal(ctx context.Context, timeCreatedNS 
 	for {
 		qr, err := mysqld.FetchSuperQuery(ctx, queryReparentJournal(timeCreatedNS))
 		if err != nil {
-			log.Infof("error query reparent journal %v", err)
+			log.Infof("Error querying reparent journal: %v", err)
 		}
 		if err == nil && len(qr.Rows) == 1 {
 			// we have the row, we're done

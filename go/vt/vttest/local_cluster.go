@@ -500,9 +500,9 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 }
 
 func (db *LocalCluster) createVTSchema() error {
-	var exec2 sidecardb.Exec = func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error) {
-		if useVT {
-			if err := db.Execute([]string{sidecardb.UseVTDatabaseQuery}, ""); err != nil {
+	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if err := db.Execute([]string{sidecardb.UseSidecarDatabaseQuery}, ""); err != nil {
 				return nil, err
 			}
 		}
@@ -510,7 +510,7 @@ func (db *LocalCluster) createVTSchema() error {
 		return &sqltypes.Result{}, err
 	}
 
-	if err := sidecardb.Init(context.Background(), exec2); err != nil {
+	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
 		return err
 	}
 	return nil
@@ -554,7 +554,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	for _, cmd := range sql {
 		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
-		_, err := conn.ExecuteFetch(cmd, 10000, false)
+		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
 		}

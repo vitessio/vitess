@@ -42,9 +42,9 @@ import (
 
 const (
 	SidecarDBName              = "_vt"
-	CreateVTDatabaseQuery      = "create database if not exists _vt"
-	UseVTDatabaseQuery         = "use _vt"
-	ShowVTDatabasesQuery       = "SHOW DATABASES LIKE '_vt'"
+	CreateSidecarDatabaseQuery = "create database if not exists _vt"
+	UseSidecarDatabaseQuery    = "use _vt"
+	ShowSidecarDatabasesQuery  = "SHOW DATABASES LIKE '_vt'"
 	SelectCurrentDatabaseQuery = "select database()"
 	ShowCreateTableQuery       = "show create table _vt.%s"
 	GetCurrentTablesQuery      = "show tables from _vt"
@@ -53,23 +53,23 @@ const (
 	AlterTableRegexp  = "ALTER TABLE _vt.*"
 )
 
-// all tables needed in _vt sidecar have their schema in the vtschema subdirectory
+// all tables needed in the sidecar database have their schema in the schema subdirectory
 //
-//go:embed vtschema/*
+//go:embed schema/*
 var schemaLocation embed.FS
 
-type vtTable struct {
+type sidecarTable struct {
 	module string // which module uses this table
 	path   string // path of the schema relative to this module
 	name   string // table name
 	schema string // create table dml
 }
 
-func (t *vtTable) String() string {
+func (t *sidecarTable) String() string {
 	return fmt.Sprintf("_vt.%s (%s)", t.name, t.module)
 }
 
-var vtTables []*vtTable
+var sidecarTables []*sidecarTable
 var ddlCount *stats.Counter
 
 func init() {
@@ -119,7 +119,7 @@ func initSchemaFiles() {
 			if err := validateSchemaDefinition(name, string(schema)); err != nil {
 				return err
 			}
-			vtTables = append(vtTables, &vtTable{name: name, module: module, path: path, schema: string(schema)})
+			sidecarTables = append(sidecarTables, &sidecarTable{name: name, module: module, path: path, schema: string(schema)})
 		}
 		return nil
 	})
@@ -137,35 +137,38 @@ func printCallerDetails() {
 	}
 }
 
-type vtSchemaInit struct {
+type schemaInit struct {
 	ctx            context.Context
 	exec           Exec
 	existingTables map[string]bool
-	dbCreated      bool // the first upgrade/create query will be prefixed by a _vt creation script
+	dbCreated      bool // the first upgrade/create query will also create the sidecar database if required
 }
 
 // Exec is the prototype of a callback that has to be passed to Init() to execute the specified query in the database
-type Exec func(ctx context.Context, query string, maxRows int, wantFields bool, useVT bool) (*sqltypes.Result, error)
+type Exec func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error)
 
 // GetDDLCount metric returns the count of sidecardb ddls that have been run as part of this vttablet's init process.
 func GetDDLCount() int64 {
 	return ddlCount.Get()
 }
 
-// Init creates or upgrades the _vt sidecar database based on declarative schema for all _vt tables
+// Init creates or upgrades the sidecar database based on declarative schema for all tables in the schema
 func Init(ctx context.Context, exec Exec) error {
-	printCallerDetails() // for debug purposes only, remove in v18
-	log.Infof("Starting sidecardb Init()")
-	si := &vtSchemaInit{
+	printCallerDetails() // for debug purposes only, remove in v17
+	log.Infof("Starting sidecardb.Init()")
+	si := &schemaInit{
 		ctx:  ctx,
 		exec: exec,
 	}
-	dbExists, err := si.doesVTDatabaseExist()
+
+	// there are paths in the tablet initialization where we are in read-only mode but the schema is already updated
+	// hence we should not always try to create the database, since it will then error out as the db is read-only
+	dbExists, err := si.doesSidecarDBExist()
 	if err != nil {
 		return err
 	}
 	if !dbExists {
-		if err := si.createVTDatabase(); err != nil {
+		if err := si.createSidecarDB(); err != nil {
 			return err
 		}
 		si.dbCreated = true
@@ -179,7 +182,7 @@ func Init(ctx context.Context, exec Exec) error {
 		return err
 	}
 
-	for _, table := range vtTables {
+	for _, table := range sidecarTables {
 		if err := si.createOrUpgradeTable(table); err != nil {
 			return err
 		}
@@ -187,8 +190,8 @@ func Init(ctx context.Context, exec Exec) error {
 	return nil
 }
 
-func (si *vtSchemaInit) doesVTDatabaseExist() (bool, error) {
-	rs, err := si.exec(si.ctx, ShowVTDatabasesQuery, 2, false, false)
+func (si *schemaInit) doesSidecarDBExist() (bool, error) {
+	rs, err := si.exec(si.ctx, ShowSidecarDatabasesQuery, 2, false)
 	if err != nil {
 		log.Error(err)
 		return false, err
@@ -196,30 +199,30 @@ func (si *vtSchemaInit) doesVTDatabaseExist() (bool, error) {
 
 	switch len(rs.Rows) {
 	case 0:
-		log.Infof("doesVTDatabaseExist: not found")
+		log.Infof("doesSidecarDBExist: not found")
 		return false, nil
 	case 1:
-		log.Infof("doesVTDatabaseExist: found")
+		log.Infof("doesSidecarDBExist: found")
 		return true, nil
 	default:
-		log.Errorf("found too many rows for _vt: %d", len(rs.Rows))
-		return false, fmt.Errorf("found too many rows for _vt: %d", len(rs.Rows))
+		log.Errorf("found too many rows for sidecarDB %s: %d", SidecarDBName, len(rs.Rows))
+		return false, fmt.Errorf("found too many rows for sidecarDB %s: %d", SidecarDBName, len(rs.Rows))
 	}
 }
 
-func (si *vtSchemaInit) createVTDatabase() error {
-	_, err := si.exec(si.ctx, CreateVTDatabaseQuery, 1, false, false)
+func (si *schemaInit) createSidecarDB() error {
+	_, err := si.exec(si.ctx, CreateSidecarDatabaseQuery, 1, false)
 	if err != nil {
 		log.Error(err)
 		return err
 	}
-	log.Infof("createVTDatabase: %s", CreateVTDatabaseQuery)
+	log.Infof("createSidecarDB: %s", CreateSidecarDatabaseQuery)
 	return nil
 }
 
 // sets db of current connection, returning the currently selected database
-func (si *vtSchemaInit) setCurrentDatabase(dbName string) (string, error) {
-	rs, err := si.exec(si.ctx, SelectCurrentDatabaseQuery, 1, false, false)
+func (si *schemaInit) setCurrentDatabase(dbName string) (string, error) {
+	rs, err := si.exec(si.ctx, SelectCurrentDatabaseQuery, 1, false)
 	if err != nil {
 		return "", err
 	}
@@ -228,7 +231,7 @@ func (si *vtSchemaInit) setCurrentDatabase(dbName string) (string, error) {
 	}
 	currentDB := rs.Rows[0][0].ToString()
 	if currentDB != "" { // while running tests we can get currentDB as empty
-		_, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1000, false, false)
+		_, err = si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1, false)
 		if err != nil {
 			return "", err
 		}
@@ -237,12 +240,12 @@ func (si *vtSchemaInit) setCurrentDatabase(dbName string) (string, error) {
 }
 
 // gets existing schema of table
-func (si *vtSchemaInit) getCurrentSchema(tableName string) (string, error) {
+func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	var currentTableSchema string
 
-	rs, err := si.exec(si.ctx, fmt.Sprintf(ShowCreateTableQuery, tableName), 1, false, false)
+	rs, err := si.exec(si.ctx, fmt.Sprintf(ShowCreateTableQuery, tableName), 1, false)
 	if err != nil {
-		log.Errorf("Error getting _vt table schema for %s: %+v", tableName, err)
+		log.Errorf("Error getting table schema for %s: %+v", tableName, err)
 		return "", err
 	}
 	if len(rs.Rows) > 0 {
@@ -262,7 +265,7 @@ func stripCharset(schema string) string {
 
 // finds diff that needs to be applied to current table schema to get the desired one. Will be an empty string if they match.
 // could be a create statement if the table does not exist or an alter if table exists but has a different schema
-func (si *vtSchemaInit) findTableSchemaDiff(current, desired string) (string, error) {
+func (si *schemaInit) findTableSchemaDiff(current, desired string) (string, error) {
 	// todo: remove once this is fixed in schemadiff
 	current = stripCharset(current)
 
@@ -276,7 +279,7 @@ func (si *vtSchemaInit) findTableSchemaDiff(current, desired string) (string, er
 	if diff != nil {
 		tableAlterSQL = diff.CanonicalStatementString()
 
-		// temp logging, should be removed in v17
+		// temp logging to debug any eventual issues around the new schema init, should be removed in v17
 		log.Infof("alter sql %s", tableAlterSQL)
 		log.Infof("current schema %s", current)
 	}
@@ -284,8 +287,7 @@ func (si *vtSchemaInit) findTableSchemaDiff(current, desired string) (string, er
 	return tableAlterSQL, nil
 }
 
-// createOrUpgradeTable expects that we are already in the _vt database
-func (si *vtSchemaInit) createOrUpgradeTable(table *vtTable) error {
+func (si *schemaInit) createOrUpgradeTable(table *sidecarTable) error {
 	var desiredTableSchema string
 	ctx := si.ctx
 	bytes, err := schemaLocation.ReadFile(table.path)
@@ -311,15 +313,15 @@ func (si *vtSchemaInit) createOrUpgradeTable(table *vtTable) error {
 
 	if tableAlterSQL != "" {
 		if !si.dbCreated {
-			// We use CreateVTDatabaseQuery to also create the first binlog entry when a primary comes up.
+			// We use CreateSidecarDatabaseQuery to also create the first binlog entry when a primary comes up.
 			// That statement doesn't make it to the replicas, so we run the query again so that it is replicated
-			// to the replicas so that the replicas can create the _vt database.
-			if err := si.createVTDatabase(); err != nil {
+			// to the replicas so that the replicas can create the sidecar database.
+			if err := si.createSidecarDB(); err != nil {
 				return err
 			}
 			si.dbCreated = true
 		}
-		_, err = si.exec(ctx, tableAlterSQL, 1, false, true)
+		_, err = si.exec(ctx, tableAlterSQL, 1, true)
 		if err != nil {
 			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERTableExists {
@@ -327,13 +329,13 @@ func (si *vtSchemaInit) createOrUpgradeTable(table *vtTable) error {
 				log.Infof("table %s already exists", table)
 				return nil
 			}
-			log.Errorf("Error altering _vt table %s: %+v", table, err)
+			log.Errorf("Error altering table %s: %+v", table, err)
 			return err
 		}
 		ddlCount.Add(1)
 
 		if tableExists {
-			log.Infof("Updated _vt table %s: %s", table, tableAlterSQL)
+			log.Infof("Updated table %s: %s", table, tableAlterSQL)
 		} else {
 			log.Infof("Created %s", table)
 		}
@@ -343,16 +345,16 @@ func (si *vtSchemaInit) createOrUpgradeTable(table *vtTable) error {
 	return nil
 }
 
-// is table already in _vt?
-func (si *vtSchemaInit) tableExists(tableName string) bool {
+// is table already present?
+func (si *schemaInit) tableExists(tableName string) bool {
 	_, ok := si.existingTables[tableName]
 	return ok
 }
 
-// cache existing tables from _vt
-func (si *vtSchemaInit) loadExistingTables() error {
+// cache existing tables in the sidecar database
+func (si *schemaInit) loadExistingTables() error {
 	si.existingTables = make(map[string]bool)
-	rs, err := si.exec(si.ctx, GetCurrentTablesQuery, 1000, false, false)
+	rs, err := si.exec(si.ctx, GetCurrentTablesQuery, -1, false)
 	if err != nil {
 		return err
 	}
@@ -364,23 +366,23 @@ func (si *vtSchemaInit) loadExistingTables() error {
 
 // region unit-test-only
 // query patterns to handle in mocks
-var vtSchemaInitQueryPatterns = []string{
-	ShowVTDatabasesQuery,
+var sidecarDBInitQueryPatterns = []string{
+	ShowSidecarDatabasesQuery,
 	SelectCurrentDatabaseQuery,
-	CreateVTDatabaseQuery,
-	UseVTDatabaseQuery,
+	CreateSidecarDatabaseQuery,
+	UseSidecarDatabaseQuery,
 	GetCurrentTablesQuery,
 	CreateTableRegexp,
 	AlterTableRegexp,
 }
 
-// AddVTSchemaInitQueries adds _vt schema related queries to a mock db
-func AddVTSchemaInitQueries(db *fakesqldb.DB) {
+// AddSidecarDBSchemaInitQueries adds sidecar database schema related queries to a mock db
+func AddSidecarDBSchemaInitQueries(db *fakesqldb.DB) {
 	result := &sqltypes.Result{}
-	for _, q := range vtSchemaInitQueryPatterns {
+	for _, q := range sidecarDBInitQueryPatterns {
 		db.AddQueryPattern(q, result)
 	}
-	for _, table := range vtTables {
+	for _, table := range sidecarTables {
 		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 			"Table|Create Table",
 			"varchar|varchar"),
@@ -390,13 +392,15 @@ func AddVTSchemaInitQueries(db *fakesqldb.DB) {
 	}
 }
 
-// MatchesVTInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp
-func MatchesVTInitQuery(query string) bool {
-	for _, q := range vtSchemaInitQueryPatterns {
+// MatchesSidecarDBInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp
+func MatchesSidecarDBInitQuery(query string) bool {
+	query = strings.ToLower(query)
+	for _, q := range sidecarDBInitQueryPatterns {
+		q = strings.ToLower(q)
 		if strings.Contains(query, q) {
 			return true
 		}
-		if match, _ := regexp.MatchString(strings.ToLower(q), strings.ToLower(query)); match {
+		if match, _ := regexp.MatchString(q, query); match {
 			return true
 		}
 	}

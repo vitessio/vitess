@@ -99,7 +99,7 @@ func (ctl *Mysqlctl) Start() error {
 	cmd.Env = append(cmd.Env, os.Environ()...)
 	cmd.Env = append(cmd.Env, ctl.Env...)
 	cmd.Env = append(cmd.Env, fmt.Sprintf("EXTRA_MY_CNF=%s", myCnf))
-	log.Infof("cmd.Env %+v", cmd.Env)
+	log.Infof("Starting MySQL using: %+v", cmd.Env)
 	_, err := cmd.Output()
 	return err
 }

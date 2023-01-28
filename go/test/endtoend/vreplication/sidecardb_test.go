@@ -1,15 +1,18 @@
 package vreplication
 
 import (
+	"fmt"
 	"strconv"
 	"testing"
+
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
 
-func getVTTables(t *testing.T, tabletID string) (numTablets int, tables []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsApp", "--", "--json", tabletID, "show tables from _vt")
+func getSidecarDBTables(t *testing.T, tabletID string) (numTablets int, tables []string) {
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", tabletID, sidecardb.GetCurrentTablesQuery)
 	require.NoError(t, err)
 	result := gjson.Get(output, "rows")
 	require.NotNil(t, result)
@@ -27,15 +30,15 @@ func getVTTables(t *testing.T, tabletID string) (numTablets int, tables []string
 	return numTablets, tables
 }
 
-var VTTables []string
-var NumVTTables int
+var sidecarDBTables []string
+var numSidecarDBTables int
 var ddls1, ddls2 []string
 
 func init() {
-	VTTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action", "redo_state",
+	sidecarDBTables = []string{"copy_state", "dt_participant", "dt_state", "heartbeat", "post_copy_action", "redo_state",
 		"redo_statement", "reparent_journal", "resharding_journal", "schema_migrations", "schema_version", "schemacopy",
 		"vdiff", "vdiff_log", "vdiff_table", "views", "vreplication", "vreplication_log"}
-	NumVTTables = len(VTTables)
+	numSidecarDBTables = len(sidecarDBTables)
 	ddls1 = []string{
 		"drop table _vt.vreplication_log",
 		"alter table _vt.vreplication drop column defer_secondary_keys",
@@ -45,8 +48,14 @@ func init() {
 	}
 }
 
-// TestSidecarDB launches a Vitess cluster and ensures that the expected _vt tables are created. We also drop/alter
-// tables and ensure the next tablet init will recreate the _vt database to the desired schema
+func prs(t *testing.T, keyspace, shard string) {
+	_, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", fmt.Sprintf("%s/%s", keyspace, shard))
+	require.NoError(t, err)
+
+}
+
+// TestSidecarDB launches a Vitess cluster and ensures that the expected sidecar tables are created. We also drop/alter
+// tables and ensure the next tablet init will recreate the sidecar database to the desired schema.
 func TestSidecarDB(t *testing.T) {
 	cells := []string{"zone1"}
 
@@ -58,70 +67,56 @@ func TestSidecarDB(t *testing.T) {
 
 	defer vc.TearDown(t)
 
-	cell1 := vc.Cells["zone1"]
-	vc.AddKeyspace(t, []*Cell{cell1}, "product", "0", initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
-	shard0 := vc.Cells["zone1"].Keyspaces["product"].Shards["0"]
-	tablet100Port := shard0.Tablets["zone1-100"].Vttablet.Port
-	tablet101Port := shard0.Tablets["zone1-101"].Vttablet.Port
-	currentPrimary := "zone1-100"
+	keyspace := "product"
+	shard := "0"
 
-	validateVTTables(t, "zone1-100", VTTables)
-	validateVTTables(t, "zone1-101", VTTables)
-	expectedChanges100 := len(VTTables)
+	cell1 := vc.Cells[defaultCellName]
+	tablet100ID := fmt.Sprintf("%s-100", defaultCellName)
+	tablet101ID := fmt.Sprintf("%s-101", defaultCellName)
+	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, shard, initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
+	shard0 := vc.Cells[defaultCellName].Keyspaces[keyspace].Shards[shard]
+	tablet100Port := shard0.Tablets[tablet100ID].Vttablet.Port
+	tablet101Port := shard0.Tablets[tablet101ID].Vttablet.Port
+	currentPrimary := tablet100ID
+
+	validateSidecarDBTables(t, tablet100ID, sidecarDBTables)
+	validateSidecarDBTables(t, tablet101ID, sidecarDBTables)
+	expectedChanges100 := len(sidecarDBTables)
 	expectedChanges101 := 0
 	require.Equal(t, getNumExecutedDDLQueries(t, tablet100Port), expectedChanges100)
 	require.Equal(t, getNumExecutedDDLQueries(t, tablet101Port), expectedChanges101)
 
-	numChanges := modifyVTSchema(t, vc, currentPrimary, ddls1)
+	numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
 
-	validateVTTables(t, "zone1-100", VTTables[0:NumVTTables-1])
-	validateVTTables(t, "zone1-101", VTTables[0:NumVTTables-1])
+	validateSidecarDBTables(t, tablet100ID, sidecarDBTables[0:numSidecarDBTables-1])
+	validateSidecarDBTables(t, tablet101ID, sidecarDBTables[0:numSidecarDBTables-1])
 
-	_, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", "product/0")
-	require.NoError(t, err)
-	currentPrimary = "zone1-101"
+	prs(t, keyspace, shard)
+	currentPrimary = tablet101ID
 	expectedChanges100 += numChanges
-	validateVTTables(t, "zone1-100", VTTables)
-	validateVTTables(t, "zone1-101", VTTables)
+	validateSidecarDBTables(t, tablet100ID, sidecarDBTables)
+	validateSidecarDBTables(t, tablet101ID, sidecarDBTables)
 	require.Equal(t, getNumExecutedDDLQueries(t, tablet100Port), expectedChanges100)
 	require.Equal(t, getNumExecutedDDLQueries(t, tablet101Port), expectedChanges101)
 
-	numChanges = modifyVTSchema(t, vc, currentPrimary, ddls1)
+	numChanges = modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
 	expectedChanges101 += numChanges
-	_, err = vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", "product/0")
-	require.NoError(t, err)
+	prs(t, keyspace, shard)
 	// nolint
-	currentPrimary = "zone1-100"
+	currentPrimary = tablet100ID
 
-	validateVTTables(t, "zone1-100", VTTables)
-	validateVTTables(t, "zone1-101", VTTables)
+	validateSidecarDBTables(t, tablet100ID, sidecarDBTables)
+	validateSidecarDBTables(t, tablet101ID, sidecarDBTables)
 	require.Equal(t, getNumExecutedDDLQueries(t, tablet100Port), expectedChanges100)
 	require.Equal(t, getNumExecutedDDLQueries(t, tablet101Port), expectedChanges101)
-
-	// TODO before merging
-	// At this point the replication on zone-101 seems to have been stopped. It is possibly because we still upgrade
-	// _vt during DemotePrimary(). This test is itself possibly incorrect though ...
-	/*
-		modifyVTSchema(t, vc, currentPrimary, ddls2)
-		output, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", "product/0")
-		require.NoErrorf(t, err, output)
-		currentPrimary = "zone1-101"
-
-		validateVTTables(t, "zone1-100", VTTables)
-		validateVTTables(t, "zone1-101", VTTables)
-		require.Equal(t, getNumExecutedDDLQueries(t, tablet100Port), expectedChanges100)
-		require.Equal(t, getNumExecutedDDLQueries(t, tablet101Port), expectedChanges101)
-
-	*/
-
 }
 
-func validateVTTables(t *testing.T, tabletID string, tables []string) {
-	_, tables2 := getVTTables(t, tabletID)
+func validateSidecarDBTables(t *testing.T, tabletID string, tables []string) {
+	_, tables2 := getSidecarDBTables(t, tabletID)
 	require.EqualValues(t, tables, tables2)
 }
 
-func modifyVTSchema(t *testing.T, vc *VitessCluster, tabletID string, ddls []string) (numChanges int) {
+func modifySidecarDBSchema(t *testing.T, vc *VitessCluster, tabletID string, ddls []string) (numChanges int) {
 	for _, ddl := range ddls {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", tabletID, ddl)
 		require.NoErrorf(t, err, output)

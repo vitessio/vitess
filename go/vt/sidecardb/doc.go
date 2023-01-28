@@ -18,12 +18,12 @@ package sidecardb
 
 /*
 
-The sidecardb module is used to create and upgrade the _vt schema on tablet init.
+The sidecardb module is used to create and upgrade the sidecar database schema on tablet init. The sidecar database
+is named `_vt`.
 
-The vtschema subdirectory has subdirectories, categorized by module, with one file per table in _vt. Each has the latest
-schema for each table in _vt (in the form of a create table script).
+The schema subdirectory has subdirectories, categorized by module, with one file per table in _vt. Each has the latest
+schema for each table in _vt (in the form of a create table statement).
 
-sidecardb uses the schemadiff module in Vitess, originally created for online ddl, to reach the desired schema
-for each table.
+sidecardb uses the schemadiff module in Vitess to reach the desired schema for each table.
 
 */

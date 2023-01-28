@@ -208,7 +208,7 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer appConn.Recycle()
-	_, err = appConn.ExecuteFetch(upsert, 10000, false)
+	_, err = appConn.ExecuteFetch(upsert, 1, false)
 	if err != nil {
 		return err
 	}
