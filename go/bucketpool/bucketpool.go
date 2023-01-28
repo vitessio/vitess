@@ -54,7 +54,7 @@ func New(minSize, maxSize int) *Pool {
 	if maxSize < minSize {
 		panic("maxSize can't be less than minSize")
 	}
-	if maxSize > math.MaxUint32 {
+	if int64(maxSize) > math.MaxUint32 {
 		panic("maxSize can't be greater than MaxUint32")
 	}
 
