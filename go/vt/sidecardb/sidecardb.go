@@ -266,10 +266,9 @@ func stripCharset(schema string) string {
 // finds diff that needs to be applied to current table schema to get the desired one. Will be an empty string if they match.
 // could be a create statement if the table does not exist or an alter if table exists but has a different schema
 func (si *schemaInit) findTableSchemaDiff(current, desired string) (string, error) {
-	// todo: remove once this is fixed in schemadiff
-	current = stripCharset(current)
-
-	hints := &schemadiff.DiffHints{}
+	hints := &schemadiff.DiffHints{
+		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
+	}
 	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints)
 	if err != nil {
 		return "", err
