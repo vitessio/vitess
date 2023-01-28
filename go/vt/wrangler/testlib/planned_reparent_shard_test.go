@@ -322,7 +322,7 @@ func TestPlannedReparentInitialization(t *testing.T) {
 		},
 	}
 	newPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		mysqlctl.GenerateInitialBinLogEntry(),
+		mysqlctl.GenerateInitialBinlogEntry(),
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 	newPrimary.StartActionLoop(t, wr)

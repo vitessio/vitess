@@ -54,7 +54,7 @@ func TestInitShardPrimary(t *testing.T) {
 
 	tablet1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		mysqlctl.GenerateInitialBinLogEntry(),
+		mysqlctl.GenerateInitialBinlogEntry(),
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 
@@ -116,7 +116,7 @@ func TestInitShardPrimaryNoFormerPrimary(t *testing.T) {
 
 	tablet1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		"FAKE RESET ALL REPLICATION",
-		mysqlctl.GenerateInitialBinLogEntry(),
+		mysqlctl.GenerateInitialBinlogEntry(),
 		"SUBINSERT INTO _vt.reparent_journal (time_created_ns, action_name, primary_alias, replication_position) VALUES",
 	}
 

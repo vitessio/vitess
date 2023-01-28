@@ -92,7 +92,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery(mysqlctl.GenerateInitialBinLogEntry(), &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
@@ -336,7 +336,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery(mysqlctl.GenerateInitialBinLogEntry(), &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
@@ -553,7 +553,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery(mysqlctl.GenerateInitialBinLogEntry(), &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
@@ -726,7 +726,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery(mysqlctl.GenerateInitialBinLogEntry(), &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
