@@ -43,19 +43,17 @@ func TestEnsureDB(t *testing.T) {
 	err = clusterInstance.StartVttablet(tablet, "NOT_SERVING", false, cell, "dbtest", hostname, "0")
 	require.NoError(t, err)
 
-	assert.Equal(t, "NOT_SERVING", tablet.VttabletProcess.GetTabletStatus())
 	// Make it the primary.
+	// primary will fail with `--read-only` since in external re-parenting we expect caller to set DB to read-write mode.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
-	require.NoError(t, err, "No error expected.")
+	require.EqualError(t, err, "exit status 1")
 
-	// Once promoted to primary during vschema/engine.go we change tablet to ReadWrite, hence promoting
-	// tablet to SERVING status.
-	assert.Equal(t, "SERVING", tablet.VttabletProcess.GetTabletStatus())
+	// It is still NOT_SERVING because the db is read-only.
+	assert.Equal(t, "NOT_SERVING", tablet.VttabletProcess.GetTabletStatus())
 	status := tablet.VttabletProcess.GetStatusDetails()
-	assert.Contains(t, status, "healthy")
+	assert.Contains(t, status, "read-only")
 
 	// Switch to read-write and verify that we go serving.
-	// Note: for TabletExternallyReparented, we expect SetReadWrite to be called by the user
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
 	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
