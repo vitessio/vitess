@@ -750,6 +750,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: c.CreateTable.Table,
 	}
+	if hints.TableQualifierHint == TableQualifierUseSpecified {
+		alterTable.Table.Qualifier = other.Table.Qualifier
+	}
+
 	diffedTableCharset := ""
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
@@ -803,6 +807,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
 	if tableSpecHasChanged {
 		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{

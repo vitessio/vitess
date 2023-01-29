@@ -36,6 +36,7 @@ func TestDiffTables(t *testing.T) {
 		toName   string
 		action   string
 		isError  bool
+		hints    *DiffHints
 	}{
 		{
 			name: "identical",
@@ -101,11 +102,47 @@ func TestDiffTables(t *testing.T) {
 		{
 			name: "none",
 		},
+		{
+			name:   "TableQualifierUseSpecified hint, to has qualifier",
+			from:   "create table t1 (id int primary key, name int)",
+			to:     "create table _vt.t1 (id int primary key, name bigint)",
+			diff:   "alter table _vt.t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierUseSpecified,
+			},
+		},
+		{
+			name:   "TableQualifierUseSpecified hint, from has qualifier",
+			from:   "create table _vt.t1 (id int primary key, name int)",
+			to:     "create table t1 (id int primary key, name bigint)",
+			diff:   "alter table t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierUseSpecified,
+			},
+		},
+		{
+			name:   "TableQualifierUseOriginal, from has qualifier",
+			from:   "create table _vt.t1 (id int primary key, name int)",
+			to:     "create table t1 (id int primary key, name bigint)",
+			diff:   "alter table _vt.t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierUseOriginal,
+			},
+		},
 	}
-	hints := &DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
+			hints := &DiffHints{}
+			if ts.hints != nil {
+				hints = ts.hints
+			}
 			if ts.from != "" {
 				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)
