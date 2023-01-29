@@ -17,18 +17,22 @@ limitations under the License.
 package scheduler
 
 import (
+	"context"
 	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -77,6 +81,47 @@ var (
 	schemaChangeDirectory = ""
 	overrideVtctlParams   *cluster.VtctlClientParams
 )
+
+type WriteMetrics struct {
+	mu                                                      sync.Mutex
+	insertsAttempts, insertsFailures, insertsNoops, inserts int64
+	updatesAttempts, updatesFailures, updatesNoops, updates int64
+	deletesAttempts, deletesFailures, deletesNoops, deletes int64
+}
+
+func (w *WriteMetrics) Clear() {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	w.inserts = 0
+	w.updates = 0
+	w.deletes = 0
+
+	w.insertsAttempts = 0
+	w.insertsFailures = 0
+	w.insertsNoops = 0
+
+	w.updatesAttempts = 0
+	w.updatesFailures = 0
+	w.updatesNoops = 0
+
+	w.deletesAttempts = 0
+	w.deletesFailures = 0
+	w.deletesNoops = 0
+}
+
+func (w *WriteMetrics) String() string {
+	return fmt.Sprintf(`WriteMetrics: inserts-deletes=%d, updates-deletes=%d,
+insertsAttempts=%d, insertsFailures=%d, insertsNoops=%d, inserts=%d,
+updatesAttempts=%d, updatesFailures=%d, updatesNoops=%d, updates=%d,
+deletesAttempts=%d, deletesFailures=%d, deletesNoops=%d, deletes=%d,
+`,
+		w.inserts-w.deletes, w.updates-w.deletes,
+		w.insertsAttempts, w.insertsFailures, w.insertsNoops, w.inserts,
+		w.updatesAttempts, w.updatesFailures, w.updatesNoops, w.updates,
+		w.deletesAttempts, w.deletesFailures, w.deletesNoops, w.deletes,
+	)
+}
 
 func parseTableName(t *testing.T, sql string) (tableName string) {
 	// ddlStatement could possibly be composed of multiple DDL statements
@@ -188,6 +233,13 @@ func TestMain(m *testing.M) {
 }
 
 func TestSchemaChange(t *testing.T) {
+	t.Run("scheduler", testScheduler)
+	t.Run("singleton", testSingleton)
+	t.Run("declarative", testDeclarative)
+	t.Run("foreign-keys", testForeignKeys)
+}
+
+func testScheduler(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
@@ -806,9 +858,9 @@ func TestSchemaChange(t *testing.T) {
 	})
 }
 
-func TestSingleton(t *testing.T) {
+func testSingleton(t *testing.T) {
 	defer cluster.PanicHandler(t)
-
+	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
 
 	createParams := func(ddlStatement string, ddlStrategy string, executeStrategy string, migrationContext string, expectHint string, expectError string, skipWait bool) *testOnlineDDLStatementParams {
@@ -864,8 +916,11 @@ func TestSingleton(t *testing.T) {
 		ALTER TABLE stress_test ENGINE=InnoDB
 	`
 		dropStatement = `
-		DROP TABLE stress_test
-	`
+	DROP TABLE stress_test
+`
+		dropIfExistsStatement = `
+DROP TABLE IF EXISTS stress_test
+`
 		dropNonexistentTableStatement = `
 		DROP TABLE IF EXISTS t_non_existent
 	`
@@ -873,6 +928,13 @@ func TestSingleton(t *testing.T) {
 	)
 
 	var uuids []string
+	// init-cleanup
+	t.Run("init DROP TABLE", func(t *testing.T) {
+		uuid := testOnlineDDLStatement(t, createParams(dropIfExistsStatement, onlineSingletonDDLStrategy, "vtgate", "", "", "", false))
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+
 	// CREATE
 	t.Run("CREATE TABLE", func(t *testing.T) {
 		// The table does not exist
@@ -1032,7 +1094,679 @@ func TestSingleton(t *testing.T) {
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, revertUUID, schema.OnlineDDLStatusCancelled)
 	})
 }
-func TestForeignKeys(t *testing.T) {
+func testDeclarative(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	shards = clusterInstance.Keyspaces[0].Shards
+	require.Equal(t, 1, len(shards))
+
+	var (
+		tableName         = `stress_test`
+		viewBaseTableName = `view_base_table_test`
+		viewName          = `view_test`
+		migrationContext  = "1111-2222-3333"
+		createStatement1  = `
+			CREATE TABLE stress_test (
+				id bigint(20) not null,
+				rand_val varchar(32) null default '',
+				hint_col varchar(64) not null default 'create1',
+				created_timestamp timestamp not null default current_timestamp,
+				updates int unsigned not null default 0,
+				PRIMARY KEY (id),
+				key created_idx(created_timestamp),
+				key updates_idx(updates)
+			) ENGINE=InnoDB
+		`
+		createStatement2 = `
+			CREATE TABLE stress_test (
+				id bigint(20) not null,
+				rand_val varchar(32) null default '',
+				hint_col varchar(64) not null default 'create2',
+				created_timestamp timestamp not null default current_timestamp,
+				updates int unsigned not null default 0,
+				PRIMARY KEY (id),
+				key created_idx(created_timestamp),
+				key updates_idx(updates)
+			) ENGINE=InnoDB
+		`
+		createIfNotExistsStatement = `
+			CREATE TABLE IF NOT EXISTS stress_test (
+				id bigint(20) not null,
+				PRIMARY KEY (id)
+			) ENGINE=InnoDB
+		`
+		createStatementZeroDate = `
+			CREATE TABLE zerodate_test (
+				id bigint(20) not null,
+				hint_col varchar(64) not null default 'create_with_zero',
+				zero_datetime datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+				PRIMARY KEY (id)
+			) ENGINE=InnoDB
+		`
+		createStatementZeroDate2 = `
+			CREATE TABLE zerodate_test (
+				id bigint(20) not null,
+				i int not null default 0,
+				hint_col varchar(64) not null default 'create_with_zero2',
+				zero_datetime datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+				zero_datetime2 datetime NOT NULL DEFAULT '0000-00-00 00:00:00',
+				PRIMARY KEY (id)
+			) ENGINE=InnoDB
+		`
+		dropZeroDateStatement = `
+			DROP TABLE zerodate_test
+		`
+		dropStatement = `
+			DROP TABLE stress_test
+		`
+		dropIfExistsStatement = `
+			DROP TABLE IF EXISTS stress_test
+		`
+		alterStatement = `
+			ALTER TABLE stress_test modify hint_col varchar(64) not null default 'this-should-fail'
+		`
+		trivialAlterStatement = `
+			ALTER TABLE stress_test ENGINE=InnoDB
+		`
+		dropViewBaseTableStatement = `
+			DROP TABLE IF EXISTS view_base_table_test
+		`
+		createViewBaseTableStatement = `
+			CREATE TABLE view_base_table_test (id INT PRIMARY KEY)
+		`
+		createViewStatement1 = `
+			CREATE VIEW view_test AS SELECT 'success_create1' AS msg FROM view_base_table_test
+		`
+		createViewStatement2 = `
+			CREATE VIEW view_test AS SELECT 'success_create2' AS msg FROM view_base_table_test
+		`
+		createOrReplaceViewStatement = `
+			CREATE OR REPLACE VIEW view_test AS SELECT 'success_replace' AS msg FROM view_base_table_test
+		`
+		alterViewStatement = `
+			ALTER VIEW view_test AS SELECT 'success_alter' AS msg FROM view_base_table_test
+		`
+		dropViewStatement = `
+			DROP VIEW view_test
+		`
+		dropViewIfExistsStatement = `
+			DROP VIEW IF EXISTS view_test
+		`
+		insertRowStatement = `
+			INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
+		`
+		updateRowStatement = `
+			UPDATE stress_test SET updates=updates+1 WHERE id=%d
+		`
+		deleteRowStatement = `
+			DELETE FROM stress_test WHERE id=%d AND updates=1
+		`
+		// We use CAST(SUM(updates) AS SIGNED) because SUM() returns a DECIMAL datatype, and we want to read a SIGNED INTEGER type
+		selectCountRowsStatement = `
+			SELECT COUNT(*) AS num_rows, CAST(SUM(updates) AS SIGNED) AS sum_updates FROM stress_test
+		`
+		truncateStatement = `
+			TRUNCATE TABLE stress_test
+		`
+		writeMetrics WriteMetrics
+		maxTableRows = 4096
+	)
+
+	declarativeStrategy := "online -declarative"
+	var uuids []string
+
+	generateInsert := func(t *testing.T, conn *mysql.Conn) error {
+		id := rand.Int31n(int32(maxTableRows))
+		query := fmt.Sprintf(insertRowStatement, id)
+		qr, err := conn.ExecuteFetch(query, 1000, true)
+
+		func() {
+			writeMetrics.mu.Lock()
+			defer writeMetrics.mu.Unlock()
+
+			writeMetrics.insertsAttempts++
+			if err != nil {
+				writeMetrics.insertsFailures++
+				return
+			}
+			assert.Less(t, qr.RowsAffected, uint64(2))
+			if qr.RowsAffected == 0 {
+				writeMetrics.insertsNoops++
+				return
+			}
+			writeMetrics.inserts++
+		}()
+		return err
+	}
+
+	generateUpdate := func(t *testing.T, conn *mysql.Conn) error {
+		id := rand.Int31n(int32(maxTableRows))
+		query := fmt.Sprintf(updateRowStatement, id)
+		qr, err := conn.ExecuteFetch(query, 1000, true)
+
+		func() {
+			writeMetrics.mu.Lock()
+			defer writeMetrics.mu.Unlock()
+
+			writeMetrics.updatesAttempts++
+			if err != nil {
+				writeMetrics.updatesFailures++
+				return
+			}
+			assert.Less(t, qr.RowsAffected, uint64(2))
+			if qr.RowsAffected == 0 {
+				writeMetrics.updatesNoops++
+				return
+			}
+			writeMetrics.updates++
+		}()
+		return err
+	}
+
+	generateDelete := func(t *testing.T, conn *mysql.Conn) error {
+		id := rand.Int31n(int32(maxTableRows))
+		query := fmt.Sprintf(deleteRowStatement, id)
+		qr, err := conn.ExecuteFetch(query, 1000, true)
+
+		func() {
+			writeMetrics.mu.Lock()
+			defer writeMetrics.mu.Unlock()
+
+			writeMetrics.deletesAttempts++
+			if err != nil {
+				writeMetrics.deletesFailures++
+				return
+			}
+			assert.Less(t, qr.RowsAffected, uint64(2))
+			if qr.RowsAffected == 0 {
+				writeMetrics.deletesNoops++
+				return
+			}
+			writeMetrics.deletes++
+		}()
+		return err
+	}
+
+	initTable := func(t *testing.T) {
+		log.Infof("initTable begin")
+		defer log.Infof("initTable complete")
+
+		ctx := context.Background()
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.Nil(t, err)
+		defer conn.Close()
+
+		writeMetrics.Clear()
+		_, err = conn.ExecuteFetch(truncateStatement, 1000, true)
+		require.Nil(t, err)
+
+		for i := 0; i < maxTableRows/2; i++ {
+			generateInsert(t, conn)
+		}
+		for i := 0; i < maxTableRows/4; i++ {
+			generateUpdate(t, conn)
+		}
+		for i := 0; i < maxTableRows/4; i++ {
+			generateDelete(t, conn)
+		}
+	}
+
+	testSelectTableMetrics := func(t *testing.T) {
+		writeMetrics.mu.Lock()
+		defer writeMetrics.mu.Unlock()
+
+		log.Infof("%s", writeMetrics.String())
+
+		ctx := context.Background()
+		conn, err := mysql.Connect(ctx, &vtParams)
+		require.Nil(t, err)
+		defer conn.Close()
+
+		rs, err := conn.ExecuteFetch(selectCountRowsStatement, 1000, true)
+		require.Nil(t, err)
+
+		row := rs.Named().Row()
+		require.NotNil(t, row)
+		log.Infof("testSelectTableMetrics, row: %v", row)
+		numRows := row.AsInt64("num_rows", 0)
+		sumUpdates := row.AsInt64("sum_updates", 0)
+
+		assert.NotZero(t, numRows)
+		assert.NotZero(t, sumUpdates)
+		assert.NotZero(t, writeMetrics.inserts)
+		assert.NotZero(t, writeMetrics.deletes)
+		assert.NotZero(t, writeMetrics.updates)
+		assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
+		assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
+	}
+
+	testOnlineDDL := func(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string) (uuid string) {
+		params := &testOnlineDDLStatementParams{
+			ddlStatement:    alterStatement,
+			ddlStrategy:     ddlStrategy,
+			executeStrategy: executeStrategy,
+			expectHint:      expectHint,
+			expectError:     expectError,
+		}
+		if executeStrategy != "vtgate" {
+			params.migrationContext = migrationContext
+		}
+		return testOnlineDDLStatement(t, params)
+	}
+	createRevertParams := func(revertUUID string) *testRevertMigrationParams {
+		return &testRevertMigrationParams{
+			revertUUID:      revertUUID,
+			executeStrategy: "vtctl",
+			ddlStrategy:     string(schema.DDLStrategyOnline),
+		}
+	}
+
+	// init-cleaup
+	t.Run("init: drop table", func(t *testing.T) {
+		// IF EXISTS is not supported in -declarative
+		uuid := testOnlineDDL(t, dropIfExistsStatement, "online", "vtgate", "", "")
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+	})
+	t.Run("init: drop view base table", func(t *testing.T) {
+		// IF EXISTS is not supported in -declarative
+		uuid := testOnlineDDL(t, dropViewBaseTableStatement, "online", "vtgate", "", "")
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+	})
+
+	// VIEWS
+	t.Run("create base table for view", func(t *testing.T) {
+		uuid := testOnlineDDL(t, createViewBaseTableStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewBaseTableName, true)
+	})
+	// CREATE VIEW 1
+	t.Run("declarative CREATE VIEW where table does not exist", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDL(t, createViewStatement1, declarativeStrategy, "vtgate", "success_create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, viewName, true)
+	})
+	// CREATE VIEW 1 again, noop
+	t.Run("declarative CREATE VIEW with no changes where view exists", func(t *testing.T) {
+		// The exists with exact same schema
+		uuid := testOnlineDDL(t, createViewStatement1, declarativeStrategy, "vtgate", "success_create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
+		checkTable(t, viewName, true)
+	})
+	t.Run("revert CREATE VIEW expecting noop", func(t *testing.T) {
+		// Reverting a noop changes nothing
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, viewName, "success_create1")
+		checkTable(t, viewName, true)
+	})
+	// CREATE OR REPLACE VIEW
+	t.Run("CREATE OR REPLACE VIEW expecting failure", func(t *testing.T) {
+		// IF NOT EXISTS is not supported in -declarative
+		uuid := testOnlineDDL(t, createOrReplaceViewStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, viewName, "success_create1")
+		checkTable(t, viewName, true)
+	})
+	t.Run("ALTER VIEW expecting failure", func(t *testing.T) {
+		// IF NOT EXISTS is not supported in -declarative
+		uuid := testOnlineDDL(t, alterViewStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, viewName, "success_create1")
+		checkTable(t, viewName, true)
+	})
+	t.Run("DROP VIEW IF EXISTS expecting failure", func(t *testing.T) {
+		// IF NOT EXISTS is not supported in -declarative
+		uuid := testOnlineDDL(t, dropViewIfExistsStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, viewName, "success_create1")
+		checkTable(t, viewName, true)
+	})
+	t.Run("declarative DROP VIEW", func(t *testing.T) {
+		uuid := testOnlineDDL(t, dropViewStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, viewName, false)
+	})
+	// View dropped. Let's start afresh.
+
+	// CREATE VIEW1
+	t.Run("declarative CREATE VIEW where view does not exist", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDL(t, createViewStatement1, declarativeStrategy, "vtgate", "success_create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, viewName, true)
+	})
+	// CREATE VIEW2: Change view
+	t.Run("declarative CREATE VIEW with changes where view exists", func(t *testing.T) {
+		// The table exists with different schema
+		uuid := testOnlineDDL(t, createViewStatement2, declarativeStrategy, "vtgate", "success_create2", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, viewName, true)
+	})
+	t.Run("revert CREATE VIEW expecting previous schema", func(t *testing.T) {
+		// Reverting back to 1st version
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, viewName, "success_create1")
+		checkTable(t, viewName, true)
+	})
+	t.Run("declarative DROP VIEW", func(t *testing.T) {
+		// Table exists
+		uuid := testOnlineDDL(t, dropViewStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, viewName, false)
+	})
+	t.Run("revert DROP VIEW", func(t *testing.T) {
+		// This will recreate the table (well, actually, rename it back into place)
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewName, true)
+		checkMigratedTable(t, viewName, "success_create1")
+	})
+	t.Run("revert revert DROP VIEW", func(t *testing.T) {
+		// This will reapply DROP VIEW
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewName, false)
+	})
+	t.Run("declarative DROP VIEW where view does not exist", func(t *testing.T) {
+		uuid := testOnlineDDL(t, dropViewStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
+		checkTable(t, viewName, false)
+	})
+	t.Run("revert DROP VIEW where view did not exist", func(t *testing.T) {
+		// Table will not be recreated because it didn't exist during the previous DROP VIEW
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, viewName, false)
+	})
+	// View dropped. Let's start afresh.
+
+	// TABLES
+
+	// CREATE1
+	t.Run("declarative CREATE TABLE where table does not exist", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, true)
+		initTable(t)
+		testSelectTableMetrics(t)
+	})
+	// CREATE1 again, noop
+	t.Run("declarative CREATE TABLE with no changes where table exists", func(t *testing.T) {
+		// The exists with exact same schema
+		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("revert CREATE TABLE expecting noop", func(t *testing.T) {
+		// Reverting a noop changes nothing
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, tableName, "create1")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("declarative DROP TABLE", func(t *testing.T) {
+		uuid := testOnlineDDL(t, dropStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, false)
+	})
+	// Table dropped. Let's start afresh.
+
+	// CREATE1
+	t.Run("declarative CREATE TABLE where table does not exist", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, true)
+		initTable(t)
+		testSelectTableMetrics(t)
+	})
+	// CREATE2: Change schema
+	t.Run("declarative CREATE TABLE with changes where table exists", func(t *testing.T) {
+		// The table exists with different schema
+		uuid := testOnlineDDL(t, createStatement2, declarativeStrategy, "vtgate", "create2", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("revert CREATE TABLE expecting previous schema", func(t *testing.T) {
+		// Reverting back to 1st version
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, tableName, "create1")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("declarative DROP TABLE", func(t *testing.T) {
+		// Table exists
+		uuid := testOnlineDDL(t, dropStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, false)
+	})
+	t.Run("revert DROP TABLE", func(t *testing.T) {
+		// This will recreate the table (well, actually, rename it back into place)
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, true)
+		checkMigratedTable(t, tableName, "create1")
+		testSelectTableMetrics(t)
+	})
+	t.Run("revert revert DROP TABLE", func(t *testing.T) {
+		// This will reapply DROP TABLE
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+	t.Run("declarative DROP TABLE where table does not exist", func(t *testing.T) {
+		uuid := testOnlineDDL(t, dropStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, false)
+		checkTable(t, tableName, false)
+	})
+	t.Run("revert DROP TABLE where table did not exist", func(t *testing.T) {
+		// Table will not be recreated because it didn't exist during the previous DROP TABLE
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkTable(t, tableName, false)
+	})
+	// Table dropped. Let's start afresh.
+
+	// CREATE1
+	t.Run("declarative CREATE TABLE where table does not exist", func(t *testing.T) {
+		// The table does not exist
+		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, true)
+		initTable(t)
+		testSelectTableMetrics(t)
+	})
+	// CREATE2
+	t.Run("declarative CREATE TABLE with changes where table exists", func(t *testing.T) {
+		// The table exists but with different schema
+		uuid := testOnlineDDL(t, createStatement2, declarativeStrategy, "vtgate", "create2", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	// CREATE1 again
+	t.Run("declarative CREATE TABLE again with changes where table exists", func(t *testing.T) {
+		// The table exists but with different schema
+		uuid := testOnlineDDL(t, createStatement1, declarativeStrategy, "vtgate", "create1", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationArtifacts(t, &vtParams, shards, uuid, true)
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("revert CREATE TABLE expecting previous schema", func(t *testing.T) {
+		// Reverting back to previous version
+		uuid := testRevertMigration(t, createRevertParams(uuids[len(uuids)-1]))
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("ALTER TABLE expecting failure", func(t *testing.T) {
+		// ALTER is not supported in -declarative
+		uuid := testOnlineDDL(t, alterStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE IF NOT EXISTS expecting failure", func(t *testing.T) {
+		// IF NOT EXISTS is not supported in -declarative
+		uuid := testOnlineDDL(t, createIfNotExistsStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("DROP TABLE IF EXISTS expecting failure", func(t *testing.T) {
+		// IF EXISTS is not supported in -declarative
+		uuid := testOnlineDDL(t, dropIfExistsStatement, declarativeStrategy, "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE IF NOT EXISTS non-declarative is successful", func(t *testing.T) {
+		// IF NOT EXISTS is supported in non-declarative mode. Just verifying that the statement itself is good,
+		// so that the failure we tested for, above, actually tests the "declarative" logic, rather than some
+		// unrelated error.
+		uuid := testOnlineDDL(t, createIfNotExistsStatement, "online", "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkMigratedTable(t, tableName, "create2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
+		uuid := testOnlineDDL(t, createStatementZeroDate, "online --allow-zero-in-date", "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, "zerodate_test", "create_with_zero")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
+		uuid := testOnlineDDL(t, createStatementZeroDate, "online -declarative --allow-zero-in-date", "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, "zerodate_test", "create_with_zero")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date is successful", func(t *testing.T) {
+		uuid := testOnlineDDL(t, createStatementZeroDate2, "online -declarative --allow-zero-in-date", "vtgate", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		checkMigratedTable(t, "zerodate_test", "create_with_zero2")
+		checkTable(t, tableName, true)
+		testSelectTableMetrics(t)
+	})
+
+	// ### The following tests are not strictly 'declarative' but are best served under this endtoend test
+
+	// Test duplicate context/SQL
+	t.Run("Trivial statement with request context is successful", func(t *testing.T) {
+		uuid := testOnlineDDL(t, trivialAlterStatement, "online", "vtctl", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkTable(t, tableName, true)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			require.NotContains(t, message, "duplicate DDL")
+		}
+	})
+	t.Run("Duplicate trivial statement with request context is successful", func(t *testing.T) {
+		uuid := testOnlineDDL(t, trivialAlterStatement, "online", "vtctl", "", "")
+		uuids = append(uuids, uuid)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		// the table existed, so we expect no changes in this non-declarative DDL
+		checkTable(t, tableName, true)
+
+		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+		require.NotNil(t, rs)
+		for _, row := range rs.Named().Rows {
+			message := row["message"].ToString()
+			// Message suggests that the migration was identified as duplicate
+			require.Contains(t, message, "duplicate DDL")
+		}
+	})
+	// Piggyride this test suite, let's also test --allow-zero-in-date for 'direct' strategy
+	t.Run("drop non_online", func(t *testing.T) {
+		_ = testOnlineDDL(t, dropZeroDateStatement, "direct", "vtctl", "", "")
+		checkTable(t, "zerodate_test", false)
+	})
+	t.Run("CREATE TABLE with zero date fails in 'direct' strategy", func(t *testing.T) {
+		_ = testOnlineDDL(t, createStatementZeroDate, "direct", "vtctl", "", "Invalid default value for")
+		checkTable(t, "zerodate_test", false)
+	})
+	t.Run("CREATE TABLE with zero date and --allow-zero-in-date succeeds in 'direct' strategy", func(t *testing.T) {
+		_ = testOnlineDDL(t, createStatementZeroDate, "direct --allow-zero-in-date", "vtctl", "", "")
+		checkTable(t, "zerodate_test", true)
+	})
+}
+
+func testForeignKeys(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
 	var (
@@ -1349,7 +2083,7 @@ func getCreateTableStatement(t *testing.T, tablet *cluster.Vttablet, tableName s
 	require.Nil(t, err)
 
 	assert.Equal(t, len(queryResult.Rows), 1)
-	assert.Equal(t, len(queryResult.Rows[0]), 2) // table name, create statement
+	assert.GreaterOrEqual(t, len(queryResult.Rows[0]), 2) // table name, create statement, and if it's a view then additional columns
 	statement = queryResult.Rows[0][1].ToString()
 	return statement
 }
