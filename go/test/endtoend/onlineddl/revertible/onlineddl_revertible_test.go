@@ -52,7 +52,7 @@ var (
 	ddlStrategy = "online -declarative -allow-zero-in-date"
 )
 
-type testCase struct {
+type revertibleTestCase struct {
 	name       string
 	fromSchema string
 	toSchema   string
@@ -62,7 +62,7 @@ type testCase struct {
 	expandedColumnNames         string
 }
 
-var testCases = []testCase{
+var testCases = []revertibleTestCase{
 	{
 		name:       "identical schemas",
 		fromSchema: `id int primary key, i1 int not null default 0`,
