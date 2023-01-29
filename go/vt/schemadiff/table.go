@@ -447,13 +447,18 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 
 			if col.Type.Options.Default != nil {
-				defaultVal := "0"
-				if col.Type.Options.Default.(sqlparser.BoolVal) {
-					defaultVal = "1"
-				}
-				col.Type.Options.Default = &sqlparser.Literal{
-					Type: sqlparser.StrVal,
-					Val:  defaultVal,
+				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
+				if ok {
+					defaultVal := "0"
+					if val {
+						defaultVal = "1"
+					}
+					col.Type.Options.Default = &sqlparser.Literal{
+						Type: sqlparser.StrVal,
+						Val:  defaultVal,
+					}
+				} else {
+					col.Type.Options.Default = nil
 				}
 			}
 		}
