@@ -51,7 +51,6 @@ func init() {
 func prs(t *testing.T, keyspace, shard string) {
 	_, err := vc.VtctldClient.ExecuteCommandWithOutput("PlannedReparentShard", "--", fmt.Sprintf("%s/%s", keyspace, shard))
 	require.NoError(t, err)
-
 }
 
 // TestSidecarDB launches a Vitess cluster and ensures that the expected sidecar tables are created. We also drop/alter
@@ -71,46 +70,52 @@ func TestSidecarDB(t *testing.T) {
 	shard := "0"
 
 	cell1 := vc.Cells[defaultCellName]
-	tablet100ID := fmt.Sprintf("%s-100", defaultCellName)
-	tablet101ID := fmt.Sprintf("%s-101", defaultCellName)
+	tablet100 := fmt.Sprintf("%s-100", defaultCellName)
+	tablet101 := fmt.Sprintf("%s-101", defaultCellName)
 	vc.AddKeyspace(t, []*Cell{cell1}, keyspace, shard, initialProductVSchema, initialProductSchema, 1, 0, 100, sourceKsOpts)
 	shard0 := vc.Cells[defaultCellName].Keyspaces[keyspace].Shards[shard]
-	tablet100Port := shard0.Tablets[tablet100ID].Vttablet.Port
-	tablet101Port := shard0.Tablets[tablet101ID].Vttablet.Port
-	currentPrimary := tablet100ID
+	tablet100Port := shard0.Tablets[tablet100].Vttablet.Port
+	tablet101Port := shard0.Tablets[tablet101].Vttablet.Port
+	currentPrimary := tablet100
 
-	validateSidecarDBTables(t, tablet100ID, sidecarDBTables)
-	validateSidecarDBTables(t, tablet101ID, sidecarDBTables)
-	expectedChanges100 := len(sidecarDBTables)
-	expectedChanges101 := 0
-	require.Equal(t, getNumExecutedDDLQueries(t, tablet100Port), expectedChanges100)
-	require.Equal(t, getNumExecutedDDLQueries(t, tablet101Port), expectedChanges101)
+	var expectedChanges100, expectedChanges101 int
 
-	numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
+	t.Run("validate sidecar on startup", func(t *testing.T) {
+		expectedChanges100 = len(sidecarDBTables)
+		expectedChanges101 = 0
+		validateSidecarDBTables(t, tablet100, sidecarDBTables)
+		validateSidecarDBTables(t, tablet101, sidecarDBTables)
+		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Port))
+		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
+	})
 
-	validateSidecarDBTables(t, tablet100ID, sidecarDBTables[0:numSidecarDBTables-1])
-	validateSidecarDBTables(t, tablet101ID, sidecarDBTables[0:numSidecarDBTables-1])
+	t.Run("modify schema, prs, and self heal on primary", func(t *testing.T) {
+		numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
+		validateSidecarDBTables(t, tablet100, sidecarDBTables[0:numSidecarDBTables-1])
+		validateSidecarDBTables(t, tablet101, sidecarDBTables[0:numSidecarDBTables-1])
 
-	prs(t, keyspace, shard)
-	currentPrimary = tablet101ID
-	expectedChanges100 += numChanges
-	validateSidecarDBTables(t, tablet100ID, sidecarDBTables)
-	validateSidecarDBTables(t, tablet101ID, sidecarDBTables)
-	require.Equal(t, getNumExecutedDDLQueries(t, tablet100Port), expectedChanges100)
-	require.Equal(t, getNumExecutedDDLQueries(t, tablet101Port), expectedChanges101)
+		prs(t, keyspace, shard)
+		currentPrimary = tablet101
+		expectedChanges100 += numChanges
+		validateSidecarDBTables(t, tablet100, sidecarDBTables)
+		validateSidecarDBTables(t, tablet101, sidecarDBTables)
+		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Port))
+		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
+	})
 
-	numChanges = modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
-	expectedChanges101 += numChanges
-	prs(t, keyspace, shard)
-	// nolint
-	currentPrimary = tablet100ID
+	t.Run("modify schema, prs, and self heal on new primary", func(t *testing.T) {
+		numChanges := modifySidecarDBSchema(t, vc, currentPrimary, ddls1)
+		expectedChanges101 += numChanges
+		prs(t, keyspace, shard)
+		// nolint
+		currentPrimary = tablet100
 
-	validateSidecarDBTables(t, tablet100ID, sidecarDBTables)
-	validateSidecarDBTables(t, tablet101ID, sidecarDBTables)
-	require.Equal(t, getNumExecutedDDLQueries(t, tablet100Port), expectedChanges100)
-	require.Equal(t, getNumExecutedDDLQueries(t, tablet101Port), expectedChanges101)
+		validateSidecarDBTables(t, tablet100, sidecarDBTables)
+		validateSidecarDBTables(t, tablet101, sidecarDBTables)
+		require.Equal(t, expectedChanges100, getNumExecutedDDLQueries(t, tablet100Port))
+		require.Equal(t, expectedChanges101, getNumExecutedDDLQueries(t, tablet101Port))
+	})
 }
-
 func validateSidecarDBTables(t *testing.T, tabletID string, tables []string) {
 	_, tables2 := getSidecarDBTables(t, tabletID)
 	require.EqualValues(t, tables, tables2)
