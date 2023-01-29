@@ -1226,6 +1226,10 @@ func TestForeignKeys(t *testing.T) {
 	}
 }
 
+func TestSequentialMigrationIds(t *testing.T) {
+	onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+}
+
 // testOnlineDDLStatement runs an online DDL, ALTER statement
 func testOnlineDDLStatement(t *testing.T, params *testOnlineDDLStatementParams) (uuid string) {
 	strategySetting, err := schema.ParseDDLStrategy(params.ddlStrategy)
