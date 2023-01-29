@@ -237,6 +237,9 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("singleton", testSingleton)
 	t.Run("declarative", testDeclarative)
 	t.Run("foreign-keys", testForeignKeys)
+	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
+		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+	})
 }
 
 func testScheduler(t *testing.T) {
@@ -1958,10 +1961,6 @@ func testForeignKeys(t *testing.T) {
 			})
 		})
 	}
-}
-
-func TestSequentialMigrationIds(t *testing.T) {
-	onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
 }
 
 // testOnlineDDLStatement runs an online DDL, ALTER statement
