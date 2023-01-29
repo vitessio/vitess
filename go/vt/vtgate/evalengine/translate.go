@@ -570,6 +570,29 @@ func translateCaseExpr(node *sqlparser.CaseExpr, lookup TranslationLookup) (Expr
 	return &result, nil
 }
 
+func translateBetweenExpr(node *sqlparser.BetweenExpr, lookup TranslationLookup) (Expr, error) {
+	// x BETWEEN a AND b => x >= a AND x <= b
+	from := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.GreaterEqualOp,
+		Left:     node.Left,
+		Right:    node.From,
+	}
+	to := &sqlparser.ComparisonExpr{
+		Operator: sqlparser.LessEqualOp,
+		Left:     node.Left,
+		Right:    node.To,
+	}
+
+	if !node.IsBetween {
+		// x NOT BETWEEN a AND b  => x < a OR x > b
+		from.Operator = sqlparser.LessThanOp
+		to.Operator = sqlparser.GreaterThanOp
+		return translateExpr(&sqlparser.OrExpr{Left: from, Right: to}, lookup)
+	}
+
+	return translateExpr(sqlparser.AndExpressions(from, to), lookup)
+}
+
 func translateExprNotSupported(e sqlparser.Expr) error {
 	return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%s: %s", ErrTranslateExprNotSupported, sqlparser.String(e))
 }
@@ -629,6 +652,8 @@ func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 		return translateConvertUsingExpr(node, lookup)
 	case *sqlparser.CaseExpr:
 		return translateCaseExpr(node, lookup)
+	case *sqlparser.BetweenExpr:
+		return translateBetweenExpr(node, lookup)
 	default:
 		return nil, translateExprNotSupported(e)
 	}

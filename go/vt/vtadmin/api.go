@@ -1913,6 +1913,9 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.
 func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
+	// TODO (andrew): https://github.com/vitessio/vitess/issues/12161.
+	log.Warningf("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
+
 	span, ctx := trace.NewSpan(ctx, "API.VTExplain")
 	defer span.Finish()
 
