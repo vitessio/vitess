@@ -28,6 +28,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"vitess.io/vitess/go/mysql"
@@ -414,8 +416,9 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
-	log.Errorf("Query not found: %s", query)
+	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
+		sqlparser.TruncateForUI(query), db.name)
+	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
 
 	return err
 }

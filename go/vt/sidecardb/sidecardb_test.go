@@ -84,7 +84,7 @@ func TestAll(t *testing.T) {
 
 	require.False(t, MatchesSidecarDBInitQuery("abc"))
 	require.True(t, MatchesSidecarDBInitQuery(SelectCurrentDatabaseQuery))
-	require.True(t, MatchesSidecarDBInitQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication"))
+	require.True(t, MatchesSidecarDBInitQuery("CREATE TABLE IF NOT EXISTS `_vt`.vreplication"))
 }
 
 // test the logic that confirms that the user defined schema's table name and qualifier are valid
@@ -105,7 +105,7 @@ func TestValidateSchema(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {
-			err := validateSchemaDefinition(tc.name, tc.schema)
+			_, err := validateSchemaDefinition(tc.name, tc.schema)
 			if tc.mustError {
 				require.Error(t, err)
 			} else {

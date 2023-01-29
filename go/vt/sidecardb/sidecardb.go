@@ -49,8 +49,8 @@ const (
 	ShowCreateTableQuery       = "show create table _vt.%s"
 	GetCurrentTablesQuery      = "show tables from _vt"
 
-	CreateTableRegexp = "CREATE TABLE .* _vt.*"
-	AlterTableRegexp  = "ALTER TABLE _vt.*"
+	CreateTableRegexp = "CREATE TABLE .* `_vt`.*"
+	AlterTableRegexp  = "ALTER TABLE `_vt`.*"
 )
 
 // all tables needed in the sidecar database have their schema in the schema subdirectory
@@ -77,27 +77,29 @@ func init() {
 	ddlCount = stats.NewCounter("SidecarDbDDLQueryCount", "Number of create/upgrade queries executed")
 }
 
-func validateSchemaDefinition(name, schema string) error {
+func validateSchemaDefinition(name, schema string) (string, error) {
 	stmt, err := sqlparser.ParseStrictDDL(schema)
+
 	if err != nil {
-		return err
+		return "", err
 	}
 	createTable, ok := stmt.(*sqlparser.CreateTable)
 	if !ok {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
 	}
 	tableName := createTable.Table.Name.String()
 	qualifier := createTable.Table.Qualifier.String()
 	if qualifier != SidecarDBName {
-		return fmt.Errorf("database qualifier for %s is %s, not %s", name, qualifier, SidecarDBName)
+		return "", fmt.Errorf("database qualifier for %s is %s, not %s", name, qualifier, SidecarDBName)
 	}
 	if tableName != name {
-		return fmt.Errorf("table in file name for %s does not match the table specified:%s in it", name, tableName)
+		return "", fmt.Errorf("table in file name for %s does not match the table specified:%s in it", name, tableName)
 	}
 	if !createTable.IfNotExists {
-		return fmt.Errorf("if not exists is not defined on table %s", name)
+		return "", fmt.Errorf("if not exists is not defined on table %s", name)
 	}
-	return nil
+	normalizedSchema := sqlparser.CanonicalString(createTable)
+	return normalizedSchema, nil
 }
 
 func initSchemaFiles() {
@@ -116,10 +118,11 @@ func initSchemaFiles() {
 			if err != nil {
 				panic(err)
 			}
-			if err := validateSchemaDefinition(name, string(schema)); err != nil {
+			var normalizedSchema string
+			if normalizedSchema, err = validateSchemaDefinition(name, string(schema)); err != nil {
 				return err
 			}
-			sidecarTables = append(sidecarTables, &sidecarTable{name: name, module: module, path: path, schema: string(schema)})
+			sidecarTables = append(sidecarTables, &sidecarTable{name: name, module: module, path: path, schema: normalizedSchema})
 		}
 		return nil
 	})
@@ -254,15 +257,6 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	return currentTableSchema, nil
 }
 
-// remove the extra DEFAULT CHARSET which we get from "show create table"
-func stripCharset(schema string) string {
-	ind := strings.Index(schema, "DEFAULT CHARSET")
-	if ind <= 0 {
-		return schema
-	}
-	return schema[:ind]
-}
-
 // finds diff that needs to be applied to current table schema to get the desired one. Will be an empty string if they match.
 // could be a create statement if the table does not exist or an alter if table exists but has a different schema
 func (si *schemaInit) findTableSchemaDiff(current, desired string) (string, error) {
@@ -287,13 +281,8 @@ func (si *schemaInit) findTableSchemaDiff(current, desired string) (string, erro
 }
 
 func (si *schemaInit) createOrUpgradeTable(table *sidecarTable) error {
-	var desiredTableSchema string
 	ctx := si.ctx
-	bytes, err := schemaLocation.ReadFile(table.path)
-	if err != nil {
-		return err
-	}
-	desiredTableSchema = string(bytes)
+	desiredTableSchema := table.schema
 
 	var tableAlterSQL string
 	tableExists := si.tableExists(table.name)
@@ -320,7 +309,7 @@ func (si *schemaInit) createOrUpgradeTable(table *sidecarTable) error {
 			}
 			si.dbCreated = true
 		}
-		_, err = si.exec(ctx, tableAlterSQL, 1, true)
+		_, err := si.exec(ctx, tableAlterSQL, 1, true)
 		if err != nil {
 			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERTableExists {
