@@ -319,13 +319,13 @@ type InvalidColumnReferencedInViewError struct {
 func (e *InvalidColumnReferencedInViewError) Error() string {
 	switch {
 	case e.Column == "":
-		return fmt.Sprintf("view %s references non-existing table %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table))
+		return fmt.Sprintf("view %s references non-existent table %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table))
 	case e.Table != "":
-		return fmt.Sprintf("view %s references non existing column %s.%s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column))
+		return fmt.Sprintf("view %s references non-existent column %s.%s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column))
 	case e.NonUnique:
 		return fmt.Sprintf("view %s references unqualified but non unique column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
 	default:
-		return fmt.Sprintf("view %s references unqualified but non existing column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
+		return fmt.Sprintf("view %s references unqualified but non-existent column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
 	}
 }
 
