@@ -263,6 +263,12 @@ func (s *Schema) normalize() error {
 	// - then we only want views that depend on 1st level views or on tables. These are 2nd level views.
 	// - etc.
 	// we stop when we have been unable to find a view in an iteration.
+
+	// it's possible that the hasn't been any table in this schema.
+	// for purposes of the algorithm, the iterationLevel must be at least 1
+	if iterationLevel < 1 {
+		iterationLevel = 1
+	}
 	for {
 		handledAnyViewsInIteration := false
 		for _, v := range s.views {
