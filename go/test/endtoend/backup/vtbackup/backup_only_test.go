@@ -62,10 +62,10 @@ func TestTabletInitialBackup(t *testing.T) {
 	// Initialize the tablets
 	initTablets(t, false, false)
 
-	ver, err := getVTExecVersion("vttablet")
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
 	require.NoError(t, err)
 	// For all version above v15, each replica will start in super-read-only mode.
-	if ver > 15 {
+	if vtTabletVersion > 15 {
 		err := primary.VttabletProcess.CreateDB("testDB")
 		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 		err = replica1.VttabletProcess.CreateDB("testDB")
@@ -184,8 +184,6 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 	if restartBeforeBackup {
 		extraArgs = append(extraArgs, "--restart_before_backup")
 	}
-	_, err = getVTExecVersion("vtbackup")
-	require.NoError(t, err)
 	if disableRedoLog {
 		extraArgs = append(extraArgs, "--disable-redo-log")
 	}
@@ -269,15 +267,15 @@ func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForS
 	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
 
-	err := tablet.VttabletProcess.CreateDBWithSuperReadOnly(keyspaceName)
-	require.Nil(t, err)
+	//err := tablet.VttabletProcess.CreateDBWithSuperReadOnly(keyspaceName)
+	//require.Nil(t, err)
 
 	// Start tablets
 	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
 	tablet.VttabletProcess.TabletType = tabletType
 	tablet.VttabletProcess.ServingStatus = waitForState
 	tablet.VttabletProcess.SupportsBackup = true
-	err = tablet.VttabletProcess.Setup()
+	err := tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 }
 
@@ -377,15 +375,4 @@ func verifyDisableEnableRedoLogs(ctx context.Context, t *testing.T, mysqlSocket 
 			require.Fail(t, "Failed to verify disable/enable redo log.")
 		}
 	}
-}
-
-// Get the version of `vttablet` in the cluster.
-func getVTExecVersion(binaryName string) (int, error) {
-	vtTabletVersion := 0
-	vtTabletVersion, err := cluster.GetMajorVersion(binaryName)
-	if err != nil {
-		return 0, err
-	}
-	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
-	return vtTabletVersion, nil
 }

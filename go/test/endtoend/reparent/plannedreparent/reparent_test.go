@@ -379,10 +379,10 @@ func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 
 	// Perform a planned reparent operation, the primary will fail the
 	// insert.  The replicas should then abort right away.
-	ver, err := getVTExecVersion("vttablet")
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
 	require.NoError(t, err)
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
-	if ver <= 15 {
+	if vtTabletVersion <= 15 {
 		require.Error(t, err)
 		assert.Contains(t, out, "primary failed to PopulateReparentJournal")
 	} else {
@@ -558,15 +558,4 @@ func rowNumberFromPosition(pos string) int {
 	rowNumStr := pos[len(pos)-4:]
 	rowNum, _ := strconv.Atoi(rowNumStr)
 	return rowNum
-}
-
-// insert should not work for any of the replicas and primary
-func getVTExecVersion(binaryName string) (int, error) {
-	vtTabletVersion := 0
-	vtTabletVersion, err := cluster.GetMajorVersion(binaryName)
-	if err != nil {
-		return 0, err
-	}
-	log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
-	return vtTabletVersion, nil
 }

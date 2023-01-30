@@ -1,7 +1,11 @@
-# This file is executed immediately after mysql_install_db, to initialize a fresh data
-# directory. This sql is similar to init_db.sql. The only difference is, it is for
-# testing purpose and specifically for vttestserver where we do not want super-read-only
-# mode for mysql. It should always represent prod sql minus super-read-only.
+# This file is for testing purpose only.
+# This file is executed immediately after mysql_install_db, to initialize a fresh data directory.
+# It is equivalent of init_db.sql. Given init_db.sql is for mysql which has super_read_only
+# related stuff therefore for testing purpose we avoid setting `super_read_only` during initialization.
+
+###############################################################################
+# WARNING: Any change to init_db.sql should gets reflected in this file as well.
+###############################################################################
 
 ###############################################################################
 # WARNING: This sql is *NOT* safe for production use,
@@ -41,9 +45,9 @@ GRANT GRANT OPTION ON *.* TO 'vt_dba'@'localhost';
 # User for app traffic, with global read-write access.
 CREATE USER 'vt_app'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
-  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+    REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+    SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_app'@'localhost';
 
 # User for app debug traffic, with global read access.
@@ -54,9 +58,9 @@ GRANT SELECT, SHOW DATABASES, PROCESS ON *.* TO 'vt_appdebug'@'localhost';
 # Same permissions as vt_app here.
 CREATE USER 'vt_allprivs'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
-  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+    REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+    SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_allprivs'@'localhost';
 
 # User for slave replication connections.
@@ -66,22 +70,18 @@ GRANT REPLICATION SLAVE ON *.* TO 'vt_repl'@'%';
 # User for Vitess VReplication (base vstreamers and vplayer).
 CREATE USER 'vt_filtered'@'localhost';
 GRANT SELECT, INSERT, UPDATE, DELETE, CREATE, DROP, RELOAD, PROCESS, FILE,
-  REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
+    REFERENCES, INDEX, ALTER, SHOW DATABASES, CREATE TEMPORARY TABLES,
   LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
-  SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
+    SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
   ON *.* TO 'vt_filtered'@'localhost';
 
 # User for general MySQL monitoring.
 CREATE USER 'vt_monitoring'@'localhost';
 GRANT SELECT, PROCESS, SUPER, REPLICATION CLIENT, RELOAD
-  ON *.* TO 'vt_monitoring'@'localhost';
+      ON *.* TO 'vt_monitoring'@'localhost';
 GRANT SELECT, UPDATE, DELETE, DROP
-  ON performance_schema.* TO 'vt_monitoring'@'localhost';
+      ON performance_schema.* TO 'vt_monitoring'@'localhost';
 
-# User for Orchestrator (https://github.com/openark/orchestrator).
-CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
-GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
-  ON *.* TO 'orc_client_user'@'%';
 FLUSH PRIVILEGES;
 
 RESET SLAVE ALL;

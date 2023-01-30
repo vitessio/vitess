@@ -804,7 +804,7 @@ func (db *DB) GetQueryResult(key string) *ExpectedResult {
 
 func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, bool, error) {
 	for _, pat := range db.patternData {
-		if pat.expr.MatchString(key) || strings.Contains(key, pat.queryPattern) {
+		if pat.expr.MatchString(key) {
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
 			if ok {
 				if pat.err != "" {
