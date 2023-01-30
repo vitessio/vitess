@@ -22,18 +22,14 @@ import (
 	"fmt"
 	"io/fs"
 	"path/filepath"
-	"regexp"
 	"runtime"
 	"strings"
 
-	"vitess.io/vitess/go/mysql"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/stats"
-
-	"vitess.io/vitess/go/mysql/fakesqldb"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -66,7 +62,7 @@ type sidecarTable struct {
 }
 
 func (t *sidecarTable) String() string {
-	return fmt.Sprintf("_vt.%s (%s)", t.name, t.module)
+	return fmt.Sprintf("%s.%s (%s)", SidecarDBName, t.name, t.module)
 }
 
 var sidecarTables []*sidecarTable
@@ -92,7 +88,7 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 	if qualifier != SidecarDBName {
 		return "", fmt.Errorf("database qualifier for %s is %s, not %s", name, qualifier, SidecarDBName)
 	}
-	if tableName != name {
+	if !strings.EqualFold(tableName, name) {
 		return "", fmt.Errorf("table in file name for %s does not match the table specified:%s in it", name, tableName)
 	}
 	if !createTable.IfNotExists {
@@ -103,17 +99,29 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 }
 
 func initSchemaFiles() {
+	sqlFileExtension := ".sql"
 	err := fs.WalkDir(schemaLocation, ".", func(path string, entry fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
 		if !entry.IsDir() {
-			module, name := filepath.Split(path)
-			arr := strings.Split(module, "/")
-			if len(arr) >= 1 {
-				module = arr[1]
+			var module string
+			dir, fname := filepath.Split(path)
+			if !strings.HasSuffix(strings.ToLower(fname), sqlFileExtension) {
+				log.Infof("Ignoring non-SQL file, %s, found during sidecar database initialization", path)
+				return nil
 			}
-			name = strings.Split(name, ".")[0]
+			dirparts := strings.Split(strings.Trim(dir, "/"), "/")
+			switch len(dirparts) {
+			case 1:
+				module = dir
+			case 2:
+				module = dirparts[0]
+			default:
+				return fmt.Errorf("unexpected path value of %s specified for sidecar schema table; expected structure is <module>[/<submodule>]/<tablename>.sql", dir)
+			}
+
+			name := strings.Split(fname, ".")[0]
 			schema, err := schemaLocation.ReadFile(path)
 			if err != nil {
 				panic(err)
@@ -136,7 +144,7 @@ func printCallerDetails() {
 	pc, _, line, ok := runtime.Caller(2)
 	details := runtime.FuncForPC(pc)
 	if ok && details != nil {
-		log.Infof("_vt schema init called from %s:%d\n", details.Name(), line)
+		log.Infof("%s schema init called from %s:%d\n", SidecarDBName, details.Name(), line)
 	}
 }
 
@@ -147,7 +155,7 @@ type schemaInit struct {
 	dbCreated      bool // the first upgrade/create query will also create the sidecar database if required
 }
 
-// Exec is the prototype of a callback that has to be passed to Init() to execute the specified query in the database
+// Exec is a callback that has to be passed to Init() to execute the specified query in the database
 type Exec func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error)
 
 // GetDDLCount metric returns the count of sidecardb ddls that have been run as part of this vttablet's init process.
@@ -273,13 +281,20 @@ func (si *schemaInit) findTableSchemaDiff(current, desired string) (string, erro
 		tableAlterSQL = diff.CanonicalStatementString()
 
 		// temp logging to debug any eventual issues around the new schema init, should be removed in v17
-		log.Infof("alter sql %s", tableAlterSQL)
-		log.Infof("current schema %s", current)
+		log.Infof("Current schema:\n%s", current)
+		if tableAlterSQL == "" {
+			log.Infof("No alter needed")
+		} else {
+			log.Infof("Alter query:\n%s", tableAlterSQL)
+		}
 	}
 
 	return tableAlterSQL, nil
 }
 
+// createOrUpgradeTable first checks if the table exist, in which case it runs the create script provided in
+// the schema directory. If the table exists, schemadiff is used to compare the existing schema with the desired one.
+// If it needs to be altered then we run the alter script.
 func (si *schemaInit) createOrUpgradeTable(table *sidecarTable) error {
 	ctx := si.ctx
 	desiredTableSchema := table.schema
@@ -311,25 +326,19 @@ func (si *schemaInit) createOrUpgradeTable(table *sidecarTable) error {
 		}
 		_, err := si.exec(ctx, tableAlterSQL, 1, true)
 		if err != nil {
-			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERTableExists {
-				// should never come here
-				log.Infof("table %s already exists", table)
-				return nil
-			}
-			log.Errorf("Error altering table %s: %+v", table, err)
+			log.Errorf("Error altering table during sidecar database initialization %s: %+v", table, err)
 			return err
 		}
 		ddlCount.Add(1)
 
 		if tableExists {
-			log.Infof("Updated table %s: %s", table, tableAlterSQL)
+			log.Infof("Sidecar DB Initialization: updated table %s: %s", table, tableAlterSQL)
 		} else {
-			log.Infof("Created %s", table)
+			log.Infof("Sidecar DB Initialization: created table %s", table)
 		}
 		return nil
 	}
-	log.Infof("Table %s was already correct", table.name)
+	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, SidecarDBName)
 	return nil
 }
 
@@ -351,48 +360,3 @@ func (si *schemaInit) loadExistingTables() error {
 	}
 	return nil
 }
-
-// region unit-test-only
-// query patterns to handle in mocks
-var sidecarDBInitQueryPatterns = []string{
-	ShowSidecarDatabasesQuery,
-	SelectCurrentDatabaseQuery,
-	CreateSidecarDatabaseQuery,
-	UseSidecarDatabaseQuery,
-	GetCurrentTablesQuery,
-	CreateTableRegexp,
-	AlterTableRegexp,
-}
-
-// AddSidecarDBSchemaInitQueries adds sidecar database schema related queries to a mock db
-func AddSidecarDBSchemaInitQueries(db *fakesqldb.DB) {
-	result := &sqltypes.Result{}
-	for _, q := range sidecarDBInitQueryPatterns {
-		db.AddQueryPattern(q, result)
-	}
-	for _, table := range sidecarTables {
-		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"Table|Create Table",
-			"varchar|varchar"),
-			fmt.Sprintf("%s|%s", table.name, table.schema),
-		)
-		db.AddQuery(fmt.Sprintf(ShowCreateTableQuery, table.name), result)
-	}
-}
-
-// MatchesSidecarDBInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp
-func MatchesSidecarDBInitQuery(query string) bool {
-	query = strings.ToLower(query)
-	for _, q := range sidecarDBInitQueryPatterns {
-		q = strings.ToLower(q)
-		if strings.Contains(query, q) {
-			return true
-		}
-		if match, _ := regexp.MatchString(q, query); match {
-			return true
-		}
-	}
-	return false
-}
-
-// endregion

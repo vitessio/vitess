@@ -400,7 +400,7 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 
 	// Check query patterns from AddQueryPattern().
 	for _, pat := range db.patternData {
-		if pat.expr.MatchString(query) || strings.Contains(query, pat.queryPattern) {
+		if pat.expr.MatchString(query) {
 			userCallback, ok := db.queryPatternUserCallback[pat.expr]
 			if ok {
 				userCallback(query)

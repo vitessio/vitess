@@ -26,4 +26,15 @@ schema for each table in _vt (in the form of a create table statement).
 
 sidecardb uses the schemadiff module in Vitess to reach the desired schema for each table.
 
+Note:
+
+The `if not exists` in the schema files should not be needed since we only create tables in the sidecar database if they don't exist.
+However, during development, we came across some Vitess flows like backup restore on replicas where the database
+already had the tables but mysql replication also found these `create`s
+in the primary's binlog causing the replica tablet to halt since it could not execute the duplicate create.
+
+We did fix these flows and hence ideally this **should never happen**, but as an abundance of caution
+I have left it in now for operational reasons, so that we paper over any bugs for now.
+We can remove it in v17 or v18 once the schema init is stable and we have done more testing.
+
 */

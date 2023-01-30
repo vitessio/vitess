@@ -18,6 +18,9 @@ package sidecardb
 
 import (
 	"context"
+	"fmt"
+	"regexp"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -31,6 +34,13 @@ func TestAll(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	AddSidecarDBSchemaInitQueries(db)
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Database",
+		"varchar"),
+		"currentDB",
+	)
+	db.AddQuery(SelectCurrentDatabaseQuery, result)
+	db.AddQuery("use dbname", &sqltypes.Result{})
 
 	ctx := context.Background()
 	cp := db.ConnParams()
@@ -56,7 +66,7 @@ func TestAll(t *testing.T) {
 	for _, table := range sidecarTables {
 		tables = append(tables, table.name)
 	}
-	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"Table",
 		"varchar"),
 		tables...,
@@ -71,13 +81,6 @@ func TestAll(t *testing.T) {
 		ctx:  ctx,
 		exec: exec,
 	}
-	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Database",
-		"varchar"),
-		"currentDB",
-	)
-	db.AddQuery(SelectCurrentDatabaseQuery, result)
-	db.AddQuery("use dbname", &sqltypes.Result{})
 	currentDB, err := si.setCurrentDatabase("dbname")
 	require.NoError(t, err)
 	require.Equal(t, currentDB, "currentDB")
@@ -113,4 +116,46 @@ func TestValidateSchema(t *testing.T) {
 			}
 		})
 	}
+}
+
+// query patterns to handle in mocks
+var sidecarDBInitQueryPatterns = []string{
+	ShowSidecarDatabasesQuery,
+	SelectCurrentDatabaseQuery,
+	CreateSidecarDatabaseQuery,
+	UseSidecarDatabaseQuery,
+	GetCurrentTablesQuery,
+	CreateTableRegexp,
+	AlterTableRegexp,
+}
+
+// AddSidecarDBSchemaInitQueries adds sidecar database schema related queries to a mock db
+func AddSidecarDBSchemaInitQueries(db *fakesqldb.DB) {
+	result := &sqltypes.Result{}
+	for _, q := range sidecarDBInitQueryPatterns {
+		db.AddQueryPattern(q, result)
+	}
+	for _, table := range sidecarTables {
+		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+			"Table|Create Table",
+			"varchar|varchar"),
+			fmt.Sprintf("%s|%s", table.name, table.schema),
+		)
+		db.AddQuery(fmt.Sprintf(ShowCreateTableQuery, table.name), result)
+	}
+}
+
+// MatchesSidecarDBInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp
+func MatchesSidecarDBInitQuery(query string) bool {
+	query = strings.ToLower(query)
+	for _, q := range sidecarDBInitQueryPatterns {
+		q = strings.ToLower(q)
+		if strings.Contains(query, q) {
+			return true
+		}
+		if match, _ := regexp.MatchString(q, query); match {
+			return true
+		}
+	}
+	return false
 }
