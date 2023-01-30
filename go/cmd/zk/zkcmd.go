@@ -147,6 +147,7 @@ func main() {
 	}
 
 	pflag.Parse()
+	go logutil.PurgeLogs()
 
 	if help || pflag.Arg(0) == "help" {
 		pflag.Usage()
