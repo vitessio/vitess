@@ -802,29 +802,20 @@ func (db *DB) GetQueryResult(key string) *ExpectedResult {
 	return nil
 }
 
-func (db *DB) GetQueryPatternResult(key string) (ExprResult, bool) {
+func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, bool, error) {
 	for _, pat := range db.patternData {
-		if pat.Expr.MatchString(key) || strings.Contains(key, pat.QueryPattern) {
-			return pat, true
-			/*userCallback, ok := db.queryPatternUserCallback[pat.expr]
+		if pat.expr.MatchString(key) || strings.Contains(key, pat.queryPattern) {
+			userCallback, ok := db.queryPatternUserCallback[pat.expr]
 			if ok {
-				userCallback(query)
+				if pat.err != "" {
+					return userCallback, ExpectedResult{pat.result, nil}, true, fmt.Errorf(pat.err)
+				}
+				return userCallback, ExpectedResult{pat.result, nil}, true, nil
 			}
-			if pat.err != "" {
-				return fmt.Errorf(pat.err)
-			}
-			return callback(pat.result)*/
+
+			return nil, ExpectedResult{nil, nil}, false, nil
 		}
 	}
 
-	return ExprResult{}, false
-}
-
-func (db *DB) GetQueryPatternUserCallBack(exp *regexp.Regexp) (func(string), bool) {
-	userCallback, ok := db.queryPatternUserCallback[exp]
-	if ok {
-		return userCallback, true
-	}
-
-	return nil, false
+	return nil, ExpectedResult{nil, nil}, false, nil
 }

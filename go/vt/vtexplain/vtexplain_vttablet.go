@@ -516,15 +516,14 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	}
 
 	// return result if query is part of defined pattern.
-	if pat, ok := t.db.GetQueryPatternResult(query); ok {
-		userCallback, ok := t.db.GetQueryPatternUserCallBack(pat.Expr)
-		if ok {
+	if userCallback, expResult, ok, err := t.db.GetQueryPatternResult(query); ok {
+		if userCallback != nil {
 			userCallback(query)
 		}
-		if pat.Err != "" {
-			return fmt.Errorf(pat.Err)
+		if err != nil {
+			return err
 		}
-		return callback(pat.Result)
+		return callback(expResult.Result)
 	}
 
 	switch sqlparser.Preview(query) {

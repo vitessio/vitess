@@ -328,13 +328,13 @@ func (c *Conn) ExecuteFetchMulti(query string, maxrows int, wantfields bool) (re
 	return res, more, err
 }
 
-// ExecuteFetchWithSuperReadOnlyHandling should be used if you are executing a write query
-// on a tablet that may NOT be a primary and you want to execute it regardless of
-// tablet type. This function will temporarily make the mysql instance read-write and
+// ExecuteFetchWithSuperReadOnlyHandling should be used if you are executing a query
+// on any tablet regardless of tablet type.
+// This function will temporarily make the mysql instance read-write and
 // re-enable read-only mode after the query is executed if needed.
 func (c *Conn) ExecuteFetchWithSuperReadOnlyHandling(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
 	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
-	turnSuperReadOnly := false
+	superReadOnlyEnabled := false
 	if !c.IsMariaDB() {
 		if err := c.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
 			return nil, err
@@ -343,7 +343,7 @@ func (c *Conn) ExecuteFetchWithSuperReadOnlyHandling(query string, maxrows int, 
 		if err == nil && len(res.Rows) == 1 {
 			sro := res.Rows[0][0].ToString()
 			if sro == "1" || sro == "ON" {
-				turnSuperReadOnly = true
+				superReadOnlyEnabled = true
 				if _, err = c.ExecuteFetch("SET GLOBAL super_read_only='OFF'", 1, false); err != nil {
 					return nil, err
 				}
@@ -352,7 +352,8 @@ func (c *Conn) ExecuteFetchWithSuperReadOnlyHandling(query string, maxrows int, 
 	}
 
 	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
-	if turnSuperReadOnly {
+	// TODO: may be use it in defer()
+	if superReadOnlyEnabled {
 		if _, err := c.ExecuteFetch("SET GLOBAL super_read_only='ON'", 1, false); err != nil {
 			return nil, err
 		}
@@ -360,61 +361,36 @@ func (c *Conn) ExecuteFetchWithSuperReadOnlyHandling(query string, maxrows int, 
 	return result, err
 }
 
-// ExecuteUnSetSuperReadOnly tries to set super-read-only to false only if it is currently enable
-func (c *Conn) ExecuteUnSetSuperReadOnly() (result *sqltypes.Result, err error) {
+// SetSuperReadOnly tries to set super-read-only either `true` or `false`
+// Since setting global super-read-only is idempotent we set them with finding current status
+func (c *Conn) SetSuperReadOnly(enableSuperReadOnly bool) (result *sqltypes.Result, err error) {
+	var val = "OFF"
+	if enableSuperReadOnly {
+		val = "ON"
+	}
 	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
 	if !c.IsMariaDB() {
-		if err := c.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
+		query := fmt.Sprintf("SET GLOBAL super_read_only='%s'", val)
+		if err = c.WriteComQuery(query); err != nil {
 			return nil, err
 		}
-		res, _, _, err := c.ReadQueryResult(1, false)
-		if err == nil && len(res.Rows) == 1 {
-			sro := res.Rows[0][0].ToString()
-			if sro == "1" || sro == "ON" {
-				if err = c.WriteComQuery("SET GLOBAL super_read_only='OFF'"); err != nil {
-					return nil, err
-				}
-			}
-		}
+	} else {
+		return nil, fmt.Errorf("MariaDB not supported for super-read-only")
 	}
 
 	return result, err
 }
 
-// ExecuteSetSuperReadOnly tries to set super-read-only to true only if it is currently disable
-func (c *Conn) ExecuteSetSuperReadOnly() (result *sqltypes.Result, err error) {
-	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
-	if !c.IsMariaDB() {
-		if err := c.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
-			return nil, err
-		}
-		res, _, _, err := c.ReadQueryResult(1, false)
-		if err == nil && len(res.Rows) == 1 {
-			sro := res.Rows[0][0].ToString()
-			if sro == "0" || sro == "OFF" {
-				if err = c.WriteComQuery("SET GLOBAL super_read_only='ON'"); err != nil {
-					return nil, err
-				}
-			}
-		}
+// SetReadOnly tries to set read-only to false only if it is currently enable
+func (c *Conn) SetReadOnly(enableReadOnly bool) (result *sqltypes.Result, err error) {
+	var val = "OFF"
+	if enableReadOnly {
+		val = "ON"
 	}
 
-	return result, err
-}
-
-// ExecuteUnSetReadOnly tries to set read-only to false only if it is currently enable
-func (c *Conn) ExecuteUnSetReadOnly() (result *sqltypes.Result, err error) {
-	if err := c.WriteComQuery("SELECT @@global.read_only"); err != nil {
+	query := fmt.Sprintf("SET GLOBAL read_only='%s'", val)
+	if err = c.WriteComQuery(query); err != nil {
 		return nil, err
-	}
-	res, _, _, err := c.ReadQueryResult(1, false)
-	if err == nil && len(res.Rows) == 1 {
-		sro := res.Rows[0][0].ToString()
-		if sro == "1" || sro == "ON" {
-			if err = c.WriteComQuery("SET GLOBAL read_only='OFF'"); err != nil {
-				return nil, err
-			}
-		}
 	}
 
 	return result, err

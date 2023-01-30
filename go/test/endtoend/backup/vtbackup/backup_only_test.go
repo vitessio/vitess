@@ -187,18 +187,14 @@ func vtBackup(t *testing.T, initialBackup bool, restartBeforeBackup, disableRedo
 	_, err = getVTExecVersion("vtbackup")
 	require.NoError(t, err)
 	if disableRedoLog {
-		//if ver > 15 {
 		extraArgs = append(extraArgs, "--disable-redo-log")
-		//}
 	}
 
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	if !initialBackup && disableRedoLog {
-		//if ver > 15 {
 		go verifyDisableEnableRedoLogs(ctx, t, mysqlSocket.Name())
-		//}
 	}
 
 	log.Infof("starting backup tablet %s", time.Now())

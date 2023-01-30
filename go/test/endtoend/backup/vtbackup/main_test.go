@@ -143,7 +143,7 @@ func TestMain(m *testing.M) {
 		// Therefore we are explicitly setting super-read-only to `false` here.
 		if vtTabletVersion <= 15 {
 			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-				if err := tablet.VttabletProcess.UnsetSuperReadOnly(""); err != nil {
+				if err := tablet.VttabletProcess.SetSuperReadOnly("", false); err != nil {
 					return 1, err
 				}
 			}

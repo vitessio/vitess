@@ -1,5 +1,7 @@
-# This file is executed immediately after mysql_install_db,
-# to initialize a fresh data directory.
+# This file is executed immediately after mysql_install_db, to initialize a fresh data
+# directory. This sql is similar to init_db.sql. The only difference is, it is for
+# testing purpose and specifically for Unit-Tests where we do not want super-read-only
+# mode for mysql. It should always represent prod sql minus super-read-only.
 
 ###############################################################################
 # WARNING: This sql is *NOT* safe for production use,

@@ -636,29 +636,29 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 	return vttablet
 }
 
-// UnsetSuperReadOnly switch-off super-read-only flag in db
-func (vttablet *VttabletProcess) UnsetSuperReadOnly(dbname string) error {
-	conn, err := vttablet.defaultConn("")
+// SetSuperReadOnly switch-off super-read-only flag in db
+func (vttablet *VttabletProcess) SetSuperReadOnly(dbname string, enableSuperReadOnly bool) error {
+	conn, err := vttablet.defaultConn(dbname)
 	if err != nil {
 		log.Infof("error in getting connection object %s", err)
 		return err
 	}
 	defer conn.Close()
 
-	_, err = conn.ExecuteUnSetSuperReadOnly()
+	_, err = conn.SetSuperReadOnly(enableSuperReadOnly)
 	return err
 }
 
-// UnsetReadOnly switch-off read-only flag in db
-func (vttablet *VttabletProcess) UnsetReadOnly(dbname string) error {
-	conn, err := vttablet.defaultConn("")
+// SetReadOnly switch-off read-only flag in db
+func (vttablet *VttabletProcess) SetReadOnly(dbname string, enableReadOnly bool) error {
+	conn, err := vttablet.defaultConn(dbname)
 	if err != nil {
 		log.Infof("error in getting connection object %s", err)
 		return err
 	}
 	defer conn.Close()
 
-	_, err = conn.ExecuteUnSetReadOnly()
+	_, err = conn.SetReadOnly(enableReadOnly)
 	return err
 }
 

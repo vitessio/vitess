@@ -112,7 +112,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
-	// Read only - "SHOW VARIABLES LIKE 'read_only'"
+	// Super read only - "SELECT @@global.super_read_only"
 	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly()
 	if err != nil {
 		return nil, err

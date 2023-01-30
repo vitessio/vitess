@@ -233,16 +233,17 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 
 // IsSuperReadOnly return true if the instance is super read only
 func (mysqld *Mysqld) IsSuperReadOnly() (bool, error) {
-	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SHOW VARIABLES LIKE 'super_read_only'")
+	qr, err := mysqld.FetchSuperQuery(context.TODO(), "SELECT @@global.super_read_only")
 	if err != nil {
-		return true, err
+		return false, err
 	}
-	if len(qr.Rows) != 1 {
-		return true, errors.New("no super_read_only variable in mysql")
+	if err == nil && len(qr.Rows) == 1 {
+		sro := qr.Rows[0][0].ToString()
+		if sro == "1" || sro == "ON" {
+			return true, nil
+		}
 	}
-	if qr.Rows[0][1].ToString() == "ON" {
-		return true, nil
-	}
+
 	return false, nil
 }
 

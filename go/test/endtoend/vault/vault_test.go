@@ -269,7 +269,7 @@ func initializeClusterLate(t *testing.T) {
 
 	for _, tablet := range shard.Vttablets {
 		// remove super read-only from vttablet
-		tablet.VttabletProcess.UnsetReadOnly("")
+		tablet.VttabletProcess.SetReadOnly("", false)
 	}
 
 	// TODO: Try moving this after InitPrimary. May be thats a better place.

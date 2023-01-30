@@ -190,6 +190,7 @@ func main() {
 
 	servenv.Init()
 	tabletenv.Init()
+
 	mysqld := &vtcomboMysqld{}
 	var cnf *mysqlctl.Mycnf
 	if *startMysql {

@@ -96,7 +96,7 @@ func TestMain(m *testing.M) {
 			fmt.Fprintf(os.Stderr, "%v", err)
 			return 1
 		}
-		cluster.UnsetReadOnly("")
+		//cluster.SetReadOnly("")
 		return m.Run()
 	}()
 	os.Exit(exitCode)

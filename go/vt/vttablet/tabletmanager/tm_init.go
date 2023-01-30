@@ -406,13 +406,11 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		// of updating the tablet state and initializing replication.
 		return nil
 	}
-	log.Infof("calling initializeReplication")
 	// We should be re-read the tablet from tabletManager and use the type specified there.
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
 	_, err = tm.initializeReplication(ctx, tm.Tablet().Type)
 	tm.tmState.Open()
-	log.Infof("TabletManager End")
 	return err
 }
 
