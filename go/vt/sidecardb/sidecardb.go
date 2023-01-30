@@ -367,12 +367,15 @@ func (si *schemaInit) loadExistingTables() error {
 // region unit-test-only
 // this section uses helpers used in go/vt/vtexplain/vtexplain_vttablet.go, hence it is here and not in the _test.go file
 // query patterns to handle in mocks
-var sidecarDBInitQueryPatterns = []string{
+var sidecarDBInitQueries = []string{
 	ShowSidecarDatabasesQuery,
 	SelectCurrentDatabaseQuery,
 	CreateSidecarDatabaseQuery,
 	UseSidecarDatabaseQuery,
 	GetCurrentTablesQuery,
+}
+
+var sidecarDBInitQueryPatterns = []string{
 	CreateTableRegexp,
 	AlterTableRegexp,
 }
@@ -382,6 +385,9 @@ func AddSidecarDBSchemaInitQueries(db *fakesqldb.DB) {
 	result := &sqltypes.Result{}
 	for _, q := range sidecarDBInitQueryPatterns {
 		db.AddQueryPattern(q, result)
+	}
+	for _, q := range sidecarDBInitQueries {
+		db.AddQuery(q, result)
 	}
 	for _, table := range sidecarTables {
 		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -396,6 +402,11 @@ func AddSidecarDBSchemaInitQueries(db *fakesqldb.DB) {
 // MatchesSidecarDBInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp
 func MatchesSidecarDBInitQuery(query string) bool {
 	query = strings.ToLower(query)
+	for _, q := range sidecarDBInitQueries {
+		if strings.EqualFold(q, query) {
+			return true
+		}
+	}
 	for _, q := range sidecarDBInitQueryPatterns {
 		q = strings.ToLower(q)
 		if strings.Contains(query, q) {
