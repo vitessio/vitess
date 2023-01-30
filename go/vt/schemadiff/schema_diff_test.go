@@ -69,34 +69,34 @@ func TestSchemaDiff(t *testing.T) {
 			name: "add partition",
 			fromQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
-				"create table t2 (id int primary key, ts timestamp) partition by list (id) (partition p0 values in (0), partition p1 values in (1));",
+				"create table t2 (id int primary key, ts timestamp) partition by range (id) (partition p0 values less than (0), partition p1 values less than (1));",
 				"create view v1 as select id from t1",
 			},
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
-				"create table t2 (id int primary key, ts timestamp) partition by list (id) (partition p0 values in (0), partition p1 values in (1), partition p2 values in (2));",
+				"create table t2 (id int primary key, ts timestamp) partition by range (id) (partition p0 values less than (0), partition p1 values less than (1), partition p2 values less than (2));",
 				"create view v1 as select id from t1",
 			},
 			expectDiffs: 1,
 			expectDeps:  0,
 		},
 		{
-			name: "add column, partition",
+			// In MySQL, you cannot ALTER TABLE ADD COLUMN ..., ADD PARTITION in a single statement
+			name: "add column, add partition",
 			fromQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
-				"create table t2 (id int primary key, ts timestamp) partition by list (id) (partition p0 values in (0), partition p1 values in (1));",
+				"create table t2 (id int primary key, ts timestamp) partition by range (id) (partition p0 values less than (0), partition p1 values less than (1));",
 				"create view v1 as select id from t1",
 			},
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
-				"create table t2 (id int primary key, ts timestamp, v varchar) partition by list (id) (partition p0 values in (0), partition p1 values in (1), partition p2 values in (2));",
+				"create table t2 (id int primary key, ts timestamp, v varchar) partition by range (id) (partition p0 values less than (0), partition p1 values less than (1), partition p2 values less than (2));",
 				"create view v1 as select id from t1",
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
 			sequential:  true,
 		},
-		// VIEWs
 		{
 			name: "add view",
 			toQueries: append(
@@ -376,7 +376,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  1,
 		},
 	}
-	hints := &DiffHints{}
+	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	for _, tc := range tt {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.fromQueries == nil {
