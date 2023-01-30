@@ -370,7 +370,7 @@ func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlpar
 		return nil, err
 	}
 	bindVars := map[string]*querypb.BindVariable{
-		"TABLE_NAME": viewNamesBV,
+		"table_name": viewNamesBV,
 	}
 
 	existErr := qre.checkViewExists(conn, stmt, bindVars, viewsMap, viewNames)
@@ -1239,8 +1239,8 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 
 func (qre *QueryExecutor) generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
 	bindVars := make(map[string]*querypb.BindVariable)
-	bindVars["TABLE_NAME"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
-	bindVars["VIEW_DEFINITION"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))
-	bindVars["CREATE_STATEMENT"] = sqltypes.StringBindVariable(sqlparser.String(createView))
+	bindVars["table_name"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
+	bindVars["view_definition"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))
+	bindVars["create_statement"] = sqltypes.StringBindVariable(sqlparser.String(createView))
 	return bindVars
 }
