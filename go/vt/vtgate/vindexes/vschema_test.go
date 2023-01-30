@@ -24,15 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -323,6 +321,36 @@ func TestVSchemaViews(t *testing.T) {
 
 	view = vschema.FindView("", "v1")
 	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
+
+	out, err := json.MarshalIndent(vschema.Keyspaces["unsharded"], "", "  ")
+	require.NoError(t, err)
+	got := string(out)
+	want := `
+{
+  "tables": {
+    "dual": {
+      "type": "reference",
+      "name": "dual"
+    },
+    "t1": {
+      "name": "t1",
+      "columns": [
+        {
+          "name": "c1",
+          "type": "NULL_TYPE"
+        },
+        {
+          "name": "c2",
+          "type": "VARCHAR"
+        }
+      ]
+    }
+  },
+  "views": {
+    "v1": "select c1 + c2 as added from t1"
+  }
+}`
+	require.JSONEq(t, want, got)
 }
 
 func TestVSchemaColumnListAuthoritative(t *testing.T) {

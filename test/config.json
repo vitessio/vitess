@@ -333,7 +333,7 @@
 		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
@@ -897,6 +897,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_topo",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_grpc_server_auth_static": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_auth_static"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
 			"RetryMax": 1,
 			"Tags": []
 		},

@@ -1001,6 +1001,9 @@ func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
 		return err
 	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitRefOfColumnType(in *ColumnType, f Visit) error {
