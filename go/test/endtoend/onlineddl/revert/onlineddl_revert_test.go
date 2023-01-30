@@ -338,7 +338,7 @@ func testRevertible(t *testing.T) {
 			DROP TABLE onlineddl_test
 		`
 		tableName   = "onlineddl_test"
-		ddlStrategy = "online -declarative -allow-zero-in-date"
+		ddlStrategy = "online --declarative --allow-zero-in-date"
 	)
 
 	removeBackticks := func(s string) string {
@@ -348,16 +348,15 @@ func testRevertible(t *testing.T) {
 	for _, testcase := range testCases {
 		t.Run(testcase.name, func(t *testing.T) {
 
-			// func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, expectHint string, expectError string, skipWait bool) (uuid string) {
-			// func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy string, executeStrategy string, tableName string, expectHint string) (uuid string) {
-
 			t.Run("ensure table dropped", func(t *testing.T) {
+				// A preparation step, to clean up anything from the previous test case
 				uuid := testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", tableName, "")
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				checkTable(t, tableName, false)
 			})
 
 			t.Run("create from-table", func(t *testing.T) {
+				// A preparation step, to re-create the base table
 				fromStatement := fmt.Sprintf(createTableWrapper, testcase.fromSchema)
 				uuid := testOnlineDDLStatement(t, fromStatement, ddlStrategy, "vtgate", tableName, "")
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
@@ -365,12 +364,14 @@ func testRevertible(t *testing.T) {
 			})
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
+				// This is the migration we will test, and see whether it is revertible or not (and why not).
 				toStatement := fmt.Sprintf(createTableWrapper, testcase.toSchema)
 				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", tableName, "")
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 				checkTable(t, tableName, true)
 			})
 			t.Run("check migration", func(t *testing.T) {
+				// All right, the actual test
 				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 				require.NotNil(t, rs)
 				for _, row := range rs.Named().Rows {
