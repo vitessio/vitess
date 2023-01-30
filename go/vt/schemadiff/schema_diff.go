@@ -52,8 +52,8 @@ type SchemaDiff struct {
 	schema *Schema
 	diffs  []EntityDiff
 
-	deps    map[string]*DiffDep
 	diffMap map[string]EntityDiff // key is diff's CanonicalStatementString()
+	deps    map[string]*DiffDep
 }
 
 func NewSchemaDiff(schema *Schema) *SchemaDiff {
