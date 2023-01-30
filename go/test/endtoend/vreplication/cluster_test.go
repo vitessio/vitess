@@ -133,8 +133,11 @@ func setTempVtDataRoot() string {
 }
 
 // StartVTOrc starts a VTOrc instance
-func (vc *VitessCluster) StartVTOrc(keyspace string) error {
-	// Start vtorc
+func (vc *VitessCluster) StartVTOrc() error {
+	// Start vtorc if not already running
+	if vc.VTOrcProcess != nil {
+		return nil
+	}
 	base := cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
 	base.Binary = "vtorc"
 	vtorcProcess := &cluster.VTOrcProcess{
@@ -147,9 +150,6 @@ func (vc *VitessCluster) StartVTOrc(keyspace string) error {
 	if err != nil {
 		log.Error(err.Error())
 		return err
-	}
-	if keyspace != "" {
-		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters_to_watch="%s"`, keyspace))
 	}
 	vc.VTOrcProcess = vtorcProcess
 	return nil
@@ -546,7 +546,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
 
-	if err := vc.StartVTOrc(keyspace.Name); err != nil {
+	if err := vc.StartVTOrc(); err != nil {
 		return err
 	}
 
@@ -649,6 +649,12 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 			log.Infof("Error in etcd teardown - %s", err.Error())
 		} else {
 			log.Infof("Successfully tore down topo %s", vc.Topo.Name)
+		}
+	}
+
+	if vc.VTOrcProcess != nil {
+		if err := vc.VTOrcProcess.TearDown(); err != nil {
+			log.Infof("Error stopping VTOrc: %s", err.Error())
 		}
 	}
 }
