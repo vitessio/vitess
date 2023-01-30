@@ -42,6 +42,11 @@ func (d *AlterTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *AlterTableEntityDiff) EntityName() string {
+	return d.from.Name()
+}
+
 // Entities implements EntityDiff
 func (d *AlterTableEntityDiff) Entities() (from Entity, to Entity) {
 	return d.from, d.to
@@ -118,6 +123,11 @@ func (d *CreateTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
 }
 
+// EntityName implements EntityDiff
+func (d *CreateTableEntityDiff) EntityName() string {
+	return d.to.Name()
+}
+
 // Entities implements EntityDiff
 func (d *CreateTableEntityDiff) Entities() (from Entity, to Entity) {
 	return nil, &CreateTableEntity{CreateTable: d.createTable}
@@ -172,6 +182,11 @@ type DropTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *DropTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *DropTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -229,6 +244,11 @@ type RenameTableEntityDiff struct {
 // IsEmpty implements EntityDiff
 func (d *RenameTableEntityDiff) IsEmpty() bool {
 	return d.Statement() == nil
+}
+
+// EntityName implements EntityDiff
+func (d *RenameTableEntityDiff) EntityName() string {
+	return d.from.Name()
 }
 
 // Entities implements EntityDiff
@@ -2157,14 +2177,14 @@ func (c *CreateTableEntity) validate() error {
 	// validate all columns used by foreign key constraints do in fact exist,
 	// and that there exists an index over those columns
 	for _, cs := range c.CreateTable.TableSpec.Constraints {
-		check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+		fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
 		if !ok {
 			continue
 		}
-		if len(check.Source) != len(check.ReferenceDefinition.ReferencedColumns) {
-			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(check.Source), ReferencedTable: check.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(check.ReferenceDefinition.ReferencedColumns)}
+		if len(fk.Source) != len(fk.ReferenceDefinition.ReferencedColumns) {
+			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(fk.Source), ReferencedTable: fk.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(fk.ReferenceDefinition.ReferencedColumns)}
 		}
-		for _, col := range check.Source {
+		for _, col := range fk.Source {
 			if !columnExists[col.Lowered()] {
 				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
 			}

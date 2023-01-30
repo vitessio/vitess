@@ -199,8 +199,7 @@ func TestGetViewDependentTableNames(t *testing.T) {
 			createView, ok := stmt.(*sqlparser.CreateView)
 			require.True(t, ok)
 
-			tables, err := getViewDependentTableNames(createView)
-			assert.NoError(t, err)
+			tables := getViewDependentTableNames(createView)
 			assert.Equal(t, ts.tables, tables)
 		})
 	}
@@ -240,8 +239,7 @@ func TestGetForeignKeyParentTableNames(t *testing.T) {
 			createTable, ok := stmt.(*sqlparser.CreateTable)
 			require.True(t, ok)
 
-			tables, err := getForeignKeyParentTableNames(createTable)
-			assert.NoError(t, err)
+			tables := getForeignKeyParentTableNames(createTable)
 			assert.Equal(t, ts.tables, tables)
 		})
 	}
