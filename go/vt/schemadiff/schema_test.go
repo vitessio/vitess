@@ -129,7 +129,7 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
 	// v8 does not exist
 	queries := []string{
-		"create view v20 as select 1 from dual2",
+		"create view v20 as select 1 from dual",
 	}
 	_, err := NewSchemaFromQueries(queries)
 	assert.NoError(t, err)
