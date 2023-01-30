@@ -844,8 +844,8 @@ func AnalyzeDiffDependenciesOld(diffs []EntityDiff) error {
 	return nil
 }
 
-func AnalyzeDiffDependencies(diffs []EntityDiff) (*SchemaDiff, error) {
-	schemaDiff := NewSchemaDiff()
+func (s *Schema) AnalyzeDiffDependencies(diffs []EntityDiff) (*SchemaDiff, error) {
+	schemaDiff := NewSchemaDiff(s)
 	schemaDiff.LoadDiffs(diffs)
 	r := mathutil.NewEquivalenceRelation()
 
@@ -897,6 +897,7 @@ func AnalyzeDiffDependencies(diffs []EntityDiff) (*SchemaDiff, error) {
 									for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
 										referencedColumnNames[referencedColumn.Lowered()] = true
 									}
+									// Walk parentDiff.Statement()
 									_ = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 										switch node := node.(type) {
 										case *sqlparser.ModifyColumn:

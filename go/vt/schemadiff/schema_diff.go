@@ -49,14 +49,16 @@ func (d *DiffDep) hashKey() string {
 }
 
 type SchemaDiff struct {
-	diffs []EntityDiff
+	schema *Schema
+	diffs  []EntityDiff
 
 	deps    map[string]*DiffDep
 	diffMap map[string]EntityDiff // key is diff's CanonicalStatementString()
 }
 
-func NewSchemaDiff() *SchemaDiff {
+func NewSchemaDiff(schema *Schema) *SchemaDiff {
 	return &SchemaDiff{
+		schema:  schema,
 		deps:    make(map[string]*DiffDep),
 		diffMap: make(map[string]EntityDiff),
 	}
@@ -111,4 +113,24 @@ func (d *SchemaDiff) DiffsByEntityName(name string) (diffs []EntityDiff) {
 
 func (d *SchemaDiff) AllDiffs() []EntityDiff {
 	return d.diffs
+}
+
+func (d *SchemaDiff) AllDeps() (deps []*DiffDep) {
+	for _, dep := range d.deps {
+		deps = append(deps, dep)
+	}
+	return deps
+}
+
+func (d *SchemaDiff) HasDeps() bool {
+	return len(d.deps) > 0
+}
+
+func (d *SchemaDiff) HasSequentialExecutionDeps() bool {
+	for _, dep := range d.deps {
+		if dep.depType >= DiffDepSequentialExecution {
+			return true
+		}
+	}
+	return false
 }
