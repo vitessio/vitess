@@ -317,14 +317,12 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	// Initializing as primary implies undoing any previous "do not replicate".
 	tm.replManager.reset()
 
-	if setSuperReadOnly {
-		// Setting super_read_only off so that we can run the DDL commands
-		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-				log.Warningf("server does not know about super_read_only, continuing anyway...")
-			} else {
-				return "", err
-			}
+	// Setting super_read_only off so that we can run the DDL commands
+	if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
+			return "", err
 		}
 	}
 
@@ -484,23 +482,17 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	}
 
 	// Now that we know no writes are in-flight and no new writes can occur,
-	// set MySQL to read-only mode. If we are already read-only because of a
+	// set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
-	if setSuperReadOnly {
-		// Setting super_read_only also sets read_only
-		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-				log.Warningf("server does not know about super_read_only, continuing anyway...")
-			} else {
-				return nil, err
-			}
-		}
-	} else {
-		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+	if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			log.Warningf("server does not know about super_read_only, continuing anyway...")
+		} else {
 			return nil, err
 		}
 	}
+
 	defer func() {
 		if finalErr != nil && revertPartialFailure && !wasReadOnly {
 			// setting read_only OFF will also set super_read_only OFF if it was set
