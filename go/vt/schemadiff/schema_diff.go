@@ -64,7 +64,7 @@ func NewSchemaDiff(schema *Schema) *SchemaDiff {
 	}
 }
 
-func (d *SchemaDiff) LoadDiffs(diffs []EntityDiff) {
+func (d *SchemaDiff) loadDiffs(diffs []EntityDiff) {
 	for _, diff := range diffs {
 		allSubsequent := AllSubsequent(diff)
 		for i, sdiff := range allSubsequent {

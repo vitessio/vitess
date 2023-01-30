@@ -390,10 +390,7 @@ func TestSchemaDiff(t *testing.T) {
 			require.NoError(t, err)
 			require.NotNil(t, toSchema)
 
-			diffs, err := fromSchema.Diff(toSchema, hints)
-			require.NoError(t, err)
-
-			schemaDiff, err := fromSchema.AnalyzeDiffDependencies(diffs)
+			schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
 			require.NoError(t, err)
 
 			allDiffs := schemaDiff.AllDiffs()

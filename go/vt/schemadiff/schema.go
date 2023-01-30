@@ -844,9 +844,13 @@ func AnalyzeDiffDependenciesOld(diffs []EntityDiff) error {
 	return nil
 }
 
-func (s *Schema) AnalyzeDiffDependencies(diffs []EntityDiff) (*SchemaDiff, error) {
+func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
+	diffs, err := s.Diff(other, hints)
+	if err != nil {
+		return nil, err
+	}
 	schemaDiff := NewSchemaDiff(s)
-	schemaDiff.LoadDiffs(diffs)
+	schemaDiff.loadDiffs(diffs)
 	r := mathutil.NewEquivalenceRelation()
 
 	for _, diff := range schemaDiff.AllDiffs() {
