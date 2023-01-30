@@ -128,7 +128,6 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 }
 
 func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
-	// v8 does not exist
 	queries := []string{
 		"create view v20 as select 1 from dual",
 	}
@@ -137,7 +136,6 @@ func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
 }
 
 func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
-	// v8 does not exist
 	queries := []string{
 		"create view v20 as select 1",
 	}
