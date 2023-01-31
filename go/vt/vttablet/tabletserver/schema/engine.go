@@ -129,7 +129,7 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
-// syncSidecarDB is called either the first time a primary starts or on consequent loads to possibly upgrade to a
+// syncSidecarDB is called either the first time a primary starts, or on subsequent loads, to possibly upgrade to a
 // new Vitess version. This is the only entry point into the sidecardb module to get the _vt database to the desired
 // schema for the running Vitess version.
 // There is some extra logging in here which can be removed in a future version (>v16) once the new schema init

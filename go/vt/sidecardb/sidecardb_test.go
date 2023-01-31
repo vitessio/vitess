@@ -30,7 +30,7 @@ import (
 func TestAll(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	AddSidecarDBSchemaInitQueries(db)
+	AdSchemaInitQueries(db)
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"Database",
 		"varchar"),
@@ -82,9 +82,9 @@ func TestAll(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, currentDB, "currentDB")
 
-	require.False(t, MatchesSidecarDBInitQuery("abc"))
-	require.True(t, MatchesSidecarDBInitQuery(SelectCurrentDatabaseQuery))
-	require.True(t, MatchesSidecarDBInitQuery("CREATE TABLE IF NOT EXISTS `_vt`.vreplication"))
+	require.False(t, MatchesInitQuery("abc"))
+	require.True(t, MatchesInitQuery(SelectCurrentDatabaseQuery))
+	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS `_vt`.vreplication"))
 }
 
 // test the logic that confirms that the user defined schema's table name and qualifier are valid

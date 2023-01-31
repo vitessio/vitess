@@ -2234,7 +2234,7 @@ func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *T
 
 func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	db := setupFakeDB(t)
-	sidecardb.AddSidecarDBSchemaInitQueries(db)
+	sidecardb.AdSchemaInitQueries(db)
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
@@ -2382,7 +2382,7 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
-	sidecardb.AddSidecarDBSchemaInitQueries(db)
+	sidecardb.AdSchemaInitQueries(db)
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}

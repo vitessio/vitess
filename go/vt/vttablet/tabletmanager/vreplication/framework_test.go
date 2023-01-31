@@ -489,7 +489,7 @@ func shouldIgnoreQuery(query string) bool {
 		", component_throttled=", // update of last throttle time, can happen out-of-band, so can't test for it
 		"context cancel",
 	}
-	if sidecardb.MatchesSidecarDBInitQuery(query) {
+	if sidecardb.MatchesInitQuery(query) {
 		return true
 	}
 	for _, q := range queriesToIgnore {
