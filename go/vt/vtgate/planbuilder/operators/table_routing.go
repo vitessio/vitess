@@ -1,6 +1,9 @@
 package operators
 
 import (
+	"golang.org/x/exp/maps"
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -124,8 +127,19 @@ func (tr *TableRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 }
 
 func (tr *TableRouting) Clone() Routing {
-	// TODO implement me
-	panic("implement me")
+	var selected *VindexOption
+	if tr.Selected != nil {
+		t := *tr.Selected
+		selected = &t
+	}
+	return &TableRouting{
+		VindexPreds:    slices.Clone(tr.VindexPreds),
+		Selected:       selected,
+		Keyspace:       tr.Keyspace,
+		RouteOpCode:    tr.RouteOpCode,
+		SeenPredicates: slices.Clone(tr.SeenPredicates),
+		Alternates:     maps.Clone(tr.Alternates),
+	}
 }
 
 func (tr *TableRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {

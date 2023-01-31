@@ -73,7 +73,7 @@ func (isr *InfoSchemaRouting) Cost() int {
 	return 0
 }
 
-func (rr *InfoSchemaRouting) OpCode() engine.Opcode {
+func (isr *InfoSchemaRouting) OpCode() engine.Opcode {
 	return engine.DBA
 }
 

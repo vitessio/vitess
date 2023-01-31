@@ -274,7 +274,7 @@ func tryMergeSubqueryWithRoute(
 
 			panic("todo")
 			// merged.PickBestAvailableVindex()
-			return merged, err
+			//return merged, err
 		}
 	}
 	return nil, nil

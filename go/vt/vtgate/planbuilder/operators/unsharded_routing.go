@@ -68,32 +68,32 @@ func (n *NoneRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr 
 	panic("implement me")
 }
 
-func (isr *NoneRouting) Cost() int {
+func (n *NoneRouting) Cost() int {
 	return 0
 }
 
-func (rr *NoneRouting) OpCode() engine.Opcode {
+func (n *NoneRouting) OpCode() engine.Opcode {
 	return engine.None
 }
 
-func (u *UnshardedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (ur *UnshardedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (u *UnshardedRouting) Clone() Routing {
+func (ur *UnshardedRouting) Clone() Routing {
 	// TODO implement me
 	panic("implement me")
 }
 
-func (u *UnshardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	return u, nil
+func (ur *UnshardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+	return ur, nil
 }
 
-func (isr *UnshardedRouting) Cost() int {
+func (ur *UnshardedRouting) Cost() int {
 	return 0
 }
 
-func (rr *UnshardedRouting) OpCode() engine.Opcode {
+func (ur *UnshardedRouting) OpCode() engine.Opcode {
 	return engine.Unsharded
 }
