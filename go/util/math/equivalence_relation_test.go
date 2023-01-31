@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package mathutil
 
 import (
@@ -17,24 +33,29 @@ func TestEquivalenceRelation(t *testing.T) {
 		4: []string{"e"},
 		5: []string{"f"},
 	}
+	trivialExpectClasses := []int{0, 1, 2, 3, 4, 5}
 	tt := []struct {
 		name      string
 		relations []string
 		expect    map[int]([]string)
+		classes   []int
 	}{
 		{
-			name:   "empty",
-			expect: trivialExpect,
+			name:    "empty",
+			expect:  trivialExpect,
+			classes: trivialExpectClasses,
 		},
 		{
 			name:      "reflective",
 			relations: []string{"aa"},
 			expect:    trivialExpect,
+			classes:   trivialExpectClasses,
 		},
 		{
 			name:      "reflective2",
 			relations: []string{"aa", "bb", "ff", "dd"},
 			expect:    trivialExpect,
+			classes:   trivialExpectClasses,
 		},
 		{
 			name:      "relate",
@@ -46,6 +67,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				4: []string{"e"},
 				5: []string{"f"},
 			},
+			classes: []int{0, 2, 3, 4, 5},
 		},
 		{
 			name:      "relate ef",
@@ -57,6 +79,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				3: []string{"d"},
 				4: []string{"e", "f"},
 			},
+			classes: []int{0, 1, 2, 3, 4},
 		},
 		{
 			name:      "relate, reverse",
@@ -68,6 +91,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				4: []string{"e"},
 				5: []string{"f"},
 			},
+			classes: []int{0, 2, 3, 4, 5},
 		},
 		{
 			name:      "relate, relate reverse, reflective",
@@ -79,6 +103,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				4: []string{"e"},
 				5: []string{"f"},
 			},
+			classes: []int{0, 2, 3, 4, 5},
 		},
 		{
 			name:      "relate, ab cd",
@@ -89,6 +114,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				4: []string{"e"},
 				5: []string{"f"},
 			},
+			classes: []int{0, 2, 4, 5},
 		},
 		{
 			name:      "relate, multi",
@@ -98,6 +124,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				2: []string{"c", "d"},
 				4: []string{"e", "f"},
 			},
+			classes: []int{0, 2, 4},
 		},
 		{
 			name:      "relate, multi join",
@@ -107,6 +134,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				3: []string{"d"},
 				4: []string{"e"},
 			},
+			classes: []int{0, 3, 4},
 		},
 		{
 			name:      "relate, multi, join",
@@ -115,6 +143,7 @@ func TestEquivalenceRelation(t *testing.T) {
 				0: []string{"a", "b", "e", "f"},
 				2: []string{"c", "d"},
 			},
+			classes: []int{0, 2},
 		},
 		{
 			name:      "relate, multi, join all",
@@ -122,6 +151,7 @@ func TestEquivalenceRelation(t *testing.T) {
 			expect: map[int]([]string){
 				0: []string{"a", "b", "e", "f", "c", "d"},
 			},
+			classes: []int{0},
 		},
 	}
 
@@ -140,6 +170,7 @@ func TestEquivalenceRelation(t *testing.T) {
 			}
 			m := r.Map()
 			assert.Equal(t, tc.expect, m)
+			assert.Equal(t, tc.classes, r.OrderedClasses())
 		})
 	}
 }
