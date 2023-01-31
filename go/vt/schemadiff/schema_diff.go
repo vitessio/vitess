@@ -166,6 +166,15 @@ func (d *SchemaDiff) HasDeps() bool {
 	return len(d.deps) > 0
 }
 
+func (d *SchemaDiff) AllSequentialExecutionDeps() (deps []*DiffDep) {
+	for _, dep := range d.deps {
+		if dep.depType >= DiffDepSequentialExecution {
+			deps = append(deps, dep)
+		}
+	}
+	return deps
+}
+
 func (d *SchemaDiff) HasSequentialExecutionDeps() bool {
 	for _, dep := range d.deps {
 		if dep.depType >= DiffDepSequentialExecution {
