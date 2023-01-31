@@ -90,8 +90,6 @@ var (
 		"onlineddl_vrepl_suite",
 		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
-		"onlineddl_declarative",
-		"onlineddl_singleton",
 		"onlineddl_scheduler",
 		"onlineddl_revertible",
 		"tabletmanager_throttler",

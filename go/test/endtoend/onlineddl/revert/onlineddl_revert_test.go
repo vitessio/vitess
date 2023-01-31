@@ -94,35 +94,7 @@ var (
 	tableName             = `stress_test`
 	viewBaseTableName     = `view_base_table_test`
 	viewName              = `view_test`
-	partitionedTableName  = `part_test`
-	createStatement       = `
-		CREATE TABLE stress_test (
-			id bigint(20) not null,
-			rand_val varchar(32) null default '',
-			hint_col varchar(64) not null default 'just-created',
-			created_timestamp timestamp not null default current_timestamp,
-			updates int unsigned not null default 0,
-			PRIMARY KEY (id),
-			key created_idx(created_timestamp),
-			key updates_idx(updates)
-		) ENGINE=InnoDB
-	`
-	createIfNotExistsStatement = `
-		CREATE TABLE IF NOT EXISTS stress_test (
-			id bigint(20) not null,
-			PRIMARY KEY (id)
-		) ENGINE=InnoDB
-	`
-	dropStatement = `
-		DROP TABLE stress_test
-	`
-	dropIfExistsStatement = `
-		DROP TABLE IF EXISTS stress_test
-	`
-	alterHintStatement = `
-		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
-	`
-	insertRowStatement = `
+	insertRowStatement    = `
 		INSERT IGNORE INTO stress_test (id, rand_val) VALUES (%d, left(md5(rand()), 8))
 	`
 	updateRowStatement = `
@@ -139,43 +111,6 @@ var (
 		TRUNCATE TABLE stress_test
 	`
 
-	createViewBaseTableStatement = `
-		CREATE TABLE view_base_table_test (id INT PRIMARY KEY)
-	`
-	createViewStatement = `
-		CREATE VIEW view_test AS SELECT 'success_create' AS msg FROM view_base_table_test
-	`
-	createOrReplaceViewStatement = `
-		CREATE OR REPLACE VIEW view_test AS SELECT 'success_replace' AS msg FROM view_base_table_test
-	`
-	alterViewStatement = `
-		ALTER VIEW view_test AS SELECT 'success_alter' AS msg FROM view_base_table_test
-	`
-	dropViewStatement = `
-		DROP VIEW view_test
-	`
-	dropViewIfExistsStatement = `
-		DROP VIEW IF EXISTS view_test
-	`
-	createPartitionedTableStatement = `
-		CREATE TABLE part_test (
-			id INT NOT NULL,
-			ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-			primary key (id)
-		)
-		PARTITION BY RANGE (id) (
-				PARTITION p1 VALUES LESS THAN (10),
-				PARTITION p2 VALUES LESS THAN (20),
-				PARTITION p3 VALUES LESS THAN (30),
-				PARTITION p4 VALUES LESS THAN (40),
-				PARTITION p5 VALUES LESS THAN (50),
-				PARTITION p6 VALUES LESS THAN (60)
-		)
-	`
-	populatePartitionedTableStatement = `
-		INSERT INTO part_test (id) VALUES (2),(11),(23),(37),(41),(53)
-	`
-
 	writeMetrics WriteMetrics
 )
 
@@ -183,6 +118,16 @@ const (
 	maxTableRows   = 4096
 	maxConcurrency = 5
 )
+
+type revertibleTestCase struct {
+	name       string
+	fromSchema string
+	toSchema   string
+	// expectProblems              bool
+	removedUniqueKeyNames       string
+	droppedNoDefaultColumnNames string
+	expandedColumnNames         string
+}
 
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
@@ -259,6 +204,262 @@ func TestSchemaChange(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	shards = clusterInstance.Keyspaces[0].Shards
 	require.Equal(t, 1, len(shards))
+
+	t.Run("revertible", testRevertible)
+	t.Run("revert", testRevert)
+}
+
+func testRevertible(t *testing.T) {
+
+	var testCases = []revertibleTestCase{
+		{
+			name:       "identical schemas",
+			fromSchema: `id int primary key, i1 int not null default 0`,
+			toSchema:   `id int primary key, i2 int not null default 0`,
+		},
+		{
+			name:       "different schemas, nothing to note",
+			fromSchema: `id int primary key, i1 int not null default 0, unique key i1_uidx(i1)`,
+			toSchema:   `id int primary key, i1 int not null default 0, i2 int not null default 0, unique key i1_uidx(i1)`,
+		},
+		{
+			name:                  "removed non-nullable unique key",
+			fromSchema:            `id int primary key, i1 int not null default 0, unique key i1_uidx(i1)`,
+			toSchema:              `id int primary key, i2 int not null default 0`,
+			removedUniqueKeyNames: `i1_uidx`,
+		},
+		{
+			name:                  "removed nullable unique key",
+			fromSchema:            `id int primary key, i1 int default null, unique key i1_uidx(i1)`,
+			toSchema:              `id int primary key, i2 int default null`,
+			removedUniqueKeyNames: `i1_uidx`,
+		},
+		{
+			name:                  "expanding unique key removes unique constraint",
+			fromSchema:            `id int primary key, i1 int default null, unique key i1_uidx(i1)`,
+			toSchema:              `id int primary key, i1 int default null, unique key i1_uidx(i1, id)`,
+			removedUniqueKeyNames: `i1_uidx`,
+		},
+		{
+			name:                  "reducing unique key does not remove unique constraint",
+			fromSchema:            `id int primary key, i1 int default null, unique key i1_uidx(i1, id)`,
+			toSchema:              `id int primary key, i1 int default null, unique key i1_uidx(i1)`,
+			removedUniqueKeyNames: ``,
+		},
+		{
+			name:                        "remove column without default",
+			fromSchema:                  `id int primary key, i1 int not null`,
+			toSchema:                    `id int primary key, i2 int not null default 0`,
+			droppedNoDefaultColumnNames: `i1`,
+		},
+		{
+			name:                "expanded: nullable",
+			fromSchema:          `id int primary key, i1 int not null, i2 int default null`,
+			toSchema:            `id int primary key, i1 int default null, i2 int not null`,
+			expandedColumnNames: `i1`,
+		},
+		{
+			name:                "expanded: longer text",
+			fromSchema:          `id int primary key, i1 int default null, v1 varchar(40) not null, v2 varchar(5), v3 varchar(3)`,
+			toSchema:            `id int primary key, i1 int not null, v1 varchar(100) not null, v2 char(3), v3 char(5)`,
+			expandedColumnNames: `v1,v3`,
+		},
+		{
+			name:                "expanded: int numeric precision and scale",
+			fromSchema:          `id int primary key, i1 int, i2 tinyint, i3 mediumint, i4 bigint`,
+			toSchema:            `id int primary key, i1 int, i2 mediumint, i3 int, i4 tinyint`,
+			expandedColumnNames: `i2,i3`,
+		},
+		{
+			name:                "expanded: floating point",
+			fromSchema:          `id int primary key, i1 int, n2 bigint, n3 bigint, n4 float, n5 double`,
+			toSchema:            `id int primary key, i1 int, n2 float, n3 double, n4 double, n5 float`,
+			expandedColumnNames: `n2,n3,n4`,
+		},
+		{
+			name:                "expanded: decimal numeric precision and scale",
+			fromSchema:          `id int primary key, i1 int, d1 decimal(10,2), d2 decimal (10,2), d3 decimal (10,2)`,
+			toSchema:            `id int primary key, i1 int, d1 decimal(11,2), d2 decimal (9,1), d3 decimal (10,3)`,
+			expandedColumnNames: `d1,d3`,
+		},
+		{
+			name:                "expanded: signed, unsigned",
+			fromSchema:          `id int primary key, i1 bigint signed, i2 int unsigned, i3 bigint unsigned`,
+			toSchema:            `id int primary key, i1 int signed, i2 int signed, i3 int signed`,
+			expandedColumnNames: `i2,i3`,
+		},
+		{
+			name:                "expanded: signed, unsigned: range",
+			fromSchema:          `id int primary key, i1 int signed, i2 bigint signed, i3 int signed`,
+			toSchema:            `id int primary key, i1 int unsigned, i2 int unsigned, i3 bigint unsigned`,
+			expandedColumnNames: `i1,i3`,
+		},
+		{
+			name:                "expanded: datetime precision",
+			fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, ti1 time, dt2 datetime(3), dt3 datetime(6), ts2 timestamp(3)`,
+			toSchema:            `id int primary key, dt1 datetime(3), ts1 timestamp(6), ti1 time(3), dt2 datetime(6), dt3 datetime(3), ts2 timestamp`,
+			expandedColumnNames: `dt1,ts1,ti1,dt2`,
+		},
+		{
+			name:                "expanded: strange data type changes",
+			fromSchema:          `id int primary key, dt1 datetime, ts1 timestamp, i1 int, d1 date, e1 enum('a', 'b')`,
+			toSchema:            `id int primary key, dt1 char(32), ts1 varchar(32), i1 tinytext, d1 char(2), e1 varchar(2)`,
+			expandedColumnNames: `dt1,ts1,i1,d1,e1`,
+		},
+		{
+			name:                "expanded: temporal types",
+			fromSchema:          `id int primary key, t1 time, t2 timestamp, t3 date, t4 datetime, t5 time, t6 date`,
+			toSchema:            `id int primary key, t1 datetime, t2 datetime, t3 timestamp, t4 timestamp, t5 timestamp, t6 datetime`,
+			expandedColumnNames: `t1,t2,t3,t5,t6`,
+		},
+		{
+			name:                "expanded: character sets",
+			fromSchema:          `id int primary key, c1 char(3) charset utf8, c2 char(3) charset utf8mb4, c3 char(3) charset ascii, c4 char(3) charset utf8mb4, c5 char(3) charset utf8, c6 char(3) charset latin1`,
+			toSchema:            `id int primary key, c1 char(3) charset utf8mb4, c2 char(3) charset utf8, c3 char(3) charset utf8, c4 char(3) charset ascii, c5 char(3) charset utf8, c6 char(3) charset utf8mb4`,
+			expandedColumnNames: `c1,c3,c6`,
+		},
+		{
+			name:                "expanded: enum",
+			fromSchema:          `id int primary key, e1 enum('a', 'b'), e2 enum('a', 'b'), e3 enum('a', 'b'), e4 enum('a', 'b'), e5 enum('a', 'b'), e6 enum('a', 'b'), e7 enum('a', 'b'), e8 enum('a', 'b')`,
+			toSchema:            `id int primary key, e1 enum('a', 'b'), e2 enum('a'), e3 enum('a', 'b', 'c'), e4 enum('a', 'x'), e5 enum('a', 'x', 'b'), e6 enum('b'), e7 varchar(1), e8 tinyint`,
+			expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
+		},
+		{
+			name:                "expanded: set",
+			fromSchema:          `id int primary key, e1 set('a', 'b'), e2 set('a', 'b'), e3 set('a', 'b'), e4 set('a', 'b'), e5 set('a', 'b'), e6 set('a', 'b'), e7 set('a', 'b'), e8 set('a', 'b')`,
+			toSchema:            `id int primary key, e1 set('a', 'b'), e2 set('a'), e3 set('a', 'b', 'c'), e4 set('a', 'x'), e5 set('a', 'x', 'b'), e6 set('b'), e7 varchar(1), e8 tinyint`,
+			expandedColumnNames: `e3,e4,e5,e6,e7,e8`,
+		},
+	}
+
+	var (
+		createTableWrapper = `CREATE TABLE onlineddl_test(%s)`
+		dropTableStatement = `
+			DROP TABLE onlineddl_test
+		`
+		tableName   = "onlineddl_test"
+		ddlStrategy = "online --declarative --allow-zero-in-date"
+	)
+
+	removeBackticks := func(s string) string {
+		return strings.Replace(s, "`", "", -1)
+	}
+
+	for _, testcase := range testCases {
+		t.Run(testcase.name, func(t *testing.T) {
+
+			t.Run("ensure table dropped", func(t *testing.T) {
+				// A preparation step, to clean up anything from the previous test case
+				uuid := testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", tableName, "")
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				checkTable(t, tableName, false)
+			})
+
+			t.Run("create from-table", func(t *testing.T) {
+				// A preparation step, to re-create the base table
+				fromStatement := fmt.Sprintf(createTableWrapper, testcase.fromSchema)
+				uuid := testOnlineDDLStatement(t, fromStatement, ddlStrategy, "vtgate", tableName, "")
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				checkTable(t, tableName, true)
+			})
+			var uuid string
+			t.Run("run migration", func(t *testing.T) {
+				// This is the migration we will test, and see whether it is revertible or not (and why not).
+				toStatement := fmt.Sprintf(createTableWrapper, testcase.toSchema)
+				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", tableName, "")
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				checkTable(t, tableName, true)
+			})
+			t.Run("check migration", func(t *testing.T) {
+				// All right, the actual test
+				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					removedUniqueKeyNames := row.AsString("removed_unique_key_names", "")
+					droppedNoDefaultColumnNames := row.AsString("dropped_no_default_column_names", "")
+					expandedColumnNames := row.AsString("expanded_column_names", "")
+
+					assert.Equal(t, testcase.removedUniqueKeyNames, removeBackticks(removedUniqueKeyNames))
+					assert.Equal(t, testcase.droppedNoDefaultColumnNames, removeBackticks(droppedNoDefaultColumnNames))
+					assert.Equal(t, testcase.expandedColumnNames, removeBackticks(expandedColumnNames))
+				}
+			})
+		})
+	}
+}
+
+func testRevert(t *testing.T) {
+
+	var (
+		partitionedTableName = `part_test`
+		createStatement      = `
+		CREATE TABLE stress_test (
+			id bigint(20) not null,
+			rand_val varchar(32) null default '',
+			hint_col varchar(64) not null default 'just-created',
+			created_timestamp timestamp not null default current_timestamp,
+			updates int unsigned not null default 0,
+			PRIMARY KEY (id),
+			key created_idx(created_timestamp),
+			key updates_idx(updates)
+		) ENGINE=InnoDB
+	`
+		createIfNotExistsStatement = `
+		CREATE TABLE IF NOT EXISTS stress_test (
+			id bigint(20) not null,
+			PRIMARY KEY (id)
+		) ENGINE=InnoDB
+	`
+		dropStatement = `
+		DROP TABLE stress_test
+	`
+		dropIfExistsStatement = `
+		DROP TABLE IF EXISTS stress_test
+	`
+		alterHintStatement = `
+		ALTER TABLE stress_test modify hint_col varchar(64) not null default '%s'
+	`
+		createViewBaseTableStatement = `
+		CREATE TABLE view_base_table_test (id INT PRIMARY KEY)
+	`
+		createViewStatement = `
+		CREATE VIEW view_test AS SELECT 'success_create' AS msg FROM view_base_table_test
+	`
+		createOrReplaceViewStatement = `
+		CREATE OR REPLACE VIEW view_test AS SELECT 'success_replace' AS msg FROM view_base_table_test
+	`
+		alterViewStatement = `
+		ALTER VIEW view_test AS SELECT 'success_alter' AS msg FROM view_base_table_test
+	`
+		dropViewStatement = `
+		DROP VIEW view_test
+	`
+		dropViewIfExistsStatement = `
+		DROP VIEW IF EXISTS view_test
+	`
+		createPartitionedTableStatement = `
+		CREATE TABLE part_test (
+			id INT NOT NULL,
+			ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+			primary key (id)
+		)
+		PARTITION BY RANGE (id) (
+				PARTITION p1 VALUES LESS THAN (10),
+				PARTITION p2 VALUES LESS THAN (20),
+				PARTITION p3 VALUES LESS THAN (30),
+				PARTITION p4 VALUES LESS THAN (40),
+				PARTITION p5 VALUES LESS THAN (50),
+				PARTITION p6 VALUES LESS THAN (60)
+		)
+	`
+		populatePartitionedTableStatement = `
+		INSERT INTO part_test (id) VALUES (2),(11),(23),(37),(41),(53)
+	`
+	)
+
+	populatePartitionedTable := func(t *testing.T) {
+		onlineddl.VtgateExecQuery(t, &vtParams, populatePartitionedTableStatement, "")
+	}
 
 	mysqlVersion = onlineddl.GetMySQLVersion(t, clusterInstance.Keyspaces[0].Shards[0].PrimaryTablet())
 	require.NotEmpty(t, mysqlVersion)
@@ -1110,8 +1311,4 @@ func testSelectTableMetrics(t *testing.T) {
 	assert.NotZero(t, writeMetrics.updates)
 	assert.Equal(t, writeMetrics.inserts-writeMetrics.deletes, numRows)
 	assert.Equal(t, writeMetrics.updates-writeMetrics.deletes, sumUpdates) // because we DELETE WHERE updates=1
-}
-
-func populatePartitionedTable(t *testing.T) {
-	onlineddl.VtgateExecQuery(t, &vtParams, populatePartitionedTableStatement, "")
 }
