@@ -25,7 +25,7 @@ Internally, that order is implied by the `id` column of `_vt.schema_migrations` 
 
 Note that `--in-order-completion` still allows concurrency. In fact, it is designed to work with concurrent migrations. The idea is that many migrations may run concurrently, but the way they finally `complete` is in-order.
 
-This lets the user submit multiple migrations which may have some dependencies (for example, introduce two views, one of which reads from the other). As long as the migrations are submitted in a valid order, the user can then expect `vitess` to complete the migrations successfully (and in that order).
+This lets the user submit multiple migrations which may have some dependencies (for example, introduce two views, one of which reads from the other). As long as the migrations are submitted in a valid order, the user can then expect Vitess to complete the migrations successfully (and in that order).
 
 This strategy flag applies to any `CREATE|DROP TABLE|VIEW` statements, and to `ALTER TABLE` with `vitess|online` strategy.
 
