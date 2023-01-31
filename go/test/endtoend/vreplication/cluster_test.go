@@ -310,7 +310,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
-		vtorcPort:           basePort + 1600,
+		vtorcPort:           basePort + 1609,
 		charset:             "utf8mb4",
 	}
 }
