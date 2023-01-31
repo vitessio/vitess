@@ -778,7 +778,7 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
 	var bm builtinBackupManifest
-
+	//time.Sleep(10 * time.Second)
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
 	}
@@ -790,8 +790,10 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 
 	var err error
 	if bm.Incremental {
+		log.Infof("inside executeRestoreIncrementalBackup...")
 		err = be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
 	} else {
+		log.Infof("inside executeRestoreIncrementalBackup...")
 		err = be.executeRestoreFullBackup(ctx, params, bh, bm)
 	}
 	if err != nil {

@@ -410,13 +410,6 @@ func (vttablet *VttabletProcess) CreateDB(keyspace string) error {
 	return err
 }
 
-// CreateDBWithSuperReadOnly creates the database for keyspace
-func (vttablet *VttabletProcess) CreateDBWithSuperReadOnly(keyspace string) error {
-	_, _ = vttablet.QueryTabletWithSuperReadOnlyHandling(fmt.Sprintf("drop database IF EXISTS vt_%s", keyspace), keyspace, false)
-	_, err := vttablet.QueryTabletWithSuperReadOnlyHandling(fmt.Sprintf("create database IF NOT EXISTS vt_%s", keyspace), keyspace, false)
-	return err
-}
-
 // QueryTablet lets you execute a query in this tablet and get the result
 func (vttablet *VttabletProcess) QueryTablet(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	if !useDb {

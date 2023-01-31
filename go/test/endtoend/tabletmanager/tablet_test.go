@@ -44,7 +44,7 @@ func TestEnsureDB(t *testing.T) {
 	require.NoError(t, err)
 
 	// Make it the primary.
-	// primary will fail with `--read-only` since in external re-parenting we expect caller to set DB to read-write mode.
+	// primary will fail with `--super_read-only` since in external re-parenting we expect caller to set DB to read-write mode.
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("TabletExternallyReparented", tablet.Alias)
 	require.EqualError(t, err, "exit status 1")
 

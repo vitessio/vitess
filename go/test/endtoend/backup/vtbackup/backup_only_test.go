@@ -263,12 +263,8 @@ func initTablets(t *testing.T, startTablet bool, initShardPrimary bool) {
 
 func restore(t *testing.T, tablet *cluster.Vttablet, tabletType string, waitForState string) {
 	// Erase mysql/tablet dir, then start tablet with restore enabled.
-
 	log.Infof("restoring tablet %s", time.Now())
 	resetTabletDirectory(t, *tablet, true)
-
-	//err := tablet.VttabletProcess.CreateDBWithSuperReadOnly(keyspaceName)
-	//require.Nil(t, err)
 
 	// Start tablets
 	tablet.VttabletProcess.ExtraArgs = []string{"--db-credentials-file", dbCredentialFile}
