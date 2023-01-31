@@ -47,7 +47,6 @@ func (e *UnknownClassError) Error() string {
 type EquivalenceRelation struct {
 	elementClassMap  map[string]int
 	classElementsMap map[int]([]string)
-	classTagsMap     map[int](map[string]bool)
 
 	classCounter int
 }
@@ -56,7 +55,6 @@ func NewEquivalenceRelation() *EquivalenceRelation {
 	return &EquivalenceRelation{
 		elementClassMap:  make(map[string]int),
 		classElementsMap: make(map[int][]string),
-		classTagsMap:     make(map[int]map[string]bool),
 	}
 }
 
@@ -68,7 +66,6 @@ func (r *EquivalenceRelation) Add(element string) {
 	}
 	r.elementClassMap[element] = r.classCounter
 	r.classElementsMap[r.classCounter] = []string{element}
-	r.classTagsMap[r.classCounter] = make(map[string]bool)
 	r.classCounter++
 }
 
@@ -113,12 +110,6 @@ func (r *EquivalenceRelation) Relate(element1, element2 string) (int, error) {
 	}
 	delete(r.classElementsMap, class2)
 
-	// Also copy over all tags
-	for tag := range r.classTagsMap[class2] {
-		r.classTagsMap[class1][tag] = true
-	}
-	delete(r.classTagsMap, class2)
-
 	return class1, nil
 }
 
@@ -145,47 +136,6 @@ func (r *EquivalenceRelation) OrderedClasses() []int {
 	return classes
 }
 
-func (r *EquivalenceRelation) TagClass(class int, tag string) error {
-	m, ok := r.classTagsMap[class]
-	if !ok {
-		return &UnknownClassError{class: class}
-	}
-	m[tag] = true
-	return nil
-}
-
-func (r *EquivalenceRelation) TagElement(element string, tag string) error {
-	class, err := r.ElementClass(element)
-	if err != nil {
-		return err
-	}
-	return r.TagClass(class, tag)
-}
-
 func (r *EquivalenceRelation) Map() map[int]([]string) {
 	return r.classElementsMap
-}
-
-func (r *EquivalenceRelation) Tags(class int) (map[string]bool, error) {
-	m, ok := r.classTagsMap[class]
-	if !ok {
-		return nil, &UnknownClassError{class: class}
-	}
-	return m, nil
-}
-
-func (r *EquivalenceRelation) ClassTagged(class int, tag string) (bool, error) {
-	m, ok := r.classTagsMap[class]
-	if !ok {
-		return false, &UnknownClassError{class: class}
-	}
-	return m[tag], nil
-}
-
-func (r *EquivalenceRelation) ElementTagged(element string, tag string) (bool, error) {
-	class, err := r.ElementClass(element)
-	if err != nil {
-		return false, err
-	}
-	return r.ClassTagged(class, tag)
 }
