@@ -795,7 +795,8 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 									// all right, this is the scenario to validate.
 									// the current diff is ALTER TABLE ... ADD FOREIGN KEY
 									// and the parent table also has an ALTER TABLE.
-									// so if the parent's ALTER in any way modifies the referenced FK columns, that an error
+									// so if the parent's ALTER in any way modifies the referenced FK columns, that's
+									// a sequential execution dependency
 									referencedColumnNames := map[string]bool{}
 									for _, referencedColumn := range fk.ReferenceDefinition.ReferencedColumns {
 										referencedColumnNames[referencedColumn.Lowered()] = true
