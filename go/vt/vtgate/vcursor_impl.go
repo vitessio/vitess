@@ -1076,6 +1076,7 @@ func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
 
 func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 	safeSession := NewAutocommitSession(vc.safeSession.Session)
+	safeSession.logging = vc.safeSession.logging
 	return &vcursorImpl{
 		safeSession:     safeSession,
 		keyspace:        vc.keyspace,
