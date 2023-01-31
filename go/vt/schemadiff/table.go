@@ -722,6 +722,7 @@ func (c *CreateTableEntity) Diff(other Entity, hints *DiffHints) (EntityDiff, er
 	if err != nil {
 		return nil, err
 	}
+
 	return d, nil
 }
 
@@ -820,6 +821,8 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			parentAlterTableEntityDiff.addSubsequentDiff(diff)
 		}
 	}
+	sortAlterOptions(parentAlterTableEntityDiff)
+
 	return parentAlterTableEntityDiff, nil
 }
 
@@ -1636,6 +1639,9 @@ func (c *CreateTableEntity) Drop() EntityDiff {
 }
 
 func sortAlterOptions(diff *AlterTableEntityDiff) {
+	if diff == nil {
+		return
+	}
 	optionOrder := func(opt sqlparser.AlterOption) int {
 		switch opt.(type) {
 		case *sqlparser.DropKey:
