@@ -23,6 +23,81 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestPermutations(t *testing.T) {
+	var (
+		fromQueries = []string{
+			"create table t1 (id int primary key, info int not null);",
+			"create table t2 (id int primary key, ts timestamp);",
+			"create view v1 as select id from t1",
+		}
+		toQueries = []string{
+			"create table t1 (id int primary key, info int not null, i int);",
+			"create table t2 (id int primary key);",
+			"create view v1 as select id, info from t1",
+			"create view v2 as select id from t2",
+		}
+	)
+	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
+
+	fromSchema, err := NewSchemaFromQueries(fromQueries)
+	require.NoError(t, err)
+	require.NotNil(t, fromSchema)
+
+	toSchema, err := NewSchemaFromQueries(toQueries)
+	require.NoError(t, err)
+	require.NotNil(t, toSchema)
+
+	schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
+	require.NoError(t, err)
+
+	allDiffs := schemaDiff.AllDiffs()[:]
+	require.Equal(t, 4, len(allDiffs))
+
+	toSingleString := func(diffs []EntityDiff) string {
+		res := ""
+		for _, diff := range diffs {
+			res = res + diff.CanonicalStatementString() + ";"
+		}
+		return res
+	}
+	{
+		iteration := 0
+		allPerms := map[string]bool{}
+		allDiffs := schemaDiff.AllDiffs()[:]
+		originalSingleString := toSingleString(allDiffs)
+		earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+			// cover all permutations
+			allPerms[toSingleString(pdiffs)] = true
+			if iteration == 0 {
+				// First permutation should be the same as original
+				require.Equal(t, originalSingleString, toSingleString(pdiffs))
+			} else {
+				// rest of permutations must be different than original (later we also verify they are all unique)
+				require.NotEqualf(t, originalSingleString, toSingleString(pdiffs), "in iteration %d", iteration)
+			}
+			iteration++
+			return false
+		})
+		assert.False(t, earlyBreak)
+		assert.Equal(t, 24, len(allPerms))
+	}
+	{
+		allPerms := map[string]bool{}
+		allDiffs := schemaDiff.AllDiffs()[:]
+		originalSingleString := toSingleString(allDiffs)
+		earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
+			// Single visit
+			allPerms[toSingleString(pdiffs)] = true
+			// First permutation should be the same as original
+			require.Equal(t, originalSingleString, toSingleString(pdiffs))
+			// early break; this callback function should not be invoked again
+			return true
+		})
+		assert.True(t, earlyBreak)
+		assert.Equal(t, 1, len(allPerms))
+	}
+}
+
 func TestSchemaDiff(t *testing.T) {
 	var (
 		createQueries = []string{
@@ -32,16 +107,36 @@ func TestSchemaDiff(t *testing.T) {
 		}
 	)
 	tt := []struct {
-		name        string
-		fromQueries []string
-		toQueries   []string
-		expectDiffs int
-		expectDeps  int
-		sequential  bool
+		name             string
+		fromQueries      []string
+		toQueries        []string
+		expectDiffs      int
+		expectDeps       int
+		sequential       bool
+		failOrderedDiffs bool
 	}{
 		{
 			name:      "no change",
 			toQueries: createQueries,
+		},
+		{
+			name: "three unrelated changes",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, ts timestamp);",
+				"create table t2 (id int primary key, ts timestamp, v varchar);",
+				"create view v1 as select id from t1",
+				"create view v2 as select 1 from dual",
+			},
+			expectDiffs: 3,
+		},
+		{
+			name: "three unrelated changes 2",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create table t2 (id int primary key, ts timestamp, v varchar);",
+				"create view v2 as select 1 from dual",
+			},
+			expectDiffs: 3,
 		},
 		// Subsequent
 		{
@@ -235,6 +330,22 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 3,
 			expectDeps:  2,
 		},
+		// {
+		// 	// This will become relevant when https://github.com/vitessio/vitess/issues/12147 is merged
+		// 	name: "alter table, alter view, impossible sequence",
+		// 	fromQueries: []string{
+		// 		"create table t1 (id int primary key, info int not null);",
+		// 		"create view v1 as select id, info from t1",
+		// 	},
+		// 	toQueries: []string{
+		// 		"create table t1 (id int primary key, newcol int not null);",
+		// 		"create view v1 as select id, newcol from t1",
+		// 	},
+		// 	expectDiffs:      2,
+		// 	expectDeps:       1,
+		// 	failOrderedDiffs: true,
+		// },
+
 		// FKs
 		{
 			name: "create table with fk",
@@ -375,6 +486,19 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 		},
+		{
+			name: "reverse fk",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p), foreign key (p) references t2 (p) on delete no action);",
+				"create table t2 (id int primary key, p int, key p_idx (p));",
+			},
+			expectDiffs: 2,
+			expectDeps:  2,
+		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	for _, tc := range tt {
@@ -407,6 +531,19 @@ func TestSchemaDiff(t *testing.T) {
 			}
 			assert.Equalf(t, tc.expectDeps, len(deps), "found deps: %v", depsKeys)
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDeps())
+
+			orderedDiffs, err := schemaDiff.OrderedDiffs()
+			if tc.failOrderedDiffs {
+				assert.Error(t, err)
+				assert.Equal(t, err, ErrImpossibleDiffSequence)
+			} else {
+				require.NoError(t, err)
+			}
+			for _, diff := range orderedDiffs {
+				s := diff.CanonicalStatementString()
+				_, err := schemaDiff.r.ElementClass(s)
+				require.NoError(t, err)
+			}
 		})
 	}
 }

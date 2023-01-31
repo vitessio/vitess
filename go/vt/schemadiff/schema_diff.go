@@ -17,6 +17,9 @@ limitations under the License.
 package schemadiff
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/mathutil"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -48,12 +51,43 @@ func (d *DiffDep) hashKey() string {
 	return d.diff.CanonicalStatementString() + "/" + d.depDiff.CanonicalStatementString()
 }
 
+/*
+Adapted from https://yourbasic.org/golang/generate-permutation-slice-string/
+Licensed under https://creativecommons.org/licenses/by/3.0/
+Modified to have an early break
+*/
+
+// Perm calls f with each permutation of a.
+func permutateDiffs(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool)) (earlyBreak bool) {
+	return permDiff(a, callback, 0)
+}
+
+// Permute the values at index i to len(a)-1.
+func permDiff(a []EntityDiff, callback func([]EntityDiff) (earlyBreak bool), i int) (earlyBreak bool) {
+	if i > len(a) {
+		return callback(a)
+	}
+	if permDiff(a, callback, i+1) {
+		return true
+	}
+	for j := i + 1; j < len(a); j++ {
+		a[i], a[j] = a[j], a[i]
+		if permDiff(a, callback, i+1) {
+			return true
+		}
+		a[i], a[j] = a[j], a[i]
+	}
+	return false
+}
+
 type SchemaDiff struct {
 	schema *Schema
 	diffs  []EntityDiff
 
 	diffMap map[string]EntityDiff // key is diff's CanonicalStatementString()
 	deps    map[string]*DiffDep
+
+	r *mathutil.EquivalenceRelation
 }
 
 func NewSchemaDiff(schema *Schema) *SchemaDiff {
@@ -61,6 +95,7 @@ func NewSchemaDiff(schema *Schema) *SchemaDiff {
 		schema:  schema,
 		deps:    make(map[string]*DiffDep),
 		diffMap: make(map[string]EntityDiff),
+		r:       mathutil.NewEquivalenceRelation(),
 	}
 }
 
@@ -75,11 +110,16 @@ func (d *SchemaDiff) loadDiffs(diffs []EntityDiff) {
 				// Two migrations on same entity (table in our case) must run sequentially.
 				d.AddDep(sdiff, allSubsequent[0], DiffDepSequentialExecution)
 			}
+			d.r.Add(sdiff.CanonicalStatementString())
+			// since we've exploded the subsequent diffs, we now clear any subsequent diffs
+			// so that they do not auto-Apply() when we compute a valid path.
+			sdiff.SetSubsequentDiff(nil)
 		}
 	}
 }
 
 func (d *SchemaDiff) AddDep(diff EntityDiff, depDiff EntityDiff, depType DiffDepType) *DiffDep {
+	_, _ = d.r.Relate(diff.CanonicalStatementString(), depDiff.CanonicalStatementString())
 	diffDep := NewDiffDep(diff, depDiff, depType)
 	if existingDep, ok := d.deps[diffDep.hashKey()]; ok {
 		if existingDep.depType >= diffDep.depType {
@@ -133,4 +173,38 @@ func (d *SchemaDiff) HasSequentialExecutionDeps() bool {
 		}
 	}
 	return false
+}
+
+func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
+	lastGoodSchema := d.schema
+	var orderedDiffs []EntityDiff
+	m := d.r.Map()
+	for _, class := range d.r.OrderedClasses() {
+		classDiffs := []EntityDiff{}
+		for _, statementString := range m[class] {
+			diff, ok := d.DiffByStatementString(statementString)
+			if !ok {
+				return nil, fmt.Errorf("unexpected error: cannot find diff: %v", statementString)
+			}
+			classDiffs = append(classDiffs, diff)
+		}
+		foundValidPathForClass := permutateDiffs(classDiffs, func(permutatedDiffs []EntityDiff) bool {
+			// We want to apply the changes one by one, and validate the schema after each change
+			for i := range permutatedDiffs {
+				permutationSchema, err := lastGoodSchema.Apply(permutatedDiffs[i : i+1])
+				if err != nil {
+					// permutation is invalid
+					return false // continue searching
+				}
+				lastGoodSchema = permutationSchema
+			}
+			// Good news, we managed to apply all of the permutations!
+			orderedDiffs = append(orderedDiffs, permutatedDiffs...)
+			return true // early break! No need to keep searching
+		})
+		if !foundValidPathForClass {
+			return nil, ErrImpossibleDiffSequence
+		}
+	}
+	return orderedDiffs, nil
 }
