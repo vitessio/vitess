@@ -1643,23 +1643,26 @@ func sortAlterOptions(diff *AlterTableEntityDiff) {
 		return
 	}
 	optionOrder := func(opt sqlparser.AlterOption) int {
-		switch opt.(type) {
+		switch opt := opt.(type) {
 		case *sqlparser.DropKey:
-			return 1
-		case *sqlparser.DropColumn:
+			if opt.Type == sqlparser.ForeignKeyType {
+				return 1
+			}
 			return 2
-		case *sqlparser.ModifyColumn:
+		case *sqlparser.DropColumn:
 			return 3
-		case *sqlparser.RenameColumn:
+		case *sqlparser.ModifyColumn:
 			return 4
-		case *sqlparser.AddColumns:
+		case *sqlparser.RenameColumn:
 			return 5
-		case *sqlparser.AddIndexDefinition:
+		case *sqlparser.AddColumns:
 			return 6
-		case *sqlparser.AddConstraintDefinition:
+		case *sqlparser.AddIndexDefinition:
 			return 7
-		case sqlparser.TableOptions, *sqlparser.TableOptions:
+		case *sqlparser.AddConstraintDefinition:
 			return 8
+		case sqlparser.TableOptions, *sqlparser.TableOptions:
+			return 9
 		default:
 			return math.MaxInt
 		}
