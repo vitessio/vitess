@@ -105,7 +105,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.Equal(t, primaryInstance.ReplicationSQLThreadState, inst.ReplicationThreadStateNoThread)
 
 	// insert an errant GTID in the replica
-	_, err = utils.RunSQLWithSuperReadOnly(t, "insert into vt_insert_test(id, msg) values (10173, 'test 178342')", replica, "vt_ks", true)
+	_, err = utils.RunSQL(t, `set global gtid_purged='12345678-1234-1234-1234-123456789012:1'`, replica, "")
 	require.NoError(t, err)
 
 	replicaInstance, err := inst.ReadTopologyInstanceBufferable(&inst.InstanceKey{
@@ -136,7 +136,7 @@ func TestReadTopologyInstanceBufferable(t *testing.T) {
 	assert.EqualValues(t, 1000000000000000000, replicaInstance.SemiSyncPrimaryTimeout)
 	assert.NotEmpty(t, replicaInstance.ExecutedGtidSet)
 	assert.Contains(t, replicaInstance.ExecutedGtidSet, primaryInstance.ServerUUID)
-	assert.Empty(t, replicaInstance.GtidPurged)
+	assert.Equal(t, "12345678-1234-1234-1234-123456789012:1", replicaInstance.GtidPurged)
 	assert.Regexp(t, ".{8}-.{4}-.{4}-.{4}-.{12}:.*", replicaInstance.GtidErrant)
 	assert.True(t, replicaInstance.HasReplicationCredentials)
 	assert.Equal(t, replicaInstance.ReplicationIOThreadState, inst.ReplicationThreadStateRunning)
