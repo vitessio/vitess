@@ -17,6 +17,9 @@ limitations under the License.
 package evalengine
 
 import (
+	"strconv"
+	"strings"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -42,6 +45,12 @@ var collationBinary = collations.TypedCollation{
 	Repertoire:   collations.RepertoireASCII,
 }
 
+var collationJSON = collations.TypedCollation{
+	Collation:    46, // utf8mb4_bin
+	Coercibility: collations.CoerceCoercible,
+	Repertoire:   collations.RepertoireUnicode,
+}
+
 type (
 	CollateExpr struct {
 		UnaryExpr
@@ -65,7 +74,7 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 		}
 		return e.withCollation(c.TypedCollation), nil
 	default:
-		return evalToText(e, c.TypedCollation.Collation, true)
+		return evalToVarchar(e, c.TypedCollation.Collation, true)
 	}
 }
 
@@ -88,12 +97,34 @@ func (d LookupDefaultCollation) DefaultCollation() collations.ID {
 	return collations.ID(d)
 }
 
+type LookupIntegrationTest struct {
+	Collation collations.ID
+}
+
+func (*LookupIntegrationTest) ColumnLookup(name *sqlparser.ColName) (int, error) {
+	n := name.CompliantName()
+	if strings.HasPrefix(n, "column") {
+		return strconv.Atoi(n[len("column"):])
+	}
+	return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown column: %q", n)
+}
+
+func (tl *LookupIntegrationTest) CollationForExpr(_ sqlparser.Expr) collations.ID {
+	return tl.Collation
+}
+
+func (tl *LookupIntegrationTest) DefaultCollation() collations.ID {
+	return tl.Collation
+}
+
 func evalCollation(e eval) collations.TypedCollation {
 	switch e := e.(type) {
 	case nil:
 		return collationNull
 	case evalNumeric:
 		return collationNumeric
+	case *evalJson:
+		return collationJSON
 	case *evalBytes:
 		return e.col
 	default:

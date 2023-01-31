@@ -103,14 +103,65 @@ func normalize(v sqltypes.Value, coll collations.ID) string {
 
 func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 	t.Helper()
+	env := evalengine.EnvWithBindVars(nil, 255)
+	compareRemoteExprEnv(t, env, conn, expr)
+}
+
+func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string) {
+	t.Helper()
 
 	localQuery := "SELECT " + expr
 	remoteQuery := "SELECT " + expr
 	if debugCheckCollations {
 		remoteQuery = fmt.Sprintf("SELECT %s, COLLATION(%s)", expr, expr)
 	}
+	if len(env.Fields) > 0 {
+		if _, err := conn.ExecuteFetch(`DROP TEMPORARY TABLE IF EXISTS vteval_test`, -1, false); err != nil {
+			t.Fatalf("failed to drop temporary table: %v", err)
+		}
 
-	local, localType, localErr := safeEvaluate(localQuery)
+		var schema strings.Builder
+		schema.WriteString(`CREATE TEMPORARY TABLE vteval_test(autopk int primary key auto_increment, `)
+		for i, field := range env.Fields {
+			if i > 0 {
+				schema.WriteString(", ")
+			}
+			_, _ = fmt.Fprintf(&schema, "%s %s", field.Name, field.ColumnType)
+		}
+		schema.WriteString(")")
+
+		if _, err := conn.ExecuteFetch(schema.String(), -1, false); err != nil {
+			t.Fatalf("failed to initialize temporary table: %v (sql=%s)", err, schema.String())
+		}
+
+		if len(env.Row) > 0 {
+			var rowsql strings.Builder
+			rowsql.WriteString(`INSERT INTO vteval_test(`)
+			for i, field := range env.Fields {
+				if i > 0 {
+					rowsql.WriteString(", ")
+				}
+				rowsql.WriteString(field.Name)
+			}
+
+			rowsql.WriteString(`) VALUES (`)
+			for i, row := range env.Row {
+				if i > 0 {
+					rowsql.WriteString(", ")
+				}
+				row.EncodeSQLStringBuilder(&rowsql)
+			}
+			rowsql.WriteString(")")
+
+			if _, err := conn.ExecuteFetch(rowsql.String(), -1, false); err != nil {
+				t.Fatalf("failed to insert data into temporary table: %v (sql=%s)", err, rowsql.String())
+			}
+		}
+
+		remoteQuery = remoteQuery + " FROM vteval_test"
+	}
+
+	local, localType, localErr := safeEvaluate(env, localQuery)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal string
@@ -153,9 +204,9 @@ func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 		}
 	}
 	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation); diff != "" {
-		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)", diff, localQuery, debugSimplify)
+		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", diff, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
-		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, localQuery)
+		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal, remoteVal, localQuery, env.Row)
 	}
 }
 

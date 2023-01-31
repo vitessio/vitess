@@ -72,7 +72,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return b, nil
 
 	case "CHAR", "NCHAR":
-		t, err := evalToText(e, c.Collation, true)
+		t, err := evalToVarchar(e, c.Collation, true)
 		if err != nil {
 			// return NULL on error
 			return nil, nil
@@ -80,6 +80,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		if c.HasLength {
 			t.truncateInPlace(c.Length)
 		}
+		t.tt = int16(c.convertToCharType(e.sqlType()))
 		return t, nil
 	case "DECIMAL":
 		m := 10
@@ -117,13 +118,13 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := c.Inner.typeof(env)
+	tt, f := c.Inner.typeof(env)
 
 	switch c.Type {
 	case "BINARY":
 		return sqltypes.VarBinary, f
 	case "CHAR", "NCHAR":
-		return sqltypes.VarChar, f | flagNullable
+		return c.convertToCharType(tt), f | flagNullable
 	case "DECIMAL":
 		return sqltypes.Decimal, f
 	case "DOUBLE", "REAL":
@@ -141,6 +142,21 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	}
 }
 
+func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
+	if c.HasLength {
+		col := collations.Local().LookupByID(c.Collation)
+		length := c.Length * col.Charset().MaxWidth()
+		if length > 64*1024 {
+			return sqltypes.Text
+		}
+	} else {
+		if tt == sqltypes.Blob {
+			return sqltypes.Text
+		}
+	}
+	return sqltypes.VarChar
+}
+
 func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := c.Inner.eval(env)
 	if err != nil {
@@ -149,7 +165,7 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	if e == nil {
 		return nil, nil
 	}
-	e, err = evalToText(e, c.Collation, true)
+	e, err = evalToVarchar(e, c.Collation, true)
 	if err != nil {
 		// return NULL instead of error
 		return nil, nil

@@ -120,13 +120,6 @@ func (cached *CallExpr) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Aliases []vitess.io/vitess/go/vt/sqlparser.IdentifierCI
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Aliases)) * int64(32))
-		for _, elem := range cached.Aliases {
-			size += elem.CachedSize(false)
-		}
-	}
 	// field Method string
 	size += hack.RuntimeAllocSize(int64(len(cached.Method)))
 	return size

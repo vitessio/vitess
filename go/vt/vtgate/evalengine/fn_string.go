@@ -78,7 +78,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 
 	case evalNumeric:
-		return evalToText(e, env.DefaultCollation, false)
+		return evalToVarchar(e, env.DefaultCollation, false)
 
 	case *evalBytes:
 		coll := collations.Local().LookupByID(e.col.Collation)
@@ -200,7 +200,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 
 	text, ok := arg1.(*evalBytes)
 	if !ok {
-		text, err = evalToText(arg1, env.DefaultCollation, true)
+		text, err = evalToVarchar(arg1, env.DefaultCollation, true)
 		if err != nil {
 			return nil, err
 		}
@@ -239,6 +239,10 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 func (*builtinCollation) typeof(_ *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, 0
+}
+
+func (c *builtinWeightString) callable() []Expr {
+	return []Expr{c.String}
 }
 
 func (c *builtinWeightString) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

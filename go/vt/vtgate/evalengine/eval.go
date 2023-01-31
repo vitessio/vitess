@@ -25,6 +25,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 type typeFlag uint32
@@ -133,7 +134,7 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 	}
 	if typ == sqltypes.VarChar || typ == sqltypes.Char {
 		// if we have an explicit VARCHAR coercion, always force it so the collation is replaced in the target
-		return evalToText(e, col, false)
+		return evalToVarchar(e, col, false)
 	}
 	if e.sqlType() == typ {
 		// nothing to be done here
@@ -309,6 +310,10 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 		return newEvalRaw(value.Type(), value.Raw(), collationNumeric), nil
 	case sqltypes.IsNull(tt):
 		return nil, nil
+	case tt == sqltypes.TypeJSON:
+		var p json.Parser
+		j, err := p.ParseBytes(value.Raw())
+		return (*evalJson)(j), wrap(err)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}

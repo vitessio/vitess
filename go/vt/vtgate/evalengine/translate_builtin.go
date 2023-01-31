@@ -18,8 +18,11 @@ package evalengine
 
 import (
 	"fmt"
+	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type argError string
@@ -28,9 +31,20 @@ func (err argError) Error() string {
 	return fmt.Sprintf("Incorrect parameter count in the call to native function '%s'", string(err))
 }
 
+func translateFuncArgs(fnargs []sqlparser.Expr, lookup TranslationLookup) ([]Expr, error) {
+	var args TupleExpr
+	for _, expr := range fnargs {
+		convertedExpr, err := translateExpr(expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+		args = append(args, convertedExpr)
+	}
+	return args, nil
+}
+
 func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, error) {
 	var args TupleExpr
-	var aliases []sqlparser.IdentifierCI
 	for _, expr := range fn.Exprs {
 		aliased, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
@@ -41,11 +55,10 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 			return nil, err
 		}
 		args = append(args, convertedExpr)
-		aliases = append(aliases, aliased.As)
 	}
 
 	method := fn.Name.Lowered()
-	call := CallExpr{Arguments: args, Aliases: aliases, Method: method}
+	call := CallExpr{Arguments: args, Method: method}
 
 	switch method {
 	case "isnull":
@@ -127,6 +140,88 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
+}
+
+func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr, error) {
+	switch call := call.(type) {
+	case *sqlparser.FuncExpr:
+		return translateFuncExpr(call, lookup)
+
+	case *sqlparser.ConvertExpr:
+		return translateConvertExpr(call.Expr, call.Type, lookup)
+
+	case *sqlparser.ConvertUsingExpr:
+		return translateConvertUsingExpr(call, lookup)
+
+	case *sqlparser.WeightStringFuncExpr:
+		var ws builtinWeightString
+		var err error
+
+		ws.String, err = translateExpr(call.Expr, lookup)
+		if err != nil {
+			return nil, err
+		}
+		if call.As != nil {
+			ws.Cast = strings.ToLower(call.As.Type)
+			ws.Len, ws.HasLen, err = translateIntegral(call.As.Length, lookup)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return &ws, nil
+
+	case *sqlparser.JSONExtractExpr:
+		args, err := translateFuncArgs(append([]sqlparser.Expr{call.JSONDoc}, call.PathList...), lookup)
+		if err != nil {
+			return nil, err
+		}
+		return &builtinJsonExtract{
+			CallExpr: CallExpr{
+				Arguments: args,
+				Method:    "JSON_EXTRACT",
+			},
+		}, nil
+
+	case *sqlparser.JSONUnquoteExpr:
+		arg, err := translateExpr(call.JSONValue, lookup)
+		if err != nil {
+			return nil, err
+		}
+		return &builtinJsonUnquote{
+			CallExpr: CallExpr{
+				Arguments: []Expr{arg},
+				Method:    "JSON_UNQUOTE",
+			},
+		}, nil
+
+	default:
+		return nil, translateExprNotSupported(call)
+	}
+}
+
+func builtinJsonExtractUnquoteRewrite(left Expr, right Expr) (Expr, error) {
+	extract, err := builtinJsonExtractRewrite(left, right)
+	if err != nil {
+		return nil, err
+	}
+	return &builtinJsonUnquote{
+		CallExpr: CallExpr{
+			Arguments: []Expr{extract},
+			Method:    "JSON_UNQUOTE",
+		},
+	}, nil
+}
+
+func builtinJsonExtractRewrite(left Expr, right Expr) (Expr, error) {
+	if _, ok := left.(*Column); !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lhs of a JSON extract operator must be a column")
+	}
+	return &builtinJsonExtract{
+		CallExpr: CallExpr{
+			Arguments: []Expr{left, right},
+			Method:    "JSON_EXTRACT",
+		},
+	}, nil
 }
 
 func builtinIsNullRewrite(args []Expr) (Expr, error) {

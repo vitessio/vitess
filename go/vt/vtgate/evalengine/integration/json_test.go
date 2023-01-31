@@ -1,0 +1,73 @@
+package integration
+
+import (
+	"fmt"
+	"testing"
+
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
+)
+
+func mustJSON(j string) sqltypes.Value {
+	v, err := sqltypes.NewJSON(j)
+	if err != nil {
+		panic(err)
+	}
+	return v
+}
+
+func TestJsonExtract(t *testing.T) {
+	var cases = []struct {
+		Operator string
+		Path     string
+	}{
+		{Operator: `->>`, Path: "$**.b"},
+		{Operator: `->>`, Path: "$.c"},
+		{Operator: `->>`, Path: "$.b[1].c"},
+		{Operator: `->`, Path: "$.b[1].c"},
+		{Operator: `->>`, Path: "$.b[1]"},
+		{Operator: `->>`, Path: "$[0][0]"},
+		{Operator: `->>`, Path: "$**[0]"},
+		{Operator: `->>`, Path: "$.a[0]"},
+		{Operator: `->>`, Path: "$[0].a[0]"},
+		{Operator: `->>`, Path: "$**.a"},
+		{Operator: `->>`, Path: "$[0][0][0].a"},
+		{Operator: `->>`, Path: "$[*].b"},
+		{Operator: `->>`, Path: "$[*].a"},
+	}
+
+	var rows = []sqltypes.Value{
+		mustJSON(`[ { "a": 1 }, { "a": 2 } ]`),
+		mustJSON(`{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }`),
+		mustJSON(`{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }`),
+		mustJSON(`{ "a" : "foo", "b" : [ true, { "c" : 123 } ] }`),
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var env evalengine.ExpressionEnv
+	env.DefaultCollation = collations.CollationUtf8mb4ID
+	env.Fields = []*querypb.Field{
+		{
+			Name:       "column0",
+			Type:       sqltypes.TypeJSON,
+			ColumnType: "JSON",
+		},
+	}
+
+	for _, tc := range cases {
+		expr0 := fmt.Sprintf("column0%s'%s'", tc.Operator, tc.Path)
+		expr1 := fmt.Sprintf("cast(json_unquote(json_extract(column0, '%s')) as char)", tc.Path)
+		expr2 := fmt.Sprintf("cast(%s as char) <=> %s", expr0, expr1)
+
+		for _, row := range rows {
+			env.Row = []sqltypes.Value{row}
+			compareRemoteExprEnv(t, &env, conn, expr0)
+			compareRemoteExprEnv(t, &env, conn, expr1)
+			compareRemoteExprEnv(t, &env, conn, expr2)
+		}
+	}
+}

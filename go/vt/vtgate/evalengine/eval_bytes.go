@@ -60,7 +60,7 @@ func evalToBinary(e eval) *evalBytes {
 	return newEvalBinary(e.toRawBytes())
 }
 
-func evalToText(e eval, col collations.ID, convert bool) (*evalBytes, error) {
+func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) {
 	var bytes []byte
 	var typedcol collations.TypedCollation
 

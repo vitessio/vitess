@@ -161,6 +161,14 @@ func NewVarChar(v string) Value {
 	return MakeTrusted(VarChar, []byte(v))
 }
 
+func NewJSON(v string) (Value, error) {
+	j := []byte(v)
+	if !json.Valid(j) {
+		return Value{}, fmt.Errorf("invalid JSON value: %q", v)
+	}
+	return MakeTrusted(TypeJSON, j), nil
+}
+
 // NewVarBinary builds a VarBinary Value.
 // The input is a string because it's the most common use case.
 func NewVarBinary(v string) Value {
