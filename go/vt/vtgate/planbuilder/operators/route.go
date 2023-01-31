@@ -314,22 +314,8 @@ func createRouteFromVSchemaTable(
 		},
 	}
 
-	var routing Routing
-	switch {
-	case vschemaTable.Type == vindexes.TypeSequence:
-		panic(45)
-	case vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual":
-		routing = &DualRouting{}
-	case vschemaTable.Type == vindexes.TypeReference:
-		routing = &ReferenceRouting{keyspace: vschemaTable.Keyspace}
-	case !vschemaTable.Keyspace.Sharded:
-		routing = &UnshardedRouting{keyspace: vschemaTable.Keyspace}
-	default:
-		routing = newTableRouting(vschemaTable, solves)
-	}
-
-	plan.Routing = routing
-
+	// We create the appropiate Routing struct here, depending on the type of table we are dealing with.
+	routing := createRoutingForVTable(vschemaTable, solves)
 	for _, predicate := range queryTable.Predicates {
 		var err error
 		plan.Routing, err = routing.UpdateRoutingLogic(ctx, predicate)
@@ -338,13 +324,18 @@ func createRouteFromVSchemaTable(
 		}
 	}
 
+	plan.Routing = routing
+
 	tr, ok := plan.Routing.(*TableRouting)
 	if !ok {
+		// if we don't have a TableRouting, the rest of the logic doesn't really make sense,
+		// so we can bail out early
 		return plan, nil
 	}
 
 	if tr.isScatter() && len(queryTable.Predicates) > 0 {
 		var err error
+		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
 		plan.Routing, err = tr.tryImprove(ctx, queryTable)
 		if err != nil {
 			return nil, err
@@ -360,6 +351,21 @@ func createRouteFromVSchemaTable(
 	// }
 
 	return plan, nil
+}
+
+func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet) Routing {
+	switch {
+	case vschemaTable.Type == vindexes.TypeSequence:
+		return &SequenceRouting{}
+	case vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual":
+		return &DualRouting{}
+	case vschemaTable.Type == vindexes.TypeReference:
+		return &ReferenceRouting{keyspace: vschemaTable.Keyspace}
+	case !vschemaTable.Keyspace.Sharded:
+		return &UnshardedRouting{keyspace: vschemaTable.Keyspace}
+	default:
+		return newTableRouting(vschemaTable, id)
+	}
 }
 
 func createAlternateRoutesFromVSchemaTable(

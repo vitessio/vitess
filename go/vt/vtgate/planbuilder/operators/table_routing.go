@@ -73,7 +73,6 @@ func (tr *TableRouting) isScatter() bool {
 }
 
 func (tr *TableRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
-	// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
 	oldPredicates := queryTable.Predicates
 	queryTable.Predicates = nil
 	tr.SeenPredicates = nil

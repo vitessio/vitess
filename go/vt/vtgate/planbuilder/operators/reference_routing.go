@@ -58,3 +58,27 @@ func (rr *DualRouting) Cost() int {
 func (rr *DualRouting) OpCode() engine.Opcode {
 	return engine.Reference
 }
+
+type SequenceRouting struct{}
+
+var _ Routing = (*SequenceRouting)(nil)
+
+func (rr *SequenceRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+	rp.Opcode = engine.Next
+}
+
+func (rr *SequenceRouting) Clone() Routing {
+	return &SequenceRouting{}
+}
+
+func (rr *SequenceRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+	return rr, nil
+}
+
+func (rr *SequenceRouting) Cost() int {
+	return 0
+}
+
+func (rr *SequenceRouting) OpCode() engine.Opcode {
+	return engine.Next
+}
