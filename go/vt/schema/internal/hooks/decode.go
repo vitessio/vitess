@@ -30,6 +30,34 @@ import (
 	"vitess.io/vitess/go/vt/proto/vttime"
 )
 
+func DecodeReadyToComplete(from, to reflect.Type, data any) (any, error) {
+	if to != reflect.TypeOf(true) {
+		return data, nil
+	}
+
+	var iVal int64
+	switch from.Kind() {
+	case reflect.Bool:
+		return data.(bool), nil
+	case reflect.Int:
+		iVal = int64(data.(int))
+	case reflect.Int32:
+		iVal = int64(data.(int32))
+	case reflect.Int64:
+		iVal = data.(int64)
+	case reflect.Float32:
+		iVal = int64(data.(float32))
+	case reflect.Float64:
+		iVal = int64(data.(float64))
+	default:
+		return nil, fmt.Errorf("invalid type %s for ReadyToComplete field", from.Kind())
+	}
+
+	// The legacy ReadyToComplete is set to 1 when a migration is ready. We're
+	// being a bit more permissive here.
+	return iVal != 0, nil
+}
+
 var protoTime vttime.Time
 
 func DecodeRequestTime(from, to reflect.Type, data any) (any, error) {

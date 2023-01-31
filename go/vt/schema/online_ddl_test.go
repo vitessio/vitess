@@ -709,4 +709,56 @@ func TestFromJSON(t *testing.T) {
 			})
 		}
 	})
+
+	t.Run("ready_to_complete parsing", func(t *testing.T) {
+		tests := []testcase{
+			{
+				json: `{"ready_to_complete": true}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						ReadyToComplete: true,
+					},
+				},
+			},
+			{
+				json: `{"ready_to_complete": 1}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						ReadyToComplete: true,
+					},
+				},
+			},
+			{
+				json: `{"ready_to_complete": false}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						ReadyToComplete: false,
+					},
+				},
+			},
+			{
+				json: `{"ready_to_complete": 0}`,
+				expected: &OnlineDDL{
+					OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
+						ReadyToComplete: false,
+					},
+				},
+			},
+		}
+
+		for _, test := range tests {
+			test := test
+
+			t.Run("", func(t *testing.T) {
+				actual, err := FromJSON([]byte(test.json))
+				if test.shouldErr {
+					assert.Error(t, err)
+					return
+				}
+
+				require.NoError(t, err)
+				utils.MustMatch(t, test.expected, actual)
+			})
+		}
+	})
 }

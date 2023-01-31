@@ -438,9 +438,7 @@ func (e *Executor) proposedMigrationConflictsWithRunningMigration(runningMigrati
 		// Specifically, if the running migration is an ALTER, and is still busy with copying rows (copy_state), then
 		// we consider the two to be conflicting. But, if the running migration is done copying rows, and is now only
 		// applying binary logs, and is up-to-date, then we consider a new ALTER migration to be non-conflicting.
-		if atomic.LoadInt64(&runningMigration.WasReadyToComplete) == 0 {
-			return true
-		}
+		return !runningMigration.IsReady()
 	}
 	return false
 }
@@ -1942,17 +1940,17 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 	}
 	onlineDDL = &schema.OnlineDDL{
 		OnlineDDL: &tabletmanagerdatapb.OnlineDDL{
-			Keyspace: row["keyspace"].ToString(),
-			Table:    row["mysql_table"].ToString(),
-			Schema:   row["mysql_schema"].ToString(),
-			Sql:      row["migration_statement"].ToString(),
-			Uuid:     row["migration_uuid"].ToString(),
-			Strategy: strategy,
-			Options:  row["options"].ToString(),
-			Retries:  row.AsInt64("retries", 0),
-			Status:   status,
+			Keyspace:        row["keyspace"].ToString(),
+			Table:           row["mysql_table"].ToString(),
+			Schema:          row["mysql_schema"].ToString(),
+			Sql:             row["migration_statement"].ToString(),
+			Uuid:            row["migration_uuid"].ToString(),
+			Strategy:        strategy,
+			Options:         row["options"].ToString(),
+			Retries:         row.AsInt64("retries", 0),
+			Status:          status,
+			ReadyToComplete: row.AsBool("ready_to_complete", false),
 		},
-		ReadyToComplete:  row.AsInt64("ready_to_complete", 0),
 		TabletAlias:      row["tablet"].ToString(),
 		MigrationContext: row["migration_context"].ToString(),
 	}
@@ -4314,12 +4312,10 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 	}
 	if val, ok := e.ownedRunningMigrations.Load(uuid); ok {
 		if runningMigration, ok := val.(*schema.OnlineDDL); ok {
-			var storeValue int64
 			if isReady {
-				storeValue = 1
 				atomic.StoreInt64(&runningMigration.WasReadyToComplete, 1) // WasReadyToComplete is set once and never cleared
 			}
-			atomic.StoreInt64(&runningMigration.ReadyToComplete, storeValue)
+			runningMigration.MarkReady(isReady)
 		}
 	}
 	return nil

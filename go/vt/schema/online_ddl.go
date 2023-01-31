@@ -103,7 +103,6 @@ type OnlineDDL struct {
 	// Stateful fields:
 	MigrationContext   string `json:"context,omitempty"`
 	TabletAlias        string `json:"tablet,omitempty"`
-	ReadyToComplete    int64  `json:"ready_to_complete,omitempty"`
 	WasReadyToComplete int64  `json:"was_ready_to_complete,omitempty"`
 }
 
@@ -135,6 +134,7 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 	}
 	dec, err := mapstructure.NewDecoder(&mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
+			hooks.DecodeReadyToComplete,
 			hooks.DecodeRequestTime,
 			hooks.DecodeStatus,
 			hooks.DecodeStrategy,
@@ -143,7 +143,7 @@ func FromJSON(data []byte) (*OnlineDDL, error) {
 		Squash: true,
 		MatchName: func(mapKey, fieldName string) bool {
 			switch mapKey {
-			case "tablet_alias", "request_time", "migration_context":
+			case "tablet_alias", "request_time", "migration_context", "ready_to_complete":
 				if strings.EqualFold(mapKey, fieldName) {
 					return true
 				} else if strings.EqualFold(camelcase(mapKey), camelcase(fieldName)) {
@@ -507,6 +507,29 @@ func (onlineDDL *OnlineDDL) IsView() bool {
 		return true
 	}
 	return false
+}
+
+// IsReady returns true if the given online DDL is ready to complete. It is
+// threadsafe.
+//
+// Do not attempt to access or modify the underlying field directly; instead
+// use this method and its companion MarkReady.
+func (onlineDDL *OnlineDDL) IsReady() bool {
+	onlineDDL.m.Lock()
+	defer onlineDDL.m.Unlock()
+
+	return onlineDDL.ReadyToComplete
+}
+
+// MarkReady marks the given online DDL as ready to complete. It is threadsafe.
+//
+// Do not attempt to access or modify the underlying field directly; instead
+// use this method and its companion IsReady.
+func (onlineDDL *OnlineDDL) MarkReady(isReady bool) {
+	onlineDDL.m.Lock()
+	defer onlineDDL.m.Unlock()
+
+	onlineDDL.ReadyToComplete = isReady
 }
 
 // GetActionStr returns a string representation of the DDL action
