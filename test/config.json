@@ -297,7 +297,7 @@
 		},
 		"onlineddl_revert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
