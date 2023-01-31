@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -37,8 +36,8 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 
 		var preds []sqlparser.Expr
 		preds, innerOp = unresolvedAndSource(ctx, innerOp)
-		merger := func(a, b *Route) (*Route, error) {
-			return mergeSubQueryOp(ctx, a, b, inner)
+		merger := func(a, b *Route, routing Routing) (*Route, error) {
+			return mergeSubQueryOp(ctx, a, b, inner, routing)
 		}
 
 		newInner := &SubQueryInner{
@@ -97,48 +96,49 @@ func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]s
 	return preds, op
 }
 
-func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner) (*Route, error) {
+func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner, mergedRouting Routing) (*Route, error) {
 	subq.ExtractedSubquery.NeedsRewrite = true
-	outer.SysTableTableSchema = append(outer.SysTableTableSchema, inner.SysTableTableSchema...)
-	for k, v := range inner.SysTableTableName {
-		if outer.SysTableTableName == nil {
-			outer.SysTableTableName = map[string]evalengine.Expr{}
+
+	switch outerRouting := outer.Routing.(type) {
+	case *TableRouting:
+		// When merging an inner query with its outer query, we can remove the
+		// inner query from the list of predicates that can influence routing of
+		// the outer query.
+		//
+		// Note that not all inner queries necessarily are part of the routing
+		// predicates list, so this might be a no-op.
+		subQueryWasPredicate := false
+		for i, predicate := range outerRouting.SeenPredicates {
+			if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
+				outerRouting.SeenPredicates = append(outerRouting.SeenPredicates[:i], outerRouting.SeenPredicates[i+1:]...)
+
+				subQueryWasPredicate = true
+
+				// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
+				// so we can stop after the first match.
+				break
+			}
 		}
-		outer.SysTableTableName[k] = v
-	}
 
-	// When merging an inner query with its outer query, we can remove the
-	// inner query from the list of predicates that can influence routing of
-	// the outer query.
-	//
-	// Note that not all inner queries necessarily are part of the routing
-	// predicates list, so this might be a no-op.
-	subQueryWasPredicate := false
-	for i, predicate := range outer.SeenPredicates {
-		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
-			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
-
-			subQueryWasPredicate = true
-
-			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
-			// so we can stop after the first match.
-			break
+		err := outerRouting.resetRoutingSelections(ctx)
+		if err != nil {
+			return nil, err
 		}
-	}
 
-	err := outer.resetRoutingSelections(ctx)
-	if err != nil {
-		return nil, err
-	}
+		if subQueryWasPredicate {
+			if innerTR, isTR := inner.Routing.(*TableRouting); isTR {
+				// Copy Vindex predicates from the inner route to the upper route.
+				// If we can route based on some of these predicates, the routing can improve
+				outerRouting.VindexPreds = append(outerRouting.VindexPreds, innerTR.VindexPreds...)
+			}
 
-	if subQueryWasPredicate {
-		// Copy Vindex predicates from the inner route to the upper route.
-		// If we can route based on some of these predicates, the routing can improve
-		outer.VindexPreds = append(outer.VindexPreds, inner.VindexPreds...)
-
-		if inner.RouteOpCode == engine.None {
-			outer.setSelectNoneOpcode()
+			if inner.Routing.OpCode() == engine.None {
+				outer.Routing = &NoneRouting{keyspace: outerRouting.Keyspace}
+			}
 		}
+
+	default:
+		outer.Routing = mergedRouting
 	}
 
 	outer.MergedWith = append(outer.MergedWith, inner)
@@ -225,7 +225,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	if outerOp.RouteOpCode == engine.Reference && !subqueryRoute.IsSingleShard() {
+	if outerOp.Routing.OpCode() == engine.Reference && !subqueryRoute.IsSingleShard() {
 		return nil, nil
 	}
 
@@ -250,8 +250,8 @@ func tryMergeSubqueryWithRoute(
 	}
 
 	// Special case: Inner query won't return any results / is not routable.
-	if subqueryRoute.RouteOpCode == engine.None {
-		merged, err := merger(outerOp, subqueryRoute)
+	if subqueryRoute.Routing.OpCode() == engine.None {
+		merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
 		if err != nil {
 			return nil, err
 		}
@@ -262,7 +262,7 @@ func tryMergeSubqueryWithRoute(
 	// the inner query is a single column selection, and that single column has a matching
 	// vindex on the outer query's operand.
 	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
-		merged, err := merger(outerOp, subqueryRoute)
+		merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
 
 		if err != nil {
 			return nil, err
@@ -271,7 +271,9 @@ func tryMergeSubqueryWithRoute(
 		if merged != nil {
 			// since we inlined the subquery into the outer query, new vindex options might have been enabled,
 			// so we go over our current options to check if anything better has come up.
-			merged.PickBestAvailableVindex()
+
+			panic("todo")
+			// merged.PickBestAvailableVindex()
 			return merged, err
 		}
 	}
@@ -292,8 +294,8 @@ func tryMergeSubqueryWithJoin(
 	if outerOp.LeftJoin {
 		return nil, nil
 	}
-	newMergefunc := func(a, b *Route) (*Route, error) {
-		rt, err := merger(a, b)
+	newMergefunc := func(a, b *Route, routing Routing) (*Route, error) {
+		rt, err := merger(a, b, routing)
 		if err != nil {
 			return nil, err
 		}
@@ -309,8 +311,8 @@ func tryMergeSubqueryWithJoin(
 		return outerOp, nil
 	}
 
-	newMergefunc = func(a, b *Route) (*Route, error) {
-		rt, err := merger(a, b)
+	newMergefunc = func(a, b *Route, routing Routing) (*Route, error) {
+		rt, err := merger(a, b, routing)
 		if err != nil {
 			return nil, err
 		}

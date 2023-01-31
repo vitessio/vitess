@@ -158,23 +158,15 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 	if err != nil {
 		return nil, err
 	}
-	var vindex vindexes.Vindex
-	var values []evalengine.Expr
-	if op.SelectedVindex() != nil {
-		vindex = op.Selected.FoundVindex
-		values = op.Selected.Values
-	}
+
+	ks, _ := ctx.VSchema.DefaultKeyspace() // we don't want to fail here - maybe the op knows where it is going
+
 	rp := &engine.RoutingParameters{
-		Opcode:              op.RouteOpCode,
-		Keyspace:            op.Keyspace,
-		Vindex:              vindex,
-		Values:              values,
-		SysTableTableName:   op.SysTableTableName,
-		SysTableTableSchema: op.SysTableTableSchema,
+		Opcode:   op.Routing.OpCode(),
+		Keyspace: ks,
 	}
-	if op.Routing != nil {
-		op.Routing.UpdateRoutingParams(rp)
-	}
+	op.Routing.UpdateRoutingParams(rp)
+
 	return &engine.Route{
 		TableName:         strings.Join(tableNames, ", "),
 		RoutingParameters: rp,
@@ -208,89 +200,64 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 }
 
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
-	var vindex vindexes.Vindex
-	var values []evalengine.Expr
-	if op.Selected != nil {
-		vindex = op.Selected.FoundVindex
-		values = op.Selected.Values
-	}
 	ast := upd.AST
 	replaceSubQuery(ctx, ast)
+	rp := &engine.RoutingParameters{}
+	op.Routing.UpdateRoutingParams(rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
 		Table: []*vindexes.Table{
 			upd.VTable,
 		},
-		OwnedVindexQuery: upd.OwnedVindexQuery,
-		RoutingParameters: &engine.RoutingParameters{
-			Opcode:            op.RouteOpCode,
-			Keyspace:          op.Keyspace,
-			Vindex:            vindex,
-			Values:            values,
-			TargetDestination: op.TargetDestination,
-		},
+		OwnedVindexQuery:  upd.OwnedVindexQuery,
+		RoutingParameters: rp,
 	}
 
-	directives := upd.AST.GetParsedComments().Directives()
-	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
-		edml.MultiShardAutocommit = true
-	}
-	edml.QueryTimeout = queryTimeout(directives)
+	apa(upd.AST, upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
 
 	e := &engine.Update{
 		ChangedVindexValues: upd.ChangedVindexValues,
-	}
-	e.DML = edml
-
-	if op.RouteOpCode != engine.Unsharded && len(upd.ChangedVindexValues) > 0 {
-		primary := upd.VTable.ColumnVindexes[0]
-		e.DML.KsidVindex = primary.Vindex
-		e.DML.KsidLength = len(primary.Columns)
+		DML:                 edml,
 	}
 
 	return &primitiveWrapper{prim: e}, nil
 }
 
 func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
-	var vindex vindexes.Vindex
-	var values []evalengine.Expr
-	if op.Selected != nil {
-		vindex = op.Selected.FoundVindex
-		values = op.Selected.Values
-	}
 	ast := del.AST
 	replaceSubQuery(ctx, ast)
+	rp := &engine.RoutingParameters{}
+	op.Routing.UpdateRoutingParams(rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
 		Table: []*vindexes.Table{
 			del.VTable,
 		},
-		OwnedVindexQuery: del.OwnedVindexQuery,
-		RoutingParameters: &engine.RoutingParameters{
-			Opcode:            op.RouteOpCode,
-			Keyspace:          op.Keyspace,
-			Vindex:            vindex,
-			Values:            values,
-			TargetDestination: op.TargetDestination,
-		},
+		OwnedVindexQuery:  del.OwnedVindexQuery,
+		RoutingParameters: rp,
 	}
 
-	directives := del.AST.GetParsedComments().Directives()
+	apa(del.AST, del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
+
+	e := &engine.Delete{
+		DML: edml,
+	}
+
+	return &primitiveWrapper{prim: e}, nil
+}
+
+func apa(stmt sqlparser.Commented, vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
+	directives := stmt.GetParsedComments().Directives()
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		edml.MultiShardAutocommit = true
 	}
 	edml.QueryTimeout = queryTimeout(directives)
 
-	e := &engine.Delete{}
-	e.DML = edml
-
-	if op.RouteOpCode != engine.Unsharded && del.OwnedVindexQuery != "" {
-		primary := del.VTable.ColumnVindexes[0]
-		e.DML.KsidVindex = primary.Vindex
-		e.DML.KsidLength = len(primary.Columns)
+	if routing.OpCode() == engine.Unsharded || !setVindex {
+		primary := vtable.ColumnVindexes[0]
+		edml.KsidVindex = primary.Vindex
+		edml.KsidLength = len(primary.Columns)
 	}
-
-	return &primitiveWrapper{prim: e}, nil
 }
 
 func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) {
@@ -308,34 +275,35 @@ func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) 
 }
 
 func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) sqlparser.Expr {
+	tr, ok := op.Routing.(*operators.TableRouting)
+	if !ok || tr.Selected == nil {
+		return nil
+	}
 	var condition sqlparser.Expr
-	if op.Selected != nil {
-		if len(op.Selected.ValueExprs) > 0 {
-			condition = op.Selected.ValueExprs[0]
-		}
-		_, isMultiColumn := op.Selected.FoundVindex.(vindexes.MultiColumn)
-		for idx, predicate := range op.Selected.Predicates {
-			switch predicate := predicate.(type) {
-			case *sqlparser.ComparisonExpr:
-				if predicate.Operator == sqlparser.InOp {
-					switch predicate.Left.(type) {
-					case *sqlparser.ColName:
-						if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
-							extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
-							if extractedSubquery != nil {
-								extractedSubquery.SetArgName(engine.ListVarName)
-							}
+	if len(tr.Selected.ValueExprs) > 0 {
+		condition = tr.Selected.ValueExprs[0]
+	}
+	_, isMultiColumn := tr.Selected.FoundVindex.(vindexes.MultiColumn)
+	for idx, predicate := range tr.Selected.Predicates {
+		switch predicate := predicate.(type) {
+		case *sqlparser.ComparisonExpr:
+			if predicate.Operator == sqlparser.InOp {
+				switch predicate.Left.(type) {
+				case *sqlparser.ColName:
+					if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
+						extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
+						if extractedSubquery != nil {
+							extractedSubquery.SetArgName(engine.ListVarName)
 						}
-						if isMultiColumn {
-							predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
-							continue
-						}
-						predicate.Right = sqlparser.ListArg(engine.ListVarName)
 					}
+					if isMultiColumn {
+						predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
+						continue
+					}
+					predicate.Right = sqlparser.ListArg(engine.ListVarName)
 				}
 			}
 		}
-
 	}
 	return condition
 }

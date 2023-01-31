@@ -59,9 +59,6 @@ func getVindexInformation(
 	return primaryVindex, vindexesAndPredicates, nil
 }
 
-// buildChangedVindexesValues adds to the plan all the lookup vindexes that are changing.
-// Updates can only be performed to secondary lookup vindexes with no complex expressions
-// in the set clause.
 func buildChangedVindexesValues(update *sqlparser.Update, table *vindexes.Table, ksidCols []sqlparser.IdentifierCI) (map[string]*engine.VindexValues, string, error) {
 	changedVindexes := make(map[string]*engine.VindexValues)
 	buf, offset := initialQuery(ksidCols, table)

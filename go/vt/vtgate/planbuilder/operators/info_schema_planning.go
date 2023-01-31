@@ -17,7 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	"fmt"
 	"strings"
 
 	"golang.org/x/exp/maps"
@@ -40,28 +39,9 @@ type InfoSchemaRouting struct {
 	Table               *QueryTable
 }
 
-func (isr *InfoSchemaRouting) CanMerge(r Routing) bool {
-	other, ok := r.(*InfoSchemaRouting)
-	if !ok {
-		return false
-	}
-	if len(isr.SysTableTableSchema) == 0 || len(other.SysTableTableSchema) == 0 {
-		// one or both of the routings need to be handled with UNIONs and can't be merged
-		return false
-	}
-	for _, lhs := range isr.SysTableTableSchema {
-		for _, rhs := range other.SysTableTableSchema {
-			// here we should be comparing predicates and making sure we can merge these two
-			fmt.Println(lhs)
-			fmt.Println(rhs)
-		}
-	}
-	return true
-}
-
 func (isr *InfoSchemaRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = isr.SysTableTableSchema
-	rp.SysTableTableSchema = isr.SysTableTableSchema
+	rp.SysTableTableName = isr.SysTableTableName
 }
 
 func (isr *InfoSchemaRouting) Clone() Routing {
@@ -71,22 +51,10 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 	}
 }
 
-func (isr *InfoSchemaRouting) Merge(other Routing) Routing {
-	otherIsr, isIsr := other.(*InfoSchemaRouting)
-	if !isIsr {
-		panic(42)
-	}
-	isr.SysTableTableSchema = append(isr.SysTableTableSchema, otherIsr.SysTableTableSchema...)
-	for k, v := range otherIsr.SysTableTableName {
-		isr.SysTableTableName[k] = v
-	}
-	return isr
-}
-
-func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) error {
+func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
 	if err != nil || out == nil {
-		return err
+		return nil, err
 	}
 
 	if isr.SysTableTableName == nil {
@@ -98,7 +66,15 @@ func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContex
 	} else {
 		isr.SysTableTableName[bvName] = out
 	}
-	return nil
+	return isr, nil
+}
+
+func (isr *InfoSchemaRouting) Cost() int {
+	return 0
+}
+
+func (rr *InfoSchemaRouting) OpCode() engine.Opcode {
+	return engine.DBA
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
