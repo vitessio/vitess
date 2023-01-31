@@ -203,7 +203,7 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 			return true // early break! No need to keep searching
 		})
 		if !foundValidPathForClass {
-			return nil, ErrImpossibleDiffSequence
+			return nil, ErrImpossibleDiffOrder
 		}
 	}
 	return orderedDiffs, nil

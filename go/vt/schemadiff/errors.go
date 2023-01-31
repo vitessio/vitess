@@ -14,7 +14,7 @@ var (
 	ErrUnexpectedTableSpec            = errors.New("unexpected table spec")
 	ErrExpectedCreateTable            = errors.New("expected a CREATE TABLE statement")
 	ErrExpectedCreateView             = errors.New("expected a CREATE VIEW statement")
-	ErrImpossibleDiffSequence         = errors.New("Impossible diff sequence")
+	ErrImpossibleDiffOrder            = errors.New("Impossible diff sequence")
 )
 
 type UnexpectedError struct {

@@ -107,13 +107,13 @@ func TestSchemaDiff(t *testing.T) {
 		}
 	)
 	tt := []struct {
-		name             string
-		fromQueries      []string
-		toQueries        []string
-		expectDiffs      int
-		expectDeps       int
-		sequential       bool
-		failOrderedDiffs bool
+		name            string
+		fromQueries     []string
+		toQueries       []string
+		expectDiffs     int
+		expectDeps      int
+		sequential      bool
+		impossibleOrder bool
 	}{
 		{
 			name:      "no change",
@@ -499,6 +499,21 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  2,
 		},
+		{
+			name: "add and drop FK, add and drop column, impossible order",
+			fromQueries: []string{
+				"create table t1 (id int primary key, p int, key p_idx (p));",
+				"create table t2 (id int primary key, p int, key p_idx (p), foreign key (p) references t1 (p) on delete no action);",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, q int, key q_idx (q));",
+				"create table t2 (id int primary key, q int, key q_idx (q), foreign key (q) references t1 (q) on delete no action);",
+			},
+			expectDiffs:     2,
+			expectDeps:      1,
+			sequential:      true,
+			impossibleOrder: true,
+		},
 	}
 	hints := &DiffHints{RangeRotationStrategy: RangeRotationDistinctStatements}
 	for _, tc := range tt {
@@ -533,9 +548,9 @@ func TestSchemaDiff(t *testing.T) {
 			assert.Equal(t, tc.sequential, schemaDiff.HasSequentialExecutionDeps())
 
 			orderedDiffs, err := schemaDiff.OrderedDiffs()
-			if tc.failOrderedDiffs {
+			if tc.impossibleOrder {
 				assert.Error(t, err)
-				assert.Equal(t, err, ErrImpossibleDiffSequence)
+				assert.Equal(t, ErrImpossibleDiffOrder, err)
 			} else {
 				require.NoError(t, err)
 			}
