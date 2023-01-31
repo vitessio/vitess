@@ -26,6 +26,8 @@ import (
 	"runtime"
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
+
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -46,7 +48,6 @@ const (
 	ShowSidecarDatabasesQuery  = "SHOW DATABASES LIKE '\\_vt'"
 	SelectCurrentDatabaseQuery = "select database()"
 	ShowCreateTableQuery       = "show create table _vt.%s"
-	GetCurrentTablesQuery      = "show tables from _vt"
 
 	CreateTableRegexp = "CREATE TABLE .* `\\_vt`\\..*"
 	AlterTableRegexp  = "ALTER TABLE `\\_vt`\\..*"
@@ -112,7 +113,7 @@ func initSchemaFiles() {
 			var module string
 			dir, fname := filepath.Split(path)
 			if !strings.HasSuffix(strings.ToLower(fname), sqlFileExtension) {
-				log.Infof("Ignoring non-SQL file, %s, found during sidecar database initialization", path)
+				log.Infof("Ignoring non-SQL file: %s, found during sidecar database initialization", path)
 				return nil
 			}
 			dirparts := strings.Split(strings.Trim(dir, "/"), "/")
@@ -193,10 +194,6 @@ func Init(ctx context.Context, exec Exec) error {
 		return err
 	}
 
-	if err := si.loadExistingTables(); err != nil {
-		return err
-	}
-
 	for _, table := range sidecarTables {
 		if err := si.ensureSchema(table); err != nil {
 			return err
@@ -260,6 +257,10 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 
 	rs, err := si.exec(si.ctx, fmt.Sprintf(ShowCreateTableQuery, tableName), 1, false)
 	if err != nil {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERNoSuchTable {
+			// table does not exist in the sidecar database
+			return "", nil
+		}
 		log.Errorf("Error getting table schema for %s: %+v", tableName, err)
 		return "", err
 	}
@@ -271,7 +272,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 
 // findTableSchemaDiff gets the diff that needs to be applied to current table schema to get the desired one. Will be an empty string if they match.
 // This could be a CREATE statement if the table does not exist or an ALTER if table exists but has a different schema.
-func (si *schemaInit) findTableSchemaDiff(current, desired string) (string, error) {
+func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
 	}
@@ -280,20 +281,20 @@ func (si *schemaInit) findTableSchemaDiff(current, desired string) (string, erro
 		return "", err
 	}
 
-	var tableAlterSQL string
+	var ddl string
 	if diff != nil {
-		tableAlterSQL = diff.CanonicalStatementString()
+		ddl = diff.CanonicalStatementString()
 
-		// temp logging to debug any eventual issues around the new schema init, should be removed in v17
-		log.Infof("Current schema:\n%s", current)
-		if tableAlterSQL == "" {
-			log.Infof("No alter needed")
+		// Temporary logging to debug any eventual issues around the new schema init, should be removed in v17.
+		log.Infof("Current schema for table %s:\n%s", tableName, current)
+		if ddl == "" {
+			log.Infof("No changes needed for table %s", tableName)
 		} else {
-			log.Infof("Alter query:\n%s", tableAlterSQL)
+			log.Infof("Applying ddl for table %s:\n%s", tableName, ddl)
 		}
 	}
 
-	return tableAlterSQL, nil
+	return ddl, nil
 }
 
 // ensureSchema first checks if the table exist, in which case it runs the create script provided in
@@ -303,22 +304,17 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 	ctx := si.ctx
 	desiredTableSchema := table.schema
 
-	var tableAlterSQL string
-	tableExists := si.tableExists(table.name)
-	if tableExists {
-		currentTableSchema, err := si.getCurrentSchema(table.name)
-		if err != nil {
-			return err
-		}
-		tableAlterSQL, err = si.findTableSchemaDiff(currentTableSchema, desiredTableSchema)
-		if err != nil {
-			return err
-		}
-	} else {
-		tableAlterSQL = desiredTableSchema
+	var ddl string
+	currentTableSchema, err := si.getCurrentSchema(table.name)
+	if err != nil {
+		return err
+	}
+	ddl, err = si.findTableSchemaDiff(table.name, currentTableSchema, desiredTableSchema)
+	if err != nil {
+		return err
 	}
 
-	if tableAlterSQL != "" {
+	if ddl != "" {
 		if !si.dbCreated {
 			// We use CreateSidecarDatabaseQuery to also create the first binlog entry when a primary comes up.
 			// That statement doesn't make it to the replicas, so we run the query again so that it is replicated
@@ -328,40 +324,16 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 			}
 			si.dbCreated = true
 		}
-		_, err := si.exec(ctx, tableAlterSQL, 1, true)
+		_, err := si.exec(ctx, ddl, 1, true)
 		if err != nil {
-			log.Errorf("Error altering table during sidecar database initialization %s: %+v", table, err)
+			log.Errorf("Error running ddl %s for table %s during sidecar database initialization %s: %+v", ddl, table, err)
 			return err
 		}
+		log.Infof("Applied ddl %s for table %s during sidecar database initialization %s", ddl, table)
 		ddlCount.Add(1)
-
-		if tableExists {
-			log.Infof("Sidecar DB Initialization: updated table %s: %s", table, tableAlterSQL)
-		} else {
-			log.Infof("Sidecar DB Initialization: created table %s", table)
-		}
 		return nil
 	}
 	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, SidecarDBName)
-	return nil
-}
-
-// Is table already present?
-func (si *schemaInit) tableExists(tableName string) bool {
-	_, ok := si.existingTables[tableName]
-	return ok
-}
-
-// Caches existing tables in the sidecar database
-func (si *schemaInit) loadExistingTables() error {
-	si.existingTables = make(map[string]bool)
-	rs, err := si.exec(si.ctx, GetCurrentTablesQuery, -1, false)
-	if err != nil {
-		return err
-	}
-	for _, row := range rs.Rows {
-		si.existingTables[row[0].ToString()] = true
-	}
 	return nil
 }
 
@@ -375,7 +347,6 @@ var sidecarDBInitQueries = []string{
 	SelectCurrentDatabaseQuery,
 	CreateSidecarDatabaseQuery,
 	UseSidecarDatabaseQuery,
-	GetCurrentTablesQuery,
 }
 
 var sidecarDBInitQueryPatterns = []string{
@@ -383,8 +354,8 @@ var sidecarDBInitQueryPatterns = []string{
 	AlterTableRegexp,
 }
 
-// AdSchemaInitQueries adds sidecar database schema related queries to a mock db.
-func AdSchemaInitQueries(db *fakesqldb.DB) {
+// AddSchemaInitQueries adds sidecar database schema related queries to a mock db.
+func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	result := &sqltypes.Result{}
 	for _, q := range sidecarDBInitQueryPatterns {
 		db.AddQueryPattern(q, result)
@@ -393,11 +364,14 @@ func AdSchemaInitQueries(db *fakesqldb.DB) {
 		db.AddQuery(q, result)
 	}
 	for _, table := range sidecarTables {
-		result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-			"Table|Create Table",
-			"varchar|varchar"),
-			fmt.Sprintf("%s|%s", table.name, table.schema),
-		)
+		result = &sqltypes.Result{}
+		if populateTables {
+			result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+				"Table|Create Table",
+				"varchar|varchar"),
+				fmt.Sprintf("%s|%s", table.name, table.schema),
+			)
+		}
 		db.AddQuery(fmt.Sprintf(ShowCreateTableQuery, table.name), result)
 	}
 }

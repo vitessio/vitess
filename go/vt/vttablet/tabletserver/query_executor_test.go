@@ -1550,7 +1550,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 		"varchar|int64"),
 		"Innodb_rows_read|0",
 	))
-	sidecardb.AdSchemaInitQueries(db)
+	sidecardb.AddSchemaInitQueries(db, true)
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1643,7 +1643,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 
-	sidecardb.AdSchemaInitQueries(db)
+	sidecardb.AddSchemaInitQueries(db, true)
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}

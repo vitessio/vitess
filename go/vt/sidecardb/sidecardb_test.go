@@ -30,13 +30,7 @@ import (
 func TestAll(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	AdSchemaInitQueries(db)
-	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Database",
-		"varchar"),
-		"currentDB",
-	)
-	db.AddQuery(SelectCurrentDatabaseQuery, result)
+	AddSchemaInitQueries(db, false)
 	db.AddQuery("use dbname", &sqltypes.Result{})
 
 	ctx := context.Background()
@@ -59,16 +53,7 @@ func TestAll(t *testing.T) {
 	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
 
 	// tests init on already inited db
-	var tables []string
-	for _, table := range sidecarTables {
-		tables = append(tables, table.name)
-	}
-	result = sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Table",
-		"varchar"),
-		tables...,
-	)
-	db.AddQuery(GetCurrentTablesQuery, result)
+	AddSchemaInitQueries(db, true)
 	err = Init(ctx, exec)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
@@ -78,9 +63,16 @@ func TestAll(t *testing.T) {
 		ctx:  ctx,
 		exec: exec,
 	}
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Database",
+		"varchar"),
+		"currentDB",
+	)
+	db.AddQuery(SelectCurrentDatabaseQuery, result)
+
 	currentDB, err := si.setCurrentDatabase("dbname")
 	require.NoError(t, err)
-	require.Equal(t, currentDB, "currentDB")
+	require.Equal(t, "currentDB", currentDB)
 
 	require.False(t, MatchesInitQuery("abc"))
 	require.True(t, MatchesInitQuery(SelectCurrentDatabaseQuery))

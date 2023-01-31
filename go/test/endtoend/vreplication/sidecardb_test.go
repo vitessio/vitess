@@ -5,14 +5,14 @@ import (
 	"strconv"
 	"testing"
 
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
 
+const GetCurrentTablesQuery = "show tables from _vt"
+
 func getSidecarDBTables(t *testing.T, tabletID string) (numTablets int, tables []string) {
-	output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", tabletID, sidecardb.GetCurrentTablesQuery)
+	output, err := vc.VtctlClient.ExecuteCommandWithOutput("ExecuteFetchAsDba", "--", "--json", tabletID, GetCurrentTablesQuery)
 	require.NoError(t, err)
 	result := gjson.Get(output, "rows")
 	require.NotNil(t, result)

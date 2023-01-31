@@ -105,7 +105,7 @@ var _ queryservice.QueryService = (*explainTablet)(nil)
 
 func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTablet {
 	db := fakesqldb.New(nil)
-	sidecardb.AdSchemaInitQueries(db)
+	sidecardb.AddSchemaInitQueries(db, true)
 
 	config := tabletenv.NewCurrentConfig()
 	config.TrackSchemaVersions = false
