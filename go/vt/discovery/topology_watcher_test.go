@@ -506,3 +506,136 @@ func TestFilterByKeyspace(t *testing.T) {
 		}
 	}
 }
+
+func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
+	ts := memorytopo.NewServer("aa")
+	fhc := NewFakeHealthCheck(nil)
+	logger := logutil.NewMemoryLogger()
+	topologyWatcherOperations.ZeroAll()
+	counts := topologyWatcherOperations.Counts()
+	f := NewFilterByKeyspace(testKeyspacesToWatch)
+	tw := NewCellTabletsWatcher(context.Background(), ts, fhc, f, "aa", 10*time.Minute, false /*refreshKnownTablets*/, 5)
+
+	counts = checkOpCounts(t, counts, map[string]int64{})
+	checkChecksum(t, tw, 0)
+
+	// Add a tablet to the topology.
+	tablet := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "aa",
+			Uid:  0,
+		},
+		Hostname: "host1",
+		PortMap: map[string]int32{
+			"vt": 123,
+		},
+		Keyspace: "ks1",
+		Shard:    "shard",
+	}
+	if err := ts.CreateTablet(context.Background(), tablet); err != nil {
+		t.Fatalf("CreateTablet failed: %v", err)
+	}
+	tw.loadTablets()
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1, "AddTablet": 1})
+	checkChecksum(t, tw, 3238442862)
+
+	// Check the tablet is returned by GetAllTablets().
+	allTablets := fhc.GetAllTablets()
+	key := TabletToMapKey(tablet)
+	if _, ok := allTablets[key]; !ok || len(allTablets) != 1 || !proto.Equal(allTablets[key], tablet) {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet)
+	}
+
+	// Add a second tablet to the topology that should get filtered out by the keyspace filter
+	tablet2 := &topodatapb.Tablet{
+		Alias: &topodatapb.TabletAlias{
+			Cell: "aa",
+			Uid:  2,
+		},
+		Hostname: "host2",
+		PortMap: map[string]int32{
+			"vt": 789,
+		},
+		Keyspace: "ks3",
+		Shard:    "shard",
+	}
+	if err := ts.CreateTablet(context.Background(), tablet2); err != nil {
+		t.Fatalf("CreateTablet failed: %v", err)
+	}
+	tw.loadTablets()
+
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "GetTablet": 1})
+	checkChecksum(t, tw, 2762153755)
+
+	// Check the new tablet is NOT returned by GetAllTablets().
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(tablet2)
+	if _, ok := allTablets[key]; ok || len(allTablets) != 1 {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet2)
+	}
+
+	// Load the tablets again to show that when refreshKnownTablets is disabled,
+	// only the list is read from the topo and the checksum doesn't change
+	tw.loadTablets()
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1})
+	checkChecksum(t, tw, 2762153755)
+
+	// same tablet, different port, should update (previous
+	// one should go away, new one be added)
+	origTablet := proto.Clone(tablet).(*topodatapb.Tablet)
+	origKey := TabletToMapKey(tablet)
+	tablet.PortMap["vt"] = 456
+	if _, err := ts.UpdateTabletFields(context.Background(), tablet.Alias, func(t *topodatapb.Tablet) error {
+		t.PortMap["vt"] = 456
+		return nil
+	}); err != nil {
+		t.Fatalf("UpdateTabletFields failed: %v", err)
+	}
+	tw.loadTablets()
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(tablet)
+
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1})
+	if _, ok := allTablets[origKey]; !ok || len(allTablets) != 1 || !proto.Equal(allTablets[origKey], origTablet) {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, origTablet)
+	}
+	if _, ok := allTablets[key]; ok {
+		t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, key)
+	}
+	checkChecksum(t, tw, 2762153755)
+
+	// Remove the tracked tablet from the topo and check that it is detected as being gone.
+	if err := ts.DeleteTablet(context.Background(), tablet.Alias); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+	if _, err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "ks1", "shard"); err != nil {
+		t.Fatalf("FixShardReplication failed: %v", err)
+	}
+	tw.loadTablets()
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1, "RemoveTablet": 1})
+	checkChecksum(t, tw, 789108290)
+
+	// confirm state of topo
+	allTablets = fhc.GetAllTablets()
+	key = TabletToMapKey(tablet)
+	if _, ok := allTablets[key]; ok || len(allTablets) != 0 {
+		t.Errorf("fhc.GetAllTablets() = %+v; don't want %v", allTablets, key)
+	}
+	key = TabletToMapKey(tablet2)
+	if _, ok := allTablets[key]; ok || len(allTablets) != 0 {
+		t.Errorf("fhc.GetAllTablets() = %+v; want %+v", allTablets, tablet2)
+	}
+
+	// Remove ignored tablet and check that we didn't try to remove it from the health check
+	if err := ts.DeleteTablet(context.Background(), tablet2.Alias); err != nil {
+		t.Fatalf("DeleteTablet failed: %v", err)
+	}
+	if _, err := topo.FixShardReplication(context.Background(), ts, logger, "aa", "ks3", "shard"); err != nil {
+		t.Fatalf("FixShardReplication failed: %v", err)
+	}
+	tw.loadTablets()
+	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1})
+	checkChecksum(t, tw, 0)
+
+	tw.Stop()
+}
