@@ -313,24 +313,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"onlineddl_declarative": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_declarative",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"onlineddl_singleton": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/singleton"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_singleton",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "20m"],
