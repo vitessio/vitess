@@ -33,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -359,7 +361,7 @@ func testRevertible(t *testing.T) {
 			t.Run("ensure table dropped", func(t *testing.T) {
 				// A preparation step, to clean up anything from the previous test case
 				uuid := testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", tableName, "")
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 				checkTable(t, tableName, false)
 			})
 
@@ -367,7 +369,7 @@ func testRevertible(t *testing.T) {
 				// A preparation step, to re-create the base table
 				fromStatement := fmt.Sprintf(createTableWrapper, testcase.fromSchema)
 				uuid := testOnlineDDLStatement(t, fromStatement, ddlStrategy, "vtgate", tableName, "")
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 				checkTable(t, tableName, true)
 			})
 			var uuid string
@@ -375,7 +377,7 @@ func testRevertible(t *testing.T) {
 				// This is the migration we will test, and see whether it is revertible or not (and why not).
 				toStatement := fmt.Sprintf(createTableWrapper, testcase.toSchema)
 				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", tableName, "")
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 				checkTable(t, tableName, true)
 			})
 			t.Run("check migration", func(t *testing.T) {
@@ -489,7 +491,7 @@ func testRevert(t *testing.T) {
 	t.Run("create base table for view", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForView(t, createViewBaseTableStatement, ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewBaseTableName, true)
 		testRevertedUUID(t, uuid, "")
 	})
@@ -500,7 +502,7 @@ func testRevert(t *testing.T) {
 		// The view does not exist
 		uuid := testOnlineDDLStatementForView(t, createViewStatement, ddlStrategy, "vtgate", "success_create")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		testRevertedUUID(t, uuid, "")
 	})
@@ -509,7 +511,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, false)
 		testRevertedUUID(t, uuid, revertedUUID)
 	})
@@ -518,7 +520,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		testRevertedUUID(t, uuid, revertedUUID)
 	})
@@ -528,7 +530,7 @@ func testRevert(t *testing.T) {
 		// The view exists
 		uuid := testOnlineDDLStatementForView(t, createOrReplaceViewStatement, ddlStrategy, "vtgate", "success_replace")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		testRevertedUUID(t, uuid, "")
 	})
@@ -537,7 +539,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		checkMigratedTable(t, viewName, "success_create")
 		testRevertedUUID(t, uuid, revertedUUID)
@@ -547,7 +549,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		checkMigratedTable(t, viewName, "success_replace")
 		testRevertedUUID(t, uuid, revertedUUID)
@@ -559,7 +561,7 @@ func testRevert(t *testing.T) {
 		checkTable(t, viewName, true)
 		uuid := testOnlineDDLStatementForView(t, alterViewStatement, ddlStrategy, "vtgate", "success_alter")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		testRevertedUUID(t, uuid, "")
 	})
@@ -568,7 +570,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		checkMigratedTable(t, viewName, "success_replace")
 		testRevertedUUID(t, uuid, revertedUUID)
@@ -578,7 +580,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 		checkMigratedTable(t, viewName, "success_alter")
 		testRevertedUUID(t, uuid, revertedUUID)
@@ -590,13 +592,13 @@ func testRevert(t *testing.T) {
 		// view exists
 		uuid := testOnlineDDLStatementForTable(t, dropViewStatement, "online", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, false)
 	})
 	t.Run("ALTER VIEW where view does not exist", func(t *testing.T) {
 		// The view does not exist. Expect failure
 		uuid := testOnlineDDLStatementForView(t, alterViewStatement, ddlStrategy, "vtgate", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		checkTable(t, viewName, false)
 	})
 
@@ -604,21 +606,21 @@ func testRevert(t *testing.T) {
 		// This will recreate the view (well, actually, rename it back into place)
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, true)
 	})
 	t.Run("revert revert DROP VIEW", func(t *testing.T) {
 		// This will reapply DROP VIEW
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, false)
 	})
 	t.Run("fail online DROP VIEW", func(t *testing.T) {
 		// The view does now exist
 		uuid := testOnlineDDLStatementForTable(t, dropViewStatement, "online", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		checkTable(t, viewName, false)
 	})
 
@@ -627,28 +629,28 @@ func testRevert(t *testing.T) {
 		// The view doesn't actually exist right now
 		uuid := testOnlineDDLStatementForTable(t, dropViewIfExistsStatement, "online", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, false)
 	})
 	t.Run("revert DROP VIEW IF EXISTS", func(t *testing.T) {
 		// View will not be recreated because it didn't exist during the DROP VIEW IF EXISTS
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, false)
 	})
 	t.Run("revert revert DROP VIEW IF EXISTS", func(t *testing.T) {
 		// View still does not exist
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, false)
 	})
 	t.Run("revert revert revert DROP VIEW IF EXISTS", func(t *testing.T) {
 		// View still does not exist
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, viewName, false)
 	})
 
@@ -657,7 +659,7 @@ func testRevert(t *testing.T) {
 		// The table does not exist
 		uuid := testOnlineDDLStatementForTable(t, createIfNotExistsStatement, ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 		testRevertedUUID(t, uuid, "")
 	})
@@ -666,7 +668,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 		testRevertedUUID(t, uuid, revertedUUID)
 	})
@@ -675,7 +677,7 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 		testRevertedUUID(t, uuid, revertedUUID)
 	})
@@ -684,14 +686,14 @@ func testRevert(t *testing.T) {
 		revertedUUID := uuids[len(uuids)-1]
 		uuid := testRevertMigration(t, revertedUUID, ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 		testRevertedUUID(t, uuid, revertedUUID)
 	})
 	t.Run("online CREATE TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, createStatement, ddlStrategy, "vtgate", "just-created")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 		initTable(t)
 		testSelectTableMetrics(t)
@@ -701,14 +703,14 @@ func testRevert(t *testing.T) {
 		// This will drop the table (well, actually, rename it away)
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert CREATE TABLE", func(t *testing.T) {
 		// Restore the table. Data should still be in the table!
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
@@ -716,13 +718,13 @@ func testRevert(t *testing.T) {
 		// We shouldn't be able to revert one-before-last succcessful migration.
 		uuid := testRevertMigration(t, uuids[len(uuids)-2], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 	})
 	t.Run("CREATE TABLE IF NOT EXISTS where table exists", func(t *testing.T) {
 		// The table exists. A noop.
 		uuid := testOnlineDDLStatementForTable(t, createIfNotExistsStatement, ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert CREATE TABLE IF NOT EXISTS where table existed", func(t *testing.T) {
@@ -730,21 +732,21 @@ func testRevert(t *testing.T) {
 		// we expect to _not_ drop it in this revert. A noop.
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 	})
 	t.Run("revert revert CREATE TABLE IF NOT EXISTS where table existed", func(t *testing.T) {
 		// Table was not dropped, thus isn't re-created, and it just still exists. A noop.
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 	})
 	t.Run("fail online CREATE TABLE", func(t *testing.T) {
 		// Table already exists
 		uuid := testOnlineDDLStatementForTable(t, createStatement, "online", "vtgate", "just-created")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		checkTable(t, tableName, true)
 	})
 
@@ -784,7 +786,7 @@ func testRevert(t *testing.T) {
 
 				uuid := testOnlineDDLStatementForTable(t, fmt.Sprintf(alterHintStatement, hint), "online", "vtgate", hint)
 				uuids = append(uuids, uuid)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 			}()
 
 			testSelectTableMetrics(t)
@@ -813,7 +815,7 @@ func testRevert(t *testing.T) {
 
 			uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 			uuids = append(uuids, uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		}()
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
@@ -841,7 +843,7 @@ func testRevert(t *testing.T) {
 
 			uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 			uuids = append(uuids, uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		}()
 		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
@@ -869,12 +871,12 @@ func testRevert(t *testing.T) {
 
 			uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 			uuids = append(uuids, uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		}()
 		checkMigratedTable(t, tableName, alterHints[0])
 		testSelectTableMetrics(t)
 	})
-	testPostponedRevert := func(t *testing.T, expectStatuses ...schema.OnlineDDLStatus) {
+	testPostponedRevert := func(t *testing.T, expectStatuses ...tabletmanagerdatapb.OnlineDDL_Status) {
 		require.NotEmpty(t, expectStatuses)
 		ctx, cancel := context.WithCancel(context.Background())
 		defer cancel()
@@ -900,12 +902,12 @@ func testRevert(t *testing.T) {
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
 		// This part may take a while, because we depend on vreplication polling
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 	}
 	t.Run("postponed revert", func(t *testing.T) {
-		testPostponedRevert(t, schema.OnlineDDLStatusRunning)
+		testPostponedRevert(t, tabletmanagerdatapb.OnlineDDL_RUNNING)
 		checkMigratedTable(t, tableName, alterHints[1])
 		testSelectTableMetrics(t)
 	})
@@ -915,7 +917,7 @@ func testRevert(t *testing.T) {
 			// The view does not exist
 			uuid := testOnlineDDLStatementForView(t, createViewStatement, ddlStrategy, "vtgate", "success_create")
 			uuids = append(uuids, uuid)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 			checkTable(t, viewName, true)
 			testRevertedUUID(t, uuid, "")
 		})
@@ -926,18 +928,18 @@ func testRevert(t *testing.T) {
 			uuid := testOnlineDDLStatementForView(t, alterViewStatement, ddlStrategy+" --postpone-completion", "vtgate", "success_create")
 			uuids = append(uuids, uuid)
 
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_QUEUED, tabletmanagerdatapb.OnlineDDL_READY)
 			// Issue a complete and wait for successful completion
 			onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
 			// This part may take a while, because we depend on vreplication polling
-			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 60*time.Second, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 			checkTable(t, viewName, true)
 			testRevertedUUID(t, uuid, "")
 		})
 		// now verify that the revert for ALTER VIEW respects `--postpone-completion`
-		testPostponedRevert(t, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+		testPostponedRevert(t, tabletmanagerdatapb.OnlineDDL_QUEUED, tabletmanagerdatapb.OnlineDDL_READY)
 		checkTable(t, viewName, true)
 	})
 
@@ -945,7 +947,7 @@ func testRevert(t *testing.T) {
 	t.Run("INSTANT DDL: add column", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, "alter table stress_test add column i_instant int not null default 0", ddlStrategy+" --prefer-instant-ddl", "vtgate", "i_instant")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
@@ -973,9 +975,9 @@ func testRevert(t *testing.T) {
 		assert.NoError(t, err)
 		if instantDDLCapable {
 			// instant DDL expected to apply in 8.0, therefore revert is impossible
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		} else {
-			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		}
 	})
 
@@ -983,14 +985,14 @@ func testRevert(t *testing.T) {
 	t.Run("online DROP TABLE", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, dropStatement, "online", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert DROP TABLE", func(t *testing.T) {
 		// This will recreate the table (well, actually, rename it back into place)
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, true)
 		testSelectTableMetrics(t)
 	})
@@ -998,7 +1000,7 @@ func testRevert(t *testing.T) {
 		// This will reapply DROP TABLE
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 	})
 
@@ -1007,28 +1009,28 @@ func testRevert(t *testing.T) {
 		// The table doesn't actually exist right now
 		uuid := testOnlineDDLStatementForTable(t, dropIfExistsStatement, "online", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert DROP TABLE IF EXISTS", func(t *testing.T) {
 		// Table will not be recreated because it didn't exist during the DROP TABLE IF EXISTS
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert DROP TABLE IF EXISTS", func(t *testing.T) {
 		// Table still does not exist
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 	})
 	t.Run("revert revert revert DROP TABLE IF EXISTS", func(t *testing.T) {
 		// Table still does not exist
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, tableName, false)
 	})
 
@@ -1045,7 +1047,7 @@ func testRevert(t *testing.T) {
 	t.Run("partitions: create partitioned table", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, createPartitionedTableStatement, ddlStrategy, "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, partitionedTableName, true)
 
 		populatePartitionedTable(t)
@@ -1054,7 +1056,7 @@ func testRevert(t *testing.T) {
 	t.Run("partitions: drop first partition", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, "alter table part_test drop partition `p1`", ddlStrategy+" --fast-range-rotation", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, partitionedTableName, true)
 
 		checkPartitionedTableCountRows(t, 5)
@@ -1062,20 +1064,20 @@ func testRevert(t *testing.T) {
 	t.Run("partitions: fail revert drop first partition", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 
 		checkPartitionedTableCountRows(t, 5)
 	})
 	t.Run("partitions: add new partition", func(t *testing.T) {
 		uuid := testOnlineDDLStatementForTable(t, "alter table part_test add partition (PARTITION p7 VALUES LESS THAN (70))", ddlStrategy+" --fast-range-rotation", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		checkTable(t, partitionedTableName, true)
 	})
 	t.Run("partitions: fail revert add new partition", func(t *testing.T) {
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 	})
 
 	// FAILURES
@@ -1083,14 +1085,14 @@ func testRevert(t *testing.T) {
 		// The table does not exist now
 		uuid := testOnlineDDLStatementForTable(t, dropStatement, "online", "vtgate", "")
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		checkTable(t, tableName, false)
 	})
 	t.Run("fail revert failed online DROP TABLE", func(t *testing.T) {
 		// Cannot revert a failed migration
 		uuid := testRevertMigration(t, uuids[len(uuids)-1], ddlStrategy)
 		uuids = append(uuids, uuid)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		checkTable(t, tableName, false)
 	})
 }
@@ -1115,7 +1117,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.IsDirect() {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
@@ -1146,7 +1148,7 @@ func testRevertMigration(t *testing.T, revertUUID string, ddlStrategy string) (u
 	fmt.Println("# Generated UUID (for debug purposes):")
 	fmt.Printf("<%s>\n", uuid)
 
-	_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+	_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 	return uuid
 }
 

@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/schema"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -225,7 +227,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("successful online alter, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableSuccessfulStatement, "gh-ost", "vtgate", "ghost_col", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 
@@ -250,35 +252,35 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("successful online alter, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtctl", "ghost_col", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("successful online alter, postponed, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost -postpone-completion", "vtgate", "ghost_col", "")
 		// Should be still running!
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_RUNNING)
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
 		// This part may take a while, because we depend on vreplicatoin polling
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("throttled migration", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableThrottlingStatement, "gh-ost --max-load=Threads_running=1", "vtgate", "ghost_col", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_RUNNING)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, tabletmanagerdatapb.OnlineDDL_FAILED, tabletmanagerdatapb.OnlineDDL_CANCELLED)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_CANCELLED)
 	})
 	t.Run("failed migration", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableFailedStatement, "gh-ost", "vtgate", "ghost_col", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 		// migration will fail again
@@ -304,19 +306,19 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtctl", "", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online CREATE, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLCreateTableStatement, "gh-ost", "vtctl", "online_ddl_create_col", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Online DROP TABLE IF EXISTS, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "gh-ost", "vtgate", "", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table existed
@@ -324,7 +326,7 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("Online DROP TABLE IF EXISTS for nonexistent table, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableIfExistsStatement, "gh-ost", "vtgate", "", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 		// this table did not exist
@@ -332,19 +334,19 @@ func TestSchemaChange(t *testing.T) {
 	})
 	t.Run("Online DROP TABLE for nonexistent table, expect error, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "gh-ost", "vtgate", "", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, true)
 	})
 	t.Run("Online CREATE no PK table, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, noPKCreateTableStatement, "gh-ost", "vtgate", "online_ddl_create_col", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 		onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, false)
 		onlineddl.CheckRetryMigration(t, &vtParams, shards, uuid, false)
 	})
 	t.Run("Fail ALTER for no PK table, vtgate", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "gh-ost", "vtgate", "", "")
-		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusFailed)
+		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_FAILED)
 
 		expectedMessage := "No PRIMARY nor UNIQUE key found"
 		rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
@@ -406,7 +408,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.IsDirect() {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 

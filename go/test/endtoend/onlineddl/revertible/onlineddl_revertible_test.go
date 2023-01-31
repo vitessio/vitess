@@ -28,6 +28,8 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/schema"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 
@@ -262,21 +264,21 @@ func TestSchemaChange(t *testing.T) {
 
 			t.Run("ensure table dropped", func(t *testing.T) {
 				uuid := testOnlineDDLStatement(t, dropTableStatement, ddlStrategy, "vtgate", "", "", false)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 				checkTable(t, tableName, false)
 			})
 
 			t.Run("create from-table", func(t *testing.T) {
 				fromStatement := fmt.Sprintf(createTableWrapper, testcase.fromSchema)
 				uuid := testOnlineDDLStatement(t, fromStatement, ddlStrategy, "vtgate", "", "", false)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 				checkTable(t, tableName, true)
 			})
 			var uuid string
 			t.Run("run migration", func(t *testing.T) {
 				toStatement := fmt.Sprintf(createTableWrapper, testcase.toSchema)
 				uuid = testOnlineDDLStatement(t, toStatement, ddlStrategy, "vtgate", "", "", false)
-				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, tabletmanagerdatapb.OnlineDDL_COMPLETE)
 				checkTable(t, tableName, true)
 			})
 			t.Run("check migration", func(t *testing.T) {
@@ -324,7 +326,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	fmt.Printf("<%s>\n", uuid)
 
 	if !strategySetting.IsDirect() && !skipWait {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 20*time.Second, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 

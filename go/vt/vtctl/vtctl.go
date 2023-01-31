@@ -3004,20 +3004,17 @@ func commandOnlineDDL(ctx context.Context, wr *wrangler.Wrangler, subFlags *pfla
 			condition = "migration_uuid like '%'"
 		case "recent":
 			condition = "requested_timestamp > now() - interval 1 week"
-		case
-			string(schema.OnlineDDLStatusCancelled),
-			string(schema.OnlineDDLStatusQueued),
-			string(schema.OnlineDDLStatusReady),
-			string(schema.OnlineDDLStatusRunning),
-			string(schema.OnlineDDLStatusComplete),
-			string(schema.OnlineDDLStatusFailed):
-			condition, err = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
 		default:
-			if schema.IsOnlineDDLUUID(arg) {
-				condition, err = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
+			var bindErr error
+			if _, err := schema.ParseOnlineDDLStatus(arg); err == nil {
+				// Argument is a status name.
+				condition, bindErr = sqlparser.ParseAndBind("migration_status=%a", sqltypes.StringBindVariable(arg))
+			} else if schema.IsOnlineDDLUUID(arg) {
+				condition, bindErr = sqlparser.ParseAndBind("migration_uuid=%a", sqltypes.StringBindVariable(arg))
 			} else {
-				condition, err = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
+				condition, bindErr = sqlparser.ParseAndBind("migration_context=%a", sqltypes.StringBindVariable(arg))
 			}
+			err = bindErr
 		}
 		order := " order by `id` "
 		switch *orderBy {

@@ -33,6 +33,8 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle/throttlerapp"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"github.com/stretchr/testify/assert"
@@ -202,7 +204,7 @@ func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCo
 }
 
 // CheckMigrationStatus verifies that the migration indicated by given UUID has the given expected status
-func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...schema.OnlineDDLStatus) {
+func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectStatuses ...tabletmanagerdatapb.OnlineDDL_Status) {
 	query, err := sqlparser.ParseAndBind("show vitess_migrations like %a",
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -218,7 +220,7 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 			continue
 		}
 		for _, expectStatus := range expectStatuses {
-			if row["migration_status"].ToString() == string(expectStatus) {
+			if row["migration_status"].ToString() == schema.OnlineDDLStatusName(expectStatus) {
 				count++
 				break
 			}
@@ -228,7 +230,7 @@ func CheckMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []clu
 }
 
 // WaitForMigrationStatus waits for a migration to reach either provided statuses (returns immediately), or eventually time out
-func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...schema.OnlineDDLStatus) schema.OnlineDDLStatus {
+func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, timeout time.Duration, expectStatuses ...tabletmanagerdatapb.OnlineDDL_Status) tabletmanagerdatapb.OnlineDDL_Status {
 	shardNames := map[string]bool{}
 	for _, shard := range shards {
 		shardNames[shard.Name] = true
@@ -238,12 +240,12 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	)
 	require.NoError(t, err)
 
-	statusesMap := map[string]bool{}
+	statusesMap := map[tabletmanagerdatapb.OnlineDDL_Status]bool{}
 	for _, status := range expectStatuses {
-		statusesMap[string(status)] = true
+		statusesMap[status] = true
 	}
 	startTime := time.Now()
-	lastKnownStatus := ""
+	var lastKnownStatus tabletmanagerdatapb.OnlineDDL_Status
 	for time.Since(startTime) < timeout {
 		countMatchedShards := 0
 		r := VtgateExecQuery(t, vtParams, query, "")
@@ -253,17 +255,25 @@ func WaitForMigrationStatus(t *testing.T, vtParams *mysql.ConnParams, shards []c
 				// irrelevant shard
 				continue
 			}
-			lastKnownStatus = row["migration_status"].ToString()
+			s, err := schema.ParseOnlineDDLStatus(row["migration_status"].ToString())
+			switch err {
+			case nil:
+				lastKnownStatus = s
+			default:
+				t.Logf("failed to parse last known status %s: %s", row["migration_status"].ToString(), err)
+				continue
+			}
+
 			if row["migration_uuid"].ToString() == uuid && statusesMap[lastKnownStatus] {
 				countMatchedShards++
 			}
 		}
 		if countMatchedShards == len(shards) {
-			return schema.OnlineDDLStatus(lastKnownStatus)
+			return lastKnownStatus
 		}
 		time.Sleep(1 * time.Second)
 	}
-	return schema.OnlineDDLStatus(lastKnownStatus)
+	return lastKnownStatus
 }
 
 // CheckMigrationArtifacts verifies given migration exists, and checks if it has artifacts

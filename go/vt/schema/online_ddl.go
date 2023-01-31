@@ -77,19 +77,6 @@ func validateWalk(node sqlparser.SQLNode, allowForeignKeys bool) (kontinue bool,
 	return false, nil
 }
 
-// OnlineDDLStatus is an indicator to a online DDL status
-type OnlineDDLStatus string
-
-const (
-	OnlineDDLStatusRequested OnlineDDLStatus = "requested"
-	OnlineDDLStatusCancelled OnlineDDLStatus = "cancelled"
-	OnlineDDLStatusQueued    OnlineDDLStatus = "queued"
-	OnlineDDLStatusReady     OnlineDDLStatus = "ready"
-	OnlineDDLStatusRunning   OnlineDDLStatus = "running"
-	OnlineDDLStatusComplete  OnlineDDLStatus = "complete"
-	OnlineDDLStatusFailed    OnlineDDLStatus = "failed"
-)
-
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
 	// m is used to provide concurrent access to ReadyToComplete logic. Callers

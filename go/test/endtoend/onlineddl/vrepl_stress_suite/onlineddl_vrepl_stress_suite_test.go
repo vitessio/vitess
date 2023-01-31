@@ -45,6 +45,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -523,9 +525,9 @@ func TestSchemaChange(t *testing.T) {
 					runMultipleConnections(ctx, t, testcase.autoIncInsert)
 				}()
 				uuid := testOnlineDDLStatement(t, fullStatement, onlineDDLStrategy, "vtgate", hintText)
-				expectStatus := schema.OnlineDDLStatusComplete
+				expectStatus := tabletmanagerdatapb.OnlineDDL_COMPLETE
 				if testcase.expectFailure {
-					expectStatus = schema.OnlineDDLStatusFailed
+					expectStatus = tabletmanagerdatapb.OnlineDDL_FAILED
 				}
 				status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, expectStatus)
 				fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
@@ -578,13 +580,13 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	strategySetting, err := schema.ParseDDLStrategy(ddlStrategy)
 	assert.NoError(t, err)
 
-	status := schema.OnlineDDLStatusComplete
+	status := tabletmanagerdatapb.OnlineDDL_COMPLETE
 	if !strategySetting.IsDirect() {
-		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, waitForStatusTimeout, tabletmanagerdatapb.OnlineDDL_COMPLETE, tabletmanagerdatapb.OnlineDDL_FAILED)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 
-	if expectHint != "" && status == schema.OnlineDDLStatusComplete {
+	if expectHint != "" && status == tabletmanagerdatapb.OnlineDDL_COMPLETE {
 		checkMigratedTable(t, afterTableName, expectHint)
 	}
 	return uuid

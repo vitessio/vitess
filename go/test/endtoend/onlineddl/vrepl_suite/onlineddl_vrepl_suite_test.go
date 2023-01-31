@@ -32,6 +32,8 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/onlineddl"
 	"vitess.io/vitess/go/test/endtoend/throttler"
@@ -250,13 +252,13 @@ func testSingle(t *testing.T, testName string) {
 
 	if expectedErrorMessage, exists := readTestFile(t, testName, "expect_failure"); exists {
 		// Failure is expected!
-		assert.Contains(t, []string{string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled)}, migrationStatus)
+		assert.Contains(t, []string{schema.OnlineDDLStatusName(tabletmanagerdatapb.OnlineDDL_FAILED), schema.OnlineDDLStatusName(tabletmanagerdatapb.OnlineDDL_CANCELLED)}, migrationStatus)
 		require.Contains(t, migrationMessage, expectedErrorMessage, "expected error message (%s) to contain (%s)", migrationMessage, expectedErrorMessage)
 		// no need to proceed to checksum or anything further
 		return
 	}
 	// We do not expect failure.
-	require.Equal(t, string(schema.OnlineDDLStatusComplete), migrationStatus, migrationMessage)
+	require.Equal(t, schema.OnlineDDLStatusName(tabletmanagerdatapb.OnlineDDL_COMPLETE), migrationStatus, migrationMessage)
 
 	if content, exists := readTestFile(t, testName, "expect_table_structure"); exists {
 		createStatement := getCreateTableStatement(t, afterTableName)
@@ -319,7 +321,7 @@ func waitForMigration(t *testing.T, uuid string, timeout time.Duration) sqltypes
 		row := readMigration(t, uuid)
 		status = row["migration_status"].ToString()
 		switch status {
-		case string(schema.OnlineDDLStatusComplete), string(schema.OnlineDDLStatusFailed), string(schema.OnlineDDLStatusCancelled):
+		case schema.OnlineDDLStatusName(tabletmanagerdatapb.OnlineDDL_COMPLETE), schema.OnlineDDLStatusName(tabletmanagerdatapb.OnlineDDL_FAILED), schema.OnlineDDLStatusName(tabletmanagerdatapb.OnlineDDL_CANCELLED):
 			// migration is complete, either successful or not
 			return row
 		}

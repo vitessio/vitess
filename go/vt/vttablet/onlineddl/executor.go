@@ -2425,7 +2425,11 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 			}
 			keyspace := row["keyspace"].ToString()
 			table := row["mysql_table"].ToString()
-			status := schema.OnlineDDLStatus(row["migration_status"].ToString())
+
+			status, err := schema.ParseOnlineDDLStatus(row["migration_status"].ToString())
+			if err != nil {
+				return fmt.Errorf("cannot revert migration %s on table %s because migration %s has unknown status: %w", revertMigration.Uuid, revertMigration.Table, pendingUUID, err)
+			}
 
 			if keyspace == e.keyspace && table == revertMigration.Table {
 				return fmt.Errorf("can not revert migration %s on table %s because migration %s is in %s status. May only revert if all migrations on this table are completed or failed", revertMigration.Uuid, revertMigration.Table, pendingUUID, status)
