@@ -91,7 +91,6 @@ var (
 		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
 		"onlineddl_scheduler",
-		"onlineddl_revertible",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_topo",
 		"tabletmanager_throttler_custom_config",
