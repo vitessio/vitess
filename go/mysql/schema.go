@@ -40,22 +40,6 @@ const (
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 
-	// CreateVTDatabase creates the _vt database
-	CreateVTDatabase = `CREATE DATABASE IF NOT EXISTS _vt`
-
-	// CreateSchemaCopyTable query creates schemacopy table in _vt schema.
-	CreateSchemaCopyTable = `
-CREATE TABLE if not exists _vt.schemacopy (
-	table_schema varchar(64) NOT NULL,
-	table_name varchar(64) NOT NULL,
-	column_name varchar(64) NOT NULL,
-	ordinal_position bigint(21) unsigned NOT NULL,
-	character_set_name varchar(32) DEFAULT NULL,
-	collation_name varchar(32) DEFAULT NULL,
-	data_type varchar(64) NOT NULL,
-	column_key varchar(3) NOT NULL,
-	PRIMARY KEY (table_schema, table_name, ordinal_position))`
-
 	// DetectSchemaChange query detects if there is any schema change from previous copy.
 	DetectSchemaChange = `
 SELECT DISTINCT table_name
@@ -103,13 +87,6 @@ order by table_name, ordinal_position`
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 
 	// Views
-	CreateViewsTable = `CREATE TABLE IF NOT EXISTS _vt.views (
-	TABLE_NAME varchar(64) NOT NULL,
-	VIEW_DEFINITION longtext NOT NULL,
-	CREATE_STATEMENT longtext NOT NULL,
-	UPDATED_AT TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-	PRIMARY KEY (TABLE_NAME))`
-
 	InsertIntoViewsTable = `insert into _vt.views (
 	table_name,
 	view_definition,
@@ -136,13 +113,6 @@ order by table_name, ordinal_position`
 	// FetchViews queries fetches all views
 	FetchViews = `select table_name, view_definition, create_statement from _vt.views`
 )
-
-// VTDatabaseInit contains all the schema creation queries needed to
-var VTDatabaseInit = []string{
-	CreateVTDatabase,
-	CreateSchemaCopyTable,
-	CreateViewsTable,
-}
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
 // They are validated by the

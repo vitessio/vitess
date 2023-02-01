@@ -1930,7 +1930,7 @@ func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersi
 		return nil, err
 	}
 
-	version, err := getVersionFromTablet(tablet.Addr())
+	version, err := GetVersionFunc()(tablet.Addr())
 	if err != nil {
 		return nil, err
 	}
@@ -4426,7 +4426,20 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	return version, nil
 }
 
+var versionFuncMu sync.Mutex
 var getVersionFromTablet = getVersionFromTabletDebugVars
+
+func SetVersionFunc(versionFunc func(string) (string, error)) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	getVersionFromTablet = versionFunc
+}
+
+func GetVersionFunc() func(string) (string, error) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	return getVersionFromTablet
+}
 
 // helper method to asynchronously get and diff a version
 func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {

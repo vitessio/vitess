@@ -280,6 +280,8 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 - vtbackup flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
+- The VTTablet flag `--init_populate_metadata` has been deprecated, since we have deleted the `local_metadata` and `shard_metadata` sidecar database tables.
+
 - The dead legacy Workflow Manager related code was removed in [#12085](https://github.com/vitessio/vitess/pull/12085). This included the following `vtctl` client commands: `WorkflowAction`, `WorkflowCreate`, `WorkflowWait`, `WorkflowStart`, `WorkflowStop`, `WorkflowTree`, `WorkflowDelete`.
 
 - VTAdmin's `VTExplain` endpoint has been deprecated. Users can use the new `vexplain` query format instead. The endpoint will be deleted in a future release.
@@ -394,3 +396,19 @@ BenchmarkCompressLz4Builtin
     PASS
     cleaning up "/var/folders/96/k7gzd7q10zdb749vr02q7sjh0000gn/T/ee7d47b45ef09786c54fa2d7354d2a68.dat"
 ```
+
+## Refactor
+
+### VTTablet sidecar schema maintenance refactor
+
+This is an internal refactor and should not change the behavior of Vitess as seen by users. 
+
+Developers will see a difference though: v16 changes the way we maintain vttablet's sidecar database schema (also referred to as the `_vt`
+database). Instead of using the `WithDDL` package, introduced in #6348, we use a declarative approach. Users will now have to update
+the desired schema in the `go/vt/sidecardb/schema` directory.
+
+The desired schema is specified, one per table. A new module `sidecardb`, compares this to the existing schema and
+performs the required `create` or `alter` to reach it. This is done whenever a primary vttablet starts up.
+
+The sidecar tables `local_metadata` and `shard_metadata` are no longer in use and all references to them are removed as
+part of this refactor. There were used previously for Orchestrator support, which has been superseded by `vtorc`.

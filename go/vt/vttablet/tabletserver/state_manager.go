@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"
@@ -598,6 +600,9 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
+	defer func() {
+		log.Infof("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
+	}()
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {

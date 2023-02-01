@@ -363,25 +363,6 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	utils.CheckDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
 }
 
-func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-
-	// Change the schema of the _vt.reparent_journal table, so that
-	// inserts into it will fail. That will make the primary fail.
-	_, err := tablets[0].VttabletProcess.QueryTabletWithDB(
-		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
-	require.NoError(t, err)
-
-	// Perform a planned reparent operation, the primary will fail the
-	// insert.  The replicas should then abort right away.
-	out, err := utils.Prs(t, clusterInstance, tablets[1])
-	require.Error(t, err)
-	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
-}
-
 // TestCrossCellDurability tests 2 things -
 // 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
 // 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any manual intervention
@@ -433,7 +414,8 @@ func TestFullStatus(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Check that full status gives the correct result for a primary tablet
-	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablets[0].Alias)
+	primaryTablet := tablets[0]
+	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
 	require.NoError(t, err)
 	primaryStatus := &replicationdatapb.FullStatus{}
 	err = protojson.Unmarshal([]byte(primaryStatusString), primaryStatus)
@@ -460,8 +442,12 @@ func TestFullStatus(t *testing.T) {
 	assert.Regexp(t, `[58]\.[07].*`, primaryStatus.Version)
 	assert.NotEmpty(t, primaryStatus.VersionComment)
 
+	replicaTablet := tablets[1]
+
+	waitForFilePosition(t, clusterInstance, primaryTablet, replicaTablet, 5*time.Second)
+
 	// Check that full status gives the correct result for a replica tablet
-	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablets[1].Alias)
+	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", replicaTablet.Alias)
 	require.NoError(t, err)
 	replicaStatus := &replicationdatapb.FullStatus{}
 	err = protojson.Unmarshal([]byte(replicaStatusString), replicaStatus)
@@ -507,6 +493,32 @@ func TestFullStatus(t *testing.T) {
 	assert.True(t, replicaStatus.LogBinEnabled)
 	assert.Regexp(t, `[58]\.[07].*`, replicaStatus.Version)
 	assert.NotEmpty(t, replicaStatus.VersionComment)
+}
+
+func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) *replicationdatapb.FullStatus {
+	statusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablet.Alias)
+	require.NoError(t, err)
+	status := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(statusString), status)
+	require.NoError(t, err)
+	return status
+}
+
+// waitForFilePosition waits for timeout to see if FilePositions align b/w primary and replica, to fix flakiness in tests due to race conditions where replica is still catching up
+func waitForFilePosition(t *testing.T, clusterInstance *cluster.LocalProcessCluster, primary *cluster.Vttablet, replica *cluster.Vttablet, timeout time.Duration) {
+	start := time.Now()
+	for {
+		primaryStatus := getFullStatus(t, clusterInstance, primary)
+		replicaStatus := getFullStatus(t, clusterInstance, replica)
+		if primaryStatus.PrimaryStatus.FilePosition == replicaStatus.ReplicationStatus.FilePosition {
+			return
+		}
+		if d := time.Since(start); d > timeout {
+			require.FailNowf(t, "waitForFilePosition timed out, primary %s, replica %s",
+				primaryStatus.PrimaryStatus.FilePosition, replicaStatus.ReplicationStatus.FilePosition)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // fileNameFromPosition gets the file name from the position

@@ -36,8 +36,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -291,42 +289,6 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 // TabletAliasString returns tablet alias as string (duh)
 func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
-}
-
-// PrepareForQueryExecutor is called by QueryExecutor, possibly before the backing
-// _vt.schema_migrations table has had the chance to be created.
-// This function prepares the schema.
-func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
-	return e.initSchema(ctx)
-}
-
-func (e *Executor) initSchema(ctx context.Context) error {
-	e.initMutex.Lock()
-	defer e.initMutex.Unlock()
-
-	if e.schemaInitialized {
-		return nil
-	}
-
-	defer e.env.LogError()
-
-	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	for _, ddl := range ApplyDDL {
-		_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
-		if mysql.IsSchemaApplyError(err) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-	}
-	e.schemaInitialized = true
-	return nil
 }
 
 // InitDBConfig initializes keysapce
@@ -3798,11 +3760,6 @@ func (e *Executor) vreplicationExec(ctx context.Context, tablet *topodatapb.Tabl
 	tmClient := e.tabletManagerClient()
 	defer tmClient.Close()
 
-	e.initVreplicationDDLOnce.Do(func() {
-		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
-		// This will make vreplication run through its WithDDL schema changes.
-		_, _ = tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
-	})
 	return tmClient.VReplicationExec(ctx, tablet, query)
 }
 
@@ -3952,10 +3909,6 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 
 	ctx := context.Background()
-	if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return
-	}
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
 		log.Error(err)
 	}
@@ -4677,11 +4630,6 @@ func (e *Executor) SubmitMigration(
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)
 	}
 
-	if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return nil, err
-	}
-
 	// The logic below has multiple steps. We hence protect the rest of the code with a mutex, only used by this function.
 	e.submitMutex.Lock()
 	defer e.submitMutex.Unlock()
@@ -4751,6 +4699,7 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
+
 	}
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
@@ -4880,11 +4829,6 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			return nil, err
 		}
 		return sqltypes.ResultToProto3(result), nil
-	}
-
-	if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return nil, err
 	}
 
 	switch stmt := vx.Stmt.(type) {

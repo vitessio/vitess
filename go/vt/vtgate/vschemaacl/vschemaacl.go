@@ -18,6 +18,7 @@ package vschemaacl
 
 import (
 	"strings"
+	"sync"
 
 	"github.com/spf13/pflag"
 
@@ -35,6 +36,8 @@ var (
 
 	// ddlACL contains a set of allowed usernames
 	acl map[string]struct{}
+
+	initMu sync.Mutex
 )
 
 // RegisterSchemaACLFlags installs log flags on the given FlagSet.
@@ -54,6 +57,8 @@ func init() {
 
 // Init parses the users option and sets allowAll / acl accordingly
 func Init() {
+	initMu.Lock()
+	defer initMu.Unlock()
 	acl = make(map[string]struct{})
 	allowAll = false
 

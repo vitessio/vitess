@@ -151,7 +151,6 @@ Usage of vttablet:
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
       --init_db_name_override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init_keyspace string                                             (init parameter) keyspace to use for this tablet
-      --init_populate_metadata                                           (init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.
       --init_shard string                                                (init parameter) shard to use for this tablet
       --init_tablet_type string                                          (init parameter) the tablet type to use for this tablet.
       --init_tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
