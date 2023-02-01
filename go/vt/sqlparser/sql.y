@@ -6177,6 +6177,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| POINT openb expression ',' expression closeb
+  {
+    $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
+  }
 | argument_less_window_expr_type openb closeb over_clause
   {
     $$ = &ArgumentLessWindowExpr{ Type: $1, OverClause : $4 }
@@ -7704,6 +7708,7 @@ non_reserved_keyword:
 | JSON_VALID %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_VALUE %prec FUNCTION_CALL_NON_KEYWORD
 | JSON_UNQUOTE %prec FUNCTION_CALL_NON_KEYWORD
+| POINT %prec FUNCTION_CALL_NON_KEYWORD
 | KEY_BLOCK_SIZE
 | KEYS
 | KEYSPACES
@@ -7785,7 +7790,6 @@ non_reserved_keyword:
 | PS_CURRENT_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
-| POINT
 | POLYGON
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
