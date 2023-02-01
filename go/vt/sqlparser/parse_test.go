@@ -40,6 +40,22 @@ type parseTest struct {
 var (
 	validSQL = []parseTest{
 		{
+			input:  "SET @foo = 'o' 'ne';",
+			output: "set @foo = 'one'",
+		},
+		{
+			input:  "SET @foo = \"o\" \"ne\";",
+			output: "set @foo = 'one'",
+		},
+		{
+			input:  "SET @foo = 'o''ne';",
+			output: "set @foo = 'o\\'ne'",
+		},
+		{
+			input:  "SET @@GLOBAL.GTID_PURGED= /*!80000 '+'*/ 'beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126';",
+			output: "set global GTID_PURGED = '+beabe64c-9dc6-11ed-8021-a0f9021e8e70:1-126'",
+		},
+		{
 			input: "start replica",
 		},
 		{
@@ -3723,6 +3739,9 @@ func TestInvalid(t *testing.T) {
 		input string
 		err   string
 	}{{
+		input: "SET @foo = `o` `ne`;",
+		err:   "syntax error",
+	}, {
 		input: "CHANGE REPLICATION FILTER",
 		err:   "syntax error",
 	}, {
@@ -5609,6 +5628,9 @@ var (
 		output       string
 		excludeMulti bool // Don't use in the ParseNext multi-statement parsing tests.
 	}{{
+		input:  "SET @foo = `o` `ne`;",
+		output: "syntax error at position 20 near 'ne'",
+	}, {
 		input:  "use db/",
 		output: "syntax error at position 8 near 'db'",
 	}, {
