@@ -38,7 +38,7 @@ type InsertGenerator struct {
 // NewInsertGenerator creates a new InsertGenerator.
 func NewInsertGenerator(state, dbname string) *InsertGenerator {
 	buf := &strings.Builder{}
-	buf.WriteString("insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) values ")
+	buf.WriteString("insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values ")
 	return &InsertGenerator{
 		buf:    buf,
 		state:  state,
@@ -49,8 +49,8 @@ func NewInsertGenerator(state, dbname string) *InsertGenerator {
 
 // AddRow adds a row to the insert statement.
 func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSource, pos, cell, tabletTypes string,
-	workflowType int64, workflowSubType int64) {
-	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v)",
+	workflowType int64, workflowSubType int64, deferSecondaryKeys bool) {
+	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v, %v)",
 		ig.prefix,
 		encodeString(workflow),
 		encodeString(bls.String()),
@@ -64,6 +64,7 @@ func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSourc
 		encodeString(ig.dbname),
 		workflowType,
 		workflowSubType,
+		deferSecondaryKeys,
 	)
 	ig.prefix = ", "
 }

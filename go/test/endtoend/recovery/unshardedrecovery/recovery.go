@@ -225,8 +225,6 @@ func TestRecoveryImpl(t *testing.T) {
 
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
 
-	cluster.VerifyLocalMetadata(t, replica2, recoveryKS1, shardName, cell)
-
 	// update the original row in primary
 	_, err = primary.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx1' where id = 1", keyspaceName, true)
 	assert.NoError(t, err)

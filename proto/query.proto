@@ -871,6 +871,9 @@ message RealtimeStats {
 
   // table_schema_changed is to provide list of tables that have schema changes detected by the tablet.
   repeated string table_schema_changed = 7;
+
+  // view_schema_changed is to provide list of views that have schema changes detected by the tablet.
+  repeated string view_schema_changed = 8;
 }
 
 // AggregateStats contains information about the health of a group of

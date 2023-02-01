@@ -24,6 +24,8 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tx"
 
 	"github.com/stretchr/testify/assert"
@@ -1548,6 +1550,7 @@ func initQueryExecutorTestDB(db *fakesqldb.DB) {
 		"varchar|int64"),
 		"Innodb_rows_read|0",
 	))
+	sidecardb.AddSchemaInitQueries(db, true)
 }
 
 func getTestTableFields() []*querypb.Field {
@@ -1560,16 +1563,6 @@ func getTestTableFields() []*querypb.Field {
 
 func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 	queryResultMap := map[string]*sqltypes.Result{
-		// queries for twopc
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
-		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
-		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
-		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
-		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
-		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
@@ -1650,6 +1643,7 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
 
+	sidecardb.AddSchemaInitQueries(db, true)
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}
@@ -1701,4 +1695,86 @@ func addQueryExecutorSupportedQueries(db *fakesqldb.DB) {
 			Type: sqltypes.Int64,
 		}},
 	})
+}
+
+func TestQueryExecSchemaReloadCount(t *testing.T) {
+	type dbResponse struct {
+		query  string
+		result *sqltypes.Result
+	}
+
+	dmlResult := &sqltypes.Result{
+		RowsAffected: 1,
+	}
+	fields := sqltypes.MakeTestFields("a|b", "int64|varchar")
+	selectResult := sqltypes.MakeTestResult(fields, "1|aaa")
+	emptyResult := &sqltypes.Result{}
+
+	// The queries are run both in and outside a transaction.
+	testcases := []struct {
+		// input is the input query.
+		input string
+		// dbResponses specifes the list of queries and responses to add to the fake db.
+		dbResponses       []dbResponse
+		schemaReloadCount int
+	}{{
+		input: "select * from t",
+		dbResponses: []dbResponse{{
+			query:  `select \* from t.*`,
+			result: selectResult,
+		}},
+	}, {
+		input: "insert into t values(1, 'aaa')",
+		dbResponses: []dbResponse{{
+			query:  "insert.*",
+			result: dmlResult,
+		}},
+	}, {
+		input: "create table t(a int, b varchar(64))",
+		dbResponses: []dbResponse{{
+			query:  "create.*",
+			result: emptyResult,
+		}},
+		schemaReloadCount: 1,
+	}, {
+		input: "drop table t",
+		dbResponses: []dbResponse{{
+			query:  "drop.*",
+			result: dmlResult,
+		}},
+		schemaReloadCount: 1,
+	}, {
+		input: "create table t(a int, b varchar(64))",
+		dbResponses: []dbResponse{{
+			query:  "create.*",
+			result: emptyResult,
+		}},
+		schemaReloadCount: 1,
+	}, {
+		input: "drop table t",
+		dbResponses: []dbResponse{{
+			query:  "drop.*",
+			result: dmlResult,
+		}},
+		schemaReloadCount: 1,
+	}}
+	db := setUpQueryExecutorTest(t)
+	defer db.Close()
+	tsv := newTestTabletServer(context.Background(), noFlags, db)
+	tsv.config.DB.DBName = "ks"
+	defer tsv.StopService()
+	for _, tcase := range testcases {
+		t.Run(tcase.input, func(t *testing.T) {
+			// reset the schema reload metric before running the test.
+			tsv.se.SchemaReloadTimings.Reset()
+			for _, dbr := range tcase.dbResponses {
+				db.AddQueryPattern(dbr.query, dbr.result)
+			}
+
+			qre := newTestQueryExecutor(context.Background(), tsv, tcase.input, 0)
+			_, err := qre.Execute()
+			require.NoError(t, err)
+			assert.EqualValues(t, tcase.schemaReloadCount, qre.tsv.se.SchemaReloadTimings.Counts()["TabletServerTest.SchemaReload"], "got: %v", qre.tsv.se.SchemaReloadTimings.Counts())
+		})
+	}
 }

@@ -141,7 +141,6 @@ func TestHeartbeatFrequencyFlag(t *testing.T) {
 func TestVReplicationTimeUpdated(t *testing.T) {
 	ctx := context.Background()
 	defer deleteTablet(addTablet(100))
-
 	execStatements(t, []string{
 		"create table t1(id int, val varbinary(128), primary key(id))",
 		fmt.Sprintf("create table %s.t1(id int, val varbinary(128), primary key(id))", vrepldb),
@@ -192,12 +191,6 @@ func TestVReplicationTimeUpdated(t *testing.T) {
 	require.Greater(t, timeUpdated2, timeUpdated1, "time_updated not updated")
 	require.Greater(t, timeUpdated2, transactionTimestamp1, "transaction_timestamp should not be < time_updated")
 	require.Greater(t, timeHeartbeat2, timeHeartbeat1, "time_heartbeat not updated")
-
-	// drop time_heartbeat column to test that heartbeat is updated using WithDDL and can self-heal by creating the column again
-	env.Mysqld.ExecuteSuperQuery(ctx, "alter table _vt.vreplication drop column time_heartbeat")
-	time.Sleep(2 * time.Second)
-	_, _, timeHeartbeat3 := getTimestamps()
-	require.Greater(t, timeHeartbeat3, timeHeartbeat2, "time_heartbeat not updated")
 }
 
 func TestCharPK(t *testing.T) {
@@ -2902,7 +2895,7 @@ func startVReplication(t *testing.T, bls *binlogdatapb.BinlogSource, pos string)
 	if pos == "" {
 		pos = primaryPosition(t)
 	}
-	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0)
+	query := binlogplayer.CreateVReplication("test", bls, pos, 9223372036854775807, 9223372036854775807, 0, vrepldb, 0, 0, false)
 	qr, err := playerEngine.Exec(query)
 	if err != nil {
 		t.Fatal(err)

@@ -26,8 +26,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/pools"
@@ -83,9 +81,6 @@ var (
 			Type: sqltypes.Int64,
 		},
 	}
-	withDDL = withddl.New([]string{
-		mysql.CreateViewsTable,
-	})
 )
 
 func returnStreamResult(result *sqltypes.Result) error {
@@ -370,7 +365,7 @@ func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlpar
 		return nil, err
 	}
 	bindVars := map[string]*querypb.BindVariable{
-		"TABLE_NAME": viewNamesBV,
+		"table_name": viewNamesBV,
 	}
 
 	existErr := qre.checkViewExists(conn, stmt, bindVars, viewsMap, viewNames)
@@ -390,7 +385,7 @@ func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection, stmt *sqlpar
 }
 
 func execWithDDLView(ctx context.Context, conn *StatefulConnection, sql string) (*sqltypes.Result, error) {
-	return withDDL.Exec(ctx, sql, conn.Exec, conn.Exec)
+	return conn.Exec(ctx, sql, 10000, true)
 }
 
 func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlparser.DropView, bindVars map[string]*querypb.BindVariable, viewsMap map[string]int, viewNames []string) error {
@@ -657,20 +652,27 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		}
 	}
 
-	defer func() {
-		// Call se.Reload() with includeStats=false as obtaining table
-		// size stats involves joining `information_schema.tables`,
-		// which can be very costly on systems with a large number of
-		// tables.
-		//
-		// Instead of synchronously recalculating table size stats
-		// after every DDL, let them be outdated until the periodic
-		// schema reload fixes it.
-		if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
-			log.Errorf("failed to reload schema %v", err)
-		}
-	}()
-
+	isTemporaryTable := false
+	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
+		isTemporaryTable = ddlStmt.IsTemporary()
+	}
+	if !isTemporaryTable {
+		// Temporary tables are limited to the session creating them. There is no need to Reload()
+		// the table because other connections will not be able to see the table anyway.
+		defer func() {
+			// Call se.Reload() with includeStats=false as obtaining table
+			// size stats involves joining `information_schema.tables`,
+			// which can be very costly on systems with a large number of
+			// tables.
+			//
+			// Instead of synchronously recalculating table size stats
+			// after every DDL, let them be outdated until the periodic
+			// schema reload fixes it.
+			if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
+				log.Errorf("failed to reload schema %v", err)
+			}
+		}()
+	}
 	sql := qre.query
 	// If FullQuery is not nil, then the DDL query was fully parsed
 	// and we should use the ast to generate the query instead.
@@ -1029,11 +1031,6 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_MIGRATION plan")
 	}
 
-	// Make sure schema exists
-	if err := qre.tsv.onlineDDLExecutor.PrepareForQueryExecutor(qre.ctx); err != nil {
-		return nil, err
-	}
-
 	switch alterMigration.Type {
 	case sqlparser.RetryMigrationType:
 		return qre.tsv.onlineDDLExecutor.RetryMigration(qre.ctx, alterMigration.UUID)
@@ -1232,8 +1229,8 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 
 func (qre *QueryExecutor) generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
 	bindVars := make(map[string]*querypb.BindVariable)
-	bindVars["TABLE_NAME"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
-	bindVars["VIEW_DEFINITION"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))
-	bindVars["CREATE_STATEMENT"] = sqltypes.StringBindVariable(sqlparser.String(createView))
+	bindVars["table_name"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
+	bindVars["view_definition"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))
+	bindVars["create_statement"] = sqltypes.StringBindVariable(sqlparser.String(createView))
 	return bindVars
 }

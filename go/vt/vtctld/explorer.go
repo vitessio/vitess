@@ -17,7 +17,6 @@ limitations under the License.
 package vtctld
 
 import (
-	"errors"
 	"fmt"
 	"net/http"
 	"path"
@@ -27,7 +26,6 @@ import (
 	"context"
 
 	"vitess.io/vitess/go/vt/topo"
-	"vitess.io/vitess/go/vt/topo/topoproto"
 )
 
 // backendExplorer is a class that uses the Backend interface of a
@@ -117,73 +115,11 @@ func (ex *backendExplorer) HandlePath(nodePath string, r *http.Request) *Result 
 	return result
 }
 
-// handleExplorerRedirect returns the redirect target URL.
-func handleExplorerRedirect(ctx context.Context, ts *topo.Server, r *http.Request) (string, error) {
-	keyspace := r.FormValue("keyspace")
-	shard := r.FormValue("shard")
-	cell := r.FormValue("cell")
-
-	switch r.FormValue("type") {
-	case "keyspace":
-		if keyspace == "" {
-			return "", errors.New("keyspace is required for this redirect")
-		}
-		return appPrefix + "#/keyspaces/", nil
-	case "shard":
-		if keyspace == "" || shard == "" {
-			return "", errors.New("keyspace and shard are required for this redirect")
-		}
-		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
-	case "srv_keyspace":
-		if keyspace == "" || cell == "" {
-			return "", errors.New("keyspace and cell are required for this redirect")
-		}
-		return appPrefix + "#/keyspaces/", nil
-	case "tablet":
-		alias := r.FormValue("alias")
-		if alias == "" {
-			return "", errors.New("alias is required for this redirect")
-		}
-		tabletAlias, err := topoproto.ParseTabletAlias(alias)
-		if err != nil {
-			return "", fmt.Errorf("bad tablet alias %q: %v", alias, err)
-		}
-		ti, err := ts.GetTablet(ctx, tabletAlias)
-		if err != nil {
-			return "", fmt.Errorf("can't get tablet %q: %v", alias, err)
-		}
-		return appPrefix + fmt.Sprintf("#/shard/%s/%s", ti.Keyspace, ti.Shard), nil
-	case "replication":
-		if keyspace == "" || shard == "" || cell == "" {
-			return "", errors.New("keyspace, shard, and cell are required for this redirect")
-		}
-		return appPrefix + fmt.Sprintf("#/shard/%s/%s", keyspace, shard), nil
-	default:
-		return "", errors.New("bad redirect type")
-	}
-}
-
 // initExplorer initializes the redirects for explorer
 func initExplorer(ts *topo.Server) {
 	// Main backend explorer functions.
 	be := newBackendExplorer(ts)
 	handleCollection("topodata", func(r *http.Request) (any, error) {
 		return be.HandlePath(path.Clean("/"+getItemPath(r.URL.Path)), r), nil
-	})
-
-	// Redirects for explorers.
-	http.HandleFunc("/explorers/redirect", func(w http.ResponseWriter, r *http.Request) {
-		if err := r.ParseForm(); err != nil {
-			httpErrorf(w, r, "cannot parse form: %s", err)
-			return
-		}
-
-		target, err := handleExplorerRedirect(context.Background(), ts, r)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		http.Redirect(w, r, target, http.StatusFound)
 	})
 }

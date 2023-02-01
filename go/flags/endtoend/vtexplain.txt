@@ -17,7 +17,7 @@ Usage of vtexplain:
       --mysql_server_version string                 MySQL server version to advertise.
       --normalize                                   Whether to enable vtgate normalization
       --output-mode string                          Output in human-friendly text or json (default "text")
-      --planner-version string                      Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4
+      --planner-version string                      Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner
       --pprof strings                               enable profiling
       --purge_logs_interval duration                how often try to remove old logs (default 1h0m0s)
       --replication-mode string                     The replication mode to simulate -- must be set to either ROW or STATEMENT (default "ROW")

@@ -36,27 +36,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
-	"vitess.io/vitess/go/vt/withddl"
 )
-
-const createSidecarDB = "CREATE DATABASE IF NOT EXISTS _vt"
-const createSchemaTrackingTable = `CREATE TABLE IF NOT EXISTS _vt.schema_version (
-		 id INT AUTO_INCREMENT,
-		  pos VARBINARY(10000) NOT NULL,
-		  time_updated BIGINT(20) NOT NULL,
-		  ddl VARBINARY(1000) DEFAULT NULL,
-		  schemax BLOB NOT NULL,
-		  PRIMARY KEY (id)
-		) ENGINE=InnoDB`
-const alterSchemaTrackingTableDDLBlob = "alter table _vt.schema_version modify column ddl BLOB NOT NULL"
-const alterSchemaTrackingTableSchemaxBlob = "alter table _vt.schema_version modify column schemax LONGBLOB NOT NULL"
-
-var withDDL = withddl.New([]string{
-	createSidecarDB,
-	createSchemaTrackingTable,
-	alterSchemaTrackingTableDDLBlob,
-	alterSchemaTrackingTableSchemaxBlob,
-})
 
 // VStreamer defines  the functions of VStreamer
 // that the replicationWatcher needs.
@@ -192,7 +172,7 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 		return false, err
 	}
 	defer conn.Recycle()
-	result, err := withDDL.Exec(ctx, "select id from _vt.schema_version limit 1", conn.Exec, conn.Exec)
+	result, err := conn.Exec(ctx, "select id from _vt.schema_version limit 1", 1, false)
 	if err != nil {
 		return false, err
 	}
@@ -258,7 +238,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 	query := fmt.Sprintf("insert into _vt.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
 		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
-	_, err = withDDL.Exec(ctx, query, conn.Exec, conn.Exec)
+	_, err = conn.Exec(ctx, query, 1, false)
 	if err != nil {
 		return err
 	}

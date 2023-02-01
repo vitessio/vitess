@@ -569,8 +569,8 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv, params *VRepl
 		params.SourceKeyspace, params.Workflow)
 
 	sourceQueries := []string{
-		"select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
-		"select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'",
+		"select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
+		"select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse'",
 	}
 	noResult := &sqltypes.Result{}
 	for _, dbclient := range tme.dbSourceClients {
@@ -580,6 +580,7 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv, params *VRepl
 		dbclient.addInvariant("select id from _vt.vreplication where db_name = 'vt_ks' and workflow = 'test_reverse'", resultid1)
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
+		dbclient.addInvariant("delete from _vt.post_copy_action where vrepl_id in (1)", noResult)
 		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type)", &sqltypes.Result{InsertID: uint64(1)})
 		dbclient.addInvariant("select id from _vt.vreplication where id = 1", resultid1)
 		dbclient.addInvariant("select id from _vt.vreplication where id = 2", resultid2)
@@ -590,7 +591,7 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv, params *VRepl
 	}
 
 	targetQueries := []string{
-		"select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
+		"select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name='vt_ks' and workflow != 'test_reverse' and state = 'Stopped' and message != 'FROZEN'",
 	}
 
 	for _, dbclient := range tme.dbTargetClients {
@@ -613,6 +614,7 @@ func expectReshardQueries(t *testing.T, tme *testShardMigraterEnv, params *VRepl
 		dbclient.addInvariant("update _vt.vreplication set message = 'FROZEN'", noResult)
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
+		dbclient.addInvariant("delete from _vt.post_copy_action where vrepl_id in (1)", noResult)
 	}
 	tme.tmeDB.AddQuery("USE `vt_ks`", noResult)
 	tme.tmeDB.AddQuery("select distinct table_name from _vt.copy_state cs, _vt.vreplication vr where vr.id = cs.vrepl_id and vr.id = 1", noResult)
@@ -652,6 +654,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplic
 		dbclient.addInvariant("select 1 from _vt.vreplication where db_name='vt_ks2' and workflow='test' and message!='FROZEN'", noResult)
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
+		dbclient.addInvariant("delete from _vt.post_copy_action where vrepl_id in (1)", noResult)
 		dbclient.addInvariant("insert into _vt.resharding_journal", noResult)
 		dbclient.addInvariant("select val from _vt.resharding_journal", noResult)
 		dbclient.addInvariant("select id, source, message, cell, tablet_types from _vt.vreplication where workflow='test_reverse' and db_name='vt_ks1'",
@@ -673,6 +676,7 @@ func expectMoveTablesQueries(t *testing.T, tme *testMigraterEnv, params *VReplic
 		dbclient.addInvariant("select id from _vt.vreplication where db_name = 'vt_ks1' and workflow = 'test_reverse'", resultid1)
 		dbclient.addInvariant("delete from _vt.vreplication where id in (1)", noResult)
 		dbclient.addInvariant("delete from _vt.copy_state where vrepl_id in (1)", noResult)
+		dbclient.addInvariant("delete from _vt.post_copy_action where vrepl_id in (1)", noResult)
 		dbclient.addInvariant("insert into _vt.vreplication (workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type)", &sqltypes.Result{InsertID: uint64(1)})
 		dbclient.addInvariant("select * from _vt.vreplication where id = 1", runningResult(1))
 		dbclient.addInvariant("select * from _vt.vreplication where id = 2", runningResult(2))

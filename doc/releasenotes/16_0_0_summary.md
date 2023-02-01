@@ -39,7 +39,40 @@ In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced nati
 - A server restored to a point in time remains in `DRAINED` tablet type, and does not join the replication stream (thus, "frozen" in time).
 - It is possible to take incremental backups from different tablets. It is OK to have overlaps in incremental backup contents. The restore process chooses a valid path, and is valid as long as there are no gaps in the backed up binary log content.
 
+
+### Structured Logging Flag
+
+In [PR #11960](https://github.com/vitessio/vitess/pull/11960/) we introduced a new flag `structured-logging`. This flag stops the `glog` usage and use [`PlanetScale Log`](https://github.com/planetscale/log) instead.
+
+The flag is available in these components:
+
+- mysqlctl
+- mysqlctld
+- vtctld
+- vtgate
+- vtorc
+- vttablet
+- vttestserver
+
 ### Breaking Changes
+
+#### vtctld UI Removal
+In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
+
+However, the vtctld HTTP API will remain at `{$vtctld_web_port}/api`.
+
+#### vtctld Flag Deprecation & Deletions
+With the removal of the vtctld UI, the following vtctld flags have been deprecated:
+- `--vtctld_show_topology_crud`: This was a flag that controlled the display of CRUD topology actions in the vtctld UI. The UI is removed, so this flag is no longer necessary.
+
+The following deprecated flags have also been removed:
+- `--enable_realtime_stats`
+- `--enable_vtctld_ui`
+- `--web_dir`
+- `--web_dir2`
+- `--workflow_manager_init`
+- `--workflow_manager_use_election`
+- `--workflow_manager_disable`
 
 #### Orchestrator Integration Deletion
 
@@ -72,6 +105,24 @@ The error code `VT03001` can then be used to search or ask for help and report p
 If you have code searching for error strings from Vitess, this is a breaking change.
 Many error strings have been tweaked.
 If your application is searching for specific errors, you might need to update your code.
+
+#### Logstats Table and Keyspace removed
+
+Information about which tables are used is now reported by the field TablesUsed added in v15, that is a string array, listing all tables and which keyspace they are in.
+The Table/Keyspace fields were deprecated in v15 and are now removed in the v16 release of Vitess.
+
+#### Removed Stats
+
+The stat `QueryRowCounts` is removed in v16. `QueryRowsAffected` and `QueryRowsReturned` can be used instead to gather the same information.
+
+#### Deprecated Stats
+
+The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16. The same information can be inferred from the stats `QueriesProcessedByTable` and `QueriesRoutedByTable` respectively. These stats will be removed in the next release.
+
+#### Removed flag
+
+The following flag is removed in v16:
+- `enable_semi_sync`
 
 #### <a id="lock-timeout-introduction"/> `lock-timeout` and `remote_operation_timeout` Changes
 
@@ -215,7 +266,7 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 ### Deprecations and Removals
 
-- The V3 planner is deprecated as of the V16 release, and will be removed in the V17 release of Vitess.
+- The V3 planner is deprecated as of the v16 release, and will be removed in the v17 release of Vitess.
 
 - The [VReplication v1 commands](https://vitess.io/docs/15.0/reference/vreplication/v1/) — which were deprecated in Vitess 11.0 — have been removed. You will need to use the [VReplication v2 commands](https://vitess.io/docs/16.0/reference/vreplication/v2/) instead.
 
@@ -229,7 +280,11 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 - vtbackup flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
+- The VTTablet flag `--init_populate_metadata` has been deprecated, since we have deleted the `local_metadata` and `shard_metadata` sidecar database tables.
+
 - The dead legacy Workflow Manager related code was removed in [#12085](https://github.com/vitessio/vitess/pull/12085). This included the following `vtctl` client commands: `WorkflowAction`, `WorkflowCreate`, `WorkflowWait`, `WorkflowStart`, `WorkflowStop`, `WorkflowTree`, `WorkflowDelete`.
+
+- VTAdmin's `VTExplain` endpoint has been deprecated. Users can use the new `vexplain` query format instead. The endpoint will be deleted in a future release.
 
 
 ### MySQL Compatibility
@@ -305,3 +360,55 @@ Creating a database with vttestserver was taking ~45 seconds. This can be proble
 In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
 For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this value might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes 
 this shouldn't be a concern.
+
+## Minor changes
+
+### Backup compression benchmarks
+
+Compression benchmarks have been added to the `mysqlctl` package.
+
+The benchmarks fetch and compress a ~6 GiB tar file containing 3 InnoDB files using different built-in and external compressors.
+
+Here are sample results from a 2020-era Mac M1 with 16 GiB of memory:
+
+```sh
+$ go test -bench=BenchmarkCompress ./go/vt/mysqlctl -run=NONE -timeout=12h -benchtime=1x -v
+goos: darwin
+goarch: arm64
+pkg: vitess.io/vitess/go/vt/mysqlctl
+BenchmarkCompressLz4Builtin
+    compression_benchmark_test.go:310: downloading data from https://www.dropbox.com/s/raw/smmgifsooy5qytd/enwiki-20080103-pages-articles.ibd.tar.zst
+    BenchmarkCompressLz4Builtin-8                  1        11737493087 ns/op        577.98 MB/s             2.554 compression-ratio
+    BenchmarkCompressPargzipBuiltin
+    BenchmarkCompressPargzipBuiltin-8              1        31083784040 ns/op        218.25 MB/s             2.943 compression-ratio
+    BenchmarkCompressPgzipBuiltin
+    BenchmarkCompressPgzipBuiltin-8                1        13325299680 ns/op        509.11 MB/s             2.910 compression-ratio
+    BenchmarkCompressZstdBuiltin
+    BenchmarkCompressZstdBuiltin-8                 1        18683863911 ns/op        363.09 MB/s             3.150 compression-ratio
+    BenchmarkCompressZstdExternal
+    BenchmarkCompressZstdExternal-8                1        10795487675 ns/op        628.41 MB/s             3.093 compression-ratio
+    BenchmarkCompressZstdExternalFast4
+    BenchmarkCompressZstdExternalFast4-8           1        7139319009 ns/op         950.23 MB/s             2.323 compression-ratio
+    BenchmarkCompressZstdExternalT0
+    BenchmarkCompressZstdExternalT0-8              1        4393860434 ns/op        1543.97 MB/s             3.093 compression-ratio
+    BenchmarkCompressZstdExternalT4
+    BenchmarkCompressZstdExternalT4-8              1        4389559744 ns/op        1545.49 MB/s             3.093 compression-ratio
+    PASS
+    cleaning up "/var/folders/96/k7gzd7q10zdb749vr02q7sjh0000gn/T/ee7d47b45ef09786c54fa2d7354d2a68.dat"
+```
+
+## Refactor
+
+### VTTablet sidecar schema maintenance refactor
+
+This is an internal refactor and should not change the behavior of Vitess as seen by users. 
+
+Developers will see a difference though: v16 changes the way we maintain vttablet's sidecar database schema (also referred to as the `_vt`
+database). Instead of using the `WithDDL` package, introduced in #6348, we use a declarative approach. Users will now have to update
+the desired schema in the `go/vt/sidecardb/schema` directory.
+
+The desired schema is specified, one per table. A new module `sidecardb`, compares this to the existing schema and
+performs the required `create` or `alter` to reach it. This is done whenever a primary vttablet starts up.
+
+The sidecar tables `local_metadata` and `shard_metadata` are no longer in use and all references to them are removed as
+part of this refactor. There were used previously for Orchestrator support, which has been superseded by `vtorc`.

@@ -220,7 +220,6 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		// to avoid flakiness when the CI is very slow.
 		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
-
 		parallelInsertWorkers,
 	}
 

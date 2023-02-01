@@ -85,7 +85,7 @@ func (mysqlctld *MysqlctldProcess) Start() error {
 	tempProcess.Stdout = os.Stdout
 	tempProcess.Stderr = os.Stderr
 
-	log.Infof("%v %v", strings.Join(tempProcess.Args, " "))
+	log.Infof("%v", strings.Join(tempProcess.Args, " "))
 
 	err := tempProcess.Start()
 	if err != nil {

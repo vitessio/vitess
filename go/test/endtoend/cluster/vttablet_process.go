@@ -66,7 +66,6 @@ type VttabletProcess struct {
 	VerifyURL                   string
 	QueryzURL                   string
 	StatusDetailsURL            string
-	EnableSemiSync              bool
 	SupportsBackup              bool
 	ServingStatus               string
 	DbPassword                  string
@@ -119,9 +118,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
-	}
-	if vttablet.EnableSemiSync {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--enable_semi_sync")
 	}
 	if vttablet.DbFlavor != "" {
 		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
@@ -593,7 +589,7 @@ func (vttablet *VttabletProcess) IsShutdown() bool {
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, enableSemiSync bool, charset string) *VttabletProcess {
+func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, charset string) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
@@ -613,7 +609,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		GrpcPort:                    grpcPort,
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
-		EnableSemiSync:              enableSemiSync,
 		SupportsBackup:              true,
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",

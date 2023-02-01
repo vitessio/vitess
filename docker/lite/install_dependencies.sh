@@ -58,6 +58,7 @@ BASE_PACKAGES=(
     wget
     curl
     percona-toolkit
+    zstd
 )
 
 apt-get update
