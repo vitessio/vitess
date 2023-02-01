@@ -25,6 +25,7 @@ import (
 	"strconv"
 	"sync"
 	"time"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"google.golang.org/protobuf/proto"
 
@@ -393,7 +394,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		}
 
 		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
-		for id := int32(qr.InsertID); id < int32(maxInsert); id++ {
+		autoIncrementStep, err := vre.getAutoIncrementStep(dbClient)
+		if err != nil {
+			return nil, err
+		}
+		firstID := int32(qr.InsertID)
+		lastID := firstID + autoIncrementStep*(int32(plan.numInserts)-1)
+		for id := firstID; id <= lastID; id += autoIncrementStep {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
 				ct.Stop()
@@ -842,6 +849,21 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 		maps[i] = mrow
 	}
 	return maps, nil
+}
+
+func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (int32, error) {
+	qr, err := dbClient.ExecuteFetch("select @@auto_increment_increment", 1)
+	if err != nil {
+		return 0, err
+	}
+	if len(qr.Rows) != 1 {
+		return 0, fmt.Errorf("error fetching @@auto_increment_increment value")
+	}
+	autoIncrement, err := evalengine.ToInt64(qr.Rows[0][0])
+	if err != nil {
+		return 0, err
+	}
+	return int32(autoIncrement), nil
 }
 
 func readRow(dbClient binlogplayer.DBClient, id int32) (map[string]string, error) {
