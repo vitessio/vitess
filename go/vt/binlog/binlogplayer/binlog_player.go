@@ -46,7 +46,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
-	"vitess.io/vitess/go/vt/withddl"
 )
 
 var (
@@ -522,77 +521,6 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
 	return nil
-}
-
-// CreateVReplicationTable returns the statements required to create
-// the _vt.vreplication table.
-// id: is an auto-increment column that identifies the stream.
-// workflow: documents the creator/manager of the stream. Example: 'MoveTables'.
-// source: contains a string proto representation of binlogpb.BinlogSource.
-// pos: initially, a start position, and is updated to the current position by the binlog player.
-// stop_pos: optional column that specifies the stop position.
-// max_tps: max transactions per second.
-// max_replication_lag: if replication lag exceeds this amount writing is throttled accordingly.
-// cell: optional column that overrides the current cell to replicate from.
-// tablet_types: optional column that overrides the tablet types to look to replicate from.
-// time_update: last time an event was applied.
-// transaction_timestamp: timestamp of the transaction (from the primary).
-// state: Running, Error or Stopped.
-// message: Reason for current state.
-func CreateVReplicationTable() []string {
-	return []string{
-		"CREATE DATABASE IF NOT EXISTS _vt",
-		"DROP TABLE IF EXISTS _vt.blp_checkpoint",
-		`CREATE TABLE IF NOT EXISTS _vt.vreplication (
-  id INT AUTO_INCREMENT,
-  workflow VARBINARY(1000),
-  source VARBINARY(10000) NOT NULL,
-  pos VARBINARY(10000) NOT NULL,
-  stop_pos VARBINARY(10000) DEFAULT NULL,
-  max_tps BIGINT(20) NOT NULL,
-  max_replication_lag BIGINT(20) NOT NULL,
-  cell VARBINARY(1000) DEFAULT NULL,
-  tablet_types VARBINARY(100) DEFAULT NULL,
-  time_updated BIGINT(20) NOT NULL,
-  transaction_timestamp BIGINT(20) NOT NULL,
-  state VARBINARY(100) NOT NULL,
-  message VARBINARY(1000) DEFAULT NULL,
-  db_name VARBINARY(255) NOT NULL,
-  PRIMARY KEY (id)
-) ENGINE=InnoDB`,
-	}
-}
-
-// AlterVReplicationTable adds new columns to vreplication table
-var AlterVReplicationTable = []string{
-	"ALTER TABLE _vt.vreplication ADD COLUMN db_name VARBINARY(255) NOT NULL",
-	"ALTER TABLE _vt.vreplication MODIFY source MEDIUMBLOB NOT NULL",
-	"ALTER TABLE _vt.vreplication ADD KEY workflow_idx (workflow(64))",
-	"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied BIGINT(20) NOT NULL DEFAULT 0",
-	"ALTER TABLE _vt.vreplication ADD COLUMN tags VARBINARY(1024) NOT NULL DEFAULT ''",
-
-	// records the time of the last heartbeat. Heartbeats are only received if the source has no recent events
-	"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat BIGINT(20) NOT NULL DEFAULT 0",
-	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
-	"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled BIGINT NOT NULL DEFAULT 0",
-	"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled VARCHAR(255) NOT NULL DEFAULT ''",
-	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_sub_type int NOT NULL DEFAULT 0",
-	"ALTER TABLE _vt.vreplication ADD COLUMN defer_secondary_keys bool NOT NULL DEFAULT false",
-}
-
-// WithDDLInitialQueries contains the queries that:
-//   - are to be expected by the mock db client during tests, or
-//   - trigger some of the above _vt.vreplication schema changes to take effect
-//     when the binlogplayer starts up
-//
-// todo: cleanup here. QueryToTriggerWithDDL will be enough to ensure vreplication schema gets created/altered correctly.
-//
-//	So do that explicitly and move queries required into the mock code.
-var WithDDLInitialQueries = []string{
-	"SELECT db_name FROM _vt.vreplication LIMIT 0",
-	"SELECT rows_copied FROM _vt.vreplication LIMIT 0",
-	"SELECT time_heartbeat FROM _vt.vreplication LIMIT 0",
-	withddl.QueryToTriggerWithDDL,
 }
 
 // VRSettings contains the settings of a vreplication table.

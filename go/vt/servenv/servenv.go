@@ -83,6 +83,7 @@ var (
 	catchSigpipe   bool
 	maxStackSize   = 64 * 1024 * 1024
 	usePSLogger    bool
+	initStartTime  time.Time // time when tablet init started: for debug purposes to time how long a tablet init takes
 )
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
@@ -104,10 +105,17 @@ func RegisterFlags() {
 	})
 }
 
+func GetInitStartTime() time.Time {
+	mu.Lock()
+	defer mu.Unlock()
+	return initStartTime
+}
+
 // Init is the first phase of the server startup.
 func Init() {
 	mu.Lock()
 	defer mu.Unlock()
+	initStartTime = time.Now()
 
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr
