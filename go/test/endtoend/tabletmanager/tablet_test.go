@@ -52,65 +52,13 @@ func TestEnsureDB(t *testing.T) {
 	status := tablet.VttabletProcess.GetStatusDetails()
 	assert.Contains(t, status, "read-only")
 
-	// Switch to read-write and verify that that we go serving.
-	_ = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
+	// Switch to read-write and verify that we go serving.
+	// Note: for TabletExternallyReparented, we expect SetReadWrite to be called by the user
+	err = clusterInstance.VtctlclientProcess.ExecuteCommand("SetReadWrite", tablet.Alias)
+	require.NoError(t, err)
 	err = tablet.VttabletProcess.WaitForTabletStatus("SERVING")
 	require.NoError(t, err)
 	killTablets(t, tablet)
-}
-
-// TestLocalMetadata tests the contents of local_metadata table after vttablet startup
-func TestLocalMetadata(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	// by default tablets are started with --restore_from_backup
-	// so metadata should exist
-	cluster.VerifyLocalMetadata(t, &replicaTablet, keyspaceName, shardName, cell)
-
-	// Create new tablet
-	rTablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-
-	clusterInstance.VtTabletExtraArgs = []string{
-		"--lock_tables_timeout", "5s",
-		"--init_populate_metadata",
-	}
-	rTablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet.TabletUID, rTablet.MySQLPort, clusterInstance.TmpDirectory)
-	err := rTablet.MysqlctlProcess.Start()
-	require.NoError(t, err)
-
-	log.Info(fmt.Sprintf("Started vttablet %v", rTablet))
-	// SupportsBackup=False prevents vttablet from trying to restore
-	// Start vttablet process
-	clusterInstance.VtGatePlannerVersion = 0
-	err = clusterInstance.StartVttablet(rTablet, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
-
-	cluster.VerifyLocalMetadata(t, rTablet, keyspaceName, shardName, cell)
-
-	// Create another new tablet
-	rTablet2 := clusterInstance.NewVttabletInstance("replica", 0, "")
-
-	// start with --init_populate_metadata false (default)
-	clusterInstance.VtTabletExtraArgs = []string{
-		"--lock_tables_timeout", "5s",
-	}
-	rTablet2.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(rTablet2.TabletUID, rTablet2.MySQLPort, clusterInstance.TmpDirectory)
-	err = rTablet2.MysqlctlProcess.Start()
-	require.NoError(t, err)
-
-	log.Info(fmt.Sprintf("Started vttablet %v", rTablet2))
-	// SupportsBackup=False prevents vttablet from trying to restore
-	// Start vttablet process
-	err = clusterInstance.StartVttablet(rTablet2, "SERVING", false, cell, keyspaceName, hostname, shardName)
-	require.NoError(t, err)
-
-	// check that tablet did _not_ get populated
-	qr, err := rTablet2.VttabletProcess.QueryTablet("select * from _vt.local_metadata", keyspaceName, false)
-	require.NoError(t, err)
-	require.Nil(t, qr.Rows)
-
-	// Reset the VtTabletExtraArgs and kill tablets
-	clusterInstance.VtTabletExtraArgs = []string{}
-	killTablets(t, rTablet, rTablet2)
 }
 
 // TestResetReplicationParameters tests that the RPC ResetReplicationParameters works as intended.

@@ -304,15 +304,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"onlineddl_revertible": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revertible"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_revertible",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "20m"],
@@ -1023,6 +1014,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
+			"RetryMax": 2,
+			"Tags": []
+		},
+		"sidecardb": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestSidecarDB"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "schemadiff_vrepl",
 			"RetryMax": 2,
 			"Tags": []
 		},

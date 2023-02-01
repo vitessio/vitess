@@ -22,8 +22,6 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -33,13 +31,12 @@ const mockClientUNameDba = "Dba"
 // MockDBClient mocks a DBClient.
 // It must be configured to expect requests in a specific order.
 type MockDBClient struct {
-	t               *testing.T
-	UName           string
-	expect          []*mockExpect
-	currentResult   int
-	done            chan struct{}
-	queriesToIgnore []*mockExpect // these queries will return a standard nil result, you SHOULD NOT expect them in the tests
-	invariants      map[string]*sqltypes.Result
+	t             *testing.T
+	UName         string
+	expect        []*mockExpect
+	currentResult int
+	done          chan struct{}
+	invariants    map[string]*sqltypes.Result
 }
 
 type mockExpect struct {
@@ -49,31 +46,12 @@ type mockExpect struct {
 	err    error
 }
 
-func getQueriesToIgnore() []*mockExpect {
-	var queriesToIgnore []*mockExpect
-	var queries []string
-	queries = append(queries, WithDDLInitialQueries...)
-	queries = append(queries, withddl.QueryToTriggerWithDDL)
-	for _, query := range queries {
-		exp := &mockExpect{
-			query:  query,
-			re:     nil,
-			result: &sqltypes.Result{},
-			err:    nil,
-		}
-		queriesToIgnore = append(queriesToIgnore, exp)
-
-	}
-	return queriesToIgnore
-}
-
 // NewMockDBClient returns a new DBClientMock with the default "Filtered" UName.
 func NewMockDBClient(t *testing.T) *MockDBClient {
 	return &MockDBClient{
-		t:               t,
-		UName:           mockClientUNameFiltered,
-		done:            make(chan struct{}),
-		queriesToIgnore: getQueriesToIgnore(),
+		t:     t,
+		UName: mockClientUNameFiltered,
+		done:  make(chan struct{}),
 		invariants: map[string]*sqltypes.Result{
 			"CREATE TABLE IF NOT EXISTS _vt.vreplication_log":           {},
 			"select id, type, state, message from _vt.vreplication_log": {},
@@ -85,10 +63,9 @@ func NewMockDBClient(t *testing.T) *MockDBClient {
 // NewMockDbaClient returns a new DBClientMock with the default "Dba" UName.
 func NewMockDbaClient(t *testing.T) *MockDBClient {
 	return &MockDBClient{
-		t:               t,
-		UName:           mockClientUNameDba,
-		done:            make(chan struct{}),
-		queriesToIgnore: getQueriesToIgnore(),
+		t:     t,
+		UName: mockClientUNameDba,
+		done:  make(chan struct{}),
 	}
 }
 
@@ -174,11 +151,6 @@ func (dc *MockDBClient) ExecuteFetch(query string, maxrows int) (qr *sqltypes.Re
 	dc.t.Helper()
 	dc.t.Logf("DBClient query: %v", query)
 
-	for _, q := range dc.queriesToIgnore {
-		if strings.EqualFold(q.query, query) || strings.Contains(strings.ToLower(query), strings.ToLower(q.query)) {
-			return q.result, q.err
-		}
-	}
 	for q, result := range dc.invariants {
 		if strings.Contains(query, q) {
 			return result, nil

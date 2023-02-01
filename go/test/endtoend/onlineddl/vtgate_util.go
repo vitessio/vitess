@@ -344,3 +344,40 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
 }
+
+// ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does
+// not have gaps
+func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard) {
+	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+	shardMin := map[string]uint64{}
+	shardMax := map[string]uint64{}
+	shardCount := map[string]uint64{}
+
+	for _, row := range r.Named().Rows {
+		id := row.AsUint64("id", 0)
+		require.NotZero(t, id)
+
+		shard := row.AsString("shard", "")
+		require.NotEmpty(t, shard)
+
+		if _, ok := shardMin[shard]; !ok {
+			shardMin[shard] = id
+			shardMax[shard] = id
+		}
+		if id < shardMin[shard] {
+			shardMin[shard] = id
+		}
+		if id > shardMax[shard] {
+			shardMax[shard] = id
+		}
+		shardCount[shard]++
+	}
+	require.NotEmpty(t, shards)
+	assert.Equal(t, len(shards), len(shardMin))
+	assert.Equal(t, len(shards), len(shardMax))
+	assert.Equal(t, len(shards), len(shardCount))
+	for shard, count := range shardCount {
+		assert.NotZero(t, count)
+		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])
+	}
+}

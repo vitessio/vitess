@@ -274,7 +274,7 @@ func (dbcfgs *DBConfigs) IsZero() bool {
 }
 
 // HasGlobalSettings returns true if DBConfigs contains values
-// for gloabl configs.
+// for global configs.
 func (dbcfgs *DBConfigs) HasGlobalSettings() bool {
 	return dbcfgs.Host != "" || dbcfgs.Socket != ""
 }

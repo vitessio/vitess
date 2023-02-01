@@ -98,6 +98,7 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
 
 	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
+	fs.MarkDeprecated("init_populate_metadata", "this flag is no longer being used and will be removed in future versions")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
 }
 
@@ -149,11 +150,6 @@ type TabletManager struct {
 	UpdateStream        binlog.UpdateStreamControl
 	VREngine            *vreplication.Engine
 	VDiffEngine         *vdiff.Engine
-
-	// MetadataManager manages the local metadata tables for a tablet. It
-	// exists, and is exported, to support swapping a nil pointer in test code,
-	// in which case metadata creation/population is skipped.
-	MetadataManager *mysqlctl.MetadataManager
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
@@ -213,9 +209,9 @@ func BuildTabletFromInput(alias *topodatapb.TabletAlias, port, grpcPort int32, d
 		if err != nil {
 			return nil, err
 		}
-		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet_hostname.", hostname)
+		log.Infof("Using detected machine hostname: %v, to change this, fix your machine network configuration or override it with --tablet_hostname. Tablet %s", hostname, alias.String())
 	} else {
-		log.Infof("Using hostname: %v from --tablet_hostname flag.", hostname)
+		log.Infof("Using hostname: %v from --tablet_hostname flag. Tablet %s", hostname, alias.String())
 	}
 
 	if initKeyspace == "" || initShard == "" {
@@ -340,6 +336,10 @@ func mergeTags(a, b map[string]string) map[string]string {
 
 // Start starts the TabletManager.
 func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval time.Duration) error {
+	defer func() {
+		log.Infof("TabletManager Start took ~%d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
+	}()
+	log.Infof("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
@@ -404,7 +404,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 		// of updating the tablet state and initializing replication.
 		return nil
 	}
-
 	// We should be re-read the tablet from tabletManager and use the type specified there.
 	// We shouldn't use the base tablet type directly, since the type could have changed to PRIMARY
 	// earlier in tm.checkPrimaryShip code.
@@ -725,7 +724,6 @@ func (tm *TabletManager) initTablet(ctx context.Context) error {
 }
 
 func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
-	tablet := tm.Tablet()
 	// Sanity check for inconsistent flags
 	if tm.Cnf == nil && restoreFromBackup {
 		return false, fmt.Errorf("you cannot enable --restore_from_backup without a my.cnf file")
@@ -758,23 +756,6 @@ func (tm *TabletManager) handleRestore(ctx context.Context) (bool, error) {
 		return true, nil
 	}
 
-	// optionally populate metadata records
-	if initPopulateMetadata {
-		localMetadata := tm.getLocalMetadataValues(tablet.Type)
-		if tm.Cnf != nil { // we are managing mysqld
-			// we'll use batchCtx here because we are still initializing and can't proceed unless this succeeds
-			if err := tm.MysqlDaemon.Wait(ctx, tm.Cnf); err != nil {
-				return false, err
-			}
-		}
-
-		if tm.MetadataManager != nil {
-			err := tm.MetadataManager.PopulateMetadataTables(tm.MysqlDaemon, localMetadata, topoproto.TabletDbName(tablet))
-			if err != nil {
-				return false, vterrors.Wrap(err, "failed to --init_populate_metadata")
-			}
-		}
-	}
 	return false, nil
 }
 

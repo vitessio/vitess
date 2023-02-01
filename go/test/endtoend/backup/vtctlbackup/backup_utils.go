@@ -414,7 +414,6 @@ func primaryBackup(t *testing.T) {
 	// Verify that we have all the new data -- we should have 2 records now...
 	// And only 1 record after we restore using the first backup timestamp
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
-	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 
 	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", "--", "--allow_primary=true", primary.Alias)
 	require.Nil(t, err)
@@ -446,7 +445,6 @@ func primaryBackup(t *testing.T) {
 
 	// Verify that we don't have the record created after the older/first backup
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 1)
-	cluster.VerifyLocalMetadata(t, primary, keyspaceName, shardName, cell)
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 	require.Nil(t, err)
@@ -798,7 +796,6 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
-	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
 	// Stop VTOrc
@@ -948,8 +945,6 @@ func vtctlBackupReplicaNoDestroyNoWrites(t *testing.T, tabletType string) (backu
 
 	err = replica2.VttabletProcess.WaitForTabletStatusesForTimeout([]string{"SERVING"}, 25*time.Second)
 	require.Nil(t, err)
-
-	cluster.VerifyLocalMetadata(t, replica2, keyspaceName, shardName, cell)
 
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)

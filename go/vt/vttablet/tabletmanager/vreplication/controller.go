@@ -203,11 +203,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	if err := dbClient.Connect(); err != nil {
 		return vterrors.Wrap(err, "can't connect to database")
 	}
-	for _, query := range withDDLInitialQueries {
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
-		}
-	}
 	defer dbClient.Close()
 
 	var tablet *topodatapb.Tablet
