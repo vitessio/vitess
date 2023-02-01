@@ -125,7 +125,7 @@ func TestDiffTables(t *testing.T) {
 			},
 		},
 		{
-			name:   "TableQualifierUseDefault, from has qualifier",
+			name:   "TableQualifierDefault, from has qualifier",
 			from:   "create table _vt.t1 (id int primary key, name int)",
 			to:     "create table t1 (id int primary key, name bigint)",
 			diff:   "alter table _vt.t1 modify column `name` bigint",
@@ -133,7 +133,7 @@ func TestDiffTables(t *testing.T) {
 			action: "alter",
 		},
 		{
-			name:   "TableQualifierUseDefault, both have qualifiers",
+			name:   "TableQualifierDefault, both have qualifiers",
 			from:   "create table _vt.t1 (id int primary key, name int)",
 			to:     "create table _vt.t1 (id int primary key, name bigint)",
 			diff:   "alter table _vt.t1 modify column `name` bigint",
