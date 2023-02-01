@@ -306,7 +306,7 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 	if on {
 		query += "'ON'"
 	} else {
-		query += "'OFF'q"
+		query += "'OFF'"
 	}
 	if err := mysqld.ExecuteSuperQuery(context.TODO(), query); err != nil {
 		return nil, err
