@@ -507,6 +507,11 @@ func TestFilterByKeyspace(t *testing.T) {
 	}
 }
 
+// TestFilterByKeypsaceSkipsIgnoredTablets confirms a bug fix for the case when a TopologyWatcher
+// has a FilterByKeyspace TabletFilter configured along with refreshKnownTablets turned off. We want
+// to ensure that the TopologyWatcher:
+//   - does not continuosly call GetTablets for tablets that do not satisfy the filter
+//   - does not add or remove these filtered out tablets from the its healtcheck
 func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 	ts := memorytopo.NewServer("aa")
 	fhc := NewFakeHealthCheck(nil)
