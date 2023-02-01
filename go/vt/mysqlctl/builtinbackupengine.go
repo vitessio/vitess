@@ -324,14 +324,19 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// get the read-only flag
 	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get read-only status")
+		return false, vterrors.Wrap(err, "can't get read_only status")
 	}
+	sReadOnly, err := params.Mysqld.IsSuperReadOnly()
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get super_read_only status")
+	}
+	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%v", readOnly, sReadOnly)
 
 	// get the replication position
 	if sourceIsPrimary {
 		if !readOnly {
 			params.Logger.Infof("turning primary super-read-only before backup")
-			if err = params.Mysqld.SetSuperReadOnly(true); err != nil {
+			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
 				return false, vterrors.Wrap(err, "can't set super-read-only status")
 			}
 		}
@@ -391,7 +396,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 			return usable, err
 		}
 	} else {
-		if err := params.Mysqld.SetSuperReadOnly(readOnly); err != nil {
+		if _, err := params.Mysqld.SetSuperReadOnly(readOnly); err != nil {
 			return usable, err
 		}
 	}
@@ -793,7 +798,7 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 		log.Infof("inside executeRestoreIncrementalBackup...")
 		err = be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
 	} else {
-		log.Infof("inside executeRestoreIncrementalBackup...")
+		log.Infof("inside executeRestoreFullBackup...")
 		err = be.executeRestoreFullBackup(ctx, params, bh, bm)
 	}
 	if err != nil {

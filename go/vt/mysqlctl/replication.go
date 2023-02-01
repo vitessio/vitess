@@ -38,6 +38,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 )
 
+type ResetSuperReadOnlyFunc func() error
+
 // WaitForReplicationStart waits until the deadline for replication to start.
 // This validates the current primary is correct and can be connected to.
 func WaitForReplicationStart(mysqld MysqlDaemon, replicaStartDeadline int) error {
@@ -270,14 +272,50 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 }
 
 // SetSuperReadOnly set/unset the super_read_only flag
-func (mysqld *Mysqld) SetSuperReadOnly(on bool) error {
+func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
+	//  return function for switching `OFF` super_read_only
+	var returnFunc ResetSuperReadOnlyFunc
+	var resetFunc = func() error {
+		query := "SET GLOBAL super_read_only = 'OFF'"
+		err := mysqld.ExecuteSuperQuery(context.TODO(), query)
+		return err
+	}
+
+	//  return function for switching `ON` super_read_only
+	var setFunc = func() error {
+		query := "SET GLOBAL super_read_only = 'ON'"
+		err := mysqld.ExecuteSuperQuery(context.TODO(), query)
+		return err
+	}
+
+	//var err error = nil
+	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly()
+	if err != nil {
+		return nil, err
+	}
+
+	// if non-idempotent then set the right call-back
+	if on && !superReadOnlyEnabled {
+		returnFunc = resetFunc
+	}
+	if !on && superReadOnlyEnabled {
+		returnFunc = setFunc
+	}
+
 	query := "SET GLOBAL super_read_only = "
 	if on {
-		query += "ON"
+		query += "'ON'"
 	} else {
-		query += "OFF"
+		query += "'OFF'q"
 	}
-	return mysqld.ExecuteSuperQuery(context.TODO(), query)
+	if err := mysqld.ExecuteSuperQuery(context.TODO(), query); err != nil {
+		return nil, err
+	}
+	if superReadOnlyEnabled {
+		return returnFunc, nil
+	}
+
+	return nil, nil
 }
 
 // WaitSourcePos lets replicas wait to given replication position

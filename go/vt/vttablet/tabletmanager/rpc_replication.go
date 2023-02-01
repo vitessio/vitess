@@ -318,7 +318,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	tm.replManager.reset()
 
 	// Setting super_read_only off so that we can run the DDL commands
-	if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
 		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {
@@ -485,7 +485,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// set MySQL to super_read_only mode. If we are already super_read_only because of a
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
-	if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
+	if _, err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
 		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {

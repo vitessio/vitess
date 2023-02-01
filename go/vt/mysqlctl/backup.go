@@ -350,13 +350,22 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// this will fail on MariaDB, which doesn't have super_read_only
 	// This is safe, since we're restarting MySQL after the restore anyway
 	params.Logger.Infof("Restore: disabling super_read_only")
-	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+	resetFunc, err := params.Mysqld.SetSuperReadOnly(false)
+	if err != nil {
 		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
+			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway.")
 		} else {
 			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
 			return nil, err
 		}
+	}
+	if resetFunc != nil {
+		defer func() {
+			err := resetFunc()
+			if err != nil {
+				params.Logger.Errorf("Not able to set super_read_only to its original value during restore.")
+			}
+		}()
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")

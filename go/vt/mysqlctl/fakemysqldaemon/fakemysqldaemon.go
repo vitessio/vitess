@@ -378,10 +378,10 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 }
 
 // SetSuperReadOnly is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
+func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) (mysqlctl.ResetSuperReadOnlyFunc, error) {
 	fmd.SuperReadOnly = on
 	fmd.ReadOnly = on
-	return nil
+	return nil, nil
 }
 
 // StartReplication is part of the MysqlDaemon interface.
