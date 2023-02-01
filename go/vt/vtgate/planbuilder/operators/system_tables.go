@@ -50,27 +50,30 @@ func (r *Route) findSysInfoRoutingPredicatesGen4(predicates []sqlparser.Expr, re
 	return nil
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
+func extractInfoSchemaRoutingPredicate(
+	in sqlparser.Expr,
+	reservedVars *sqlparser.ReservedVars,
+) (isSchemaName bool, name string, evalExpr evalengine.Expr, err error) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
 	if !ok || cmp.Operator != sqlparser.EqualOp {
-		return false, "", nil, nil
+		return
 	}
 
 	isSchemaName, col := isTableOrSchemaRouteable(cmp)
 	if col == nil || !shouldRewrite(cmp.Right) {
-		return false, "", nil, nil
+		return
 	}
 
-	evalExpr, err := evalengine.Translate(cmp.Right, &notImplementedSchemaInfoConverter{})
+	evalExpr, err = evalengine.Translate(cmp.Right, &notImplementedSchemaInfoConverter{})
 	if err != nil {
 		if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			// This just means we can't rewrite this particular expression,
 			// not that we have to exit altogether
-			return false, "", nil, nil
+			err = nil
+			return
 		}
-		return false, "", nil, err
+		return
 	}
-	var name string
 	if isSchemaName {
 		name = sqltypes.BvSchemaName
 	} else {
