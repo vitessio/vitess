@@ -634,7 +634,7 @@ func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 		t.Fatalf("FixShardReplication failed: %v", err)
 	}
 	tw.loadTablets()
-	counts = checkOpCounts(t, counts, map[string]int64{"ListTablets": 1})
+	checkOpCounts(t, counts, map[string]int64{"ListTablets": 1})
 	checkChecksum(t, tw, 0)
 
 	tw.Stop()
