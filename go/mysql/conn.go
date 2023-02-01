@@ -952,7 +952,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 
-		sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", table)
+		sql := fmt.Sprintf("SELECT * FROM %s LIMIT 0;", formatID(table))
 		err = handler.ComQuery(c, sql, func(qr *sqltypes.Result, more bool) error {
 			// only send meta data, no rows
 			if len(qr.Fields) == 0 {
@@ -1236,6 +1236,22 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	}
 
 	return nil
+}
+
+// formatID returns a quoted identifier from the one given. Adapted from ast.go
+func formatID(original string) string {
+	var sb strings.Builder
+	
+	sb.WriteByte('`')
+	for _, c := range original {
+		sb.WriteRune(c)
+		if c == '`' {
+			sb.WriteByte('`')
+		}
+	}
+	sb.WriteByte('`')
+	
+	return sb.String()
 }
 
 func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (string, error) {
