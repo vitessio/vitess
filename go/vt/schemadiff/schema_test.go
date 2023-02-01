@@ -127,6 +127,7 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 }
 
 func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
+	// Schema will not contain any tables, just a view selecting from DUAL
 	queries := []string{
 		"create view v20 as select 1 from dual",
 	}
@@ -135,6 +136,7 @@ func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
 }
 
 func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
+	// Schema will not contain any tables, just a view implicitly selecting from DUAL
 	queries := []string{
 		"create view v20 as select 1",
 	}

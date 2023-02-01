@@ -264,8 +264,11 @@ func (s *Schema) normalize() error {
 	// - etc.
 	// we stop when we have been unable to find a view in an iteration.
 
-	// it's possible that the hasn't been any table in this schema.
-	// for purposes of the algorithm, the iterationLevel must be at least 1
+	// It's possible that there's never been any tables in this schema. Which means
+	// iterationLevel remains zero.
+	// To deal with views, we must have iterationLevel at least 1. This is because any view reads
+	// from _something_: at the very least it reads from DUAL (inplicitly or explicitly). Which
+	// puts the view at a higher level.
 	if iterationLevel < 1 {
 		iterationLevel = 1
 	}
