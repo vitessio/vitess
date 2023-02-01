@@ -95,8 +95,8 @@ const (
 )
 
 const (
-	TableQualifierUseSpecified int = iota
-	TableQualifierUseOriginal
+	TableQualifierDefault int = iota
+	TableQualifierDeclared
 )
 
 // DiffHints is an assortment of rules for diffing entities

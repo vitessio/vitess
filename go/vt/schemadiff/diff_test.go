@@ -103,37 +103,42 @@ func TestDiffTables(t *testing.T) {
 			name: "none",
 		},
 		{
-			name:   "TableQualifierUseSpecified hint, to has qualifier",
+			name:   "TableQualifierDeclared hint, to has qualifier",
 			from:   "create table t1 (id int primary key, name int)",
 			to:     "create table _vt.t1 (id int primary key, name bigint)",
 			diff:   "alter table _vt.t1 modify column `name` bigint",
 			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
 			hints: &DiffHints{
-				TableQualifierHint: TableQualifierUseSpecified,
+				TableQualifierHint: TableQualifierDeclared,
 			},
 		},
 		{
-			name:   "TableQualifierUseSpecified hint, from has qualifier",
+			name:   "TableQualifierDeclared hint, from has qualifier",
 			from:   "create table _vt.t1 (id int primary key, name int)",
 			to:     "create table t1 (id int primary key, name bigint)",
 			diff:   "alter table t1 modify column `name` bigint",
 			cdiff:  "ALTER TABLE `t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
 			hints: &DiffHints{
-				TableQualifierHint: TableQualifierUseSpecified,
+				TableQualifierHint: TableQualifierDeclared,
 			},
 		},
 		{
-			name:   "TableQualifierUseOriginal, from has qualifier",
+			name:   "TableQualifierUseDefault, from has qualifier",
 			from:   "create table _vt.t1 (id int primary key, name int)",
 			to:     "create table t1 (id int primary key, name bigint)",
 			diff:   "alter table _vt.t1 modify column `name` bigint",
 			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
-			hints: &DiffHints{
-				TableQualifierHint: TableQualifierUseOriginal,
-			},
+		},
+		{
+			name:   "TableQualifierUseDefault, both have qualifiers",
+			from:   "create table _vt.t1 (id int primary key, name int)",
+			to:     "create table _vt.t1 (id int primary key, name bigint)",
+			diff:   "alter table _vt.t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
 		},
 	}
 	for _, ts := range tt {

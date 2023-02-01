@@ -750,7 +750,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: c.CreateTable.Table,
 	}
-	if hints.TableQualifierHint == TableQualifierUseSpecified {
+	if hints.TableQualifierHint == TableQualifierDeclared {
 		alterTable.Table.Qualifier = other.Table.Qualifier
 	}
 
