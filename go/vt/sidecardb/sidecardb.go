@@ -59,14 +59,9 @@ const (
 var schemaLocation embed.FS
 
 type sidecarTable struct {
-	module string // which module uses this table
 	path   string // path of the schema relative to this module
 	name   string // table name
 	schema string // create table dml
-}
-
-func (t *sidecarTable) String() string {
-	return fmt.Sprintf("%s.%s (%s)", SidecarDBName, t.name, t.module)
 }
 
 var sidecarTables []*sidecarTable
@@ -110,20 +105,10 @@ func initSchemaFiles() {
 			return err
 		}
 		if !entry.IsDir() {
-			var module string
-			dir, fname := filepath.Split(path)
+			_, fname := filepath.Split(path)
 			if !strings.HasSuffix(strings.ToLower(fname), sqlFileExtension) {
 				log.Infof("Ignoring non-SQL file: %s, found during sidecar database initialization", path)
 				return nil
-			}
-			dirparts := strings.Split(strings.Trim(dir, "/"), "/")
-			switch len(dirparts) {
-			case 1:
-				module = dir
-			case 2:
-				module = fmt.Sprintf("%s/%s", dirparts[0], dirparts[1])
-			default:
-				return fmt.Errorf("unexpected path value of %s specified for sidecar schema table; expected structure is <module>[/<submodule>]/<tablename>.sql", dir)
 			}
 
 			name := strings.Split(fname, ".")[0]
@@ -135,7 +120,7 @@ func initSchemaFiles() {
 			if normalizedSchema, err = validateSchemaDefinition(name, string(schema)); err != nil {
 				return err
 			}
-			sidecarTables = append(sidecarTables, &sidecarTable{name: name, module: module, path: path, schema: normalizedSchema})
+			sidecarTables = append(sidecarTables, &sidecarTable{name: name, path: path, schema: normalizedSchema})
 		}
 		return nil
 	})
