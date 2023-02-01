@@ -587,10 +587,10 @@
   },
   {
     "comment": "union of information_schema with normal table",
-    "query": "select * from information_schema.a union select * from unsharded",
+    "query": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS union select user_name from unsharded",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select * from information_schema.a union select * from unsharded",
+      "Original": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS union select user_name from unsharded",
       "Instructions": {
         "OperatorType": "Distinct",
         "Inputs": [
@@ -604,9 +604,9 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select * from information_schema.a where 1 != 1",
-                "Query": "select * from information_schema.a",
-                "Table": "information_schema.a"
+                "FieldQuery": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS where 1 != 1",
+                "Query": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS",
+                "Table": "information_schema.CHARACTER_SETS"
               },
               {
                 "OperatorType": "Route",
@@ -615,8 +615,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select * from unsharded where 1 != 1",
-                "Query": "select * from unsharded",
+                "FieldQuery": "select user_name from unsharded where 1 != 1",
+                "Query": "select user_name from unsharded",
                 "Table": "unsharded"
               }
             ]
@@ -626,9 +626,13 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select * from information_schema.a union select * from unsharded",
+      "Original": "select CHARACTER_SET_NAME from information_schema.CHARACTER_SETS union select user_name from unsharded",
       "Instructions": {
         "OperatorType": "Distinct",
+        "Collations": [
+          "(0:1)"
+        ],
+        "ResultColumns": 1,
         "Inputs": [
           {
             "OperatorType": "Concatenate",
@@ -640,9 +644,9 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select * from information_schema.a where 1 != 1",
-                "Query": "select distinct * from information_schema.a",
-                "Table": "information_schema.a"
+                "FieldQuery": "select CHARACTER_SET_NAME, weight_string(CHARACTER_SET_NAME) from information_schema.CHARACTER_SETS where 1 != 1",
+                "Query": "select distinct CHARACTER_SET_NAME, weight_string(CHARACTER_SET_NAME) from information_schema.CHARACTER_SETS",
+                "Table": "information_schema.CHARACTER_SETS"
               },
               {
                 "OperatorType": "Route",
@@ -651,8 +655,8 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select * from unsharded where 1 != 1",
-                "Query": "select distinct * from unsharded",
+                "FieldQuery": "select user_name, weight_string(user_name) from unsharded where 1 != 1",
+                "Query": "select distinct user_name, weight_string(user_name) from unsharded",
                 "Table": "unsharded"
               }
             ]
@@ -666,10 +670,10 @@
   },
   {
     "comment": "union of information_schema with normal table",
-    "query": "select * from unsharded union select * from information_schema.a",
+    "query": "select * from unsharded union select * from information_schema.CHARACTER_SETS",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select * from unsharded union select * from information_schema.a",
+      "Original": "select * from unsharded union select * from information_schema.CHARACTER_SETS",
       "Instructions": {
         "OperatorType": "Distinct",
         "Inputs": [
@@ -694,9 +698,9 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select * from information_schema.a where 1 != 1",
-                "Query": "select * from information_schema.a",
-                "Table": "information_schema.a"
+                "FieldQuery": "select * from information_schema.CHARACTER_SETS where 1 != 1",
+                "Query": "select * from information_schema.CHARACTER_SETS",
+                "Table": "information_schema.CHARACTER_SETS"
               }
             ]
           }
@@ -705,7 +709,7 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select * from unsharded union select * from information_schema.a",
+      "Original": "select * from unsharded union select * from information_schema.CHARACTER_SETS",
       "Instructions": {
         "OperatorType": "Distinct",
         "Inputs": [
@@ -730,9 +734,9 @@
                   "Name": "main",
                   "Sharded": false
                 },
-                "FieldQuery": "select * from information_schema.a where 1 != 1",
-                "Query": "select distinct * from information_schema.a",
-                "Table": "information_schema.a"
+                "FieldQuery": "select CHARACTER_SET_NAME, DEFAULT_COLLATE_NAME, DESCRIPTION, MAXLEN from information_schema.CHARACTER_SETS where 1 != 1",
+                "Query": "select distinct CHARACTER_SET_NAME, DEFAULT_COLLATE_NAME, DESCRIPTION, MAXLEN from information_schema.CHARACTER_SETS",
+                "Table": "information_schema.CHARACTER_SETS"
               }
             ]
           }
