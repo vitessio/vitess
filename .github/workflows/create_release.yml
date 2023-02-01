@@ -10,7 +10,12 @@ on:
 jobs:
   build:
     name: Create Release
-    runs-on: ubuntu-latest
+    # Use the oldest supported Ubuntu release for vtorc as that uses
+    # sqlite and the library dynamically links in glibc with versioned
+    # symbols. Older libc symbols will allow the vtorc binary we build
+    # to be usable on a wider array of Linux distros. For more
+    # details see: https://github.com/vitessio/vitess/issues/12185
+    runs-on: ubuntu-20.04
     steps:
 
     - name: Set up Go
