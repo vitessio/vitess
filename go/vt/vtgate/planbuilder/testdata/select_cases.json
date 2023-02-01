@@ -1032,41 +1032,9 @@
     }
   },
   {
-    "comment": "select from dual on sharded keyspace",
-    "query": "select @@session.auto_increment_increment from user.dual",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select @@session.auto_increment_increment from user.dual",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select @@session.auto_increment_increment from user.dual",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual",
-        "Table": "dual"
-      },
-      "TablesUsed": [
-        "user.dual"
-      ]
-    }
+    "comment": "prefixing dual with a keyspace should not work",
+    "query": "select 1 from user.dual",
+    "plan": "table dual not found"
   },
   {
     "comment": "RHS route referenced",
@@ -3545,82 +3513,6 @@
         "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
         "Query": "select 42, id from dual, `user`",
         "Table": "`user`, dual"
-      },
-      "TablesUsed": [
-        "main.dual",
-        "user.user"
-      ]
-    }
-  },
-  {
-    "comment": "Table named \"dual\" with a qualifier joined on user should not be merged",
-    "query": "select 42, user.id from main.dual, user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42, user.id from main.dual, user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "dual_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 42 from dual where 1 != 1",
-            "Query": "select 42 from dual",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42, user.id from main.dual, user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "dual_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 42 from dual where 1 != 1",
-            "Query": "select 42 from dual",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          }
-        ]
       },
       "TablesUsed": [
         "main.dual",
