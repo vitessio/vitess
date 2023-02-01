@@ -199,7 +199,11 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 		case <-timeout:
 			require.Fail(t, failureMsg, diff)
 		case <-time.After(r):
-			qr := Exec(t, conn, query)
+			qr, err := ExecAllowError(t, conn, query)
+			if err != nil {
+				diff = err.Error()
+				break
+			}
 			diff = cmp.Diff(expected,
 				fmt.Sprintf("%v", qr.Rows))
 		}
@@ -228,6 +232,47 @@ func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks,
 				continue
 			}
 			return nil
+		}
+	}
+}
+
+// WaitForColumn waits for a table's column to be present
+func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
+		default:
+			time.Sleep(1 * time.Second)
+			res, err := vtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			t2Map := getTableT2Map(res, ks, tbl)
+			authoritative, fieldPresent := t2Map["column_list_authoritative"]
+			if !fieldPresent {
+				break
+			}
+			authoritativeBool, isBool := authoritative.(bool)
+			if !isBool || !authoritativeBool {
+				break
+			}
+			colMap, exists := t2Map["columns"]
+			if !exists {
+				break
+			}
+			colList, isSlice := colMap.([]interface{})
+			if !isSlice {
+				break
+			}
+			for _, c := range colList {
+				colDef, isMap := c.(map[string]interface{})
+				if !isMap {
+					break
+				}
+				if colName, exists := colDef["name"]; exists && colName == col {
+					return nil
+				}
+			}
 		}
 	}
 }

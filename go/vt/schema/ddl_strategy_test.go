@@ -47,6 +47,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		isSingleton          bool
 		isPostponeLaunch     bool
 		isPostponeCompletion bool
+		isInOrderCompletion  bool
 		isAllowConcurrent    bool
 		fastOverRevertible   bool
 		fastRangeRotation    bool
@@ -122,6 +123,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			options:              "-postpone-completion",
 			runtimeOptions:       "",
 			isPostponeCompletion: true,
+		},
+		{
+			strategyVariable:    "online --in-order-completion",
+			strategy:            DDLStrategyOnline,
+			options:             "--in-order-completion",
+			runtimeOptions:      "",
+			isInOrderCompletion: true,
 		},
 		{
 			strategyVariable:  "online -allow-concurrent",

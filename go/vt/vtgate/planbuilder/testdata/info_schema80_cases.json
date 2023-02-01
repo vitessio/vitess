@@ -1617,5 +1617,62 @@
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }
     }
+  },
+  {
+    "comment": "select variable, value from sys.sys_config",
+    "query": "select variable, value from sys.sys_config",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select variable, value from sys.sys_config",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select variable, value from sys.sys_config where 1 != 1",
+        "Query": "select variable, value from sys.sys_config",
+        "Table": "sys.sys_config"
+      }
+    }
+  },
+  {
+    "comment": "select host, db from mysql.`db`",
+    "query": "select host, db from mysql.`db`",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select host, db from mysql.`db`",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select host, db from mysql.db where 1 != 1",
+        "Query": "select host, db from mysql.db",
+        "Table": "mysql.db"
+      }
+    }
+  },
+  {
+    "comment": "select logged, prio from performance_schema.error_log",
+    "query": "select logged, prio from performance_schema.error_log",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select logged, prio from performance_schema.error_log",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select logged, prio from performance_schema.error_log where 1 != 1",
+        "Query": "select logged, prio from performance_schema.error_log",
+        "Table": "performance_schema.error_log"
+      }
+    }
   }
 ]
