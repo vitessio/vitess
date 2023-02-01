@@ -1559,5 +1559,24 @@
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }
     }
+  },
+  {
+    "comment": "Non-existing information_schema table is still OK",
+    "query": "select TABLE_NAME from information_schema.apa",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select TABLE_NAME from information_schema.apa",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select TABLE_NAME from information_schema.apa where 1 != 1",
+        "Query": "select TABLE_NAME from information_schema.apa",
+        "Table": "information_schema.apa"
+      }
+    }
   }
 ]
