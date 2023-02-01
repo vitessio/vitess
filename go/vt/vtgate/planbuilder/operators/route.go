@@ -729,7 +729,7 @@ func createRoute(
 	ctx *plancontext.PlanningContext,
 	queryTable *QueryTable,
 	solves semantics.TableSet,
-) (*Route, error) {
+) (ops.Operator, error) {
 	if queryTable.IsInfSchema {
 		return createInfSchemaRoute(ctx, queryTable)
 	}
