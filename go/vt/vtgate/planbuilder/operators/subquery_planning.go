@@ -101,48 +101,57 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 
 	switch outerRouting := outer.Routing.(type) {
 	case *TableRouting:
-		// When merging an inner query with its outer query, we can remove the
-		// inner query from the list of predicates that can influence routing of
-		// the outer query.
-		//
-		// Note that not all inner queries necessarily are part of the routing
-		// predicates list, so this might be a no-op.
-		subQueryWasPredicate := false
-		for i, predicate := range outerRouting.SeenPredicates {
-			if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
-				outerRouting.SeenPredicates = append(outerRouting.SeenPredicates[:i], outerRouting.SeenPredicates[i+1:]...)
-
-				subQueryWasPredicate = true
-
-				// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
-				// so we can stop after the first match.
-				break
-			}
-		}
-
-		err := outerRouting.resetRoutingSelections(ctx)
-		if err != nil {
-			return nil, err
-		}
-
-		if subQueryWasPredicate {
-			if innerTR, isTR := inner.Routing.(*TableRouting); isTR {
-				// Copy Vindex predicates from the inner route to the upper route.
-				// If we can route based on some of these predicates, the routing can improve
-				outerRouting.VindexPreds = append(outerRouting.VindexPreds, innerTR.VindexPreds...)
-			}
-
-			if inner.Routing.OpCode() == engine.None {
-				outer.Routing = &NoneRouting{keyspace: outerRouting.Keyspace}
-			}
-		}
-
+		return mergeSubQueryFromTableRouting(ctx, outer, inner, outerRouting, subq)
 	default:
 		outer.Routing = mergedRouting
 	}
 
 	outer.MergedWith = append(outer.MergedWith, inner)
 
+	return outer, nil
+}
+
+func mergeSubQueryFromTableRouting(
+	ctx *plancontext.PlanningContext,
+	outer, inner *Route,
+	outerRouting *TableRouting,
+	subq *SubQueryInner,
+) (*Route, error) {
+	// When merging an inner query with its outer query, we can remove the
+	// inner query from the list of predicates that can influence routing of
+	// the outer query.
+	//
+	// Note that not all inner queries necessarily are part of the routing
+	// predicates list, so this might be a no-op.
+	subQueryWasPredicate := false
+	for i, predicate := range outerRouting.SeenPredicates {
+		if ctx.SemTable.EqualsExpr(predicate, subq.ExtractedSubquery) {
+			outerRouting.SeenPredicates = append(outerRouting.SeenPredicates[:i], outerRouting.SeenPredicates[i+1:]...)
+
+			subQueryWasPredicate = true
+
+			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
+			// so we can stop after the first match.
+			break
+		}
+	}
+
+	err := outerRouting.resetRoutingSelections(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	if subQueryWasPredicate {
+		if innerTR, isTR := inner.Routing.(*TableRouting); isTR {
+			// Copy Vindex predicates from the inner route to the upper route.
+			// If we can route based on some of these predicates, the routing can improve
+			outerRouting.VindexPreds = append(outerRouting.VindexPreds, innerTR.VindexPreds...)
+		}
+
+		if inner.Routing.OpCode() == engine.None {
+			outer.Routing = &NoneRouting{keyspace: outerRouting.keyspace}
+		}
+	}
 	return outer, nil
 }
 
@@ -235,7 +244,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	merged, err := tryMerge(ctx, outerOp, subq, joinPredicates, merger)
+	merged, err := Merge(ctx, outerOp, subq, nil, nil) // TODO: need to fix this
 	if err != nil {
 		return nil, err
 	}

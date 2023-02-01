@@ -234,7 +234,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "from_cases.json", testOutputTempDir, vschemaWrapper, false)
 	//testFile(t, "filter_cases.json", testOutputTempDir, vschemaWrapper, false)
 	//testFile(t, "postprocess_cases.json", testOutputTempDir, vschemaWrapper, false)
-	//testFile(t, "select_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "select_cases.json", testOutputTempDir, vschemaWrapper, false)
 	//testFile(t, "symtab_cases.json", testOutputTempDir, vschemaWrapper, false)
 	//testFile(t, "unsupported_cases.json", testOutputTempDir, vschemaWrapper, false)
 	//testFile(t, "vindex_func_cases.json", testOutputTempDir, vschemaWrapper, false)

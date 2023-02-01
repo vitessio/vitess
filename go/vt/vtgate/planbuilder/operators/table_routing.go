@@ -22,7 +22,7 @@ type TableRouting struct {
 	// the best option available is stored here
 	Selected *VindexOption
 
-	Keyspace *vindexes.Keyspace
+	keyspace *vindexes.Keyspace
 
 	RouteOpCode engine.Opcode
 
@@ -40,7 +40,7 @@ var _ Routing = (*TableRouting)(nil)
 func newTableRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 	routing := &TableRouting{
 		RouteOpCode: engine.Scatter,
-		Keyspace:    vtable.Keyspace,
+		keyspace:    vtable.Keyspace,
 	}
 
 	if vtable.Pinned != nil {
@@ -118,7 +118,7 @@ func (tr *TableRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable 
 
 func (tr *TableRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	rp.Opcode = tr.RouteOpCode
-	rp.Keyspace = tr.Keyspace
+	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex
 		rp.Values = tr.Selected.Values
@@ -134,7 +134,7 @@ func (tr *TableRouting) Clone() Routing {
 	return &TableRouting{
 		VindexPreds:    slices.Clone(tr.VindexPreds),
 		Selected:       selected,
-		Keyspace:       tr.Keyspace,
+		keyspace:       tr.keyspace,
 		RouteOpCode:    tr.RouteOpCode,
 		SeenPredicates: slices.Clone(tr.SeenPredicates),
 		Alternates:     maps.Clone(tr.Alternates),
@@ -194,7 +194,7 @@ func (tr *TableRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sq
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
 		// so we can safely bail out here
-		return &NoneRouting{keyspace: tr.Keyspace}, false, nil
+		return &NoneRouting{keyspace: tr.keyspace}, false, nil
 	}
 
 	switch cmp.Operator {
@@ -203,14 +203,14 @@ func (tr *TableRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sq
 		return nil, found, nil
 	case sqlparser.InOp:
 		if isImpossibleIN(cmp) {
-			return &NoneRouting{keyspace: tr.Keyspace}, true, nil
+			return &NoneRouting{keyspace: tr.keyspace}, true, nil
 		}
 		found := tr.planInOp(ctx, cmp)
 		return nil, found, nil
 	case sqlparser.NotInOp:
 		// NOT IN is always a scatter, except when we can be sure it would return nothing
 		if isImpossibleNotIN(cmp) {
-			return &NoneRouting{keyspace: tr.Keyspace}, true, nil
+			return &NoneRouting{keyspace: tr.keyspace}, true, nil
 		}
 	case sqlparser.LikeOp:
 		found := tr.planLikeOp(ctx, cmp)
@@ -336,6 +336,10 @@ func (tr *TableRouting) Cost() int {
 
 func (tr *TableRouting) OpCode() engine.Opcode {
 	return tr.RouteOpCode
+}
+
+func (tr *TableRouting) Keyspace() *vindexes.Keyspace {
+	return tr.keyspace
 }
 
 // PickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
@@ -528,6 +532,20 @@ func (tr *TableRouting) resetRoutingSelections(ctx *plancontext.PlanningContext)
 		return vterrors.VT13001("uh-oh. we ended up with a different type of routing")
 	}
 	return nil
+}
+
+func (tr *TableRouting) SelectedVindex() vindexes.Vindex {
+	if tr.Selected == nil {
+		return nil
+	}
+	return tr.Selected.FoundVindex
+}
+
+func (tr *TableRouting) VindexExpressions() []sqlparser.Expr {
+	if tr.Selected == nil {
+		return nil
+	}
+	return tr.Selected.ValueExprs
 }
 
 // makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.

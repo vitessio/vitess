@@ -18,8 +18,9 @@ type (
 	}
 
 	TargetedRouting struct {
-		Keyspace *vindexes.Keyspace
-		// TargetDestination specifies an explicit target destination tablet type
+		keyspace *vindexes.Keyspace
+
+		//targetDestination specifies an explicit target destination tablet type
 		TargetDestination key.Destination
 	}
 )
@@ -53,6 +54,10 @@ func (tr *TargetedRouting) OpCode() engine.Opcode {
 	return engine.ByDestination
 }
 
+func (tr *TargetedRouting) Keyspace() *vindexes.Keyspace {
+	return tr.keyspace
+}
+
 func (n *NoneRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	// TODO implement me
 	panic("implement me")
@@ -76,14 +81,17 @@ func (n *NoneRouting) OpCode() engine.Opcode {
 	return engine.None
 }
 
+func (n *NoneRouting) Keyspace() *vindexes.Keyspace {
+	return n.keyspace
+}
+
 func (ur *UnshardedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	// TODO implement me
-	panic("implement me")
+	rp.Keyspace = ur.keyspace
+	rp.Opcode = ur.OpCode()
 }
 
 func (ur *UnshardedRouting) Clone() Routing {
-	// TODO implement me
-	panic("implement me")
+	return &UnshardedRouting{keyspace: ur.keyspace}
 }
 
 func (ur *UnshardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
@@ -96,4 +104,8 @@ func (ur *UnshardedRouting) Cost() int {
 
 func (ur *UnshardedRouting) OpCode() engine.Opcode {
 	return engine.Unsharded
+}
+
+func (ur *UnshardedRouting) Keyspace() *vindexes.Keyspace {
+	return ur.keyspace
 }

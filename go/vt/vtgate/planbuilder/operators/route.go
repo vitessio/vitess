@@ -73,6 +73,7 @@ type (
 		UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error)
 		Cost() int
 		OpCode() engine.Opcode
+		Keyspace() *vindexes.Keyspace // note that all routings do not have a keyspace, so this method can return nil
 	}
 )
 

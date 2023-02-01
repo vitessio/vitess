@@ -19,6 +19,8 @@ package operators
 import (
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
+
 	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
@@ -75,6 +77,10 @@ func (isr *InfoSchemaRouting) Cost() int {
 
 func (isr *InfoSchemaRouting) OpCode() engine.Opcode {
 	return engine.DBA
+}
+
+func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
+	return nil
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {

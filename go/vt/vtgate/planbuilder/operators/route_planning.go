@@ -172,7 +172,7 @@ func buildVindexTableForDML(
 	}
 	if dest == nil {
 		routing := &TableRouting{
-			Keyspace:    vindexTable.Keyspace,
+			keyspace:    vindexTable.Keyspace,
 			RouteOpCode: engine.Scatter,
 		}
 		return vindexTable, routing, nil
@@ -184,7 +184,7 @@ func buildVindexTableForDML(
 
 	// we are dealing with an explicitly targeted UPDATE
 	routing := &TargetedRouting{
-		Keyspace:          vindexTable.Keyspace,
+		keyspace:          vindexTable.Keyspace,
 		TargetDestination: dest,
 	}
 	return vindexTable, routing, nil
@@ -425,11 +425,10 @@ func requiresSwitchingSides(ctx *plancontext.PlanningContext, op ops.Operator) b
 }
 
 func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, inner bool) (ops.Operator, error) {
-	merger := func(a, b *Route, routing Routing) (*Route, error) {
-		return createRouteOperatorForJoin(ctx, a, b, joinPredicates, inner)
+	newPlan, err := Merge(ctx, lhs, rhs, joinPredicates, newJoinMerge(ctx, joinPredicates, inner))
+	if err != nil {
+		return nil, err
 	}
-
-	newPlan, _ := tryMerge(ctx, lhs, rhs, joinPredicates, merger)
 	if newPlan != nil {
 		return newPlan, nil
 	}
@@ -451,18 +450,6 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute *Route, joinPredicates []sqlparser.Expr, inner bool) (*Route, error) {
-	//join := NewApplyJoin(aRoute.Source, bRoute.Source, ctx.SemTable.AndExpressions(joinPredicates...), !inner)
-	panic("merge this, man!")
-	//r := &Route{
-	//	Routing:    aRoute.Routing.Merge(bRoute.Routing),
-	//	Source:     join,
-	//	MergedWith: []*Route{bRoute},
-	//}
-	//
-	//return r, nil
-}
-
 type mergeFunc func(a, b *Route, routing Routing) (*Route, error)
 
 func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {
@@ -476,161 +463,6 @@ func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {
 	}
 	return aRoute, bRoute
 }
-
-func tryMerge(
-	ctx *plancontext.PlanningContext,
-	a, b ops.Operator,
-	joinPredicates []sqlparser.Expr,
-	merger mergeFunc,
-) (ops.Operator, error) {
-	aRoute, bRoute := operatorsToRoutes(Clone(a), Clone(b))
-	if aRoute == nil || bRoute == nil {
-		return nil, nil
-	}
-
-	mergedRouting := Merge(a, b)
-	if mergedRouting == nil {
-		return nil, nil
-	}
-
-	return merger(aRoute, bRoute, mergedRouting)
-
-	// sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
-	//
-	// if !sameKeyspace {
-	// 	if altARoute := aRoute.AlternateInKeyspace(bRoute.Keyspace); altARoute != nil {
-	// 		aRoute = altARoute
-	// 		sameKeyspace = true
-	// 	} else if altBRoute := bRoute.AlternateInKeyspace(aRoute.Keyspace); altBRoute != nil {
-	// 		bRoute = altBRoute
-	// 		sameKeyspace = true
-	// 	}
-	// }
-	//
-	// if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
-	// 	tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
-	// 	if tree != nil || err != nil {
-	// 		return tree, err
-	// 	}
-	// }
-	//
-	// if !sameKeyspace {
-	// 	// if the two queries are not even going to the same keyspaces, we are not going to be able to merge them
-	// 	return nil, nil
-	// }
-	//
-	// switch aRoute.RouteOpCode {
-	// case engine.Unsharded, engine.DBA:
-	// 	if aRoute.RouteOpCode == bRoute.RouteOpCode && sameKeyspace {
-	// 		return merger(aRoute, bRoute)
-	// 	}
-	// case engine.EqualUnique:
-	// 	// If the two routes fully match, they can be merged together.
-	// 	if bRoute.RouteOpCode == engine.EqualUnique {
-	// 		aVdx := aRoute.SelectedVindex()
-	// 		bVdx := bRoute.SelectedVindex()
-	// 		aExpr := aRoute.VindexExpressions()
-	// 		bExpr := bRoute.VindexExpressions()
-	// 		if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-	// 			return merger(aRoute, bRoute)
-	// 		}
-	// 	}
-	//
-	// 	// If the two routes don't match, fall through to the next case and see if we
-	// 	// can merge via join predicates instead.
-	// 	fallthrough
-	//
-	// case engine.Scatter, engine.IN, engine.None:
-	// 	if len(joinPredicates) == 0 {
-	// 		// If we are doing two Scatters, we have to make sure that the
-	// 		// joins are on the correct vindex to allow them to be merged
-	// 		// no join predicates - no vindex
-	// 		return nil, nil
-	// 	}
-	//
-	// 	if !sameKeyspace {
-	// 		return nil, vterrors.VT12001("cross-shard correlated subquery")
-	// 	}
-	//
-	// 	canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)
-	// 	if !canMerge {
-	// 		return nil, nil
-	// 	}
-	// 	r, err := merger(aRoute, bRoute)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	//
-	// 	// If we have a `None` route opcode, we want to keep it -
-	// 	// we only try to find a better Vindex for other route opcodes
-	// 	if aRoute.RouteOpCode != engine.None {
-	// 		r.PickBestAvailableVindex()
-	// 	}
-	//
-	// 	return r, nil
-	// }
-	// return nil, nil
-}
-
-func isDualTable(route *Route) bool {
-	sources := leaves(route)
-	if len(sources) > 1 {
-		return false
-	}
-	src, ok := sources[0].(*Table)
-	if !ok {
-		return false
-	}
-	return src.VTable.Name.String() == "dual" && src.QTable.Table.Qualifier.IsEmpty()
-}
-
-func leaves(op ops.Operator) (sources []ops.Operator) {
-	switch op := op.(type) {
-	// these are the leaves
-	case *Table:
-		return []ops.Operator{op}
-		// physical
-	case *ApplyJoin:
-		return []ops.Operator{op.LHS, op.RHS}
-	case *Filter:
-		return []ops.Operator{op.Source}
-	case *Route:
-		return []ops.Operator{op.Source}
-	}
-
-	panic(fmt.Sprintf("leaves unknown type: %T", op))
-}
-
-// func tryMergeReferenceTable(aRoute, bRoute *Route, merger mergeFunc) (*Route, error) {
-// 	var (
-// 		// if either side is a reference table, we can just merge it and use the opcode of the other side
-// 		opCode engine.Opcode
-// 		vindex *VindexOption
-// 		ks     *vindexes.Keyspace
-// 	)
-//
-// 	switch {
-// 	case aRoute.RouteOpCode == engine.Reference:
-// 		vindex = bRoute.Selected
-// 		opCode = bRoute.RouteOpCode
-// 		ks = bRoute.Keyspace
-// 	case bRoute.RouteOpCode == engine.Reference:
-// 		vindex = aRoute.Selected
-// 		opCode = aRoute.RouteOpCode
-// 		ks = aRoute.Keyspace
-// 	default:
-// 		return nil, nil
-// 	}
-//
-// 	r, err := merger(aRoute, bRoute)
-// 	if err != nil {
-// 		return nil, err
-// 	}
-// 	r.RouteOpCode = opCode
-// 	r.Selected = vindex
-// 	r.Keyspace = ks
-// 	return r, nil
-// }
 
 func canMergeOnFilter(ctx *plancontext.PlanningContext, a, b *Route, predicate sqlparser.Expr) bool {
 	comparison, ok := predicate.(*sqlparser.ComparisonExpr)
