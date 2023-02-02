@@ -27,7 +27,10 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -199,4 +202,18 @@ func (orc *VTOrcProcess) MakeAPICall(endpoint string) (status int, response stri
 
 	respByte, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(respByte), err
+}
+
+// DisableGlobalRecoveries stops VTOrc from running any recoveries
+func (orc *VTOrcProcess) DisableGlobalRecoveries(t *testing.T) {
+	status, _, err := orc.MakeAPICall("/api/disable-global-recoveries")
+	assert.NoError(t, err)
+	assert.Equal(t, 200, status)
+}
+
+// EnableGlobalRecoveries allows VTOrc to run any recoveries
+func (orc *VTOrcProcess) EnableGlobalRecoveries(t *testing.T) {
+	status, _, err := orc.MakeAPICall("/api/enable-global-recoveries")
+	assert.NoError(t, err)
+	assert.Equal(t, 200, status)
 }

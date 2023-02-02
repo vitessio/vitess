@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"testing"
 	"time"
 
 	"vitess.io/vitess/go/json2"
@@ -1252,4 +1253,18 @@ func (cluster *LocalProcessCluster) GetVTParams(dbname string) mysql.ConnParams 
 		params.DbName = dbname
 	}
 	return params
+}
+
+// DisableVTOrcRecoveries stops all VTOrcs from running any recoveries
+func (cluster *LocalProcessCluster) DisableVTOrcRecoveries(t *testing.T) {
+	for _, vtorc := range cluster.VTOrcProcesses {
+		vtorc.DisableGlobalRecoveries(t)
+	}
+}
+
+// EnableVTOrcRecoveries allows all VTOrcs to run any recoveries
+func (cluster *LocalProcessCluster) EnableVTOrcRecoveries(t *testing.T) {
+	for _, vtorc := range cluster.VTOrcProcesses {
+		vtorc.EnableGlobalRecoveries(t)
+	}
 }
