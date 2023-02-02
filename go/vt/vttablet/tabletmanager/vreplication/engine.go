@@ -394,6 +394,11 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		}
 
 		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
+
+		// If we are creating multiple streams, for example in a merge workflow going from 2 shards to 1 shard,
+		// we will be inserting multiple rows. To get the ids of subsequent streams we need to know what
+		// the auto_increment_increment step is. In a multi-master environment, for example, we will encounter
+		// auto increment steps > 1.
 		autoIncrementStep, err := vre.getAutoIncrementStep(dbClient)
 		if err != nil {
 			return nil, err
@@ -857,7 +862,8 @@ func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (int32, 
 		return 0, err
 	}
 	if len(qr.Rows) != 1 {
-		return 0, fmt.Errorf("error fetching @@auto_increment_increment value")
+		// Handles case where underlying mysql doesn't support auto_increment_increment for any reason.
+		return 1, nil
 	}
 	autoIncrement, err := evalengine.ToInt64(qr.Rows[0][0])
 	if err != nil {
