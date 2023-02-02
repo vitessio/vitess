@@ -26,6 +26,7 @@ import (
 	"strings"
 	"time"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/go-sql-driver/mysql"
@@ -33,7 +34,6 @@ import (
 	"github.com/rcrowley/go-metrics"
 
 	"vitess.io/vitess/go/vt/vtgr/config"
-	"vitess.io/vitess/go/vt/vtgr/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/vtgr/ssl"
 )
 
