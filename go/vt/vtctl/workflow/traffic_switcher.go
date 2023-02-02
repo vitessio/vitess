@@ -289,12 +289,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 }
 
 func getVReplicationWorkflowType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowType {
-	i, _ := row["workflow_type"].ToInt64()
+	i, _ := row["workflow_type"].ToInt32()
 	return binlogdatapb.VReplicationWorkflowType(i)
 }
 
 func getVReplicationWorkflowSubType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowSubType {
-	i, _ := row["workflow_sub_type"].ToInt64()
+	i, _ := row["workflow_sub_type"].ToInt32()
 	return binlogdatapb.VReplicationWorkflowSubType(i)
 }
 

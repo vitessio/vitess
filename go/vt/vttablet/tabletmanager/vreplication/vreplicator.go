@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -33,8 +34,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -499,7 +498,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 	if err != nil {
 		return resetFunc, err
 	}
-	if settings.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
+	if settings.WorkflowType == binlogdatapb.VReplicationWorkflowType_OnlineDDL {
 		vreplicationSQLMode = StrictSQLMode
 	}
 

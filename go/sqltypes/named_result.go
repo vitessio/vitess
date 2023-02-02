@@ -54,6 +54,13 @@ func (r RowNamedValues) ToInt64(fieldName string) (int64, error) {
 	return 0, ErrNoSuchField
 }
 
+func (r RowNamedValues) ToInt32(fieldName string) (int32, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToInt32()
+	}
+	return 0, ErrNoSuchField
+}
+
 // AsInt64 returns the named field as int64, or default value if nonexistent/error
 func (r RowNamedValues) AsInt64(fieldName string, def int64) int64 {
 	if v, err := r.ToInt64(fieldName); err == nil {

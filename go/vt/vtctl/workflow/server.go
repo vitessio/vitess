@@ -370,8 +370,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		if tags != "" {
 			tagArray = strings.Split(tags, ",")
 		}
-		workflowType, _ := row["workflow_type"].ToInt64()
-		workflowSubType, _ := row["workflow_sub_type"].ToInt64()
+		workflowType, _ := row["workflow_type"].ToInt32()
+		workflowSubType, _ := row["workflow_sub_type"].ToInt32()
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -390,8 +390,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			Message: message,
 			Tags:    tagArray,
 		}
-		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)]
-		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)]
+		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
+		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err

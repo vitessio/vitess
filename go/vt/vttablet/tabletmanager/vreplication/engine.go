@@ -660,11 +660,12 @@ func (vre *Engine) transitionJournal(je *journalEvent) {
 		bls := proto.Clone(vre.controllers[refid].source).(*binlogdatapb.BinlogSource)
 		bls.Keyspace, bls.Shard = sgtid.Keyspace, sgtid.Shard
 
-		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 64)
-		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 64)
+		workflowType, _ := strconv.ParseInt(params["workflow_type"], 10, 32)
+		workflowSubType, _ := strconv.ParseInt(params["workflow_sub_type"], 10, 32)
 		deferSecondaryKeys, _ := strconv.ParseBool(params["defer_secondary_keys"])
 		ig := NewInsertGenerator(binlogplayer.BlpRunning, vre.dbName)
-		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"], workflowType, workflowSubType, deferSecondaryKeys)
+		ig.AddRow(params["workflow"], bls, sgtid.Gtid, params["cell"], params["tablet_types"],
+			binlogdatapb.VReplicationWorkflowType(workflowType), binlogdatapb.VReplicationWorkflowSubType(workflowSubType), deferSecondaryKeys)
 		qr, err := dbClient.ExecuteFetch(ig.String(), maxRows)
 		if err != nil {
 			log.Errorf("transitionJournal: %v", err)

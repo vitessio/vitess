@@ -530,8 +530,8 @@ type VRSettings struct {
 	MaxTPS             int64
 	MaxReplicationLag  int64
 	State              string
-	WorkflowType       int32
-	WorkflowSubType    int32
+	WorkflowType       binlogdatapb.VReplicationWorkflowType
+	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
 	WorkflowName       string
 	DeferSecondaryKeys bool
 }
@@ -566,13 +566,11 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
-	workflowTypeTmp, err := vrRow.ToInt64("workflow_type")
-	workflowType := int32(workflowTypeTmp)
+	workflowType, err := vrRow.ToInt32("workflow_type")
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_type column: %v", err)
 	}
-	workflowSubTypeTmp, err := vrRow.ToInt64("workflow_sub_type")
-	workflowSubType := int32(workflowSubTypeTmp)
+	workflowSubType, err := vrRow.ToInt32("workflow_sub_type")
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_sub_type column: %v", err)
 	}
@@ -586,9 +584,9 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 		MaxTPS:             maxTPS,
 		MaxReplicationLag:  maxReplicationLag,
 		State:              vrRow.AsString("state", ""),
-		WorkflowType:       workflowType,
+		WorkflowType:       binlogdatapb.VReplicationWorkflowType(workflowType),
 		WorkflowName:       vrRow.AsString("workflow", ""),
-		WorkflowSubType:    workflowSubType,
+		WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
 		DeferSecondaryKeys: deferSecondaryKeys,
 	}, nil
 }
@@ -601,7 +599,7 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v, %v)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
-		timeUpdated, BlpRunning, encodeString(dbName), int64(workflowType), int64(workflowSubType), deferSecondaryKeys)
+		timeUpdated, BlpRunning, encodeString(dbName), workflowType, workflowSubType, deferSecondaryKeys)
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.
@@ -612,7 +610,7 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
 		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName),
-		int64(workflowType), int64(workflowSubType))
+		workflowType, workflowSubType)
 }
 
 // GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.
