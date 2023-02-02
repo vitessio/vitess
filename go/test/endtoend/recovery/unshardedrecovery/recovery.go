@@ -160,6 +160,9 @@ SET GLOBAL old_alter_table = ON;
 		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
+		if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+			return 1, err
+		}
 		return m.Run(), nil
 	}()
 
