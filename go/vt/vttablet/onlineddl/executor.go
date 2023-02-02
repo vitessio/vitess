@@ -4577,33 +4577,43 @@ func (e *Executor) submitCallbackIfNonConflicting(
 	}
 	// This is either singleton or singleton-context
 
-	e.migrationMutex.Lock()
-	defer e.migrationMutex.Unlock()
+	// This entire next logic is wrapped in an anonymous func just to get the migrationMutex released
+	// before calling the callback function. Reason is: the callback function itself may need to acquire
+	// the mutex. And specifically, one of the callback functions used is e.RetryMigration(), which does
+	// lock the mutex...
+	err = func() error {
+		e.migrationMutex.Lock()
+		defer e.migrationMutex.Unlock()
 
-	pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return err
+		}
+		switch {
+		case onlineDDL.StrategySetting().IsSingleton():
+			// We will reject this migration if there's any pending migration
+			if len(pendingUUIDs) > 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
+			}
+		case onlineDDL.StrategySetting().IsSingletonContext():
+			// We will reject this migration if there's any pending migration within a different context
+			for _, pendingUUID := range pendingUUIDs {
+				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
+				if err != nil {
+					return vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
+				}
+				if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
+				}
+				// no conflict? continue looking for other pending migrations
+			}
+		}
+		return nil
+	}()
 	if err != nil {
 		return nil, err
 	}
-	switch {
-	case onlineDDL.StrategySetting().IsSingleton():
-		// We will reject this migration if there's any pending migration
-		if len(pendingUUIDs) > 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
-		}
-	case onlineDDL.StrategySetting().IsSingletonContext():
-		// We will reject this migration if there's any pending migration within a different context
-		for _, pendingUUID := range pendingUUIDs {
-			pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
-			if err != nil {
-				return nil, vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
-			}
-			if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
-			}
-			// no conflict? continue looking for other pending migrations
-		}
-	}
-	// OK to go! We can go
+	// OK to go!
 	return callback()
 }
 
