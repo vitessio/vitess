@@ -597,7 +597,7 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v, %v)",
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
 		timeUpdated, BlpRunning, encodeString(dbName), workflowType, workflowSubType, deferSecondaryKeys)
 }
@@ -607,7 +607,7 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v)",
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
 		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName),
 		workflowType, workflowSubType)

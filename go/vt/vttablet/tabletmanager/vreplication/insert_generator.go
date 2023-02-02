@@ -50,7 +50,7 @@ func NewInsertGenerator(state, dbname string) *InsertGenerator {
 // AddRow adds a row to the insert statement.
 func (ig *InsertGenerator) AddRow(workflow string, bls *binlogdatapb.BinlogSource, pos, cell, tabletTypes string,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) {
-	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v, %v)",
+	fmt.Fprintf(ig.buf, "%s(%v, %v, %v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
 		ig.prefix,
 		encodeString(workflow),
 		encodeString(bls.String()),
