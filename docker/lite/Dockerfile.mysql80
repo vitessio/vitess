@@ -35,8 +35,6 @@ RUN make install PREFIX=/vt/install
 # Start over and build the final image.
 FROM debian:buster-slim
 
-LABEL com.vitessio.mysql-version="8.0.31"
-
 # Install dependencies
 COPY docker/lite/install_dependencies.sh /vt/dist/install_dependencies.sh
 RUN /vt/dist/install_dependencies.sh mysql80
