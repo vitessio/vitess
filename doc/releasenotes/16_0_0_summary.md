@@ -54,6 +54,11 @@ The flag is available in these components:
 - vttablet
 - vttestserver
 
+### Replication manager removal and VTOrc becomes mandatory
+VTOrc is now a **required** component of Vitess starting from v16. If the users want VTOrc to manage replication, then they must run VTOrc.
+Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
+The flag `disable-replication-manager` is deprecated and will be removed in a later release.
+
 ### Breaking Changes
 
 #### vtctld UI Removal
