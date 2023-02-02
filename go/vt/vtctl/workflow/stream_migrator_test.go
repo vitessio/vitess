@@ -329,7 +329,7 @@ func stringifyVRS(streams []*VReplicationStream) string {
 	}
 
 	type testVRS struct {
-		ID           uint32
+		ID           int32
 		Workflow     string
 		BinlogSource *binlogdatapb.BinlogSource
 	}

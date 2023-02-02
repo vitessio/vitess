@@ -324,7 +324,7 @@ func (tmc *testVDiffTMClient) WaitForPosition(ctx context.Context, tablet *topod
 	return nil
 }
 
-func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()
