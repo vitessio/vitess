@@ -38,7 +38,7 @@ const DateTimeFormat = "2006-01-02 15:04:05.999999"
 // for easy, typed getters by column name.
 type RowMap map[string]CellData
 
-// Cell data is the result of a single (atomic) column in a single row
+// CellData is the result of a single (atomic) column in a single row
 type CellData sql.NullString
 
 func (this *CellData) MarshalJSON() ([]byte, error) {
@@ -200,22 +200,22 @@ func GetDB(mysql_uri string) (*sql.DB, bool, error) {
 	return GetGenericDB("mysql", mysql_uri)
 }
 
-// GetDB returns a SQLite DB instance based on DB file name.
+// GetSQLiteDB returns a SQLite DB instance based on DB file name.
 // bool result indicates whether the DB was returned from cache; err
 func GetSQLiteDB(dbFile string) (*sql.DB, bool, error) {
-	return GetGenericDB("sqlite3", dbFile)
+	return GetGenericDB("sqlite", dbFile)
 }
 
 // RowToArray is a convenience function, typically not called directly, which maps a
 // single read database row into a NullString
-func RowToArray(rows *sql.Rows, columns []string) []CellData {
+func RowToArray(rows *sql.Rows, columns []string) ([]CellData, error) {
 	buff := make([]any, len(columns))
 	data := make([]CellData, len(columns))
 	for i := range buff {
 		buff[i] = data[i].NullString()
 	}
-	rows.Scan(buff...)
-	return data
+	err := rows.Scan(buff...)
+	return data, err
 }
 
 // ScanRowsToArrays is a convenience function, typically not called directly, which maps rows
@@ -223,8 +223,11 @@ func RowToArray(rows *sql.Rows, columns []string) []CellData {
 func ScanRowsToArrays(rows *sql.Rows, on_row func([]CellData) error) error {
 	columns, _ := rows.Columns()
 	for rows.Next() {
-		arr := RowToArray(rows, columns)
-		err := on_row(arr)
+		arr, err := RowToArray(rows, columns)
+		if err != nil {
+			return err
+		}
+		err = on_row(arr)
 		if err != nil {
 			return err
 		}

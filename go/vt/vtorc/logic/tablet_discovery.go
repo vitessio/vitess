@@ -26,6 +26,8 @@ import (
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
+
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
@@ -33,8 +35,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
-
-	"github.com/openark/golib/sqlutils"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
