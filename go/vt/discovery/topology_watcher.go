@@ -214,7 +214,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	tw.mu.Lock()
 
 	for alias, newVal := range newTablets {
-		if !(tw.tabletFilter == nil || tw.tabletFilter.IsIncluded(newVal.tablet)) {
+		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(newVal.tablet) {
 			continue
 		}
 
@@ -237,7 +237,7 @@ func (tw *TopologyWatcher) loadTablets() {
 	}
 
 	for _, val := range tw.tablets {
-		if !(tw.tabletFilter == nil || tw.tabletFilter.IsIncluded(val.tablet)) {
+		if tw.tabletFilter != nil && !tw.tabletFilter.IsIncluded(val.tablet) {
 			continue
 		}
 
