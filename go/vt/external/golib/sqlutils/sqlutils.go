@@ -38,7 +38,7 @@ const DateTimeFormat = "2006-01-02 15:04:05.999999"
 // for easy, typed getters by column name.
 type RowMap map[string]CellData
 
-// Cell data is the result of a single (atomic) column in a single row
+// CellData is the result of a single (atomic) column in a single row
 type CellData sql.NullString
 
 func (this *CellData) MarshalJSON() ([]byte, error) {
@@ -200,10 +200,10 @@ func GetDB(mysql_uri string) (*sql.DB, bool, error) {
 	return GetGenericDB("mysql", mysql_uri)
 }
 
-// GetDB returns a SQLite DB instance based on DB file name.
+// GetSQLiteDB returns a SQLite DB instance based on DB file name.
 // bool result indicates whether the DB was returned from cache; err
 func GetSQLiteDB(dbFile string) (*sql.DB, bool, error) {
-	return GetGenericDB("sqlite3", dbFile)
+	return GetGenericDB("sqlite", dbFile)
 }
 
 // RowToArray is a convenience function, typically not called directly, which maps a

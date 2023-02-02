@@ -27,10 +27,11 @@ import (
 	"sync"
 	"time"
 
-	"github.com/openark/golib/sqlutils"
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
 	"github.com/sjmudd/stopwatch"
+
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
 	vitessmysql "vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/tb"
