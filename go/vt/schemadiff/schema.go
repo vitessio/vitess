@@ -368,7 +368,9 @@ func (s *Schema) normalize() error {
 				}
 			}
 
-			// TODO(shlomi): find a valid index
+			if !referencedTable.columnsCoveredByInOrderIndex(check.ReferenceDefinition.ReferencedColumns) {
+				return &MissingForeignKeyReferencedIndexError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName}
+			}
 		}
 	}
 	return nil

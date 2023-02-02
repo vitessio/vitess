@@ -253,8 +253,12 @@ type fakeSchema struct {
 	t map[string][]vindexes.Column
 }
 
-var _ SchemaInfo = (*fakeSchema)(nil)
-
 func (f *fakeSchema) Tables(string) map[string][]vindexes.Column {
 	return f.t
 }
+
+func (f *fakeSchema) Views(ks string) map[string]sqlparser.SelectStatement {
+	return nil
+}
+
+var _ SchemaInfo = (*fakeSchema)(nil)

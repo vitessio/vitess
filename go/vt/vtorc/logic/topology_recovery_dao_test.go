@@ -19,8 +19,9 @@ package logic
 import (
 	"testing"
 
-	"github.com/openark/golib/sqlutils"
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
 	"vitess.io/vitess/go/vt/vtorc/db"
 	"vitess.io/vitess/go/vt/vtorc/inst"

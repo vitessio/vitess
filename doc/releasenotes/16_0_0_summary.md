@@ -54,12 +54,21 @@ The flag is available in these components:
 - vttablet
 - vttestserver
 
+### Replication manager removal and VTOrc becomes mandatory
+VTOrc is now a **required** component of Vitess starting from v16. If the users want VTOrc to manage replication, then they must run VTOrc.
+Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
+The flag `disable-replication-manager` is deprecated and will be removed in a later release.
+
 ### Breaking Changes
 
 #### VTGate Advertised MySQL Version 
 
 VTGate now advertises MySQL version 8.0.31. This is a breaking change for clients that rely on the VTGate advertised MySQL version and still use MySQL 5.7.
 The users can set the `mysql_server_version` flag to advertise the correct version.
+
+#### Default MySQL version on Docker
+
+The default major MySQL version used by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the default patch version of the `vitess/lite:mysql80` image goes from `8.0.23` to `8.0.31`.
 
 #### vtctld UI Removal
 In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
@@ -285,6 +294,8 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 - vtbackup flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 
+- The VTTablet flag `--init_populate_metadata` has been deprecated, since we have deleted the `local_metadata` and `shard_metadata` sidecar database tables.
+
 - The dead legacy Workflow Manager related code was removed in [#12085](https://github.com/vitessio/vitess/pull/12085). This included the following `vtctl` client commands: `WorkflowAction`, `WorkflowCreate`, `WorkflowWait`, `WorkflowStart`, `WorkflowStop`, `WorkflowTree`, `WorkflowDelete`.
 
 - VTAdmin's `VTExplain` endpoint has been deprecated. Users can use the new `vexplain` query format instead. The endpoint will be deleted in a future release.
@@ -399,3 +410,19 @@ BenchmarkCompressLz4Builtin
     PASS
     cleaning up "/var/folders/96/k7gzd7q10zdb749vr02q7sjh0000gn/T/ee7d47b45ef09786c54fa2d7354d2a68.dat"
 ```
+
+## Refactor
+
+### VTTablet sidecar schema maintenance refactor
+
+This is an internal refactor and should not change the behavior of Vitess as seen by users. 
+
+Developers will see a difference though: v16 changes the way we maintain vttablet's sidecar database schema (also referred to as the `_vt`
+database). Instead of using the `WithDDL` package, introduced in #6348, we use a declarative approach. Users will now have to update
+the desired schema in the `go/vt/sidecardb/schema` directory.
+
+The desired schema is specified, one per table. A new module `sidecardb`, compares this to the existing schema and
+performs the required `create` or `alter` to reach it. This is done whenever a primary vttablet starts up.
+
+The sidecar tables `local_metadata` and `shard_metadata` are no longer in use and all references to them are removed as
+part of this refactor. There were used previously for Orchestrator support, which has been superseded by `vtorc`.

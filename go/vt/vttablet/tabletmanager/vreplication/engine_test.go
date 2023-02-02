@@ -28,7 +28,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -467,106 +466,6 @@ func TestWaitForPosCancel(t *testing.T) {
 	if err == nil || err.Error() != want {
 		t.Errorf("WaitForPos: %v, want %v", err, want)
 	}
-}
-
-func TestCreateDBAndTable(t *testing.T) {
-	defer func() { globalStats = &vrStats{} }()
-
-	defer deleteTablet(addTablet(100))
-	resetBinlogClient()
-	dbClient := binlogplayer.NewMockDBClient(t)
-	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
-
-	// Test Insert
-
-	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
-
-	tableNotFound := mysql.SQLError{Num: 1146, Message: "table not found"}
-	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", nil, &tableNotFound)
-	vre.Open(context.Background())
-	defer vre.Close()
-
-	// Missing db. Statement should get retried after creating everything.
-	dbNotFound := mysql.SQLError{Num: 1049, Message: "db not found"}
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, &dbNotFound)
-
-	expectDDLs := func() {
-		t.Helper()
-		ddls := []string{
-			"CREATE DATABASE IF NOT EXISTS _vt",
-			"DROP TABLE IF EXISTS _vt.blp_checkpoint",
-		}
-		for _, ddl := range ddls {
-			dbClient.ExpectRequest(ddl, &sqltypes.Result{}, nil)
-		}
-
-		ddls = []string{
-			"CREATE TABLE IF NOT EXISTS _vt.vreplication.*",
-			"ALTER TABLE _vt.vreplication ADD COLUMN db_name.*",
-			"ALTER TABLE _vt.vreplication MODIFY source.*",
-			"ALTER TABLE _vt.vreplication ADD KEY.*",
-			"ALTER TABLE _vt.vreplication ADD COLUMN rows_copied.*",
-			"ALTER TABLE _vt.vreplication ADD COLUMN tags.*",
-			"ALTER TABLE _vt.vreplication ADD COLUMN time_heartbeat.*",
-			"ALTER TABLE _vt.vreplication ADD COLUMN workflow_type int NOT NULL DEFAULT 0",
-			"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled.*",
-			"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled.*",
-			"ALTER TABLE _vt.vreplication ADD COLUMN workflow_sub_type int NOT NULL DEFAULT 0",
-			"ALTER TABLE _vt.vreplication ADD COLUMN defer_secondary_keys bool NOT NULL DEFAULT false",
-			"create table if not exists _vt.resharding_journal.*",
-			"create table if not exists _vt.copy_state.*",
-			"alter table _vt.copy_state.*",
-			"create table if not exists _vt.post_copy_action.*",
-		}
-		for _, ddl := range ddls {
-			dbClient.ExpectRequestRE(ddl, &sqltypes.Result{}, nil)
-		}
-	}
-	expectDDLs()
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-
-	// Non-recoverable error.
-	unrecoverableError := &mysql.SQLError{Num: 1234, Message: "random error"}
-	dbClient.ExpectRequest("select fail_query from _vt.vreplication", &sqltypes.Result{}, unrecoverableError)
-
-	// Missing table. Statement should get retried after creating everything.
-	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
-	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{}, &tableNotFound)
-	expectDDLs()
-	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
-
-	// The rest of this test is normal with no db errors or extra queries.
-
-	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields(
-			"id|state|source",
-			"int64|varchar|varchar",
-		),
-		fmt.Sprintf(`1|Running|keyspace:"%s" shard:"0" key_range:{end:"\x80"}`, env.KeyspaceName),
-	), nil)
-	dbClient.ExpectRequestRE("update _vt.vreplication set message='Picked source tablet.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("update _vt.vreplication set state='Running', message='' where id=1", testDMLResponse, nil)
-	dbClient.ExpectRequest("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=1", testSettingsResponse, nil)
-	dbClient.ExpectRequest("begin", nil, nil)
-	dbClient.ExpectRequest("insert into t values(1)", testDMLResponse, nil)
-	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
-	dbClient.ExpectRequest("commit", nil, nil)
-
-	_, err := vre.Exec("select fail_query from _vt.vreplication")
-	if err != unrecoverableError {
-		t.Errorf("Want: %v, Got: %v", unrecoverableError, err)
-	}
-
-	qr, err := vre.Exec("insert into _vt.vreplication values(null)")
-	if err != nil {
-		t.Fatal(err)
-	}
-	wantqr := &sqltypes.Result{InsertID: 1}
-	if !qr.Equal(wantqr) {
-		t.Errorf("Exec: %v, want %v", qr, wantqr)
-	}
-	dbClient.Wait()
 }
 
 func TestGetDBClient(t *testing.T) {

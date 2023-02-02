@@ -87,7 +87,6 @@ type healthStreamer struct {
 	ticks                  *timer.Timer
 	dbConfig               dbconfigs.Connector
 	conns                  *connpool.Pool
-	initSuccess            bool
 	signalWhenSchemaChange bool
 
 	views map[string]string
@@ -339,13 +338,6 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	if !hs.initSuccess {
-		hs.initSuccess, err = hs.InitSchemaLocked(conn)
-		if err != nil {
-			return err
-		}
-	}
-
 	tables, err := getChangedTableNames(ctx, conn)
 	if err != nil {
 		return err
@@ -369,17 +361,6 @@ func (hs *healthStreamer) reload() error {
 	hs.state.RealtimeStats.ViewSchemaChanged = nil
 
 	return nil
-}
-
-func (hs *healthStreamer) InitSchemaLocked(conn *connpool.DBConn) (bool, error) {
-	for _, query := range mysql.VTDatabaseInit {
-		_, err := conn.Exec(hs.ctx, query, 1, false)
-		if err != nil {
-			return false, err
-		}
-	}
-
-	return true, nil
 }
 
 func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {

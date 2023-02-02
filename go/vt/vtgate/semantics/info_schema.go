@@ -1689,15 +1689,13 @@ func (i *infoSchemaWithColumns) FindTableOrVindex(tbl sqlparser.TableName) (*vin
 		return i.inner.FindTableOrVindex(tbl)
 	}
 
-	ks := vindexes.Keyspace{
-		Name:    "information_schema",
-		Sharded: false,
+	cols, found := i.infoSchemaData[strings.ToUpper(tbl.Name.String())]
+	if !found {
+		return nil, nil, "", topodatapb.TabletType_UNKNOWN, nil, vindexes.NotFoundError{TableName: tbl.Name.String()}
 	}
-	cols := i.infoSchemaData[strings.ToUpper(tbl.Name.String())]
 	vtbl := &vindexes.Table{
 		Type:                    "View",
 		Name:                    sqlparser.NewIdentifierCS(tbl.Name.String()),
-		Keyspace:                &ks,
 		Columns:                 cols,
 		ColumnListAuthoritative: true,
 	}

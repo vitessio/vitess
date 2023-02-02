@@ -44,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer/testenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
-	"vitess.io/vitess/go/vt/withddl"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -384,10 +383,6 @@ func (dbc *realDBClient) ExecuteFetch(query string, maxrows int) (*sqltypes.Resu
 	// Use Clone() because the contents of memory region referenced by
 	// string can change when clients (e.g. vcopier) use unsafe string methods.
 	query = strings.Clone(query)
-	if strings.HasPrefix(query, "use") ||
-		query == withddl.QueryToTriggerWithDDL { // this query breaks unit tests since it errors out
-		return nil, nil
-	}
 	qr, err := dbc.conn.ExecuteFetch(query, 10000, true)
 	if doNotLogDBQueries {
 		return qr, err
@@ -503,9 +498,7 @@ func newTestVDiffEnv(t *testing.T) *testVDiffEnv {
 	vdiffenv.vse.Open()
 
 	once.Do(func() {
-		ddls := binlogplayer.CreateVReplicationTable()
-		ddls = append(ddls, binlogplayer.AlterVReplicationTable...)
-		ddls = append(ddls, withDDL.DDLs()...)
+		var ddls []string
 
 		// This is needed for the vstreamer engine and the snapshotConn which
 		// use the real DB started by vttestserver

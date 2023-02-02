@@ -755,6 +755,9 @@ func TestSchemaChange(t *testing.T) {
 			}
 		})
 	})
+	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
+		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+	})
 }
 
 func insertRow(t *testing.T) {

@@ -360,10 +360,10 @@
   },
   {
     "comment": "Alter View",
-    "query": "alter view user.user_extra as select* from user.user",
+    "query": "alter view user.user_extra as select * from user.user",
     "plan": {
       "QueryType": "DDL",
-      "Original": "alter view user.user_extra as select* from user.user",
+      "Original": "alter view user.user_extra as select * from user.user",
       "Instructions": {
         "OperatorType": "DDL",
         "Keyspace": {
@@ -374,6 +374,40 @@
       },
       "TablesUsed": [
         "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Create View with authoritative column",
+    "query": "create view user.tmp_view as select * from user.authoritative",
+    "v3-plan": {
+      "QueryType": "DDL",
+      "Original": "create view user.tmp_view as select * from user.authoritative",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create view tmp_view as select * from authoritative"
+      },
+      "TablesUsed": [
+        "user.tmp_view"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DDL",
+      "Original": "create view user.tmp_view as select * from user.authoritative",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create view tmp_view as select user_id, col1, col2 from authoritative"
+      },
+      "TablesUsed": [
+        "user.tmp_view"
       ]
     }
   },

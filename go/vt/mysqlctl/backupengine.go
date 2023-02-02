@@ -82,8 +82,6 @@ type RestoreParams struct {
 	Concurrency int
 	// Extra env variables for pre-restore and post-restore transform hooks
 	HookExtraEnv map[string]string
-	// Metadata to write into database after restore. See PopulateMetadataTables
-	LocalMetadata map[string]string
 	// DeleteBeforeRestore tells us whether existing data should be deleted before
 	// restoring. This is always set to false when starting a tablet with -restore_from_backup,
 	// but is set to true when executing a RestoreFromBackup command on an already running vttablet
@@ -417,7 +415,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	}
 	// restore to a position (using incremental backups):
 	// we calculate a possible restore path based on the manifests. The resulting manifests are
-	// a sorted subsequence, with the full backup first, and zero or more inremental backups to follow.
+	// a sorted subsequence, with the full backup first, and zero or more incremental backups to follow.
 	manifests, err := FindPITRPath(params.RestoreToPos.GTIDSet, manifests)
 	if err != nil {
 		return nil, err

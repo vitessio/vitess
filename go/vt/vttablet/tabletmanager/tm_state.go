@@ -68,17 +68,16 @@ type tmState struct {
 	// Because mu can be held for long, we publish the current state
 	// of these variables into displayState, which can be accessed
 	// more freely even while tmState is busy transitioning.
-	mu                       sync.Mutex
-	isOpen                   bool
-	isOpening                bool
-	isResharding             bool
-	isInSrvKeyspace          bool
-	isShardServing           map[topodatapb.TabletType]bool
-	tabletControls           map[topodatapb.TabletType]bool
-	deniedTables             map[topodatapb.TabletType][]string
-	tablet                   *topodatapb.Tablet
-	isPublishing             bool
-	hasCreatedMetadataTables bool
+	mu              sync.Mutex
+	isOpen          bool
+	isOpening       bool
+	isResharding    bool
+	isInSrvKeyspace bool
+	isShardServing  map[topodatapb.TabletType]bool
+	tabletControls  map[topodatapb.TabletType]bool
+	deniedTables    map[topodatapb.TabletType][]string
+	tablet          *topodatapb.Tablet
+	isPublishing    bool
 
 	// displayState contains the current snapshot of the internal state
 	// and has its own mutex.
@@ -99,6 +98,7 @@ func newTMState(tm *TabletManager, tablet *topodatapb.Tablet) *tmState {
 }
 
 func (ts *tmState) Open() {
+	log.Infof("In tmState.Open()")
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 	if ts.isOpen {
@@ -113,6 +113,7 @@ func (ts *tmState) Open() {
 }
 
 func (ts *tmState) Close() {
+	log.Infof("In tmState.Close()")
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
 
@@ -182,7 +183,7 @@ func (ts *tmState) RefreshFromTopoInfo(ctx context.Context, shardInfo *topo.Shar
 func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.TabletType, action DBAction) error {
 	ts.mu.Lock()
 	defer ts.mu.Unlock()
-	log.Infof("Changing Tablet Type: %v", tabletType)
+	log.Infof("Changing Tablet Type: %v for %s", tabletType, ts.tablet.Alias.String())
 
 	if tabletType == topodatapb.TabletType_PRIMARY {
 		PrimaryTermStartTime := logutil.TimeToProto(time.Now())
@@ -211,6 +212,7 @@ func (ts *tmState) ChangeTabletType(ctx context.Context, tabletType topodatapb.T
 				return err
 			}
 		}
+
 		if action == DBActionSetReadWrite {
 			// We call SetReadOnly only after the topo has been updated to avoid
 			// situations where two tablets are primary at the DB level but not at the vitess level
@@ -290,8 +292,6 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 		returnErr = vterrors.Wrapf(err, errStr)
 	}
 
-	ts.tm.replManager.SetTabletType(ts.tablet.Type)
-
 	if ts.tm.UpdateStream != nil {
 		if topo.IsRunningUpdateStream(ts.tablet.Type) {
 			ts.tm.UpdateStream.Enable()
@@ -334,33 +334,6 @@ func (ts *tmState) updateLocked(ctx context.Context) error {
 	}
 
 	return returnErr
-}
-
-func (ts *tmState) populateLocalMetadataLocked() {
-	if ts.tm.MetadataManager == nil {
-		return
-	}
-
-	if ts.isOpening && !initPopulateMetadata {
-		return
-	}
-
-	localMetadata := ts.tm.getLocalMetadataValues(ts.tablet.Type)
-	dbName := topoproto.TabletDbName(ts.tablet)
-
-	if !ts.hasCreatedMetadataTables {
-		if err := ts.tm.MetadataManager.PopulateMetadataTables(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
-			log.Errorf("PopulateMetadataTables(%v) failed: %v", localMetadata, err)
-			return
-		}
-
-		ts.hasCreatedMetadataTables = true
-		return
-	}
-
-	if err := ts.tm.MetadataManager.UpsertLocalMetadata(ts.tm.MysqlDaemon, localMetadata, dbName); err != nil {
-		log.Errorf("UpsertMetadataTables(%v) failed: %v", localMetadata, err)
-	}
 }
 
 func (ts *tmState) canServe(tabletType topodatapb.TabletType) string {
