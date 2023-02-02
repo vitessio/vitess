@@ -468,6 +468,16 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 // AddShards creates shards given list of comma-separated keys with specified tablets in each shard
 func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) error {
+	// Add a VTOrc instance if one is not already running
+	if err := vc.StartVTOrc(); err != nil {
+		return err
+	}
+	// Disable global recoveries until the shard has been added.
+	// We need this because we run ISP in the end. Running ISP after VTOrc has already run PRS
+	// causes issues.
+	vc.VTOrcProcess.DisableGlobalRecoveries(t)
+	defer vc.VTOrcProcess.EnableGlobalRecoveries(t)
+
 	if value, exists := opts["DBTypeVersion"]; exists {
 		if resetFunc := setupDBTypeVersion(t, value); resetFunc != nil {
 			defer resetFunc()
@@ -546,10 +556,6 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		log.Infof("InitializeShard and make %d primary", primaryTabletUID)
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
-	}
-
-	if err := vc.StartVTOrc(); err != nil {
-		return err
 	}
 
 	return nil
