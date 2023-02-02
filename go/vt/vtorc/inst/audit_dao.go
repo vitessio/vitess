@@ -22,11 +22,10 @@ import (
 	"os"
 	"time"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/rcrowley/go-metrics"
-
-	"github.com/openark/golib/sqlutils"
 
 	"vitess.io/vitess/go/vt/vtorc/config"
 	"vitess.io/vitess/go/vt/vtorc/db"
