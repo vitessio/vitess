@@ -304,8 +304,9 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	readOnly := true //nolint
+	superReadOnly := true //nolint
 	var replicationPosition mysql.Position
+	var resetSuperReadOnlyFunc ResetSuperReadOnlyFunc
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
@@ -322,21 +323,21 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// get the read-only flag
-	readOnly, err = params.Mysqld.IsReadOnly()
+	readOnly, err := params.Mysqld.IsReadOnly()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get read_only status")
 	}
-	sReadOnly, err := params.Mysqld.IsSuperReadOnly()
+	superReadOnly, err = params.Mysqld.IsSuperReadOnly()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get super_read_only status")
 	}
-	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%v", readOnly, sReadOnly)
+	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%v", readOnly, superReadOnly)
 
 	// get the replication position
 	if sourceIsPrimary {
-		if !readOnly {
+		if !superReadOnly {
 			params.Logger.Infof("turning primary super-read-only before backup")
-			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
+			if resetSuperReadOnlyFunc, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
 				return false, vterrors.Wrap(err, "can't set super-read-only status")
 			}
 		}
@@ -390,14 +391,10 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// And set read-only mode
-	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if !readOnly {
-		if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
-			return usable, err
-		}
-	} else {
-		if _, err := params.Mysqld.SetSuperReadOnly(readOnly); err != nil {
-			return usable, err
+	if resetSuperReadOnlyFunc != nil {
+		err := resetSuperReadOnlyFunc()
+		if err != nil {
+			log.Info("not able to set super_read_only to its original value during backup")
 		}
 	}
 

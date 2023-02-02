@@ -21,7 +21,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -31,7 +30,6 @@ import (
 
 	"context"
 
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -342,30 +340,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	err = params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return nil, err
-	}
-
-	// We disable super_read_only, in case it is in the default MySQL startup
-	// parameters and will be blocking the writes we need to do in
-	// PopulateMetadataTables().  We do it blindly, since
-	// this will fail on MariaDB, which doesn't have super_read_only
-	// This is safe, since we're restarting MySQL after the restore anyway
-	params.Logger.Infof("Restore: disabling super_read_only")
-	resetFunc, err := params.Mysqld.SetSuperReadOnly(false)
-	if err != nil {
-		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
-			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway.")
-		} else {
-			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
-			return nil, err
-		}
-	}
-	if resetFunc != nil {
-		defer func() {
-			err := resetFunc()
-			if err != nil {
-				params.Logger.Errorf("Not able to set super_read_only to its original value during restore.")
-			}
-		}()
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")

@@ -1218,14 +1218,11 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 			return err
 		}
 		args := []string{}
-		if includeGTIDs != nil {
-			log.Infof("includeGTIDs.String() are %s", includeGTIDs.String())
-			if gtids := includeGTIDs.String(); gtids != "" {
-				args = append(args,
-					"--include-gtids",
-					gtids,
-				)
-			}
+		if gtids := includeGTIDs.String(); gtids != "" {
+			args = append(args,
+				"--include-gtids",
+				gtids,
+			)
 		}
 
 		args = append(args, binlogFile)
