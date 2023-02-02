@@ -222,6 +222,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	if err := localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 		return 1, err
 	}
+
+	if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+		return 1, err
+	}
+
 	return 0, nil
 }
 

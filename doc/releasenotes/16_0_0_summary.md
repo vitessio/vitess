@@ -54,7 +54,16 @@ The flag is available in these components:
 - vttablet
 - vttestserver
 
+### Replication manager removal and VTOrc becomes mandatory
+VTOrc is now a **required** component of Vitess starting from v16. If the users want VTOrc to manage replication, then they must run VTOrc.
+Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
+The flag `disable-replication-manager` is deprecated and will be removed in a later release.
+
 ### Breaking Changes
+
+#### Default MySQL version on Docker
+
+The default major MySQL version used by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the default patch version of the `vitess/lite:mysql80` image goes from `8.0.23` to `8.0.31`.
 
 #### vtctld UI Removal
 In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.

@@ -152,9 +152,6 @@ type TabletManager struct {
 	// tmState manages the TabletManager state.
 	tmState *tmState
 
-	// replManager manages replication.
-	replManager *replManager
-
 	// tabletAlias is saved away from tablet for read-only access
 	tabletAlias *topodatapb.TabletAlias
 
@@ -342,7 +339,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}()
 	log.Infof("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
-	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = sync2.NewSemaphore(1, 0)
