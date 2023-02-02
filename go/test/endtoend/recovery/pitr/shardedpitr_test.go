@@ -446,6 +446,7 @@ func initializeCluster(t *testing.T) {
 		"FLUSH PRIVILEGES;",
 	}
 
+	// Executing these queries with super_read_only since these are additional DMLs outside init_db.sql
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
 

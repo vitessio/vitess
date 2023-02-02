@@ -267,21 +267,16 @@ func initializeClusterLate(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	for _, tablet := range shard.Vttablets {
-		// remove super read-only from vttablet
-		tablet.VttabletProcess.SetReadOnly("", false)
-	}
-
-	// TODO: Try moving this after InitPrimary. May be thats a better place.
+	// TODO: may be put them in init_db at runtime, then we don't need superReadOnly handling
 	for _, tablet := range []*cluster.Vttablet{primary, replica} {
 		for _, user := range mysqlUsers {
 			query := fmt.Sprintf("ALTER USER '%s'@'%s' IDENTIFIED BY '%s';", user, hostname, mysqlPassword)
-			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+			_, err = tablet.VttabletProcess.QueryTabletWithSuperReadOnlyHandling(query, keyspace.Name, false)
 			// Reset after the first ALTER, or we lock ourselves out.
 			tablet.VttabletProcess.DbPassword = mysqlPassword
 			if err != nil {
 				query = fmt.Sprintf("ALTER USER '%s'@'%%' IDENTIFIED BY '%s';", user, mysqlPassword)
-				_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+				_, err = tablet.VttabletProcess.QueryTabletWithSuperReadOnlyHandling(query, keyspace.Name, false)
 				require.NoError(t, err)
 			}
 		}
