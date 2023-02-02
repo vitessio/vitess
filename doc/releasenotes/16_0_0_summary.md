@@ -63,7 +63,7 @@ The flag `disable-replication-manager` is deprecated and will be removed in a la
 
 #### Default MySQL version on Docker
 
-The default MySQL version use by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the default version of the `vitess/lite:mysql80` image goes from `8.0.23` to `8.0.31`.
+The default major MySQL version used by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the default patch version of the `vitess/lite:mysql80` image goes from `8.0.23` to `8.0.31`.
 
 #### vtctld UI Removal
 In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
