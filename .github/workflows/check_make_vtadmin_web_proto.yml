@@ -57,7 +57,7 @@ jobs:
       uses: actions/setup-node@v3
       with:
         # node-version should match package.json
-        node-version: '16.13.0'
+        node-version: '16.19.0'
 
     - name: Install npm dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.proto_changes == 'true'
