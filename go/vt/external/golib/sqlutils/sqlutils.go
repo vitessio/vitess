@@ -208,14 +208,14 @@ func GetSQLiteDB(dbFile string) (*sql.DB, bool, error) {
 
 // RowToArray is a convenience function, typically not called directly, which maps a
 // single read database row into a NullString
-func RowToArray(rows *sql.Rows, columns []string) []CellData {
+func RowToArray(rows *sql.Rows, columns []string) ([]CellData, error) {
 	buff := make([]any, len(columns))
 	data := make([]CellData, len(columns))
 	for i := range buff {
 		buff[i] = data[i].NullString()
 	}
-	rows.Scan(buff...)
-	return data
+	err := rows.Scan(buff...)
+	return data, err
 }
 
 // ScanRowsToArrays is a convenience function, typically not called directly, which maps rows
@@ -223,8 +223,11 @@ func RowToArray(rows *sql.Rows, columns []string) []CellData {
 func ScanRowsToArrays(rows *sql.Rows, on_row func([]CellData) error) error {
 	columns, _ := rows.Columns()
 	for rows.Next() {
-		arr := RowToArray(rows, columns)
-		err := on_row(arr)
+		arr, err := RowToArray(rows, columns)
+		if err != nil {
+			return err
+		}
+		err = on_row(arr)
 		if err != nil {
 			return err
 		}
