@@ -141,13 +141,13 @@ func TestMain(m *testing.M) {
 		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
 		// For downgrade / upgrade test, tablet version < 16 will not have super read only code handling
 		// Therefore we are explicitly setting super-read-only to `false` here.
-		if vtTabletVersion <= 15 {
-			for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
-				if err := tablet.VttabletProcess.SetSuperReadOnly("", false); err != nil {
-					return 1, err
-				}
-			}
-		}
+		//if vtTabletVersion <= 15 {
+		//for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {
+		//	if err := tablet.VttabletProcess.SetSuperReadOnly("", false); err != nil {
+		//		return 1, err
+		//	}
+		//}
+		//}
 
 		if localCluster.VtTabletMajorVersion >= 16 {
 			// If vttablets are any lower than version 16, then they are running the replication manager.
