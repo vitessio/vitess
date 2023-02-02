@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -64,8 +65,6 @@ type Engine struct {
 	// snapshotMu is used to ensure that only one vdiff snapshot cycle is active at a time,
 	// because we stop/start vreplication workflows during this process
 	snapshotMu sync.Mutex
-
-	vdiffSchemaCreateOnce sync.Once
 
 	// This should only be set when the engine is being used in tests. It then provides
 	// modified behavior for that env, e.g. not starting the retry goroutine. This should
@@ -278,7 +277,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 
 	// We have to use ExecIgnore here so as not to block quick tablet state
 	// transitions from primary to non-primary when starting the engine
-	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRun, -1)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffsToRun, sidecardb.GetSidecarDBNameIdentifier()), -1)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +288,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffsToRetry, sidecardb.GetSidecarDBNameIdentifier()), -1)
 	if err != nil {
 		return nil, err
 	}
@@ -300,7 +299,7 @@ func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBClient, id int64) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffByID, id), -1)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffByID, sidecardb.GetSidecarDBNameIdentifier(), id), -1)
 	if err != nil {
 		return nil, err
 	}
@@ -343,7 +342,8 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 			return err
 		}
 		log.Infof("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError)
-		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, id), 1); err != nil {
+		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, sidecardb.GetSidecarDBNameIdentifier(),
+			sidecardb.GetSidecarDBNameIdentifier(), id), 1); err != nil {
 			return err
 		}
 		options := &tabletmanagerdata.VDiffOptions{}

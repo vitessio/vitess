@@ -20,6 +20,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestNormalizeAlphabetically(t *testing.T) {
@@ -177,6 +178,83 @@ func TestQueryMatchesTemplates(t *testing.T) {
 			match, err := QueryMatchesTemplates(tc.q, tc.tmpl)
 			assert.NoError(t, err)
 			assert.Equal(t, tc.out, match)
+		})
+	}
+}
+
+func TestReplaceTableQualifiers(t *testing.T) {
+	origDB := "_vt"
+	tests := []struct {
+		name    string
+		in      string
+		newdb   string
+		out     string
+		wantErr bool
+	}{
+		{
+			name:    "invalid select",
+			in:      "select frog bar person",
+			out:     "",
+			wantErr: true,
+		},
+		{
+			name: "simple select",
+			in:   "select * from _vt.foo",
+			out:  "select * from foo",
+		},
+		{
+			name:  "simple select with new db",
+			in:    "select * from _vt.foo",
+			newdb: "_vt_test",
+			out:   "select * from _vt_test.foo",
+		},
+		{
+			name:  "simple select with new db same",
+			in:    "select * from _vt.foo where id=1", // should be unchanged
+			newdb: "_vt",
+			out:   "select * from _vt.foo where id=1",
+		},
+		{
+			name:  "simple select with new db needing escaping",
+			in:    "select * from _vt.foo",
+			newdb: "1_vt-test",
+			out:   "select * from `1_vt-test`.foo",
+		},
+		{
+			name: "complex select",
+			in:   "select table_name, lastpk from _vt.copy_state where vrepl_id = 1 and id in (select max(id) from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
+			out:  "select table_name, lastpk from copy_state where vrepl_id = 1 and id in (select max(id) from copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
+		},
+		{
+			name: "complex select",
+			in:   "select t1.col1, t2.col2 from _vt.t1 as t1 join _vt.t2 as t2 on t1.id = t2.id",
+			out:  "select t1.col1, t2.col2 from t1 as t1 join t2 as t2 on t1.id = t2.id",
+		},
+		{
+			name: "simple insert",
+			in:   "insert into _vt.foo(id) values (1)",
+			out:  "insert into foo(id) values (1)",
+		},
+		{
+			name: "simple update",
+			in:   "update _vt.foo set id = 1",
+			out:  "update foo set id = 1",
+		},
+		{
+			name: "simple delete",
+			in:   "delete from _vt.foo where id = 1",
+			out:  "delete from foo where id = 1",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ReplaceTableQualifiers(tt.in, origDB, tt.newdb)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.out, got, "RemoveTableQualifiers(); in: %s, out: %s", tt.in, got)
 		})
 	}
 }

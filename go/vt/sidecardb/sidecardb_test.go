@@ -38,7 +38,7 @@ func TestAll(t *testing.T) {
 	require.NoError(t, err)
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecarDBName), maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetSidecarDBNameIdentifier()), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
@@ -50,8 +50,8 @@ func TestAll(t *testing.T) {
 		"int64"),
 		sidecarDBName,
 	)
-	db.AddQuery(fmt.Sprintf(sidecarDBExistsQueryf, sidecarDBName), result)
-	db.AddQuery(fmt.Sprintf(createSidecarDBQueryf, sidecarDBName), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(sidecarDBExistsQuery, GetSidecarDBNameIdentifier()), result)
+	db.AddQuery(fmt.Sprintf(createSidecarDBQuery, GetSidecarDBNameIdentifier()), &sqltypes.Result{})
 	AddSchemaInitQueries(db, false)
 
 	// tests init on empty db
@@ -79,7 +79,7 @@ func TestAll(t *testing.T) {
 	require.NoError(t, err)
 
 	require.False(t, MatchesInitQuery("abc"))
-	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS vreplication"))
+	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication"))
 }
 
 // test the logic that confirms that the user defined schema's table name and qualifier are valid

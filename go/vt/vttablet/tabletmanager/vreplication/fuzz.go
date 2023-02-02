@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
@@ -99,7 +100,8 @@ func FuzzEngine(data []byte) int {
 	vre := NewTestEngine(topoServer, "cell1", mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	// Fuzzer fails if this expectation is not made first:
-	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest(fmt.Sprintf("select * from %s.vreplication where db_name='db'",
+		sidecardb.GetSidecarDBNameIdentifier()), &sqltypes.Result{}, nil)
 	err = makeExpectations(dbClient, f)
 	if err != nil {
 		return 0

@@ -25,6 +25,7 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"context"
@@ -292,7 +293,8 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	query := fmt.Sprintf("update %s.vreplication set message=%v where id=%v",
+		sidecardb.GetSidecarDBNameIdentifier(), encodeString(binlogplayer.MessageTruncate(message)), ct.id)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}

@@ -142,7 +142,7 @@ func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnecti
 
 	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			_, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetSidecarDBName()), maxRows, false)
+			_, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetSidecarDBNameIdentifier()), maxRows, false)
 			if err != nil {
 				return nil, err
 			}

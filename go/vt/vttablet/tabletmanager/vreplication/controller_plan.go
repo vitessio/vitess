@@ -19,6 +19,7 @@ package vreplication
 import (
 	"fmt"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -55,6 +56,7 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	var plan *controllerPlan
 	switch stmt := stmt.(type) {
 	case *sqlparser.Insert:
@@ -76,12 +78,12 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 }
 
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
-	switch sqlparser.String(ins.Table) {
-	case reshardingJournalTableName:
+	switch ins.Table.Name.String() {
+	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName):
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
 		}, nil
-	case vreplicationTableName:
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName):
 		// no-op
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
@@ -130,11 +132,11 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 
 func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	switch sqlparser.String(upd.TableExprs) {
-	case reshardingJournalTableName:
+	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName):
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
 		}, nil
-	case vreplicationTableName:
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName):
 		// no-op
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(upd.TableExprs))
@@ -149,7 +151,9 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s%v", vreplicationTableName, upd.Where)
+	buf1.Myprintf("select id from %s%v",
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), vreplicationTableName),
+		upd.Where)
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -171,11 +175,11 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 
 func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	switch sqlparser.String(del.TableExprs) {
-	case reshardingJournalTableName:
+	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName):
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
 		}, nil
-	case vreplicationTableName:
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName):
 		// no-op
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(del.TableExprs))
@@ -191,7 +195,9 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from %s%v", vreplicationTableName, del.Where)
+	buf1.Myprintf("select id from %s%v",
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), vreplicationTableName),
+		del.Where)
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -213,10 +219,14 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		},
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
-	buf3.Myprintf("delete from %s%v", copyStateTableName, copyStateWhere)
+	buf3.Myprintf("delete from %s%v",
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), copyStateTableName),
+		copyStateWhere)
 
 	buf4 := sqlparser.NewTrackedBuffer(nil)
-	buf4.Myprintf("delete from %s%v", postCopyActionTableName, copyStateWhere)
+	buf4.Myprintf("delete from %s%v",
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), postCopyActionTableName),
+		copyStateWhere)
 
 	return &controllerPlan{
 		opcode:            deleteQuery,
@@ -229,7 +239,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	switch sqlparser.ToString(sel.From) {
-	case vreplicationTableName, reshardingJournalTableName, copyStateTableName, vreplicationLogTableName:
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName),
+		reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName),
+		copyStateTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), copyStateTableName),
+		vreplicationLogTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationLogTableName):
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil

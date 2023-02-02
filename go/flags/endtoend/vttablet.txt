@@ -264,6 +264,7 @@ Usage of vttablet:
       --serving_state_grace_period duration                              how long to pause after broadcasting health to vtgate, before enforcing a new serving state
       --shard_sync_retry_delay duration                                  delay between retries of updates to keep the tablet and its shard record in sync (default 30s)
       --shutdown_grace_period float                                      how long to wait (in seconds) for queries and transactions to complete during graceful shutdown.
+      --sidecar-db-name string                                           Name of the Vitess sidecar database used for internal metadata. (default "_vt")
       --sql-max-length-errors int                                        truncate queries in error logs to the given length (default unlimited)
       --sql-max-length-ui int                                            truncate queries in debug UIs to the given length (default 512) (default 512)
       --srv_topo_cache_refresh duration                                  how frequently to refresh the topology for cached entries (default 1s)
@@ -363,7 +364,7 @@ Usage of vttablet:
       --vreplication_max_time_to_retry_on_error duration                 stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence
       --vreplication_replica_lag_tolerance duration                      Replica lag threshold duration: once lag is below this we switch from copy phase to the replication (streaming) phase (default 1m0s)
       --vreplication_retry_delay duration                                delay before retrying a failed workflow event in the replication phase (default 5s)
-      --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of _vt.vreplication
+      --vreplication_store_compressed_gtid                               Store compressed gtids in the pos column of vreplication sidecardb table
       --vreplication_tablet_type string                                  comma separated list of tablet types used as a source (default "in_order:REPLICA,PRIMARY")
       --vstream-binlog-rotation-threshold int                            Byte size at which a VStreamer will attempt to rotate the source's open binary log before starting a GTID snapshot based stream (e.g. a ResultStreamer or RowStreamer) (default 67108864)
       --vstream_dynamic_packet_size                                      Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance. (default true)

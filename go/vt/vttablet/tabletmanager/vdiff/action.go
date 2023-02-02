@@ -23,6 +23,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -97,7 +98,8 @@ func (vde *Engine) getVDiffSummary(vdiffID int64, dbClient binlogplayer.DBClient
 	var qr *sqltypes.Result
 	var err error
 
-	query := fmt.Sprintf(sqlVDiffSummary, vdiffID)
+	query := fmt.Sprintf(sqlVDiffSummary, sidecardb.GetSidecarDBNameIdentifier(),
+		sidecardb.GetSidecarDBNameIdentifier(), vdiffID)
 	if qr, err = dbClient.ExecuteFetch(query, -1); err != nil {
 		return nil, err
 	}
@@ -147,7 +149,7 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	var err error
 	options := req.Options
 
-	query := fmt.Sprintf(sqlGetVDiffID, encodeString(req.VdiffUuid))
+	query := fmt.Sprintf(sqlGetVDiffID, sidecardb.GetSidecarDBNameIdentifier(), encodeString(req.VdiffUuid))
 	if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -174,8 +176,8 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 	}
 	if action == CreateAction {
 		query := fmt.Sprintf(sqlNewVDiff,
-			encodeString(req.Keyspace), encodeString(req.Workflow), "pending", encodeString(string(optionsJSON)),
-			vde.thisTablet.Shard, topoproto.TabletDbName(vde.thisTablet), req.VdiffUuid)
+			sidecardb.GetSidecarDBNameIdentifier(), encodeString(req.Keyspace), encodeString(req.Workflow), "pending",
+			encodeString(string(optionsJSON)), vde.thisTablet.Shard, topoproto.TabletDbName(vde.thisTablet), req.VdiffUuid)
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -185,7 +187,8 @@ func (vde *Engine) handleCreateResumeAction(ctx context.Context, dbClient binlog
 		}
 		resp.Id = int64(qr.InsertID)
 	} else {
-		query := fmt.Sprintf(sqlResumeVDiff, encodeString(string(optionsJSON)), encodeString(req.VdiffUuid))
+		query := fmt.Sprintf(sqlResumeVDiff, sidecardb.GetSidecarDBNameIdentifier(), sidecardb.GetSidecarDBNameIdentifier(),
+			encodeString(string(optionsJSON)), encodeString(req.VdiffUuid))
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -219,7 +222,8 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	vdiffUUID := ""
 
 	if req.ActionArg == LastActionArg {
-		query := fmt.Sprintf(sqlGetMostRecentVDiff, encodeString(req.Keyspace), encodeString(req.Workflow))
+		query := fmt.Sprintf(sqlGetMostRecentVDiff, sidecardb.GetSidecarDBNameIdentifier(),
+			encodeString(req.Keyspace), encodeString(req.Workflow))
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -234,7 +238,8 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	}
 	if vdiffUUID != "" {
 		resp.VdiffUuid = vdiffUUID
-		query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(vdiffUUID))
+		query := fmt.Sprintf(sqlGetVDiffByKeyspaceWorkflowUUID, sidecardb.GetSidecarDBNameIdentifier(),
+			encodeString(req.Keyspace), encodeString(req.Workflow), encodeString(vdiffUUID))
 		if qr, err = dbClient.ExecuteFetch(query, 1); err != nil {
 			return err
 		}
@@ -257,7 +262,7 @@ func (vde *Engine) handleShowAction(ctx context.Context, dbClient binlogplayer.D
 	}
 	switch req.ActionArg {
 	case AllActionArg:
-		if qr, err = dbClient.ExecuteFetch(sqlGetAllVDiffs, -1); err != nil {
+		if qr, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlGetAllVDiffs, sidecardb.GetSidecarDBNameIdentifier()), -1); err != nil {
 			return err
 		}
 		resp.Output = sqltypes.ResultToProto3(qr)
@@ -292,13 +297,15 @@ func (vde *Engine) handleDeleteAction(ctx context.Context, dbClient binlogplayer
 
 	switch req.ActionArg {
 	case AllActionArg:
-		query = fmt.Sprintf(sqlDeleteVDiffs, encodeString(req.Keyspace), encodeString(req.Workflow))
+		query = fmt.Sprintf(sqlDeleteVDiffs, sidecardb.GetSidecarDBNameIdentifier(), sidecardb.GetSidecarDBNameIdentifier(),
+			sidecardb.GetSidecarDBNameIdentifier(), encodeString(req.Keyspace), encodeString(req.Workflow))
 	default:
 		uuid, err := uuid.Parse(req.ActionArg)
 		if err != nil {
 			return fmt.Errorf("action argument %s not supported", req.ActionArg)
 		}
-		query = fmt.Sprintf(sqlDeleteVDiffByUUID, encodeString(uuid.String()))
+		query = fmt.Sprintf(sqlDeleteVDiffByUUID, sidecardb.GetSidecarDBNameIdentifier(),
+			sidecardb.GetSidecarDBNameIdentifier(), encodeString(uuid.String()))
 	}
 	if _, err = dbClient.ExecuteFetch(query, 1); err != nil {
 		return err

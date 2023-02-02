@@ -17,7 +17,7 @@ limitations under the License.
 package onlineddl
 
 const (
-	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
+	sqlInsertMigration = `INSERT IGNORE INTO %a.schema_migrations (
 		migration_uuid,
 		keyspace,
 		shard,
@@ -49,13 +49,13 @@ const (
 			postpone_launch,
 			postpone_completion,
 			ready_to_complete
-		FROM _vt.schema_migrations
+		FROM %s.schema_migrations
 		WHERE
 			migration_status='queued'
 			AND reviewed_timestamp IS NOT NULL
 		ORDER BY id
 	`
-	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
+	sqlUpdateMySQLTable = `UPDATE %s.schema_migrations
 			SET mysql_table=%a
 		WHERE
 			migration_uuid=%a

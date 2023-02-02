@@ -44,7 +44,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 )
 
-// VReplStream represents a row in _vt.vreplication table
+// VReplStream represents a row in vreplication table
 type VReplStream struct {
 	id                   int64
 	workflow             string
@@ -562,7 +562,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 	return nil
 }
 
-// generateInsertStatement generates the INSERT INTO _vt.replication stataement that creates the vreplication workflow
+// generateInsertStatement generates the INSERT INTO replication stataement that creates the vreplication workflow
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",

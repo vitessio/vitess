@@ -37,6 +37,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -227,7 +228,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	// Insert the table list only if at least one table matches.
 	if len(plan.TargetTables) != 0 {
 		var buf strings.Builder
-		buf.WriteString("insert into _vt.copy_state(vrepl_id, table_name) values ")
+		buf.WriteString(fmt.Sprintf("insert into %s.copy_state(vrepl_id, table_name) values ", sidecardb.GetSidecarDBNameIdentifier()))
 		prefix := ""
 		for name := range plan.TargetTables {
 			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
@@ -292,7 +293,8 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 // primary key that was copied. A nil Result means that nothing has been copied.
 // A table that was fully copied is removed from copyState.
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
-	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state group by vrepl_id, table_name)", vc.vr.id))
+	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from %s.copy_state where vrepl_id = %d and id in (select max(id) from %s.copy_state group by vrepl_id, table_name)",
+		sidecardb.GetSidecarDBNameIdentifier(), vc.vr.id, sidecardb.GetSidecarDBNameIdentifier()))
 	if err != nil {
 		return err
 	}
@@ -440,8 +442,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				// number of rows does not have a big impact on the queries used for
 				// the workflow.
 				go func() {
-					gcQuery := fmt.Sprintf("delete from _vt.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from _vt.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
-						vc.vr.id, encodeString(tableName), vc.vr.id, encodeString(tableName))
+					gcQuery := fmt.Sprintf("delete from %s.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from %s.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
+						sidecardb.GetSidecarDBNameIdentifier(), vc.vr.id, encodeString(tableName), sidecardb.GetSidecarDBNameIdentifier(), vc.vr.id, encodeString(tableName))
 					dbClient := vc.vr.vre.getDBClient(false)
 					if err := dbClient.Connect(); err != nil {
 						log.Errorf("Error while garbage collecting older copy_state rows, could not connect to database: %v", err)
@@ -489,7 +491,10 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			pkfields = append(pkfields, rows.Pkfields...)
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
-				"insert into _vt.copy_state (lastpk, vrepl_id, table_name) values (%a, %s, %s)", ":lastpk",
+				"insert into %s.copy_state (lastpk, vrepl_id, table_name) ",
+				sidecardb.GetSidecarDBNameIdentifier())
+			buf.Myprintf(
+				"values (%a, %s, %s)", ":lastpk",
 				strconv.Itoa(int(vc.vr.id)),
 				encodeString(tableName))
 			addLatestCopyState := buf.ParsedQuery()
@@ -518,7 +523,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 
 		// Use prevCh to Sequence the prevT with the currT so that:
 		// * The prevT is completed before we begin updating
-		//   _vt.copy_state for currT.
+		//   copy_state for currT.
 		// * If prevT fails or is canceled, the current task is
 		//   canceled.
 		// prevCh is nil only for the first task in the vcopier run.
@@ -656,8 +661,9 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	log.Infof("Copy of %v finished at lastpk: %v", tableName, lastpkbv)
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf(
-		"delete cs, pca from %s as cs left join %s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
-		copyStateTableName, postCopyActionTableName,
+		"delete cs, pca from %s.%s as cs left join %s.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
+		sidecardb.GetSidecarDBNameIdentifier(), copyStateTableName,
+		sidecardb.GetSidecarDBNameIdentifier(), postCopyActionTableName,
 		vc.vr.id, encodeString(tableName),
 	)
 	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {
@@ -1071,7 +1077,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 		case vcopierCopyTaskInsertCopyState:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
 				if err := vbc.insertCopyState(ctx, args.lastpk); err != nil {
-					return fmt.Errorf("error updating _vt.copy_state: %s", err.Error())
+					return fmt.Errorf("error updating copy_state: %s", err.Error())
 				}
 				return nil
 			}

@@ -22,11 +22,18 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
-	qr, err := tm.VREngine.ExecWithDBA(query)
+	// Replace any provided sidecar DB qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultSidecarDBName, sidecardb.GetSidecarDBName())
+	if err != nil {
+		return nil, err
+	}
+	qr, err := tm.VREngine.ExecWithDBA(uq)
 	if err != nil {
 		return nil, err
 	}

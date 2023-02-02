@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 
@@ -143,14 +144,16 @@ func (td *tableDiffer) initialize(ctx context.Context) error {
 func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClient binlogplayer.DBClient) error {
 	log.Infof("stopTargetVReplicationStreams")
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state = 'Stopped', message='for vdiff' %s", ct.workflowFilter)
+	query := fmt.Sprintf("update %s.vreplication set state = 'Stopped', message='for vdiff' %s",
+		sidecardb.GetSidecarDBNameIdentifier(), ct.workflowFilter)
 	if _, err := ct.vde.vre.Exec(query); err != nil {
 		return err
 	}
 	// streams are no longer running because vre.Exec would have replaced old controllers and new ones will not start
 
 	// update position of all source streams
-	query = fmt.Sprintf("select id, source, pos from _vt.vreplication %s", ct.workflowFilter)
+	query = fmt.Sprintf("select id, source, pos from %s.vreplication %s",
+		sidecardb.GetSidecarDBNameIdentifier(), ct.workflowFilter)
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
@@ -280,8 +283,8 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 	defer cancel()
 
 	if err := td.forEachSource(func(source *migrationSource) error {
-		query := fmt.Sprintf("update _vt.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d",
-			source.snapshotPosition, source.vrID)
+		query := fmt.Sprintf("update %s.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d",
+			sidecardb.GetSidecarDBNameIdentifier(), source.snapshotPosition, source.vrID)
 		if _, err := ct.tmc.VReplicationExec(waitCtx, ct.vde.thisTablet, query); err != nil {
 			return err
 		}
@@ -330,8 +333,8 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
 	ct := td.wd.ct
-	query := fmt.Sprintf("update _vt.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
-		encodeString(ct.vde.dbName), encodeString(ct.workflow))
+	query := fmt.Sprintf("update %s.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
+		sidecardb.GetSidecarDBNameIdentifier(), encodeString(ct.vde.dbName), encodeString(ct.workflow))
 	log.Infof("Restarting the %q VReplication workflow using %q", ct.workflow, query)
 	var err error
 	// Let's retry a few times if we get a retryable error.
@@ -442,7 +445,8 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 	// We need to continue were we left off when appropriate. This can be an
 	// auto-retry on error, or a manual retry via the resume command.
 	// Otherwise the existing state will be empty and we start from scratch.
-	query := fmt.Sprintf(sqlGetVDiffTable, td.wd.ct.id, encodeString(td.table.Name))
+	query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetSidecarDBNameIdentifier(), sidecardb.GetSidecarDBNameIdentifier(),
+		td.wd.ct.id, encodeString(td.table.Name))
 	cs, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return nil, err
@@ -661,9 +665,11 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 
-		query = fmt.Sprintf(sqlUpdateTableProgress, dr.ProcessedRows, encodeString(string(lastPK)), encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
+		query = fmt.Sprintf(sqlUpdateTableProgress, sidecardb.GetSidecarDBNameIdentifier(), dr.ProcessedRows, encodeString(string(lastPK)),
+			encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
 	} else {
-		query = fmt.Sprintf(sqlUpdateTableNoProgress, dr.ProcessedRows, encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
+		query = fmt.Sprintf(sqlUpdateTableNoProgress, sidecardb.GetSidecarDBNameIdentifier(), dr.ProcessedRows, encodeString(string(rpt)),
+			td.wd.ct.id, encodeString(td.table.Name))
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -672,7 +678,8 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 }
 
 func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
-	query := fmt.Sprintf(sqlUpdateTableState, encodeString(string(state)), td.wd.ct.id, encodeString(td.table.Name))
+	query := fmt.Sprintf(sqlUpdateTableState, sidecardb.GetSidecarDBNameIdentifier(), encodeString(string(state)),
+		td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -692,7 +699,8 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	} else {
 		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableStateAndReport, encodeString(string(state)), dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(td.table.Name))
+	query := fmt.Sprintf(sqlUpdateTableStateAndReport, sidecardb.GetSidecarDBNameIdentifier(), encodeString(string(state)),
+		dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -702,7 +710,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 }
 
 func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
-	query := fmt.Sprintf(sqlUpdateTableMismatch, vdiffID, encodeString(table))
+	query := fmt.Sprintf(sqlUpdateTableMismatch, sidecardb.GetSidecarDBNameIdentifier(), vdiffID, encodeString(table))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -724,7 +732,7 @@ func (td *tableDiffer) lastPKFromRow(row []sqltypes.Value) ([]byte, error) {
 	return buf, err
 }
 
-// If SourceTimeZone is defined in the BinlogSource (_vt.vreplication.source), the
+// If SourceTimeZone is defined in the BinlogSource (vreplication.source), the
 // VReplication workflow would have converted the datetime columns expecting the
 // source to have been in the SourceTimeZone and target in TargetTimeZone. We need
 // to do the reverse conversion in VDiff before the comparison.

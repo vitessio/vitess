@@ -37,6 +37,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -45,10 +46,10 @@ import (
 )
 
 const (
-	reshardingJournalTableName = "_vt.resharding_journal"
-	vreplicationTableName      = "_vt.vreplication"
-	copyStateTableName         = "_vt.copy_state"
-	postCopyActionTableName    = "_vt.post_copy_action"
+	reshardingJournalTableName = "resharding_journal"
+	vreplicationTableName      = "vreplication"
+	copyStateTableName         = "copy_state"
+	postCopyActionTableName    = "post_copy_action"
 
 	maxRows                      = 10000
 	throttlerVReplicationAppName = "vreplication"
@@ -69,7 +70,7 @@ const (
 // stop replicating.
 var waitRetryTime = 1 * time.Second
 
-// How frequently vcopier will update _vt.vreplication rows_copied
+// How frequently vcopier will update vreplication rows_copied
 var rowsCopiedUpdateInterval = 30 * time.Second
 
 // How frequntly vcopier will garbage collect old copy_state rows.
@@ -340,15 +341,15 @@ func (vre *Engine) Exec(query string) (*sqltypes.Result, error) {
 
 // Exec executes the query and the related actions.
 // Example insert statement:
-// insert into _vt.vreplication
+// insert into vreplication
 //
 //	(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state)
 //	values ('Resharding', 'keyspace:"ks" shard:"0" tables:"a" tables:"b" ', 'MariaDB/0-1-1083', 9223372036854775807, 9223372036854775807, 481823, 0, 'Running')`
 //
 // Example update statement:
-// update _vt.vreplication set state='Stopped', message='testing stop' where id=1
-// Example delete: delete from _vt.vreplication where id=1
-// Example select: select * from _vt.vreplication
+// update vreplication set state='Stopped', message='testing stop' where id=1
+// Example delete: delete from vreplication where id=1
+// Example select: select * from vreplication
 func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error) {
 	vre.mu.Lock()
 	defer vre.mu.Unlock()
@@ -374,7 +375,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch("use _vt", 1); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetSidecarDBNameIdentifier()), 1); err != nil {
 		return nil, err
 	}
 
@@ -748,7 +749,7 @@ func (vre *Engine) WaitForPos(ctx context.Context, id int, pos string) error {
 		qr, err := dbClient.ExecuteFetch(binlogplayer.ReadVReplicationStatus(uint32(id)), 10)
 		switch {
 		case err != nil:
-			// We have high contention on the _vt.vreplication row, so retry if our read gets
+			// We have high contention on the vreplication row, so retry if our read gets
 			// killed off by the deadlock detector and should be re-tried.
 			// The full error we get back from MySQL in that case is:
 			// Deadlock found when trying to get lock; try restarting transaction (errno 1213) (sqlstate 40001)
@@ -819,7 +820,8 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 		return nil, err
 	}
 	defer dbClient.Close()
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where db_name=%v", encodeString(vre.dbName)), maxRows)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from %s.vreplication where db_name=%v",
+		sidecardb.GetSidecarDBNameIdentifier(), encodeString(vre.dbName)), maxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -835,7 +837,8 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 }
 
 func readRow(dbClient binlogplayer.DBClient, id int) (map[string]string, error) {
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from _vt.vreplication where id = %d", id), 10)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from %s.vreplication where id = %d",
+		sidecardb.GetSidecarDBNameIdentifier(), id), 10)
 	if err != nil {
 		return nil, err
 	}

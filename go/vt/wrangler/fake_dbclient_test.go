@@ -21,6 +21,7 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"unicode"
 
 	"github.com/stretchr/testify/assert"
 
@@ -198,4 +199,18 @@ func (dc *fakeDBClient) verifyQueries(t *testing.T) {
 			assert.FailNowf(t, "expected regex query did not get executed during the test", query)
 		}
 	}
+}
+
+// normalizeTestQuery removes all whitespace from the string
+// and makes the query lowercase to avoid brittleness in tests
+// due to case or whitespace differences.
+func normalizeTestQuery(spacey string) string {
+	var nospace strings.Builder
+	nospace.Grow(len(spacey))
+	for _, ch := range spacey {
+		if !unicode.IsSpace(ch) {
+			nospace.WriteRune(unicode.ToLower(ch))
+		}
+	}
+	return nospace.String()
 }
