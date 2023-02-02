@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.schema_migrations
+CREATE TABLE IF NOT EXISTS schema_migrations
 (
     `id`                              bigint unsigned  NOT NULL AUTO_INCREMENT,
     `migration_uuid`                  varchar(64)      NOT NULL,

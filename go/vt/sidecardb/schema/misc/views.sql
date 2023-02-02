@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.views
+CREATE TABLE IF NOT EXISTS views
 (
     TABLE_NAME varchar(64) NOT NULL,
     VIEW_DEFINITION longtext NOT NULL,

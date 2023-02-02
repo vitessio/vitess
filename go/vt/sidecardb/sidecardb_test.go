@@ -18,6 +18,7 @@ package sidecardb
 
 import (
 	"context"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -30,8 +31,6 @@ import (
 func TestAll(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	AddSchemaInitQueries(db, false)
-	db.AddQuery("use dbname", &sqltypes.Result{})
 
 	ctx := context.Background()
 	cp := db.ConnParams()
@@ -39,12 +38,21 @@ func TestAll(t *testing.T) {
 	require.NoError(t, err)
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(UseSidecarDatabaseQuery, maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", sidecarDBName), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
+
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"dbexists",
+		"int64"),
+		sidecarDBName,
+	)
+	db.AddQuery(fmt.Sprintf(sidecarDBExistsQueryf, sidecarDBName), result)
+	db.AddQuery(fmt.Sprintf(createSidecarDBQueryf, sidecarDBName), &sqltypes.Result{})
+	AddSchemaInitQueries(db, false)
 
 	// tests init on empty db
 	require.Equal(t, int64(0), GetDDLCount())
@@ -52,8 +60,11 @@ func TestAll(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
 
-	// tests init on already inited db
+	// Include the table DDLs in the expected queries.
+	// This causes them to NOT be created again.
 	AddSchemaInitQueries(db, true)
+
+	// tests init on already inited db
 	err = Init(ctx, exec)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
@@ -63,20 +74,12 @@ func TestAll(t *testing.T) {
 		ctx:  ctx,
 		exec: exec,
 	}
-	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Database",
-		"varchar"),
-		"currentDB",
-	)
-	db.AddQuery(SelectCurrentDatabaseQuery, result)
 
-	currentDB, err := si.setCurrentDatabase("dbname")
+	err = si.setCurrentDatabase(sidecarDBName)
 	require.NoError(t, err)
-	require.Equal(t, "currentDB", currentDB)
 
 	require.False(t, MatchesInitQuery("abc"))
-	require.True(t, MatchesInitQuery(SelectCurrentDatabaseQuery))
-	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS `_vt`.vreplication"))
+	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS vreplication"))
 }
 
 // test the logic that confirms that the user defined schema's table name and qualifier are valid
@@ -88,12 +91,11 @@ func TestValidateSchema(t *testing.T) {
 		mustError bool
 	}
 	testCases := []testCase{
-		{"valid", "t1", "create table if not exists _vt.t1(i int)", false},
-		{"no if not exists", "t1", "create table _vt.t1(i int)", true},
-		{"invalid table name", "t2", "create table if not exists _vt.t1(i int)", true},
-		{"invalid table name", "t1", "create table if not exists _vt.t2(i int)", true},
-		{"invalid qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
-		{"invalid qualifier", "t1", "create table if not exists t1(i int)", true},
+		{"valid", "t1", "create table if not exists t1(i int)", false},
+		{"no if not exists", "t1", "create table t1(i int)", true},
+		{"invalid table name", "t2", "create table if not exists t1(i int)", true},
+		{"invalid table name", "t1", "create table if not exists t2(i int)", true},
+		{"qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
 	}
 	for _, tc := range testCases {
 		t.Run(tc.testName, func(t *testing.T) {

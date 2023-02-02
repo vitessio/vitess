@@ -31,6 +31,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/tableacl/simpleacl"
 	"vitess.io/vitess/go/vt/topo"
@@ -65,6 +66,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&tabletConfig, "tablet_config", tabletConfig, "YAML file config for tablet")
 
 	acl.RegisterFlags(fs)
+	sidecardb.RegisterFlags(fs)
 }
 
 func init() {
