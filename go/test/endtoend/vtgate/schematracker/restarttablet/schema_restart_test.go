@@ -122,7 +122,7 @@ func TestVSchemaTrackerInit(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "SHOW VSCHEMA TABLES")
 	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("test_table")] [VARCHAR("vt_user")]]`
+	want := `[[VARCHAR("main")] [VARCHAR("test_table")] [VARCHAR("vt_user")]]`
 	assert.Equal(t, want, got)
 }
 
