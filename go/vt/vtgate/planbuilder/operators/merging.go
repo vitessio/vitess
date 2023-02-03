@@ -1,6 +1,7 @@
 package operators
 
 import (
+	"fmt"
 	"reflect"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -13,6 +14,65 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
+/*
+select 1 from t1 where exists(select 1 from t2 where t1.id = t2.id and t1.foo = t2.foo)
+select 1 from t1 where (id, foo) in (select id, foo from t2)
+*/
+type (
+	merger interface {
+		mergeTables(r1, r2 *TableRouting, op1, op2 *Route) (ops.Operator, error)
+		merge(op1, op2 *Route, r Routing) (ops.Operator, error)
+	}
+
+	joinMerger struct {
+		ctx        *plancontext.PlanningContext
+		predicates []sqlparser.Expr
+		innerJoin  bool
+	}
+
+	subQueryMerger struct {
+		ctx  *plancontext.PlanningContext
+		subq *SubQueryInner
+	}
+
+	mergeDecorator struct {
+		inner merger
+		f     func() error
+	}
+
+	routingType int
+)
+
+const (
+	table routingType = iota
+	infoSchema
+	ref
+	none
+	unsharded
+	dual
+	targeted
+)
+
+func (rt routingType) String() string {
+	switch rt {
+	case table:
+		return "table"
+	case infoSchema:
+		return "infoSchema"
+	case ref:
+		return "ref"
+	case none:
+		return "none"
+	case unsharded:
+		return "unsharded"
+	case dual:
+		return "dual"
+	case targeted:
+		return "targeted"
+	}
+	panic("switch should be exhaustive")
+}
+
 // Merge checks whether two operators can be merged into a single one.
 // If they can be merged, the new Routing for the merged operator is returned.
 // If they cannot be merged, nil is returned.
@@ -20,11 +80,6 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 	routeA, routeB := operatorsToRoutes(opA, opB)
 	if routeA == nil || routeB == nil {
 		return nil, nil
-	}
-
-	if getTypeName(routeA.Routing) < getTypeName(routeB.Routing) {
-		// merging is commutative, and we only want to have to think about one of the two orders, so we do this
-		routeA, routeB = routeB, routeA
 	}
 
 	//
@@ -38,36 +93,42 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 	// 	}
 	// }
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
-	a, b := getR(routeA.Routing), getR(routeB.Routing)
+	a, b := getRoutingType(routeA.Routing), getRoutingType(routeB.Routing)
+	fmt.Println(a, b)
+	if getTypeName(routeA.Routing) < getTypeName(routeB.Routing) {
+		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
+		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
+		a, b = b, a
+	}
 	switch {
 
 	// if either side is a dual query, we can always merge them together
-	case a.dual:
-		return m.merge(routeA, routeB, routeB.Routing), nil
-	case b.dual:
-		return m.merge(routeA, routeB, routeA.Routing), nil
+	case a == dual:
+		return m.merge(routeA, routeB, routeB.Routing)
+	case b == dual:
+		return m.merge(routeA, routeB, routeA.Routing)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
-	case (a.unsharded || a.ref) && sameKeyspace:
-		return m.merge(routeA, routeB, routeB.Routing), nil
-	case (b.unsharded || b.ref) && sameKeyspace:
-		return m.merge(routeA, routeB, routeA.Routing), nil
+	case (a == unsharded || a == ref) && sameKeyspace:
+		return m.merge(routeA, routeB, routeB.Routing)
+	case (b == unsharded || b == ref) && sameKeyspace:
+		return m.merge(routeA, routeB, routeA.Routing)
 
-	case (a.unsharded || a.ref || b.unsharded || b.ref) && !sameKeyspace:
+	case (a == unsharded || a == ref || b == unsharded || b == ref) && !sameKeyspace:
 		return nil, nil
 
-	case a.unsharded && b.table || b.unsharded && a.table:
+	case a == unsharded && b == table || b == unsharded && a == table:
 		return nil, nil
 
-	case a.table && b.table:
+	case a == table && b == table:
 		return mergeTables(ctx, routeA, routeB, m, joinPredicates)
 
 	// table and reference routing can be merged if they are going to the same keyspace
-	case a.table && b.ref && sameKeyspace:
-		return m.merge(routeA, routeB, routeA.Routing), nil
+	case a == table && b == ref && sameKeyspace:
+		return m.merge(routeA, routeB, routeA.Routing)
 
 	// info schema routings are hard to merge with anything else
-	case a.infoSchema || b.infoSchema:
+	case a == infoSchema || b == infoSchema:
 		return nil, nil
 
 	default:
@@ -89,7 +150,7 @@ func mergeTables(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route,
 			aExpr := tblA.VindexExpressions()
 			bExpr := tblB.VindexExpressions()
 			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeTables(tblA, tblB, routeA, routeB), nil
+				return m.mergeTables(tblA, tblB, routeA, routeB)
 			}
 		}
 
@@ -113,9 +174,33 @@ func mergeTables(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route,
 		if !canMerge {
 			return nil, nil
 		}
-		return m.mergeTables(tblA, tblB, routeA, routeB), nil
+		return m.mergeTables(tblA, tblB, routeA, routeB)
 	}
 	return nil, nil
+}
+
+func getTypeName(myvar interface{}) string {
+	return reflect.TypeOf(myvar).String()
+}
+
+func getRoutingType(r Routing) routingType {
+	switch r.(type) {
+	case *InfoSchemaRouting:
+		return infoSchema
+	case *ReferenceRouting:
+		return ref
+	case *DualRouting:
+		return dual
+	case *TableRouting:
+		return table
+	case *NoneRouting:
+		return none
+	case *UnshardedRouting:
+		return unsharded
+	case *TargetedRouting:
+		return targeted
+	}
+	panic("switch should be exhaustive")
 }
 
 func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr, innerJoin bool) merger {
@@ -126,18 +211,7 @@ func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr,
 	}
 }
 
-type joinMerger struct {
-	ctx        *plancontext.PlanningContext
-	predicates []sqlparser.Expr
-	innerJoin  bool
-}
-
-type merger interface {
-	mergeTables(r1, r2 *TableRouting, op1, op2 *Route) ops.Operator
-	merge(op1, op2 *Route, r Routing) ops.Operator
-}
-
-func (jm *joinMerger) mergeTables(r1, r2 *TableRouting, op1, op2 *Route) ops.Operator {
+func (jm *joinMerger) mergeTables(r1, r2 *TableRouting, op1, op2 *Route) (ops.Operator, error) {
 	tr := &TableRouting{
 		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:    r1.keyspace,
@@ -153,51 +227,79 @@ func (jm *joinMerger) mergeTables(r1, r2 *TableRouting, op1, op2 *Route) ops.Ope
 		Source:     jm.getApplyJoin(op1, op2),
 		MergedWith: []*Route{op2},
 		Routing:    tr,
-	}
+	}, nil
 }
 
 func (jm *joinMerger) getApplyJoin(op1, op2 *Route) *ApplyJoin {
 	return NewApplyJoin(op1.Source, op2.Source, jm.ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
 }
 
-func (jm *joinMerger) merge(op1, op2 *Route, r Routing) ops.Operator {
+func (jm *joinMerger) merge(op1, op2 *Route, r Routing) (ops.Operator, error) {
 	return &Route{
 		Source:     jm.getApplyJoin(op1, op2),
 		MergedWith: []*Route{op2},
 		Routing:    r,
+	}, nil
+}
+
+func newSubQueryMerge(ctx *plancontext.PlanningContext, subq *SubQueryInner) merger {
+	return &subQueryMerger{ctx: ctx, subq: subq}
+}
+
+func (s *subQueryMerger) mergeTables(outer, inner *TableRouting, op1, op2 *Route) (ops.Operator, error) {
+	s.subq.ExtractedSubquery.NeedsRewrite = true
+
+	// When merging an inner query with its outer query, we can remove the
+	// inner query from the list of predicates that can influence routing of
+	// the outer query.
+	//
+	// Note that not all inner queries necessarily are part of the routing
+	// predicates list, so this might be a no-op.
+	subQueryWasPredicate := false
+	for i, predicate := range outer.SeenPredicates {
+		if s.ctx.SemTable.EqualsExpr(predicate, s.subq.ExtractedSubquery) {
+			outer.SeenPredicates = append(outer.SeenPredicates[:i], outer.SeenPredicates[i+1:]...)
+
+			subQueryWasPredicate = true
+
+			// The `ExtractedSubquery` of an inner query is unique (due to the uniqueness of bind variable names)
+			// so we can stop after the first match.
+			break
+		}
 	}
-}
 
-func getTypeName(myvar interface{}) string {
-	return reflect.TypeOf(myvar).String()
-}
-
-func getR(r Routing) rBools {
-	switch r.(type) {
-	case *InfoSchemaRouting:
-		return rBools{infoSchema: true}
-	case *ReferenceRouting:
-		return rBools{ref: true}
-	case *DualRouting:
-		return rBools{dual: true}
-	case *TableRouting:
-		return rBools{table: true}
-	case *NoneRouting:
-		return rBools{none: true}
-	case *UnshardedRouting:
-		return rBools{unsharded: true}
-	case *TargetedRouting:
-		return rBools{targeted: true}
+	err := outer.resetRoutingSelections(s.ctx)
+	if err != nil {
+		return nil, err
 	}
-	return rBools{}
+
+	if subQueryWasPredicate { // TODO: should this not be done before the `resetRoutingSelection`?
+		// Copy Vindex predicates from the inner route to the upper route.
+		// If we can route based on some of these predicates, the routing can improve
+		outer.VindexPreds = append(outer.VindexPreds, inner.VindexPreds...)
+	}
+
+	op1.MergedWith = append(op1.MergedWith, op2)
+	return op1, nil
 }
 
-type rBools struct {
-	table,
-	infoSchema,
-	ref,
-	none,
-	unsharded,
-	dual,
-	targeted bool
+func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
+	s.subq.ExtractedSubquery.NeedsRewrite = true
+
+	// TODO implement me
+	panic("implement me")
+}
+
+func (d *mergeDecorator) mergeTables(outer, inner *TableRouting, op1, op2 *Route) (ops.Operator, error) {
+	merged, err := d.inner.mergeTables(outer, inner, op1, op2)
+	if err != nil {
+		return nil, err
+	}
+	d.f()
+	return merged, nil
+}
+
+func (d *mergeDecorator) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
+	outer.Routing = r
+	return outer, nil
 }

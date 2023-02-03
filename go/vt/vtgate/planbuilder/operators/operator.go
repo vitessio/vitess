@@ -34,6 +34,9 @@ The operators go through a few phases while planning:
 package operators
 
 import (
+	"fmt"
+
+	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -56,6 +59,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 	if err != nil {
 		return nil, err
 	}
+	fmt.Println("LOGICAL TREE")
+	dbg.P(op)
 
 	if err = CheckValid(op); err != nil {
 		return nil, err
@@ -65,6 +70,9 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 	if err != nil {
 		return nil, err
 	}
+
+	fmt.Println("PHYSICAL TREE")
+	dbg.P(op)
 
 	backup := Clone(op)
 
@@ -79,6 +87,8 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 		return nil, err
 	}
 
+	fmt.Println("POST HORIZON TREE")
+	dbg.P(op)
 	return op, err
 }
 

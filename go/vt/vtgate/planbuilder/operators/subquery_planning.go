@@ -36,15 +36,12 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 
 		var preds []sqlparser.Expr
 		preds, innerOp = unresolvedAndSource(ctx, innerOp)
-		merger := func(a, b *Route, routing Routing) (*Route, error) {
-			return mergeSubQueryOp(ctx, a, b, inner, routing)
-		}
 
 		newInner := &SubQueryInner{
 			Inner:             inner.Inner,
 			ExtractedSubquery: inner.ExtractedSubquery,
 		}
-		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, merger, ts)
+		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
 		if err != nil {
 			return nil, rewrite.SameTree, err
 		}
@@ -200,7 +197,7 @@ func tryMergeSubQueryOp(
 	outer, subq ops.Operator,
 	subQueryInner *SubQueryInner,
 	joinPredicates []sqlparser.Expr,
-	merger mergeFunc,
+	merger merger,
 	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
 ) (ops.Operator, error) {
 	switch outerOp := outer.(type) {
@@ -225,7 +222,7 @@ func tryMergeSubqueryWithRoute(
 	subq ops.Operator,
 	outerOp *Route,
 	joinPredicates []sqlparser.Expr,
-	merger mergeFunc,
+	merger merger,
 	subQueryInner *SubQueryInner,
 	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
 ) (ops.Operator, error) {
@@ -234,9 +231,9 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	if outerOp.Routing.OpCode() == engine.Reference && !subqueryRoute.IsSingleShard() {
-		return nil, nil
-	}
+	// if outerOp.Routing.OpCode() == engine.Reference && !subqueryRoute.IsSingleShard() {
+	// 	return nil, nil
+	// }
 
 	deps := ctx.SemTable.DirectDeps(subQueryInner.ExtractedSubquery.Subquery)
 	outer := lhs.Merge(TableID(outerOp))
@@ -244,7 +241,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	merged, err := Merge(ctx, outerOp, subq, nil, nil) // TODO: need to fix this
+	merged, err := Merge(ctx, outerOp, subq, joinPredicates, merger) // TODO: need to fix this
 	if err != nil {
 		return nil, err
 	}
@@ -259,32 +256,32 @@ func tryMergeSubqueryWithRoute(
 	}
 
 	// Special case: Inner query won't return any results / is not routable.
-	if subqueryRoute.Routing.OpCode() == engine.None {
-		merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
-		if err != nil {
-			return nil, err
-		}
-		return merged, err
-	}
+	// if subqueryRoute.Routing.OpCode() == engine.None {
+	// 	merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	// 	return merged, err
+	// }
 
 	// Inner subqueries can be merged with the outer subquery as long as
 	// the inner query is a single column selection, and that single column has a matching
 	// vindex on the outer query's operand.
 	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
-		merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
-
-		if err != nil {
-			return nil, err
-		}
-
-		if merged != nil {
-			// since we inlined the subquery into the outer query, new vindex options might have been enabled,
-			// so we go over our current options to check if anything better has come up.
-
-			panic("todo")
-			// merged.PickBestAvailableVindex()
-			//return merged, err
-		}
+		// 	merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
+		//
+		// 	if err != nil {
+		// 		return nil, err
+		// 	}
+		//
+		// 	if merged != nil {
+		// 		// since we inlined the subquery into the outer query, new vindex options might have been enabled,
+		// 		// so we go over our current options to check if anything better has come up.
+		//
+		// 		panic("todo")
+		// 		// merged.PickBestAvailableVindex()
+		// 		// return merged, err
+		// 	}
 	}
 	return nil, nil
 }
@@ -294,7 +291,7 @@ func tryMergeSubqueryWithJoin(
 	subq ops.Operator,
 	outerOp *ApplyJoin,
 	joinPredicates []sqlparser.Expr,
-	merger mergeFunc,
+	merger merger,
 	subQueryInner *SubQueryInner,
 	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
 ) (ops.PhysicalOperator, error) {
@@ -303,13 +300,13 @@ func tryMergeSubqueryWithJoin(
 	if outerOp.LeftJoin {
 		return nil, nil
 	}
-	newMergefunc := func(a, b *Route, routing Routing) (*Route, error) {
-		rt, err := merger(a, b, routing)
-		if err != nil {
-			return nil, err
-		}
-		outerOp.RHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.RHS, outerOp, subQueryInner)
-		return rt, err
+	newMergefunc := &mergeDecorator{
+		inner: merger,
+		f: func() error {
+			var err error
+			outerOp.RHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.RHS, outerOp, subQueryInner)
+			return err
+		},
 	}
 	merged, err := tryMergeSubQueryOp(ctx, outerOp.LHS, subq, subQueryInner, joinPredicates, newMergefunc, lhs)
 	if err != nil {
@@ -320,14 +317,12 @@ func tryMergeSubqueryWithJoin(
 		return outerOp, nil
 	}
 
-	newMergefunc = func(a, b *Route, routing Routing) (*Route, error) {
-		rt, err := merger(a, b, routing)
-		if err != nil {
-			return nil, err
-		}
-		outerOp.LHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.LHS, outerOp, subQueryInner)
-		return rt, err
+	newMergefunc.f = func() error {
+		var err error
+		outerOp.RHS, err = rewriteColumnsInSubqueryOpForJoin(ctx, outerOp.LHS, outerOp, subQueryInner)
+		return err
 	}
+
 	merged, err = tryMergeSubQueryOp(ctx, outerOp.RHS, subq, subQueryInner, joinPredicates, newMergefunc, lhs.Merge(TableID(outerOp.LHS)))
 	if err != nil {
 		return nil, err

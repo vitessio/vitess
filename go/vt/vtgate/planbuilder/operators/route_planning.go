@@ -450,8 +450,6 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 	return pushJoinPredicates(ctx, joinPredicates, join)
 }
 
-type mergeFunc func(a, b *Route, routing Routing) (*Route, error)
-
 func operatorsToRoutes(a, b ops.Operator) (*Route, *Route) {
 	aRoute, ok := a.(*Route)
 	if !ok {
