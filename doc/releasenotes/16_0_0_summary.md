@@ -85,6 +85,11 @@ The flag `disable-replication-manager` is deprecated and will be removed in a la
 
 ### <a id="breaking-changes"/>  Breaking Changes
 
+#### VTGate Advertised MySQL Version
+
+VTGate now advertises MySQL version 8.0.31. This is a breaking change for clients that rely on the VTGate advertised MySQL version and still use MySQL 5.7.
+The users can set the `mysql_server_version` flag to advertise the correct version.
+
 #### <a id="default-mysql-version"/> Default MySQL version on Docker
 
 The default major MySQL version used by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the default patch version of the `vitess/lite:mysql80` image goes from `8.0.23` to `8.0.31`.
