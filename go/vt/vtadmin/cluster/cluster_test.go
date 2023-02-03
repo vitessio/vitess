@@ -977,7 +977,7 @@ func TestFindWorkflows(t *testing.T) {
 			},
 			keyspaces: []string{"ks2"},
 			opts: cluster.FindWorkflowsOptions{
-				IgnoreKeyspaces: sets.NewString("ks2"),
+				IgnoreKeyspaces: sets.New[string]("ks2"),
 			},
 			expected: &vtadminpb.ClusterWorkflows{
 				Workflows: []*vtadminpb.Workflow{
@@ -1047,7 +1047,7 @@ func TestFindWorkflows(t *testing.T) {
 			},
 			keyspaces: nil,
 			opts: cluster.FindWorkflowsOptions{
-				IgnoreKeyspaces: sets.NewString("ks2"),
+				IgnoreKeyspaces: sets.New[string]("ks2"),
 			},
 			expected: &vtadminpb.ClusterWorkflows{
 				Workflows: []*vtadminpb.Workflow{
