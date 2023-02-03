@@ -312,9 +312,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	m := sync.Mutex{} // guards access to the following maps during concurrent calls to scanWorkflow
 	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
 	sourceKeyspaceByWorkflow := make(map[string]string, len(results))
-	sourceShardsByWorkflow := make(map[string]sets.String, len(results))
+	sourceShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	targetKeyspaceByWorkflow := make(map[string]string, len(results))
-	targetShardsByWorkflow := make(map[string]sets.String, len(results))
+	targetShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	maxVReplicationLagByWorkflow := make(map[string]float64, len(results))
 
 	// We guarantee the following invariants when this function is called for a
@@ -496,8 +496,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				}
 
 				workflowsMap[workflowName] = workflow
-				sourceShardsByWorkflow[workflowName] = sets.NewString()
-				targetShardsByWorkflow[workflowName] = sets.NewString()
+				sourceShardsByWorkflow[workflowName] = sets.New[string]()
+				targetShardsByWorkflow[workflowName] = sets.New[string]()
 			}
 
 			scanWorkflowWg.Add(1)
@@ -682,12 +682,12 @@ ORDER BY
 
 		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: sourceKeyspace,
-			Shards:   sourceShards.List(),
+			Shards:   sets.List(sourceShards),
 		}
 
 		workflow.Target = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: targetKeyspace,
-			Shards:   targetShards.List(),
+			Shards:   sets.List(targetShards),
 		}
 
 		workflow.MaxVReplicationLag = int64(maxVReplicationLag)

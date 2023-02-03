@@ -308,7 +308,7 @@ func getVReplicationWorkflowSubType(row sqltypes.RowNamedValues) binlogdatapb.VR
 // this function should be unexported. Consequently, YOU SHOULD NOT DEPEND ON
 // THIS FUNCTION EXTERNALLY.
 func CompareShards(ctx context.Context, keyspace string, shards []*topo.ShardInfo, ts *topo.Server) error {
-	shardSet := sets.NewString()
+	shardSet := sets.New[string]()
 	for _, si := range shards {
 		shardSet.Insert(si.ShardName())
 	}
@@ -318,19 +318,19 @@ func CompareShards(ctx context.Context, keyspace string, shards []*topo.ShardInf
 		return err
 	}
 
-	topoShardSet := sets.NewString(topoShards...)
+	topoShardSet := sets.New[string](topoShards...)
 	if !shardSet.Equal(topoShardSet) {
 		wfExtra := shardSet.Difference(topoShardSet)
 		topoExtra := topoShardSet.Difference(shardSet)
 
 		var rec concurrency.AllErrorRecorder
 		if wfExtra.Len() > 0 {
-			wfExtraSorted := wfExtra.List()
+			wfExtraSorted := sets.List(wfExtra)
 			rec.RecordError(fmt.Errorf("switch command shards not in topo: %v", wfExtraSorted))
 		}
 
 		if topoExtra.Len() > 0 {
-			topoExtraSorted := topoExtra.List()
+			topoExtraSorted := sets.List(topoExtra)
 			rec.RecordError(fmt.Errorf("topo shards not in switch command: %v", topoExtraSorted))
 		}
 
