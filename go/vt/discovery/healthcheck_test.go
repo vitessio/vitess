@@ -709,22 +709,28 @@ func TestRemoveTablet(t *testing.T) {
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
 
-	// Now confirm that when a tablet's type changes between when it's added to the cache
-	// and when it's removed, that the tablet is entirely removed from the cache since
-	// in the secondary maps it's keyed in part by tablet type.
-	// Note: we are using GetTabletStats here to check the healthData map (rather than
-	// the healthy map that we checked above) because that is the data structure that
-	// is used when printing the contents of the healthcheck cache in the /debug/status
-	// endpoint and in the SHOW VITESS_TABLETS; SQL command output.
+	// Now confirm that when a tablet's type changes between when it's added to the
+	// cache and when it's removed, that the tablet is entirely removed from the
+	// cache since in the secondary maps it's keyed in part by tablet type.
+	// Note: we are using GetTabletStats here to check the healthData map (rather
+	// than the healthy map that we checked above) because that is the data
+	// structure that is used when printing the contents of the healthcheck cache
+	// in the /debug/status endpoint and in the SHOW VITESS_TABLETS; SQL command
+	// output.
 
 	// Add the tablet back.
 	hc.AddTablet(tablet)
-	// Receive and discard the initial result.
+	// Receive and discard the initial result as we have not yet sent the first
+	// StreamHealthResponse with the dynamic serving and stats information.
 	<-resultChan
+	// Send the first StreamHealthResponse with the dynamic serving and stats
+	// information.
 	input <- shrReplica
+	<-resultChan
 	// Confirm it's there in the cache.
 	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	mustMatch(t, want, a, "unexpected result")
+
 	// Change the tablet type to RDONLY.
 	tablet.Type = topodatapb.TabletType_RDONLY
 	shrRdonly := &querypb.StreamHealthResponse{
@@ -734,16 +740,21 @@ func TestRemoveTablet(t *testing.T) {
 		TabletExternallyReparentedTimestamp: 0,
 		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.4},
 	}
-	// Now replace it, which does a Remove and Add. The tablet should
-	// be removed from the cache and all its maps even though the
-	// tablet type had changed in-between the initial Add and Remove.
+
+	// Now Replace it, which does a Remove and Add. The tablet should be removed
+	// from the cache and all its maps even though the tablet type had changed
+	// in-between the initial Add and Remove.
 	hc.ReplaceTablet(tablet, tablet)
+	// Receive and discard the initial result as we have not yet sent the first
+	// StreamHealthResponse with the dynamic serving and stats information.
+	<-resultChan
 	// Confirm that the old entry is gone.
 	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
-	// Receive and discard the initial result.
-	<-resultChan
+	// Send the first StreamHealthResponse with the dynamic serving and stats
+	// information.
 	input <- shrRdonly
+	<-resultChan
 	// Confirm that the new entry is there in the cache.
 	want = []*TabletHealth{{
 		Tablet:               tablet,
@@ -754,8 +765,9 @@ func TestRemoveTablet(t *testing.T) {
 	}}
 	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY})
 	mustMatch(t, want, a, "unexpected result")
-	// Delete the tablet, confirm again that it's gone in both
-	// tablet type forms.
+
+	// Delete the tablet, confirm again that it's gone in both tablet type
+	// forms.
 	hc.RemoveTablet(tablet)
 	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
