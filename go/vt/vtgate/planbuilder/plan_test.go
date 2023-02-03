@@ -110,6 +110,7 @@ func (*nameLkpIndex) Cost() int                            { return 3 }
 func (*nameLkpIndex) IsUnique() bool                       { return false }
 func (*nameLkpIndex) NeedsVCursor() bool                   { return false }
 func (*nameLkpIndex) AllowBatch() bool                     { return true }
+func (*nameLkpIndex) AutoCommitEnabled() bool              { return false }
 func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil

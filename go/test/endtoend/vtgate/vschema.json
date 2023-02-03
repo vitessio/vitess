@@ -79,6 +79,16 @@
         "to": "keyspace_id"
       },
       "owner": "t9"
+    },
+    "t10_id_to_keyspace_id_idx": {
+      "type": "lookup_unique",
+      "params": {
+        "autocommit": "true",
+        "table": "t10_id_to_keyspace_id_idx",
+        "from": "id",
+        "to": "keyspace_id"
+      },
+      "owner": "t10"
     }
   },
   "tables": {
@@ -265,6 +275,26 @@
       ]
     },
     "t9_id_to_keyspace_id_idx": {
+      "column_vindexes": [
+        {
+          "column": "id",
+          "name": "hash"
+        }
+      ]
+    },
+    "t10": {
+      "column_vindexes": [
+        {
+          "column": "sharding_key",
+          "name": "hash"
+        },
+        {
+          "column": "id",
+          "name": "t10_id_to_keyspace_id_idx"
+        }
+      ]
+    },
+    "t10_id_to_keyspace_id_idx": {
       "column_vindexes": [
         {
           "column": "id",
