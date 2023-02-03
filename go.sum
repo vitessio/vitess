@@ -582,8 +582,6 @@ github.com/onsi/gomega v1.7.0/go.mod h1:ex+gbHU/CVuBBDIJjb2X0qEXbFg53c61hWP/1Cpa
 github.com/onsi/gomega v1.7.1/go.mod h1:XdKZgCCFLUoM/7CFJVPcG8C1xQ1AJ0vpAezJrB7JYyY=
 github.com/onsi/gomega v1.10.3 h1:gph6h/qe9GSUw1NhH1gp+qb+h8rXD8Cy60Z32Qw3ELA=
 github.com/onsi/gomega v1.10.3/go.mod h1:V9xEwhxec5O8UDM77eCW8vLymOMltsqPVYWrpDsH8xc=
-github.com/openark/golib v0.0.0-20210531070646-355f37940af8 h1:9ciIHNuyFqRWi9NpMNw9sVLB6z1ItpP5ZhTY9Q1xVu4=
-github.com/openark/golib v0.0.0-20210531070646-355f37940af8/go.mod h1:1jj8x1eDVZxgc/Z4VyamX4qTbAdHPUQA6NeVtCd8Sl8=
 github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02 h1:0R5mDLI66Qw13qN80TRz85zthQ2nf2+uDyiV23w6c3Q=
 github.com/opentracing-contrib/go-grpc v0.0.0-20180928155321-4b5a12d3ff02/go.mod h1:JNdpVEzCpXBgIiv4ds+TzhN1hrtxq6ClLrTlT9OQRSc=
 github.com/opentracing/opentracing-go v1.1.0 h1:pWlfV3Bxv7k65HYwkikxat0+s3pV4bsqf19k25Ur8rU=
