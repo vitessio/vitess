@@ -3036,7 +3036,7 @@ func (*VarPop) iExpr()                             {}
 func (*VarSamp) iExpr()                            {}
 func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
-func (*PointExpr) iExpr()                              {}
+func (*PointExpr) iExpr()                          {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}

@@ -3623,5 +3623,4 @@ func (node *PointExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString(", ")
 	buf.printExpr(node, node.YCordinate, true)
 	buf.WriteByte(')')
-
 }
