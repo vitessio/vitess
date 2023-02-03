@@ -10,6 +10,7 @@
   - **[Incremental backup and point in time recovery](#inc-backup)**
   - **[Replication manager removal and VTOrc becomes mandatory](#repl-manager-removal)**
   - **[Breaking Changes](#breaking-changes)**
+    - [VTGate Advertised MySQL Version](#advertised-mysql-version)
     - [Default MySQL version on Docker](#default-mysql-version)
     - [vtctld UI Removal](#vtcltd-ui-removal)
     - [vtctld Flag Deprecation & Deletions](#vtctld-flag-deprecations)
@@ -85,7 +86,7 @@ The flag `disable-replication-manager` is deprecated and will be removed in a la
 
 ### <a id="breaking-changes"/>  Breaking Changes
 
-#### VTGate Advertised MySQL Version
+#### <a id="advertised-mysql-version"/> VTGate Advertised MySQL Version
 
 VTGate now advertises MySQL version 8.0.31. This is a breaking change for clients that rely on the VTGate advertised MySQL version and still use MySQL 5.7.
 The users can set the `mysql_server_version` flag to advertise the correct version.
