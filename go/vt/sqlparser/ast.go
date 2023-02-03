@@ -3090,7 +3090,7 @@ func (*ExtractValueExpr) iCallable()                   {}
 func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
-func (*PointExpr) iCallable()                              {}
+func (*PointExpr) iCallable()                          {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}
