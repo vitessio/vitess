@@ -252,7 +252,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	}()
 
 	// Start up mysqld as if we are mysqlctld provisioning a fresh tablet.
-	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, int32(mysqlPort))
+	mysqld, mycnf, err := mysqlctl.CreateMysqldAndMycnf(tabletAlias.Uid, mysqlSocket, mysqlPort)
 	if err != nil {
 		return fmt.Errorf("failed to initialize mysql config: %v", err)
 	}

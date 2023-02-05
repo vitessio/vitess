@@ -61,14 +61,14 @@ that shard.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			n, err := strconv.ParseInt(cmd.Flags().Arg(0), 10, 64)
+			n, err := strconv.Atoi(cmd.Flags().Arg(0))
 			if err != nil {
 				return err
 			}
 
 			cli.FinishedParsing(cmd)
 
-			shards, err := key.GenerateShardRanges(int(n))
+			shards, err := key.GenerateShardRanges(n)
 			if err != nil {
 				return err
 			}
