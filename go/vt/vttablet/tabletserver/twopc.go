@@ -40,51 +40,16 @@ import (
 )
 
 const (
-	sqlCreateSidecarDB = "create database if not exists %s"
-
-	sqlDropLegacy1 = "drop table if exists %s.redo_log_transaction"
-	sqlDropLegacy2 = "drop table if exists %s.redo_log_statement"
-	sqlDropLegacy3 = "drop table if exists %s.transaction"
-	sqlDropLegacy4 = "drop table if exists %s.participant"
-
 	// RedoStateFailed represents the Failed state for redo_state.
 	RedoStateFailed = 0
 	// RedoStatePrepared represents the Prepared state for redo_state.
-	RedoStatePrepared       = 1
-	sqlCreateTableRedoState = `create table if not exists %s.redo_state(
-  dtid varbinary(512),
-  state bigint,
-  time_created bigint,
-  primary key(dtid)
-	) engine=InnoDB`
-
-	sqlCreateTableRedoStatement = `create table if not exists %s.redo_statement(
-  dtid varbinary(512),
-  id bigint,
-  statement mediumblob,
-  primary key(dtid, id)
-	) engine=InnoDB`
-
+	RedoStatePrepared = 1
 	// DTStatePrepare represents the PREPARE state for dt_state.
 	DTStatePrepare = querypb.TransactionState_PREPARE
 	// DTStateCommit represents the COMMIT state for dt_state.
 	DTStateCommit = querypb.TransactionState_COMMIT
 	// DTStateRollback represents the ROLLBACK state for dt_state.
-	DTStateRollback       = querypb.TransactionState_ROLLBACK
-	sqlCreateTableDTState = `create table if not exists %s.dt_state(
-  dtid varbinary(512),
-  state bigint,
-  time_created bigint,
-  primary key(dtid)
-	) engine=InnoDB`
-
-	sqlCreateTableDTParticipant = `create table if not exists %s.dt_participant(
-  dtid varbinary(512),
-	id bigint,
-	keyspace varchar(256),
-	shard varchar(256),
-  primary key(dtid, id)
-	) engine=InnoDB`
+	DTStateRollback = querypb.TransactionState_ROLLBACK
 
 	sqlReadAllRedo = `select t.dtid, t.state, t.time_created, s.statement
 	from %s.redo_state t
@@ -174,28 +139,11 @@ func NewTwoPC(readPool *connpool.Pool) *TwoPC {
 
 // Open starts the TwoPC service.
 func (tpc *TwoPC) Open(dbconfigs *dbconfigs.DBConfigs) error {
-	dbname := "_vt"
 	conn, err := dbconnpool.NewDBConnection(context.TODO(), dbconfigs.DbaWithDB())
 	if err != nil {
 		return err
 	}
 	defer conn.Close()
-	statements := []string{
-		fmt.Sprintf(sqlCreateSidecarDB, dbname),
-		fmt.Sprintf(sqlDropLegacy1, dbname),
-		fmt.Sprintf(sqlDropLegacy2, dbname),
-		fmt.Sprintf(sqlDropLegacy3, dbname),
-		fmt.Sprintf(sqlDropLegacy4, dbname),
-		fmt.Sprintf(sqlCreateTableRedoState, dbname),
-		fmt.Sprintf(sqlCreateTableRedoStatement, dbname),
-		fmt.Sprintf(sqlCreateTableDTState, dbname),
-		fmt.Sprintf(sqlCreateTableDTParticipant, dbname),
-	}
-	for _, s := range statements {
-		if _, err := conn.ExecuteFetch(s, 0, false); err != nil {
-			return err
-		}
-	}
 	tpc.readPool.Open(dbconfigs.AppWithDB(), dbconfigs.DbaWithDB(), dbconfigs.DbaWithDB())
 	log.Infof("TwoPC: Engine open succeeded")
 	return nil

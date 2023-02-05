@@ -115,8 +115,8 @@ func (v *Verifier) checkQueryAgainstExpectation(query string, expectation Sequen
 	if expectation.ImmediatelyAfter() != nil {
 		if len(v.matched) == 0 {
 			result.Message = fmt.Sprintf(
-				"expected immediately after %q, but it is first",
-				expectation.ImmediatelyAfter().Query(),
+				"%q expected immediately after %q, but it is first",
+				query, expectation.ImmediatelyAfter().Query(),
 			)
 			return false
 		}

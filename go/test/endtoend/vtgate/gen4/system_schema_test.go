@@ -214,3 +214,15 @@ func TestMultipleSchemaPredicates(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "specifying two different database in the query is not supported")
 }
+
+func TestQuerySystemTables(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, `select * from sys.sys_config`)
+	utils.Exec(t, conn, "select * from mysql.`db`")
+	utils.Exec(t, conn, "select * from performance_schema.error_log")
+}

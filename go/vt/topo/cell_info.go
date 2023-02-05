@@ -194,7 +194,7 @@ func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, erro
 	var (
 		err         error
 		inputCells  []string
-		outputCells = sets.NewString() // Use a set to dedupe if the input cells list includes an alias and a cell in that alias.
+		outputCells = sets.New[string]() // Use a set to dedupe if the input cells list includes an alias and a cell in that alias.
 	)
 
 	if cells == "" {
@@ -238,5 +238,5 @@ func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, erro
 		}
 	}
 
-	return outputCells.List(), nil
+	return sets.List(outputCells), nil
 }

@@ -79,6 +79,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	} else {
 		require.Error(t, err)
 	}
+
+	err = clusterInstance.StartVTOrc(keyspace)
+	require.NoError(t, err)
 }
 
 func initializeCluster(t *testing.T) (int, error) {

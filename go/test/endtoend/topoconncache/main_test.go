@@ -213,6 +213,10 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		if err := clusterInstance.StartVTOrc(keyspaceName); err != nil {
+			return 1, err
+		}
+
 		if err := clusterInstance.VtctlclientProcess.ApplySchema(keyspaceName, fmt.Sprintf(sqlSchema, tableName)); err != nil {
 			return 1, err
 		}

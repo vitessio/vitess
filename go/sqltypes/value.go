@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -527,17 +528,12 @@ func (v *Value) decodeBitNum() ([]byte, error) {
 	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'b' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
-	bitBytes := v.val[2:]
-	ui, err := strconv.ParseUint(string(bitBytes), 2, 64)
-	if err != nil {
-		return nil, err
+	var i big.Int
+	_, ok := i.SetString(string(v.val), 0)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
-	hexVal := fmt.Sprintf("%x", ui)
-	decodedHexBytes, err := hex.DecodeString(hexVal)
-	if err != nil {
-		return nil, err
-	}
-	return decodedHexBytes, nil
+	return i.Bytes(), nil
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {
