@@ -33,5 +33,5 @@ done
 for shard in "-80" "80-"; do
 	# Wait for all the tablets to be up and registered in the topology server
 	# and for a primary tablet to be elected in the shard and become healthy/serving.
-	wait_for_healthy_shard customer "${shard}"
+	wait_for_healthy_shard customer "${shard}" || exit 1
 done;

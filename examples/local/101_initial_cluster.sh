@@ -48,7 +48,7 @@ vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-p
 
 # Wait for all the tablets to be up and registered in the topology server
 # and for a primary tablet to be elected in the shard and become healthy/serving.
-wait_for_healthy_shard commerce 0
+wait_for_healthy_shard commerce 0 || exit 1
 
 # create the schema
 vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce || fail "Failed to apply schema for the commerce keyspace"

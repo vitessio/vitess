@@ -31,4 +31,4 @@ vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-p
 
 # Wait for all the tablets to be up and registered in the topology server
 # and for a primary tablet to be elected in the shard and become healthy/serving.
-wait_for_healthy_shard customer 0
+wait_for_healthy_shard customer 0 || exit 1
