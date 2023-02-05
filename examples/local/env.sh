@@ -14,14 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+source ./lib/utils.sh
+
 hostname=$(hostname -f)
 vtctld_web_port=15000
 export VTDATAROOT="${VTDATAROOT:-${PWD}/vtdataroot}"
-
-function fail() {
-  echo "ERROR: $1"
-  exit 1
-}
 
 if [[ $EUID -eq 0 ]]; then
   fail "This script refuses to be run as root. Please switch to a regular user."

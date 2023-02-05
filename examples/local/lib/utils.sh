@@ -1,0 +1,72 @@
+#!/bin/bash
+
+# Wait for the given number of tablets to show up
+# for the keyspace/shard in the topology server.
+# Example (wait for 2 tables in commerce/0):
+#   wait_for_shard_tablets commerce 0 2
+function wait_for_shard_tablets() {
+	if [[ -z ${1} || -z ${2} || -z ${3} ]]; then
+		fail "A keyspace, shard, and number of tablets must be specified when waiting for tablets to come up"
+	fi
+	keyspace=${1}
+	shard=${2}
+	num_tablets=${3}
+
+	for _ in $(seq 0 200); do
+		cur_tablets=$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | wc -l)
+		if [[ ${cur_tablets} -eq ${num_tablets} ]]; then
+			break
+		fi
+		sleep 1
+	done;
+
+	cur_tablets=$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | wc -l)
+        if [[ ${cur_tablets} -lt ${num_tablets} ]]; then
+		fail "Timed out waiting for tablets to be up in ${keyspace}/${shard}"
+        fi
+}
+
+# Wait for a primary to be elected and become healthy
+# and serving in the given keyspace/shard. Example:
+#  wait_for_healthy_shard("commerce", "0")
+function wait_for_healthy_shard_primary() {
+	if [[ -z ${1} || -z ${2} ]]; then
+		fail "A keyspace and shard must be specified when waiting for a shard to be healthy"
+	fi
+	keyspace=${1}
+	shard=${2}
+	healthy_indicator="PRIMARY: Serving"
+
+	for _ in $(seq 0 200); do
+		if curl -s "http://$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | grep 'primary' | awk '{print $5}')/debug/status_details" | grep -q "${healthy_indicator}"; then
+			break
+		fi
+        	sleep 1
+	done;
+
+        curl -s "http://$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | grep -i 'primary' | awk '{print $5}')/debug/status_details" | grep -qi "${healthy_indicator}" || fail "Timed out waiting for primary to be elected and become healthy in ${keyspace}/${shard}"
+}
+
+# Wait for the specified number of shards to show
+# up in the topology server (3 is the default if
+# no value is specified) and then wait for one of
+# the tablets to be promoted to primary and become
+# healthy/serving. Example:
+#  wait_for_healthy_shard commerce 0
+function wait_for_healthy_shard() {
+	if [[ -z ${1} || -z ${2} ]]; then
+		fail "A keyspace and shard must be specified when waiting for tablets to come up"
+	fi
+	keyspace=${1}
+	shard=${2}
+	num_tablets=${3:-3}
+
+	wait_for_shard_tablets "${keyspace}" "${shard}" "${num_tablets}"
+	wait_for_healthy_shard_primary "${keyspace}" "${shard}"
+}
+
+# Print error message and exit with error code.
+function fail() {
+	echo "ERROR: ${1}"
+	exit 1
+}

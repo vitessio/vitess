@@ -17,6 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
+source ./lib/utils.sh
 source ./env.sh
 
 for i in 300 301 302; do
@@ -30,17 +31,7 @@ for i in 400 401 402; do
 done
 
 for shard in "-80" "80-"; do
-  # Wait for all the tablets to be up and registered in the topology server
-  for _ in $(seq 0 200); do
-  	vtctldclient GetTablets --keyspace customer --shard $shard | wc -l | grep -q "3" && break
-  	sleep 1
-  done;
-  vtctldclient GetTablets --keyspace customer --shard $shard | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in customer/$shard" && exit 1)
-
-  # Wait for a primary tablet to be elected in the shard
-  for _ in $(seq 0 200); do
-  	vtctldclient GetTablets --keyspace customer --shard $shard | grep -q "primary" && break
-  	sleep 1
-  done;
-  vtctldclient GetTablets --keyspace customer --shard $shard | grep "primary" || (echo "Timed out waiting for primary to be elected in customer/$shard" && exit 1)
+	# Wait for all the tablets to be up and registered in the topology server
+	# and for a primary tablet to be elected in the shard and become healthy/serving.
+	wait_for_healthy_shard customer "${shard}"
 done;
