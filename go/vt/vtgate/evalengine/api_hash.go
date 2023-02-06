@@ -57,7 +57,7 @@ func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqlt
 		}
 		return HashCode(math.Float64bits(f)), err
 
-	case sqltypes.IsSigned(typ):
+	case sqltypes.IsIntegral(typ):
 		switch {
 		case v.IsSigned():
 			i, err := v.ToInt64()
@@ -66,19 +66,7 @@ func NullsafeHashCodeInPlace(v sqltypes.Value, collation collations.ID, typ sqlt
 			u, err := v.ToUint64()
 			return HashCode(u), err
 		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a signed int: %v", v)
-		}
-
-	case sqltypes.IsUnsigned(typ):
-		switch {
-		case v.IsSigned():
-			i, err := v.ToInt64()
-			return HashCode(i), err
-		case v.IsUnsigned():
-			u, err := v.ToUint64()
-			return HashCode(u), err
-		default:
-			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a unsigned int: %v", v)
+			return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to an integral: %v", v)
 		}
 
 	case sqltypes.IsBinary(typ):
