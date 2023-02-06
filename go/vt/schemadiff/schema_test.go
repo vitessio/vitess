@@ -126,6 +126,24 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
+func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
+	// Schema will not contain any tables, just a view selecting from DUAL
+	queries := []string{
+		"create view v20 as select 1 from dual",
+	}
+	_, err := NewSchemaFromQueries(queries)
+	assert.NoError(t, err)
+}
+
+func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
+	// Schema will not contain any tables, just a view implicitly selecting from DUAL
+	queries := []string{
+		"create view v20 as select 1",
+	}
+	_, err := NewSchemaFromQueries(queries)
+	assert.NoError(t, err)
+}
+
 func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	// v7 and v8 depend on each other
 	queries := append(schemaTestCreateQueries,

@@ -623,7 +623,7 @@ func (c *Cluster) findTablets(ctx context.Context, filter func(*vtadminpb.Tablet
 // FindWorkflowsOptions is the set of options for FindWorkflows requests.
 type FindWorkflowsOptions struct {
 	ActiveOnly      bool
-	IgnoreKeyspaces sets.String
+	IgnoreKeyspaces sets.Set[string]
 	Filter          func(workflow *vtadminpb.Workflow) bool
 }
 
@@ -658,7 +658,7 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 	}
 
 	if opts.IgnoreKeyspaces == nil {
-		opts.IgnoreKeyspaces = sets.NewString()
+		opts.IgnoreKeyspaces = sets.New[string]()
 	}
 
 	if len(keyspaces) == 0 {
@@ -685,7 +685,7 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 		span.Finish()
 	} else if opts.IgnoreKeyspaces.Len() > 0 {
 		log.Warningf("Cluster.findWorkflows: IgnoreKeyspaces was set, but Keyspaces was not empty; ignoring IgnoreKeyspaces in favor of explicitly checking everything in Keyspaces: (%s)", strings.Join(keyspaces, ", "))
-		opts.IgnoreKeyspaces = sets.NewString()
+		opts.IgnoreKeyspaces = sets.New[string]()
 	}
 
 	// Annotate the parent span with some additional information about the call.
@@ -693,7 +693,7 @@ func (c *Cluster) findWorkflows(ctx context.Context, keyspaces []string, opts Fi
 		span.Annotate("num_keyspaces", len(keyspaces))
 		span.Annotate("keyspaces", strings.Join(keyspaces, ","))
 		span.Annotate("num_ignore_keyspaces", opts.IgnoreKeyspaces.Len())
-		span.Annotate("ignore_keyspaces", strings.Join(opts.IgnoreKeyspaces.List(), ","))
+		span.Annotate("ignore_keyspaces", strings.Join(sets.List(opts.IgnoreKeyspaces), ","))
 	}
 
 	clusterpb := c.ToProto()
@@ -799,7 +799,7 @@ func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsReque
 	)
 
 	for ks, shardSet := range shardsByKeyspace {
-		for _, shard := range shardSet.List() {
+		for _, shard := range sets.List(shardSet) {
 			wg.Add(1)
 
 			go func(keyspace, shard string) {
@@ -856,8 +856,8 @@ func (c *Cluster) GetBackups(ctx context.Context, req *vtadminpb.GetBackupsReque
 	return backups, nil
 }
 
-func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspaceShards []string) (map[string]sets.String, error) {
-	shardsByKeyspace := map[string]sets.String{}
+func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspaceShards []string) (map[string]sets.Set[string], error) {
+	shardsByKeyspace := map[string]sets.Set[string]{}
 
 	if len(keyspaces) == 0 && len(keyspaceShards) == 0 {
 		// Special case: if nothing was explicitly passed, get all shards in
@@ -868,7 +868,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 		}
 
 		for _, ks := range kss {
-			shardsByKeyspace[ks.Keyspace.Name] = sets.NewString()
+			shardsByKeyspace[ks.Keyspace.Name] = sets.New[string]()
 			for _, shard := range ks.Shards {
 				shardsByKeyspace[ks.Keyspace.Name].Insert(shard.Name)
 			}
@@ -884,7 +884,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 		}
 
 		if _, ok := shardsByKeyspace[ks]; !ok {
-			shardsByKeyspace[ks] = sets.NewString(shard)
+			shardsByKeyspace[ks] = sets.New[string](shard)
 			continue
 		}
 
@@ -897,7 +897,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 		// empty set to indicate we should take all shards in the GetKeyspace
 		// section below.
 		if _, ok := shardsByKeyspace[ks]; !ok {
-			shardsByKeyspace[ks] = sets.NewString()
+			shardsByKeyspace[ks] = sets.New[string]()
 		}
 	}
 
@@ -912,7 +912,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 	for ksName, shardSet := range shardsByKeyspace {
 		wg.Add(1)
 
-		go func(ksName string, shardSet sets.String) {
+		go func(ksName string, shardSet sets.Set[string]) {
 			defer wg.Done()
 
 			keyspace, err := c.GetKeyspace(ctx, ksName)
@@ -934,7 +934,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 				return
 			}
 
-			fullShardSet := sets.NewString()
+			fullShardSet := sets.New[string]()
 			for _, shard := range keyspace.Shards {
 				fullShardSet.Insert(shard.Name)
 			}
@@ -949,7 +949,7 @@ func (c *Cluster) getShardSets(ctx context.Context, keyspaces []string, keyspace
 
 			overlap := shardSet.Intersection(fullShardSet)
 			if overlap.Len() != shardSet.Len() {
-				log.Warningf("getShardSets(): keyspace %s is missing specified shards in cluster %s: %v", ksName, c.ID, shardSet.Difference(overlap).List())
+				log.Warningf("getShardSets(): keyspace %s is missing specified shards in cluster %s: %v", ksName, c.ID, sets.List(shardSet.Difference(overlap)))
 			}
 
 			m.Lock()
@@ -1684,7 +1684,7 @@ func (c *Cluster) GetShardReplicationPositions(ctx context.Context, req *vtadmin
 	)
 
 	for ks, shardSet := range shardsByKeyspace {
-		for _, shard := range shardSet.List() {
+		for _, shard := range sets.List(shardSet) {
 			wg.Add(1)
 
 			go func(keyspace, shard string) {
@@ -1890,7 +1890,7 @@ func (c *Cluster) GetWorkflow(ctx context.Context, keyspace string, name string,
 // requests.
 type GetWorkflowsOptions struct {
 	ActiveOnly      bool
-	IgnoreKeyspaces sets.String
+	IgnoreKeyspaces sets.Set[string]
 }
 
 // GetWorkflows returns a list of Workflows in this cluster, across the given
@@ -2046,7 +2046,7 @@ func (c *Cluster) reloadKeyspaceSchemas(ctx context.Context, req *vtadminpb.Relo
 			return resp.Keyspaces, nil
 		}
 
-		keyspaceNames := sets.NewString(req.Keyspaces...)
+		keyspaceNames := sets.New[string](req.Keyspaces...)
 
 		for _, ks := range resp.Keyspaces {
 			if keyspaceNames.Has(ks.Name) {
@@ -2184,7 +2184,7 @@ func (c *Cluster) reloadShardSchemas(ctx context.Context, req *vtadminpb.ReloadS
 
 // reloadTabletSchemas reloads schemas in one or more tablets in the cluster.
 func (c *Cluster) reloadTabletSchemas(ctx context.Context, req *vtadminpb.ReloadSchemasRequest) ([]*vtadminpb.ReloadSchemasResponse_TabletResult, error) {
-	aliasSet := sets.NewString()
+	aliasSet := sets.New[string]()
 	for _, alias := range req.Tablets {
 		aliasSet.Insert(topoproto.TabletAliasString(alias))
 	}

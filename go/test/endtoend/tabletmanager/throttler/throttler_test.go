@@ -247,6 +247,10 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 
 func TestLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	// Stop VTOrc because we want to stop replication to increase lag.
+	// We don't want VTOrc to fix this.
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 
 	t.Run("stopping replication", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)

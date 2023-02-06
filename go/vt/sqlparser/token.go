@@ -674,7 +674,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 
 	commentVersion, sql := ExtractMysqlComment(tkn.buf[start:tkn.Pos])
 
-	if MySQLVersion >= commentVersion {
+	if mySQLParserVersion >= commentVersion {
 		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
 		tkn.specialComment = NewStringTokenizer(sql)
 	}

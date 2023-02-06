@@ -294,12 +294,6 @@ func performResharding(t *testing.T) {
 	err := clusterInstance.VtctlclientProcess.ApplyVSchema(keyspaceName, vSchema)
 	require.NoError(t, err)
 
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "--", "--force", "ks/-80", shard0Primary.Alias)
-	require.NoError(t, err)
-
-	err = clusterInstance.VtctlProcess.ExecuteCommand("InitShardPrimary", "--", "--force", "ks/80-", shard1Primary.Alias)
-	require.NoError(t, err)
-
 	err = clusterInstance.VtctlclientProcess.ExecuteCommand("Reshard", "--", "--source_shards=0", "--target_shards=-80,80-", "Create", "ks.reshardWorkflow")
 	require.NoError(t, err)
 
@@ -459,6 +453,15 @@ func initializeCluster(t *testing.T) {
 	}
 
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard.Name, cell, primary.TabletUID)
+	require.NoError(t, err)
+
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard0.Name, cell, shard0Primary.TabletUID)
+	require.NoError(t, err)
+
+	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
+	require.NoError(t, err)
+
+	err = clusterInstance.StartVTOrc(keyspaceName)
 	require.NoError(t, err)
 
 	// Start vtgate

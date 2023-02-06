@@ -508,10 +508,10 @@ func TestSetVar(t *testing.T) {
 	executor, _, _, sbc := createExecutorEnv()
 	executor.normalize = true
 
-	oldVersion := sqlparser.MySQLVersion
-	sqlparser.MySQLVersion = "80000"
+	oldVersion := sqlparser.GetParserVersion()
+	sqlparser.SetParserVersion("80000")
 	defer func() {
-		sqlparser.MySQLVersion = oldVersion
+		sqlparser.SetParserVersion(oldVersion)
 	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
@@ -552,10 +552,10 @@ func TestSetVarShowVariables(t *testing.T) {
 	executor, _, _, sbc := createExecutorEnv()
 	executor.normalize = true
 
-	oldVersion := sqlparser.MySQLVersion
-	sqlparser.MySQLVersion = "80000"
+	oldVersion := sqlparser.GetParserVersion()
+	sqlparser.SetParserVersion("80000")
 	defer func() {
-		sqlparser.MySQLVersion = oldVersion
+		sqlparser.SetParserVersion(oldVersion)
 	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 

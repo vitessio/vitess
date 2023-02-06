@@ -233,6 +233,17 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 
 // SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
+	// temp logging, to be removed in v17
+	var newState string
+	switch on {
+	case false:
+		newState = "ReadWrite"
+	case true:
+		newState = "ReadOnly"
+	}
+	log.Infof("SetReadOnly setting connection setting of %s:%d to : %s",
+		mysqld.dbcfgs.Host, mysqld.dbcfgs.Port, newState)
+
 	query := "SET GLOBAL read_only = "
 	if on {
 		query += "ON"

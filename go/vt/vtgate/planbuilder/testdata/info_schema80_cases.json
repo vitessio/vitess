@@ -119,8 +119,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where 1 != 1",
-        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto'",
+        "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION, SRS_ID from information_schema.`COLUMNS` where 1 != 1",
+        "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, COLUMN_NAME, ORDINAL_POSITION, COLUMN_DEFAULT, IS_NULLABLE, DATA_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE, DATETIME_PRECISION, CHARACTER_SET_NAME, COLLATION_NAME, COLUMN_TYPE, COLUMN_KEY, EXTRA, `PRIVILEGES`, COLUMN_COMMENT, GENERATION_EXPRESSION, SRS_ID from information_schema.`COLUMNS` where `COLUMNS`.COLUMN_NAME = 'toto'",
         "Table": "information_schema.`COLUMNS`"
       }
     }
@@ -262,9 +262,9 @@
           "Sharded": false
         },
         "FieldQuery": "select RC.CONSTRAINT_NAME, ORDINAL_POSITION from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where 1 != 1",
-        "Query": "select RC.CONSTRAINT_NAME, ORDINAL_POSITION from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :KCU_TABLE_NAME and KCU.COLUMN_NAME = 'id' and KCU.REFERENCED_TABLE_SCHEMA = 'test' and KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
+        "Query": "select RC.CONSTRAINT_NAME, ORDINAL_POSITION from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as KCU join INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS as RC on KCU.CONSTRAINT_NAME = RC.CONSTRAINT_NAME where KCU.TABLE_SCHEMA = :__vtschemaname and KCU.TABLE_NAME = :KCU_TABLE_NAME and KCU.COLUMN_NAME = 'id' and KCU.REFERENCED_TABLE_SCHEMA = :__vtschemaname and KCU.CONSTRAINT_NAME = 'data_type_table_id_fkey' order by KCU.CONSTRAINT_NAME asc, KCU.COLUMN_NAME asc",
         "SysTableTableName": "[KCU_TABLE_NAME:VARCHAR(\"data_type_table\")]",
-        "SysTableTableSchema": "[VARCHAR(\"test\")]",
+        "SysTableTableSchema": "[VARCHAR(\"test\"), VARCHAR(\"test\")]",
         "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE, INFORMATION_SCHEMA.REFERENTIAL_CONSTRAINTS"
       }
     },
@@ -486,8 +486,8 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select CATALOG_NAME, SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH from information_schema.schemata where 1 != 1",
-        "Query": "select CATALOG_NAME, SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH from information_schema.schemata where schema_name = :__vtschemaname",
+        "FieldQuery": "select CATALOG_NAME, SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH, DEFAULT_ENCRYPTION from information_schema.schemata where 1 != 1",
+        "Query": "select CATALOG_NAME, SCHEMA_NAME, DEFAULT_CHARACTER_SET_NAME, DEFAULT_COLLATION_NAME, SQL_PATH, DEFAULT_ENCRYPTION from information_schema.schemata where schema_name = :__vtschemaname",
         "SysTableTableSchema": "[VARCHAR(\"user\")]",
         "Table": "information_schema.schemata"
       }
@@ -549,6 +549,44 @@
         "SysTableTableName": "[fk_table_name:VARCHAR(\"table_name\"), rc_table_name:VARCHAR(\"table_name\")]",
         "SysTableTableSchema": "[VARCHAR(\"table_schema\"), VARCHAR(\"table_schema\")]",
         "Table": "information_schema.key_column_usage, information_schema.referential_constraints"
+      }
+    }
+  },
+  {
+    "comment": "rails_query 5",
+    "query": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc using (constraint_schema, constraint_name) where 1 != 1",
+        "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc join information_schema.table_constraints as tc using (constraint_schema, constraint_name) where tc.table_schema = :__vtschemaname and tc.table_name = :tc_table_name and cc.constraint_schema = :__vtschemaname",
+        "SysTableTableName": "[tc_table_name:VARCHAR(\"table_name\")]",
+        "SysTableTableSchema": "[VARCHAR(\"table_schema\"), VARCHAR(\"constraint_schema\")]",
+        "Table": "information_schema.check_constraints, information_schema.table_constraints"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT cc.constraint_name AS 'name', cc.check_clause AS 'expression' FROM information_schema.check_constraints cc JOIN information_schema.table_constraints tc USING (constraint_schema, constraint_name) WHERE tc.table_schema = 'table_schema' AND tc.table_name = 'table_name' AND cc.constraint_schema = 'constraint_schema'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc, information_schema.table_constraints as tc where 1 != 1",
+        "Query": "select cc.constraint_name as `name`, cc.check_clause as expression from information_schema.check_constraints as cc, information_schema.table_constraints as tc where cc.constraint_schema = :__vtschemaname and tc.table_schema = :__vtschemaname and tc.table_name = :tc_table_name",
+        "SysTableTableName": "[tc_table_name:VARCHAR(\"table_name\")]",
+        "SysTableTableSchema": "[VARCHAR(\"constraint_schema\"), VARCHAR(\"table_schema\")]",
+        "Table": "information_schema.check_constraints, information_schema.table_constraints"
       }
     }
   },
@@ -683,6 +721,26 @@
         "Query": "select table_name from (select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from information_schema.`tables` where table_schema = :__vtschemaname and table_type = 'table_type' and table_name = 'table_name') as _subquery",
         "SysTableTableSchema": "[VARCHAR(\"table_schema\")]",
         "Table": "information_schema.`tables`"
+      }
+    }
+  },
+  {
+    "comment": "two predicates specifying the database for the same table work if the database is the same",
+    "query": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.`CONSTRAINT_CATALOG` = 'a'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT cc.constraint_name AS 'name' FROM information_schema.check_constraints cc  WHERE cc.constraint_schema = 'a' AND cc.`CONSTRAINT_CATALOG` = 'a'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where 1 != 1",
+        "Query": "select cc.constraint_name as `name` from information_schema.check_constraints as cc where cc.constraint_schema = :__vtschemaname and cc.CONSTRAINT_CATALOG = 'a'",
+        "SysTableTableSchema": "[VARCHAR(\"a\")]",
+        "Table": "information_schema.check_constraints"
       }
     }
   },
@@ -1052,10 +1110,10 @@
   },
   {
     "comment": "join of information_schema queries with select stars exprs",
-    "query": "select a.*, b.* from information_schema.a a, information_schema.b b",
-    "plan": {
+    "query": "select a.*, b.* from information_schema.CHECK_CONSTRAINTS a, information_schema.CHARACTER_SETS b",
+    "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select a.*, b.* from information_schema.a a, information_schema.b b",
+      "Original": "select a.*, b.* from information_schema.CHECK_CONSTRAINTS a, information_schema.CHARACTER_SETS b",
       "Instructions": {
         "OperatorType": "Route",
         "Variant": "DBA",
@@ -1063,9 +1121,24 @@
           "Name": "main",
           "Sharded": false
         },
-        "FieldQuery": "select a.*, b.* from information_schema.a as a, information_schema.b as b where 1 != 1",
-        "Query": "select a.*, b.* from information_schema.a as a, information_schema.b as b",
-        "Table": "information_schema.a, information_schema.b"
+        "FieldQuery": "select a.*, b.* from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b where 1 != 1",
+        "Query": "select a.*, b.* from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b",
+        "Table": "information_schema.CHECK_CONSTRAINTS, information_schema.CHARACTER_SETS"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select a.*, b.* from information_schema.CHECK_CONSTRAINTS a, information_schema.CHARACTER_SETS b",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select a.CONSTRAINT_CATALOG as CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA as CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME as CONSTRAINT_NAME, a.CHECK_CLAUSE as CHECK_CLAUSE, b.CHARACTER_SET_NAME as CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME as DEFAULT_COLLATE_NAME, b.DESCRIPTION as DESCRIPTION, b.MAXLEN as MAXLEN from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b where 1 != 1",
+        "Query": "select a.CONSTRAINT_CATALOG as CONSTRAINT_CATALOG, a.CONSTRAINT_SCHEMA as CONSTRAINT_SCHEMA, a.CONSTRAINT_NAME as CONSTRAINT_NAME, a.CHECK_CLAUSE as CHECK_CLAUSE, b.CHARACTER_SET_NAME as CHARACTER_SET_NAME, b.DEFAULT_COLLATE_NAME as DEFAULT_COLLATE_NAME, b.DESCRIPTION as DESCRIPTION, b.MAXLEN as MAXLEN from information_schema.CHECK_CONSTRAINTS as a, information_schema.CHARACTER_SETS as b",
+        "Table": "information_schema.CHARACTER_SETS, information_schema.CHECK_CONSTRAINTS"
       }
     }
   },
@@ -1542,6 +1615,82 @@
         "FieldQuery": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where 1 != 1",
         "Query": "select TABLE_CATALOG, TABLE_SCHEMA, TABLE_NAME, TABLE_TYPE, `ENGINE`, VERSION, `ROW_FORMAT`, TABLE_ROWS, `AVG_ROW_LENGTH`, DATA_LENGTH, MAX_DATA_LENGTH, INDEX_LENGTH, DATA_FREE, `AUTO_INCREMENT`, CREATE_TIME, UPDATE_TIME, CHECK_TIME, TABLE_COLLATION, `CHECKSUM`, CREATE_OPTIONS, TABLE_COMMENT from INFORMATION_SCHEMA.`TABLES` where TABLE_SCHEMA = 'ks' or TABLE_SCHEMA = 'main'",
         "Table": "INFORMATION_SCHEMA.`TABLES`"
+      }
+    }
+  },
+  {
+    "comment": "select variable, value from sys.sys_config",
+    "query": "select variable, value from sys.sys_config",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select variable, value from sys.sys_config",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select variable, value from sys.sys_config where 1 != 1",
+        "Query": "select variable, value from sys.sys_config",
+        "Table": "sys.sys_config"
+      }
+    }
+  },
+  {
+    "comment": "select host, db from mysql.`db`",
+    "query": "select host, db from mysql.`db`",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select host, db from mysql.`db`",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select host, db from mysql.db where 1 != 1",
+        "Query": "select host, db from mysql.db",
+        "Table": "mysql.db"
+      }
+    }
+  },
+  {
+    "comment": "select logged, prio from performance_schema.error_log",
+    "query": "select logged, prio from performance_schema.error_log",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select logged, prio from performance_schema.error_log",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select logged, prio from performance_schema.error_log where 1 != 1",
+        "Query": "select logged, prio from performance_schema.error_log",
+        "Table": "performance_schema.error_log"
+      }
+    }
+  },
+  {
+    "comment": "Non-existing information_schema table is still OK",
+    "query": "select TABLE_NAME from information_schema.apa",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select TABLE_NAME from information_schema.apa",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select TABLE_NAME from information_schema.apa where 1 != 1",
+        "Query": "select TABLE_NAME from information_schema.apa",
+        "Table": "information_schema.apa"
       }
     }
   }

@@ -25,6 +25,9 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/schema"
@@ -126,15 +129,56 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
+// syncSidecarDB is called either the first time a primary starts, or on subsequent loads, to possibly upgrade to a
+// new Vitess version. This is the only entry point into the sidecardb module to get the _vt database to the desired
+// schema for the running Vitess version.
+// There is some extra logging in here which can be removed in a future version (>v16) once the new schema init
+// functionality is stable.
+func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	log.Infof("In syncSidecarDB")
+	defer func(start time.Time) {
+		log.Infof("syncSidecarDB took %d ms", time.Since(start).Milliseconds())
+	}(time.Now())
+
+	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			_, err := conn.ExecuteFetch(sidecardb.UseSidecarDatabaseQuery, maxRows, false)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return conn.ExecuteFetch(query, maxRows, false)
+	}
+	if err := sidecardb.Init(ctx, exec); err != nil {
+		log.Errorf("Error in sidecardb.Init: %+v", err)
+		if se.env.Config().DB.HasGlobalSettings() {
+			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
+			return nil
+		}
+		log.Errorf("syncSidecarDB error %+v", err)
+		return err
+	}
+	log.Infof("syncSidecarDB done")
+	return nil
+}
+
 // EnsureConnectionAndDB ensures that we can connect to mysql.
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
 	ctx := tabletenv.LocalContext()
-	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	// We use AllPrivs since syncSidecarDB() might need to upgrade the schema
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
-		conn.Close()
 		se.dbCreationFailed = false
+		// upgrade _vt if required, for a tablet with an existing database
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			if err := se.syncSidecarDB(ctx, conn); err != nil {
+				conn.Close()
+				return err
+			}
+		}
+		conn.Close()
 		return nil
 	}
 	if tabletType != topodatapb.TabletType_PRIMARY {
@@ -165,6 +209,10 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+	// creates sidecar schema, the first time the database is created
+	if err := se.syncSidecarDB(ctx, conn); err != nil {
+		return err
+	}
 	return nil
 }
 
