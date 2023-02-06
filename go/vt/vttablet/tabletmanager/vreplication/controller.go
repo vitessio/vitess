@@ -95,6 +95,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
+	ct.lastWorkflowError = newLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
 	blpStats.State.Set(state)
