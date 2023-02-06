@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -49,10 +49,25 @@ func TestHashCodesRandom(t *testing.T) {
 		require.NoError(t, err)
 		if cmp == 0 {
 			equal++
-			require.Equalf(t, hash1, hash2, "values %s and %s are considered equal but produce different hash codes: %d & %d", v1.String(), v2.String(), hash1, hash2)
+			require.Equalf(t, hash1, hash2, "values %s and %s are considered equal but produce different hash codes: %d & %d (%v)", v1.String(), v2.String(), hash1, hash2, typ)
 		}
 	}
 	t.Logf("tested %d values, with %d equalities found\n", tested, equal)
+}
+
+func TestHashForDecimal(t *testing.T) {
+	hash1, err := NullsafeHashcode(sqltypes.NewDecimal("5989907846286453570"), collations.CollationBinaryID, 0)
+	require.NoError(t, err)
+	hash2, err := NullsafeHashcode(sqltypes.NewInt64(5989907846286453570), collations.CollationBinaryID, 0)
+	require.NoError(t, err)
+
+	t.Logf("%v %v", hash1, hash2)
+}
+
+func TestHash1(t *testing.T) {
+	hash1, err := NullsafeHashcode(sqltypes.NewVarChar("5989907846286453570"), collations.CollationBinaryID, sqltypes.Float64)
+	require.NoError(t, err)
+	t.Logf("%d", hash1)
 }
 
 func randomValues() (sqltypes.Value, sqltypes.Value) {

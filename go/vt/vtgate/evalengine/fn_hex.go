@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -24,6 +24,43 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
+
+type builtinHex struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinHex)(nil)
+
+func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	var encoded []byte
+	switch arg := arg.(type) {
+	case *evalBytes:
+		encoded = hexEncodeBytes(arg.bytes)
+	case evalNumeric:
+		encoded = hexEncodeUint(arg.toUint64().u)
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", arg.sqlType())
+	}
+
+	return newEvalText(encoded, collations.TypedCollation{
+		Collation:    env.DefaultCollation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}), nil
+}
+
+func (call *builtinHex) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env)
+	return sqltypes.VarChar, f
+}
 
 const hextable = "0123456789ABCDEF"
 
@@ -55,38 +92,4 @@ func hexEncodeUint(u uint64) []byte {
 	i--
 	a[i] = hextable[uint(u)]
 	return a[i:]
-}
-
-type builtinHex struct{}
-
-func (builtinHex) call(env *ExpressionEnv, args []EvalResult, result *EvalResult) {
-	tohex := &args[0]
-	if tohex.isNull() {
-		result.setNull()
-	}
-
-	var encoded []byte
-	switch tt := tohex.typeof(); {
-	case sqltypes.IsQuoted(tt):
-		encoded = hexEncodeBytes(tohex.bytes())
-	case sqltypes.IsNumber(tt):
-		tohex.makeUnsignedIntegral()
-		encoded = hexEncodeUint(tohex.uint64())
-	default:
-		throwEvalError(vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", tt.String()))
-	}
-
-	result.setRaw(sqltypes.VarChar, encoded, collations.TypedCollation{
-		Collation:    env.DefaultCollation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	})
-}
-
-func (builtinHex) typeof(env *ExpressionEnv, args []Expr) (sqltypes.Type, flag) {
-	if len(args) != 1 {
-		throwArgError("HEX")
-	}
-	_, f := args[0].typeof(env)
-	return sqltypes.VarChar, f
 }

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -81,10 +81,10 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	}
 
 	lit2, _ := expr.Right.(*Literal)
-	if lit2 != nil && lit2.Val.isTextual() {
-		expr.MatchCollation = lit2.Val.collation().Collation
+	if lit2, ok := lit2.inner.(*evalBytes); ok && (lit2.isText() || lit2.isBinary()) {
+		expr.MatchCollation = lit2.col.Collation
 		coll := collations.Local().LookupByID(expr.MatchCollation)
-		expr.Match = coll.Wildcard(lit2.Val.bytes(), 0, 0, 0)
+		expr.Match = coll.Wildcard(lit2.bytes, 0, 0, 0)
 	}
 	return nil
 }
@@ -107,8 +107,8 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 
 	for i, expr := range tuple {
 		if lit, ok := expr.(*Literal); ok {
-			thisColl := lit.Val.collation().Collation
-			thisTyp := lit.Val.typeof()
+			thisColl := evalCollation(lit.inner).Collation
+			thisTyp := lit.inner.sqlType()
 			if i == 0 {
 				collation = thisColl
 				typ = thisTyp
@@ -126,13 +126,13 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 		inexpr.Hashed = make(map[HashCode]int)
 		for i, expr := range tuple {
 			lit := expr.(*Literal)
-			hash, err := lit.Val.nullSafeHashcode()
+			hash, err := lit.inner.hash()
 			if err != nil {
 				inexpr.Hashed = nil
 				break
 			}
 			if collidx, collision := inexpr.Hashed[hash]; collision {
-				cmp, _, err := evalCompareAll(&lit.Val, &tuple[collidx].(*Literal).Val, true)
+				cmp, _, err := evalCompareAll(lit.inner, tuple[collidx].(*Literal).inner, true)
 				if cmp != 0 || err != nil {
 					inexpr.Hashed = nil
 					break
@@ -170,11 +170,11 @@ func (c *CallExpr) simplify(env *ExpressionEnv) error {
 	return c.Arguments.simplify(env)
 }
 
-func (c *WeightStringCallExpr) constant() bool {
+func (c *builtinWeightString) constant() bool {
 	return c.String.constant()
 }
 
-func (c *WeightStringCallExpr) simplify(env *ExpressionEnv) error {
+func (c *builtinWeightString) simplify(env *ExpressionEnv) error {
 	var err error
 	c.String, err = simplifyExpr(env, c.String)
 	return err
@@ -186,7 +186,7 @@ func simplifyExpr(env *ExpressionEnv, e Expr) (Expr, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &Literal{Val: res}, nil
+		return &Literal{inner: res.v}, nil
 	}
 	if err := e.simplify(env); err != nil {
 		return nil, err
