@@ -14,17 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the mysqld and vttablet instances
-# created by vttablet-up.sh
+# This is an example script that stops the etcd servers started by etcd-up.sh.
 
-source ./env.sh
+source "$(dirname ${BASH_SOURCE})/../env.sh"
 
-printf -v tablet_dir 'vt_%010d' $TABLET_UID
-pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`
-
-kill $pid
-
-# Wait for vttablet to die.
-while ps -p $pid > /dev/null; do sleep 1; done
-
-
+echo "Stopping etcd..."
+kill -9 `cat $VTDATAROOT/tmp/etcd.pid` 

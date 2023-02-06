@@ -1,9 +1,10 @@
 #!/bin/bash
 
-source ./env.sh
+script_dir="$(dirname ${BASH_SOURCE})"
+source "${script_dir}/../env.sh"
 
 log_dir="${VTDATAROOT}/tmp"
-web_dir="../../web/vtadmin"
+web_dir="${script_dir}/../../../web/vtadmin"
 
 vtadmin_api_port=14200
 vtadmin_web_port=14201
@@ -18,7 +19,7 @@ vtadmin \
   --logtostderr \
   --alsologtostderr \
   --rbac \
-  --rbac-config="./vtadmin/rbac.yaml" \
+  --rbac-config="${script_dir}/../vtadmin/rbac.yaml" \
   --cluster "id=local,name=local,discovery=staticfile,discovery-staticfile-path=./vtadmin/discovery.json,tablet-fqdn-tmpl={{ .Tablet.Hostname }}:15{{ .Tablet.Alias.Uid }}" \
   > "${log_dir}/vtadmin-api.out" 2>&1 &
 

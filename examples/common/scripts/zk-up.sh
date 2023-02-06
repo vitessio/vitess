@@ -16,7 +16,7 @@
 
 # This is an example script that creates a quorum of ZooKeeper servers.
 
-source ./env.sh
+source "$(dirname ${BASH_SOURCE})/../env.sh"
 
 cell=${CELL:-'test'}
 

@@ -19,11 +19,8 @@
 set -e
 cell=${CELL:-'test'}
 
-script_root=$(dirname "${BASH_SOURCE[0]}")
-
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source ./env.sh
+script_dir="$(dirname ${BASH_SOURCE})"
+source "${script_dir}/../env.sh"
 
 case $(uname) in
   Linux) ;;
@@ -47,7 +44,7 @@ sleep 15
 KUBECTL="k3s kubectl --kubeconfig=${K8S_KUBECONFIG}"
 
 # Create the CRD for vitesstopologynodes
-$KUBECTL create -f ../../go/vt/topo/k8stopo/VitessTopoNodes-crd.yaml
+$KUBECTL create -f "${script_dir}/../../../go/vt/topo/k8stopo/VitessTopoNodes-crd.yaml"
 
 # Add the CellInfo description for the cell
 set +e

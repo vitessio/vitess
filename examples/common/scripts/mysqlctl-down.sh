@@ -17,7 +17,7 @@
 # This is an example script that stops the mysqld and vttablet instances
 # created by vttablet-up.sh
 
-source ./env.sh
+source "$(dirname ${BASH_SOURCE})/../env.sh"
 
 cell=${CELL:-'test'}
 uid=$TABLET_UID

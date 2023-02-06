@@ -14,17 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# This is an example script that stops the k3s server started by k3s-up.sh.
+# This is an example script that stops vtctld.
 
-set -e
+source "$(dirname ${BASH_SOURCE})/../env.sh"
 
-# shellcheck source=./env.sh
-# shellcheck disable=SC1091
-source ./env.sh
-
-# Stop K3s server.
-echo "Stopping k3s server..."
-
-pid=`cat $VTDATAROOT/tmp/k3s.pid`
-echo "Stopping k3s..."
-kill -9 $pid
+echo "Stopping vtctld..."
+kill -9 `cat $VTDATAROOT/tmp/vtctld.pid`

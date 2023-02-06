@@ -14,8 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-source ./lib/utils.sh
-source ./env.sh
+source ../common/env.sh
 
 # apply sharding vschema
 vtctldclient ApplyVSchema --vschema-file main_vschema_sharded.json main || fail "Failed to apply vschema for the sharded main keyspace"
@@ -30,5 +29,5 @@ vtctlclient CreateLookupVindex -- --tablet_types=PRIMARY main "$(cat lookup_vind
 # Can see on vttablet status page Vreplication that copy is complete
 sleep 5
 
-#externalize vindex
+# externalize vindex
 vtctlclient ExternalizeVindex main.customer_region_lookup || fail "Failed to externalize customer_region_lookup vindex in the main keyspace"

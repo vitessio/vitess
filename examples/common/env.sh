@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-source ./lib/utils.sh
+source "$(dirname ${BASH_SOURCE})/lib/utils.sh"
 
 hostname=$(hostname -f)
 vtctld_web_port=15000

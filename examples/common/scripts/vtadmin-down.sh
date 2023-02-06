@@ -1,6 +1,6 @@
 #!/bin/bash
 
-source ./env.sh
+source "$(dirname ${BASH_SOURCE})/../env.sh"
 
 echo "Stopping vtadmin-web..."
 kill -9 "$(cat "$VTDATAROOT/tmp/vtadmin-web.pid")"

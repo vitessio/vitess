@@ -14,7 +14,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-source ./env.sh
+source "$(dirname ${BASH_SOURCE})/../env.sh"
 
 cell=${CELL:-'test'}
 keyspace=${KEYSPACE:-'test_keyspace'}

@@ -16,7 +16,7 @@
 
 # This is an example script that starts a single vtgate.
 
-source ./env.sh
+source "$(dirname ${BASH_SOURCE})/../env.sh"
 
 cell=${CELL:-'test'}
 web_port=15001

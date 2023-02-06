@@ -18,12 +18,11 @@
 # resharding it also splits the vschema between the two keyspaces
 # old (commerce) and new (customer)
 
-source ./lib/utils.sh
-source ./env.sh
+source ../common/env.sh
 
 for i in 200 201 202; do
-	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
-	CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
+	CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 
 # set the correct durability policy for the keyspace

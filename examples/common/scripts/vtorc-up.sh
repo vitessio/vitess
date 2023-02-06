@@ -1,6 +1,7 @@
 #!/bin/bash
 
-source ./env.sh
+script_dir="$(dirname ${BASH_SOURCE})"
+source "${script_dir}/../env.sh"
 
 log_dir="${VTDATAROOT}/tmp"
 port=16000
@@ -9,7 +10,7 @@ vtorc \
   $TOPOLOGY_FLAGS \
   --logtostderr \
   --alsologtostderr \
-  --config="./vtorc/config.json" \
+  --config="${script_dir}/../vtorc/config.json" \
   --port $port \
   > "${log_dir}/vtorc.out" 2>&1 &
 

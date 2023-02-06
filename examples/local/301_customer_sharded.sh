@@ -20,10 +20,9 @@
 # it also changes the customer vschema from unsharded to sharded and
 # sets up the necessary vindexes
 
-source ./lib/utils.sh
-source ./env.sh
+source ../common/env.sh
 
 vtctldclient ApplySchema --sql-file create_commerce_seq.sql commerce || fail "Failed to create sequence tables in the commerce keyspace"
 vtctldclient ApplyVSchema --vschema-file vschema_commerce_seq.json commerce || fail "Failed to create vschema sequences in the commerce keyspace"
 vtctldclient ApplyVSchema --vschema-file vschema_customer_sharded.json customer || fail "Failed to create vschema in sharded customer keyspace"
-vtctldclient ApplySchema --sql-file create_customer_sharded.sql customer fail || "Failed to create schema in sharded customer keyspace"
+vtctldclient ApplySchema --sql-file create_customer_sharded.sql customer || fail "Failed to create schema in sharded customer keyspace"
