@@ -55,7 +55,6 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -708,7 +707,7 @@ func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err
 	return pos, err
 }
 
-// terminateVReplMigration stops vreplication, then removes the vreplication entry for the given migration
+// terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
 	tmClient := e.tabletManagerClient()
 	defer tmClient.Close()
@@ -735,7 +734,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	return nil
 }
 
-// cutOverVReplMigration stops vreplication, then removes the vreplication entry for the given migration
+// cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
 	if err := e.incrementCutoverAttempts(ctx, s.workflow); err != nil {
 		return err
@@ -1413,9 +1412,9 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		}
 
 		{
-			// temporary hack. todo: this should be done when inserting any vreplication record across all workflow types
-			query := fmt.Sprintf("update %s.vreplication set workflow_type = %d where workflow = '%s'",
-				sidecardb.GetSidecarDBNameIdentifier(), binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
+			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
+			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
+				binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
 			if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
 			}
@@ -2141,7 +2140,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 
 	var onlyScheduleOneMigration sync.Once
 
-	r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectQueuedMigrations, sidecardb.GetSidecarDBNameIdentifier()))
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
 		return err
 	}
@@ -3353,7 +3352,7 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 	return err
 }
 
-// readVReplStream reads vreplication entries for given workflow
+// readVReplStream reads _vt.vreplication entries for given workflow
 func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing bool) (*VReplStream, error) {
 	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
 		sqltypes.StringBindVariable(uuid),
@@ -3540,7 +3539,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
-				// We check the vreplication table
+				// We check the _vt.vreplication table
 				s, err := e.readVReplStream(ctx, uuid, true)
 				if err != nil {
 					return countRunnning, cancellable, err
@@ -3776,7 +3775,7 @@ func (e *Executor) reloadSchema(ctx context.Context) error {
 	return tmClient.ReloadSchema(ctx, tablet.Tablet, "")
 }
 
-// deleteVReplicationEntry cleans up a vreplication entry; this function is called as part of
+// deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of
 // migration termination and as part of artifact cleanup
 func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlDeleteVReplStream,
@@ -4165,7 +4164,6 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 
 func (e *Executor) updateMySQLTable(ctx context.Context, uuid string, tableName string) error {
 	query, err := sqlparser.ParseAndBind(sqlUpdateMySQLTable,
-		sqltypes.StringBindVariable(sidecardb.GetSidecarDBName()),
 		sqltypes.StringBindVariable(tableName),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4520,7 +4518,7 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 	if err != nil {
 		return result, err
 	}
-	r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectQueuedMigrations, sidecardb.GetSidecarDBNameIdentifier()))
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
 		return result, err
 	}
@@ -4579,33 +4577,43 @@ func (e *Executor) submitCallbackIfNonConflicting(
 	}
 	// This is either singleton or singleton-context
 
-	e.migrationMutex.Lock()
-	defer e.migrationMutex.Unlock()
+	// This entire next logic is wrapped in an anonymous func just to get the migrationMutex released
+	// before calling the callback function. Reason is: the callback function itself may need to acquire
+	// the mutex. And specifically, one of the callback functions used is e.RetryMigration(), which does
+	// lock the mutex...
+	err = func() error {
+		e.migrationMutex.Lock()
+		defer e.migrationMutex.Unlock()
 
-	pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return err
+		}
+		switch {
+		case onlineDDL.StrategySetting().IsSingleton():
+			// We will reject this migration if there's any pending migration
+			if len(pendingUUIDs) > 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
+			}
+		case onlineDDL.StrategySetting().IsSingletonContext():
+			// We will reject this migration if there's any pending migration within a different context
+			for _, pendingUUID := range pendingUUIDs {
+				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
+				if err != nil {
+					return vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
+				}
+				if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
+				}
+				// no conflict? continue looking for other pending migrations
+			}
+		}
+		return nil
+	}()
 	if err != nil {
 		return nil, err
 	}
-	switch {
-	case onlineDDL.StrategySetting().IsSingleton():
-		// We will reject this migration if there's any pending migration
-		if len(pendingUUIDs) > 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
-		}
-	case onlineDDL.StrategySetting().IsSingletonContext():
-		// We will reject this migration if there's any pending migration within a different context
-		for _, pendingUUID := range pendingUUIDs {
-			pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
-			if err != nil {
-				return nil, vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
-			}
-			if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
-			}
-			// no conflict? continue looking for other pending migrations
-		}
-	}
-	// OK to go! We can go
+	// OK to go!
 	return callback()
 }
 
@@ -4673,7 +4681,6 @@ func (e *Executor) SubmitMigration(
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
 	submitQuery, err := sqlparser.ParseAndBind(sqlInsertMigration,
-		sqltypes.StringBindVariable(sidecardb.GetSidecarDBName()),
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
 		sqltypes.StringBindVariable(e.shard),
