@@ -933,7 +933,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 	if vc.warnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-			Code:    mysql.ERNotSupportedYet,
+			Code:    uint32(mysql.ERNotSupportedYet),
 			Message: fmt.Sprintf(format, params...),
 		})
 	}
@@ -945,7 +945,7 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 		return
 	}
 	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-		Code:    mysql.ERNotSupportedYet,
+		Code:    uint32(mysql.ERNotSupportedYet),
 		Message: message,
 	})
 }
