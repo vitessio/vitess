@@ -498,7 +498,7 @@ func (vr *vreplicator) setSQLMode(ctx context.Context, dbClient *vdbClient) (fun
 	if err != nil {
 		return resetFunc, err
 	}
-	if settings.WorkflowType == int32(binlogdatapb.VReplicationWorkflowType_OnlineDDL) {
+	if settings.WorkflowType == binlogdatapb.VReplicationWorkflowType_OnlineDDL {
 		vreplicationSQLMode = StrictSQLMode
 	}
 
