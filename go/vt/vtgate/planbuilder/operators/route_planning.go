@@ -553,7 +553,7 @@ func tryMerge(
 		}
 
 		if !sameKeyspace {
-			return nil, vterrors.VT12001("cross-shard correlated subquery")
+			return nil, nil
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)

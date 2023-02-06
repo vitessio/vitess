@@ -2427,51 +2427,7 @@
         ]
       }
     },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col) and u.id in (user_extra.col, 1)",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "user_extra_col": 0
-        },
-        "TableName": "user_extra_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-            "Query": "select user_extra.col from user_extra",
-            "Table": "user_extra"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col) and u.id in ::__vals",
-            "Table": "`user`",
-            "Values": [
-              "(:user_extra_col, INT64(1))"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "correlated subquery merge-able into a route of a join tree",
@@ -2691,51 +2647,7 @@
         ]
       }
     },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select u.m from user_extra join user u where u.id in (select m2 from user where user.id = u.id and user_extra.col = user.col and user.id in (select m3 from user_extra where user_extra.user_id = user.id)) and u.id in (user_extra.col, 1)",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "R:0",
-        "JoinVars": {
-          "user_extra_col": 0
-        },
-        "TableName": "user_extra_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
-            "Query": "select user_extra.col from user_extra",
-            "Table": "user_extra"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "IN",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select u.m from `user` as u where 1 != 1",
-            "Query": "select u.m from `user` as u where u.id in (select m2 from `user` where `user`.id = u.id and `user`.col = :user_extra_col and `user`.id in (select m3 from user_extra where user_extra.user_id = `user`.id)) and u.id in ::__vals",
-            "Table": "`user`",
-            "Values": [
-              "(:user_extra_col, INT64(1))"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "Correlated subquery in where clause",
@@ -2937,25 +2849,7 @@
         "Table": "`user`"
       }
     },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Scatter",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select id2 from `user` as uu where 1 != 1",
-        "Query": "select id2 from `user` as uu where id in (select id from `user` where id = uu.id and `user`.col in (select user_extra.col from user_extra where user_extra.user_id = uu.id))",
-        "Table": "`user`"
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
-    }
+    "gen4-plan": "VT12001: unsupported: cross-shard correlated subquery"
   },
   {
     "comment": "cross-shard subquery in IN clause.\n# Note the improved Underlying plan as SelectIN.",

@@ -226,6 +226,11 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
+	deps := ctx.SemTable.DirectDeps(subQueryInner.ExtractedSubquery.Subquery)
+	if !deps.IsSolvedBy(TableID(outerOp)) {
+		return nil, nil
+	}
+
 	merged, err := tryMerge(ctx, outerOp, subq, joinPredicates, merger)
 	if err != nil {
 		return nil, err
