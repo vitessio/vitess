@@ -24,9 +24,9 @@ import (
 	"sort"
 	"strings"
 
-	"go.uber.org/multierr"
-
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type tablesColumnsMap map[string]map[string]struct{}
@@ -772,13 +772,13 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 }
 
 func (s *Schema) ValidateViewReferences() error {
-	var errs error
+	errs := &concurrency.AllErrorRecorder{}
 	availableColumns := tablesColumnsMap{}
 
 	for _, e := range s.Entities() {
 		entityColumns, err := s.getEntityColumnNames(e.Name(), availableColumns)
 		if err != nil {
-			errs = multierr.Append(errs, err)
+			errs.RecordError(err)
 			continue
 		}
 		availableColumns[e.Name()] = map[string]struct{}{}
@@ -795,18 +795,18 @@ func (s *Schema) ValidateViewReferences() error {
 		tableAliases := map[string]string{}
 		tableReferences := map[string]struct{}{}
 		err := gatherTableInformationForView(view, availableColumns, tableReferences, tableAliases)
-		errs = multierr.Append(errs, err)
+		errs.RecordError(err)
 
 		// Now we can walk the view again and check each column expression
 		// to see if there's an existing column referenced.
 		err = gatherColumnReferenceInformationForView(view, availableColumns, tableReferences, tableAliases)
-		errs = multierr.Append(errs, err)
+		errs.RecordError(err)
 	}
-	return errs
+	return errs.AggrError(vterrors.Aggregate)
 }
 
 func gatherTableInformationForView(view *CreateViewEntity, availableColumns tablesColumnsMap, tableReferences map[string]struct{}, tableAliases map[string]string) error {
-	var errs error
+	errs := &concurrency.AllErrorRecorder{}
 	tableErrors := make(map[string]struct{})
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 		switch node := node.(type) {
@@ -825,7 +825,7 @@ func gatherTableInformationForView(view *CreateViewEntity, availableColumns tabl
 					View:  view.Name(),
 					Table: aliased,
 				}
-				errs = multierr.Append(errs, err)
+				errs.RecordError(err)
 				tableErrors[aliased] = struct{}{}
 				return true, nil
 			}
@@ -840,11 +840,11 @@ func gatherTableInformationForView(view *CreateViewEntity, availableColumns tabl
 		// parsing error. Forget about any view dependency issues we may have found. This is way more important
 		return err
 	}
-	return errs
+	return errs.AggrError(vterrors.Aggregate)
 }
 
 func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableColumns tablesColumnsMap, tableReferences map[string]struct{}, tableAliases map[string]string) error {
-	var errs error
+	errs := &concurrency.AllErrorRecorder{}
 	qualifiedColumnErrors := make(map[string]map[string]struct{})
 	unqualifiedColumnErrors := make(map[string]struct{})
 
@@ -853,10 +853,10 @@ func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableCo
 		case *sqlparser.ColName:
 			if node.Qualifier.IsEmpty() {
 				err := verifyUnqualifiedColumn(view, availableColumns, tableReferences, node.Name, unqualifiedColumnErrors)
-				errs = multierr.Append(errs, err)
+				errs.RecordError(err)
 			} else {
 				err := verifyQualifiedColumn(view, availableColumns, tableAliases, node, qualifiedColumnErrors)
-				errs = multierr.Append(errs, err)
+				errs.RecordError(err)
 			}
 		}
 		return true, nil
@@ -865,7 +865,7 @@ func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableCo
 		// parsing error. Forget about any view dependency issues we may have found. This is way more important
 		return err
 	}
-	return errs
+	return errs.AggrError(vterrors.Aggregate)
 }
 
 func verifyUnqualifiedColumn(view *CreateViewEntity, availableColumns tablesColumnsMap, tableReferences map[string]struct{}, nodeName sqlparser.IdentifierCI, unqualifiedColumnErrors map[string]struct{}) error {
