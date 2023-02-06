@@ -572,7 +572,7 @@
               "Name": "main",
               "Sharded": false
             },
-            "Expr": "'read-committed'",
+            "Expr": "'READ-COMMITTED'",
             "SupportSetVar": false
           }
         ],

@@ -22,6 +22,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/openark/golib/sqlutils"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
@@ -175,6 +176,26 @@ func TestRefreshTabletsInKeyspaceShard(t *testing.T) {
 		// We expect 1 tablet to be refreshed since that is the only one that has changed
 		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets)
 	})
+
+	t.Run("change the port and call refreshTabletsInKeyspaceShard again", func(t *testing.T) {
+		defer func() {
+			_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+				tablet.MysqlPort = 100
+				return nil
+			})
+			tab100.MysqlPort = 100
+		}()
+		// Let's assume tab100 restarted on a different pod. This would change its tablet hostname and port
+		_, err = ts.UpdateTabletFields(context.Background(), tab100.Alias, func(tablet *topodatapb.Tablet) error {
+			tablet.MysqlPort = 39293
+			return nil
+		})
+		require.NoError(t, err)
+		tab100.MysqlPort = 39293
+		// We expect 1 tablet to be refreshed since that is the only one that has changed
+		// Also the old tablet should be forgotten
+		verifyRefreshTabletsInKeyspaceShard(t, false, 1, tablets)
+	})
 }
 
 func TestShardPrimary(t *testing.T) {
@@ -258,6 +279,7 @@ func verifyRefreshTabletsInKeyspaceShard(t *testing.T, forceRefresh bool, instan
 	for _, tablet := range tablets {
 		verifyTabletInfo(t, tablet, "")
 	}
+	verifyTabletCount(t, len(tablets))
 	// Verify that refresh as many tablets as expected
 	assert.EqualValues(t, instanceRefreshRequired, instancesRefreshed.Load())
 }
@@ -279,4 +301,16 @@ func verifyTabletInfo(t *testing.T, tabletWanted *topodatapb.Tablet, errString s
 		diff := cmp.Diff(tablet, tabletWanted, cmp.Comparer(proto.Equal))
 		assert.Empty(t, diff)
 	}
+}
+
+// verifyTabletCount verifies that the number of tablets in the vitess_tablet table match the given count
+func verifyTabletCount(t *testing.T, countWanted int) {
+	t.Helper()
+	totalTablets := 0
+	err := db.QueryVTOrc("select count(*) as total_tablets from vitess_tablet", nil, func(rowMap sqlutils.RowMap) error {
+		totalTablets = rowMap.GetInt("total_tablets")
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, countWanted, totalTablets)
 }

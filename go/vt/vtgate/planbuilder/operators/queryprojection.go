@@ -185,36 +185,49 @@ func CreateQPFromSelect(ctx *plancontext.PlanningContext, sel *sqlparser.Select)
 	return qp, nil
 }
 
-// Rewrite will go through an expression, add aggregations to the QP, and rewrite them to use column offset
-func (ar *AggrRewriter) Rewrite() func(*sqlparser.Cursor) bool {
+// RewriteDown stops the walker from entering inside aggregation functions
+func (ar *AggrRewriter) RewriteDown() func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
+	return func(node, _ sqlparser.SQLNode) bool {
+		if ar.Err != nil {
+			return true
+		}
+		_, ok := node.(sqlparser.AggrFunc)
+		return !ok
+	}
+}
+
+// RewriteUp will go through an expression, add aggregations to the QP, and rewrite them to use column offset
+func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
 	return func(cursor *sqlparser.Cursor) bool {
 		if ar.Err != nil {
 			return false
 		}
 		sqlNode := cursor.Node()
-		if fExp, ok := sqlNode.(sqlparser.AggrFunc); ok {
-			for offset, expr := range ar.qp.SelectExprs {
-				ae, err := expr.GetAliasedExpr()
-				if err != nil {
-					ar.Err = err
-					return false
-				}
-				if ar.st.EqualsExpr(ae.Expr, fExp) {
-					cursor.Replace(sqlparser.NewOffset(offset, fExp))
-					return false // no need to visit aggregation children
-				}
-			}
-
-			col := SelectExpr{
-				Aggr: true,
-				Col:  &sqlparser.AliasedExpr{Expr: fExp},
-			}
-			ar.qp.HasAggr = true
-
-			cursor.Replace(sqlparser.NewOffset(len(ar.qp.SelectExprs), fExp))
-			ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
-			ar.qp.AddedColumn++
+		fExp, ok := sqlNode.(sqlparser.AggrFunc)
+		if !ok {
+			return true
 		}
+		for offset, expr := range ar.qp.SelectExprs {
+			ae, err := expr.GetAliasedExpr()
+			if err != nil {
+				ar.Err = err
+				return false
+			}
+			if ar.st.EqualsExpr(ae.Expr, fExp) {
+				cursor.Replace(sqlparser.NewOffset(offset, fExp))
+				return true
+			}
+		}
+
+		col := SelectExpr{
+			Aggr: true,
+			Col:  &sqlparser.AliasedExpr{Expr: fExp},
+		}
+		ar.qp.HasAggr = true
+
+		cursor.Replace(sqlparser.NewOffset(len(ar.qp.SelectExprs), fExp))
+		ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
+		ar.qp.AddedColumn++
 
 		return true
 	}

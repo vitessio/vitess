@@ -66,8 +66,17 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 }
 
 func TestPlan(t *testing.T) {
+	testPlan(t, "exec_cases.txt")
+}
+
+func TestDDLPlan(t *testing.T) {
+	testPlan(t, "ddl_cases.txt")
+}
+
+func testPlan(t *testing.T, fileName string) {
+	t.Helper()
 	testSchema := loadSchema("schema_test.json")
-	for tcase := range iterateExecFile("exec_cases.txt") {
+	for tcase := range iterateExecFile(fileName) {
 		t.Run(tcase.input, func(t *testing.T) {
 			if strings.Contains(tcase.options, "PassthroughDMLs") {
 				PassthroughDMLs = true

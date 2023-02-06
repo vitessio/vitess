@@ -104,28 +104,37 @@ order by table_name, ordinal_position`
 
 	// Views
 	CreateViewsTable = `CREATE TABLE IF NOT EXISTS _vt.views (
-  	TABLE_NAME varchar(64) NOT NULL,
-  	VIEW_DEFINITION longtext NOT NULL,
-  	CREATE_STATEMENT longtext NOT NULL,
-  	PRIMARY KEY (TABLE_NAME))`
+	TABLE_NAME varchar(64) NOT NULL,
+	VIEW_DEFINITION longtext NOT NULL,
+	CREATE_STATEMENT longtext NOT NULL,
+	UPDATED_AT TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+	PRIMARY KEY (TABLE_NAME))`
 
-	InsertIntoViewsTable = `INSERT INTO _vt.views (
-	TABLE_NAME,
-	VIEW_DEFINITION,
-	CREATE_STATEMENT) VALUES (:TABLE_NAME, :VIEW_DEFINITION, :CREATE_STATEMENT)`
+	InsertIntoViewsTable = `insert into _vt.views (
+	table_name,
+	view_definition,
+	create_statement) values (:table_name, :view_definition, :create_statement)`
 
-	ReplaceIntoViewsTable = `REPLACE INTO _vt.views (
-	TABLE_NAME,
-	VIEW_DEFINITION,
-	CREATE_STATEMENT) VALUES (:TABLE_NAME, :VIEW_DEFINITION, :CREATE_STATEMENT)`
+	ReplaceIntoViewsTable = `replace into _vt.views (
+	table_name,
+	view_definition,
+	create_statement) values (:table_name, :view_definition, :create_statement)`
 
-	UpdateViewsTable = `UPDATE _vt.views 
-	SET VIEW_DEFINITION = :VIEW_DEFINITION, CREATE_STATEMENT = :CREATE_STATEMENT 
-	WHERE TABLE_NAME = :TABLE_NAME`
+	UpdateViewsTable = `update _vt.views 
+	set view_definition = :view_definition, create_statement = :create_statement 
+	where table_name = :table_name`
 
-	DeleteFromViewsTable = `DELETE FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
+	DeleteFromViewsTable = `delete from _vt.views where table_name in ::table_name`
 
-	SelectFromViewsTable = `SELECT TABLE_NAME FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
+	SelectFromViewsTable = `select table_name from _vt.views where table_name in ::table_name`
+
+	SelectAllViews = `select table_name, updated_at from _vt.views`
+
+	// FetchUpdatedViews queries fetches information about updated views
+	FetchUpdatedViews = `select table_name, view_definition, create_statement from _vt.views where table_name in ::viewnames`
+
+	// FetchViews queries fetches all views
+	FetchViews = `select table_name, view_definition, create_statement from _vt.views`
 )
 
 // VTDatabaseInit contains all the schema creation queries needed to

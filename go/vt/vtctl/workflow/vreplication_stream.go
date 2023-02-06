@@ -30,12 +30,13 @@ import (
 
 // VReplicationStream represents a single stream of a vreplication workflow.
 type VReplicationStream struct {
-	ID              uint32
-	Workflow        string
-	BinlogSource    *binlogdatapb.BinlogSource
-	Position        mysql.Position
-	WorkflowType    binlogdatapb.VReplicationWorkflowType
-	WorkflowSubType binlogdatapb.VReplicationWorkflowSubType
+	ID                 uint32
+	Workflow           string
+	BinlogSource       *binlogdatapb.BinlogSource
+	Position           mysql.Position
+	WorkflowType       binlogdatapb.VReplicationWorkflowType
+	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
+	DeferSecondaryKeys bool
 }
 
 // VReplicationStreams wraps a slice of VReplicationStream objects to provide

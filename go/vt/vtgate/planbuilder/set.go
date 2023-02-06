@@ -21,6 +21,7 @@ import (
 	"strconv"
 	"strings"
 
+	"vitess.io/vitess/go/vt/sysvars"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
@@ -46,6 +47,7 @@ type (
 		// SET transaction_mode = two_pc => SET transaction_mode = 'two_pc'
 		identifierAsString bool
 		supportSetVar      bool
+		storageCase        sysvars.StorageCase
 	}
 )
 
@@ -184,6 +186,8 @@ func buildSetOpReservedConn(s setting) planFunc {
 			return nil, err
 		}
 
+		value = provideAppliedCase(value, s.storageCase)
+
 		return &engine.SysVarReservedConn{
 			Name:              expr.Var.Name.Lowered(),
 			Keyspace:          ks,
@@ -192,6 +196,16 @@ func buildSetOpReservedConn(s setting) planFunc {
 			SupportSetVar:     s.supportSetVar,
 		}, nil
 	}
+}
+
+func provideAppliedCase(value string, storageCase sysvars.StorageCase) string {
+	switch storageCase {
+	case sysvars.SCUpper:
+		return strings.ToUpper(value)
+	case sysvars.SCLower:
+		return strings.ToLower(value)
+	}
+	return value
 }
 
 const defaultNotSupportedErrFmt = "DEFAULT for @@%s"

@@ -577,6 +577,7 @@ var AlterVReplicationTable = []string{
 	"ALTER TABLE _vt.vreplication ADD COLUMN time_throttled BIGINT NOT NULL DEFAULT 0",
 	"ALTER TABLE _vt.vreplication ADD COLUMN component_throttled VARCHAR(255) NOT NULL DEFAULT ''",
 	"ALTER TABLE _vt.vreplication ADD COLUMN workflow_sub_type int NOT NULL DEFAULT 0",
+	"ALTER TABLE _vt.vreplication ADD COLUMN defer_secondary_keys bool NOT NULL DEFAULT false",
 }
 
 // WithDDLInitialQueries contains the queries that:
@@ -596,20 +597,21 @@ var WithDDLInitialQueries = []string{
 
 // VRSettings contains the settings of a vreplication table.
 type VRSettings struct {
-	StartPos          mysql.Position
-	StopPos           mysql.Position
-	MaxTPS            int64
-	MaxReplicationLag int64
-	State             string
-	WorkflowType      int32
-	WorkflowSubType   int32
-	WorkflowName      string
+	StartPos           mysql.Position
+	StopPos            mysql.Position
+	MaxTPS             int64
+	MaxReplicationLag  int64
+	State              string
+	WorkflowType       int32
+	WorkflowSubType    int32
+	WorkflowName       string
+	DeferSecondaryKeys bool
 }
 
 // ReadVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
 func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
-	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type from _vt.vreplication where id=%v", uid)
+	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
@@ -646,27 +648,32 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_sub_type column: %v", err)
 	}
+	deferSecondaryKeys, err := vrRow.ToBool("defer_secondary_keys")
+	if err != nil {
+		return VRSettings{}, fmt.Errorf("failed to parse defer_secondary_keys column: %v", err)
+	}
 	return VRSettings{
-		StartPos:          startPos,
-		StopPos:           stopPos,
-		MaxTPS:            maxTPS,
-		MaxReplicationLag: maxReplicationLag,
-		State:             vrRow.AsString("state", ""),
-		WorkflowType:      workflowType,
-		WorkflowName:      vrRow.AsString("workflow", ""),
-		WorkflowSubType:   workflowSubType,
+		StartPos:           startPos,
+		StopPos:            stopPos,
+		MaxTPS:             maxTPS,
+		MaxReplicationLag:  maxReplicationLag,
+		State:              vrRow.AsString("state", ""),
+		WorkflowType:       workflowType,
+		WorkflowName:       vrRow.AsString("workflow", ""),
+		WorkflowSubType:    workflowSubType,
+		DeferSecondaryKeys: deferSecondaryKeys,
 	}, nil
 }
 
 // CreateVReplication returns a statement to populate the first value into
 // the _vt.vreplication table.
 func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, position string, maxTPS, maxReplicationLag, timeUpdated int64, dbName string,
-	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
+	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
-		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v)",
+		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v, %v)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
-		timeUpdated, BlpRunning, encodeString(dbName), int64(workflowType), int64(workflowSubType))
+		timeUpdated, BlpRunning, encodeString(dbName), int64(workflowType), int64(workflowSubType), deferSecondaryKeys)
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.

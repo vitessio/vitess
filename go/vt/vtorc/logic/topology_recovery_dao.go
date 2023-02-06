@@ -264,6 +264,7 @@ func RegisterBlockedRecoveries(analysisEntry *inst.ReplicationAnalysis, blocking
 					?,
 					?,
 					?,
+					?,
 					NOW(),
 					?
 				)
