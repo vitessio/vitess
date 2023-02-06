@@ -39,23 +39,24 @@ func GenerateInitialBinlogEntry() string {
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
-// the _vt.reparent_journal table, as well as the time_created_ns
+// the reparent_journal table, as well as the time_created_ns
 // value used.
 func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos mysql.Position) string {
 	posStr := mysql.EncodePosition(pos)
 	if len(posStr) > mysql.MaximumPositionSize {
 		posStr = posStr[:mysql.MaximumPositionSize]
 	}
-	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
+	return fmt.Sprintf("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%v, '%v', '%v', '%v')",
+		"VALUES (%v, '%v', '%v', '%v')", sidecardb.GetSidecarDBNameIdentifier(),
 		timeCreatedNS, actionName, primaryAlias, posStr)
 }
 
 // queryReparentJournal returns the SQL query to use to query the database
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
-	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns=%v", timeCreatedNS)
+	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%v",
+		sidecardb.GetSidecarDBNameIdentifier(), timeCreatedNS)
 }
 
 // WaitForReparentJournal will wait until the context is done for
