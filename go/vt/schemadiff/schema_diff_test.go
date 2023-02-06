@@ -17,6 +17,7 @@ limitations under the License.
 package schemadiff
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -114,10 +115,12 @@ func TestSchemaDiff(t *testing.T) {
 		expectDeps      int
 		sequential      bool
 		impossibleOrder bool
+		entityOrder     []string // names of tables/views in expected diff order
 	}{
 		{
-			name:      "no change",
-			toQueries: createQueries,
+			name:        "no change",
+			toQueries:   createQueries,
+			entityOrder: []string{},
 		},
 		{
 			name: "three unrelated changes",
@@ -128,6 +131,7 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v2 as select 1 from dual",
 			},
 			expectDiffs: 3,
+			entityOrder: []string{"t1", "t2", "v2"},
 		},
 		{
 			name: "three unrelated changes 2",
@@ -137,6 +141,7 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v2 as select 1 from dual",
 			},
 			expectDiffs: 3,
+			entityOrder: []string{"v1", "t2", "v2"},
 		},
 		// Subsequent
 		{
@@ -148,6 +153,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 1,
 			expectDeps:  0,
+			entityOrder: []string{"t2"},
 		},
 		{
 			name: "add two fulltext keys",
@@ -159,6 +165,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			sequential:  true,
+			entityOrder: []string{"t2", "t2"},
 		},
 		{
 			name: "add partition",
@@ -174,6 +181,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 1,
 			expectDeps:  0,
+			entityOrder: []string{"t2"},
 		},
 		{
 			// In MySQL, you cannot ALTER TABLE ADD COLUMN ..., ADD PARTITION in a single statement
@@ -191,6 +199,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			sequential:  true,
+			entityOrder: []string{"t2", "t2"},
 		},
 		{
 			name: "add view",
@@ -199,6 +208,7 @@ func TestSchemaDiff(t *testing.T) {
 				"create view v2 as select id from t2",
 			),
 			expectDiffs: 1,
+			entityOrder: []string{"v2"},
 		},
 		{
 			name: "add view, alter table",
@@ -210,6 +220,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t2", "v2"},
 		},
 		{
 			name: "alter view, alter table",
@@ -220,9 +231,10 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t1", "v1"},
 		},
 		{
-			name: "alter view, alter table, add view",
+			name: "alter table, add view",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
 				"create table t2 (id int primary key, ts timestamp, v varchar);",
@@ -231,6 +243,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t2", "v2"},
 		},
 		{
 			name: "alter view (2 tables), alter table",
@@ -242,6 +255,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t2", "v2"},
 		},
 		{
 			name: "alter view (2 tables), alter tables",
@@ -253,6 +267,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 3,
 			expectDeps:  2,
+			entityOrder: []string{"t1", "t2", "v2"},
 		},
 		{
 			name: "drop view",
@@ -262,6 +277,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 1,
 			expectDeps:  0,
+			entityOrder: []string{"v1"},
 		},
 		{
 			name: "drop view, alter dependent table",
@@ -271,6 +287,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"v1", "t1"},
 		},
 		{
 			name: "drop view, drop dependent table",
@@ -279,6 +296,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"v1", "t1"},
 		},
 		{
 			name: "drop view, drop unrelated table",
@@ -287,6 +305,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  0,
+			entityOrder: []string{"v1", "t2"},
 		},
 		{
 			name: "alter view, drop table",
@@ -296,6 +315,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"v1", "t1"},
 		},
 		{
 			name: "alter view, add view",
@@ -307,6 +327,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"v1", "v2"},
 		},
 		{
 			name: "alter view, add view, 2",
@@ -318,6 +339,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"v2", "v1"},
 		},
 		{
 			name: "alter table, alter view, add view",
@@ -329,6 +351,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 3,
 			expectDeps:  2,
+			entityOrder: []string{"t2", "v1", "v2"},
 		},
 		// {
 		// 	// This will become relevant when https://github.com/vitessio/vitess/issues/12147 is merged
@@ -354,6 +377,7 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t3 (id int primary key, ts timestamp, t1_id int, foreign key (t1_id) references t1 (id) on delete no action);",
 			),
 			expectDiffs: 1,
+			entityOrder: []string{"t3"},
 		},
 		{
 			name: "create two table with fk",
@@ -364,6 +388,7 @@ func TestSchemaDiff(t *testing.T) {
 			),
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"tp", "t3"},
 		},
 		{
 			name: "add FK",
@@ -374,9 +399,10 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 1,
 			expectDeps:  0,
+			entityOrder: []string{"t2"},
 		},
 		{
-			name: "add FK to new table",
+			name: "add FK pointing to new table",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
 				"create table t2 (id int primary key, ts timestamp, tp_id int, foreign key (tp_id) references tp (id) on delete no action);",
@@ -386,6 +412,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			sequential:  true,
+			entityOrder: []string{"tp", "t2"},
 		},
 		{
 			name: "add FK, unrelated alter",
@@ -396,6 +423,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t1", "t2"},
 		},
 		{
 			name: "add FK, add unrelated column",
@@ -406,6 +434,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t1", "t2"},
 		},
 		{
 			name: "add FK, alter unrelated column",
@@ -416,6 +445,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t1", "t2"},
 		},
 		{
 			name: "add FK, alter referenced column",
@@ -427,6 +457,7 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			sequential:  true,
+			entityOrder: []string{"t1", "t2"},
 		},
 		{
 			name: "add column. create FK table referencing new column",
@@ -438,6 +469,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t1", "t3"},
 		},
 		{
 			name: "add column. add FK referencing new column",
@@ -449,6 +481,19 @@ func TestSchemaDiff(t *testing.T) {
 			expectDiffs: 2,
 			expectDeps:  1,
 			sequential:  true,
+			entityOrder: []string{"t1", "t2"},
+		},
+		{
+			name: "add column. add FK referencing new column, alphabetically desc",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, t2_p int, foreign key (t2_p) references t2 (p) on delete no action);",
+				"create table t2 (id int primary key, ts timestamp, p int, key p_idx (p));",
+				"create view v1 as select id from t1",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			sequential:  true,
+			entityOrder: []string{"t2", "t1"},
 		},
 		{
 			name: "drop fk",
@@ -460,6 +505,7 @@ func TestSchemaDiff(t *testing.T) {
 			toQueries:   createQueries,
 			expectDiffs: 1,
 			expectDeps:  0,
+			entityOrder: []string{"t2"},
 		},
 		{
 			name: "drop fk, drop table",
@@ -472,6 +518,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t2", "t1"},
 		},
 		{
 			name: "drop fk, drop column",
@@ -485,6 +532,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  1,
+			entityOrder: []string{"t2", "t1"},
 		},
 		{
 			name: "reverse fk",
@@ -498,6 +546,7 @@ func TestSchemaDiff(t *testing.T) {
 			},
 			expectDiffs: 2,
 			expectDeps:  2,
+			entityOrder: []string{"t2", "t1"},
 		},
 		{
 			name: "add and drop FK, add and drop column, impossible order",
@@ -554,8 +603,24 @@ func TestSchemaDiff(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+			diffStatementStrings := []string{}
+			for _, diff := range orderedDiffs {
+				diffStatementStrings = append(diffStatementStrings, diff.CanonicalStatementString())
+			}
+			if !tc.impossibleOrder {
+				// validate that the order of diffs is as expected (we don't check for the full diff statement,
+				// just for the order of affected tables/views)
+				require.NotNil(t, tc.entityOrder) // making sure we explicitly specified expected order
+				assert.Equalf(t, len(tc.entityOrder), len(orderedDiffs), "expected %d diffs/entities per %v", len(tc.entityOrder), tc.entityOrder)
+				diffEntities := []string{}
+				for _, diff := range orderedDiffs {
+					diffEntities = append(diffEntities, diff.EntityName())
+				}
+				assert.Equalf(t, tc.entityOrder, diffEntities, "diffs: %v", strings.Join(diffStatementStrings, ";\n"))
+			}
 			for _, diff := range orderedDiffs {
 				s := diff.CanonicalStatementString()
+				// Internal sanity, while we're here: see that the equivalence relation has entries for all diffs.
 				_, err := schemaDiff.r.ElementClass(s)
 				require.NoError(t, err)
 			}
