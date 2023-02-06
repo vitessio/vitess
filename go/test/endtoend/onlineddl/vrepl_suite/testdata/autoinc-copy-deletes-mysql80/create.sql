@@ -13,6 +13,7 @@ insert into onlineddl_test values (NULL, 17);
 insert into onlineddl_test values (NULL, 23);
 insert into onlineddl_test values (NULL, 29);
 insert into onlineddl_test values (NULL, 31);
+delete from onlineddl_test where id>=0;
 
 drop event if exists onlineddl_test;
 delimiter ;;
@@ -25,5 +26,5 @@ create event onlineddl_test
   do
 begin
   insert into onlineddl_test values (NULL, 37);
-  delete from onlineddl_test where id>=5;
+  delete from onlineddl_test where id>=0;
 end ;;
