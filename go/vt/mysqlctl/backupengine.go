@@ -130,7 +130,6 @@ func (p RestoreParams) Copy() RestoreParams {
 		p.Logger,
 		p.Concurrency,
 		p.HookExtraEnv,
-		p.LocalMetadata,
 		p.DeleteBeforeRestore,
 		p.DbName,
 		p.Keyspace,

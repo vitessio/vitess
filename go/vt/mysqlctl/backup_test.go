@@ -475,7 +475,6 @@ func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
 		Mysqld:              mysqld,
 		Concurrency:         1,
 		HookExtraEnv:        map[string]string{},
-		LocalMetadata:       map[string]string{},
 		DeleteBeforeRestore: false,
 		DbName:              "test",
 		Keyspace:            "test",
