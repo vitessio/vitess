@@ -34,8 +34,11 @@ type controllerPlan struct {
 	selector string
 	applier  *sqlparser.ParsedQuery
 
-	// delCopyState is set of deletes.
+	// delCopyState deletes related copy state.
 	delCopyState *sqlparser.ParsedQuery
+
+	// delPostCopyAction deletes related post copy actions.
+	delPostCopyAction *sqlparser.ParsedQuery
 }
 
 const (
@@ -212,11 +215,15 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	buf3 := sqlparser.NewTrackedBuffer(nil)
 	buf3.Myprintf("delete from %s%v", copyStateTableName, copyStateWhere)
 
+	buf4 := sqlparser.NewTrackedBuffer(nil)
+	buf4.Myprintf("delete from %s%v", postCopyActionTableName, copyStateWhere)
+
 	return &controllerPlan{
-		opcode:       deleteQuery,
-		selector:     buf1.String(),
-		applier:      buf2.ParsedQuery(),
-		delCopyState: buf3.ParsedQuery(),
+		opcode:            deleteQuery,
+		selector:          buf1.String(),
+		applier:           buf2.ParsedQuery(),
+		delCopyState:      buf3.ParsedQuery(),
+		delPostCopyAction: buf4.ParsedQuery(),
 	}, nil
 }
 

@@ -175,24 +175,32 @@ type KeyspaceSchema struct {
 	Error    error
 }
 
+type ksJSON struct {
+	Sharded  bool              `json:"sharded,omitempty"`
+	Tables   map[string]*Table `json:"tables,omitempty"`
+	Vindexes map[string]Vindex `json:"vindexes,omitempty"`
+	Views    map[string]string `json:"views,omitempty"`
+	Error    string            `json:"error,omitempty"`
+}
+
 // MarshalJSON returns a JSON representation of KeyspaceSchema.
 func (ks *KeyspaceSchema) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		Sharded  bool              `json:"sharded,omitempty"`
-		Tables   map[string]*Table `json:"tables,omitempty"`
-		Vindexes map[string]Vindex `json:"vindexes,omitempty"`
-		Error    string            `json:"error,omitempty"`
-	}{
+	ksJ := ksJSON{
 		Sharded:  ks.Keyspace.Sharded,
 		Tables:   ks.Tables,
 		Vindexes: ks.Vindexes,
-		Error: func(ks *KeyspaceSchema) string {
-			if ks.Error == nil {
-				return ""
-			}
-			return ks.Error.Error()
-		}(ks),
-	})
+	}
+	if ks.Error != nil {
+		ksJ.Error = ks.Error.Error()
+	}
+	if len(ks.Views) > 0 {
+		ksJ.Views = make(map[string]string, len(ks.Views))
+	}
+	for view, def := range ks.Views {
+		ksJ.Views[view] = sqlparser.String(def)
+	}
+
+	return json.Marshal(ksJ)
 }
 
 // AutoIncrement contains the auto-inc information for a table.
@@ -957,7 +965,6 @@ func (vschema *VSchema) FindView(keyspace, name string) sqlparser.SelectStatemen
 	}
 
 	// We do this to make sure there is no shared state between uses of this AST
-	// todo copy-on-rewrite!
 	statement = sqlparser.CloneSelectStatement(statement)
 	sqlparser.SafeRewrite(statement, nil, func(cursor *sqlparser.Cursor) bool {
 		col, ok := cursor.Node().(*sqlparser.ColName)

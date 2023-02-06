@@ -374,6 +374,8 @@ type ReplicationStatusResult struct {
 	TargetTimeZone string
 	// OnDDL specifies the action to be taken when a DDL is encountered.
 	OnDDL string `json:"OnDDL,omitempty"`
+	// DeferSecondaryKeys specifies whether to defer the creation of secondary keys.
+	DeferSecondaryKeys bool `json:"DeferSecondaryKeys,omitempty"`
 }
 
 // ReplicationLocation represents a location that data is either replicating from, or replicating into.
@@ -436,14 +438,16 @@ type ReplicationStatus struct {
 	// sourceTimeZone represents the time zone of each stream, only set if not UTC
 	sourceTimeZone string
 	// targetTimeZone is set to the sourceTimeZone of the forward stream, if it was provided in the workflow
-	targetTimeZone string
+	targetTimeZone     string
+	deferSecondaryKeys bool
 }
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
 	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
 	var state, dbName, pos, stopPos, message, tags, componentThrottled string
-	var workflowType, workflowSubType int64
+	var workflowType, workflowSubType int32
+	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
 
@@ -511,8 +515,9 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
-	workflowType, _ = row.ToInt64("workflow_type")
-	workflowSubType, _ = row.ToInt64("workflow_sub_type")
+	workflowType, _ = row.ToInt32("workflow_type")
+	workflowSubType, _ = row.ToInt32("workflow_sub_type")
+	deferSecondaryKeys, _ = row.ToBool("defer_secondary_keys")
 
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
@@ -532,8 +537,9 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
 		targetTimeZone:       bls.TargetTimeZone,
-		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)],
-		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)],
+		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[workflowType],
+		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType],
+		deferSecondaryKeys:   deferSecondaryKeys,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -565,7 +571,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		message,
 		tags,
 		workflow_type, 
-		workflow_sub_type
+		workflow_sub_type,
+		defer_secondary_keys
 	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
@@ -576,8 +583,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var sourceKeyspace string
-	sourceShards := sets.NewString()
-	targetShards := sets.NewString()
+	sourceShards := sets.New[string]()
+	targetShards := sets.New[string]()
 	for primary, result := range results {
 		var rsrStatus []*ReplicationStatus
 		nqr := sqltypes.Proto3ToResult(result).Named()
@@ -610,6 +617,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 				// https://github.com/golang/protobuf/issues/52
 				status.Bls.OnDdl = 0
 			}
+
+			rsr.DeferSecondaryKeys = status.deferSecondaryKeys
 
 			if status.Message == workflow2.Frozen {
 				rsr.Frozen = true
@@ -660,11 +669,11 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 	rsr.SourceLocation = ReplicationLocation{
 		Keyspace: sourceKeyspace,
-		Shards:   sourceShards.List(),
+		Shards:   sets.List(sourceShards),
 	}
 	rsr.TargetLocation = ReplicationLocation{
 		Keyspace: keyspace,
-		Shards:   targetShards.List(),
+		Shards:   sets.List(targetShards),
 	}
 
 	return &rsr, nil
@@ -687,7 +696,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 	if err != nil {
 		return nil, err
 	}
-	workflowsSet := sets.NewString()
+	workflowsSet := sets.New[string]()
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			continue
@@ -700,7 +709,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 			}
 		}
 	}
-	workflows := workflowsSet.List()
+	workflows := sets.List(workflowsSet)
 	return workflows, nil
 }
 

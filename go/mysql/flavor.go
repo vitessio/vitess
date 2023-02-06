@@ -17,12 +17,11 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -479,11 +478,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	executedPosStr := fields["Exec_Master_Log_Pos"]
 	file := fields["Relay_Master_Log_File"]
 	if file != "" && executedPosStr != "" {
-		filePos, err := strconv.Atoi(executedPosStr)
+		filePos, err := strconv.ParseUint(executedPosStr, 10, 32)
 		if err == nil {
 			status.FilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  filePos,
+				pos:  uint32(filePos),
 			}
 		}
 	}
@@ -491,11 +490,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	readPosStr := fields["Read_Master_Log_Pos"]
 	file = fields["Master_Log_File"]
 	if file != "" && readPosStr != "" {
-		fileRelayPos, err := strconv.Atoi(readPosStr)
+		fileRelayPos, err := strconv.ParseUint(readPosStr, 10, 32)
 		if err == nil {
 			status.RelayLogSourceBinlogEquivalentPosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  fileRelayPos,
+				pos:  uint32(fileRelayPos),
 			}
 		}
 	}
@@ -503,11 +502,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	relayPosStr := fields["Relay_Log_Pos"]
 	file = fields["Relay_Log_File"]
 	if file != "" && relayPosStr != "" {
-		relayFilePos, err := strconv.Atoi(relayPosStr)
+		relayFilePos, err := strconv.ParseUint(relayPosStr, 10, 32)
 		if err == nil {
 			status.RelayLogFilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  relayFilePos,
+				pos:  uint32(relayFilePos),
 			}
 		}
 	}
@@ -527,11 +526,11 @@ func parsePrimaryStatus(fields map[string]string) PrimaryStatus {
 	fileExecPosStr := fields["Position"]
 	file := fields["File"]
 	if file != "" && fileExecPosStr != "" {
-		filePos, err := strconv.Atoi(fileExecPosStr)
+		filePos, err := strconv.ParseUint(fileExecPosStr, 10, 32)
 		if err == nil {
 			status.FilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  filePos,
+				pos:  uint32(filePos),
 			}
 		}
 	}

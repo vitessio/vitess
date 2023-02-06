@@ -32,8 +32,7 @@ package logic
 import (
 	"fmt"
 
-	"github.com/openark/golib/sqlutils"
-
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vtorc/db"
 )

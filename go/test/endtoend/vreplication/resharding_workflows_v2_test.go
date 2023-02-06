@@ -63,6 +63,7 @@ func createReshardWorkflow(t *testing.T, sourceShards, targetShards string) erro
 		"", workflowActionCreate, "", sourceShards, targetShards)
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, "")
 	catchup(t, targetTab1, workflowName, "Reshard")
 	catchup(t, targetTab2, workflowName, "Reshard")
 	vdiff1(t, ksWorkflow, "")
@@ -77,6 +78,7 @@ func createMoveTablesWorkflow(t *testing.T, tables string) {
 		tables, workflowActionCreate, "", "", "")
 	require.NoError(t, err)
 	waitForWorkflowState(t, vc, ksWorkflow, workflowStateRunning)
+	confirmTablesHaveSecondaryKeys(t, []*cluster.VttabletProcess{targetTab1}, targetKs, tables)
 	catchup(t, targetTab1, workflowName, "MoveTables")
 	catchup(t, targetTab2, workflowName, "MoveTables")
 	vdiff1(t, ksWorkflow, "")
@@ -109,6 +111,11 @@ func tstWorkflowExec(t *testing.T, cells, workflow, sourceKs, targetKs, tables, 
 			}
 		} else {
 			args = append(args, "--source_shards", sourceShards, "--target_shards", targetShards)
+		}
+		// Test new experimental --defer-secondary-keys flag
+		switch currentWorkflowType {
+		case wrangler.MoveTablesWorkflow, wrangler.MigrateWorkflow, wrangler.ReshardWorkflow:
+			args = append(args, "--defer-secondary-keys")
 		}
 	}
 	if cells != "" {

@@ -93,6 +93,8 @@ message MaterializeSettings {
   repeated string source_shards = 12;
   // OnDdl specifies the action to be taken when a DDL is encountered.
   string on_ddl = 13;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
+  bool defer_secondary_keys = 14;
 }
 
 /* Data types for VtctldServer */
@@ -1151,7 +1153,7 @@ message SleepTabletResponse {
 message SourceShardAddRequest {
   string keyspace = 1;
   string shard = 2;
-  uint32 uid = 3;
+  int32 uid = 3;
   string source_keyspace = 4;
   string source_shard = 5;
   // KeyRange identifies the key range to use for the SourceShard. This field is
@@ -1170,7 +1172,7 @@ message SourceShardAddResponse {
 message SourceShardDeleteRequest {
   string keyspace = 1;
   string shard = 2;
-  uint32 uid = 3;
+  int32 uid = 3;
 }
 
 message SourceShardDeleteResponse {

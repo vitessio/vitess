@@ -237,7 +237,7 @@ func TestVersion(t *testing.T) {
 
 	for _, tcase := range testcases {
 		t.Run(tcase.version+"_"+tcase.in, func(t *testing.T) {
-			MySQLVersion = tcase.version
+			mySQLParserVersion = tcase.version
 			tok := NewStringTokenizer(tcase.in)
 			for _, expectedID := range tcase.id {
 				id, _ := tok.Scan()

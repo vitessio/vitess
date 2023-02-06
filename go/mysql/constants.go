@@ -372,6 +372,7 @@ const (
 	ERServerShutdown = 1053
 
 	// not found
+	ERDbDropExists          = 1008
 	ERCantFindFile          = 1017
 	ERFormNotFound          = 1029
 	ERKeyNotFound           = 1032
@@ -383,7 +384,6 @@ const (
 	ERNoSuchTable           = 1146
 	ERNonExistingTableGrant = 1147
 	ERKeyDoesNotExist       = 1176
-	ERDbDropExists          = 1008
 
 	// permissions
 	ERDBAccessDenied            = 1044
@@ -411,6 +411,7 @@ const (
 	ERRowIsReferenced               = 1217
 	ERCantUpdateWithReadLock        = 1223
 	ERNoDefault                     = 1230
+	ERMasterFatalReadingBinlog      = 1236
 	EROperandColumns                = 1241
 	ERSubqueryNo1Row                = 1242
 	ERWarnDataOutOfRange            = 1264
@@ -419,19 +420,19 @@ const (
 	EROptionPreventsStatement       = 1290
 	ERDuplicatedValueInType         = 1291
 	ERSPDoesNotExist                = 1305
+	ERNoDefaultForField             = 1364
+	ErSPNotVarArg                   = 1414
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
-	ErSPNotVarArg                   = 1414
+	ERDupIndex                      = 1831
 	ERInnodbReadOnly                = 1874
-	ERMasterFatalReadingBinlog      = 1236
-	ERNoDefaultForField             = 1364
 
 	// already exists
+	ERDbCreateExists = 1007
 	ERTableExists    = 1050
 	ERDupEntry       = 1062
 	ERFileExists     = 1086
 	ERUDFExists      = 1125
-	ERDbCreateExists = 1007
 
 	// aborted
 	ERGotSignal          = 1078
@@ -517,7 +518,11 @@ const (
 	ERWrongFKDef                   = 1239
 	ERKeyRefDoNotMatchTableRef     = 1240
 	ERCyclicReference              = 1245
+	ERIllegalReference             = 1247
+	ERDerivedMustHaveAlias         = 1248
+	ERTableNameNotAllowedHere      = 1250
 	ERCollationCharsetMismatch     = 1253
+	ERWarnDataTruncated            = 1265
 	ERCantAggregate2Collations     = 1267
 	ERCantAggregate3Collations     = 1270
 	ERCantAggregateNCollations     = 1271
@@ -531,16 +536,13 @@ const (
 	ERInvalidOnUpdate              = 1294
 	ERUnknownTimeZone              = 1298
 	ERInvalidCharacterString       = 1300
-	ERIllegalReference             = 1247
-	ERDerivedMustHaveAlias         = 1248
-	ERTableNameNotAllowedHere      = 1250
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
 	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406
 	ErrWrongValueForType           = 1411
-	ERWarnDataTruncated            = 1265
 	ERForbidSchemaChange           = 1450
+	ERWrongValue                   = 1525
 	ERDataOutOfRange               = 1690
 	ERInvalidJSONText              = 3140
 	ERInvalidJSONTextInParams      = 3141
@@ -549,7 +551,6 @@ const (
 	ERInvalidCastToJSON            = 3147
 	ERJSONValueTooBig              = 3150
 	ERJSONDocumentTooDeep          = 3157
-	ERWrongValue                   = 1525
 
 	// max execution time exceeded
 	ERQueryTimeout = 3024

@@ -20,7 +20,6 @@ package vtctld
 
 import (
 	"context"
-	"net/http"
 
 	"github.com/spf13/pflag"
 
@@ -32,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/wrangler"
-	"vitess.io/vitess/web/vtctld2"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
@@ -40,15 +38,8 @@ import (
 
 var (
 	enableRealtimeStats = false
-	enableUI            = true
 	durabilityPolicy    = "none"
 	sanitizeLogMessages = false
-	webDir              string
-	webDir2             string
-)
-
-const (
-	appPrefix = "/app/"
 )
 
 func init() {
@@ -58,16 +49,8 @@ func init() {
 }
 
 func registerVtctldFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&enableRealtimeStats, "enable_realtime_stats", enableRealtimeStats, "Required for the Realtime Stats view. If set, vtctld will maintain a streaming RPC to each tablet (in all cells) to gather the realtime health stats.")
-	fs.MarkDeprecated("enable_realtime_stats", "It is used by old vtctl UI that is already deprecated.")
-	fs.BoolVar(&enableUI, "enable_vtctld_ui", enableUI, "If true, the vtctld web interface will be enabled. Default is true.")
-	fs.MarkDeprecated("enable_vtctld_ui", "It is used by old vtctl UI that is already deprecated.")
 	fs.StringVar(&durabilityPolicy, "durability_policy", durabilityPolicy, "type of durability to enforce. Default is none. Other values are dictated by registered plugins")
 	fs.BoolVar(&sanitizeLogMessages, "vtctld_sanitize_log_messages", sanitizeLogMessages, "When true, vtctld sanitizes logging.")
-	fs.StringVar(&webDir, "web_dir", webDir, "NOT USED, here for backward compatibility")
-	fs.MarkDeprecated("web_dir", "it will be removed in a future releases.")
-	fs.StringVar(&webDir2, "web_dir2", webDir2, "NOT USED, here for backward compatibility")
-	fs.MarkDeprecated("web_dir2", "it will be removed in a future releases.")
 }
 
 // InitVtctld initializes all the vtctld functionality.
@@ -148,13 +131,6 @@ func InitVtctld(ts *topo.Server) error {
 			return "", err
 		})
 
-	// Anything unrecognized gets redirected to the main app page.
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, appPrefix, http.StatusFound)
-	})
-
-	http.Handle(appPrefix, staticContentHandler(enableUI))
-
 	var healthCheck discovery.HealthCheck
 	if enableRealtimeStats {
 		ctx := context.Background()
@@ -166,28 +142,11 @@ func InitVtctld(ts *topo.Server) error {
 		}
 	}
 
-	// Serve the REST API for the vtctld web app.
+	// Serve the REST API
 	initAPI(context.Background(), ts, actionRepo, healthCheck)
 
-	// Init redirects for explorers
+	// Serve the topology endpoint in the REST API at /topodata
 	initExplorer(ts)
 
-	// Init workflow manager.
-	initWorkflowManager(ts)
-
-	// Setup reverse proxy for all vttablets through /vttablet/.
-	initVTTabletRedirection(ts)
-
 	return nil
-}
-
-func staticContentHandler(enabled bool) http.Handler {
-	if enabled {
-		return http.FileServer(http.FS(vtctld2.Content))
-	}
-
-	fn := func(w http.ResponseWriter, r *http.Request) {
-		http.NotFound(w, r)
-	}
-	return http.HandlerFunc(fn)
 }

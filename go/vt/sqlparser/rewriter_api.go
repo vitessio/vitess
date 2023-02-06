@@ -53,11 +53,22 @@ func Rewrite(node SQLNode, pre, post ApplyFunc) (result SQLNode) {
 
 // SafeRewrite does not allow replacing nodes on the down walk of the tree walking
 // Long term this is the only Rewrite functionality we want
-func SafeRewrite(node SQLNode, down func(SQLNode) bool, up ApplyFunc) (result SQLNode) {
+func SafeRewrite(
+	node SQLNode,
+	shouldVisitChildren func(node SQLNode, parent SQLNode) bool,
+	up ApplyFunc,
+) SQLNode {
 	var pre func(cursor *Cursor) bool
-	if down != nil {
+	if shouldVisitChildren != nil {
 		pre = func(cursor *Cursor) bool {
-			return down(cursor.Node())
+			visitChildren := shouldVisitChildren(cursor.Node(), cursor.Parent())
+			if !visitChildren && up != nil {
+				// this gives the up-function a chance to do work on this node even if we are not visiting the children
+				// unfortunately, if the `up` function also returns false for this node, we won't abort the rest of the
+				// tree walking. This is a temporary limitation, and will be fixed when we generated the correct code
+				up(cursor)
+			}
+			return visitChildren
 		}
 	}
 	return Rewrite(node, pre, up)

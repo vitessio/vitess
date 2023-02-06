@@ -37,7 +37,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
-	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
@@ -82,8 +81,7 @@ type BuiltinBackupEngine struct {
 }
 
 // builtinBackupManifest represents the backup. It lists all the files, the
-// Position that the backup was taken at, and the transform hook used,
-// if any.
+// Position that the backup was taken at, the compression engine used, etc.
 type builtinBackupManifest struct {
 	// BackupManifest is an anonymous embedding of the base manifest struct.
 	BackupManifest
@@ -96,9 +94,6 @@ type builtinBackupManifest struct {
 
 	// FileEntries contains all the files in the backup
 	FileEntries []FileEntry
-
-	// TransformHook that was used on the files, if any.
-	TransformHook string
 
 	// SkipCompress is true if the backup files were NOT run through gzip.
 	// The field is expressed as a negative because it will come through as
@@ -192,7 +187,8 @@ func (fe *FileEntry) open(cnf *Mycnf, readOnly bool) (*os.File, error) {
 // ExecuteBackup runs a backup based on given params. This could be a full or incremental backup.
 // The function returns a boolean that indicates if the backup is usable, and an overall error.
 func (be *BuiltinBackupEngine) ExecuteBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
-	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
+	params.Logger.Infof("Executing Backup at %v for keyspace/shard %v/%v on tablet %v, concurrency: %v, compress: %v, incrementalFromPos: %v",
+		params.BackupTime, params.Keyspace, params.Shard, params.TabletAlias, params.Concurrency, backupStorageCompress, params.IncrementalFromPos)
 
 	if isIncrementalBackup(params) {
 		return be.executeIncrementalBackup(ctx, params, bh)
@@ -311,11 +307,6 @@ func (be *BuiltinBackupEngine) executeIncrementalBackup(ctx context.Context, par
 // executeFullBackup returns a boolean that indicates if the backup is usable,
 // and an overall error.
 func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params BackupParams, bh backupstorage.BackupHandle) (bool, error) {
-
-	params.Logger.Infof("Hook: %v, Compress: %v", backupStorageHook, backupStorageCompress)
-	if backupStorageHook != "" {
-		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
-	}
 
 	if params.IncrementalFromPos != "" {
 		return be.executeIncrementalBackup(ctx, params, bh)
@@ -562,7 +553,6 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 		// Builtin-specific fields
 		FileEntries:       fes,
-		TransformHook:     backupStorageHook,
 		SkipCompress:      !backupStorageCompress,
 		CompressionEngine: CompressionEngineName,
 	}
@@ -698,19 +688,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	var reader io.Reader = br
 	var writer io.Writer = bw
 
-	// Create the external write pipe, if any.
-	var pipe io.WriteCloser
-	var wait hook.WaitFunc
-	if backupStorageHook != "" {
-		h := hook.NewHook(backupStorageHook, []string{"-operation", "write"})
-		h.ExtraEnv = params.HookExtraEnv
-		pipe, wait, _, err = h.ExecuteAsWritePipe(writer)
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' hook returned error", backupStorageHook)
-		}
-		writer = pipe
-	}
-
 	// Create the gzip compression pipe, if necessary.
 	var compressor io.WriteCloser
 	if backupStorageCompress {
@@ -740,20 +717,6 @@ func (be *BuiltinBackupEngine) backupFile(ctx context.Context, params BackupPara
 	if compressor != nil {
 		if err = compressor.Close(); err != nil {
 			return vterrors.Wrap(err, "cannot close compressor")
-		}
-	}
-
-	// Close the hook pipe if necessary.
-	if pipe != nil {
-		if err := pipe.Close(); err != nil {
-			return vterrors.Wrap(err, "cannot close hook pipe")
-		}
-		stderr, err := wait()
-		if stderr != "" {
-			params.Logger.Infof("'%v' hook returned stderr: %v", backupStorageHook, stderr)
-		}
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' returned error", backupStorageHook)
 		}
 	}
 
@@ -834,10 +797,6 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 	// mark restore as in progress
 	if err := createStateFile(params.Cnf); err != nil {
 		return nil, err
-	}
-
-	if bm.TransformHook != "" {
-		log.Warning("Flag --backup_storage_hook has been deprecated, consider using one of the builtin compression algorithms or --external-compressor and --external-decompressor instead.")
 	}
 
 	var err error
@@ -935,17 +894,6 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	dst := bufio.NewWriterSize(dstFile, int(builtinBackupFileWriteBufferSize))
 	var reader io.Reader = bp
 
-	// Create the external read pipe, if any.
-	var wait hook.WaitFunc
-	if bm.TransformHook != "" {
-		h := hook.NewHook(bm.TransformHook, []string{"-operation", "read"})
-		h.ExtraEnv = params.HookExtraEnv
-		reader, wait, _, err = h.ExecuteAsReadPipe(reader)
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' hook returned error", bm.TransformHook)
-		}
-	}
-
 	// Create the uncompresser if needed.
 	if !bm.SkipCompress {
 		var decompressor io.ReadCloser
@@ -988,17 +936,6 @@ func (be *BuiltinBackupEngine) restoreFile(ctx context.Context, params RestorePa
 	// Copy the data. Will also write to the hasher.
 	if _, err = io.Copy(dst, reader); err != nil {
 		return vterrors.Wrap(err, "failed to copy file contents")
-	}
-
-	// Close the Pipe.
-	if wait != nil {
-		stderr, err := wait()
-		if stderr != "" {
-			log.Infof("'%v' hook returned stderr: %v", bm.TransformHook, stderr)
-		}
-		if err != nil {
-			return vterrors.Wrapf(err, "'%v' returned error", bm.TransformHook)
-		}
 	}
 
 	// Check the hash.

@@ -879,7 +879,7 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 func (col *ColumnDefinition) formatFast(buf *TrackedBuffer) {
 	col.Name.formatFast(buf)
 	buf.WriteByte(' ')
-	(&col.Type).formatFast(buf)
+	col.Type.formatFast(buf)
 }
 
 // formatFast returns a canonical string representation of the type and all relevant options
@@ -3247,7 +3247,7 @@ func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JSONObjectParam) formatFast(buf *TrackedBuffer) {
+func (node *JSONObjectParam) formatFast(buf *TrackedBuffer) {
 	node.Key.formatFast(buf)
 	buf.WriteString(", ")
 	node.Value.formatFast(buf)

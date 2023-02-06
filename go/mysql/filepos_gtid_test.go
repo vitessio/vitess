@@ -23,7 +23,7 @@ import (
 func Test_filePosGTID_String(t *testing.T) {
 	type fields struct {
 		file string
-		pos  int
+		pos  uint32
 	}
 	tests := []struct {
 		name   string
@@ -52,7 +52,7 @@ func Test_filePosGTID_String(t *testing.T) {
 func Test_filePosGTID_ContainsGTID(t *testing.T) {
 	type fields struct {
 		file string
-		pos  int
+		pos  uint32
 	}
 	type args struct {
 		other GTID

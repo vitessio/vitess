@@ -71,6 +71,7 @@ type ClusterConfig struct {
 	tabletPortBase       int
 	tabletGrpcPortBase   int
 	tabletMysqlPortBase  int
+	vtorcPort            int
 
 	vreplicationCompressGTID bool
 }
@@ -84,6 +85,8 @@ type VitessCluster struct {
 	Vtctld        *cluster.VtctldProcess
 	Vtctl         *cluster.VtctlProcess
 	VtctlClient   *cluster.VtctlClientProcess
+	VtctldClient  *cluster.VtctldClientProcess
+	VTOrcProcess  *cluster.VTOrcProcess
 }
 
 // Cell represents a Vitess cell within the test cluster
@@ -128,6 +131,29 @@ func setTempVtDataRoot() string {
 	_ = os.Setenv("VTDATAROOT", vtdataroot)
 	fmt.Printf("VTDATAROOT is %s\n", vtdataroot)
 	return vtdataroot
+}
+
+// StartVTOrc starts a VTOrc instance
+func (vc *VitessCluster) StartVTOrc() error {
+	// Start vtorc if not already running
+	if vc.VTOrcProcess != nil {
+		return nil
+	}
+	base := cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
+	base.Binary = "vtorc"
+	vtorcProcess := &cluster.VTOrcProcess{
+		VtctlProcess: *base,
+		LogDir:       vc.ClusterConfig.tmpDir,
+		Config:       cluster.VTOrcConfiguration{},
+		Port:         vc.ClusterConfig.vtorcPort,
+	}
+	err := vtorcProcess.Setup()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	vc.VTOrcProcess = vtorcProcess
+	return nil
 }
 
 // setVtMySQLRoot creates the root directory if it does not exist
@@ -285,6 +311,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
+		vtorcPort:           basePort + 2639,
 		charset:             "utf8mb4",
 	}
 }
@@ -341,7 +368,8 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 
 	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
 	require.NotNil(t, vc.VtctlClient)
-
+	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
+	require.NotNil(t, vc.VtctldClient)
 	return vc
 }
 
@@ -417,7 +445,6 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
 		options,
-		false,
 		vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)
@@ -441,6 +468,16 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 // AddShards creates shards given list of comma-separated keys with specified tablets in each shard
 func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) error {
+	// Add a VTOrc instance if one is not already running
+	if err := vc.StartVTOrc(); err != nil {
+		return err
+	}
+	// Disable global recoveries until the shard has been added.
+	// We need this because we run ISP in the end. Running ISP after VTOrc has already run PRS
+	// causes issues.
+	vc.VTOrcProcess.DisableGlobalRecoveries(t)
+	defer vc.VTOrcProcess.EnableGlobalRecoveries(t)
+
 	if value, exists := opts["DBTypeVersion"]; exists {
 		if resetFunc := setupDBTypeVersion(t, value); resetFunc != nil {
 			defer resetFunc()
@@ -520,6 +557,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
+
 	return nil
 }
 
@@ -619,6 +657,12 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 			log.Infof("Error in etcd teardown - %s", err.Error())
 		} else {
 			log.Infof("Successfully tore down topo %s", vc.Topo.Name)
+		}
+	}
+
+	if vc.VTOrcProcess != nil {
+		if err := vc.VTOrcProcess.TearDown(); err != nil {
+			log.Infof("Error stopping VTOrc: %s", err.Error())
 		}
 	}
 }

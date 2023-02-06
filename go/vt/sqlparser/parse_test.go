@@ -851,6 +851,12 @@ var (
 		input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
 		output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
 	}, {
+		input:  "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)",
+		output: "select DATE_ADD(min(FROM_UNIXTIME(1673444922)), interval (-DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1) DAY) from dual",
+	}, {
+		input:  "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month",
+		output: "select '2020-01-01' + interval (month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month)) - 1) month from dual",
+	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
 		input:  "select /* Dual */ 1 from Dual",
@@ -5678,9 +5684,9 @@ partition by range (id)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
-			oldMySQLVersion := MySQLVersion
-			defer func() { MySQLVersion = oldMySQLVersion }()
-			MySQLVersion = testcase.mysqlVersion
+			oldMySQLVersion := mySQLParserVersion
+			defer func() { mySQLParserVersion = oldMySQLVersion }()
+			mySQLParserVersion = testcase.mysqlVersion
 			tree, err := Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)

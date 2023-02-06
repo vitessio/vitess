@@ -413,6 +413,19 @@ func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Pr
 	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
 }
 
+func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// clone the vcursorImpl with a new session.
+	newVC := vc.cloneWithAutocommitSession()
+	for try := 0; try < MaxBufferingRetries; try++ {
+		res, err := primitive.TryExecute(ctx, newVC, bindVars, wantfields)
+		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
+			continue
+		}
+		return res, err
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
+}
+
 func (vc *vcursorImpl) StreamExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
 	for try := 0; try < MaxBufferingRetries; try++ {
 		err := primitive.TryStreamExecute(ctx, vc, bindVars, wantfields, callback)
@@ -800,11 +813,6 @@ func (vc *vcursorImpl) SetWorkload(workload querypb.ExecuteOptions_Workload) {
 	vc.safeSession.GetOrCreateOptions().Workload = workload
 }
 
-// SetTransactionIsolation implements the SessionActions interface
-func (vc *vcursorImpl) SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation) {
-	vc.safeSession.GetOrCreateOptions().TransactionIsolation = isolation
-}
-
 // SetPlannerVersion implements the SessionActions interface
 func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
@@ -1068,6 +1076,7 @@ func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
 
 func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 	safeSession := NewAutocommitSession(vc.safeSession.Session)
+	safeSession.logging = vc.safeSession.logging
 	return &vcursorImpl{
 		safeSession:     safeSession,
 		keyspace:        vc.keyspace,

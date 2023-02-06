@@ -106,8 +106,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
 			"--disable_active_reparents",
 		}
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
@@ -249,6 +247,10 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 
 func TestLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	// Stop VTOrc because we want to stop replication to increase lag.
+	// We don't want VTOrc to fix this.
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 
 	t.Run("stopping replication", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)

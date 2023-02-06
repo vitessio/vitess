@@ -328,10 +328,7 @@ func rewriteProjectionOfDerivedTable(expr *sqlparser.AliasedExpr, semTable *sema
 	}
 	_, isDerivedTable := ti.(*semantics.DerivedTable)
 	if isDerivedTable {
-		expr.Expr, err = semantics.RewriteDerivedTableExpression(expr.Expr, ti)
-		if err != nil {
-			return err
-		}
+		expr.Expr = semantics.RewriteDerivedTableExpression(expr.Expr, ti)
 	}
 	return nil
 }
