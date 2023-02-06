@@ -201,7 +201,7 @@ func NewTabletPicker(
 
 	return &TabletPicker{
 		ts:            ts,
-		cells:         cells,
+		cells:         dedupeCells(cells),
 		localCellInfo: localCellInfo{localCell: localCell, aliasCells: aliasCellMap},
 		keyspace:      keyspace,
 		shard:         shard,
@@ -211,7 +211,7 @@ func NewTabletPicker(
 	}, nil
 }
 
-func (tp *TabletPicker) dedupeCells(cells []string) []string {
+func dedupeCells(cells []string) []string {
 	keys := make(map[string]bool)
 	dedupedCells := []string{}
 
@@ -371,7 +371,7 @@ func (tp *TabletPicker) GetMatchingTablets(ctx context.Context) []*topo.TabletIn
 
 		// Just in case a cell was passed in addition to its alias.
 		// Can happen if localPreference is not "". See NewTabletPicker
-		actualCells = tp.dedupeCells(actualCells)
+		actualCells = dedupeCells(actualCells)
 
 		for _, cell := range actualCells {
 			shortCtx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
