@@ -29,9 +29,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
