@@ -190,12 +190,16 @@ func compareAllText(args []eval, cmp int) (eval, error) {
 	collationB := evalCollation(args[0])
 
 	var ca collationAggregation
-	ca.add(env, collationB)
+	if err := ca.add(env, collationB); err != nil {
+		return nil, err
+	}
 
 	for _, arg := range args[1:] {
 		thisB := arg.toRawBytes()
 		thisColl := evalCollation(arg)
-		ca.add(env, thisColl)
+		if err := ca.add(env, thisColl); err != nil {
+			return nil, err
+		}
 
 		thisTC, coerceLeft, coerceRight, err := env.MergeCollations(thisColl, collationB, collations.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
 		if err != nil {

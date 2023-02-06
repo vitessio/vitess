@@ -209,6 +209,9 @@ func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 		truthy := evalIsTruthy(when) == boolTrue
 
 		then, err := whenThen.then.eval(env)
+		if err != nil {
+			return nil, err
+		}
 		if err := ca.add(local, evalCollation(then)); err != nil {
 			return nil, err
 		}
