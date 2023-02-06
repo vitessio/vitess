@@ -349,8 +349,8 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 // This section uses helpers used in tests, but also in the go/vt/vtexplain/vtexplain_vttablet.go.
 // Hence, it is here and not in the _test.go file.
 const (
-	createTableRegexp = "CREATE TABLE .* \\_vt\\..*"
-	alterTableRegexp  = "ALTER TABLE \\_vt\\..*"
+	createTableRegexp = "(?i)CREATE TABLE .* `?\\_vt\\`?..*"
+	alterTableRegexp  = "(?i)ALTER TABLE `?\\_vt\\`?..*"
 )
 
 var (
