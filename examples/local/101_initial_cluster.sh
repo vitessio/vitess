@@ -61,3 +61,4 @@ CELL=zone1 ./scripts/vtgate-up.sh
 
 # start vtadmin
 ./scripts/vtadmin-up.sh
+
