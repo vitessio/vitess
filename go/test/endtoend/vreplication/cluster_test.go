@@ -71,6 +71,7 @@ type ClusterConfig struct {
 	tabletPortBase       int
 	tabletGrpcPortBase   int
 	tabletMysqlPortBase  int
+	vtorcPort            int
 
 	vreplicationCompressGTID bool
 }
@@ -84,6 +85,8 @@ type VitessCluster struct {
 	Vtctld        *cluster.VtctldProcess
 	Vtctl         *cluster.VtctlProcess
 	VtctlClient   *cluster.VtctlClientProcess
+	VtctldClient  *cluster.VtctldClientProcess
+	VTOrcProcess  *cluster.VTOrcProcess
 }
 
 // Cell represents a Vitess cell within the test cluster
@@ -128,6 +131,29 @@ func setTempVtDataRoot() string {
 	_ = os.Setenv("VTDATAROOT", vtdataroot)
 	fmt.Printf("VTDATAROOT is %s\n", vtdataroot)
 	return vtdataroot
+}
+
+// StartVTOrc starts a VTOrc instance
+func (vc *VitessCluster) StartVTOrc() error {
+	// Start vtorc if not already running
+	if vc.VTOrcProcess != nil {
+		return nil
+	}
+	base := cluster.VtctlProcessInstance(vc.ClusterConfig.topoPort, vc.ClusterConfig.hostname)
+	base.Binary = "vtorc"
+	vtorcProcess := &cluster.VTOrcProcess{
+		VtctlProcess: *base,
+		LogDir:       vc.ClusterConfig.tmpDir,
+		Config:       cluster.VTOrcConfiguration{},
+		Port:         vc.ClusterConfig.vtorcPort,
+	}
+	err := vtorcProcess.Setup()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	vc.VTOrcProcess = vtorcProcess
+	return nil
 }
 
 // setVtMySQLRoot creates the root directory if it does not exist
@@ -225,6 +251,9 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	} else if dbType == "mysql" && majorVersion == "8.0" {
 		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
+	} else if dbType == "mariadb" && majorVersion == "10.10" {
+		versionFile = "mariadb-10.10.2-linux-systemd-x86_64.tar.gz"
+		url = "https://ftp.osuosl.org/pub/mariadb/mariadb-10.10.2/bintar-linux-systemd-x86_64/" + versionFile
 	} else {
 		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
 	}
@@ -282,6 +311,7 @@ func getClusterConfig(idx int, dataRootDir string) *ClusterConfig {
 		tabletPortBase:      basePort + 1000,
 		tabletGrpcPortBase:  basePort + 1991,
 		tabletMysqlPortBase: basePort + 1306,
+		vtorcPort:           basePort + 2639,
 		charset:             "utf8mb4",
 	}
 }
@@ -338,7 +368,8 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 
 	vc.VtctlClient = cluster.VtctlClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
 	require.NotNil(t, vc.VtctlClient)
-
+	vc.VtctldClient = cluster.VtctldClientProcessInstance(vc.ClusterConfig.hostname, vc.Vtctld.GrpcPort, vc.ClusterConfig.tmpDir)
+	require.NotNil(t, vc.VtctldClient)
 	return vc
 }
 
@@ -414,7 +445,6 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		vc.ClusterConfig.hostname,
 		vc.ClusterConfig.tmpDir,
 		options,
-		false,
 		vc.ClusterConfig.charset)
 
 	require.NotNil(t, vttablet)
@@ -438,8 +468,20 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 
 // AddShards creates shards given list of comma-separated keys with specified tablets in each shard
 func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspace, names string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) error {
+	// Add a VTOrc instance if one is not already running
+	if err := vc.StartVTOrc(); err != nil {
+		return err
+	}
+	// Disable global recoveries until the shard has been added.
+	// We need this because we run ISP in the end. Running ISP after VTOrc has already run PRS
+	// causes issues.
+	vc.VTOrcProcess.DisableGlobalRecoveries(t)
+	defer vc.VTOrcProcess.EnableGlobalRecoveries(t)
+
 	if value, exists := opts["DBTypeVersion"]; exists {
-		setupDBTypeVersion(t, value)
+		if resetFunc := setupDBTypeVersion(t, value); resetFunc != nil {
+			defer resetFunc()
+		}
 	}
 
 	arrNames := strings.Split(names, ",")
@@ -515,6 +557,7 @@ func (vc *VitessCluster) AddShards(t *testing.T, cells []*Cell, keyspace *Keyspa
 		require.NoError(t, vc.VtctlClient.InitializeShard(keyspace.Name, shardName, cells[0].Name, primaryTabletUID))
 		log.Infof("Finished creating shard %s", shard.Name)
 	}
+
 	return nil
 }
 
@@ -616,6 +659,12 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 			log.Infof("Successfully tore down topo %s", vc.Topo.Name)
 		}
 	}
+
+	if vc.VTOrcProcess != nil {
+		if err := vc.VTOrcProcess.TearDown(); err != nil {
+			log.Infof("Error stopping VTOrc: %s", err.Error())
+		}
+	}
 }
 
 // TearDown brings down a cluster, deleting processes, removing topo keys
@@ -694,7 +743,10 @@ func (vc *VitessCluster) startQuery(t *testing.T, query string) (func(t *testing
 	return commit, rollback
 }
 
-func setupDBTypeVersion(t *testing.T, value string) {
+// setupDBTypeVersion will perform any work needed to enable a specific
+// database type and version if not already installed. It returns a
+// function to reset any environment changes made.
+func setupDBTypeVersion(t *testing.T, value string) func() {
 	details := strings.Split(value, "-")
 	if len(details) != 2 {
 		t.Fatalf("Invalid database details: %s", value)
@@ -709,21 +761,23 @@ func setupDBTypeVersion(t *testing.T, value string) {
 	}
 	if dbTypeMajorVersion == dbVersionInUse {
 		t.Logf("Requsted database version %s is already installed, doing nothing.", dbTypeMajorVersion)
-	} else {
-		path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
-		// Set the root path and create it if needed
-		if err := setVtMySQLRoot(path); err != nil {
-			t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
-		}
-		defer unsetVtMySQLRoot()
-		// Download and extract the version artifact if needed
-		if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
-			t.Fatalf("Could not download %s, error: %v", majorVersion, err)
-		}
-		// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
-		if err := setDBFlavor(); err != nil {
-			t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
-		}
-		defer unsetDBFlavor()
+		return func() {}
+	}
+	path := fmt.Sprintf("/tmp/%s", dbTypeMajorVersion)
+	// Set the root path and create it if needed
+	if err := setVtMySQLRoot(path); err != nil {
+		t.Fatalf("Could not set VT_MYSQL_ROOT to %s, error: %v", path, err)
+	}
+	// Download and extract the version artifact if needed
+	if err := downloadDBTypeVersion(dbType, majorVersion, path); err != nil {
+		t.Fatalf("Could not download %s, error: %v", majorVersion, err)
+	}
+	// Set the MYSQL_FLAVOR OS ENV var for mysqlctl to use the correct config file
+	if err := setDBFlavor(); err != nil {
+		t.Fatalf("Could not set MYSQL_FLAVOR: %v", err)
+	}
+	return func() {
+		unsetDBFlavor()
+		unsetVtMySQLRoot()
 	}
 }

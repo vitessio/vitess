@@ -31,8 +31,6 @@ import (
 	"strings"
 
 	flag "github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/log"
 )
 
 // Parse wraps the standard library's flag.Parse to perform some sanity checking
@@ -68,6 +66,15 @@ func Parse(fs *flag.FlagSet) {
 
 	flag.CommandLine = fs
 	flag.Parse()
+}
+
+// IsFlagProvided returns if the given flag has been provided by the user explicitly or not
+func IsFlagProvided(name string) bool {
+	fl := flag.Lookup(name)
+	if fl != nil {
+		return fl.Changed
+	}
+	return false
 }
 
 // TrickGlog tricks glog into understanding that flags have been parsed.
@@ -234,46 +241,6 @@ func Arg(i int) string {
 	}
 
 	return ""
-}
-
-const (
-	singleDashLongFlagsWarning  = "Use of single-dash long flags is deprecated and will be removed in the next version of Vitess. Please use --%s instead"
-	mixedFlagsAndPosargsWarning = "Detected a dashed argument after a positional argument. " +
-		"Currently these are treated as posargs that may be parsed by a subcommand, but in the next version of Vitess they will be parsed as top-level flags, which may not be defined, causing errors. " +
-		"To preserve existing behavior, please update your invocation to include a \"--\" after all top-level flags to continue treating %s as a positional argument."
-)
-
-// Check and warn on any single-dash flags.
-// nolint:deadcode
-func warnOnSingleDashLongFlags(fs *goflag.FlagSet, argv []string, warningf func(msg string, args ...any)) {
-	fs.Visit(func(f *goflag.Flag) {
-		// Boolean flags with single-character names are okay to use the
-		// single-dash form. I don't _think_ we have any of these, but I'm being
-		// conservative here.
-		if bf, ok := f.Value.(maybeBoolFlag); ok && bf.IsBoolFlag() && len(f.Name) == 1 {
-			return
-		}
-
-		for _, arg := range argv {
-			if strings.HasPrefix(arg, "-"+f.Name) {
-				warningf(singleDashLongFlagsWarning, f.Name)
-			}
-		}
-	})
-}
-
-// Check and warn for any mixed posarg / dashed-arg on the CLI.
-// nolint:deadcode
-func warnOnMixedPositionalAndFlagArguments(posargs []string, warningf func(msg string, args ...any)) {
-	for _, arg := range posargs {
-		if arg == "--" {
-			break
-		}
-
-		if strings.HasPrefix(arg, "-") {
-			log.Warningf(mixedFlagsAndPosargsWarning, arg)
-		}
-	}
 }
 
 // From the standard library documentation:

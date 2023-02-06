@@ -29,9 +29,8 @@ import (
 type mysqlVersion string
 
 const (
-	mysql57    mysqlVersion = "mysql57"
-	mysql80    mysqlVersion = "mysql80"
-	mariadb103 mysqlVersion = "mariadb103"
+	mysql57 mysqlVersion = "mysql57"
+	mysql80 mysqlVersion = "mysql80"
 
 	defaultMySQLVersion = mysql80
 )
@@ -44,7 +43,7 @@ var (
 )
 
 var (
-	unitTestDatabases = []mysqlVersion{mysql57, mysql80, mariadb103}
+	unitTestDatabases = []mysqlVersion{mysql57, mysql80}
 )
 
 const (
@@ -91,10 +90,7 @@ var (
 		"onlineddl_vrepl_suite",
 		"vreplication_migrate_vdiff2_convert_tz",
 		"onlineddl_revert",
-		"onlineddl_declarative",
-		"onlineddl_singleton",
 		"onlineddl_scheduler",
-		"onlineddl_revertible",
 		"tabletmanager_throttler",
 		"tabletmanager_throttler_topo",
 		"tabletmanager_throttler_custom_config",

@@ -17,12 +17,11 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -115,7 +114,7 @@ type flavor interface {
 
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
-	sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error
+	sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos Position) error
 
 	// readBinlogEvent reads the next BinlogEvent from the connection.
 	readBinlogEvent(c *Conn) (BinlogEvent, error)
@@ -361,8 +360,8 @@ func (c *Conn) StartSQLThreadCommand() string {
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
-func (c *Conn) SendBinlogDumpCommand(serverID uint32, startPos Position) error {
-	return c.flavor.sendBinlogDumpCommand(c, serverID, startPos)
+func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, startPos Position) error {
+	return c.flavor.sendBinlogDumpCommand(c, serverID, binlogFilename, startPos)
 }
 
 // ReadBinlogEvent reads the next BinlogEvent. This must be used
@@ -479,11 +478,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	executedPosStr := fields["Exec_Master_Log_Pos"]
 	file := fields["Relay_Master_Log_File"]
 	if file != "" && executedPosStr != "" {
-		filePos, err := strconv.Atoi(executedPosStr)
+		filePos, err := strconv.ParseUint(executedPosStr, 10, 32)
 		if err == nil {
 			status.FilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  filePos,
+				pos:  uint32(filePos),
 			}
 		}
 	}
@@ -491,11 +490,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	readPosStr := fields["Read_Master_Log_Pos"]
 	file = fields["Master_Log_File"]
 	if file != "" && readPosStr != "" {
-		fileRelayPos, err := strconv.Atoi(readPosStr)
+		fileRelayPos, err := strconv.ParseUint(readPosStr, 10, 32)
 		if err == nil {
 			status.RelayLogSourceBinlogEquivalentPosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  fileRelayPos,
+				pos:  uint32(fileRelayPos),
 			}
 		}
 	}
@@ -503,11 +502,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	relayPosStr := fields["Relay_Log_Pos"]
 	file = fields["Relay_Log_File"]
 	if file != "" && relayPosStr != "" {
-		relayFilePos, err := strconv.Atoi(relayPosStr)
+		relayFilePos, err := strconv.ParseUint(relayPosStr, 10, 32)
 		if err == nil {
 			status.RelayLogFilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  relayFilePos,
+				pos:  uint32(relayFilePos),
 			}
 		}
 	}
@@ -527,11 +526,11 @@ func parsePrimaryStatus(fields map[string]string) PrimaryStatus {
 	fileExecPosStr := fields["Position"]
 	file := fields["File"]
 	if file != "" && fileExecPosStr != "" {
-		filePos, err := strconv.Atoi(fileExecPosStr)
+		filePos, err := strconv.ParseUint(fileExecPosStr, 10, 32)
 		if err == nil {
 			status.FilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  filePos,
+				pos:  uint32(filePos),
 			}
 		}
 	}

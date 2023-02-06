@@ -124,6 +124,12 @@ func TestMain(m *testing.M) {
 			return 1, err
 		}
 
+		vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
+		_, err = vtctldClientProcess.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--durability-policy=semi_sync")
+		if err != nil {
+			return 1, err
+		}
+
 		shard1Primary = clusterInstance.NewVttabletInstance("primary", 0, cell1)
 		shard1Replica = clusterInstance.NewVttabletInstance("replica", 0, cell2)
 		shard1Rdonly = clusterInstance.NewVttabletInstance("rdonly", 0, cell2)
@@ -147,7 +153,6 @@ func TestMain(m *testing.M) {
 				hostname,
 				clusterInstance.TmpDirectory,
 				commonTabletArg,
-				true,
 				clusterInstance.DefaultCharset,
 			)
 			tablet.VttabletProcess.SupportsBackup = true
@@ -161,10 +166,6 @@ func TestMain(m *testing.M) {
 			if err := proc.Wait(); err != nil {
 				return 1, err
 			}
-		}
-
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
-			return 1, err
 		}
 
 		shard1 = cluster.Shard{
@@ -209,6 +210,10 @@ func TestMain(m *testing.M) {
 		}
 
 		if err := clusterInstance.VtctlclientProcess.InitializeShard(keyspaceName, shard2.Name, shard2Primary.Cell, shard2Primary.TabletUID); err != nil {
+			return 1, err
+		}
+
+		if err := clusterInstance.StartVTOrc(keyspaceName); err != nil {
 			return 1, err
 		}
 

@@ -29,6 +29,14 @@ var integralTypes = map[string]bool{
 	"bigint":    true,
 }
 
+var floatTypes = map[string]bool{
+	"float":  true,
+	"float4": true,
+	"float8": true,
+	"double": true,
+	"real":   true,
+}
+
 var charsetTypes = map[string]bool{
 	"char":       true,
 	"varchar":    true,
@@ -38,4 +46,8 @@ var charsetTypes = map[string]bool{
 	"longtext":   true,
 	"enum":       true,
 	"set":        true,
+}
+
+func IsIntegralType(columnType string) bool {
+	return integralTypes[columnType]
 }

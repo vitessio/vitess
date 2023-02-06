@@ -30,29 +30,32 @@ func BreakExpressionInLHSandRHS(
 	expr sqlparser.Expr,
 	lhs semantics.TableSet,
 ) (bvNames []string, columns []*sqlparser.ColName, rewrittenExpr sqlparser.Expr, err error) {
-	rewrittenExpr = sqlparser.CloneExpr(expr)
-	_ = sqlparser.Rewrite(rewrittenExpr, nil, func(cursor *sqlparser.Cursor) bool {
-		switch node := cursor.Node().(type) {
-		case *sqlparser.ColName:
-			deps := ctx.SemTable.RecursiveDeps(node)
-			if deps.IsEmpty() {
-				err = vterrors.VT13001("unknown column. has the AST been copied?")
-				return false
-			}
-			if deps.IsSolvedBy(lhs) {
-				node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
-				columns = append(columns, node)
-				bvName := node.CompliantName()
-				bvNames = append(bvNames, bvName)
-				arg := sqlparser.NewArgument(bvName)
-				// we are replacing one of the sides of the comparison with an argument,
-				// but we don't want to lose the type information we have, so we copy it over
-				ctx.SemTable.CopyExprInfo(node, arg)
-				cursor.Replace(arg)
-			}
+	rewrittenExpr = sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
+		node, ok := cursor.Node().(*sqlparser.ColName)
+		if !ok {
+			return
 		}
-		return true
-	})
+		deps := ctx.SemTable.RecursiveDeps(node)
+		if deps.IsEmpty() {
+			err = vterrors.VT13001("unknown column. has the AST been copied?")
+			cursor.StopTreeWalk()
+			return
+		}
+		if !deps.IsSolvedBy(lhs) {
+			return
+		}
+
+		node.Qualifier.Qualifier = sqlparser.NewIdentifierCS("")
+		columns = append(columns, node)
+		bvName := node.CompliantName()
+		bvNames = append(bvNames, bvName)
+		arg := sqlparser.NewArgument(bvName)
+		// we are replacing one of the sides of the comparison with an argument,
+		// but we don't want to lose the type information we have, so we copy it over
+		ctx.SemTable.CopyExprInfo(node, arg)
+		cursor.Replace(arg)
+	}, nil).(sqlparser.Expr)
+
 	if err != nil {
 		return nil, nil, nil, err
 	}

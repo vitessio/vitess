@@ -108,8 +108,8 @@ func ParseTabletAlias(aliasStr string) (*topodatapb.TabletAlias, error) {
 }
 
 // ParseTabletSet returns a set of tablets based on a provided comma separated list of tablets.
-func ParseTabletSet(tabletListStr string) sets.String {
-	set := sets.NewString()
+func ParseTabletSet(tabletListStr string) sets.Set[string] {
+	set := sets.New[string]()
 	if tabletListStr == "" {
 		return set
 	}

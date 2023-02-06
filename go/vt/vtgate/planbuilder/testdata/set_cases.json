@@ -566,9 +566,14 @@
         "OperatorType": "Set",
         "Ops": [
           {
-            "Type": "SysVarAware",
+            "Type": "SysVarSet",
             "Name": "transaction_isolation",
-            "Expr": "VARCHAR(\"read-committed\")"
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "Expr": "'READ-COMMITTED'",
+            "SupportSetVar": false
           }
         ],
         "Inputs": [

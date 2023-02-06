@@ -163,7 +163,11 @@ func (vs *vstreamer) Cancel() {
 func (vs *vstreamer) Stream() error {
 	//defer vs.cancel()
 	ctx := context.Background()
-	defer ctx.Done()
+	vs.vse.vstreamerCount.Add(1)
+	defer func() {
+		ctx.Done()
+		vs.vse.vstreamerCount.Add(-1)
+	}()
 	vs.vse.vstreamersCreated.Add(1)
 	log.Infof("Starting Stream() with startPos %s", vs.startPos)
 	pos, err := mysql.DecodePosition(vs.startPos)
@@ -190,16 +194,16 @@ func (vs *vstreamer) replicate(ctx context.Context) error {
 	}
 	defer conn.Close()
 
-	events, err := conn.StartBinlogDumpFromPosition(vs.ctx, vs.pos)
+	events, errs, err := conn.StartBinlogDumpFromPosition(vs.ctx, "", vs.pos)
 	if err != nil {
 		return wrapError(err, vs.pos, vs.vse)
 	}
-	err = vs.parseEvents(vs.ctx, events)
+	err = vs.parseEvents(vs.ctx, events, errs)
 	return wrapError(err, vs.pos, vs.vse)
 }
 
 // parseEvents parses and sends events.
-func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent) error {
+func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.BinlogEvent, errs <-chan error) error {
 	// bufferAndTransmit uses bufferedEvents and curSize to buffer events.
 	var (
 		bufferedEvents []*binlogdatapb.VEvent
@@ -384,6 +388,8 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				// Increment this counter for testing.
 				vschemaUpdateCount.Add(1)
 			}
+		case err := <-errs:
+			return err
 		case <-ctx.Done():
 			return nil
 		case <-hbTimer.C:

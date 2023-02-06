@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   close_stale_pull_requests:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       - uses: actions/stale@v5
         with:

@@ -65,7 +65,7 @@ func vdiff1(t *testing.T, ksWorkflow, cells string) {
 
 func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 	t.Run(fmt.Sprintf("vdiff1 %s", ksWorkflow), func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
 		log.Infof("vdiff1 err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
@@ -165,7 +165,7 @@ func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDif
 
 func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
 	var err error
-	args := []string{"VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
+	args := []string{"VDiff", "--", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
 	if len(extraFlags) > 0 {
 		args = append(args, extraFlags...)
 	}

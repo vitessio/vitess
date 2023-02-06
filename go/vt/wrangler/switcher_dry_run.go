@@ -189,7 +189,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.Strea
 }
 
 func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
-	dr.drLog.Log(fmt.Sprintf("Wait for VReplication on stopped streams to catchup for upto %v", filteredReplicationWaitTime))
+	dr.drLog.Log(fmt.Sprintf("Wait for VReplication on stopped streams to catchup for up to %v", filteredReplicationWaitTime))
 	return nil
 }
 

@@ -124,10 +124,7 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 		return nil, err
 	}
 
-	newExpr, err := semantics.RewriteDerivedTableExpression(expr, tableInfo)
-	if err != nil {
-		return nil, err
-	}
+	newExpr := semantics.RewriteDerivedTableExpression(expr, tableInfo)
 	d.Source, err = d.Source.AddPredicate(ctx, newExpr)
 	if err != nil {
 		return nil, err

@@ -30,10 +30,8 @@ import (
 )
 
 const (
-	demoteQuery                = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
-	disableSemiSyncSourceQuery = "SET GLOBAL rpl_semi_sync_master_enabled = 0"
-	enableSemiSyncSourceQuery  = "SET GLOBAL rpl_semi_sync_master_enabled = 1"
-	promoteQuery               = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
+	demoteQuery  = "SET GLOBAL read_only = ON;FLUSH TABLES WITH READ LOCK;UNLOCK TABLES;"
+	promoteQuery = "STOP SLAVE;RESET SLAVE ALL;SET GLOBAL read_only = OFF;"
 
 	hostname = "localhost"
 )
@@ -51,9 +49,6 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 	oldPrimary := primary
 	newPrimary := replica
 	primary.VttabletProcess.QueryTablet(demoteQuery, keyspaceUnshardedName, true)
-	if primary.VttabletProcess.EnableSemiSync {
-		primary.VttabletProcess.QueryTablet(disableSemiSyncSourceQuery, keyspaceUnshardedName, true)
-	}
 
 	// Wait for replica to catch up to primary.
 	cluster.WaitForReplicationPos(t, primary, replica, "localhost", 60.0)
@@ -68,10 +63,6 @@ func failoverExternalReparenting(t *testing.T, clusterInstance *cluster.LocalPro
 
 	// Promote replica to new primary.
 	replica.VttabletProcess.QueryTablet(promoteQuery, keyspaceUnshardedName, true)
-
-	if replica.VttabletProcess.EnableSemiSync {
-		replica.VttabletProcess.QueryTablet(enableSemiSyncSourceQuery, keyspaceUnshardedName, true)
-	}
 
 	// Configure old primary to replicate from new primary.
 

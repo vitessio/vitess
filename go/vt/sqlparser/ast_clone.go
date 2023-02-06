@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -223,8 +223,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJSONKeysExpr(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
-	case JSONObjectParam:
-		return CloneJSONObjectParam(in)
+	case *JSONObjectParam:
+		return CloneRefOfJSONObjectParam(in)
 	case *JSONOverlapsExpr:
 		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
@@ -471,6 +471,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfUpdateXMLExpr(in)
 	case *Use:
 		return CloneRefOfUse(in)
+	case *VExplainStmt:
+		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
 	case ValTuple:
@@ -867,7 +869,7 @@ func CloneRefOfColumnDefinition(n *ColumnDefinition) *ColumnDefinition {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Type = CloneColumnType(n.Type)
+	out.Type = CloneRefOfColumnType(n.Type)
 	return &out
 }
 
@@ -1575,9 +1577,15 @@ func CloneRefOfJSONObjectExpr(n *JSONObjectExpr) *JSONObjectExpr {
 	return &out
 }
 
-// CloneJSONObjectParam creates a deep clone of the input.
-func CloneJSONObjectParam(n JSONObjectParam) JSONObjectParam {
-	return *CloneRefOfJSONObjectParam(&n)
+// CloneRefOfJSONObjectParam creates a deep clone of the input.
+func CloneRefOfJSONObjectParam(n *JSONObjectParam) *JSONObjectParam {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Key = CloneExpr(n.Key)
+	out.Value = CloneExpr(n.Value)
+	return &out
 }
 
 // CloneRefOfJSONOverlapsExpr creates a deep clone of the input.
@@ -2899,6 +2907,17 @@ func CloneRefOfUse(n *Use) *Use {
 	return &out
 }
 
+// CloneRefOfVExplainStmt creates a deep clone of the input.
+func CloneRefOfVExplainStmt(n *VExplainStmt) *VExplainStmt {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Statement = CloneStatement(n.Statement)
+	out.Comments = CloneRefOfParsedComments(n.Comments)
+	return &out
+}
+
 // CloneRefOfVStream creates a deep clone of the input.
 func CloneRefOfVStream(n *VStream) *VStream {
 	if n == nil {
@@ -3810,6 +3829,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfUpdate(in)
 	case *Use:
 		return CloneRefOfUse(in)
+	case *VExplainStmt:
+		return CloneRefOfVExplainStmt(in)
 	case *VStream:
 		return CloneRefOfVStream(in)
 	default:
@@ -3915,11 +3936,6 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 		res[i] = CloneRefOfWhen(x)
 	}
 	return res
-}
-
-// CloneColumnType creates a deep clone of the input.
-func CloneColumnType(n ColumnType) ColumnType {
-	return *CloneRefOfColumnType(&n)
 }
 
 // CloneRefOfColumnTypeOptions creates a deep clone of the input.
@@ -4034,17 +4050,6 @@ func CloneSliceOfRefOfJSONObjectParam(n []*JSONObjectParam) []*JSONObjectParam {
 	return res
 }
 
-// CloneRefOfJSONObjectParam creates a deep clone of the input.
-func CloneRefOfJSONObjectParam(n *JSONObjectParam) *JSONObjectParam {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Key = CloneExpr(n.Key)
-	out.Value = CloneExpr(n.Value)
-	return &out
-}
-
 // CloneSliceOfRefOfJtColumnDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfJtColumnDefinition(n []*JtColumnDefinition) []*JtColumnDefinition {
 	if n == nil {
@@ -4074,7 +4079,7 @@ func CloneRefOfJtPathColDef(n *JtPathColDef) *JtPathColDef {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Type = CloneColumnType(n.Type)
+	out.Type = CloneRefOfColumnType(n.Type)
 	out.Path = CloneExpr(n.Path)
 	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
 	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)

@@ -26,6 +26,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	"github.com/spf13/pflag"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -152,8 +153,6 @@ func registerFlags(fs *pflag.FlagSet) {
 
 	fs.StringVar(&config.TabletHostName, "tablet_hostname", "localhost", "The hostname to use for the tablet otherwise it will be derived from OS' hostname")
 
-	fs.BoolVar(&config.InitWorkflowManager, "workflow_manager_init", false, "Enable workflow manager")
-
 	fs.StringVar(&config.VSchemaDDLAuthorizedUsers, "vschema_ddl_authorized_users", "", "Comma separated list of users authorized to execute vschema ddl operations via vtgate")
 
 	fs.StringVar(&config.ForeignKeyMode, "foreign_key_mode", "allow", "This is to provide how to handle foreign key constraint in create/alter table. Valid values are: allow, disallow")
@@ -165,6 +164,7 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&config.ExternalTopoGlobalServerAddress, "external_topo_global_server_address", "", "the address of the global topology server for vtcombo process")
 	fs.StringVar(&config.ExternalTopoGlobalRoot, "external_topo_global_root", "", "the path of the global topology data in the global topology server for vtcombo process")
 
+	fs.DurationVar(&config.VtgateTabletRefreshInterval, "tablet_refresh_interval", 10*time.Second, "Interval at which vtgate refreshes tablet information from topology server.")
 	acl.RegisterFlags(fs)
 }
 

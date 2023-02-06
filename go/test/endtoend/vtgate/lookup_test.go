@@ -42,6 +42,45 @@ func TestUnownedLookupInsertNull(t *testing.T) {
 	utils.Exec(t, conn, "insert into t8(id, parent_id, t9_id) VALUES (3, 2, 2)")
 }
 
+func TestLookupUniqueWithAutocommit(t *testing.T) {
+	conn, closer := start(t)
+	defer closer()
+
+	// conn2 is to check entries in the lookup table
+	conn2, err := mysql.Connect(context.Background(), &vtParams)
+	require.Nil(t, err)
+	defer conn2.Close()
+
+	// Test that all vindex writes are autocommitted outside of any ongoing transactions.
+	//
+	// Also test that autocommited vindex entries are visible inside transactions, as lookups
+	// should also use the autocommit connection.
+
+	utils.Exec(t, conn, "insert into t10(id, sharding_key) VALUES (1, 1)")
+
+	utils.AssertMatches(t, conn2, "select id from t10_id_to_keyspace_id_idx order by id asc", "[[INT64(1)]]")
+	utils.AssertMatches(t, conn, "select id from t10 where id = 1", "[[INT64(1)]]")
+
+	utils.Exec(t, conn, "begin")
+
+	utils.Exec(t, conn, "insert into t10(id, sharding_key) VALUES (2, 1)")
+
+	utils.AssertMatches(t, conn2, "select id from t10_id_to_keyspace_id_idx order by id asc", "[[INT64(1)] [INT64(2)]]")
+	utils.AssertMatches(t, conn, "select id from t10 where id = 2", "[[INT64(2)]]")
+
+	utils.Exec(t, conn, "insert into t10(id, sharding_key) VALUES (3, 1)")
+
+	utils.AssertMatches(t, conn2, "select id from t10_id_to_keyspace_id_idx order by id asc", "[[INT64(1)] [INT64(2)] [INT64(3)]]")
+	utils.AssertMatches(t, conn, "select id from t10 where id = 3", "[[INT64(3)]]")
+
+	utils.Exec(t, conn, "savepoint sp_foobar")
+
+	utils.Exec(t, conn, "insert into t10(id, sharding_key) VALUES (4, 1)")
+
+	utils.AssertMatches(t, conn2, "select id from t10_id_to_keyspace_id_idx order by id asc", "[[INT64(1)] [INT64(2)] [INT64(3)] [INT64(4)]]")
+	utils.AssertMatches(t, conn, "select id from t10 where id = 4", "[[INT64(4)]]")
+}
+
 func TestUnownedLookupInsertChecksKeyspaceIdsAreMatching(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()

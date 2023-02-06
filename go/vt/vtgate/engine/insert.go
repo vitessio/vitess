@@ -379,7 +379,7 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
-	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, true /* rollbackOnError */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /* rollbackOnError */, autocommit)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}
@@ -558,7 +558,7 @@ func (ins *Insert) processGenerateFromValues(
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
 		}
 		bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-		qr, err := vcursor.ExecuteStandalone(ctx, ins.Generate.Query, bindVars, rss[0])
+		qr, err := vcursor.ExecuteStandalone(ctx, ins, ins.Generate.Query, bindVars, rss[0])
 		if err != nil {
 			return 0, err
 		}
@@ -620,7 +620,7 @@ func (ins *Insert) processGenerateFromRows(
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
 	}
 	bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-	qr, err := vcursor.ExecuteStandalone(ctx, ins.Generate.Query, bindVars, rss[0])
+	qr, err := vcursor.ExecuteStandalone(ctx, ins, ins.Generate.Query, bindVars, rss[0])
 	if err != nil {
 		return 0, err
 	}
@@ -1026,7 +1026,7 @@ func (ins *Insert) executeUnshardedTableQuery(ctx context.Context, vcursor VCurs
 	if err != nil {
 		return 0, nil, err
 	}
-	qr, err := execShard(ctx, vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
+	qr, err := execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
 		return 0, nil, err
 	}

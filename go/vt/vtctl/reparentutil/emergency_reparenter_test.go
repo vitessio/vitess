@@ -1964,7 +1964,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 	}{
 		{
 			name:                 "success",
-			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.NewString("zone1-0000000404")},
+			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.New[string]("zone1-0000000404")},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -2341,7 +2341,7 @@ func TestEmergencyReparenter_promoteNewPrimary(t *testing.T) {
 		},
 		{
 			name:                 "success in initialization",
-			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.NewString("zone1-0000000404")},
+			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.New[string]("zone1-0000000404")},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -3165,7 +3165,7 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 	}{
 		{
 			name:                 "success",
-			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.NewString("zone1-0000000404")},
+			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.New[string]("zone1-0000000404")},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -3489,6 +3489,49 @@ func TestEmergencyReparenter_reparentReplicas(t *testing.T) {
 			shard:     "-",
 			ts:        memorytopo.NewServer("zone1"),
 			shouldErr: false,
+		}, {
+			name:                 "single replica failing to SetReplicationSource does not fail the promotion",
+			emergencyReparentOps: EmergencyReparentOptions{},
+			tmc: &testutil.TabletManagerClient{
+				PopulateReparentJournalResults: map[string]error{
+					"zone1-0000000100": nil,
+				},
+				PrimaryPositionResults: map[string]struct {
+					Position string
+					Error    error
+				}{
+					"zone1-0000000100": {
+						Error: nil,
+					},
+				},
+				SetReplicationSourceResults: map[string]error{
+					"zone1-0000000101": assert.AnError,
+				},
+			},
+			newPrimaryTabletAlias: "zone1-0000000100",
+			tabletMap: map[string]*topo.TabletInfo{
+				"zone1-0000000100": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  100,
+						},
+					},
+				},
+				"zone1-0000000101": {
+					Tablet: &topodatapb.Tablet{
+						Alias: &topodatapb.TabletAlias{
+							Cell: "zone1",
+							Uid:  101,
+						},
+					},
+				},
+			},
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{},
+			keyspace:  "testkeyspace",
+			shard:     "-",
+			ts:        memorytopo.NewServer("zone1"),
+			shouldErr: false,
 		},
 	}
 
@@ -3561,7 +3604,7 @@ func TestEmergencyReparenter_promoteIntermediateSource(t *testing.T) {
 	}{
 		{
 			name:                 "success",
-			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.NewString("zone1-0000000404")},
+			emergencyReparentOps: EmergencyReparentOptions{IgnoreReplicas: sets.New[string]("zone1-0000000404")},
 			tmc: &testutil.TabletManagerClient{
 				PopulateReparentJournalResults: map[string]error{
 					"zone1-0000000100": nil,
@@ -4205,7 +4248,7 @@ func TestParentContextCancelled(t *testing.T) {
 	durability, err := GetDurabilityPolicy("none")
 	require.NoError(t, err)
 	// Setup ERS options with a very high wait replicas timeout
-	emergencyReparentOps := EmergencyReparentOptions{IgnoreReplicas: sets.NewString("zone1-0000000404"), WaitReplicasTimeout: time.Minute, durability: durability}
+	emergencyReparentOps := EmergencyReparentOptions{IgnoreReplicas: sets.New[string]("zone1-0000000404"), WaitReplicasTimeout: time.Minute, durability: durability}
 	// Make the replica tablet return its results after 3 seconds
 	tmc := &testutil.TabletManagerClient{
 		PrimaryPositionResults: map[string]struct {

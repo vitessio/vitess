@@ -181,6 +181,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 
 	fs.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
+
+	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 }
 
 var (
@@ -313,6 +315,7 @@ type TabletConfig struct {
 	TxThrottlerHealthCheckCells []string `json:"-"`
 
 	EnableLagThrottler bool `json:"-"`
+	EnableTableGC      bool `json:"-"` // can be turned off programmatically by tests
 
 	TransactionLimitConfig `json:"-"`
 
@@ -321,6 +324,8 @@ type TabletConfig struct {
 	EnableSettingsPool       bool `json:"-"`
 
 	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
+
+	EnableViews bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -563,6 +568,7 @@ var defaultConfig = TabletConfig{
 
 	EnforceStrictTransTables: true,
 	EnableOnlineDDL:          true,
+	EnableTableGC:            true,
 
 	RowStreamer: RowStreamerConfig{
 		MaxInnoDBTrxHistLen: 1000000,

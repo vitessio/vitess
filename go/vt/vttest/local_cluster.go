@@ -27,7 +27,10 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
+
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
@@ -143,6 +146,8 @@ type Config struct {
 	ExternalTopoGlobalServerAddress string
 
 	ExternalTopoGlobalRoot string
+
+	VtgateTabletRefreshInterval time.Duration
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -494,8 +499,30 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	return nil
 }
 
+func (db *LocalCluster) createVTSchema() error {
+	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if err := db.Execute([]string{sidecardb.UseSidecarDatabaseQuery}, ""); err != nil {
+				return nil, err
+			}
+		}
+		err := db.Execute([]string{query}, "")
+		return &sqltypes.Result{}, err
+	}
+
+	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
+		return err
+	}
+	return nil
+}
 func (db *LocalCluster) createDatabases() error {
 	log.Info("Creating databases in cluster...")
+
+	// The tablets created in vttest do not follow the same tablet init process, so we need to explicitly create
+	// the sidecar database tables
+	if err := db.createVTSchema(); err != nil {
+		return err
+	}
 
 	var sql []string
 	for _, kpb := range db.Topology.Keyspaces {
@@ -527,7 +554,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	for _, cmd := range sql {
 		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
-		_, err := conn.ExecuteFetch(cmd, 0, false)
+		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
 		}

@@ -42,7 +42,6 @@ import (
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtctl"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
@@ -52,8 +51,8 @@ import (
 
 var (
 	localCell        string
-	showTopologyCRUD = true
 	proxyTablets     bool
+	showTopologyCRUD = true
 )
 
 // This file implements a REST-style API for the vtctld web interface.
@@ -97,8 +96,9 @@ func init() {
 
 func registerVtctldAPIFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&localCell, "cell", localCell, "cell to use")
-	fs.BoolVar(&showTopologyCRUD, "vtctld_show_topology_crud", showTopologyCRUD, "Controls the display of the CRUD topology actions in the vtctld UI.")
 	fs.BoolVar(&proxyTablets, "proxy_tablets", proxyTablets, "Setting this true will make vtctld proxy the tablet status instead of redirecting to them")
+	fs.BoolVar(&showTopologyCRUD, "vtctld_show_topology_crud", showTopologyCRUD, "Controls the display of the CRUD topology actions in the vtctld UI.")
+	fs.MarkDeprecated("vtctld_show_topology_crud", "It is no longer applicable because vtctld no longer provides a UI.")
 }
 
 func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.HealthCheck) *TabletWithStatsAndURL {
@@ -668,9 +668,6 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		resp := make(map[string]any)
 		resp["activeReparents"] = !mysqlctl.DisableActiveReparents
 		resp["showStatus"] = enableRealtimeStats
-		resp["showTopologyCRUD"] = showTopologyCRUD
-		resp["showWorkflows"] = workflowManagerInit
-		resp["workflows"] = workflow.AvailableFactories()
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {
 			return fmt.Errorf("json error: %v", err)

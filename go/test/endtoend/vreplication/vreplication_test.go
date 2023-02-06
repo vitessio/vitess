@@ -220,7 +220,6 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		// to avoid flakiness when the CI is very slow.
 		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
-
 		parallelInsertWorkers,
 	}
 
@@ -270,6 +269,10 @@ func TestVreplicationCopyParallel(t *testing.T) {
 }
 
 func testBasicVreplicationWorkflow(t *testing.T) {
+	testVreplicationWorkflows(t, false)
+}
+
+func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -303,6 +306,10 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	shardOrders(t)
 	shardMerchant(t)
 
+	if minimal {
+		return
+	}
+
 	materializeProduct(t)
 
 	materializeMerchantOrders(t)
@@ -334,6 +341,15 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t)
+}
+
+// TestMoveTablesMariaDBToMySQL tests that MoveTables works between a MariaDB source
+// and a MySQL target as while MariaDB is not supported in Vitess v14+ we want
+// MariaDB users to have a way to migrate into Vitess.
+func TestMoveTablesMariaDBToMySQL(t *testing.T) {
+	sourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	testVreplicationWorkflows(t, true /* only do MoveTables */)
 }
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {
@@ -1022,12 +1038,12 @@ func shardOrders(t *testing.T) {
 func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", ksWorkflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", ksWorkflow)
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
 	})
 	t.Run("check that vdiff2 won't run", func(t2 *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", ksWorkflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", ksWorkflow)
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
 

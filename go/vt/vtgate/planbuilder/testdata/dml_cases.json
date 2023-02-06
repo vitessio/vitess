@@ -6014,16 +6014,17 @@
   {
     "comment": "explain dml without any directive should fail",
     "query": "explain format=vtexplain delete from user",
-    "plan": "VT09008: explain format = vtexplain will actually run queries"
+    "plan": "VT09008: vexplain queries/all will actually run queries"
   },
   {
-    "comment": "explain dml with actually_run_query directive",
-    "query": "explain /*vt+ execute_dml_queries */ format=vtexplain delete from user",
+    "comment": "vexplain dml with actually_run_query directive",
+    "query": "vexplain /*vt+ execute_dml_queries */ queries delete from user",
     "plan": {
       "QueryType": "EXPLAIN",
-      "Original": "explain /*vt+ execute_dml_queries */ format=vtexplain delete from user",
+      "Original": "vexplain /*vt+ execute_dml_queries */ queries delete from user",
       "Instructions": {
-        "OperatorType": "VTEXPLAIN",
+        "OperatorType": "VEXPLAIN",
+        "Type": "queries",
         "Inputs": [
           {
             "OperatorType": "Delete",
@@ -6049,12 +6050,13 @@
   },
   {
     "comment": "explain dml with actually_run_query directive - 2",
-    "query": "explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user",
+    "query": "vexplain /*vt+ eXECUTE_DML_QUERIES */ queries delete from user",
     "plan": {
       "QueryType": "EXPLAIN",
-      "Original": "explain /*vt+ eXECUTE_DML_QUERIES */ format=vtexplain delete from user",
+      "Original": "vexplain /*vt+ eXECUTE_DML_QUERIES */ queries delete from user",
       "Instructions": {
-        "OperatorType": "VTEXPLAIN",
+        "OperatorType": "VEXPLAIN",
+        "Type": "queries",
         "Inputs": [
           {
             "OperatorType": "Delete",

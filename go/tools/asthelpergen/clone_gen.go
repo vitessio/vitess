@@ -93,7 +93,7 @@ func (c *cloneGen) sliceMethod(t types.Type, slice *types.Slice, spi generatorSP
 	funcName := cloneName + name
 
 	c.addFunc(funcName,
-		//func (n Bytes) Clone() Bytes {
+		// func (n Bytes) Clone() Bytes {
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(typeString)).Id(typeString).Block(
 			// if n == nil { return nil }
 			ifNilReturnNil("n"),
@@ -116,9 +116,9 @@ func (c *cloneGen) copySliceElement(t types.Type, elType types.Type, spi generat
 		return jen.Id("copy").Call(jen.Id("res"), jen.Id("n"))
 	}
 
-	//for i := range n {
+	// for i := range n {
 	//  res[i] = CloneAST(x)
-	//}
+	// }
 	spi.addType(elType)
 
 	return jen.For(jen.List(jen.Id("i"), jen.Id("x"))).Op(":=").Range().Id("n").Block(
@@ -128,17 +128,17 @@ func (c *cloneGen) copySliceElement(t types.Type, elType types.Type, spi generat
 
 func (c *cloneGen) interfaceMethod(t types.Type, iface *types.Interface, spi generatorSPI) error {
 
-	//func CloneAST(in AST) AST {
+	// func CloneAST(in AST) AST {
 	//	if in == nil {
 	//	return nil
-	//}
+	// }
 	//	switch in := in.(type) {
-	//case *RefContainer:
+	// case *RefContainer:
 	//	return in.CloneRefOfRefContainer()
-	//}
+	// }
 	//	// this should never happen
 	//	return nil
-	//}
+	// }
 
 	typeString := types.TypeString(t, noQualifier)
 	typeName := printableTypeName(t)
@@ -196,7 +196,7 @@ func (c *cloneGen) ptrToBasicMethod(t types.Type, _ *types.Basic, spi generatorS
 func (c *cloneGen) ptrToOtherMethod(t types.Type, ptr *types.Pointer, spi generatorSPI) error {
 	receiveType := types.TypeString(t, noQualifier)
 
-	funcName := "Clone" + printableTypeName(t)
+	funcName := cloneName + printableTypeName(t)
 	c.addFunc(funcName,
 		jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType).Block(
 			ifNilReturnNil("n"),
@@ -224,7 +224,7 @@ func (c *cloneGen) ptrToStructMethod(t types.Type, strct *types.Struct, spi gene
 	receiveType := types.TypeString(t, noQualifier)
 	funcName := cloneName + printableTypeName(t)
 
-	//func CloneRefOfType(n *Type) *Type
+	// func CloneRefOfType(n *Type) *Type
 	funcDeclaration := jen.Func().Id(funcName).Call(jen.Id("n").Id(receiveType)).Id(receiveType)
 
 	if slices.Contains(c.exclude, receiveType) {

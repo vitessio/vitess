@@ -66,13 +66,13 @@ type VTGate struct {
 	server vtgateservice.VTGateService
 }
 
-// immediateCallerID tries to extract the common name as well as the (domain) subject
+// immediateCallerIDFromCert tries to extract the common name as well as the (domain) subject
 // alternative names of the certificate that was used to connect to vtgate.
 // If it fails for any reason, it will return "".
 // That immediate caller id is then inserted into a Context,
 // and will be used when talking to vttablet.
 // vttablet in turn can use table ACLs to validate access is authorized.
-func immediateCallerID(ctx context.Context) (string, []string) {
+func immediateCallerIDFromCert(ctx context.Context) (string, []string) {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return "", nil
@@ -92,6 +92,13 @@ func immediateCallerID(ctx context.Context) (string, []string) {
 	}
 	cert := tlsInfo.State.VerifiedChains[0][0]
 	return cert.Subject.CommonName, cert.DNSNames
+}
+
+func immediateCallerID(ctx context.Context) (string, []string) {
+	if immediate := servenv.StaticAuthUsernameFromContext(ctx); immediate != "" {
+		return immediate, nil
+	}
+	return immediateCallerIDFromCert(ctx)
 }
 
 // withCallerIDContext creates a context that extracts what we need

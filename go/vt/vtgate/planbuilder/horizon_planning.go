@@ -267,7 +267,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 
 	if hp.sel.Having != nil {
 		rewriter := hp.qp.AggrRewriter(ctx)
-		sqlparser.Rewrite(hp.sel.Having.Expr, rewriter.Rewrite(), nil)
+		sqlparser.SafeRewrite(hp.sel.Having.Expr, rewriter.RewriteDown(), rewriter.RewriteUp())
 		if rewriter.Err != nil {
 			return nil, rewriter.Err
 		}
@@ -1096,13 +1096,13 @@ func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) erro
 	if err != nil {
 		return err
 	}
-	sqlparser.Rewrite(rb.Select, func(cursor *sqlparser.Cursor) bool {
-		if aliasedExpr, ok := cursor.Node().(sqlparser.SelectExpr); ok {
+	return sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+		if aliasedExpr, ok := node.(sqlparser.SelectExpr); ok {
 			removeKeyspaceFromSelectExpr(aliasedExpr)
 		}
-		return true
-	}, nil)
-	return nil
+		return true, nil
+	}, rb.Select)
+
 }
 
 func removeKeyspaceFromSelectExpr(expr sqlparser.SelectExpr) {

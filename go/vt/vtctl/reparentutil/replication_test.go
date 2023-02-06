@@ -18,26 +18,32 @@ package reparentutil
 
 import (
 	"context"
+	"os"
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/assert"
 	"k8s.io/apimachinery/pkg/util/sets"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools/events"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
+
+func TestMain(m *testing.M) {
+	_flag.ParseFlagsForTest()
+	os.Exit(m.Run())
+}
 
 func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 	t.Parallel()
@@ -83,6 +89,19 @@ func TestFindValidEmergencyReparentCandidates(t *testing.T) {
 			},
 			expected:  []string{"r1", "r2", "p1"},
 			shouldErr: false,
+		}, {
+			name: "success for single tablet",
+			statusMap: map[string]*replicationdatapb.StopReplicationStatus{
+				"r1": {
+					After: &replicationdatapb.Status{
+						SourceUuid:       "3E11FA47-71CA-11E1-9E33-C80AA9429562",
+						RelayLogPosition: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429562:1-5,AAAAAAAA-71CA-11E1-9E33-C80AA9429562:1",
+					},
+				},
+			},
+			primaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
+			expected:         []string{"r1"},
+			shouldErr:        false,
 		},
 		{
 			name: "mixed replication modes",
@@ -278,8 +297,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		durability               string
 		tmc                      *stopReplicationAndBuildStatusMapsTestTMClient
 		tabletMap                map[string]*topo.TabletInfo
-		waitReplicasTimeout      time.Duration
-		ignoredTablets           sets.String
+		stopReplicasTimeout      time.Duration
+		ignoredTablets           sets.Set[string]
 		tabletToWaitFor          *topodatapb.TabletAlias
 		expectedStatusMap        map[string]*replicationdatapb.StopReplicationStatus
 		expectedPrimaryStatusMap map[string]*replicationdatapb.PrimaryStatus
@@ -328,7 +347,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets: sets.NewString(),
+			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -421,7 +440,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets: sets.NewString(),
+			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -514,7 +533,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets: sets.NewString(),
+			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -583,7 +602,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets: sets.NewString("zone1-0000000100"),
+			ignoredTablets: sets.New[string]("zone1-0000000100"),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -651,7 +670,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets: sets.NewString(),
+			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -725,7 +744,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets: sets.NewString(),
+			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -789,14 +808,14 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets:           sets.NewString(),
+			ignoredTablets:           sets.New[string](),
 			expectedStatusMap:        nil,
 			expectedPrimaryStatusMap: nil,
 			expectedTabletsReachable: nil,
 			shouldErr:                true, // we get multiple errors, so we fail
 		},
 		{
-			name:       "waitReplicasTimeout exceeded",
+			name:       "stopReplicasTimeout exceeded",
 			durability: "none",
 			tmc: &stopReplicationAndBuildStatusMapsTestTMClient{
 				stopReplicationAndGetStatusDelays: map[string]time.Duration{
@@ -840,8 +859,8 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			waitReplicasTimeout: time.Millisecond * 5,
-			ignoredTablets:      sets.NewString(),
+			stopReplicasTimeout: time.Millisecond * 5,
+			ignoredTablets:      sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -897,7 +916,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets: sets.NewString(),
+			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000101": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429101:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -950,7 +969,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets:           sets.NewString(),
+			ignoredTablets:           sets.New[string](),
 			expectedStatusMap:        nil,
 			expectedPrimaryStatusMap: nil,
 			expectedTabletsReachable: nil,
@@ -994,7 +1013,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					},
 				},
 			},
-			ignoredTablets:           sets.NewString(),
+			ignoredTablets:           sets.New[string](),
 			expectedStatusMap:        nil,
 			expectedPrimaryStatusMap: nil,
 			expectedTabletsReachable: nil,
@@ -1064,7 +1083,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 				Cell: "zone1",
 				Uid:  102,
 			},
-			ignoredTablets: sets.NewString(),
+			ignoredTablets: sets.New[string](),
 			expectedStatusMap: map[string]*replicationdatapb.StopReplicationStatus{
 				"zone1-0000000100": {
 					Before: &replicationdatapb.Status{Position: "MySQL56/3E11FA47-71CA-11E1-9E33-C80AA9429100:1-5", IoState: int32(mysql.ReplicationStateRunning), SqlState: int32(mysql.ReplicationStateRunning)},
@@ -1098,7 +1117,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 					Uid:  102,
 				},
 			}},
-			waitReplicasTimeout:      time.Minute,
+			stopReplicasTimeout:      time.Minute,
 			expectedPrimaryStatusMap: map[string]*replicationdatapb.PrimaryStatus{},
 			shouldErr:                false,
 		},
@@ -1110,7 +1129,7 @@ func Test_stopReplicationAndBuildStatusMaps(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			durability, err := GetDurabilityPolicy(tt.durability)
 			require.NoError(t, err)
-			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.waitReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, logger)
+			res, err := stopReplicationAndBuildStatusMaps(ctx, tt.tmc, &events.Reparent{}, tt.tabletMap, tt.stopReplicasTimeout, tt.ignoredTablets, tt.tabletToWaitFor, durability, logger)
 			if tt.shouldErr {
 				assert.Error(t, err)
 				return
