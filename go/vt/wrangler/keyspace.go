@@ -183,7 +183,7 @@ func (wr *Wrangler) waitForFilteredReplication(ctx context.Context, sourcePositi
 					return
 				}
 
-				if err := wr.tmc.VReplicationWaitForPos(ctx, ti.Tablet, int(sourceShard.Uid), pos); err != nil {
+				if err := wr.tmc.VReplicationWaitForPos(ctx, ti.Tablet, sourceShard.Uid, pos); err != nil {
 					if strings.Contains(err.Error(), "not found") {
 						wr.Logger().Infof("%v stream %d was not found. Skipping wait.", topoproto.TabletAliasString(si.PrimaryAlias), sourceShard.Uid)
 					} else {

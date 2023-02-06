@@ -46,7 +46,7 @@ export REWRITER=go/vt/sqlparser/rewriter.go
 # Since we are not using this Makefile for compilation, limiting parallelism will not increase build time.
 .NOTPARALLEL:
 
-.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools web_bootstrap web_build web_start generate_ci_workflows
+.PHONY: all build install test clean unit_test unit_test_cover unit_test_race integration_test proto proto_banner site_test site_integration_test docker_bootstrap docker_test docker_unit_test java_test reshard_tests e2e_test e2e_test_race minimaltools tools generate_ci_workflows
 
 all: build
 
@@ -92,12 +92,6 @@ endif
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
 
-	# build vtorc with CGO, because it depends on sqlite
-	CGO_ENABLED=1 go build \
-		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
-		    -o ${VTROOTBIN} ./go/cmd/vtorc/...
-
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
 # Usage: GOOS=darwin GOARCH=amd64 make cross-build
@@ -119,8 +113,6 @@ endif
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
 		echo "Missing vttablet at: ${VTROOTBIN}/${GOOS}_${GOARCH}." && exit; \
 	fi
-
-	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
 ifndef NOBANNER
@@ -145,8 +137,7 @@ install: build
 cross-install: cross-build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	# Still no vtorc for cross-compile
-	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
+	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
@@ -164,9 +155,6 @@ install-testing: build
 	cp "$${VTROOT}/bin/"{mysqlctld,mysqlctl,vtcombo,vttestserver} "$${PREFIX}/bin/"
 	# config files
 	cp -R config "$${PREFIX}/"
-	# vtctld web UI files
-	mkdir -p "$${PREFIX}/web/vtctld2"
-	cp -R web/vtctld2/app "$${PREFIX}/web/vtctld2"
 
 vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 	make -C go/vt/vtctl/vtctldclient
@@ -452,22 +440,6 @@ client_go_gen: install_k8s-code-generator
 	mv vitess.io/vitess/go/vt/topo/k8stopo/client go/vt/topo/k8stopo/
 	mv vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go go/vt/topo/k8stopo/apis/topo/v1beta1/zz_generated.deepcopy.go
 	rm -rf vitess.io/vitess/go/vt/topo/k8stopo/
-
-# Check prerequisites and install dependencies
-web_bootstrap:
-	./tools/web_bootstrap.sh
-
-# Do a production build of the vtctld UI.
-# This target needs to be manually run every time any file within web/vtctld2/app
-# is modified to regenerate assets.
-web_build: web_bootstrap
-	./tools/web_build.sh
-
-# Start a front-end dev server with hot reloading on http://localhost:4200.
-# This expects that you have a vtctld API server running on http://localhost:15000.
-# Following the local Docker install guide is recommended: https://vitess.io/docs/get-started/local-docker/
-web_start: web_bootstrap
-	cd web/vtctld2 && npm run start
 
 vtadmin_web_install:
 	cd web/vtadmin && npm install

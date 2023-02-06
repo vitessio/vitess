@@ -126,6 +126,24 @@ func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
+func TestNewSchemaFromQueriesViewFromDual(t *testing.T) {
+	// Schema will not contain any tables, just a view selecting from DUAL
+	queries := []string{
+		"create view v20 as select 1 from dual",
+	}
+	_, err := NewSchemaFromQueries(queries)
+	assert.NoError(t, err)
+}
+
+func TestNewSchemaFromQueriesViewFromDualImplicit(t *testing.T) {
+	// Schema will not contain any tables, just a view implicitly selecting from DUAL
+	queries := []string{
+		"create view v20 as select 1",
+	}
+	_, err := NewSchemaFromQueries(queries)
+	assert.NoError(t, err)
+}
+
 func TestNewSchemaFromQueriesLoop(t *testing.T) {
 	// v7 and v8 depend on each other
 	queries := append(createQueries,
@@ -249,15 +267,15 @@ func TestGetForeignKeyParentTableNames(t *testing.T) {
 
 func TestTableForeignKeyOrdering(t *testing.T) {
 	fkQueries := []string{
-		"create table t11 (id int primary key, i int, constraint f12 foreign key (i) references t12(id) on delete restrict, constraint f20 foreign key (i) references t20(id) on delete restrict)",
+		"create table t11 (id int primary key, i int, key ix (i), constraint f12 foreign key (i) references t12(id) on delete restrict, constraint f20 foreign key (i) references t20(id) on delete restrict)",
 		"create table t15(id int, primary key(id))",
 		"create view v09 as select * from v13, t17",
-		"create table t20 (id int primary key, i int, constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t20 (id int primary key, i int, key ix (i), constraint f15 foreign key (i) references t15(id) on delete restrict)",
 		"create view v13 as select * from t20",
-		"create table t12 (id int primary key, i int, constraint f15 foreign key (i) references t15(id) on delete restrict)",
-		"create table t17 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
-		"create table t16 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
-		"create table t14 (id int primary key, i int, constraint f14 foreign key (i) references t14(id) on delete restrict)",
+		"create table t12 (id int primary key, i int, key ix (i), constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t17 (id int primary key, i int, key ix (i), constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t16 (id int primary key, i int, key ix (i), constraint f11 foreign key (i) references t11(id) on delete restrict, constraint f15 foreign key (i) references t15(id) on delete restrict)",
+		"create table t14 (id int primary key, i int, key ix (i), constraint f14 foreign key (i) references t14(id) on delete restrict)",
 	}
 	expectSortedTableNames := []string{
 		"t14",
@@ -287,10 +305,10 @@ func TestInvalidSchema(t *testing.T) {
 		expectErr error
 	}{
 		{
-			schema: "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t11(id) on delete restrict)",
+			schema: "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id) on delete restrict)",
 		},
 		{
-			schema: "create table t10(id int primary key); create table t11 (id int primary key, i int, constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			schema: "create table t10(id int primary key); create table t11 (id int primary key, i int, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
 		{
 			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i7) references t11(id) on delete restrict)",
@@ -309,35 +327,39 @@ func TestInvalidSchema(t *testing.T) {
 			expectErr: &ForeignKeyDependencyUnresolvedError{Table: "t11"},
 		},
 		{
-			schema:    "create table t11 (id int primary key, i int, constraint f11 foreign key (i) references t11(id2) on delete restrict)",
+			schema:    "create table t11 (id int primary key, i int, key ix(i), constraint f11 foreign key (i) references t11(id2) on delete restrict)",
 			expectErr: &InvalidReferencedColumnInForeignKeyConstraintError{Table: "t11", Constraint: "f11", ReferencedTable: "t11", ReferencedColumn: "id2"},
 		},
 		{
-			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i int, constraint f10 foreign key (i) references t10(x) on delete restrict)",
+			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i int, key ix(i), constraint f10 foreign key (i) references t10(x) on delete restrict)",
 			expectErr: &InvalidReferencedColumnInForeignKeyConstraintError{Table: "t11", Constraint: "f10", ReferencedTable: "t10", ReferencedColumn: "x"},
 		},
 		{
-			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i int unsigned, constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			schema:    "create table t10(id int primary key, i int); create table t11 (id int primary key, i int, key ix(i), constraint f10 foreign key (i) references t10(i) on delete restrict)",
+			expectErr: &MissingForeignKeyReferencedIndexError{Table: "t11", Constraint: "f10", ReferencedTable: "t10"},
+		},
+		{
+			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i int unsigned, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
 		},
 		{
-			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i bigint, constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			schema:    "create table t10(id int primary key); create table t11 (id int primary key, i bigint, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
 		},
 		{
-			schema:    "create table t10(id bigint primary key); create table t11 (id int primary key, i int, constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			schema:    "create table t10(id bigint primary key); create table t11 (id int primary key, i int, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
 		},
 		{
-			schema:    "create table t10(id bigint primary key); create table t11 (id int primary key, i varchar(100), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			schema:    "create table t10(id bigint primary key); create table t11 (id int primary key, i varchar(100), key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
 		},
 		{
 			// InnoDB allows different string length
-			schema: "create table t10(id varchar(50) primary key); create table t11 (id int primary key, i varchar(100), constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			schema: "create table t10(id varchar(50) primary key); create table t11 (id int primary key, i varchar(100), key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 		},
 		{
-			schema:    "create table t10(id varchar(50) charset utf8mb3 primary key); create table t11 (id int primary key, i varchar(100) charset utf8mb4, constraint f10 foreign key (i) references t10(id) on delete restrict)",
+			schema:    "create table t10(id varchar(50) charset utf8mb3 primary key); create table t11 (id int primary key, i varchar(100) charset utf8mb4, key ix(i), constraint f10 foreign key (i) references t10(id) on delete restrict)",
 			expectErr: &ForeignKeyColumnTypeMismatchError{Table: "t11", Constraint: "f10", Column: "i", ReferencedTable: "t10", ReferencedColumn: "id"},
 		},
 	}

@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,8 +27,6 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
@@ -56,7 +55,7 @@ type controller struct {
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
-	id           uint32
+	id           int32
 	workflow     string
 	source       *binlogdatapb.BinlogSource
 	stopPos      string
@@ -90,11 +89,11 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
 	// id
-	id, err := strconv.Atoi(params["id"])
+	id, err := strconv.ParseInt(params["id"], 10, 32)
 	if err != nil {
 		return nil, err
 	}
-	ct.id = uint32(id)
+	ct.id = int32(id)
 	ct.workflow = params["workflow"]
 
 	state := params["state"]
@@ -202,11 +201,6 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	dbClient := ct.dbClientFactory()
 	if err := dbClient.Connect(); err != nil {
 		return vterrors.Wrap(err, "can't connect to database")
-	}
-	for _, query := range withDDLInitialQueries {
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
-		}
 	}
 	defer dbClient.Close()
 

@@ -44,3 +44,18 @@ func TestGetDialerWithProtocol(t *testing.T) {
 		t.Fatalf("dialerFunc has been registered, should not get nil: %v %v", err, c)
 	}
 }
+
+func TestDeregisterDialer(t *testing.T) {
+	const protocol = "test3"
+
+	RegisterDialer(protocol, func(context.Context, string) (Impl, error) {
+		return nil, nil
+	})
+
+	DeregisterDialer(protocol)
+
+	_, err := DialProtocol(context.Background(), protocol, "")
+	if err == nil || err.Error() != "no dialer registered for VTGate protocol "+protocol {
+		t.Fatalf("protocol: %s is not registered, should return error: %v", protocol, err)
+	}
+}

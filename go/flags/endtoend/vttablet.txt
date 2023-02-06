@@ -87,7 +87,6 @@ Usage of vttablet:
       --dba_idle_timeout duration                                        Idle timeout for dba connections (default 1m0s)
       --dba_pool_size int                                                Size of the connection pool for dba connections (default 20)
       --degraded_threshold duration                                      replication lag after which a replica is considered degraded (default 30s)
-      --disable-replication-manager                                      Disable replication manager to prevent replication repairs.
       --disable_active_reparents                                         if set, do not allow active reparents. Use this to protect a cluster using external reparents.
       --emit_stats                                                       If set, emit stats to push-based monitoring and stats backends
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
@@ -151,7 +150,6 @@ Usage of vttablet:
       --hot_row_protection_max_queue_size int                            Maximum number of BeginExecute RPCs which will be queued for the same row (range). (default 20)
       --init_db_name_override string                                     (init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>
       --init_keyspace string                                             (init parameter) keyspace to use for this tablet
-      --init_populate_metadata                                           (init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.
       --init_shard string                                                (init parameter) shard to use for this tablet
       --init_tablet_type string                                          (init parameter) the tablet type to use for this tablet.
       --init_tags StringMap                                              (init parameter) comma separated list of key:value pairs used to tag the tablet
@@ -190,7 +188,7 @@ Usage of vttablet:
       --mycnf_slow_log_path string                                       mysql slow query log path
       --mycnf_socket_file string                                         mysql socket file
       --mycnf_tmp_dir string                                             mysql tmp directory
-      --mysql_server_version string                                      MySQL server version to advertise.
+      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.31-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)

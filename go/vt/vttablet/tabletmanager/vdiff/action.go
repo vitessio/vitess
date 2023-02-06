@@ -25,7 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/withddl"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
@@ -69,10 +68,6 @@ func (vde *Engine) PerformVDiffAction(ctx context.Context, req *tabletmanagerdat
 		return nil, err
 	}
 	defer dbClient.Close()
-
-	vde.vdiffSchemaCreateOnce.Do(func() {
-		_, _ = withDDL.Exec(ctx, withddl.QueryToTriggerWithDDL, dbClient.ExecuteFetch, dbClient.ExecuteFetch)
-	})
 
 	action := VDiffAction(req.Action)
 	switch action {

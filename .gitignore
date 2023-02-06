@@ -72,11 +72,6 @@ _test/
 # release folder
 releases
 
-# Angular2 Bower Libs
-/web/vtctld2/.bowerrc~
-/web/vtctld2/bower.json~
-/web/vtctld2/public/bower_components/
-
 # Local examples
 /examples/local/vtdataroot
 
