@@ -791,10 +791,8 @@ func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params Restor
 
 	var err error
 	if bm.Incremental {
-		log.Infof("inside executeRestoreIncrementalBackup...")
 		err = be.executeRestoreIncrementalBackup(ctx, params, bh, bm)
 	} else {
-		log.Infof("inside executeRestoreFullBackup...")
 		err = be.executeRestoreFullBackup(ctx, params, bh, bm)
 	}
 	if err != nil {
