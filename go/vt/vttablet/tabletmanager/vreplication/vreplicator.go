@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -33,8 +34,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -105,7 +104,7 @@ const (
 // vreplicator provides the core logic to start vreplication streams
 type vreplicator struct {
 	vre      *Engine
-	id       uint32
+	id       int32
 	dbClient *vdbClient
 	// source
 	source          *binlogdatapb.BinlogSource
@@ -147,7 +146,7 @@ type vreplicator struct {
 //	alias like "a+b as targetcol" must be used.
 //	More advanced constructs can be used. Please see the table plan builder
 //	documentation for more info.
-func newVReplicator(id uint32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
+func newVReplicator(id int32, source *binlogdatapb.BinlogSource, sourceVStreamer VStreamerClient, stats *binlogplayer.Stats, dbClient binlogplayer.DBClient, mysqld mysqlctl.MysqlDaemon, vre *Engine) *vreplicator {
 	if vreplicationHeartbeatUpdateInterval > vreplicationMinimumHeartbeatUpdateInterval {
 		log.Warningf("The supplied value for vreplication_heartbeat_update_interval:%d seconds is larger than the maximum allowed:%d seconds, vreplication will fallback to %d",
 			vreplicationHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval, vreplicationMinimumHeartbeatUpdateInterval)
@@ -637,7 +636,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		if err != nil {
 			return err
 		}
-		insert, err := sqlparser.ParseAndBind(sqlCreatePostCopyAction, sqltypes.Uint32BindVariable(vr.id),
+		insert, err := sqlparser.ParseAndBind(sqlCreatePostCopyAction, sqltypes.Int32BindVariable(vr.id),
 			sqltypes.StringBindVariable(tableName), sqltypes.StringBindVariable(string(action)))
 		if err != nil {
 			return err
@@ -721,7 +720,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	defer dbClient.Close()
 
-	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Uint32BindVariable(vr.id),
+	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Int32BindVariable(vr.id),
 		sqltypes.StringBindVariable(tableName))
 	if err != nil {
 		return err
@@ -755,8 +754,8 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
 	}
 
-	deleteAction := func(dbc *vdbClient, id int64, vid uint32, tn string) error {
-		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Uint32BindVariable(vid),
+	deleteAction := func(dbc *vdbClient, id int64, vid int32, tn string) error {
+		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Int32BindVariable(vid),
 			sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
 		if err != nil {
 			return err
@@ -864,14 +863,14 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		if vrsres != nil && len(vrsres.Rows) > 1 {
 			// We have more than one planned post copy action on the table.
 			for _, row := range vrsres.Named().Rows {
-				vrid, err := row["vrepl_id"].ToUint64()
+				vrid, err := row["vrepl_id"].ToInt32()
 				if err != nil {
 					return err
 				}
 				ctlaction := row["action"].ToString()
 				// Let's make sure that it's a different controller/vreplicator
 				// and that the action is the same.
-				if uint32(vrid) != vr.id && strings.EqualFold(ctlaction, string(actionBytes)) {
+				if vrid != vr.id && strings.EqualFold(ctlaction, string(actionBytes)) {
 					// We know that there's another controller/vreplicator yet
 					// to finish its copy phase for the table and it will perform
 					// the same action on the same table when it completes, so we

@@ -46,7 +46,7 @@ import (
 
 // VReplStream represents a row in _vt.vreplication table
 type VReplStream struct {
-	id                   int64
+	id                   int32
 	workflow             string
 	source               string
 	pos                  string
