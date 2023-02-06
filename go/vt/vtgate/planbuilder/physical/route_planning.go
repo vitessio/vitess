@@ -81,17 +81,32 @@ func CreatePhysicalOperator(ctx *plancontext.PlanningContext, opTree abstract.Lo
 	case *abstract.Concatenate:
 		return optimizeUnion(ctx, op)
 	case *abstract.Filter:
-		src, err := CreatePhysicalOperator(ctx, op.Source)
-		if err != nil {
-			return nil, err
-		}
-		return &Filter{
-			Source:     src,
-			Predicates: op.Predicates,
-		}, nil
+		return optimizeFilter(ctx, op)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid operator tree: %T", op)
 	}
+}
+
+func optimizeFilter(ctx *plancontext.PlanningContext, op *abstract.Filter) (abstract.PhysicalOperator, error) {
+	src, err := CreatePhysicalOperator(ctx, op.Source)
+	if err != nil {
+		return nil, err
+	}
+
+	filter := &Filter{
+		Predicates: op.Predicates,
+	}
+
+	if route, ok := src.(*Route); ok {
+		// let's push the filter into the route
+		filter.Source = route.Source
+		route.Source = filter
+		return route, nil
+	}
+
+	filter.Source = src
+
+	return filter, nil
 }
 
 /*
