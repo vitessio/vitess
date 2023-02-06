@@ -56,7 +56,7 @@ func AddStatusPart() {
 type vrStats struct {
 	mu          sync.Mutex
 	isOpen      bool
-	controllers map[int]*controller
+	controllers map[int32]*controller
 }
 
 func (st *vrStats) register() {
@@ -451,7 +451,7 @@ type EngineStatus struct {
 
 // ControllerStatus contains a renderable status of a controller.
 type ControllerStatus struct {
-	Index                 uint32
+	Index                 int32
 	Source                string
 	SourceShard           string
 	StopPosition          string

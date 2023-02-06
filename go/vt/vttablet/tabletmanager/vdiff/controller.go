@@ -148,7 +148,7 @@ func (ct *controller) run(ctx context.Context) {
 type migrationSource struct {
 	*shardStreamer
 
-	vrID     int64
+	vrID     int32
 	position mysql.Position
 }
 
@@ -203,7 +203,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 			return err
 		}
 		source.shard = bls.Shard
-		source.vrID, _ = row["id"].ToInt64()
+		source.vrID, _ = row["id"].ToInt32()
 		ct.sourceTimeZone = bls.SourceTimeZone
 		ct.targetTimeZone = bls.TargetTimeZone
 
