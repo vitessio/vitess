@@ -27,7 +27,7 @@ type evalTuple struct {
 }
 
 func (e *evalTuple) hash() (HashCode, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot hash TUPLE")
+	return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should never attempt to hash a TUPLE")
 }
 
 var _ eval = (*evalTuple)(nil)
