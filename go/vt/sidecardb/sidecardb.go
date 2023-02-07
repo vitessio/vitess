@@ -194,6 +194,28 @@ func Init(ctx context.Context, exec Exec) error {
 		return err
 	}
 
+	// We need to allow zero date and zero in date, for existing tables which may happen to
+	// actually have zero (in) date values.
+	// get current sql_mode, change it to a more relaxed value, defer restoring it to original value
+	rs, err := si.exec(si.ctx, `select @@session.sql_mode as sql_mode`, 1, false)
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	sqlMode, err := rs.Named().Row().ToString("sql_mode")
+	if err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	defer func() {
+		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
+		_, _ = si.exec(si.ctx, restoreSQLModeQuery, 0, false)
+	}()
+	// Change sql_mode
+	changeSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
+	if _, err := si.exec(si.ctx, changeSQLModeQuery, 0, false); err != nil {
+		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not change sql_mode: %v", err)
+	}
+	// end of sql_mode handling
+
 	for _, table := range sidecarTables {
 		if err := si.ensureSchema(table); err != nil {
 			return err
