@@ -85,7 +85,7 @@ func TestStatusHtml(t *testing.T) {
 
 	testStats := &vrStats{}
 	testStats.isOpen = true
-	testStats.controllers = map[int]*controller{
+	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
 			source: &binlogdata.BinlogSource{
@@ -113,7 +113,7 @@ func TestStatusHtml(t *testing.T) {
 
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
 	buf := bytes.NewBuffer(nil)
-	tpl.Execute(buf, testStats.status())
+	require.NoError(t, tpl.Execute(buf, testStats.status()))
 	if strings.Contains(buf.String(), wantOut) {
 		t.Errorf("output: %v, want %v", buf, wantOut)
 	}
@@ -124,7 +124,7 @@ func TestVReplicationStats(t *testing.T) {
 
 	testStats := &vrStats{}
 	testStats.isOpen = true
-	testStats.controllers = map[int]*controller{
+	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
 			source: &binlogdata.BinlogSource{

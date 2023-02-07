@@ -20859,7 +20859,7 @@ export namespace tabletmanagerdata {
     interface IVReplicationWaitForPosRequest {
 
         /** VReplicationWaitForPosRequest id */
-        id?: (number|Long|null);
+        id?: (number|null);
 
         /** VReplicationWaitForPosRequest position */
         position?: (string|null);
@@ -20875,7 +20875,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IVReplicationWaitForPosRequest);
 
         /** VReplicationWaitForPosRequest id. */
-        public id: (number|Long);
+        public id: number;
 
         /** VReplicationWaitForPosRequest position. */
         public position: string;

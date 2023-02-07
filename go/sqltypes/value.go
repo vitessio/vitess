@@ -281,6 +281,15 @@ func (v Value) ToInt64() (int64, error) {
 	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
+func (v Value) ToInt32() (int32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseInt(v.RawStr(), 10, 32)
+	return int32(i), err
+}
+
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
 	if !IsNumber(v.typ) {

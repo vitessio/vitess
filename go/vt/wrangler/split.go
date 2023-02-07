@@ -17,11 +17,10 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/topo"
@@ -55,7 +54,7 @@ func (wr *Wrangler) SetSourceShards(ctx context.Context, keyspace, shard string,
 	for i, alias := range sources {
 		ti := sourceTablets[topoproto.TabletAliasString(alias)]
 		sourceShards[i] = &topodatapb.Shard_SourceShard{
-			Uid:      uint32(i),
+			Uid:      int32(i),
 			Keyspace: ti.Keyspace,
 			Shard:    ti.Shard,
 			KeyRange: ti.KeyRange,
