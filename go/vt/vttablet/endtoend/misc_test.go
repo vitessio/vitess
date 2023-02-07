@@ -470,7 +470,7 @@ func TestQueryStats(t *testing.T) {
 	require.False(t, framework.IsPresent(vend, "QueryRowsAffected/vitess_a.Select"))
 	compareIntDiff(t, vend, "QueryCounts/vitess_a.Select", vstart, 2)
 	compareIntDiff(t, vend, "QueryRowsReturned/vitess_a.Select", vstart, 2)
-	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Select", vstart, 1)
+	compareIntDiff(t, vend, "QueryErrorCounts/vitess_a.Select.UNKNOWN", vstart, 1)
 
 	query = "update /* query_stats */ vitess_a set name = 'a'"
 	_, _ = client.Execute(query, bv)
