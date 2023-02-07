@@ -37,9 +37,9 @@ func NewNumber(num []byte) *Value {
 	}
 }
 
-func NewString(num []byte) *Value {
+func NewString(raw []byte) *Value {
 	return &Value{
-		s: string(num),
+		s: string(raw),
 		t: TypeString,
 	}
 }

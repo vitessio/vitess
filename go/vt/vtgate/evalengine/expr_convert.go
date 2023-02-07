@@ -69,6 +69,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		if c.HasLength {
 			b.truncateInPlace(c.Length)
 		}
+		b.tt = int16(c.convertToBinaryType(e.sqlType()))
 		return b, nil
 
 	case "CHAR", "NCHAR":
@@ -124,7 +125,7 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 
 	switch c.Type {
 	case "BINARY":
-		return sqltypes.VarBinary, f
+		return c.convertToBinaryType(tt), f
 	case "CHAR", "NCHAR":
 		return c.convertToCharType(tt), f | flagNullable
 	case "DECIMAL":
@@ -137,11 +138,26 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 		return sqltypes.Int64, f
 	case "UNSIGNED", "UNSIGNED INTEGER":
 		return sqltypes.Uint64, f
-	case "DATE", "DATETIME", "YEAR", "JSON", "TIME":
+	case "JSON":
+		return sqltypes.TypeJSON, f
+	case "DATE", "DATETIME", "YEAR", "TIME":
 		return sqltypes.Null, f
 	default:
 		panic("BUG: sqlparser emitted unknown type")
 	}
+}
+
+func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
+	if c.HasLength {
+		if c.Length > 64*1024 {
+			return sqltypes.Blob
+		}
+	} else {
+		if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+			return sqltypes.Blob
+		}
+	}
+	return sqltypes.VarBinary
 }
 
 func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
@@ -152,7 +168,7 @@ func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
 			return sqltypes.Text
 		}
 	} else {
-		if tt == sqltypes.Blob {
+		if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
 			return sqltypes.Text
 		}
 	}

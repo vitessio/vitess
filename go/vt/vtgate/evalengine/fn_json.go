@@ -17,6 +17,9 @@ limitations under the License.
 package evalengine
 
 import (
+	"bytes"
+	"encoding/base64"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -178,12 +181,29 @@ func (b *builtinJsonArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) 
 	return sqltypes.TypeJSON, 0
 }
 
+var mysqlBase64 = base64.StdEncoding
+
+func evalBinaryToJson(e *evalBytes) *evalJson {
+	const prefix = "base64:type15:"
+
+	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
+	copy(dst, prefix)
+	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
+	return (*evalJson)(json.NewString(dst))
+}
+
 func evalToJson(e eval) (*evalJson, error) {
 	switch e := e.(type) {
 	case nil:
 		return (*evalJson)(json.ValueNull), nil
 	case *evalJson:
 		return e, nil
+	case *evalFloat:
+		f := e.toRawBytes()
+		if bytes.IndexByte(f, '.') < 0 {
+			f = append(f, '.', '0')
+		}
+		return (*evalJson)(json.NewNumber(f)), nil
 	case evalNumeric:
 		if e == evalBoolTrue {
 			return (*evalJson)(json.ValueTrue), nil
@@ -193,7 +213,21 @@ func evalToJson(e eval) (*evalJson, error) {
 		}
 		return (*evalJson)(json.NewNumber(e.toRawBytes())), nil
 	case *evalBytes:
-		return (*evalJson)(json.NewString(e.bytes)), nil
+		if sqltypes.IsBinary(e.sqlType()) {
+			return evalBinaryToJson(e), nil
+		}
+
+		jsonText, err := collations.ConvertForJSON(nil, e.bytes, collations.Local().LookupByID(e.col.Collation))
+		if err != nil {
+			return nil, err
+		}
+
+		var p json.Parser
+		j, err := p.ParseBytes(jsonText)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid JSON text in argument 1 to function cast_as_json")
+		}
+		return (*evalJson)(j), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.sqlType())
 	}

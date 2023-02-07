@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 type (
@@ -85,7 +86,7 @@ func newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {
 	return &evalDecimal{dec: dec, length: prec}
 }
 
-func newEvalBool(b bool) eval {
+func newEvalBool(b bool) *evalInt64 {
 	if b {
 		return evalBoolTrue
 	}
@@ -110,6 +111,18 @@ func evalToNumeric(e eval) evalNumeric {
 			return &evalUint64{u: binary.BigEndian.Uint64(number[:]), hexLiteral: true}
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
+	case *evalJson:
+		j := e.toJsonValue()
+		switch j.Type() {
+		case json.TypeTrue:
+			return newEvalBool(true)
+		case json.TypeFalse:
+			return newEvalBool(false)
+		case json.TypeNumber, json.TypeString:
+			return &evalFloat{f: parseStringToFloat(j.Raw())}
+		default:
+			return &evalFloat{f: 0}
+		}
 	default:
 		panic("unsupported")
 	}

@@ -745,6 +745,10 @@ func (v *Value) StringBytes() ([]byte, bool) {
 	return hack.StringBytes(v.s), true
 }
 
+func (v *Value) Raw() string {
+	return v.s
+}
+
 // Bool returns the underlying JSON bool for the v.
 //
 // Use GetBool if you don't need error handling.

@@ -127,6 +127,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT JSON_OBJECT(true, 1.0)`)
+	eval, err := testSingle(t, `SELECT CAST(CAST(0 AS JSON) AS CHAR)`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupByID(eval.Collation()).Name())
 }

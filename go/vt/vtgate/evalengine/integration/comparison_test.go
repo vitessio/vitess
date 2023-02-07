@@ -657,10 +657,11 @@ func TestConversionOperators(t *testing.T) {
 		"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7",
 		`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
 		`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
-		"NULL",
+		"NULL", "true", "false",
 		"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
 		"18446744073709540000e0",
 		"-18446744073709540000e0",
+		"JSON_OBJECT()", "JSON_ARRAY()",
 	}
 	var right = []string{
 		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
@@ -668,7 +669,7 @@ func TestConversionOperators(t *testing.T) {
 		"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
 		"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
 		"DOUBLE", "REAL",
-		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER",
+		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
 	}
 	var conn = mysqlconn(t)
 	defer conn.Close()
@@ -677,6 +678,7 @@ func TestConversionOperators(t *testing.T) {
 		for _, rhs := range right {
 			compareRemoteExpr(t, conn, fmt.Sprintf("CAST(%s AS %s)", lhs, rhs))
 			compareRemoteExpr(t, conn, fmt.Sprintf("CONVERT(%s, %s)", lhs, rhs))
+			compareRemoteExpr(t, conn, fmt.Sprintf("CAST(CAST(%s AS JSON) AS %s)", lhs, rhs))
 		}
 	}
 }

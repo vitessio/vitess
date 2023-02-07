@@ -89,6 +89,7 @@ var (
 		regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
 		regexp.MustCompile(`You have an error in your SQL syntax; (.*?)`),
 		regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
+		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
 	}
 )
 
