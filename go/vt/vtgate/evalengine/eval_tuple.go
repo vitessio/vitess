@@ -33,7 +33,7 @@ func (e *evalTuple) hash() (HashCode, error) {
 var _ eval = (*evalTuple)(nil)
 
 func (e *evalTuple) toRawBytes() []byte {
-	panic("toRawBytes on TUPLE")
+	return nil
 }
 
 func (e *evalTuple) sqlType() sqltypes.Type {

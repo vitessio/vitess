@@ -127,6 +127,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debu	g
-	eval, err := testSingle(t, `SELECT LEAST(0.0,-9223372036854775808)`)
+	eval, err := testSingle(t, `SELECT NULL & 0`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupByID(eval.Collation()).Name())
 }

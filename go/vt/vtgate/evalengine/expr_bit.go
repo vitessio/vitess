@@ -172,7 +172,7 @@ func (o opBitAnd) BitwiseOp() string { return "&" }
 
 func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 	l, r, err := bit.arguments(env)
-	if l == r || r == nil || err != nil {
+	if l == nil || r == nil || err != nil {
 		return nil, err
 	}
 
