@@ -19,6 +19,7 @@ package sqlparser
 
 import (
 	"fmt"
+
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -3617,8 +3618,7 @@ func (node *Variable) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *PointExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("point")
-	buf.WriteByte('(')
+	buf.WriteString("point(")
 	buf.printExpr(node, node.XCordinate, true)
 	buf.WriteString(", ")
 	buf.printExpr(node, node.YCordinate, true)
