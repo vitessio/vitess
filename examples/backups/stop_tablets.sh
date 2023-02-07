@@ -17,7 +17,7 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ./env.sh
+source ../common/env.sh
 
 for tablet in 100 200 300; do
   if vtctlclient --action_timeout 1s --server localhost:15999 GetTablet zone1-$tablet >/dev/null 2>&1; then
@@ -25,9 +25,9 @@ for tablet in 100 200 300; do
     for i in 0 1 2; do
       uid=$(($tablet + $i))
       echo "Shutting down tablet zone1-$uid"
-      CELL=zone1 TABLET_UID=$uid ./scripts/vttablet-down.sh
+      CELL=zone1 TABLET_UID=$uid ../common/scripts/vttablet-down.sh
       echo "Shutting down mysql zone1-$uid"
-      CELL=zone1 TABLET_UID=$uid ./scripts/mysqlctl-down.sh
+      CELL=zone1 TABLET_UID=$uid ../common/scripts/mysqlctl-down.sh
       echo "Removing tablet directory zone1-$uid"
       vtctlclient DeleteTablet -- --allow_primary=true zone1-$uid
       rm -Rf $VTDATAROOT/vt_0000000$uid

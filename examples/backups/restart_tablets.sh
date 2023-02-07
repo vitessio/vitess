@@ -17,21 +17,21 @@
 # this script brings up new tablets for the two new shards that we will
 # be creating in the customer keyspace and copies the schema
 
-source ./env.sh
+source ../common/env.sh
 
 for i in 100 101 102; do
-  CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
-  CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
+  CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 
 for i in 200 201 202; do
-  CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
-  SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
+  SHARD=-80 CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 
 for i in 300 301 302; do
-  CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
-  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+  CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
+  SHARD=80- CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 sleep 5
 
@@ -40,7 +40,7 @@ sleep 5
 # complete before we start InitShardPrimary, otherwise we end up reading the
 # tablet type to RESTORE and do not set semi-sync, which leads to the primary
 # hanging on writes.
-totalTime=300
+totalTime=600
 for i in 101 201 301; do
   while [ $totalTime -gt 0 ]; do
     status=$(curl "http://$hostname:15$i/debug/status_details")
