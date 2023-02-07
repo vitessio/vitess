@@ -25,7 +25,6 @@ import (
 	"strconv"
 	"sync"
 	"time"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	"google.golang.org/protobuf/proto"
 
@@ -41,6 +40,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
