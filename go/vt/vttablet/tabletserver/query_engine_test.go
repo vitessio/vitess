@@ -583,6 +583,7 @@ func TestAddQueryStats(t *testing.T) {
 		rowsAffected              int64
 		rowsReturned              int64
 		errorCount                int64
+		errorCode                 string
 		expectedQueryCounts       string
 		expectedQueryTimes        string
 		expectedQueryRowsAffected string
@@ -598,11 +599,12 @@ func TestAddQueryStats(t *testing.T) {
 			rowsAffected:              0,
 			rowsReturned:              15,
 			errorCount:                0,
+			errorCode:                 "OK",
 			expectedQueryCounts:       `{"A.Select": 1}`,
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{}`,
 			expectedQueryRowsReturned: `{"A.Select": 15}`,
-			expectedQueryErrorCounts:  `{"A.Select": 0}`,
+			expectedQueryErrorCounts:  `{"A.Select.OK": 0}`,
 		}, {
 			name:                      "select into query",
 			planType:                  planbuilder.PlanSelect,
@@ -612,11 +614,12 @@ func TestAddQueryStats(t *testing.T) {
 			rowsAffected:              15,
 			rowsReturned:              0,
 			errorCount:                0,
+			errorCode:                 "OK",
 			expectedQueryCounts:       `{"A.Select": 1}`,
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{"A.Select": 15}`,
 			expectedQueryRowsReturned: `{"A.Select": 0}`,
-			expectedQueryErrorCounts:  `{"A.Select": 0}`,
+			expectedQueryErrorCounts:  `{"A.Select.OK": 0}`,
 		}, {
 			name:                      "error",
 			planType:                  planbuilder.PlanSelect,
@@ -626,11 +629,12 @@ func TestAddQueryStats(t *testing.T) {
 			rowsAffected:              0,
 			rowsReturned:              0,
 			errorCount:                1,
+			errorCode:                 "RESOURCE_EXHAUSTED",
 			expectedQueryCounts:       `{"A.Select": 1}`,
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{}`,
 			expectedQueryRowsReturned: `{"A.Select": 0}`,
-			expectedQueryErrorCounts:  `{"A.Select": 1}`,
+			expectedQueryErrorCounts:  `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
 		}, {
 			name:                      "insert query",
 			planType:                  planbuilder.PlanInsert,
@@ -640,11 +644,12 @@ func TestAddQueryStats(t *testing.T) {
 			rowsAffected:              15,
 			rowsReturned:              0,
 			errorCount:                0,
+			errorCode:                 "OK",
 			expectedQueryCounts:       `{"A.Insert": 1}`,
 			expectedQueryTimes:        `{"A.Insert": 10}`,
 			expectedQueryRowsAffected: `{"A.Insert": 15}`,
 			expectedQueryRowsReturned: `{}`,
-			expectedQueryErrorCounts:  `{"A.Insert": 0}`,
+			expectedQueryErrorCounts:  `{"A.Insert.OK": 0}`,
 		},
 	}
 
@@ -656,7 +661,7 @@ func TestAddQueryStats(t *testing.T) {
 			env := tabletenv.NewEnv(config, "TestAddQueryStats_"+testcase.name)
 			se := schema.NewEngine(env)
 			qe := NewQueryEngine(env, se)
-			qe.AddStats(testcase.planType, testcase.tableName, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount)
+			qe.AddStats(testcase.planType, testcase.tableName, testcase.queryCount, testcase.duration, testcase.mysqlTime, testcase.rowsAffected, testcase.rowsReturned, testcase.errorCount, testcase.errorCode)
 			assert.Equal(t, testcase.expectedQueryCounts, qe.queryCounts.String())
 			assert.Equal(t, testcase.expectedQueryTimes, qe.queryTimes.String())
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
