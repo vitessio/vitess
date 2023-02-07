@@ -441,10 +441,7 @@ func translateExprNotSupported(e sqlparser.Expr) error {
 func translateExpr(e sqlparser.Expr, lookup TranslationLookup) (Expr, error) {
 	switch node := e.(type) {
 	case sqlparser.BoolVal:
-		if node {
-			return NewLiteralInt(1), nil
-		}
-		return NewLiteralInt(0), nil
+		return NewLiteralBool(bool(node)), nil
 	case *sqlparser.ColName:
 		return translateColName(node, lookup)
 	case *sqlparser.Offset:

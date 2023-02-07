@@ -16,14 +16,6 @@ limitations under the License.
 
 package json
 
-import (
-	"bytes"
-	"strconv"
-	"unicode/utf8"
-
-	"vitess.io/vitess/go/hack"
-)
-
 func NewArray(vals []*Value) *Value {
 	return &Value{
 		a: vals,
@@ -31,49 +23,23 @@ func NewArray(vals []*Value) *Value {
 	}
 }
 
-var ErrSyntax = strconv.ErrSyntax
+func NewObject() *Value {
+	return &Value{
+		o: Object{},
+		t: TypeObject,
+	}
+}
 
-func Unquote(s []byte) ([]byte, error) {
-	n := len(s)
-	if n < 2 {
-		return nil, ErrSyntax
+func NewNumber(num []byte) *Value {
+	return &Value{
+		s: string(num),
+		t: TypeNumber,
 	}
-	if s[0] != '"' || s[n-1] != '"' {
-		return nil, ErrSyntax
-	}
-	s = s[1 : n-1]
-	if bytes.IndexByte(s, '\n') != -1 {
-		return nil, ErrSyntax
-	}
+}
 
-	// avoid allocation if the string is trivial
-	if bytes.IndexByte(s, '\\') == -1 {
-		if utf8.Valid(s) {
-			return s, nil
-		}
+func NewString(num []byte) *Value {
+	return &Value{
+		s: string(num),
+		t: TypeString,
 	}
-
-	// the following code is taken from strconv.Unquote (with modification)
-	var runeTmp [utf8.UTFMax]byte
-	buf := make([]byte, 0, 3*len(s)/2) // Try to avoid more allocations.
-	for len(s) > 0 {
-		// Convert []byte to string for satisfying UnquoteChar. We won't keep
-		// the retured string, so it's safe to use unsafe here.
-		c, multibyte, tail, err := strconv.UnquoteChar(hack.String(s), '"')
-		if err != nil {
-			return nil, err
-		}
-
-		// UnquoteChar returns tail as the remaining unprocess string. Because
-		// we are processing []byte, we use len(tail) to get the remaining bytes
-		// instead.
-		s = s[len(s)-len(tail):]
-		if c < utf8.RuneSelf || !multibyte {
-			buf = append(buf, byte(c))
-		} else {
-			n = utf8.EncodeRune(runeTmp[:], c)
-			buf = append(buf, runeTmp[:n]...)
-		}
-	}
-	return buf, nil
 }

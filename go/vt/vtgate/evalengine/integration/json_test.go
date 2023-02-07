@@ -71,3 +71,34 @@ func TestJsonExtract(t *testing.T) {
 		}
 	}
 }
+
+var jsonInputs = []string{
+	`true`, `false`, `"true"`, `'false'`,
+	`1`, `1.0`, `'1'`, `'1.0'`, `NULL`, `'NULL'`,
+	`'foobar'`, `'foo\nbar'`, `'a'`, `JSON_OBJECT()`,
+}
+
+func TestJSONObject(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, a := range jsonInputs {
+		for _, b := range jsonInputs {
+			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_OBJECT(%s, %s)", a, b))
+		}
+	}
+	compareRemoteExpr(t, conn, "JSON_OBJECT()")
+}
+
+func TestJSONArray(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, a := range jsonInputs {
+		compareRemoteExpr(t, conn, fmt.Sprintf("JSON_ARRAY(%s)", a))
+		for _, b := range jsonInputs {
+			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_ARRAY(%s, %s)", a, b))
+		}
+	}
+	compareRemoteExpr(t, conn, "JSON_ARRAY()")
+}

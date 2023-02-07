@@ -55,7 +55,7 @@ func (o *Object) Set(key string, value *Value, t Transformation) {
 		return
 	}
 	if value == nil {
-		value = valueNull
+		value = ValueNull
 	}
 	o.unescapeKeys()
 
@@ -92,7 +92,7 @@ func (v *Value) SetArrayItem(idx int, value *Value, t Transformation) {
 		fallthrough
 	case Set:
 		for idx >= len(v.a) {
-			v.a = append(v.a, valueNull)
+			v.a = append(v.a, ValueNull)
 		}
 	}
 	if idx < len(v.a) {

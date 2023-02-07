@@ -110,7 +110,9 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		return evalToNumeric(e).toInt64(), nil
 	case "UNSIGNED", "UNSIGNED INTEGER":
 		return evalToNumeric(e).toUint64(), nil
-	case "DATE", "DATETIME", "YEAR", "JSON", "TIME":
+	case "JSON":
+		return evalToJson(e)
+	case "DATE", "DATETIME", "YEAR", "TIME":
 		return nil, c.returnUnsupportedError()
 	default:
 		panic("BUG: sqlparser emitted unknown type")

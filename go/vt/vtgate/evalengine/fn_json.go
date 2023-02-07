@@ -17,7 +17,10 @@ limitations under the License.
 package evalengine
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
@@ -29,10 +32,20 @@ type (
 	builtinJsonUnquote struct {
 		CallExpr
 	}
+
+	builtinJsonObject struct {
+		CallExpr
+	}
+
+	builtinJsonArray struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinJsonExtract)(nil)
 var _ Expr = (*builtinJsonUnquote)(nil)
+var _ Expr = (*builtinJsonObject)(nil)
+var _ Expr = (*builtinJsonArray)(nil)
 
 func (call *builtinJsonExtract) eval(env *ExpressionEnv) (eval, error) {
 	args, err := call.args(env)
@@ -108,4 +121,80 @@ func (call *builtinJsonUnquote) eval(env *ExpressionEnv) (eval, error) {
 func (call *builtinJsonUnquote) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env)
 	return sqltypes.Blob, f
+}
+
+func (b *builtinJsonObject) eval(env *ExpressionEnv) (eval, error) {
+	j := json.NewObject()
+	obj, _ := j.Object()
+
+	for i := 0; i < len(b.Arguments); i += 2 {
+		key, err := b.Arguments[i].eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if key == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+		}
+		val, err := b.Arguments[i+1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+
+		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
+		if err != nil {
+			return nil, err
+		}
+		val1, err := evalToJson(val)
+		if err != nil {
+			return nil, err
+		}
+
+		obj.Set(key1.string(), (*json.Value)(val1), json.Set)
+	}
+	return (*evalJson)(j), nil
+}
+
+func (b *builtinJsonObject) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	return sqltypes.TypeJSON, 0
+}
+
+func (b *builtinJsonArray) eval(env *ExpressionEnv) (eval, error) {
+	ary := make([]*json.Value, 0, len(b.Arguments))
+	for _, arg := range b.Arguments {
+		arg, err := arg.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		arg1, err := evalToJson(arg)
+		if err != nil {
+			return nil, err
+		}
+		ary = append(ary, (*json.Value)(arg1))
+	}
+	return (*evalJson)(json.NewArray(ary)), nil
+}
+
+func (b *builtinJsonArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	return sqltypes.TypeJSON, 0
+}
+
+func evalToJson(e eval) (*evalJson, error) {
+	switch e := e.(type) {
+	case nil:
+		return (*evalJson)(json.ValueNull), nil
+	case *evalJson:
+		return e, nil
+	case evalNumeric:
+		if e == evalBoolTrue {
+			return (*evalJson)(json.ValueTrue), nil
+		}
+		if e == evalBoolFalse {
+			return (*evalJson)(json.ValueFalse), nil
+		}
+		return (*evalJson)(json.NewNumber(e.toRawBytes())), nil
+	case *evalBytes:
+		return (*evalJson)(json.NewString(e.bytes)), nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.sqlType())
+	}
 }

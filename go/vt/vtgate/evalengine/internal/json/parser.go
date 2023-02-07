@@ -164,13 +164,13 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 		if len(s) < len("true") || s[:len("true")] != "true" {
 			return nil, s, fmt.Errorf("unexpected value found: %q", s)
 		}
-		return valueTrue, s[len("true"):], nil
+		return ValueTrue, s[len("true"):], nil
 	}
 	if s[0] == 'f' {
 		if len(s) < len("false") || s[:len("false")] != "false" {
 			return nil, s, fmt.Errorf("unexpected value found: %q", s)
 		}
-		return valueFalse, s[len("false"):], nil
+		return ValueFalse, s[len("false"):], nil
 	}
 	if s[0] == 'n' {
 		if len(s) < len("null") || s[:len("null")] != "null" {
@@ -183,7 +183,7 @@ func parseValue(s string, c *cache, depth int) (*Value, string, error) {
 			}
 			return nil, s, fmt.Errorf("unexpected value found: %q", s)
 		}
-		return valueNull, s[len("null"):], nil
+		return ValueNull, s[len("null"):], nil
 	}
 
 	ns, tail, err := parseRawNumber(s)
@@ -758,7 +758,7 @@ func (v *Value) Bool() (bool, bool) {
 }
 
 var (
-	valueTrue  = &Value{t: TypeTrue}
-	valueFalse = &Value{t: TypeFalse}
-	valueNull  = &Value{t: TypeNull}
+	ValueTrue  = &Value{t: TypeTrue}
+	ValueFalse = &Value{t: TypeFalse}
+	ValueNull  = &Value{t: TypeNull}
 )

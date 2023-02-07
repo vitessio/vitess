@@ -194,6 +194,36 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 			},
 		}, nil
 
+	case *sqlparser.JSONObjectExpr:
+		var args []Expr
+		for _, param := range call.Params {
+			key, err := translateExpr(param.Key, lookup)
+			if err != nil {
+				return nil, err
+			}
+			val, err := translateExpr(param.Value, lookup)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, key, val)
+		}
+		return &builtinJsonObject{
+			CallExpr: CallExpr{
+				Arguments: args,
+				Method:    "JSON_OBJECT",
+			},
+		}, nil
+
+	case *sqlparser.JSONArrayExpr:
+		args, err := translateFuncArgs(call.Params, lookup)
+		if err != nil {
+			return nil, err
+		}
+		return &builtinJsonArray{CallExpr: CallExpr{
+			Arguments: args,
+			Method:    "JSON_ARRAY",
+		}}, nil
+
 	default:
 		return nil, translateExprNotSupported(call)
 	}
