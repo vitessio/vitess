@@ -604,7 +604,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{}`,
 			expectedQueryRowsReturned: `{"A.Select": 15}`,
-			expectedQueryErrorCounts:  `{"A.Select.OK": 0}`,
+			expectedQueryErrorCounts:  `{}`,
 		}, {
 			name:                      "select into query",
 			planType:                  planbuilder.PlanSelect,
@@ -619,7 +619,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:        `{"A.Select": 10}`,
 			expectedQueryRowsAffected: `{"A.Select": 15}`,
 			expectedQueryRowsReturned: `{"A.Select": 0}`,
-			expectedQueryErrorCounts:  `{"A.Select.OK": 0}`,
+			expectedQueryErrorCounts:  `{}`,
 		}, {
 			name:                      "error",
 			planType:                  planbuilder.PlanSelect,
@@ -649,7 +649,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryTimes:        `{"A.Insert": 10}`,
 			expectedQueryRowsAffected: `{"A.Insert": 15}`,
 			expectedQueryRowsReturned: `{}`,
-			expectedQueryErrorCounts:  `{"A.Insert.OK": 0}`,
+			expectedQueryErrorCounts:  `{}`,
 		},
 	}
 

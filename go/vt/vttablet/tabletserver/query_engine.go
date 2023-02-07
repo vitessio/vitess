@@ -483,8 +483,10 @@ func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName string,
 	keys := []string{tableName, planType.String()}
 	qe.queryCounts.Add(keys, queryCount)
 	qe.queryTimes.Add(keys, int64(duration))
-	errorKeys := []string{tableName, planType.String(), errorCode}
-	qe.queryErrorCounts.Add(errorKeys, errorCount)
+	if errorCount > 0 {
+		errorKeys := []string{tableName, planType.String(), errorCode}
+		qe.queryErrorCounts.Add(errorKeys, errorCount)
+	}
 
 	// For certain plan types like select, we only want to add their metrics to rows returned
 	// But there are special cases like `SELECT ... INTO OUTFILE ''` which return positive rows affected
