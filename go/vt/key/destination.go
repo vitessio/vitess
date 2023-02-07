@@ -128,7 +128,7 @@ func (d DestinationExactKeyRange) String() string {
 
 func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
 	sort.SliceStable(allShards, func(i, j int) bool {
-		return KeyRangeStartSmaller(allShards[i].GetKeyRange(), allShards[j].GetKeyRange())
+		return KeyRangeLess(allShards[i].GetKeyRange(), allShards[j].GetKeyRange())
 	})
 
 	shardnum := 0

@@ -26,16 +26,20 @@ import (
 	"regexp"
 	"strings"
 
-	"google.golang.org/protobuf/proto"
-
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+var (
+	EmptyKey        = []byte{}
+	ZeroKey         = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	KeyRangePattern = regexp.MustCompile(`^[0-9a-fA-F]*-[0-9a-fA-F]*$`)
 )
 
 //
 // Uint64Key definitions
 //
 
-// Uint64Key is a uint64 that can be converted into a KeyspaceId.
+// Uint64Key is a uint64 that can be converted into a keyspace id.
 type Uint64Key uint64
 
 func (i Uint64Key) String() string {
@@ -49,9 +53,305 @@ func (i Uint64Key) Bytes() []byte {
 	return buf
 }
 
+// Helper methods for keyspace id values.
+
+// Normalize adds padding to id as necessary to make sure it can be compared as an 8 byte integer.
+// From a key range perspective, -80 == 00-80 == 0000-8000 == 000000-800000, etc. and they should
+// always be treated the same even if they are different lengths.
+func Normalize(id []byte) []byte {
+	if len(id) >= 8 {
+		return id[:8]
+	}
+
+	paddedId := []byte{}
+	paddedId = append(paddedId, id[:]...)
+	paddedId = append(paddedId, ZeroKey[0:8-len(id)]...)
+
+	return paddedId
+}
+
+// Compare compares two keyspace IDs while taking care to normalize them; returns -1 if a<b, 1 if a>b, 0 if equal.
+func Compare(a, b []byte) int {
+	return bytes.Compare(Normalize(a), Normalize(b))
+}
+
+// Less returns true if a is less than b.
+func Less(a, b []byte) bool {
+	return Compare(a, b) < 0
+}
+
+// Equal returns true if a is equal to b.
+func Equal(a, b []byte) bool {
+	return Compare(a, b) == 0
+}
+
+// Empty returns true if id is an empty keyspace ID.
+func Empty(id []byte) bool {
+	return len(id) == 0
+}
+
 //
 // KeyRange helper methods
 //
+
+// KeyRangeAdd adds two adjacent KeyRange values (in any order) into a single value. If the values are not adjacent,
+// it returns false.
+func KeyRangeAdd(a, b *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
+	if a == nil || b == nil {
+		return nil, false
+	}
+	if !Empty(a.End) && Equal(a.End, b.Start) {
+		return &topodatapb.KeyRange{Start: a.Start, End: b.End}, true
+	}
+	if !Empty(b.End) && Equal(b.End, a.Start) {
+		return &topodatapb.KeyRange{Start: b.Start, End: a.End}, true
+	}
+	return nil, false
+}
+
+// KeyRangeContains returns true if the provided id is in the keyrange.
+func KeyRangeContains(keyRange *topodatapb.KeyRange, id []byte) bool {
+	if KeyRangeIsComplete(keyRange) {
+		return true
+	}
+	return (Empty(keyRange.Start) || Compare(id, keyRange.Start) >= 0) && (Empty(keyRange.End) || Compare(id, keyRange.End) < 0)
+}
+
+// ParseKeyRangeParts parses a start and end hex values and build a proto KeyRange
+func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
+	startKey, err := hex.DecodeString(start)
+	if err != nil {
+		return nil, err
+	}
+	endKey, err := hex.DecodeString(end)
+	if err != nil {
+		return nil, err
+	}
+	return &topodatapb.KeyRange{Start: startKey, End: endKey}, nil
+}
+
+// KeyRangeString formats a topodatapb.KeyRange into a string.
+func KeyRangeString(keyRange *topodatapb.KeyRange) string {
+	if KeyRangeIsComplete(keyRange) {
+		return "-"
+	}
+	return hex.EncodeToString(keyRange.Start) + "-" + hex.EncodeToString(keyRange.End)
+}
+
+// KeyRangeStartCompare compares the Start of two KeyRange values using semantics unique to start values where an
+// empty Start means the *minimum* value; returns -1 if a<b, 1 if a>b, 0 if equal.
+func KeyRangeStartCompare(a, b *topodatapb.KeyRange) int {
+	aIsMinimum := a == nil || Empty(a.Start)
+	bIsMinimum := b == nil || Empty(b.Start)
+
+	if aIsMinimum && bIsMinimum {
+		return 0
+	} else if aIsMinimum {
+		return -1
+	} else if bIsMinimum {
+		return 1
+	}
+
+	return Compare(a.Start, b.Start)
+}
+
+// KeyRangeStartEqual returns true if both KeyRange values have the same start.
+func KeyRangeStartEqual(a, b *topodatapb.KeyRange) bool {
+	return KeyRangeStartCompare(a, b) == 0
+}
+
+// KeyRangeEndCompare compares the End of two KeyRange values using semantics unique to end values where an
+// empty End means the *maximum* value; returns -1 if a<b, 1 if a>b, 0 if equal.
+func KeyRangeEndCompare(a, b *topodatapb.KeyRange) int {
+	aIsMaximum := a == nil || Empty(a.End)
+	bIsMaximum := b == nil || Empty(b.End)
+
+	if aIsMaximum && bIsMaximum {
+		return 0
+	} else if aIsMaximum {
+		return 1
+	} else if bIsMaximum {
+		return -1
+	}
+
+	return Compare(a.End, b.End)
+}
+
+// KeyRangeEndEqual returns true if both KeyRange values have the same end.
+func KeyRangeEndEqual(a, b *topodatapb.KeyRange) bool {
+	return KeyRangeEndCompare(a, b) == 0
+}
+
+// KeyRangeCompare compares two KeyRange values, taking into account both the Start and End fields and their
+// field-specific comparison logic; returns -1 if a<b, 1 if a>b, 0 if equal.
+func KeyRangeCompare(a, b *topodatapb.KeyRange) int {
+	if v := KeyRangeStartCompare(a, b); v != 0 {
+		return v
+	}
+
+	return KeyRangeEndCompare(a, b)
+}
+
+// KeyRangeEqual returns true if a and b are equal.
+func KeyRangeEqual(a, b *topodatapb.KeyRange) bool {
+	return KeyRangeCompare(a, b) == 0
+}
+
+// KeyRangeLess returns true if a is less than b.
+func KeyRangeLess(a, b *topodatapb.KeyRange) bool {
+	return KeyRangeCompare(a, b) < 0
+}
+
+// KeyRangeIsComplete returns true if the KeyRange covers the entire keyspace.
+func KeyRangeIsComplete(keyRange *topodatapb.KeyRange) bool {
+	return keyRange == nil || (Empty(keyRange.Start) && Empty(keyRange.End))
+}
+
+// KeyRangeIsPartial returns true if the KeyRange does not cover the entire keyspace.
+func KeyRangeIsPartial(keyRange *topodatapb.KeyRange) bool {
+	return !KeyRangeIsComplete(keyRange)
+}
+
+// KeyRangeContiguous returns true if the end of the KeyRange a exactly matches the start of the KeyRange b,
+// meaning that they are contiguous.
+func KeyRangeContiguous(a, b *topodatapb.KeyRange) bool {
+	if a == nil {
+		return KeyRangeIsComplete(b)
+	}
+	if b == nil {
+		return KeyRangeIsComplete(a)
+	}
+
+	return Equal(a.End, b.Start)
+}
+
+// For more info on the following functions, see:
+//   http://stackoverflow.com/questions/4879315/what-is-a-tidy-algorithm-to-find-overlapping-intervals
+// Two segments defined as (a,b) and (c,d) (with a<b and c<d):
+//   * intersects = (b > c) && (a < d)
+//   * overlap = min(b, d) - max(c, a)
+
+// KeyRangesIntersect returns true if some part of KeyRange a and b overlap, meaning that some keyspace ID values
+// exist in both a and b.
+func KeyRangesIntersect(a, b *topodatapb.KeyRange) bool {
+	if a == nil || b == nil {
+		return true
+	}
+
+	return (Empty(a.End) || Less(b.Start, a.End)) && (Empty(b.End) || Less(a.Start, b.End))
+}
+
+func keyRangeStartMax(a, b *topodatapb.KeyRange) []byte {
+	if Empty(a.Start) {
+		return b.Start
+	}
+	if Empty(b.Start) {
+		return a.Start
+	}
+	if Less(a.Start, b.Start) {
+		return b.Start
+	}
+	return a.Start
+}
+
+func keyRangeEndMin(a, b *topodatapb.KeyRange) []byte {
+	if Empty(a.End) {
+		return b.End
+	}
+	if Empty(b.End) {
+		return a.End
+	}
+	if Less(a.End, b.End) {
+		return a.End
+	}
+	return b.End
+}
+
+// KeyRangesOverlap returns a KeyRange representing the overlap between KeyRange a and b. If they do not overlap,
+// an error is returned.
+func KeyRangesOverlap(a, b *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
+	if !KeyRangesIntersect(a, b) {
+		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", a, b)
+	}
+	if KeyRangeIsComplete(a) {
+		return b, nil
+	}
+	if KeyRangeIsComplete(b) {
+		return a, nil
+	}
+
+	return &topodatapb.KeyRange{Start: keyRangeStartMax(a, b), End: keyRangeEndMin(a, b)}, nil
+}
+
+// KeyRangeIncludes returns true if KeyRange big fully contains KeyRange small.
+func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
+	// If big covers the entire KeyRange, it always contains small.
+	if KeyRangeIsComplete(big) {
+		return true
+	}
+
+	// If small covers the entire KeyRange, big must also cover the entire KeyRange.
+	if KeyRangeIsComplete(small) {
+		return KeyRangeIsComplete(big)
+	}
+
+	// Ensure small.Start >= big.Start and small.End <= big.End.
+	if KeyRangeStartCompare(small, big) >= 0 && KeyRangeEndCompare(small, big) <= 0 {
+		return true
+	}
+
+	return false
+}
+
+// ParseShardingSpec parses a string that describes a sharding
+// specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
+// string may serve both as the start and end of the keyspace: -a-b-
+// will be parsed as start-a, a-b, b-end.
+// "0" is treated as "-", to allow us to not have to special-case
+// client code.
+func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
+	parts := strings.Split(spec, "-")
+	if len(parts) == 1 {
+		if spec == "0" {
+			parts = []string{"", ""}
+		} else {
+			return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
+		}
+	}
+	old := parts[0]
+	ranges := make([]*topodatapb.KeyRange, len(parts)-1)
+
+	for i, p := range parts[1:] {
+		if p == "" && i != (len(parts)-2) {
+			return nil, fmt.Errorf("malformed spec: MinKey/MaxKey cannot be in the middle of the spec: %q", spec)
+		}
+		if p != "" && p <= old {
+			return nil, fmt.Errorf("malformed spec: shard limits should be in order: %q", spec)
+		}
+		s, err := hex.DecodeString(old)
+		if err != nil {
+			return nil, err
+		}
+		if len(s) == 0 {
+			s = nil
+		}
+		e, err := hex.DecodeString(p)
+		if err != nil {
+			return nil, err
+		}
+		if len(e) == 0 {
+			e = nil
+		}
+		ranges[i] = &topodatapb.KeyRange{Start: s, End: e}
+		old = p
+	}
+	return ranges, nil
+}
+
+// IsKeyRange returns true if the string represents a keyrange.
+func IsKeyRange(keyRangeString string) bool {
+	return KeyRangePattern.MatchString(keyRangeString)
+}
 
 // EvenShardsKeyRange returns a key range definition for a shard at index "i",
 // assuming range based sharding with "n" equal-width shards in total.
@@ -105,257 +405,6 @@ func EvenShardsKeyRange(i, n int) (*topodatapb.KeyRange, error) {
 		endBytes = []byte{}
 	}
 	return &topodatapb.KeyRange{Start: startBytes, End: endBytes}, nil
-}
-
-// KeyRangeAdd adds two adjacent keyranges into a single value.
-// If the values are not adjacent, it returns false.
-func KeyRangeAdd(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, bool) {
-	if first == nil || second == nil {
-		return nil, false
-	}
-	if len(first.End) != 0 && bytes.Equal(first.End, second.Start) {
-		return &topodatapb.KeyRange{Start: first.Start, End: second.End}, true
-	}
-	if len(second.End) != 0 && bytes.Equal(second.End, first.Start) {
-		return &topodatapb.KeyRange{Start: second.Start, End: first.End}, true
-	}
-	return nil, false
-}
-
-// KeyRangeContains returns true if the provided id is in the keyrange.
-func KeyRangeContains(kr *topodatapb.KeyRange, id []byte) bool {
-	if kr == nil {
-		return true
-	}
-	return bytes.Compare(kr.Start, id) <= 0 &&
-		(len(kr.End) == 0 || bytes.Compare(id, kr.End) < 0)
-}
-
-// ParseKeyRangeParts parses a start and end hex values and build a proto KeyRange
-func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
-	s, err := hex.DecodeString(start)
-	if err != nil {
-		return nil, err
-	}
-	e, err := hex.DecodeString(end)
-	if err != nil {
-		return nil, err
-	}
-	return &topodatapb.KeyRange{Start: s, End: e}, nil
-}
-
-// KeyRangeString prints a topodatapb.KeyRange
-func KeyRangeString(k *topodatapb.KeyRange) string {
-	if k == nil {
-		return "-"
-	}
-	return hex.EncodeToString(k.Start) + "-" + hex.EncodeToString(k.End)
-}
-
-// KeyRangeIsPartial returns true if the KeyRange does not cover the entire space.
-func KeyRangeIsPartial(kr *topodatapb.KeyRange) bool {
-	if kr == nil {
-		return false
-	}
-	return !(len(kr.Start) == 0 && len(kr.End) == 0)
-}
-
-// KeyRangeEqual returns true if both key ranges cover the same area
-func KeyRangeEqual(left, right *topodatapb.KeyRange) bool {
-	if left == nil {
-		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
-	}
-	if right == nil {
-		return len(left.Start) == 0 && len(left.End) == 0
-	}
-	return bytes.Equal(addPadding(left.Start), addPadding(right.Start)) &&
-		bytes.Equal(addPadding(left.End), addPadding(right.End))
-}
-
-// addPadding adds padding to make sure keyrange represents an 8 byte integer.
-// From Vitess docs:
-// A hash vindex produces an 8-byte number.
-// This means that all numbers less than 0x8000000000000000 will fall in shard -80.
-// Any number with the highest bit set will be >= 0x8000000000000000, and will therefore
-// belong to shard 80-.
-// This means that from a keyrange perspective -80 == 00-80 == 0000-8000 == 000000-800000
-// If we don't add this padding, we could run into issues when transitioning from keyranges
-// that use 2 bytes to 4 bytes.
-func addPadding(kr []byte) []byte {
-	paddedKr := make([]byte, 8)
-
-	for i := 0; i < len(kr); i++ {
-		paddedKr = append(paddedKr, kr[i])
-	}
-
-	for i := len(kr); i < 8; i++ {
-		paddedKr = append(paddedKr, 0)
-	}
-	return paddedKr
-}
-
-// KeyRangeStartSmaller returns true if right's keyrange start is _after_ left's start
-func KeyRangeStartSmaller(left, right *topodatapb.KeyRange) bool {
-	if left == nil {
-		return right != nil
-	}
-	if right == nil {
-		return false
-	}
-	return bytes.Compare(left.Start, right.Start) < 0
-}
-
-// KeyRangeStartEqual returns true if both key ranges have the same start
-func KeyRangeStartEqual(left, right *topodatapb.KeyRange) bool {
-	if left == nil {
-		return right == nil || len(right.Start) == 0
-	}
-	if right == nil {
-		return len(left.Start) == 0
-	}
-	return bytes.Equal(addPadding(left.Start), addPadding(right.Start))
-}
-
-// KeyRangeContiguous returns true if the end of the left key range exactly
-// matches the start of the right key range (i.e they are contigious)
-func KeyRangeContiguous(left, right *topodatapb.KeyRange) bool {
-	if left == nil {
-		return right == nil || (len(right.Start) == 0 && len(right.End) == 0)
-	}
-	if right == nil {
-		return len(left.Start) == 0 && len(left.End) == 0
-	}
-	return bytes.Equal(addPadding(left.End), addPadding(right.Start))
-}
-
-// KeyRangeEndEqual returns true if both key ranges have the same end
-func KeyRangeEndEqual(left, right *topodatapb.KeyRange) bool {
-	if left == nil {
-		return right == nil || len(right.End) == 0
-	}
-	if right == nil {
-		return len(left.End) == 0
-	}
-	return bytes.Equal(addPadding(left.End), addPadding(right.End))
-}
-
-// For more info on the following functions, see:
-// See: http://stackoverflow.com/questions/4879315/what-is-a-tidy-algorithm-to-find-overlapping-intervals
-// two segments defined as (a,b) and (c,d) (with a<b and c<d):
-// intersects = (b > c) && (a < d)
-// overlap = min(b, d) - max(c, a)
-
-// KeyRangesIntersect returns true if some Keyspace values exist in both ranges.
-func KeyRangesIntersect(first, second *topodatapb.KeyRange) bool {
-	if first == nil || second == nil {
-		return true
-	}
-	return (len(first.End) == 0 || bytes.Compare(second.Start, first.End) < 0) &&
-		(len(second.End) == 0 || bytes.Compare(first.Start, second.End) < 0)
-}
-
-// KeyRangesOverlap returns the overlap between two KeyRanges.
-// They need to overlap, otherwise an error is returned.
-func KeyRangesOverlap(first, second *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
-	if !KeyRangesIntersect(first, second) {
-		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", first, second)
-	}
-	if first == nil {
-		return second, nil
-	}
-	if second == nil {
-		return first, nil
-	}
-	// compute max(c,a) and min(b,d)
-	// start with (a,b)
-	result := proto.Clone(first).(*topodatapb.KeyRange)
-	// if c > a, then use c
-	if bytes.Compare(second.Start, first.Start) > 0 {
-		result.Start = second.Start
-	}
-	// if b is maxed out, or
-	// (d is not maxed out and d < b)
-	//                           ^ valid test as neither b nor d are max
-	// then use d
-	if len(first.End) == 0 || (len(second.End) != 0 && bytes.Compare(second.End, first.End) < 0) {
-		result.End = second.End
-	}
-	return result, nil
-}
-
-// KeyRangeIncludes returns true if the first provided KeyRange, big,
-// contains the second KeyRange, small. If they intersect, but small
-// spills out, this returns false.
-func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
-	if big == nil {
-		// The outside one covers everything, we're good.
-		return true
-	}
-	if small == nil {
-		// The smaller one covers everything, better have the
-		// bigger one also cover everything.
-		return len(big.Start) == 0 && len(big.End) == 0
-	}
-	// Now we check small.Start >= big.Start, and small.End <= big.End
-	if len(big.Start) != 0 && bytes.Compare(small.Start, big.Start) < 0 {
-		return false
-	}
-	if len(big.End) != 0 && (len(small.End) == 0 || bytes.Compare(small.End, big.End) > 0) {
-		return false
-	}
-	return true
-}
-
-// ParseShardingSpec parses a string that describes a sharding
-// specification. a-b-c-d will be parsed as a-b, b-c, c-d. The empty
-// string may serve both as the start and end of the keyspace: -a-b-
-// will be parsed as start-a, a-b, b-end.
-// "0" is treated as "-", to allow us to not have to special-case
-// client code.
-func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
-	parts := strings.Split(spec, "-")
-	if len(parts) == 1 {
-		if spec == "0" {
-			parts = []string{"", ""}
-		} else {
-			return nil, fmt.Errorf("malformed spec: doesn't define a range: %q", spec)
-		}
-	}
-	old := parts[0]
-	ranges := make([]*topodatapb.KeyRange, len(parts)-1)
-
-	for i, p := range parts[1:] {
-		if p == "" && i != (len(parts)-2) {
-			return nil, fmt.Errorf("malformed spec: MinKey/MaxKey cannot be in the middle of the spec: %q", spec)
-		}
-		if p != "" && p <= old {
-			return nil, fmt.Errorf("malformed spec: shard limits should be in order: %q", spec)
-		}
-		s, err := hex.DecodeString(old)
-		if err != nil {
-			return nil, err
-		}
-		if len(s) == 0 {
-			s = nil
-		}
-		e, err := hex.DecodeString(p)
-		if err != nil {
-			return nil, err
-		}
-		if len(e) == 0 {
-			e = nil
-		}
-		ranges[i] = &topodatapb.KeyRange{Start: s, End: e}
-		old = p
-	}
-	return ranges, nil
-}
-
-var krRegexp = regexp.MustCompile(`^[0-9a-fA-F]*-[0-9a-fA-F]*$`)
-
-// IsKeyRange returns true if the string represents a keyrange.
-func IsKeyRange(kr string) bool {
-	return krRegexp.MatchString(kr)
 }
 
 // GenerateShardRanges returns shard ranges assuming a keyspace with N shards.

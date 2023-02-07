@@ -28,7 +28,232 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-func TestKey(t *testing.T) {
+func TestNormalize(t *testing.T) {
+	type args struct {
+		id []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want []byte
+	}{
+		{
+			"empty should be all zeroes",
+			args{id: []byte{}},
+			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			"zero should be all zeroes",
+			args{[]byte{0x00}},
+			[]byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			"one byte should be padded with seven zeroes",
+			args{[]byte{0x11}},
+			[]byte{0x11, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			"two bytes should be padded with six zeroes",
+			args{[]byte{0x11, 0x22}},
+			[]byte{0x11, 0x22, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			"three bytes should be padded with five zeroes",
+			args{[]byte{0x11, 0x22, 0x33}},
+			[]byte{0x11, 0x22, 0x33, 0x00, 0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			"four bytes should be padded with four zeroes",
+			args{[]byte{0x11, 0x22, 0x33, 0x44}},
+			[]byte{0x11, 0x22, 0x33, 0x44, 0x00, 0x00, 0x00, 0x00},
+		},
+		{
+			"five bytes should be padded with three zeroes",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x55}},
+			[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x00, 0x00, 0x00},
+		},
+		{
+			"six bytes should be padded with two zeroes",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}},
+			[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x00, 0x00},
+		},
+		{
+			"seven bytes should be padded with one zero",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77}},
+			[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x00},
+		},
+		{
+			"eight bytes should be a alone",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88}},
+			[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
+		},
+		{
+			"nine bytes should be truncated to eight",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88, 0x99}},
+			[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Normalize(tt.args.id), "Normalize(%v)", tt.args.id)
+		})
+	}
+}
+
+func TestCompare(t *testing.T) {
+	type args struct {
+		a []byte
+		b []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want int
+	}{
+		{
+			"empty ids are equal",
+			args{[]byte{}, []byte{}},
+			0,
+		},
+		{
+			"equal full id values are equal",
+			args{
+				[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
+				[]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88},
+			},
+			0,
+		},
+		{
+			"equal partial id values are equal",
+			args{
+				[]byte{0x11, 0x22},
+				[]byte{0x11, 0x22},
+			},
+			0,
+		},
+		{
+			"equal full and partial id values are equal",
+			args{[]byte{0x11, 0x22, 0x33, 0x44}, []byte{0x11, 0x22, 0x33, 0x44, 0x00, 0x00, 0x00, 0x00}},
+			0,
+		},
+		{
+			"equal partial and full id values are equal",
+			args{[]byte{0x11, 0x22, 0x33, 0x44, 0x00, 0x00, 0x00, 0x00}, []byte{0x11, 0x22, 0x33, 0x44}},
+			0,
+		},
+		{"a less than b", args{[]byte{0x01}, []byte{0x02}}, -1},
+		{"a greater than b", args{[]byte{0x02}, []byte{0x01}}, +1},
+		{
+			"equal partial a and b with different lengths",
+			args{[]byte{0x30, 0x00}, []byte{0x20}},
+			1,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Compare(tt.args.a, tt.args.b), "Compare(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestLess(t *testing.T) {
+	type args struct {
+		a []byte
+		b []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// Less uses Compare which is already robustly tested, so we're just aiming to ensure that the result
+		// of the Compare is used correctly in context and not e.g. reversed, so test a few obvious cases.
+		{
+			"a is less than b",
+			args{[]byte{0x01}, []byte{0x02}},
+			true,
+		},
+		{
+			"a is equal to b",
+			args{[]byte{0x01}, []byte{0x01}},
+			false,
+		},
+		{
+			"a is greater than b",
+			args{[]byte{0x02}, []byte{0x01}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Less(tt.args.a, tt.args.b), "Less(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestEqual(t *testing.T) {
+	type args struct {
+		a []byte
+		b []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// Equal uses Compare which is already robustly tested, so we're just aiming to ensure that the result
+		// of the Compare is used correctly in context and not e.g. reversed, so test a few obvious cases.
+		{
+			"a is less than b",
+			args{[]byte{0x01}, []byte{0x02}},
+			false,
+		},
+		{
+			"a is equal to b",
+			args{[]byte{0x01}, []byte{0x01}},
+			true,
+		},
+		{
+			"a is greater than b",
+			args{[]byte{0x02}, []byte{0x01}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Equal(tt.args.a, tt.args.b), "Equal(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestEmpty(t *testing.T) {
+	type args struct {
+		id []byte
+	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		{
+			"empty",
+			args{[]byte{}},
+			true,
+		},
+		{
+			"not empty",
+			args{[]byte{0x11, 0x22, 0x33}},
+			false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, Empty(tt.args.id), "Empty(%v)", tt.args.id)
+		})
+	}
+}
+
+func TestUint64Key(t *testing.T) {
 	k0 := Uint64Key(0)
 	k1 := Uint64Key(1)
 	k2 := Uint64Key(0x7FFFFFFFFFFFFFFF)
@@ -460,7 +685,62 @@ func TestParseShardingSpec(t *testing.T) {
 	}
 }
 
-func TestContains(t *testing.T) {
+func TestKeyRangeComparisons(t *testing.T) {
+	type args struct {
+		a *topodatapb.KeyRange
+		b *topodatapb.KeyRange
+	}
+	type wants struct {
+		wantStartCompare int
+		wantStartEqual   bool
+		wantEndCompare   int
+		wantEndEqual     bool
+		wantCompare      int
+		wantEqual        bool
+	}
+	tests := []struct {
+		name  string
+		args  args
+		wants wants
+	}{
+		{"a and b are both full range", args{stringToKeyRange("-"), stringToKeyRange("-")}, wants{0, true, 0, true, 0, true}},
+		{"a is equal to b", args{stringToKeyRange("10-30"), stringToKeyRange("10-30")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, end only) but equal to b (2 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-80")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, end only) but equal to b (4 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-8000")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, end only) but equal to b (6 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-800000")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, end only) but equal to b (8 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-80000000")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, start only) but equal to b (2 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("80-")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, start only) but equal to b (4 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("8000-")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, start only) but equal to b (6 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("800000-")}, wants{0, true, 0, true, 0, true}},
+		{"a (2 digit, start only) but equal to b (8 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("80000000-")}, wants{0, true, 0, true, 0, true}},
+		{"a (4 digits) but equal to b (2 digits)", args{stringToKeyRange("1000-3000"), stringToKeyRange("10-30")}, wants{0, true, 0, true, 0, true}},
+		{"a (8 digits) but equal to b (4 digits)", args{stringToKeyRange("10000000-30000000"), stringToKeyRange("1000-3000")}, wants{0, true, 0, true, 0, true}},
+		{"b (4 digits) but equal to a (2 digits)", args{stringToKeyRange("10-30"), stringToKeyRange("1000-3000")}, wants{0, true, 0, true, 0, true}},
+		{"b (8 digits) but equal to a (4 digits)", args{stringToKeyRange("10-30"), stringToKeyRange("10000000-30000000")}, wants{0, true, 0, true, 0, true}},
+		{"a is full range, b is not", args{stringToKeyRange("-"), stringToKeyRange("20-30")}, wants{-1, false, 1, false, -1, false}},
+		{"b is full range, a is not", args{stringToKeyRange("10-30"), stringToKeyRange("-")}, wants{1, false, -1, false, 1, false}},
+		{"a start is greater than b start", args{stringToKeyRange("10-30"), stringToKeyRange("20-30")}, wants{-1, false, 0, true, -1, false}},
+		{"b start is greater than a start", args{stringToKeyRange("20-30"), stringToKeyRange("10-30")}, wants{1, false, 0, true, 1, false}},
+		{"a start is empty, b start is not", args{stringToKeyRange("-30"), stringToKeyRange("10-30")}, wants{-1, false, 0, true, -1, false}},
+		{"b start is empty, a start is not", args{stringToKeyRange("10-30"), stringToKeyRange("-30")}, wants{1, false, 0, true, 1, false}},
+		{"a end is greater than b end", args{stringToKeyRange("10-30"), stringToKeyRange("10-20")}, wants{0, true, 1, false, 1, false}},
+		{"b end is greater than a end", args{stringToKeyRange("10-20"), stringToKeyRange("10-30")}, wants{0, true, -1, false, -1, false}},
+		{"a end is empty, b end is not", args{stringToKeyRange("10-"), stringToKeyRange("10-30")}, wants{0, true, 1, false, 1, false}},
+		{"b end is empty, a end is not", args{stringToKeyRange("10-30"), stringToKeyRange("10-")}, wants{0, true, -1, false, -1, false}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.wants.wantStartCompare, KeyRangeStartCompare(tt.args.a, tt.args.b), "KeyRangeStartCompare(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantStartEqual, KeyRangeStartEqual(tt.args.a, tt.args.b), "KeyRangeStartEqual(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantEndCompare, KeyRangeEndCompare(tt.args.a, tt.args.b), "KeyRangeEndCompare(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantEndEqual, KeyRangeEndEqual(tt.args.a, tt.args.b), "KeyRangeEndEqual(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantCompare, KeyRangeCompare(tt.args.a, tt.args.b), "KeyRangeCompare(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.wants.wantEqual, KeyRangeEqual(tt.args.a, tt.args.b), "KeyRangeEqual(%v, %v)", tt.args.a, tt.args.b)
+		})
+	}
+}
+
+func TestKeyRangeContains(t *testing.T) {
 	var table = []struct {
 		kid       string
 		start     string
@@ -499,7 +779,7 @@ func TestContains(t *testing.T) {
 	}
 }
 
-func TestIntersectOverlap(t *testing.T) {
+func TestKeyRangeIntersectOverlap(t *testing.T) {
 	var table = []struct {
 		a          string
 		b          string
