@@ -16,6 +16,8 @@
 
 # This is an example script that stops the k3s server started by k3s-up.sh.
 
+set -e
+
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 # Stop K3s server.

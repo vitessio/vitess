@@ -6,7 +6,7 @@ This document contains the summary of the commands to be run.
 
 ```
 # setup environment and aliases
-source env.sh
+source ../common/env.sh
 
 # Bring up initial cluster and main keyspace (unsharded)
 ./101_initial_cluster.sh
