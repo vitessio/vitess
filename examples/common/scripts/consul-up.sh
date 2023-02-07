@@ -16,7 +16,7 @@
 
 # This is an example script that creates a single-node consul datacenter.
 
-source "$(dirname ${BASH_SOURCE})/../env.sh"
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 cell=${CELL:-'test'}
 consul_http_port=${CONSUL_HTTP_PORT:-'8500'}

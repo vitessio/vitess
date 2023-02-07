@@ -17,7 +17,7 @@
 # This is an example script that stops the mysqld and vttablet instances
 # created by vttablet-up.sh
 
-source "$(dirname ${BASH_SOURCE})/../env.sh"
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 printf -v tablet_dir 'vt_%010d' $TABLET_UID
 pid=`cat $VTDATAROOT/$tablet_dir/vttablet.pid`

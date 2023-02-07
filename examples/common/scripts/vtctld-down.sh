@@ -16,7 +16,7 @@
 
 # This is an example script that stops vtctld.
 
-source "$(dirname ${BASH_SOURCE})/../env.sh"
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 echo "Stopping vtctld..."
 kill -9 `cat $VTDATAROOT/tmp/vtctld.pid`

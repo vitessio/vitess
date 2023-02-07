@@ -16,7 +16,7 @@
 
 # This is an example script that stops the consul server started by consul-up.sh.
 
-source "$(dirname ${BASH_SOURCE})/../env.sh"
+source "$(dirname "${BASH_SOURCE[0]:-$0}")/../env.sh"
 
 echo "Stopping consul..."
 kill -9 `cat $VTDATAROOT/tmp/consul.pid` 

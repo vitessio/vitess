@@ -19,7 +19,7 @@
 set -e
 cell=${CELL:-'test'}
 
-script_dir="$(dirname ${BASH_SOURCE})"
+script_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
 source "${script_dir}/../env.sh"
 
 case $(uname) in
