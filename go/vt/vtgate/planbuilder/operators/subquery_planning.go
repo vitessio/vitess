@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
-func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Operator, rewrite.TreeIdentity, error) {
+func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
 	var unmerged []*SubQueryOp
 
 	// first loop over the subqueries and try to merge them into the outer plan
@@ -45,7 +45,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery) (ops.Opera
 			Inner:             inner.Inner,
 			ExtractedSubquery: inner.ExtractedSubquery,
 		}
-		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, merger, semantics.EmptyTableSet())
+		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, merger, ts)
 		if err != nil {
 			return nil, rewrite.SameTree, err
 		}
