@@ -61,7 +61,7 @@ vtctldclient InitShardPrimary --force customer/-80 zone1-200
 vtctldclient InitShardPrimary --force customer/80- zone1-300
 
 for shard in "-80" "80-"; do
-	wait_for_healthy_shard customer "${shard}"
+	wait_for_healthy_shard customer "${shard}" || exit 1
 done
 
 # create the schema for customer
