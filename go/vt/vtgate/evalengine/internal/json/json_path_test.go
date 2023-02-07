@@ -150,27 +150,27 @@ func TestTransformations(t *testing.T) {
 			Document: Document1,
 			Paths:    []string{Path1, Path2},
 			Values:   []string{"1", "2"},
-			Expected: `["a",{"b":[1,false]},[10,20,2]]`,
+			Expected: `["a", {"b": [1, false]}, [10, 20, 2]]`,
 		},
 		{
 			T:        Insert,
 			Document: Document1,
 			Paths:    []string{Path1, Path2},
 			Values:   []string{"1", "2"},
-			Expected: `["a",{"b":[true,false]},[10,20,2]]`,
+			Expected: `["a", {"b": [true, false]}, [10, 20, 2]]`,
 		},
 		{
 			T:        Replace,
 			Document: Document1,
 			Paths:    []string{Path1, Path2},
 			Values:   []string{"1", "2"},
-			Expected: `["a",{"b":[1,false]},[10,20]]`,
+			Expected: `["a", {"b": [1, false]}, [10, 20]]`,
 		},
 		{
 			T:        Remove,
 			Document: Document1,
 			Paths:    []string{`$[2]`, `$[1].b[1]`, `$[1].b[1]`},
-			Expected: `["a",{"b":[true]}]`,
+			Expected: `["a", {"b": [true]}]`,
 		},
 	}
 
@@ -187,7 +187,11 @@ func TestTransformations(t *testing.T) {
 			values = append(values, json(t, v))
 		}
 
-		ApplyTransform(tc.T, doc, paths, values)
+		err := ApplyTransform(tc.T, doc, paths, values)
+		if err != nil {
+			t.Fatal(err)
+		}
+
 		result := string(doc.MarshalTo(nil))
 		if result != tc.Expected {
 			t.Errorf("bad transformation (%v)\nwant: %s\ngot:  %s", tc.T, tc.Expected, result)

@@ -23,6 +23,8 @@ import (
 	"strings"
 	"unicode/utf16"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/hack"
 )
 
@@ -257,6 +259,7 @@ func parseObject(s string, c *cache, depth int) (*Value, string, error) {
 	o.o.reset()
 	for {
 		var err error
+		var unescape bool
 		kv := o.o.getKV()
 
 		// Parse key.
@@ -264,9 +267,12 @@ func parseObject(s string, c *cache, depth int) (*Value, string, error) {
 		if len(s) == 0 || s[0] != '"' {
 			return nil, s, fmt.Errorf(`cannot find opening '"" for object key`)
 		}
-		kv.k, s, err = parseRawKey(s[1:])
+		kv.k, s, unescape, err = parseRawKey(s[1:])
 		if err != nil {
 			return nil, s, fmt.Errorf("cannot parse object key: %s", err)
+		}
+		if unescape {
+			kv.k = unescapeStringBestEffort(kv.k)
 		}
 		s = skipWS(s)
 		if len(s) == 0 || s[0] != ':' {
@@ -289,6 +295,7 @@ func parseObject(s string, c *cache, depth int) (*Value, string, error) {
 			continue
 		}
 		if s[0] == '}' {
+			o.o.sort()
 			return o, s[1:], nil
 		}
 		return nil, s, fmt.Errorf("missing ',' after object value")
@@ -403,18 +410,18 @@ func unescapeStringBestEffort(s string) string {
 
 // parseRawKey is similar to parseRawString, but is optimized
 // for small-sized keys without escape sequences.
-func parseRawKey(s string) (string, string, error) {
+func parseRawKey(s string) (string, string, bool, error) {
 	for i := 0; i < len(s); i++ {
 		if s[i] == '"' {
 			// Fast path.
-			return s[:i], s[i+1:], nil
+			return s[:i], s[i+1:], false, nil
 		}
 		if s[i] == '\\' {
-			// Slow path.
-			return parseRawString(s)
+			s, t, err := parseRawString(s)
+			return s, t, true, err
 		}
 	}
-	return s, "", fmt.Errorf(`missing closing '"'`)
+	return s, "", false, fmt.Errorf(`missing closing '"'`)
 }
 
 func parseRawString(s string) (string, string, error) {
@@ -479,19 +486,15 @@ func parseRawNumber(s string) (string, string, error) {
 // Object cannot be used from concurrent goroutines.
 // Use per-goroutine parsers or ParserPool instead.
 type Object struct {
-	kvs           []kv
-	keysUnescaped bool
+	kvs []kv
 }
 
 func (o *Object) reset() {
 	o.kvs = o.kvs[:0]
-	o.keysUnescaped = false
 }
 
 // MarshalTo appends marshaled o to dst and returns the result.
 func (o *Object) MarshalTo(dst []byte) []byte {
-	o.unescapeKeys()
-
 	dst = append(dst, '{')
 	for i, kv := range o.kvs {
 		dst = escapeString(dst, kv.k)
@@ -525,32 +528,45 @@ func (o *Object) getKV() *kv {
 	return &o.kvs[len(o.kvs)-1]
 }
 
-func (o *Object) unescapeKeys() {
-	if o.keysUnescaped {
+func (o *Object) sort() {
+	if len(o.kvs) < 2 {
 		return
 	}
 
-	unescaped := o.kvs[:0]
-
-nextKV:
-	for _, kv1 := range o.kvs {
-		kv1.k = unescapeStringBestEffort(kv1.k)
-		for j, kv2 := range unescaped {
-			if kv2.k == kv1.k {
-				unescaped[j].v = kv1.v
-				continue nextKV
-			}
+	slices.SortStableFunc(o.kvs, func(a, b kv) bool {
+		return a.k < b.k
+	})
+	uniq := o.kvs[:1]
+	for _, kv := range o.kvs[1:] {
+		if uniq[len(uniq)-1].k == kv.k {
+			uniq = uniq[:len(uniq)-1]
 		}
-		unescaped = append(unescaped, kv1)
+		uniq = append(uniq, kv)
 	}
-
-	o.kvs = unescaped
-	o.keysUnescaped = true
+	o.kvs = uniq
 }
 
 // Len returns the number of items in the o.
 func (o *Object) Len() int {
 	return len(o.kvs)
+}
+
+func (o *Object) find(key string) (int, bool) {
+	n := len(o.kvs)
+	// Define cmp(x[-1], target) < 0 and cmp(x[n], target) >= 0 .
+	// Invariant: cmp(x[i - 1], target) < 0, cmp(x[j], target) >= 0.
+	i, j := 0, n
+	for i < j {
+		h := int(uint(i+j) >> 1) // avoid overflow when computing h
+		// i ≤ h < j
+		if o.kvs[h].k < key {
+			i = h + 1 // preserves cmp(x[i - 1], target) < 0
+		} else {
+			j = h // preserves cmp(x[j], target) >= 0
+		}
+	}
+	// i == j, cmp(x[i-1], target) < 0, and cmp(x[j], target) (= cmp(x[i], target)) >= 0  =>  answer is i.
+	return i, i < n && o.kvs[i].k == key
 }
 
 // Get returns the value for the given key in the o.
@@ -559,23 +575,8 @@ func (o *Object) Len() int {
 //
 // The returned value is valid until Parse is called on the Parser returned o.
 func (o *Object) Get(key string) *Value {
-	if !o.keysUnescaped && strings.IndexByte(key, '\\') < 0 {
-		// Fast path - try searching for the key without object keys unescaping.
-		// We need to scan backwards to catch duplicates
-		for i := len(o.kvs) - 1; i >= 0; i-- {
-			if o.kvs[i].k == key {
-				return o.kvs[i].v
-			}
-		}
-	}
-
-	// Slow path - unescape object keys.
-	o.unescapeKeys()
-
-	for _, kv := range o.kvs {
-		if kv.k == key {
-			return kv.v
-		}
+	if i, ok := o.find(key); ok {
+		return o.kvs[i].v
 	}
 	return nil
 }
@@ -588,9 +589,6 @@ func (o *Object) Visit(f func(key []byte, v *Value)) {
 	if o == nil {
 		return
 	}
-
-	o.unescapeKeys()
-
 	for _, kv := range o.kvs {
 		f(hack.StringBytes(kv.k), kv.v)
 	}
@@ -713,6 +711,9 @@ func (t Type) String() string {
 
 // Type returns the type of the v.
 func (v *Value) Type() Type {
+	if v == nil {
+		return TypeNull
+	}
 	if v.t == typeRawString {
 		v.s = unescapeStringBestEffort(v.s)
 		v.t = TypeString

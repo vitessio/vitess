@@ -17,33 +17,15 @@ limitations under the License.
 
 package json
 
-import (
-	"strings"
-)
+import "golang.org/x/exp/slices"
 
 // Del deletes the entry with the given key from o.
 func (o *Object) Del(key string) {
 	if o == nil {
 		return
 	}
-	if !o.keysUnescaped && strings.IndexByte(key, '\\') < 0 {
-		// Fast path - try searching for the key without object keys unescaping.
-		for i, kv := range o.kvs {
-			if kv.k == key {
-				o.kvs = append(o.kvs[:i], o.kvs[i+1:]...)
-				return
-			}
-		}
-	}
-
-	// Slow path - unescape object keys before item search.
-	o.unescapeKeys()
-
-	for i, kv := range o.kvs {
-		if kv.k == key {
-			o.kvs = append(o.kvs[:i], o.kvs[i+1:]...)
-			return
-		}
+	if i, ok := o.find(key); ok {
+		o.kvs = append(o.kvs[:i], o.kvs[i+1:]...)
 	}
 }
 
@@ -57,23 +39,24 @@ func (o *Object) Set(key string, value *Value, t Transformation) {
 	if value == nil {
 		value = ValueNull
 	}
-	o.unescapeKeys()
 
-	// Try substituting already existing entry with the given key.
-	if t == Set || t == Replace {
-		for i := range o.kvs {
-			kv := &o.kvs[i]
-			if kv.k == key {
-				kv.v = value
-				return
-			}
+	i, found := o.find(key)
+
+	switch t {
+	case Set:
+		if found {
+			o.kvs[i].v = value
+		} else {
+			o.kvs = slices.Insert(o.kvs, i, kv{key, value})
 		}
-	}
-	// Add new entry.
-	if t == Set || t == Insert {
-		kv := o.getKV()
-		kv.k = key
-		kv.v = value
+	case Replace:
+		if found {
+			o.kvs[i].v = value
+		}
+	case Insert:
+		if !found {
+			o.kvs = slices.Insert(o.kvs, i, kv{key, value})
+		}
 	}
 }
 
