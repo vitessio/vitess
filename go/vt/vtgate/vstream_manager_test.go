@@ -886,6 +886,11 @@ func TestResolveVStreamParams(t *testing.T) {
 		err:   "vgtid must have at least one value with a starting position",
 	}, {
 		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{}},
+		},
+		err: "for an empty keyspace, the Gtid value must be 'current'",
+	}, {
+		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "TestVStream",
 			}},
@@ -1011,20 +1016,33 @@ func TestResolveVStreamParams(t *testing.T) {
 
 	// Special-case: empty keyspace because output is too big.
 	specialCases := []struct {
-		input  string
-		output string
+		input *binlogdatapb.ShardGtid
 	}{
 		{
-			input:  "current",
-			output: "current",
+			input: &binlogdatapb.ShardGtid{
+				Gtid: "current",
+			},
 		},
-		{},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/.*",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/.*",
+				Gtid:     "current",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/Test.*",
+			},
+		},
 	}
 	for _, tcase := range specialCases {
 		input := &binlogdatapb.VGtid{
-			ShardGtids: []*binlogdatapb.ShardGtid{{
-				Gtid: tcase.input,
-			}},
+			ShardGtids: []*binlogdatapb.ShardGtid{tcase.input},
 		}
 		vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
 		require.NoError(t, err, tcase.input)
@@ -1032,7 +1050,7 @@ func TestResolveVStreamParams(t *testing.T) {
 			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)
 		}
 		for _, s := range vgtid.ShardGtids {
-			require.Equal(t, tcase.output, s.Gtid)
+			require.Equal(t, tcase.input.Gtid, s.Gtid)
 		}
 	}
 

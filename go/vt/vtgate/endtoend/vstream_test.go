@@ -298,7 +298,7 @@ func TestVStreamCopyWithoutKeyspaceShard(t *testing.T) {
 		{
 			name: "copy from all keyspaces",
 			shardGtid: &binlogdatapb.ShardGtid{
-				Gtid: "",
+				Keyspace: "/.*",
 			},
 			expectedEventNum: expectedKs1EventNum + expectedKs2EventNum + expectedFullyCopyCompletedNum,
 			expectedCompletedEvents: []string{
@@ -313,7 +313,6 @@ func TestVStreamCopyWithoutKeyspaceShard(t *testing.T) {
 			name: "copy from all shards in the keyspace",
 			shardGtid: &binlogdatapb.ShardGtid{
 				Keyspace: "ks",
-				Gtid:     "",
 			},
 			expectedEventNum: expectedKs1EventNum + expectedFullyCopyCompletedNum,
 			expectedCompletedEvents: []string{
