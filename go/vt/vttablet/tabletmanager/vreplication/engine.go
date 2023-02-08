@@ -40,7 +40,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 )
@@ -407,8 +406,8 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 			return nil, err
 		}
 		firstID := int32(qr.InsertID)
-		lastID := firstID + autoIncrementStep*(int32(plan.numInserts)-1)
-		for id := firstID; id <= lastID; id += autoIncrementStep {
+		lastID := firstID + int32(autoIncrementStep)*(int32(plan.numInserts)-1)
+		for id := firstID; id <= lastID; id += int32(autoIncrementStep) {
 			if ct := vre.controllers[id]; ct != nil {
 				// Unreachable. Just a failsafe.
 				ct.Stop()
@@ -859,7 +858,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 	return maps, nil
 }
 
-func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (int32, error) {
+func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (uint16, error) {
 	qr, err := dbClient.ExecuteFetch("select @@session.auto_increment_increment", 1)
 	if err != nil {
 		return 0, err
@@ -868,11 +867,11 @@ func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (int32, 
 		// Handles case where underlying mysql doesn't support auto_increment_increment for any reason.
 		return 1, nil
 	}
-	autoIncrement, err := evalengine.ToInt64(qr.Rows[0][0])
+	autoIncrement, err := qr.Rows[0][0].ToUint16()
 	if err != nil {
 		return 0, err
 	}
-	return int32(autoIncrement), nil
+	return autoIncrement, nil
 }
 
 func readRow(dbClient binlogplayer.DBClient, id int32) (map[string]string, error) {
