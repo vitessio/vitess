@@ -88,7 +88,7 @@ func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
 	var err error
 
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", int32(*mysqlPort))
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", *mysqlPort)
 		if err != nil {
 			log.Errorf("failed to initialize mysql config :%v", err)
 			exit.Return(1)
