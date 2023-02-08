@@ -71,7 +71,7 @@ Usage of vttestserver:
       --min_table_shard_size int                                         The minimum number of initial rows in a table shard. Ignored if--initialize_with_random_data is false. The actual number is chosen randomly. (default 1000)
       --mysql_bind_host string                                           which host to bind vtgate mysql listener to (default "localhost")
       --mysql_only                                                       If this flag is set only mysql is initialized. The rest of the vitess components are not started. Also, the output specifies the mysql unix socket instead of the vtgate port.
-      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.31-Vitess")
+      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
       --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize_with_random_data is true. Only applies to fields that can contain NULL values. (default 0.1)
