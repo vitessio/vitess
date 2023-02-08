@@ -1,3 +1,0 @@
-#!/bin/bash
-set -x
-vtexplain -vschema-file vschema.json -schema-file schema.sql -shards 4 -sql 'SET transaction_mode="single"; INSERT INTO t1 (c1) values (10),(14),(15),(16);'
