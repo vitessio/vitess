@@ -5633,7 +5633,7 @@
                     "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
                     "Table": "name_user_vdx",
                     "Values": [
-                      ":name"
+                      "::name"
                     ],
                     "Vindex": "user_index"
                   },
@@ -5682,7 +5682,7 @@
                     "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
                     "Table": "name_user_vdx",
                     "Values": [
-                      ":name"
+                      "::name"
                     ],
                     "Vindex": "user_index"
                   },
@@ -5856,7 +5856,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -5926,7 +5926,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6310,7 +6310,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6372,7 +6372,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6445,7 +6445,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6498,7 +6498,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6544,7 +6544,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6595,7 +6595,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6672,7 +6672,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6723,7 +6723,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6774,7 +6774,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6818,7 +6818,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6869,7 +6869,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6913,7 +6913,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6964,7 +6964,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7056,7 +7056,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7148,7 +7148,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7206,7 +7206,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7275,7 +7275,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7329,7 +7329,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7376,7 +7376,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -25,61 +25,61 @@ import (
 type (
 	BitwiseExpr struct {
 		BinaryExpr
-		Op BitwiseOp
+		Op opBit
 	}
 
 	BitwiseNotExpr struct {
 		UnaryExpr
 	}
 
-	BitwiseOp interface {
+	opBit interface {
 		BitwiseOp() string
 	}
 
-	BitwiseBinaryOp interface {
-		BitwiseOp
+	opBitBinary interface {
+		opBit
 		numeric(left, right uint64) uint64
 		binary(left, right []byte) []byte
 	}
 
-	BitwiseShiftOp interface {
-		BitwiseOp
+	opBitShift interface {
+		opBit
 		numeric(num, shift uint64) uint64
 		binary(num []byte, shift uint64) []byte
 	}
 
-	OpBitAnd        struct{}
-	OpBitOr         struct{}
-	OpBitXor        struct{}
-	OpBitShiftLeft  struct{}
-	OpBitShiftRight struct{}
+	opBitAnd struct{}
+	opBitOr  struct{}
+	opBitXor struct{}
+	opBitShl struct{}
+	opBitShr struct{}
 )
 
-func (b *BitwiseNotExpr) eval(env *ExpressionEnv, result *EvalResult) {
-	var inner EvalResult
-	inner.init(env, b.Inner)
+var _ Expr = (*BitwiseExpr)(nil)
+var _ Expr = (*BitwiseNotExpr)(nil)
 
-	if inner.isNull() {
-		result.setNull()
-		return
+func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
+	e, err := b.Inner.eval(env)
+	if err != nil {
+		return nil, err
 	}
-
-	if inner.isBitwiseBinaryString() {
-		in := inner.bytes()
+	if e == nil {
+		return nil, nil
+	}
+	if e, ok := e.(*evalBytes); ok && e.isBinary() && !e.isHexOrBitLiteral() {
+		in := e.bytes
 		out := make([]byte, len(in))
-
 		for i := range in {
 			out[i] = ^in[i]
 		}
-
-		result.setRaw(sqltypes.VarBinary, out, collationBinary)
-	} else {
-		inner.makeUnsignedIntegral()
-		result.setUint64(^inner.uint64())
+		return newEvalBinary(out), nil
 	}
+
+	eu := evalToNumeric(e).toUint64()
+	return newEvalUint64(^eu.u), nil
 }
 
-func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	tt, f := b.Inner.typeof(env)
 	if tt == sqltypes.VarBinary && f&(flagHex|flagBit) == 0 {
 		return sqltypes.VarBinary, f
@@ -87,10 +87,10 @@ func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	return sqltypes.Uint64, f
 }
 
-func (o OpBitShiftRight) BitwiseOp() string                { return ">>" }
-func (o OpBitShiftRight) numeric(num, shift uint64) uint64 { return num >> shift }
+func (o opBitShr) BitwiseOp() string                { return ">>" }
+func (o opBitShr) numeric(num, shift uint64) uint64 { return num >> shift }
 
-func (o OpBitShiftRight) binary(num []byte, shift uint64) []byte {
+func (o opBitShr) binary(num []byte, shift uint64) []byte {
 	var (
 		bits   = int(shift % 8)
 		bytes  = int(shift / 8)
@@ -110,10 +110,10 @@ func (o OpBitShiftRight) binary(num []byte, shift uint64) []byte {
 	return out
 }
 
-func (o OpBitShiftLeft) BitwiseOp() string                { return "<<" }
-func (o OpBitShiftLeft) numeric(num, shift uint64) uint64 { return num << shift }
+func (o opBitShl) BitwiseOp() string                { return "<<" }
+func (o opBitShl) numeric(num, shift uint64) uint64 { return num << shift }
 
-func (o OpBitShiftLeft) binary(num []byte, shift uint64) []byte {
+func (o opBitShl) binary(num []byte, shift uint64) []byte {
 	var (
 		bits   = int(shift % 8)
 		bytes  = int(shift / 8)
@@ -134,9 +134,9 @@ func (o OpBitShiftLeft) binary(num []byte, shift uint64) []byte {
 	return out
 }
 
-func (o OpBitXor) numeric(left, right uint64) uint64 { return left ^ right }
+func (o opBitXor) numeric(left, right uint64) uint64 { return left ^ right }
 
-func (o OpBitXor) binary(left, right []byte) (out []byte) {
+func (o opBitXor) binary(left, right []byte) (out []byte) {
 	out = make([]byte, len(left))
 	for i := range out {
 		out[i] = left[i] ^ right[i]
@@ -144,11 +144,11 @@ func (o OpBitXor) binary(left, right []byte) (out []byte) {
 	return
 }
 
-func (o OpBitXor) BitwiseOp() string { return "^" }
+func (o opBitXor) BitwiseOp() string { return "^" }
 
-func (o OpBitOr) numeric(left, right uint64) uint64 { return left | right }
+func (o opBitOr) numeric(left, right uint64) uint64 { return left | right }
 
-func (o OpBitOr) binary(left, right []byte) (out []byte) {
+func (o opBitOr) binary(left, right []byte) (out []byte) {
 	out = make([]byte, len(left))
 	for i := range out {
 		out[i] = left[i] | right[i]
@@ -156,11 +156,11 @@ func (o OpBitOr) binary(left, right []byte) (out []byte) {
 	return
 }
 
-func (o OpBitOr) BitwiseOp() string { return "|" }
+func (o opBitOr) BitwiseOp() string { return "|" }
 
-func (o OpBitAnd) numeric(left, right uint64) uint64 { return left & right }
+func (o opBitAnd) numeric(left, right uint64) uint64 { return left & right }
 
-func (o OpBitAnd) binary(left, right []byte) (out []byte) {
+func (o opBitAnd) binary(left, right []byte) (out []byte) {
 	out = make([]byte, len(left))
 	for i := range out {
 		out[i] = left[i] & right[i]
@@ -168,21 +168,16 @@ func (o OpBitAnd) binary(left, right []byte) (out []byte) {
 	return
 }
 
-func (o OpBitAnd) BitwiseOp() string { return "&" }
+func (o opBitAnd) BitwiseOp() string { return "&" }
 
-func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
-	var l, r EvalResult
-
-	l.init(env, bit.Left)
-	r.init(env, bit.Right)
-
-	if l.isNull() || r.isNull() {
-		result.setNull()
-		return
+func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
+	l, r, err := bit.arguments(env)
+	if l == nil || r == nil || err != nil {
+		return nil, err
 	}
 
 	switch op := bit.Op.(type) {
-	case BitwiseBinaryOp:
+	case opBitBinary:
 		/*
 			The result type depends on whether the arguments are evaluated as binary strings or numbers:
 			Binary-string evaluation occurs when the arguments have a binary string type, and at least one of them is
@@ -191,49 +186,54 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv, result *EvalResult) {
 			the same length as the arguments. If the arguments have unequal lengths, an ER_INVALID_BITWISE_OPERANDS_SIZE
 			error occurs. Numeric evaluation produces an unsigned 64-bit integer.
 		*/
-		if l.typeof() == sqltypes.VarBinary && r.typeof() == sqltypes.VarBinary && (!l.hasFlag(flagHex|flagBit) || !r.hasFlag(flagHex|flagBit)) {
-			b1 := l.bytes()
-			b2 := r.bytes()
-
-			if len(b1) != len(b2) {
-				throwEvalError(vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length"))
+		if l, ok := l.(*evalBytes); ok && l.isBinary() {
+			if r, ok := r.(*evalBytes); ok && r.isBinary() {
+				if !l.isHexOrBitLiteral() || !r.isHexOrBitLiteral() {
+					b1 := l.bytes
+					b2 := r.bytes
+					if len(b1) != len(b2) {
+						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
+					}
+					return newEvalBinary(op.binary(b1, b2)), nil
+				}
 			}
-			result.setRaw(sqltypes.VarBinary, op.binary(b1, b2), collationBinary)
-		} else {
-			l.makeUnsignedIntegral()
-			r.makeUnsignedIntegral()
-			result.setUint64(op.numeric(l.uint64(), r.uint64()))
 		}
 
-	case BitwiseShiftOp:
+		lu := evalToNumeric(l).toUint64()
+		ru := evalToNumeric(r).toUint64()
+		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+
+	case opBitShift:
 		/*
 			The result type depends on whether the bit argument is evaluated as a binary string or number:
 			Binary-string evaluation occurs when the bit argument has a binary string type, and is not a hexadecimal
 			literal, bit literal, or NULL literal. Numeric evaluation occurs otherwise, with argument conversion to an
 			unsigned 64-bit integer as necessary.
 		*/
-		if l.isBitwiseBinaryString() {
-			r.makeUnsignedIntegral()
-			result.setRaw(sqltypes.VarBinary, op.binary(l.bytes(), r.uint64()), collationBinary)
-		} else {
-			l.makeUnsignedIntegral()
-			r.makeUnsignedIntegral()
-			result.setUint64(op.numeric(l.uint64(), r.uint64()))
+		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
+			ru := evalToNumeric(r).toUint64()
+			return newEvalBinary(op.binary(l.bytes, ru.u)), nil
 		}
+		lu := evalToNumeric(l).toUint64()
+		ru := evalToNumeric(r).toUint64()
+		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+
+	default:
+		panic("unexpected bit operation")
 	}
 }
 
-func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	t1, f1 := bit.Left.typeof(env)
 	t2, f2 := bit.Right.typeof(env)
 
 	switch bit.Op.(type) {
-	case BitwiseBinaryOp:
+	case opBitBinary:
 		if t1 == sqltypes.VarBinary && t2 == sqltypes.VarBinary &&
 			(f1&(flagHex|flagBit) == 0 || f2&(flagHex|flagBit) == 0) {
 			return sqltypes.VarBinary, f1 | f2
 		}
-	case BitwiseShiftOp:
+	case opBitShift:
 		if t1 == sqltypes.VarBinary && (f1&(flagHex|flagBit)) == 0 {
 			return sqltypes.VarBinary, f1 | f2
 		}
@@ -242,8 +242,8 @@ func (bit *BitwiseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
 	return sqltypes.Uint64, f1 | f2
 }
 
-var _ BitwiseBinaryOp = (*OpBitAnd)(nil)
-var _ BitwiseBinaryOp = (*OpBitOr)(nil)
-var _ BitwiseBinaryOp = (*OpBitXor)(nil)
-var _ BitwiseShiftOp = (*OpBitShiftLeft)(nil)
-var _ BitwiseShiftOp = (*OpBitShiftRight)(nil)
+var _ opBitBinary = (*opBitAnd)(nil)
+var _ opBitBinary = (*opBitOr)(nil)
+var _ opBitBinary = (*opBitXor)(nil)
+var _ opBitShift = (*opBitShl)(nil)
+var _ opBitShift = (*opBitShr)(nil)
