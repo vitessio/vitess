@@ -47,6 +47,10 @@ type (
 	builtinJsonDepth struct {
 		CallExpr
 	}
+
+	builtinJsonLength struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinJsonExtract)(nil)
@@ -54,6 +58,7 @@ var _ Expr = (*builtinJsonUnquote)(nil)
 var _ Expr = (*builtinJsonObject)(nil)
 var _ Expr = (*builtinJsonArray)(nil)
 var _ Expr = (*builtinJsonDepth)(nil)
+var _ Expr = (*builtinJsonLength)(nil)
 
 func evalBinaryToJson(e *evalBytes) *evalJson {
 	const prefix = "base64:type15:"
@@ -181,19 +186,19 @@ func (call *builtinJsonUnquote) typeof(env *ExpressionEnv) (sqltypes.Type, typeF
 	return sqltypes.Blob, f
 }
 
-func (b *builtinJsonObject) eval(env *ExpressionEnv) (eval, error) {
+func (call *builtinJsonObject) eval(env *ExpressionEnv) (eval, error) {
 	j := json.NewObject()
 	obj, _ := j.Object()
 
-	for i := 0; i < len(b.Arguments); i += 2 {
-		key, err := b.Arguments[i].eval(env)
+	for i := 0; i < len(call.Arguments); i += 2 {
+		key, err := call.Arguments[i].eval(env)
 		if err != nil {
 			return nil, err
 		}
 		if key == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
 		}
-		val, err := b.Arguments[i+1].eval(env)
+		val, err := call.Arguments[i+1].eval(env)
 		if err != nil {
 			return nil, err
 		}
@@ -212,13 +217,13 @@ func (b *builtinJsonObject) eval(env *ExpressionEnv) (eval, error) {
 	return (*evalJson)(j), nil
 }
 
-func (b *builtinJsonObject) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (call *builtinJsonObject) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.TypeJSON, 0
 }
 
-func (b *builtinJsonArray) eval(env *ExpressionEnv) (eval, error) {
-	ary := make([]*json.Value, 0, len(b.Arguments))
-	for _, arg := range b.Arguments {
+func (call *builtinJsonArray) eval(env *ExpressionEnv) (eval, error) {
+	ary := make([]*json.Value, 0, len(call.Arguments))
+	for _, arg := range call.Arguments {
 		arg, err := arg.eval(env)
 		if err != nil {
 			return nil, err
@@ -232,26 +237,69 @@ func (b *builtinJsonArray) eval(env *ExpressionEnv) (eval, error) {
 	return (*evalJson)(json.NewArray(ary)), nil
 }
 
-func (b *builtinJsonArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (call *builtinJsonArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.TypeJSON, 0
 }
 
-func (b *builtinJsonDepth) eval(env *ExpressionEnv) (eval, error) {
-	arg, err := b.arg1(env)
+func (call *builtinJsonDepth) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
 	if err != nil {
 		return nil, err
 	}
 	if arg == nil {
 		return nil, nil
 	}
-	j, err := evalToJson(arg)
+	j, err := intoJson("JSON_DEPTH", arg)
 	if err != nil {
 		return nil, err
 	}
-	return newEvalInt64(int64(j.toJsonValue().Depth())), nil
+	return newEvalInt64(int64(j.Depth())), nil
 }
 
-func (b *builtinJsonDepth) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := b.Arguments[0].typeof(env)
+func (call *builtinJsonDepth) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env)
+	return sqltypes.Int64, f
+}
+
+func (call *builtinJsonLength) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.Arguments[0].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	j, err := intoJson("JSON_LENGTH", arg)
+	if err != nil {
+		return nil, err
+	}
+
+	var length int
+
+	if len(call.Arguments) == 2 {
+		path, err := call.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if path == nil {
+			return nil, nil
+		}
+		jp, err := intoJsonPath(path)
+		if err != nil {
+			return nil, err
+		}
+		jp.Match(j, func(value *json.Value) {
+			length += value.Len()
+		})
+	} else {
+		length = j.Len()
+	}
+
+	return newEvalInt64(int64(length)), nil
+}
+
+func (call *builtinJsonLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env)
 	return sqltypes.Int64, f
 }

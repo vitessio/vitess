@@ -65,3 +65,14 @@ func (v *Value) Depth() int {
 	}
 	return depth + 1
 }
+
+func (v *Value) Len() int {
+	switch v.t {
+	case TypeArray:
+		return len(v.a)
+	case TypeObject:
+		return v.o.Len()
+	default:
+		return 1
+	}
+}
