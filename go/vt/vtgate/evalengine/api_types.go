@@ -107,8 +107,9 @@ func ToUint64(v sqltypes.Value) (uint64, error) {
 		return uint64(num.i), nil
 	case *evalUint64:
 		return num.u, nil
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected return from numeric evaluation (%T)", num)
 	}
-	panic("unreachable")
 }
 
 // ToInt64 converts Value to int64.
@@ -126,8 +127,9 @@ func ToInt64(v sqltypes.Value) (int64, error) {
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsigned number overflows int64 value: %d", num.u)
 		}
 		return ival, nil
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected return from numeric evaluation (%T)", num)
 	}
-	panic("unreachable")
 }
 
 // ToFloat64 converts Value to float64.

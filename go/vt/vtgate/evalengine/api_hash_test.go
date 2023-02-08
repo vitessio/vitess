@@ -55,21 +55,6 @@ func TestHashCodesRandom(t *testing.T) {
 	t.Logf("tested %d values, with %d equalities found\n", tested, equal)
 }
 
-func TestHashForDecimal(t *testing.T) {
-	hash1, err := NullsafeHashcode(sqltypes.NewDecimal("5989907846286453570"), collations.CollationBinaryID, 0)
-	require.NoError(t, err)
-	hash2, err := NullsafeHashcode(sqltypes.NewInt64(5989907846286453570), collations.CollationBinaryID, 0)
-	require.NoError(t, err)
-
-	t.Logf("%v %v", hash1, hash2)
-}
-
-func TestHash1(t *testing.T) {
-	hash1, err := NullsafeHashcode(sqltypes.NewVarChar("5989907846286453570"), collations.CollationBinaryID, sqltypes.Float64)
-	require.NoError(t, err)
-	t.Logf("%d", hash1)
-}
-
 func randomValues() (sqltypes.Value, sqltypes.Value) {
 	if rand.Int()%2 == 0 {
 		// create a single value, and turn it into two different types
