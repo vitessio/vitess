@@ -147,6 +147,11 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 			return nil, argError(method)
 		}
 		return &builtinToBase64{CallExpr: call}, nil
+	case "json_depth":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinJsonDepth{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}

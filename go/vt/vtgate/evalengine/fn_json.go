@@ -43,12 +43,67 @@ type (
 	builtinJsonArray struct {
 		CallExpr
 	}
+
+	builtinJsonDepth struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinJsonExtract)(nil)
 var _ Expr = (*builtinJsonUnquote)(nil)
 var _ Expr = (*builtinJsonObject)(nil)
 var _ Expr = (*builtinJsonArray)(nil)
+var _ Expr = (*builtinJsonDepth)(nil)
+
+func evalBinaryToJson(e *evalBytes) *evalJson {
+	const prefix = "base64:type15:"
+
+	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
+	copy(dst, prefix)
+	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
+	return (*evalJson)(json.NewString(dst))
+}
+
+func evalToJson(e eval) (*evalJson, error) {
+	switch e := e.(type) {
+	case nil:
+		return (*evalJson)(json.ValueNull), nil
+	case *evalJson:
+		return e, nil
+	case *evalFloat:
+		f := e.toRawBytes()
+		if bytes.IndexByte(f, '.') < 0 {
+			f = append(f, '.', '0')
+		}
+		return (*evalJson)(json.NewNumber(f)), nil
+	case evalNumeric:
+		if e == evalBoolTrue {
+			return (*evalJson)(json.ValueTrue), nil
+		}
+		if e == evalBoolFalse {
+			return (*evalJson)(json.ValueFalse), nil
+		}
+		return (*evalJson)(json.NewNumber(e.toRawBytes())), nil
+	case *evalBytes:
+		if sqltypes.IsBinary(e.sqlType()) {
+			return evalBinaryToJson(e), nil
+		}
+
+		jsonText, err := collations.ConvertForJSON(nil, e.bytes, collations.Local().LookupByID(e.col.Collation))
+		if err != nil {
+			return nil, err
+		}
+
+		var p json.Parser
+		j, err := p.ParseBytes(jsonText)
+		if err != nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid JSON text in argument 1 to function cast_as_json")
+		}
+		return (*evalJson)(j), nil
+	default:
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.sqlType())
+	}
+}
 
 func (call *builtinJsonExtract) eval(env *ExpressionEnv) (eval, error) {
 	args, err := call.args(env)
@@ -181,52 +236,22 @@ func (b *builtinJsonArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) 
 	return sqltypes.TypeJSON, 0
 }
 
-func evalBinaryToJson(e *evalBytes) *evalJson {
-	const prefix = "base64:type15:"
-
-	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
-	copy(dst, prefix)
-	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
-	return (*evalJson)(json.NewString(dst))
+func (b *builtinJsonDepth) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := b.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+	j, err := evalToJson(arg)
+	if err != nil {
+		return nil, err
+	}
+	return newEvalInt64(int64(j.toJsonValue().Depth())), nil
 }
 
-func evalToJson(e eval) (*evalJson, error) {
-	switch e := e.(type) {
-	case nil:
-		return (*evalJson)(json.ValueNull), nil
-	case *evalJson:
-		return e, nil
-	case *evalFloat:
-		f := e.toRawBytes()
-		if bytes.IndexByte(f, '.') < 0 {
-			f = append(f, '.', '0')
-		}
-		return (*evalJson)(json.NewNumber(f)), nil
-	case evalNumeric:
-		if e == evalBoolTrue {
-			return (*evalJson)(json.ValueTrue), nil
-		}
-		if e == evalBoolFalse {
-			return (*evalJson)(json.ValueFalse), nil
-		}
-		return (*evalJson)(json.NewNumber(e.toRawBytes())), nil
-	case *evalBytes:
-		if sqltypes.IsBinary(e.sqlType()) {
-			return evalBinaryToJson(e), nil
-		}
-
-		jsonText, err := collations.ConvertForJSON(nil, e.bytes, collations.Local().LookupByID(e.col.Collation))
-		if err != nil {
-			return nil, err
-		}
-
-		var p json.Parser
-		j, err := p.ParseBytes(jsonText)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid JSON text in argument 1 to function cast_as_json")
-		}
-		return (*evalJson)(j), nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.sqlType())
-	}
+func (b *builtinJsonDepth) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	_, f := b.Arguments[0].typeof(env)
+	return sqltypes.Int64, f
 }

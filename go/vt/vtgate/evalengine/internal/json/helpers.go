@@ -43,3 +43,25 @@ func NewString(raw []byte) *Value {
 		t: TypeString,
 	}
 }
+
+func (v *Value) Depth() int {
+	max := func(a, b int) int {
+		if a > b {
+			return a
+		}
+		return b
+	}
+
+	var depth int
+	switch v.t {
+	case TypeObject:
+		for _, kv := range v.o.kvs {
+			depth = max(kv.v.Depth(), depth)
+		}
+	case TypeArray:
+		for _, a := range v.a {
+			depth = max(a.Depth(), depth)
+		}
+	}
+	return depth + 1
+}
