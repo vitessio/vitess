@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,9 +14,9 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES
-// DO NOT EDIT
-
 package servenv
 
-const versionName = "16.0.0-SNAPSHOT"
+// THIS FILE IS AUTO-GENERATED DURING NEW RELEASES BY ./tools/do_releases.sh
+// DO NOT EDIT
+
+const versionName = "16.0.0-rc1"
