@@ -751,7 +751,7 @@ func IsSchemaApplyError(err error) bool {
 	return false
 }
 
-type ReplicationState int
+type ReplicationState int32
 
 const (
 	ReplicationStateUnknown ReplicationState = iota
