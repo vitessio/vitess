@@ -109,6 +109,7 @@ func (*nameLkpIndex) Cost() int                            { return 3 }
 func (*nameLkpIndex) IsUnique() bool                       { return false }
 func (*nameLkpIndex) NeedsVCursor() bool                   { return false }
 func (*nameLkpIndex) AllowBatch() bool                     { return true }
+func (*nameLkpIndex) AutoCommitEnabled() bool              { return false }
 func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
@@ -250,7 +251,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases80.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "info_schema80_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
@@ -261,7 +262,7 @@ func TestSystemTables57(t *testing.T) {
 	defer servenv.SetMySQLServerVersionForTest("")
 	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 	testOutputTempDir := makeTestOutput(t)
-	testFile(t, "systemtables_cases57.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {

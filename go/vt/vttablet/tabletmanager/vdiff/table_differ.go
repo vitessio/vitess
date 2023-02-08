@@ -285,7 +285,7 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 		if _, err := ct.tmc.VReplicationExec(waitCtx, ct.vde.thisTablet, query); err != nil {
 			return err
 		}
-		if err := ct.vde.vre.WaitForPos(waitCtx, int(source.vrID), source.snapshotPosition); err != nil {
+		if err := ct.vde.vre.WaitForPos(waitCtx, source.vrID, source.snapshotPosition); err != nil {
 			log.Errorf("WaitForPosition error: %d: %s", source.vrID, err)
 			return vterrors.Wrapf(err, "WaitForPosition for stream id %d", source.vrID)
 		}

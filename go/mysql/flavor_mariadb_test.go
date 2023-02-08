@@ -30,7 +30,7 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
 		Pass:  "password",
 	}
 	host := "localhost"
-	port := 123
+	port := int32(123)
 	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
@@ -57,7 +57,7 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
 	}
 	params.EnableSSL()
 	host := "localhost"
-	port := 123
+	port := int32(123)
 	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',

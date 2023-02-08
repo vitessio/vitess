@@ -24,9 +24,9 @@ import (
 
 // Rule is a single rule governing access to a particular resource.
 type Rule struct {
-	clusters sets.String
-	actions  sets.String
-	subjects sets.String
+	clusters sets.Set[string]
+	actions  sets.Set[string]
+	subjects sets.Set[string]
 }
 
 // Allows returns true if the actor is allowed to take the specified action in

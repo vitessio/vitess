@@ -453,41 +453,41 @@ func Test_getShardSets(t *testing.T) {
 		name           string
 		keyspaces      []string
 		keyspaceShards []string
-		result         map[string]sets.String
+		result         map[string]sets.Set[string]
 		shouldErr      bool
 	}{
 		{
 			name:           "all keyspaces and shards",
 			keyspaces:      nil,
 			keyspaceShards: nil,
-			result: map[string]sets.String{
-				"ks1": sets.NewString("-80", "80-"),
-				"ks2": sets.NewString("-"),
+			result: map[string]sets.Set[string]{
+				"ks1": sets.New[string]("-80", "80-"),
+				"ks2": sets.New[string]("-"),
 			},
 		},
 		{
 			name:           "keyspaceShards filter",
 			keyspaces:      nil,
 			keyspaceShards: []string{"ks1/-80", "ks2/-"},
-			result: map[string]sets.String{
-				"ks1": sets.NewString("-80"),
-				"ks2": sets.NewString("-"),
+			result: map[string]sets.Set[string]{
+				"ks1": sets.New[string]("-80"),
+				"ks2": sets.New[string]("-"),
 			},
 		},
 		{
 			name:           "keyspace and shards filters",
 			keyspaces:      []string{"ks1"},
 			keyspaceShards: []string{"ks1/80-"},
-			result: map[string]sets.String{
-				"ks1": sets.NewString("80-"),
+			result: map[string]sets.Set[string]{
+				"ks1": sets.New[string]("80-"),
 			},
 		},
 		{
 			name:           "skipped non-existing shards and keyspaces",
 			keyspaces:      nil,
 			keyspaceShards: []string{"ks1/-" /* does not exist */, "ks1/-80", "ks1/80-", "ks3/-" /* does not exist */},
-			result: map[string]sets.String{
-				"ks1": sets.NewString("-80", "80-"),
+			result: map[string]sets.Set[string]{
+				"ks1": sets.New[string]("-80", "80-"),
 			},
 		},
 	}

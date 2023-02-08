@@ -46,7 +46,7 @@ import (
 
 // VReplStream represents a row in _vt.vreplication table
 type VReplStream struct {
-	id                   int64
+	id                   int32
 	workflow             string
 	source               string
 	pos                  string
@@ -566,7 +566,7 @@ func (v *VRepl) analyze(ctx context.Context, conn *dbconnpool.DBConnection) erro
 func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 	ig := vreplication.NewInsertGenerator(binlogplayer.BlpStopped, v.dbName)
 	ig.AddRow(v.workflow, v.bls, v.pos, "", "in_order:REPLICA,PRIMARY",
-		int64(binlogdatapb.VReplicationWorkflowType_OnlineDDL), int64(binlogdatapb.VReplicationWorkflowSubType_None), false)
+		binlogdatapb.VReplicationWorkflowType_OnlineDDL, binlogdatapb.VReplicationWorkflowSubType_None, false)
 
 	return ig.String(), nil
 }

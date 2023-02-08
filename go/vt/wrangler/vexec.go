@@ -446,7 +446,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	var err error
 	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
 	var state, dbName, pos, stopPos, message, tags, componentThrottled string
-	var workflowType, workflowSubType int64
+	var workflowType, workflowSubType int32
 	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
@@ -515,8 +515,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
-	workflowType, _ = row.ToInt64("workflow_type")
-	workflowSubType, _ = row.ToInt64("workflow_sub_type")
+	workflowType, _ = row.ToInt32("workflow_type")
+	workflowSubType, _ = row.ToInt32("workflow_sub_type")
 	deferSecondaryKeys, _ = row.ToBool("defer_secondary_keys")
 
 	status := &ReplicationStatus{
@@ -537,8 +537,8 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
 		targetTimeZone:       bls.TargetTimeZone,
-		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)],
-		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)],
+		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[workflowType],
+		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType],
 		deferSecondaryKeys:   deferSecondaryKeys,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
@@ -583,8 +583,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var sourceKeyspace string
-	sourceShards := sets.NewString()
-	targetShards := sets.NewString()
+	sourceShards := sets.New[string]()
+	targetShards := sets.New[string]()
 	for primary, result := range results {
 		var rsrStatus []*ReplicationStatus
 		nqr := sqltypes.Proto3ToResult(result).Named()
@@ -669,11 +669,11 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 	rsr.SourceLocation = ReplicationLocation{
 		Keyspace: sourceKeyspace,
-		Shards:   sourceShards.List(),
+		Shards:   sets.List(sourceShards),
 	}
 	rsr.TargetLocation = ReplicationLocation{
 		Keyspace: keyspace,
-		Shards:   targetShards.List(),
+		Shards:   sets.List(targetShards),
 	}
 
 	return &rsr, nil
@@ -696,7 +696,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 	if err != nil {
 		return nil, err
 	}
-	workflowsSet := sets.NewString()
+	workflowsSet := sets.New[string]()
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			continue
@@ -709,7 +709,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 			}
 		}
 	}
-	workflows := workflowsSet.List()
+	workflows := sets.List(workflowsSet)
 	return workflows, nil
 }
 

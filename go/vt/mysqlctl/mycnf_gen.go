@@ -73,7 +73,7 @@ func registerMyCnfFlags(fs *pflag.FlagSet) {
 // uid is a unique id for a particular tablet - it must be unique within the
 // tabletservers deployed within a keyspace, lest there be collisions on disk.
 // mysqldPort needs to be unique per instance per machine.
-func NewMycnf(tabletUID uint32, mysqlPort int32) *Mycnf {
+func NewMycnf(tabletUID uint32, mysqlPort int) *Mycnf {
 	cnf := new(Mycnf)
 	cnf.Path = MycnfFile(tabletUID)
 	tabletDir := TabletDir(tabletUID)
