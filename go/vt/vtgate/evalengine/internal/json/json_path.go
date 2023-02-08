@@ -103,10 +103,15 @@ func (j *Path) String() string {
 	return b.String()
 }
 
-func (j *Path) Multi() bool {
+func (j *Path) ContainsWildcards() bool {
 	for j != nil {
-		if j.kind == jpAny {
+		switch j.kind {
+		case jpAny, jpArrayLocationAny, jpMemberAny:
 			return true
+		case jpArrayLocation:
+			if j.offset1 != 0 {
+				return true
+			}
 		}
 		j = j.next
 	}
@@ -196,28 +201,29 @@ func (jp *Path) Match(doc *Value, match func(value *Value)) {
 	jp.match(doc, make(map[*Value]struct{}), match)
 }
 
-func (j *Path) transform(v *Value, t func(pp *Path, vv *Value) bool) bool {
+func (j *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
 	if v == nil {
-		return true
+		return
 	}
 	if j.next == nil {
-		return t(j, v)
+		t(j, v)
+		return
 	}
 	switch j.kind {
 	case jpDocumentRoot:
-		return j.next.transform(v, t)
+		j.next.transform(v, t)
 	case jpMember:
 		if obj, ok := v.Object(); ok {
-			return j.next.transform(obj.Get(j.name), t)
+			j.next.transform(obj.Get(j.name), t)
 		}
 	case jpArrayLocation:
 		if ary, ok := v.Array(); ok {
 			from, to := j.arrayOffsets(ary)
 			if from != to {
-				return false
+				panic("range in transformation path expression")
 			}
 			if from >= 0 && from < len(ary) {
-				return j.next.transform(ary[from], t)
+				j.next.transform(ary[from], t)
 			}
 		} else if j.offset0 == 0 || j.offset0 == -1 {
 			/*
@@ -225,12 +231,11 @@ func (j *Path) transform(v *Value, t func(pp *Path, vv *Value) bool) bool {
 				the result of the evaluation is the same as if the value had been
 				wrapped in a single-element array:
 			*/
-			return j.next.transform(v, t)
+			j.next.transform(v, t)
 		}
 	case jpMemberAny, jpArrayLocationAny, jpAny:
-		return false
+		panic("wildcard in transformation path expression")
 	}
-	return true
 }
 
 type Transformation int
@@ -242,20 +247,18 @@ const (
 	Remove
 )
 
-var errInvalidPathForTransform = errors.New("In this situation, path expressions may not contain the * and ** tokens or an array range.")
-
 func ApplyTransform(t Transformation, doc *Value, paths []*Path, values []*Value) error {
 	if t != Remove && len(paths) != len(values) {
 		panic("missing Values for transformation")
 	}
 	for i, p := range paths {
-		transform := func(pp *Path, vv *Value) bool {
+		transform := func(pp *Path, vv *Value) {
 			switch pp.kind {
 			case jpArrayLocation:
 				if ary, ok := vv.Array(); ok {
 					from, to := pp.arrayOffsets(ary)
 					if from != to {
-						return false
+						return
 					}
 					if t == Remove {
 						vv.DelArrayItem(from)
@@ -263,7 +266,6 @@ func ApplyTransform(t Transformation, doc *Value, paths []*Path, values []*Value
 						vv.SetArrayItem(from, values[i], t)
 					}
 				}
-				return true
 			case jpMember:
 				if obj, ok := vv.Object(); ok {
 					if t == Remove {
@@ -272,14 +274,9 @@ func ApplyTransform(t Transformation, doc *Value, paths []*Path, values []*Value
 						obj.Set(pp.name, values[i], t)
 					}
 				}
-				return true
-			default:
-				return false
 			}
 		}
-		if !p.transform(doc, transform) {
-			return errInvalidPathForTransform
-		}
+		p.transform(doc, transform)
 	}
 	return nil
 }

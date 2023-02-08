@@ -246,6 +246,18 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 			Method:    "JSON_ARRAY",
 		}}, nil
 
+	case *sqlparser.JSONContainsPathExpr:
+		exprs := []sqlparser.Expr{call.JSONDoc, call.OneOrAll}
+		exprs = append(exprs, call.PathList...)
+		args, err := translateFuncArgs(exprs, lookup)
+		if err != nil {
+			return nil, err
+		}
+		return &builtinJsonContainsPath{CallExpr: CallExpr{
+			Arguments: args,
+			Method:    "JSON_CONTAINS_PATH",
+		}}, nil
+
 	default:
 		return nil, translateExprNotSupported(call)
 	}

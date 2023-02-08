@@ -102,3 +102,38 @@ func TestJSONArray(t *testing.T) {
 	}
 	compareRemoteExpr(t, conn, "JSON_ARRAY()")
 }
+
+var inputJsonObjects = []string{
+	`[ { "a": 1 }, { "a": 2 } ]`,
+	`{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }`,
+	`{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }`,
+	`{ "a" : "foo", "b" : [ true, { "c" : 123 } ] }`,
+	`{"a": 1, "b": 2, "c": {"d": 4}}`,
+	`["a", {"b": [true, false]}, [10, 20]]`,
+	`[10, 20, [30, 40]]`,
+}
+
+var inputJsonPaths = []string{
+	"$**.b", "$.c", "$.b[1].c", "$.b[1].c", "$.b[1]", "$[0][0]", "$**[0]", "$.a[0]",
+	"$[0].a[0]", "$**.a", "$[0][0][0].a", "$[*].b", "$[*].a", `$[1].b[0]`, `$[2][2]`,
+	`$.a`, `$.e`, `$.b`, `$.c.d`, `$.a.d`, `$[0]`, `$[1]`, `$[2][*]`,
+}
+
+func TestJSONPathOperations(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, obj := range inputJsonObjects {
+		for _, path1 := range inputJsonPaths {
+			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1))
+			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1))
+			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1))
+
+			for _, path2 := range inputJsonPaths {
+				compareRemoteExpr(t, conn, fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2))
+				compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s', '%s')", obj, path1, path2))
+				compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s', '%s')", obj, path1, path2))
+			}
+		}
+	}
+}

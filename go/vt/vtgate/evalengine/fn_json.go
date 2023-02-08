@@ -17,9 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"bytes"
-	"encoding/base64"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -51,6 +48,10 @@ type (
 	builtinJsonLength struct {
 		CallExpr
 	}
+
+	builtinJsonContainsPath struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinJsonExtract)(nil)
@@ -59,56 +60,9 @@ var _ Expr = (*builtinJsonObject)(nil)
 var _ Expr = (*builtinJsonArray)(nil)
 var _ Expr = (*builtinJsonDepth)(nil)
 var _ Expr = (*builtinJsonLength)(nil)
+var _ Expr = (*builtinJsonContainsPath)(nil)
 
-func evalBinaryToJson(e *evalBytes) *evalJson {
-	const prefix = "base64:type15:"
-
-	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
-	copy(dst, prefix)
-	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
-	return json.NewString(dst)
-}
-
-func evalToJson(e eval) (*evalJson, error) {
-	switch e := e.(type) {
-	case nil:
-		return json.ValueNull, nil
-	case *evalJson:
-		return e, nil
-	case *evalFloat:
-		f := e.ToRawBytes()
-		if bytes.IndexByte(f, '.') < 0 {
-			f = append(f, '.', '0')
-		}
-		return json.NewNumber(f), nil
-	case evalNumeric:
-		if e == evalBoolTrue {
-			return json.ValueTrue, nil
-		}
-		if e == evalBoolFalse {
-			return json.ValueFalse, nil
-		}
-		return json.NewNumber(e.ToRawBytes()), nil
-	case *evalBytes:
-		if sqltypes.IsBinary(e.SQLType()) {
-			return evalBinaryToJson(e), nil
-		}
-
-		jsonText, err := collations.ConvertForJSON(nil, e.bytes, collations.Local().LookupByID(e.col.Collation))
-		if err != nil {
-			return nil, err
-		}
-
-		var p json.Parser
-		j, err := p.ParseBytes(jsonText)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid JSON text in argument 1 to function cast_as_json")
-		}
-		return j, nil
-	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
-	}
-}
+var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
 
 func (call *builtinJsonExtract) eval(env *ExpressionEnv) (eval, error) {
 	args, err := call.args(env)
@@ -128,7 +82,7 @@ func (call *builtinJsonExtract) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var matches = make([]*json.Value, 0, 4)
-	var multi bool
+	var multi = len(args) > 2
 
 	for _, p := range args[1:] {
 		path, err := intoJsonPath(p)
@@ -136,7 +90,7 @@ func (call *builtinJsonExtract) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 
-		if path.Multi() {
+		if path.ContainsWildcards() {
 			multi = true
 		}
 
@@ -145,17 +99,13 @@ func (call *builtinJsonExtract) eval(env *ExpressionEnv) (eval, error) {
 		})
 	}
 
-	switch len(matches) {
-	case 0:
+	if len(matches) == 0 {
 		return nil, nil
-	case 1:
-		if !multi {
-			return (*evalJson)(matches[0]), nil
-		}
-		fallthrough
-	default:
-		return (*evalJson)(json.NewArray(matches)), nil
 	}
+	if len(matches) == 1 && !multi {
+		return matches[0], nil
+	}
+	return json.NewArray(matches), nil
 }
 
 func (call *builtinJsonExtract) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
@@ -300,6 +250,60 @@ func (call *builtinJsonLength) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (call *builtinJsonLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env)
+	return sqltypes.Int64, f
+}
+
+func (call *builtinJsonContainsPath) eval(env *ExpressionEnv) (eval, error) {
+	args, err := call.args(env)
+	if err != nil {
+		return nil, err
+	}
+	for _, arg := range args {
+		if arg == nil {
+			return nil, nil
+		}
+	}
+
+	doc, err := intoJson("JSON_CONTAINS_PATH", args[0])
+	if err != nil {
+		return nil, err
+	}
+
+	all, err := intoOneOrAll("JSON_CONTAINS_PATH", args[1])
+	if err != nil {
+		return nil, err
+	}
+
+	for _, path := range args[2:] {
+		jp, err := intoJsonPath(path)
+		if err != nil {
+			return nil, err
+		}
+		var matched bool
+		jp.Match(doc, func(*json.Value) { matched = true })
+		if matched && !all {
+			return newEvalBool(true), nil
+		}
+		if !matched && all {
+			return newEvalBool(false), nil
+		}
+	}
+	return newEvalBool(all), nil
+}
+
+func intoOneOrAll(fname string, e eval) (bool, error) {
+	switch evalToBinary(e).string() {
+	case "one":
+		return false, nil
+	case "all":
+		return true, nil
+	default:
+		return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "The oneOrAll argument to %s may take these values: 'one' or 'all'.", fname)
+	}
+}
+
+func (call *builtinJsonContainsPath) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env)
 	return sqltypes.Int64, f
 }

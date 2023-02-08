@@ -127,6 +127,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT CAST(CAST(0 AS JSON) AS CHAR)`)
+	eval, err := testSingle(t, `SELECT JSON_CONTAINS_PATH('{"a": 1, "b": 2, "c": {"d": 4}}', 'all', '$.b[1].c', '$.c')`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupByID(eval.Collation()).Name())
 }
