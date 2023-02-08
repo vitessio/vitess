@@ -249,7 +249,7 @@ func (td *tableDiffer) selectTablets(ctx context.Context, cell, tabletTypes stri
 }
 
 func pickTablet(ctx context.Context, ts *topo.Server, cell, keyspace, shard, tabletTypes string) (*topodata.Tablet, error) {
-	tp, err := discovery.NewTabletPicker(ctx, ts, []string{cell}, cell, keyspace, shard, tabletTypes, nil)
+	tp, err := discovery.NewTabletPicker(ctx, ts, []string{cell}, cell, keyspace, shard, tabletTypes, discovery.TabletPickerOptions{})
 	if err != nil {
 		return nil, err
 	}

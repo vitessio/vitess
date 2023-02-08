@@ -110,8 +110,7 @@ type vstream struct {
 	heartbeatInterval uint32
 	ts                *topo.Server
 
-	cellPref    string
-	tabletOrder string
+	tabletPickerOptions discovery.TabletPickerOptions
 }
 
 type journalEvent struct {
@@ -159,8 +158,10 @@ func (vsm *vstreamManager) VStream(ctx context.Context, tabletType topodatapb.Ta
 		heartbeatInterval:  flags.GetHeartbeatInterval(),
 		ts:                 ts,
 		copyCompletedShard: make(map[string]struct{}),
-		cellPref:           flags.GetCellPreference(),
-		tabletOrder:        flags.GetTabletOrder(),
+		tabletPickerOptions: discovery.TabletPickerOptions{
+			CellPref:    flags.GetCellPreference(),
+			TabletOrder: flags.GetTabletOrder(),
+		},
 	}
 	return vs.stream(ctx)
 }
@@ -435,20 +436,6 @@ func (vs *vstream) getCells() []string {
 	return cells
 }
 
-func (vs *vstream) getTabletPickerOptions() *discovery.TabletPickerOptions {
-	options := &discovery.TabletPickerOptions{}
-
-	if vs.cellPref != "" {
-		options.CellPref = discovery.ParseTabletPickerCellPreferenceString(vs.cellPref)
-	}
-
-	if vs.tabletOrder != "" {
-		options.TabletOrder = discovery.ParseTabletPickerTabletOrderString(vs.tabletOrder)
-	}
-
-	return options
-}
-
 // streamFromTablet streams from one shard. If transactions come in separate chunks, they are grouped and sent.
 func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.ShardGtid) error {
 	// journalDone is assigned a channel when a journal event is encountered.
@@ -471,7 +458,7 @@ func (vs *vstream) streamFromTablet(ctx context.Context, sgtid *binlogdatapb.Sha
 		var eventss [][]*binlogdatapb.VEvent
 		var err error
 		cells := vs.getCells()
-		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.getTabletPickerOptions())
+		tp, err := discovery.NewTabletPicker(ctx, vs.ts, cells, vs.vsm.cell, sgtid.Keyspace, sgtid.Shard, vs.tabletType.String(), vs.tabletPickerOptions)
 		if err != nil {
 			log.Errorf(err.Error())
 			return err

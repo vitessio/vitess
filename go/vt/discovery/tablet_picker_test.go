@@ -43,7 +43,7 @@ func TestPickPrimary(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", nil)
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -69,7 +69,7 @@ func TestPickLocalPreferences(t *testing.T) {
 		inCells       []string
 		localCell     string
 		inTabletTypes string
-		options       *TabletPickerOptions
+		options       TabletPickerOptions
 
 		//expected
 		tpCells     []string
@@ -86,7 +86,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "replica",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -99,7 +99,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "replica,rdonly",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{100, 101},
 		}, {
@@ -112,7 +112,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "in_order:replica,rdonly",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -125,7 +125,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "in_order:rdonly,replica",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{101},
 		}, {
@@ -140,7 +140,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "in_order:rdonly,replica",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{101, 102, 103},
 		}, {
@@ -157,7 +157,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "rdonly,replica",
-			options:       &TabletPickerOptions{TabletOrder: TabletPickerTabletOrder_InOrder},
+			options:       TabletPickerOptions{TabletOrder: "InOrder"},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{101, 102, 103},
 		}, {
@@ -170,7 +170,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "replica,rdonly",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -182,7 +182,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "otherCell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -194,7 +194,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "otherCell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -207,7 +207,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell"},
 			localCell:     "cell",
 			inTabletTypes: "replica",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -220,7 +220,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "otherCell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -233,7 +233,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica",
-			options:       &TabletPickerOptions{CellPref: TabletPickerCellPreference_OnlySpecified},
+			options:       TabletPickerOptions{CellPref: "OnlySpecified"},
 			tpCells:       []string{"cell", "otherCell"},
 			wantTablets:   []uint32{100, 101},
 		}, {
@@ -246,7 +246,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica,rdonly",
-			options:       nil,
+			options:       TabletPickerOptions{},
 			tpCells:       []string{"cell", "otherCell", "cella"},
 			wantTablets:   []uint32{100},
 		}, {
@@ -259,7 +259,7 @@ func TestPickLocalPreferences(t *testing.T) {
 			inCells:       []string{"cell", "otherCell"},
 			localCell:     "cell",
 			inTabletTypes: "replica,rdonly",
-			options:       &TabletPickerOptions{CellPref: TabletPickerCellPreference_OnlySpecified},
+			options:       TabletPickerOptions{CellPref: "OnlySpecified"},
 			tpCells:       []string{"cell", "otherCell"},
 			wantTablets:   []uint32{100, 101},
 		},
@@ -305,7 +305,7 @@ func TestPickUsingCellAlias_LocalPreferenceDefault(t *testing.T) {
 	defer deleteTablet(t, te, want1)
 
 	// Local cell preference is default
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", nil)
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -351,7 +351,7 @@ func TestPickUsingCellAlias_OnlySpecified(t *testing.T) {
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want1)
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", &TabletPickerOptions{CellPref: TabletPickerCellPreference_OnlySpecified})
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPref: "OnlySpecified"})
 	require.NoError(t, err)
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -394,7 +394,7 @@ func TestPickUsingCellAlias_OnlySpecified(t *testing.T) {
 
 func TestTabletAppearsDuringSleep(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", nil)
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	delay := GetTabletPickerRetryDelay()
@@ -422,10 +422,10 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 
 func TestPickError_LocalPreferenceDefault(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
-	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", nil)
+	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", nil)
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {
@@ -451,7 +451,7 @@ func TestPickError_LocalPreferenceDefault(t *testing.T) {
 func TestPickError_OnlySpecified(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
 
-	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", &TabletPickerOptions{CellPref: TabletPickerCellPreference_OnlySpecified})
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{CellPref: "OnlySpecified"})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {

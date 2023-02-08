@@ -41,19 +41,19 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type TabletPickerCellPreference string
-type TabletPickerTabletOrder string
+type TabletPickerCellPreference int
+type TabletPickerTabletOrder int
 
 const (
 	// PreferLocalWithAlias gives preference to the local cell first, then specified cells, if any.
 	// This is the default when no other option is provided.
-	TabletPickerCellPreference_PreferLocalWithAlias TabletPickerCellPreference = "PreferLocalWithAlias"
+	TabletPickerCellPreference_PreferLocalWithAlias TabletPickerCellPreference = 0
 	// OnlySpecified only picks tablets from the list of cells given.
-	TabletPickerCellPreference_OnlySpecified TabletPickerCellPreference = "OnlySpecified"
+	TabletPickerCellPreference_OnlySpecified TabletPickerCellPreference = 1
 	// All provided tablet types are given equal priority. This is the default.
-	TabletPickerTabletOrder_Any TabletPickerTabletOrder = "Any"
+	TabletPickerTabletOrder_Any TabletPickerTabletOrder = 0
 	// Provided tablet types are expected to be prioritized in the given order.
-	TabletPickerTabletOrder_InOrder TabletPickerTabletOrder = "InOrder"
+	TabletPickerTabletOrder_InOrder TabletPickerTabletOrder = 1
 )
 
 var (
@@ -87,12 +87,17 @@ func SetTabletPickerRetryDelay(delay time.Duration) {
 	tabletPickerRetryDelay = delay
 }
 
+// type options struct {
+// 	cellPref    TabletPickerCellPreference
+// 	tabletOrder TabletPickerTabletOrder
+// }
+
 type TabletPickerOptions struct {
-	CellPref    TabletPickerCellPreference
-	TabletOrder TabletPickerTabletOrder
+	CellPref    string
+	TabletOrder string
 }
 
-func ParseTabletPickerCellPreferenceString(str string) TabletPickerCellPreference {
+func parseTabletPickerCellPreferenceString(str string) TabletPickerCellPreference {
 	if c, ok := tabletPickerCellPreferenceMap[strings.ToLower(str)]; ok {
 		return c
 	}
@@ -101,7 +106,7 @@ func ParseTabletPickerCellPreferenceString(str string) TabletPickerCellPreferenc
 	return TabletPickerCellPreference_PreferLocalWithAlias
 }
 
-func ParseTabletPickerTabletOrderString(str string) TabletPickerTabletOrder {
+func parseTabletPickerTabletOrderString(str string) TabletPickerTabletOrder {
 	if o, ok := tabletPickerTabletOrderMap[strings.ToLower(str)]; ok {
 		return o
 	}
@@ -133,7 +138,7 @@ func NewTabletPicker(
 	ts *topo.Server,
 	cells []string,
 	localCell, keyspace, shard, tabletTypesStr string,
-	options *TabletPickerOptions,
+	options TabletPickerOptions,
 ) (*TabletPicker, error) {
 	// Keep inOrder parsing here for backward compatability until TabletPickerTabletOrder is fully adopted.
 	tabletTypes, inOrder, err := ParseTabletTypesAndOrder(tabletTypesStr)
@@ -155,18 +160,19 @@ func NewTabletPicker(
 			fmt.Sprintf("Missing required field(s) for tablet picker: %s", strings.Join(missingFields, ", ")))
 	}
 
-	cellPref := TabletPickerCellPreference_PreferLocalWithAlias
-	if options != nil {
-		if options.CellPref != "" {
-			cellPref = options.CellPref
-		}
-		if options.TabletOrder != "" {
-			switch options.TabletOrder {
-			case TabletPickerTabletOrder_Any:
-				inOrder = false
-			case TabletPickerTabletOrder_InOrder:
-				inOrder = true
-			}
+	// Resolve tablet picker options
+	cellPref := parseTabletPickerCellPreferenceString(options.CellPref)
+
+	// For backward compatibility only parse the options for tablet ordering
+	// if the in_order hint wasn't already specified. Otherwise it could be overridden.
+	// We can remove this check once the in_order hint is deprecated.
+	if !inOrder {
+		order := parseTabletPickerTabletOrderString(options.TabletOrder)
+		switch order {
+		case TabletPickerTabletOrder_Any:
+			inOrder = false
+		case TabletPickerTabletOrder_InOrder:
+			inOrder = true
 		}
 	}
 

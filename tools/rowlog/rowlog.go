@@ -379,16 +379,16 @@ func getFlavor(ctx context.Context, server, keyspace string) string {
 
 func getTablet(ctx context.Context, ts *topo.Server, cells []string, keyspace string) string {
 	picker, err := discovery.NewTabletPicker(
-		ctx, 
-		ts, 
-		cells, 
-		"", 
-		keyspace, 
-		"0", 
-		"primary", 
-		&discovery.TabletPickerOptions{
-			CellPref: discovery.TabletPickerCellPreference_OnlySpecified
-		}
+		ctx,
+		ts,
+		cells,
+		"",
+		keyspace,
+		"0",
+		"primary",
+		discovery.TabletPickerOptions{
+			CellPref: "OnlySpecified",
+		},
 	)
 	if err != nil {
 		return ""
