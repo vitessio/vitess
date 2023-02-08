@@ -395,10 +395,13 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 
 		vdbc := newVDBClient(dbClient, binlogplayer.NewStats())
 
-		// If we are creating multiple streams, for example in a merge workflow going from 2 shards to 1 shard,
-		// we will be inserting multiple rows. To get the ids of subsequent streams we need to know what
-		// the auto_increment_increment step is. In a multi-master environment, for example, we will encounter
-		// auto increment steps > 1.
+		// If we are creating multiple streams, for example in a
+		// merge workflow going from 2 shards to 1 shard, we
+		// will be inserting multiple rows. To get the ids of
+		// subsequent streams we need to know what the
+		// auto_increment_increment step is. In a multi-master
+		// environment, for example, we will often encounter
+		// auto_increment steps > 1.
 		autoIncrementStep, err := vre.getAutoIncrementStep(dbClient)
 		if err != nil {
 			return nil, err
@@ -857,7 +860,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 }
 
 func (vre *Engine) getAutoIncrementStep(dbClient binlogplayer.DBClient) (int32, error) {
-	qr, err := dbClient.ExecuteFetch("select @@auto_increment_increment", 1)
+	qr, err := dbClient.ExecuteFetch("select @@session.auto_increment_increment", 1)
 	if err != nil {
 		return 0, err
 	}

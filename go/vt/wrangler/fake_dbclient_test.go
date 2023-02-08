@@ -81,7 +81,7 @@ func newFakeDBClient(name string) *fakeDBClient {
 			"select id, type, state, message from _vt.vreplication_log": {},
 			"insert into _vt.vreplication_log":                          {},
 			"SELECT db_name FROM _vt.vreplication LIMIT 0":              {},
-			"select @@auto_increment_increment":                         {},
+			"select @@session.auto_increment_increment":                 {},
 		},
 	}
 }

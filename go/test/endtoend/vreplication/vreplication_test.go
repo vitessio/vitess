@@ -984,7 +984,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 
 		// Test multi-master setups with auto increment steps > 1.
 		for _, tablet := range tablets {
-			autoIncrementSetQuery := fmt.Sprintf("set auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
+			autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
 				autoIncrementStep, autoIncrementStep)
 			tablet.QueryTablet(autoIncrementSetQuery, "", false)
 		}

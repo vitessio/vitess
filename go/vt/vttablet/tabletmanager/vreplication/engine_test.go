@@ -154,7 +154,7 @@ func TestEngineExec(t *testing.T) {
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
-	dbClient.ExpectRequest("select @@auto_increment_increment", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest("select @@session.auto_increment_increment", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|state|source|tablet_types",
