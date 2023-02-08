@@ -292,7 +292,7 @@
  * Add support for Views DDL [#11896](https://github.com/vitessio/vitess/pull/11896)
  * notify view change to vtgate [#12115](https://github.com/vitessio/vitess/pull/12115)
  * Views Support: Updating Views in VSchema for query serving [#12124](https://github.com/vitessio/vitess/pull/12124) 
-#### web UI
+#### Admin Web UI
  * [VTAdmin] Topology Browser [#11496](https://github.com/vitessio/vitess/pull/11496)
 ### Internal Cleanup 
 #### Backup and Restore
@@ -343,7 +343,7 @@
  * VReplication: Remove Deprecated V1 Client Commands [#11705](https://github.com/vitessio/vitess/pull/11705) 
 #### VTAdmin
  * move react-scripts to dev dependencies [#11767](https://github.com/vitessio/vitess/pull/11767) 
-#### web UI
+#### Admin Web UI
  * [vtctld2] Remove vtctld2 UI and vtctld server components that serve the app UI [#11851](https://github.com/vitessio/vitess/pull/11851)
 ### Performance 
 #### Cluster management
