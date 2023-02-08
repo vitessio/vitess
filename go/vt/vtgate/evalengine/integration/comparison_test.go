@@ -743,7 +743,7 @@ func TestCeilandCeiling(t *testing.T) {
 	}
 
 	for _, num := range ceilInputs {
-		// compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
 		compareRemoteExpr(t, conn, fmt.Sprintf("CEILING(%s)", num))
 	}
 }

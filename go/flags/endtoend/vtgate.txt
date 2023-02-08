@@ -115,7 +115,7 @@ Usage of vtgate:
       --mysql_server_ssl_key string                                      Path to ssl key for mysql server plugin SSL
       --mysql_server_ssl_server_ca string                                path to server CA in PEM format, which will be combine with server cert, return full certificate chain to clients
       --mysql_server_tls_min_version string                              Configures the minimal TLS version negotiated when SSL is enabled. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
-      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.31-Vitess")
+      --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
       --mysql_server_write_timeout duration                              connection write timeout
       --mysql_slow_connect_warn_threshold duration                       Warn if it takes more than the given threshold for a mysql connection to establish
       --mysql_tcp_version string                                         Select tcp, tcp4, or tcp6 to control the socket type. (default "tcp")

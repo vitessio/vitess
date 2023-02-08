@@ -148,14 +148,14 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 		}
 		zkID := zkiParts[0]
 		zkAddrParts := strings.Split(zkiParts[1], ":")
-		serverId, _ := strconv.ParseUint(zkID, 10, 0) // nolint:revive
-		if serverId > 1000 {
-			serverId = serverId % 1000
+		serverID, _ := strconv.ParseUint(zkID, 10, 32)
+		if serverID > 1000 {
+			serverID = serverID % 1000
 			zkConfig.Global = true
 		}
 		myID = myID % 1000
 
-		zkServer := zkServerAddr{ServerId: uint32(serverId), ClientPort: 2181,
+		zkServer := zkServerAddr{ServerId: uint32(serverID), ClientPort: 2181,
 			LeaderPort: 2888, ElectionPort: 3888}
 		switch len(zkAddrParts) {
 		case 4:
