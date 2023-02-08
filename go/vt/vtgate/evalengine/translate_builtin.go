@@ -137,6 +137,16 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 			return nil, argError(method)
 		}
 		return &builtinRepeat{CallExpr: call}, nil
+	case "from_base64":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinFromBase64{CallExpr: call}, nil
+	case "to_base64":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinToBase64{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}

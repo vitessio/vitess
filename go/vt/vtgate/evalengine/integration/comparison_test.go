@@ -17,6 +17,7 @@ limitations under the License.
 package integration
 
 import (
+	"encoding/base64"
 	"fmt"
 	"math"
 	"strconv"
@@ -650,19 +651,20 @@ func TestLargeDecimals(t *testing.T) {
 	}
 }
 
+var conversionInputs = []string{
+	"0", "1", "255",
+	"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
+	"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7",
+	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
+	`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
+	"NULL", "true", "false",
+	"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
+	"18446744073709540000e0",
+	"-18446744073709540000e0",
+	"JSON_OBJECT()", "JSON_ARRAY()",
+}
+
 func TestConversionOperators(t *testing.T) {
-	var left = []string{
-		"0", "1", "255",
-		"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
-		"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7",
-		`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
-		`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
-		"NULL", "true", "false",
-		"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
-		"18446744073709540000e0",
-		"-18446744073709540000e0",
-		"JSON_OBJECT()", "JSON_ARRAY()",
-	}
 	var right = []string{
 		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
 		"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
@@ -674,12 +676,33 @@ func TestConversionOperators(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
-	for _, lhs := range left {
+	for _, lhs := range conversionInputs {
 		for _, rhs := range right {
 			compareRemoteExpr(t, conn, fmt.Sprintf("CAST(%s AS %s)", lhs, rhs))
 			compareRemoteExpr(t, conn, fmt.Sprintf("CONVERT(%s, %s)", lhs, rhs))
 			compareRemoteExpr(t, conn, fmt.Sprintf("CAST(CAST(%s AS JSON) AS %s)", lhs, rhs))
 		}
+	}
+}
+
+func TestBase64(t *testing.T) {
+	var inputs = []string{
+		`'bGlnaHQgdw=='`,
+		`'bGlnaHQgd28='`,
+		`'bGlnaHQgd29y'`,
+	}
+
+	inputs = append(inputs, conversionInputs...)
+	for _, input := range conversionInputs {
+		inputs = append(inputs, "'"+base64.StdEncoding.EncodeToString([]byte(input))+"'")
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, lhs := range inputs {
+		compareRemoteExpr(t, conn, fmt.Sprintf("FROM_BASE64(%s)", lhs))
+		compareRemoteExpr(t, conn, fmt.Sprintf("TO_BASE64(%s)", lhs))
 	}
 }
 

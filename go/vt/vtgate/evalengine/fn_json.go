@@ -181,8 +181,6 @@ func (b *builtinJsonArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) 
 	return sqltypes.TypeJSON, 0
 }
 
-var mysqlBase64 = base64.StdEncoding
-
 func evalBinaryToJson(e *evalBytes) *evalJson {
 	const prefix = "base64:type15:"
 
