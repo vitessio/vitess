@@ -80,11 +80,12 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 		return err
 	}
 
-	lit2, _ := expr.Right.(*Literal)
-	if lit2, ok := lit2.inner.(*evalBytes); ok && (lit2.isText() || lit2.isBinary()) {
-		expr.MatchCollation = lit2.col.Collation
-		coll := collations.Local().LookupByID(expr.MatchCollation)
-		expr.Match = coll.Wildcard(lit2.bytes, 0, 0, 0)
+	if lit, ok := expr.Right.(*Literal); ok {
+		if b, ok := lit.inner.(*evalBytes); ok && (b.isText() || b.isBinary()) {
+			expr.MatchCollation = b.col.Collation
+			coll := collations.Local().LookupByID(expr.MatchCollation)
+			expr.Match = coll.Wildcard(b.bytes, 0, 0, 0)
+		}
 	}
 	return nil
 }
