@@ -20,8 +20,6 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
@@ -33,30 +31,14 @@ func (fn errJsonType) Error() string {
 
 var errJsonPath = errors.New("Invalid JSON path expression.")
 
-type evalJson json.Value
-
-func (v *evalJson) hash() (HashCode, error) {
-	return HashCode(hack.RuntimeMemhash(v.toRawBytes(), 0x3333)), nil
-}
-
-func (v *evalJson) toJsonValue() *json.Value {
-	return (*json.Value)(v)
-}
-
-func (v *evalJson) toRawBytes() []byte {
-	return v.toJsonValue().MarshalTo(nil)
-}
-
-func (v *evalJson) sqlType() sqltypes.Type {
-	return sqltypes.TypeJSON
-}
+type evalJson = json.Value
 
 var _ eval = (*evalJson)(nil)
 
-func intoJson(fn string, e eval) (*json.Value, error) {
+func intoJson(fn string, e eval) (*evalJson, error) {
 	switch e := e.(type) {
 	case *evalJson:
-		return e.toJsonValue(), nil
+		return e, nil
 	case *evalBytes:
 		var p json.Parser
 		return p.ParseBytes(e.bytes)

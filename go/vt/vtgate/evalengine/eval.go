@@ -56,16 +56,16 @@ const (
 )
 
 type eval interface {
-	toRawBytes() []byte
-	sqlType() sqltypes.Type
-	hash() (HashCode, error)
+	ToRawBytes() []byte
+	SQLType() sqltypes.Type
+	Hash() (HashCode, error)
 }
 
 func evalToSQLValue(e eval) sqltypes.Value {
 	if e == nil {
 		return sqltypes.NULL
 	}
-	return sqltypes.MakeTrusted(e.sqlType(), e.toRawBytes())
+	return sqltypes.MakeTrusted(e.SQLType(), e.ToRawBytes())
 }
 
 func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
@@ -100,7 +100,7 @@ func evalToSQLValueWithType(e eval, resultType sqltypes.Type) sqltypes.Value {
 			return sqltypes.MakeTrusted(resultType, e.dec.FormatMySQL(e.length))
 		}
 	default:
-		return sqltypes.MakeTrusted(resultType, e.toRawBytes())
+		return sqltypes.MakeTrusted(resultType, e.ToRawBytes())
 	}
 	return sqltypes.NULL
 }
@@ -136,7 +136,7 @@ func evalCoerce(e eval, typ sqltypes.Type, col collations.ID) (eval, error) {
 		// if we have an explicit VARCHAR coercion, always force it so the collation is replaced in the target
 		return evalToVarchar(e, col, false)
 	}
-	if e.sqlType() == typ {
+	if e.SQLType() == typ {
 		// nothing to be done here
 		return e, nil
 	}
@@ -313,7 +313,7 @@ func valueToEval(value sqltypes.Value, collation collations.TypedCollation) (eva
 	case tt == sqltypes.TypeJSON:
 		var p json.Parser
 		j, err := p.ParseBytes(value.Raw())
-		return (*evalJson)(j), wrap(err)
+		return j, wrap(err)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Type is not supported: %q %s", value, value.Type())
 	}

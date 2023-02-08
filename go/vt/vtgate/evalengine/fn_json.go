@@ -66,31 +66,31 @@ func evalBinaryToJson(e *evalBytes) *evalJson {
 	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
 	copy(dst, prefix)
 	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
-	return (*evalJson)(json.NewString(dst))
+	return json.NewString(dst)
 }
 
 func evalToJson(e eval) (*evalJson, error) {
 	switch e := e.(type) {
 	case nil:
-		return (*evalJson)(json.ValueNull), nil
+		return json.ValueNull, nil
 	case *evalJson:
 		return e, nil
 	case *evalFloat:
-		f := e.toRawBytes()
+		f := e.ToRawBytes()
 		if bytes.IndexByte(f, '.') < 0 {
 			f = append(f, '.', '0')
 		}
-		return (*evalJson)(json.NewNumber(f)), nil
+		return json.NewNumber(f), nil
 	case evalNumeric:
 		if e == evalBoolTrue {
-			return (*evalJson)(json.ValueTrue), nil
+			return json.ValueTrue, nil
 		}
 		if e == evalBoolFalse {
-			return (*evalJson)(json.ValueFalse), nil
+			return json.ValueFalse, nil
 		}
-		return (*evalJson)(json.NewNumber(e.toRawBytes())), nil
+		return json.NewNumber(e.ToRawBytes()), nil
 	case *evalBytes:
-		if sqltypes.IsBinary(e.sqlType()) {
+		if sqltypes.IsBinary(e.SQLType()) {
 			return evalBinaryToJson(e), nil
 		}
 
@@ -104,9 +104,9 @@ func evalToJson(e eval) (*evalJson, error) {
 		if err != nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid JSON text in argument 1 to function cast_as_json")
 		}
-		return (*evalJson)(j), nil
+		return j, nil
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.sqlType())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}
 }
 
@@ -175,8 +175,8 @@ func (call *builtinJsonUnquote) eval(env *ExpressionEnv) (eval, error) {
 	if err != nil {
 		return nil, err
 	}
-	if bytes, ok := j.StringBytes(); ok {
-		return newEvalRaw(sqltypes.Blob, bytes, collationJSON), nil
+	if b, ok := j.StringBytes(); ok {
+		return newEvalRaw(sqltypes.Blob, b, collationJSON), nil
 	}
 	return newEvalRaw(sqltypes.Blob, j.MarshalTo(nil), collationJSON), nil
 }
@@ -212,9 +212,9 @@ func (call *builtinJsonObject) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 
-		obj.Set(key1.string(), (*json.Value)(val1), json.Set)
+		obj.Set(key1.string(), val1, json.Set)
 	}
-	return (*evalJson)(j), nil
+	return j, nil
 }
 
 func (call *builtinJsonObject) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
@@ -232,9 +232,9 @@ func (call *builtinJsonArray) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		ary = append(ary, (*json.Value)(arg1))
+		ary = append(ary, arg1)
 	}
-	return (*evalJson)(json.NewArray(ary)), nil
+	return json.NewArray(ary), nil
 }
 
 func (call *builtinJsonArray) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

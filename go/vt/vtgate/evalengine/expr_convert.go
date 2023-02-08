@@ -69,7 +69,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		if c.HasLength {
 			b.truncateInPlace(c.Length)
 		}
-		b.tt = int16(c.convertToBinaryType(e.sqlType()))
+		b.tt = int16(c.convertToBinaryType(e.SQLType()))
 		return b, nil
 
 	case "CHAR", "NCHAR":
@@ -81,7 +81,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		if c.HasLength {
 			t.truncateInPlace(c.Length)
 		}
-		t.tt = int16(c.convertToCharType(e.sqlType()))
+		t.tt = int16(c.convertToCharType(e.SQLType()))
 		return t, nil
 	case "DECIMAL":
 		m := 10

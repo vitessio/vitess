@@ -46,7 +46,7 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	case evalNumeric:
 		encoded = hexEncodeUint(arg.toUint64().u)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", arg.sqlType())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", arg.SQLType())
 	}
 
 	return newEvalText(encoded, env.collation()), nil

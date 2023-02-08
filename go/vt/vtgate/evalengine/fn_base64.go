@@ -34,7 +34,7 @@ func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	encoded := make([]byte, mysqlBase64.EncodedLen(len(b.bytes)))
 	mysqlBase64.Encode(encoded, b.bytes)
 
-	if arg.sqlType() == sqltypes.Blob || arg.sqlType() == sqltypes.TypeJSON {
+	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
 		return newEvalRaw(sqltypes.Text, encoded, env.collation()), nil
 	}
 	return newEvalText(encoded, env.collation()), nil

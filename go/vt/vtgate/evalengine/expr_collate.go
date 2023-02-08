@@ -160,8 +160,8 @@ func mergeCollations(left, right eval) (eval, eval, collations.ID, error) {
 		return nil, nil, 0, err
 	}
 
-	left1 := newEvalRaw(left.sqlType(), left.(*evalBytes).bytes, mc)
-	right1 := newEvalRaw(right.sqlType(), right.(*evalBytes).bytes, mc)
+	left1 := newEvalRaw(left.SQLType(), left.(*evalBytes).bytes, mc)
+	right1 := newEvalRaw(right.SQLType(), right.(*evalBytes).bytes, mc)
 
 	if coerceLeft != nil {
 		left1.bytes, err = coerceLeft(nil, left1.bytes)

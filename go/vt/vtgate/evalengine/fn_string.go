@@ -113,14 +113,14 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 	case nil:
 		return nil, nil
 	case *evalBytes:
-		if sqltypes.IsBinary(e.sqlType()) {
+		if sqltypes.IsBinary(e.SQLType()) {
 			return newEvalInt64(int64(len(e.bytes))), nil
 		}
 		coll := collations.Local().LookupByID(e.col.Collation)
 		count := collations.Length(coll, e.bytes)
 		return newEvalInt64(int64(count)), nil
 	default:
-		return newEvalInt64(int64(len(e.toRawBytes()))), nil
+		return newEvalInt64(int64(len(e.ToRawBytes()))), nil
 	}
 }
 
@@ -137,7 +137,7 @@ func (call *builtinLength) eval(env *ExpressionEnv) (eval, error) {
 	if arg == nil {
 		return nil, nil
 	}
-	return newEvalInt64(int64(len(arg.toRawBytes()))), nil
+	return newEvalInt64(int64(len(arg.ToRawBytes()))), nil
 }
 
 func (call *builtinLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
@@ -153,7 +153,7 @@ func (call *builtinBitLength) eval(env *ExpressionEnv) (eval, error) {
 	if arg == nil {
 		return nil, nil
 	}
-	return newEvalInt64(int64(len(arg.toRawBytes())) * 8), nil
+	return newEvalInt64(int64(len(arg.ToRawBytes())) * 8), nil
 }
 
 func (call *builtinBitLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

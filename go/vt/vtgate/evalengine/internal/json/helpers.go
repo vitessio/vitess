@@ -16,6 +16,23 @@ limitations under the License.
 
 package json
 
+import (
+	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/sqltypes"
+)
+
+func (v *Value) Hash() (uintptr, error) {
+	return uintptr(hack.RuntimeMemhash(v.ToRawBytes(), 0x3333)), nil
+}
+
+func (v *Value) ToRawBytes() []byte {
+	return v.MarshalTo(nil)
+}
+
+func (v *Value) SQLType() sqltypes.Type {
+	return sqltypes.TypeJSON
+}
+
 func NewArray(vals []*Value) *Value {
 	return &Value{
 		a: vals,

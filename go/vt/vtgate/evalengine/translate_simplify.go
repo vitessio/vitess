@@ -109,7 +109,7 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 	for i, expr := range tuple {
 		if lit, ok := expr.(*Literal); ok {
 			thisColl := evalCollation(lit.inner).Collation
-			thisTyp := lit.inner.sqlType()
+			thisTyp := lit.inner.SQLType()
 			if i == 0 {
 				collation = thisColl
 				typ = thisTyp
@@ -127,7 +127,7 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 		inexpr.Hashed = make(map[HashCode]int)
 		for i, expr := range tuple {
 			lit := expr.(*Literal)
-			hash, err := lit.inner.hash()
+			hash, err := lit.inner.Hash()
 			if err != nil {
 				inexpr.Hashed = nil
 				break
