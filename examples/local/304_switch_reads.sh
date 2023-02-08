@@ -16,6 +16,6 @@
 
 # this script migrates traffic for the rdonly and replica tablets
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient Reshard -- --tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
