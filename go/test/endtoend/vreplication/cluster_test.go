@@ -251,7 +251,7 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 	} else if dbType == "mysql" && majorVersion == "8.0" {
 		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
-	} else if dbType == "mariadb" && majorVersion == "10.10" {
+	} else if dbType == "mariadb" && majorVersion == "10.6" {
 		versionFile = "mariadb-10.6.12-linux-systemd-x86_64.tar.gz"
 		url = "https://github.com/vitessio/vitess-resources/releases/download/v4.0/" + versionFile
 	} else {
