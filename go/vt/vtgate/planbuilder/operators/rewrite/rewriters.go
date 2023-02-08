@@ -80,13 +80,17 @@ func bottomUp(root ops.Operator, rootID semantics.TableSet, resolveID func(ops.O
 	newInputs := make([]ops.Operator, len(oldInputs))
 	childID := rootID
 
+	// noLHSTableSet is used to mark which operators that do not send data from the LHS to the RHS
+	// It's only UNION at this moment, but this package can't depend on the actual operators, so
+	// we use this interface to avoid direct dependencies
 	type noLHSTableSet interface{ NoLHSTableSet() }
 
 	for i, operator := range oldInputs {
 		// We merge the table set of all the LHS above the current root so that we can
 		// send it down to the current RHS.
 		// We don't want to send the LHS table set to the RHS if the root is an UNION.
-		if _, isUnion := root.(noLHSTableSet); !isUnion && i == 1 {
+		// Some operators, like SubQuery, can have multiple child operators on the RHS
+		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
 			childID = childID.Merge(resolveID(oldInputs[0]))
 		}
 		in, changed, err := bottomUp(operator, childID, resolveID, rewriter)
