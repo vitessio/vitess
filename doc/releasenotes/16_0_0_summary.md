@@ -106,9 +106,8 @@ However, if you are running MySQL 8.0 on the vitess-operator, with for instance 
 2. Apply this file.
 3. Wait for all the pods to be healthy.
 4. Then change your YAML file to use the new Docker Images (`vitess/lite:v16.0.0`, defaults to mysql80).
-5. Wait for all the pods to be healthy.
-6. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
-7. Apply this file.
+5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
+6. Apply this file.
 
 #### <a id="vtcltd-ui-removal"/> vtctld UI Removal
 In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
