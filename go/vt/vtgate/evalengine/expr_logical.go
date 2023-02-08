@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -23,21 +23,15 @@ import (
 )
 
 type (
-	LogicalOp interface {
-		eval(left, right EvalResult) (boolean, error)
-		String()
-	}
-
 	LogicalExpr struct {
 		BinaryExpr
 		op     func(left, right boolean) boolean
 		opname string
 	}
+
 	NotExpr struct {
 		UnaryExpr
 	}
-
-	OpLogicalAnd struct{}
 
 	boolean int8
 
@@ -46,7 +40,7 @@ type (
 	IsExpr struct {
 		UnaryExpr
 		Op    sqlparser.IsExprOperator
-		Check func(*EvalResult) bool
+		Check func(eval) bool
 	}
 
 	WhenThen struct {
@@ -59,6 +53,10 @@ type (
 		Else  Expr
 	}
 )
+
+var _ Expr = (*IsExpr)(nil)
+var _ Expr = (*LogicalExpr)(nil)
+var _ Expr = (*NotExpr)(nil)
 
 const (
 	boolFalse boolean = 0
@@ -78,6 +76,17 @@ func makeboolean2(b, isNull bool) boolean {
 		return boolNULL
 	}
 	return makeboolean(b)
+}
+
+func (left boolean) eval() eval {
+	switch left {
+	case boolTrue:
+		return evalBoolTrue
+	case boolFalse:
+		return evalBoolFalse
+	default:
+		return nil
+	}
 }
 
 func (left boolean) not() boolean {
@@ -143,88 +152,99 @@ func (left boolean) xor(right boolean) boolean {
 	}
 }
 
-func (n *NotExpr) eval(env *ExpressionEnv, out *EvalResult) {
-	var inner EvalResult
-	inner.init(env, n.Inner)
-	out.setBoolean(inner.isTruthy().not())
+func (n *NotExpr) eval(env *ExpressionEnv) (eval, error) {
+	e, err := n.Inner.eval(env)
+	if err != nil {
+		return nil, err
+	}
+	return evalIsTruthy(e).not().eval(), nil
 }
 
-func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+func (n *NotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	_, flags := n.Inner.typeof(env)
 	return sqltypes.Uint64, flags
 }
 
-func (l *LogicalExpr) eval(env *ExpressionEnv, out *EvalResult) {
-	var left, right EvalResult
-	left.init(env, l.Left)
-	right.init(env, l.Right)
-	if left.typeof() == sqltypes.Tuple || right.typeof() == sqltypes.Tuple {
-		panic("did not typecheck tuples")
+func (l *LogicalExpr) eval(env *ExpressionEnv) (eval, error) {
+	left, right, err := l.arguments(env)
+	if err != nil {
+		return nil, err
 	}
-	out.setBoolean(l.op(left.isTruthy(), right.isTruthy()))
+	return l.op(evalIsTruthy(left), evalIsTruthy(right)).eval(), nil
 }
 
-func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+func (l *LogicalExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	_, f1 := l.Left.typeof(env)
 	_, f2 := l.Right.typeof(env)
 	return sqltypes.Uint64, f1 | f2
 }
 
-func (i *IsExpr) eval(env *ExpressionEnv, result *EvalResult) {
-	var in EvalResult
-	in.init(env, i.Inner)
-	result.setBool(i.Check(&in))
+func (i *IsExpr) eval(env *ExpressionEnv) (eval, error) {
+	e, err := i.Inner.eval(env)
+	if err != nil {
+		return nil, err
+	}
+	return newEvalBool(i.Check(e)), nil
 }
 
-func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+func (i *IsExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, 0
 }
 
-func (c *CaseExpr) eval(env *ExpressionEnv, result *EvalResult) {
-	var tmp EvalResult
-	var matched = false
+func (c *CaseExpr) eval(env *ExpressionEnv) (eval, error) {
 	var ca collationAggregation
 	var local = collations.Local()
+	var result eval
+	var matched = false
 
 	// From what we can tell, MySQL actually evaluates all the branches
 	// of a CASE expression, even after a truthy match. I.e. the CASE
 	// operator does _not_ short-circuit.
 
 	for _, whenThen := range c.cases {
-		tmp.init(env, whenThen.when)
-		truthy := tmp.isTruthy() == boolTrue
+		when, err := whenThen.when.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		truthy := evalIsTruthy(when) == boolTrue
 
-		tmp.init(env, whenThen.then)
-		ca.add(local, tmp.collation())
+		then, err := whenThen.then.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if err := ca.add(local, evalCollation(then)); err != nil {
+			return nil, err
+		}
 
 		if !matched && truthy {
-			tmp.resolve()
-			*result = tmp
+			result = then
 			matched = true
 		}
 	}
 	if c.Else != nil {
-		tmp.init(env, c.Else)
-		ca.add(local, tmp.collation())
-
+		e, err := c.Else.eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if err := ca.add(local, evalCollation(e)); err != nil {
+			return nil, err
+		}
 		if !matched {
-			tmp.resolve()
-			*result = tmp
+			result = e
 			matched = true
 		}
 	}
 
 	if !matched {
-		result.setNull()
+		return nil, nil
 	}
-
 	t, _ := c.typeof(env)
-	result.coerce(t, ca.result().Collation)
+	return evalCoerce(result, t, ca.result().Collation)
 }
 
-func (c *CaseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, flag) {
+func (c *CaseExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	var ta typeAggregation
-	var resultFlag flag
+	var resultFlag typeFlag
 
 	for _, whenthen := range c.cases {
 		t, f := whenthen.then.typeof(env)

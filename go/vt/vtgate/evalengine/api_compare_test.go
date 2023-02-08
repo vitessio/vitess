@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -88,11 +88,11 @@ func (tc testCase) run(t *testing.T) {
 	if tc.err == "" {
 		require.NoError(t, err)
 		if tc.out != nil && *tc.out {
-			require.EqualValues(t, uint64(1), got.uint64())
+			require.EqualValues(t, uint64(1), evalToNumeric(got.v).toUint64().u)
 		} else if tc.out != nil && !*tc.out {
-			require.EqualValues(t, uint64(0), got.uint64())
+			require.EqualValues(t, uint64(0), evalToNumeric(got.v).toUint64().u)
 		} else {
-			require.EqualValues(t, sqltypes.Null, got.typeof())
+			require.EqualValues(t, nil, got.v)
 		}
 	} else {
 		require.EqualError(t, err, tc.err)
