@@ -347,7 +347,7 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 // and a MySQL target as while MariaDB is not supported in Vitess v14+ we want
 // MariaDB users to have a way to migrate into Vitess.
 func TestMoveTablesMariaDBToMySQL(t *testing.T) {
-	sourceKsOpts["DBTypeVersion"] = "mariadb-10.6"
+	sourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testVreplicationWorkflows(t, true /* only do MoveTables */)
 }
