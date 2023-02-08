@@ -36,7 +36,7 @@ func TestPickSimple(t *testing.T) {
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	tablet, err := tp.PickForStreaming(context.Background())
@@ -51,7 +51,7 @@ func TestPickFromTwoHealthy(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica,rdonly", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	// In 20 attempts, both tablet types must be picked at least once.
@@ -77,7 +77,7 @@ func TestPickInOrder1(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:replica,rdonly")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "in_order:replica,rdonly", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	// In 20 attempts, we always pick the first healthy tablet in order
@@ -103,7 +103,7 @@ func TestPickInOrder2(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "cell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:rdonly,replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "in_order:rdonly,replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	// In 20 attempts, we always pick the first healthy tablet in order
@@ -133,7 +133,7 @@ func TestPickInOrderMultipleInGroup(t *testing.T) {
 	want4 := addTablet(te, 103, topodatapb.TabletType_RDONLY, "cell", true, true)
 	defer deleteTablet(t, te, want4)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "in_order:rdonly,replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "in_order:rdonly,replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	// In 40 attempts, we pick each of the three RDONLY, but never the REPLICA
@@ -167,7 +167,7 @@ func TestPickRespectsTabletType(t *testing.T) {
 	dont := addTablet(te, 101, topodatapb.TabletType_PRIMARY, "cell", true, true)
 	defer deleteTablet(t, te, dont)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica,rdonly", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	// In 20 attempts, primary tablet must be never picked
@@ -184,7 +184,7 @@ func TestPickMultiCell(t *testing.T) {
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -206,7 +206,7 @@ func TestPickPrimary(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"otherCell"}, te.keyspace, te.shard, "primary")
+	tp, err := NewTabletPicker(ctx, te.topoServ, []string{"otherCell"}, "cell", te.keyspace, te.shard, "primary", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx2, cancel2 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -221,7 +221,7 @@ func TestPickFromOtherCell(t *testing.T) {
 	want := addTablet(te, 100, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -238,7 +238,7 @@ func TestDontPickFromOtherCell(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"cell"}, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cell"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -267,7 +267,7 @@ func TestPickMultiCellTwoTablets(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_REPLICA, "otherCell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -296,7 +296,7 @@ func TestPickMultiCellTwoTabletTypes(t *testing.T) {
 	want2 := addTablet(te, 101, topodatapb.TabletType_RDONLY, "otherCell", true, true)
 	defer deleteTablet(t, te, want2)
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica,rdonly")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica,rdonly", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -324,7 +324,7 @@ func TestPickUsingCellAlias(t *testing.T) {
 	want1 := addTablet(te, 100, topodatapb.TabletType_REPLICA, "cell", true, true)
 	defer deleteTablet(t, te, want1)
 
-	tp, err := NewTabletPicker(te.topoServ, []string{"cella"}, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, []string{"cella"}, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	ctx1, cancel1 := context.WithTimeout(context.Background(), 200*time.Millisecond)
@@ -366,7 +366,7 @@ func TestPickUsingCellAlias(t *testing.T) {
 
 func TestTabletAppearsDuringSleep(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 
 	delay := GetTabletPickerRetryDelay()
@@ -394,10 +394,10 @@ func TestTabletAppearsDuringSleep(t *testing.T) {
 
 func TestPickError(t *testing.T) {
 	te := newPickerTestEnv(t, []string{"cell"})
-	_, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "badtype")
+	_, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "badtype", TabletPickerOptions{})
 	assert.EqualError(t, err, "failed to parse list of tablet types: badtype")
 
-	tp, err := NewTabletPicker(te.topoServ, te.cells, te.keyspace, te.shard, "replica")
+	tp, err := NewTabletPicker(context.Background(), te.topoServ, te.cells, "cell", te.keyspace, te.shard, "replica", TabletPickerOptions{})
 	require.NoError(t, err)
 	delay := GetTabletPickerRetryDelay()
 	defer func() {
