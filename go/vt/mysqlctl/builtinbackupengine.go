@@ -62,14 +62,15 @@ var (
 
 	builtinBackupProgress = 5 * time.Second
 
-	// Controls the size of blocks read from disk during backups.
+	// Controls the size of the IO buffer used when reading files during backups.
 	builtinBackupFileReadBufferSize uint
 
-	// Controls the size of blocks written to disk during restores.
+	// Controls the size of the IO buffer used when writing files during restores.
 	builtinBackupFileWriteBufferSize uint = 2 * 1024 * 1024 /* 2 MiB */
 
-	// Controls the byte block size of writes to backupstorage during backups.
-	// The backupstorage may be a physical file, network, or something else.
+	// Controls the size of the IO buffer used when writing to backupstorage
+	// engines during backups.  The backupstorage may be a physical file,
+	// network, or something else.
 	builtinBackupStorageWriteBufferSize = 2 * 1024 * 1024 /* 2 MiB */
 )
 
@@ -132,8 +133,8 @@ func init() {
 func registerBuiltinBackupEngineFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&BuiltinBackupMysqldTimeout, "builtinbackup_mysqld_timeout", BuiltinBackupMysqldTimeout, "how long to wait for mysqld to shutdown at the start of the backup.")
 	fs.DurationVar(&builtinBackupProgress, "builtinbackup_progress", builtinBackupProgress, "how often to send progress updates when backing up large files.")
-	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files from disk in blocks of this many bytes. Golang defaults are used when set to 0.")
-	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files to disk in blocks of this many bytes.")
+	fs.UintVar(&builtinBackupFileReadBufferSize, "builtinbackup-file-read-buffer-size", builtinBackupFileReadBufferSize, "read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
+	fs.UintVar(&builtinBackupFileWriteBufferSize, "builtinbackup-file-write-buffer-size", builtinBackupFileWriteBufferSize, "write files using an IO buffer of this many bytes. Golang defaults are used when set to 0.")
 }
 
 // isIncrementalBackup is a convenience function to check whether the params indicate an incremental backup request
