@@ -52,6 +52,10 @@ type (
 	builtinJsonContainsPath struct {
 		CallExpr
 	}
+
+	builtinJsonKeys struct {
+		CallExpr
+	}
 )
 
 var _ Expr = (*builtinJsonExtract)(nil)
@@ -61,6 +65,7 @@ var _ Expr = (*builtinJsonArray)(nil)
 var _ Expr = (*builtinJsonDepth)(nil)
 var _ Expr = (*builtinJsonLength)(nil)
 var _ Expr = (*builtinJsonContainsPath)(nil)
+var _ Expr = (*builtinJsonKeys)(nil)
 
 var errInvalidPathForTransform = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "In this situation, path expressions may not contain the * and ** tokens or an array range.")
 
@@ -94,7 +99,7 @@ func (call *builtinJsonExtract) eval(env *ExpressionEnv) (eval, error) {
 			multi = true
 		}
 
-		path.Match(doc, func(v *json.Value) {
+		path.Match(doc, true, func(v *json.Value) {
 			matches = append(matches, v)
 		})
 	}
@@ -239,7 +244,7 @@ func (call *builtinJsonLength) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		jp.Match(j, func(value *json.Value) {
+		jp.Match(j, true, func(value *json.Value) {
 			length += value.Len()
 		})
 	} else {
@@ -281,7 +286,7 @@ func (call *builtinJsonContainsPath) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		var matched bool
-		jp.Match(doc, func(*json.Value) { matched = true })
+		jp.Match(doc, true, func(*json.Value) { matched = true })
 		if matched && !all {
 			return newEvalBool(true), nil
 		}
@@ -306,4 +311,56 @@ func intoOneOrAll(fname string, e eval) (bool, error) {
 func (call *builtinJsonContainsPath) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env)
 	return sqltypes.Int64, f
+}
+
+func (call *builtinJsonKeys) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.Arguments[0].eval(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	j, err := intoJson("JSON_KEYS", arg)
+	if err != nil {
+		return nil, err
+	}
+
+	var obj *json.Object
+	if len(call.Arguments) == 2 {
+		path, err := call.Arguments[1].eval(env)
+		if err != nil {
+			return nil, err
+		}
+		if path == nil {
+			return nil, nil
+		}
+		jp, err := intoJsonPath(path)
+		if err != nil {
+			return nil, err
+		}
+		if jp.ContainsWildcards() {
+			return nil, errInvalidPathForTransform
+		}
+		jp.Match(j, false, func(value *json.Value) {
+			obj, _ = value.Object()
+		})
+	} else {
+		obj, _ = j.Object()
+	}
+	if obj == nil {
+		return nil, nil
+	}
+
+	var keys []*json.Value
+	obj.Visit(func(key []byte, _ *json.Value) {
+		keys = append(keys, json.NewString(key))
+	})
+	return json.NewArray(keys), nil
+}
+
+func (call *builtinJsonKeys) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env)
+	return sqltypes.TypeJSON, f | flagNullable
 }

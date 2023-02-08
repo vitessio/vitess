@@ -133,72 +133,87 @@ func (j *Path) arrayOffsets(ary []*Value) (int, int) {
 	return from, to
 }
 
-func (j *Path) matchAny(v *Value, matched map[*Value]struct{}, match func(v *Value)) {
-	j.match(v, matched, match)
+type matcher struct {
+	seen map[*Value]struct{}
+	f    func(v *Value)
+	wrap bool
+}
+
+func (m *matcher) match(v *Value) {
+	if _, seen := m.seen[v]; !seen {
+		m.seen[v] = struct{}{}
+		m.f(v)
+	}
+}
+
+func (m *matcher) any(p *Path, v *Value) {
+	m.value(p, v)
 
 	if obj, ok := v.Object(); ok {
 		obj.Visit(func(_ []byte, v *Value) {
-			j.matchAny(v, matched, match)
+			m.any(p, v)
 		})
 	}
 	if ary, ok := v.Array(); ok {
 		for _, v := range ary {
-			j.matchAny(v, matched, match)
+			m.any(p, v)
 		}
 	}
 }
 
-func (j *Path) match(v *Value, matched map[*Value]struct{}, match func(v *Value)) {
+func (m *matcher) value(p *Path, v *Value) {
 	if v == nil {
 		return
 	}
-	if j == nil {
-		if _, m := matched[v]; !m {
-			matched[v] = struct{}{}
-			match(v)
-		}
+	if p == nil {
+		m.match(v)
 		return
 	}
-	switch j.kind {
+	switch p.kind {
 	case jpDocumentRoot:
-		j.next.match(v, matched, match)
+		m.value(p.next, v)
 	case jpAny:
-		j.next.matchAny(v, matched, match)
+		m.any(p.next, v)
 	case jpMember:
 		if obj, ok := v.Object(); ok {
-			j.next.match(obj.Get(j.name), matched, match)
+			m.value(p.next, obj.Get(p.name))
 		}
 	case jpMemberAny:
 		if obj, ok := v.Object(); ok {
 			obj.Visit(func(_ []byte, v *Value) {
-				j.next.match(v, matched, match)
+				m.value(p.next, v)
 			})
 		}
 	case jpArrayLocation:
 		if ary, ok := v.Array(); ok {
-			from, to := j.arrayOffsets(ary)
+			from, to := p.arrayOffsets(ary)
 			if from >= 0 && from < len(ary) {
 				if to >= len(ary) {
 					to = len(ary) - 1
 				}
 				for n := from; n <= to; n++ {
-					j.next.match(ary[n], matched, match)
+					m.value(p.next, ary[n])
 				}
 			}
-		} else if j.offset0 == 0 || j.offset0 == -1 {
-			j.next.match(v, matched, match)
+		} else if m.wrap && (p.offset0 == 0 || p.offset0 == -1) {
+			m.value(p.next, v)
 		}
 	case jpArrayLocationAny:
 		if ary, ok := v.Array(); ok {
 			for _, v := range ary {
-				j.next.match(v, matched, match)
+				m.value(p.next, v)
 			}
 		}
 	}
 }
 
-func (jp *Path) Match(doc *Value, match func(value *Value)) {
-	jp.match(doc, make(map[*Value]struct{}), match)
+func (jp *Path) Match(doc *Value, wrap bool, match func(value *Value)) {
+	m := matcher{
+		seen: make(map[*Value]struct{}),
+		f:    match,
+		wrap: wrap,
+	}
+	m.value(jp, doc)
 }
 
 func (j *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
@@ -294,7 +309,7 @@ func MatchPath(rawJson, rawPath []byte, match func(value *Value)) error {
 		return err
 	}
 
-	jp.Match(doc, match)
+	jp.Match(doc, true, match)
 	return nil
 }
 

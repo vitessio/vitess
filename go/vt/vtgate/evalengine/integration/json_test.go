@@ -116,7 +116,7 @@ var inputJsonObjects = []string{
 var inputJsonPaths = []string{
 	"$**.b", "$.c", "$.b[1].c", "$.b[1].c", "$.b[1]", "$[0][0]", "$**[0]", "$.a[0]",
 	"$[0].a[0]", "$**.a", "$[0][0][0].a", "$[*].b", "$[*].a", `$[1].b[0]`, `$[2][2]`,
-	`$.a`, `$.e`, `$.b`, `$.c.d`, `$.a.d`, `$[0]`, `$[1]`, `$[2][*]`,
+	`$.a`, `$.e`, `$.b`, `$.c.d`, `$.a.d`, `$[0]`, `$[1]`, `$[2][*]`, `$`,
 }
 
 func TestJSONPathOperations(t *testing.T) {
@@ -124,10 +124,13 @@ func TestJSONPathOperations(t *testing.T) {
 	defer conn.Close()
 
 	for _, obj := range inputJsonObjects {
+		compareRemoteExpr(t, conn, fmt.Sprintf("JSON_KEYS('%s')", obj))
+
 		for _, path1 := range inputJsonPaths {
 			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1))
 			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1))
 			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1))
+			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_KEYS('%s', '%s')", obj, path1))
 
 			for _, path2 := range inputJsonPaths {
 				compareRemoteExpr(t, conn, fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2))
