@@ -66,7 +66,7 @@ func (le *lastError) record(err error) {
 		log.Infof("Got the same last error for %q: %+v ; first seen at %s and last seen %dms ago", le.name, le.err, le.firstSeen, int(time.Since(le.lastSeen).Milliseconds()))
 		if time.Since(le.lastSeen) > le.maxTimeInError {
 			// reset firstSeen, since it has been long enough since the last time we saw this error
-			log.Infof("Resetting firstSeen for %s", le.name)
+			log.Infof("Resetting firstSeen for %s, since it is too long since the last one", le.name)
 			le.firstSeen = time.Now()
 		}
 		le.lastSeen = time.Now()
