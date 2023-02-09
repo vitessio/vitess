@@ -18,6 +18,7 @@ package api
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,17 +29,39 @@ import (
 	"vitess.io/vitess/go/test/endtoend/vtorc/utils"
 )
 
-// make an api call to /api/problems endpoint
-// and verify the output
-func TestProblemsAPI(t *testing.T) {
+// TestAPIEndpoints tests the various API endpoints that VTOrc offers.
+// It also tests the functioning of the `disable-global-recoveries` flag.
+func TestAPIEndpoints(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, nil, cluster.VTOrcConfiguration{
+	utils.SetupVttabletsAndVTOrcs(t, clusterInfo, 2, 1, []string{"--disable-global-recoveries"}, cluster.VTOrcConfiguration{
 		PreventCrossDataCenterPrimaryFailover: true,
 		RecoveryPeriodBlockSeconds:            5,
 	}, 1, "")
 	keyspace := &clusterInfo.ClusterInstance.Keyspaces[0]
 	shard0 := &keyspace.Shards[0]
 	vtorc := clusterInfo.ClusterInstance.VTOrcProcesses[0]
+
+	t.Run("Replication Analysis API - 1", func(t *testing.T) {
+		// Wait until VTOrc picks up on there being no primary and verify
+		// that we see a not null result on the api/replication-analysis end-point
+		timeout := time.After(30 * time.Second)
+		for {
+			select {
+			case <-timeout:
+				t.Fatal("timed out waiting for VTOrc to see ClusterHasNoPrimary in replication analysis")
+				return
+			default:
+				status, response, err := vtorc.MakeAPICall("/api/replication-analysis")
+				if err == nil && status == 200 && strings.Contains(response, "ClusterHasNoPrimary") {
+					return
+				}
+				time.Sleep(1 * time.Second)
+			}
+		}
+	})
+
+	// Enable global recoveries on the VTOrc instance and wait for primary to be elected
+	vtorc.EnableGlobalRecoveries(t)
 
 	// find primary from topo
 	primary := utils.ShardPrimaryTablet(t, clusterInfo, keyspace, shard0)
@@ -87,7 +110,7 @@ func TestProblemsAPI(t *testing.T) {
 		assert.Equal(t, "Global recoveries disabled\n", resp)
 	})
 
-	t.Run("Replication Analysis API", func(t *testing.T) {
+	t.Run("Replication Analysis API - 2", func(t *testing.T) {
 		// use vtctlclient to stop replication
 		_, err := clusterInfo.ClusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("StopReplication", replica.Alias)
 		require.NoError(t, err)
