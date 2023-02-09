@@ -2710,6 +2710,11 @@ type (
 		YCordinate Expr
 	}
 
+	//LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
+	LineStringExpr struct {
+		PointParams []*PointExpr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3037,6 +3042,7 @@ func (*VarSamp) iExpr()                            {}
 func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
 func (*PointExpr) iExpr()                          {}
+func (*LineStringExpr) iExpr()                     {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3091,6 +3097,7 @@ func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
 func (*PointExpr) iCallable()                          {}
+func (*LineStringExpr) iCallable()                     {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

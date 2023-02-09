@@ -266,6 +266,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
 	case *Limit:
 		return c.copyOnRewriteRefOfLimit(n, parent)
+	case *LineStringExpr:
+		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
 	case ListArg:
 		return c.copyOnRewriteListArg(n, parent)
 	case *Literal:
@@ -3349,6 +3351,36 @@ func (c *cow) copyOnRewriteRefOfLimit(n *Limit, parent SQLNode) (out SQLNode, ch
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfLineStringExpr(n *LineStringExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		var changedPointParams bool
+		_PointParams := make([]*PointExpr, len(n.PointParams))
+		for x, el := range n.PointParams {
+			this, changed := c.copyOnRewriteRefOfPointExpr(el, n)
+			_PointParams[x] = this.(*PointExpr)
+			if changed {
+				changedPointParams = true
+			}
+		}
+		if changedPointParams {
+			res := *n
+			res.PointParams = _PointParams
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfLiteral(n *Literal, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6249,6 +6281,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfJSONValueModifierExpr(n, parent)
 	case *LagLeadExpr:
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
+	case *LineStringExpr:
+		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
 	case *LocateExpr:
 		return c.copyOnRewriteRefOfLocateExpr(n, parent)
 	case *MatchExpr:
@@ -6499,6 +6533,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfJSONValueModifierExpr(n, parent)
 	case *LagLeadExpr:
 		return c.copyOnRewriteRefOfLagLeadExpr(n, parent)
+	case *LineStringExpr:
+		return c.copyOnRewriteRefOfLineStringExpr(n, parent)
 	case ListArg:
 		return c.copyOnRewriteListArg(n, parent)
 	case *Literal:

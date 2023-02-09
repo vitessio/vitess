@@ -2344,6 +2344,23 @@ func (cached *Limit) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *LineStringExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field PointParams []*vitess.io/vitess/go/vt/sqlparser.PointExpr
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.PointParams)) * int64(8))
+		for _, elem := range cached.PointParams {
+			size += elem.CachedSize(true)
+		}
+	}
+	return size
+}
 func (cached *Literal) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

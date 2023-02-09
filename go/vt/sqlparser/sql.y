@@ -62,6 +62,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   strs          []string
   vindexParam   VindexParam
   jsonObjectParam *JSONObjectParam
+  pointParam *PointExpr
   identifierCI      IdentifierCI
   joinCondition *JoinCondition
   databaseOption DatabaseOption
@@ -153,6 +154,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   alterOptions	   []AlterOption
   vindexParams  []VindexParam
   jsonObjectParams []*JSONObjectParam
+  pointParams []*PointExpr
   partDefs      []*PartitionDefinition
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
@@ -577,6 +579,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <jsonObjectParam> json_object_param
 %type <jsonObjectParams> json_object_param_list json_object_param_opt
 %type <identifierCI> ci_identifier ci_identifier_opt vindex_type vindex_type_opt
+%type <pointParam> point_param
+%type <pointParams> point_param_list two_point_param
 %type <str> database_or_schema column_opt insert_method_options row_format_options
 %type <referenceAction> fk_reference_action fk_on_delete fk_on_update
 %type <matchAction> fk_match fk_match_opt fk_match_action
@@ -1420,6 +1424,29 @@ table_column_list:
 | table_column_list ',' check_constraint_definition
   {
     $$.AddConstraint($3)
+  }
+
+//list of points with length >=2
+point_param_list:
+  two_point_param
+  {
+    $$ = $1
+  }
+| point_param_list ',' point_param
+  {
+    $$ = append($$, $3)
+  }
+
+two_point_param:
+  point_param ',' point_param
+{
+  $$ = []*PointExpr{$1, $3}
+}
+
+point_param:
+  POINT openb expression ',' expression closeb
+  {
+    $$ = &PointExpr{XCordinate:$3, YCordinate:$5}
   }
 
 // collate_opt has to be in the first rule so that we don't have a shift reduce conflict when seeing a COLLATE
@@ -6179,7 +6206,11 @@ UTC_DATE func_paren_opt
   }
 | POINT openb expression ',' expression closeb
   {
-    $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
+    $$ = &PointExpr{XCordinate:$3, YCordinate:$5}
+  }
+| LINESTRING openb point_param_list closeb
+  {
+    $$ = &LineStringExpr{ PointParams:$3 }
   }
 | argument_less_window_expr_type openb closeb over_clause
   {

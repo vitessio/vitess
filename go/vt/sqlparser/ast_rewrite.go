@@ -266,6 +266,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case *Limit:
 		return a.rewriteRefOfLimit(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -4382,6 +4384,37 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 	}
 	return true
 }
+func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStringExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	for x, el := range node.PointParams {
+		if !a.rewriteRefOfPointExpr(node, el, func(idx int) replacerFunc {
+			return func(newNode, parent SQLNode) {
+				parent.(*LineStringExpr).PointParams[idx] = newNode.(*PointExpr)
+			}
+		}(x)) {
+			return false
+		}
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfLiteral(parent SQLNode, node *Literal, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8439,6 +8472,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case *LocateExpr:
 		return a.rewriteRefOfLocateExpr(parent, node, replacer)
 	case *MatchExpr:
@@ -8689,6 +8724,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:

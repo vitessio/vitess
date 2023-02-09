@@ -267,6 +267,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
 		return CloneRefOfLimit(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -1826,6 +1828,16 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	return &out
 }
 
+// CloneRefOfLineStringExpr creates a deep clone of the input.
+func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PointParams = CloneSliceOfRefOfPointExpr(n.PointParams)
+	return &out
+}
+
 // CloneRefOfLiteral creates a deep clone of the input.
 func CloneRefOfLiteral(n *Literal) *Literal {
 	if n == nil {
@@ -3316,6 +3328,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
@@ -3578,6 +3592,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -4112,6 +4128,18 @@ func CloneRefOfJtNestedPathColDef(n *JtNestedPathColDef) *JtNestedPathColDef {
 	out.Path = CloneExpr(n.Path)
 	out.Columns = CloneSliceOfRefOfJtColumnDefinition(n.Columns)
 	return &out
+}
+
+// CloneSliceOfRefOfPointExpr creates a deep clone of the input.
+func CloneSliceOfRefOfPointExpr(n []*PointExpr) []*PointExpr {
+	if n == nil {
+		return nil
+	}
+	res := make([]*PointExpr, len(n))
+	for i, x := range n {
+		res[i] = CloneRefOfPointExpr(x)
+	}
+	return res
 }
 
 // CloneTableAndLockTypes creates a deep clone of the input.
