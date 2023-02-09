@@ -571,6 +571,9 @@ const (
 	// SSConstraintViolation is constraint violation
 	SSConstraintViolation = "23000"
 
+	// SSDupKey is ER_DUP_KEY
+	SSDupKey = "23000"
+
 	// SSCantDoThisDuringAnTransaction is
 	// ER_CANT_DO_THIS_DURING_AN_TRANSACTION
 	SSCantDoThisDuringAnTransaction = "25000"
