@@ -194,7 +194,7 @@ func Init(ctx context.Context, exec Exec) error {
 		return err
 	}
 
-	resetSQLMode, err := si.setSQLMode()
+	resetSQLMode, err := si.setPermissiveSQLMode()
 	if err != nil {
 		return err
 	}
@@ -209,9 +209,9 @@ func Init(ctx context.Context, exec Exec) error {
 }
 
 // We need to allow zero dates for existing sidecar database tables which may happen to
-// actually have zero (in) date values. setSQLMode gets the current sql_mode, change it to a more relaxed value,
+// actually have zero (in) date values. setPermissiveSQLMode gets the current sql_mode, change it to a more relaxed value,
 // defer restoring it to the original value.
-func (si *schemaInit) setSQLMode() (func(), error) {
+func (si *schemaInit) setPermissiveSQLMode() (func(), error) {
 	rs, err := si.exec(si.ctx, `select @@session.sql_mode as sql_mode`, 1, false)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
