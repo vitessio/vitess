@@ -41,7 +41,7 @@ var (
 	cnf    *mysqlctl.Mycnf
 
 	mysqlPort   = 3306
-	tabletUID   = uint(41983)
+	tabletUID   = uint32(41983)
 	mysqlSocket string
 
 	// mysqlctl init flags
@@ -60,7 +60,7 @@ func init() {
 	dbconfigs.RegisterFlags(dbconfigs.Dba)
 	servenv.OnParse(func(fs *pflag.FlagSet) {
 		fs.IntVar(&mysqlPort, "mysql_port", mysqlPort, "MySQL port")
-		fs.UintVar(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
+		fs.Uint32Var(&tabletUID, "tablet_uid", tabletUID, "Tablet UID")
 		fs.StringVar(&mysqlSocket, "mysql_socket", mysqlSocket, "Path to the mysqld socket file")
 		fs.DurationVar(&waitTime, "wait_time", waitTime, "How long to wait for mysqld startup or shutdown")
 		fs.StringVar(&initDBSQLFile, "init_db_sql_file", initDBSQLFile, "Path to .sql file to run after mysqld initialization")
@@ -84,13 +84,13 @@ func main() {
 
 	// Start or Init mysqld as needed.
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
-	mycnfFile := mysqlctl.MycnfFile(uint32(tabletUID))
+	mycnfFile := mysqlctl.MycnfFile(tabletUID)
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
 		// Generate my.cnf from scratch and use it to find mysqld.
 		log.Infof("mycnf file (%s) doesn't exist, initializing", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uint32(tabletUID), mysqlSocket, int32(mysqlPort))
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(tabletUID, mysqlSocket, mysqlPort)
 		if err != nil {
 			log.Errorf("failed to initialize mysql config: %v", err)
 			exit.Return(1)
@@ -106,7 +106,7 @@ func main() {
 		log.Infof("mycnf file (%s) already exists, starting without init", mycnfFile)
 
 		var err error
-		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(uint32(tabletUID))
+		mysqld, cnf, err = mysqlctl.OpenMysqldAndMycnf(tabletUID)
 		if err != nil {
 			log.Errorf("failed to find mysql config: %v", err)
 			exit.Return(1)

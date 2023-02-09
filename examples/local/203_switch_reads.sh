@@ -17,6 +17,6 @@
 # this script migrates traffic for the new customer keyspace to the new
 # tablets of types rdonly and replica
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient MoveTables -- --tablet_types=rdonly,replica SwitchTraffic customer.commerce2customer

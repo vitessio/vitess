@@ -195,7 +195,7 @@
                         "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                         "Table": "lineitem_map",
                         "Values": [
-                          ":l_orderkey"
+                          "::l_orderkey"
                         ],
                         "Vindex": "md5"
                       },
@@ -344,7 +344,7 @@
                                         "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                                         "Table": "lineitem_map",
                                         "Values": [
-                                          ":l_orderkey"
+                                          "::l_orderkey"
                                         ],
                                         "Vindex": "md5"
                                       },
@@ -792,7 +792,7 @@
                                         "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                                         "Table": "lineitem_map",
                                         "Values": [
-                                          ":l_orderkey"
+                                          "::l_orderkey"
                                         ],
                                         "Vindex": "md5"
                                       },
@@ -949,7 +949,7 @@
                             "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                             "Table": "lineitem_map",
                             "Values": [
-                              ":l_orderkey"
+                              "::l_orderkey"
                             ],
                             "Vindex": "md5"
                           },
@@ -1195,7 +1195,7 @@
                                 "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where :o_orderkey in (select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300) group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
                                 "Table": "orders",
                                 "Values": [
-                                  ":__sq1"
+                                  "::__sq1"
                                 ],
                                 "Vindex": "hash"
                               },
@@ -1241,7 +1241,7 @@
                             "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                             "Table": "lineitem_map",
                             "Values": [
-                              ":l_orderkey"
+                              "::l_orderkey"
                             ],
                             "Vindex": "md5"
                           },

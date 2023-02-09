@@ -203,18 +203,17 @@ func (mysqlGRFlavor) status(c *Conn) (ReplicationStatus, error) {
 }
 
 func parsePrimaryGroupMember(res *ReplicationStatus, row []sqltypes.Value) {
-	res.SourceHost = row[0].ToString() /* MEMBER_HOST */
-	memberPort, _ := row[1].ToInt64()  /* MEMBER_PORT */
-	res.SourcePort = int(memberPort)
+	res.SourceHost = row[0].ToString()   /* MEMBER_HOST */
+	res.SourcePort, _ = row[1].ToInt32() /* MEMBER_PORT */
 }
 
 func parseReplicationApplierLag(res *ReplicationStatus, row []sqltypes.Value) {
-	lagSec, err := row[0].ToInt64()
+	lagSec, err := row[0].ToUint32()
 	// if the error is not nil, ReplicationLagSeconds will remain to be MaxUint32
 	if err == nil {
 		// Only set where there is no error
 		// The value can be NULL when there is no replication applied yet
-		res.ReplicationLagSeconds = uint(lagSec)
+		res.ReplicationLagSeconds = lagSec
 	}
 }
 

@@ -51,7 +51,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUp(in, func(operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	op, err := rewrite.BottomUp(in, semantics.EmptyTableSet(), TableID, func(ts semantics.TableSet, operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -60,7 +60,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		case *Derived:
 			return optimizeDerived(ctx, op)
 		case *SubQuery:
-			return optimizeSubQuery(ctx, op)
+			return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
 			return optimizeFilter(op)
 		default:
@@ -553,7 +553,7 @@ func tryMerge(
 		}
 
 		if !sameKeyspace {
-			return nil, vterrors.VT12001("cross-shard correlated subquery")
+			return nil, nil
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)

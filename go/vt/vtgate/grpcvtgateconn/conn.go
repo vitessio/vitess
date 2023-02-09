@@ -73,11 +73,11 @@ type vtgateConn struct {
 }
 
 func dial(ctx context.Context, addr string) (vtgateconn.Impl, error) {
-	return DialWithOpts(ctx)(ctx, addr)
+	return Dial()(ctx, addr)
 }
 
-// DialWithOpts allows for custom dial options to be set on a vtgateConn.
-func DialWithOpts(ctx context.Context, opts ...grpc.DialOption) vtgateconn.DialerFunc {
+// Dial produces a vtgateconn.DialerFunc with custom options.
+func Dial(opts ...grpc.DialOption) vtgateconn.DialerFunc {
 	return func(ctx context.Context, address string) (vtgateconn.Impl, error) {
 		opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 		if err != nil {
@@ -86,7 +86,7 @@ func DialWithOpts(ctx context.Context, opts ...grpc.DialOption) vtgateconn.Diale
 
 		opts = append(opts, opt)
 
-		cc, err := grpcclient.Dial(address, grpcclient.FailFast(false), opts...)
+		cc, err := grpcclient.DialContext(ctx, address, grpcclient.FailFast(false), opts...)
 		if err != nil {
 			return nil, err
 		}
@@ -97,6 +97,14 @@ func DialWithOpts(ctx context.Context, opts ...grpc.DialOption) vtgateconn.Diale
 			c:  c,
 		}, nil
 	}
+}
+
+// DialWithOpts allows for custom dial options to be set on a vtgateConn.
+//
+// Deprecated: the context parameter cannot be used by the returned
+// vtgateconn.DialerFunc and thus has no effect. Use Dial instead.
+func DialWithOpts(_ context.Context, opts ...grpc.DialOption) vtgateconn.DialerFunc {
+	return Dial(opts...)
 }
 
 func (conn *vtgateConn) Execute(ctx context.Context, session *vtgatepb.Session, query string, bindVars map[string]*querypb.BindVariable) (*vtgatepb.Session, *sqltypes.Result, error) {

@@ -14,7 +14,7 @@ Usage of vtexplain:
       --log_err_stacks                              log stack traces for errors
       --log_rotate_max_size uint                    size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                 log to standard error instead of files
-      --mysql_server_version string                 MySQL server version to advertise. (default "8.0.31-Vitess")
+      --mysql_server_version string                 MySQL server version to advertise. (default "8.0.30-Vitess")
       --normalize                                   Whether to enable vtgate normalization
       --output-mode string                          Output in human-friendly text or json (default "text")
       --planner-version string                      Sets the query planner version to use when generating the explain output. Valid values are V3 and Gen4. An empty value will use VTGate's default planner

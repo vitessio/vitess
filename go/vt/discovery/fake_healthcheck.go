@@ -55,7 +55,7 @@ type FakeHealthCheck struct {
 	mu               sync.RWMutex
 	items            map[string]*fhcItem
 	itemsAlias       map[string]*fhcItem
-	currentTabletUID int
+	currentTabletUID uint32
 	// channel to return on subscribe. Pass nil if no subscribe should not return a channel
 	ch chan *TabletHealth
 }
@@ -308,8 +308,7 @@ func (fhc *FakeHealthCheck) AddFakeTablet(cell, host string, port int32, keyspac
 
 	// tabletUID must be unique
 	fhc.currentTabletUID++
-	uid := fhc.currentTabletUID
-	t := topo.NewTablet(uint32(uid), cell, host)
+	t := topo.NewTablet(fhc.currentTabletUID, cell, host)
 	t.Keyspace = keyspace
 	t.Shard = shard
 	t.Type = tabletType

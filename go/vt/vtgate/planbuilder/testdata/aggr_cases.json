@@ -2883,7 +2883,7 @@
                         "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
                         "Table": "name_user_vdx",
                         "Values": [
-                          ":name"
+                          "::name"
                         ],
                         "Vindex": "user_index"
                       },

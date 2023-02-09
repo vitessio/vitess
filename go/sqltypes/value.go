@@ -308,6 +308,15 @@ func (v Value) ToUint64() (uint64, error) {
 	return strconv.ParseUint(v.RawStr(), 10, 64)
 }
 
+func (v Value) ToUint32() (uint32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	u, err := strconv.ParseUint(v.RawStr(), 10, 32)
+	return uint32(u), err
+}
+
 // ToBool returns the value as a bool value
 func (v Value) ToBool() (bool, error) {
 	i, err := v.ToInt64()

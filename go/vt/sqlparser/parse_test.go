@@ -44,9 +44,8 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
-		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
-		output:     "create table x",
-		partialDDL: true,
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
@@ -73,7 +72,7 @@ var (
 		output: "select 1 from t1 where exists (select 1 from dual) = 1",
 	}, {
 		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation GEOMETRY default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "select 1",
 		output: "select 1 from dual",
@@ -163,22 +162,22 @@ var (
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
 	}, {
 		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation LINESTRING default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation POLYGON default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation MULTIPOINT default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation MULTILINESTRING default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
