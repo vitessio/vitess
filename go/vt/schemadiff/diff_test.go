@@ -64,6 +64,16 @@ func TestDiffTables(t *testing.T) {
 			toName:   "t",
 		},
 		{
+			name: "alter columns from tinyint(1) to boolean",
+			from: "create table t(id int primary key, b tinyint(1))",
+			to:   "create table t(id int primary key, b boolean)",
+		},
+		{
+			name: "alter columns from boolean to tinyint(1)",
+			from: "create table t(id int primary key, b boolean)",
+			to:   "create table t(id int primary key, b tinyint(1))",
+		},
+		{
 			name:     "change of columns, boolean type, default true",
 			from:     "create table t(id int primary key)",
 			to:       "create table t(id int primary key, i int, b boolean default true)",
