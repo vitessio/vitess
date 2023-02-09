@@ -51,8 +51,7 @@ func (rr *DualRouting) Clone() Routing {
 }
 
 func (rr *DualRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	// TODO implement me
-	panic("implement me")
+	return rr, nil
 }
 
 func (rr *DualRouting) Cost() int {
