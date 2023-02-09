@@ -71,7 +71,7 @@ func Add(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	if err != nil {
 		return sqltypes.NULL, err
 	}
-	return evalToSqlValue(r), nil
+	return evalToSQLValue(r), nil
 }
 
 // Subtract takes two values and subtracts them
@@ -91,7 +91,7 @@ func Subtract(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	if err != nil {
 		return sqltypes.NULL, err
 	}
-	return evalToSqlValue(r), nil
+	return evalToSQLValue(r), nil
 }
 
 // Multiply takes two values and multiplies it together
@@ -111,7 +111,7 @@ func Multiply(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	if err != nil {
 		return sqltypes.NULL, err
 	}
-	return evalToSqlValue(r), nil
+	return evalToSQLValue(r), nil
 }
 
 // Divide (Float) for MySQL. Replicates behavior of "/" operator
@@ -131,7 +131,7 @@ func Divide(v1, v2 sqltypes.Value) (sqltypes.Value, error) {
 	if err != nil {
 		return sqltypes.NULL, err
 	}
-	return evalToSqlValue(r), nil
+	return evalToSQLValue(r), nil
 }
 
 // NullSafeAdd adds two Values in a null-safe manner. A null value
