@@ -111,7 +111,6 @@ func setupCluster(ctx context.Context, t *testing.T, shardName string, cells []s
 
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs,
 		"--lock_tables_timeout", "5s",
-		"--init_populate_metadata",
 		"--track_schema_versions=true",
 		// disabling online-ddl for reparent tests. This is done to reduce flakiness.
 		// All the tests in this package reparent frequently between different tablets
@@ -210,7 +209,6 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 		clusterInstance.TmpDirectory,
 		[]string{
 			"--lock_tables_timeout", "5s",
-			"--init_populate_metadata",
 			"--track_schema_versions=true",
 			"--queryserver_enable_online_ddl=false",
 		},

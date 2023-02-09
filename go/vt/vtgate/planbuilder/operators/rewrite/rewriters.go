@@ -18,10 +18,11 @@ package rewrite
 
 import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 type (
-	Func          func(ops.Operator) (ops.Operator, TreeIdentity, error)
+	Func          func(semantics.TableSet, ops.Operator) (ops.Operator, TreeIdentity, error)
 	BreakableFunc func(ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error)
 
 	// TreeIdentity tracks modifications to node and expression trees.
@@ -56,8 +57,8 @@ func Visit(root ops.Operator, visitor func(ops.Operator) error) error {
 // BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
 // the given operator tree from the bottom up. Each callback [f] returns a TreeIdentity that is aggregated
 // into a final output indicating whether the operator tree was changed.
-func BottomUp(root ops.Operator, f Func) (ops.Operator, error) {
-	op, _, err := bottomUp(root, f)
+func BottomUp(root ops.Operator, rootID semantics.TableSet, resolveID func(ops.Operator) semantics.TableSet, f Func) (ops.Operator, error) {
+	op, _, err := bottomUp(root, rootID, resolveID, f)
 	if err != nil {
 		return nil, err
 	}
@@ -73,12 +74,26 @@ func TopDown(in ops.Operator, rewriter BreakableFunc) (ops.Operator, error) {
 	return op, err
 }
 
-func bottomUp(root ops.Operator, rewriter Func) (ops.Operator, TreeIdentity, error) {
+func bottomUp(root ops.Operator, rootID semantics.TableSet, resolveID func(ops.Operator) semantics.TableSet, rewriter Func) (ops.Operator, TreeIdentity, error) {
 	oldInputs := root.Inputs()
 	anythingChanged := false
 	newInputs := make([]ops.Operator, len(oldInputs))
+	childID := rootID
+
+	// noLHSTableSet is used to mark which operators that do not send data from the LHS to the RHS
+	// It's only UNION at this moment, but this package can't depend on the actual operators, so
+	// we use this interface to avoid direct dependencies
+	type noLHSTableSet interface{ NoLHSTableSet() }
+
 	for i, operator := range oldInputs {
-		in, changed, err := bottomUp(operator, rewriter)
+		// We merge the table set of all the LHS above the current root so that we can
+		// send it down to the current RHS.
+		// We don't want to send the LHS table set to the RHS if the root is an UNION.
+		// Some operators, like SubQuery, can have multiple child operators on the RHS
+		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
+			childID = childID.Merge(resolveID(oldInputs[0]))
+		}
+		in, changed, err := bottomUp(operator, childID, resolveID, rewriter)
 		if err != nil {
 			return nil, SameTree, err
 		}
@@ -92,7 +107,7 @@ func bottomUp(root ops.Operator, rewriter Func) (ops.Operator, TreeIdentity, err
 		root = root.Clone(newInputs)
 	}
 
-	newOp, treeIdentity, err := rewriter(root)
+	newOp, treeIdentity, err := rewriter(rootID, root)
 	if err != nil {
 		return nil, SameTree, err
 	}

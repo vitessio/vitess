@@ -36,8 +36,6 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"google.golang.org/protobuf/proto"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -291,42 +289,6 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 // TabletAliasString returns tablet alias as string (duh)
 func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
-}
-
-// PrepareForQueryExecutor is called by QueryExecutor, possibly before the backing
-// _vt.schema_migrations table has had the chance to be created.
-// This function prepares the schema.
-func (e *Executor) PrepareForQueryExecutor(ctx context.Context) error {
-	return e.initSchema(ctx)
-}
-
-func (e *Executor) initSchema(ctx context.Context) error {
-	e.initMutex.Lock()
-	defer e.initMutex.Unlock()
-
-	if e.schemaInitialized {
-		return nil
-	}
-
-	defer e.env.LogError()
-
-	conn, err := dbconnpool.NewDBConnection(ctx, e.env.Config().DB.DbaConnector())
-	if err != nil {
-		return err
-	}
-	defer conn.Close()
-
-	for _, ddl := range ApplyDDL {
-		_, err := conn.ExecuteFetch(ddl, math.MaxInt32, false)
-		if mysql.IsSchemaApplyError(err) {
-			continue
-		}
-		if err != nil {
-			return err
-		}
-	}
-	e.schemaInitialized = true
-	return nil
 }
 
 // InitDBConfig initializes keysapce
@@ -807,7 +769,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		ctx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
-		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, int(s.id), mysql.EncodePosition(pos)); err != nil {
+		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, s.id, mysql.EncodePosition(pos)); err != nil {
 			return err
 		}
 		// Target is now in sync with source!
@@ -991,7 +953,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	go log.Infof("cutOverVReplMigration %v: done waiting for position %v", s.workflow, mysql.EncodePosition(postWritesPos))
 	// Stop vreplication
 	e.updateMigrationStage(ctx, onlineDDL.UUID, "stopping vreplication")
-	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(uint32(s.id), "stopped for online DDL cutover")); err != nil {
+	if _, err := e.vreplicationExec(ctx, tablet.Tablet, binlogplayer.StopVReplication(s.id, "stopped for online DDL cutover")); err != nil {
 		return err
 	}
 	go log.Infof("cutOverVReplMigration %v: stopped vreplication", s.workflow)
@@ -3410,7 +3372,7 @@ func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "Cannot find unique workflow for UUID: %+v", uuid)
 	}
 	s := &VReplStream{
-		id:                   row.AsInt64("id", 0),
+		id:                   row.AsInt32("id", 0),
 		workflow:             row.AsString("workflow", ""),
 		source:               row.AsString("source", ""),
 		pos:                  row.AsString("pos", ""),
@@ -3467,7 +3429,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		// copy_state must have no entries for this vreplication id: if entries are
 		// present that means copy is still in progress
 		query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
-			sqltypes.Int64BindVariable(s.id),
+			sqltypes.Int32BindVariable(s.id),
 		)
 		if err != nil {
 			return false, err
@@ -3798,11 +3760,6 @@ func (e *Executor) vreplicationExec(ctx context.Context, tablet *topodatapb.Tabl
 	tmClient := e.tabletManagerClient()
 	defer tmClient.Close()
 
-	e.initVreplicationDDLOnce.Do(func() {
-		// Ensure vreplication schema is up-to-date by invoking a query with non-existing columns.
-		// This will make vreplication run through its WithDDL schema changes.
-		_, _ = tmClient.VReplicationExec(ctx, tablet, withddl.QueryToTriggerWithDDL)
-	})
 	return tmClient.VReplicationExec(ctx, tablet, query)
 }
 
@@ -3952,10 +3909,6 @@ func (e *Executor) onMigrationCheckTick() {
 	}
 
 	ctx := context.Background()
-	if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return
-	}
 	if err := e.retryTabletFailureMigrations(ctx); err != nil {
 		log.Error(err)
 	}
@@ -4624,33 +4577,43 @@ func (e *Executor) submitCallbackIfNonConflicting(
 	}
 	// This is either singleton or singleton-context
 
-	e.migrationMutex.Lock()
-	defer e.migrationMutex.Unlock()
+	// This entire next logic is wrapped in an anonymous func just to get the migrationMutex released
+	// before calling the callback function. Reason is: the callback function itself may need to acquire
+	// the mutex. And specifically, one of the callback functions used is e.RetryMigration(), which does
+	// lock the mutex...
+	err = func() error {
+		e.migrationMutex.Lock()
+		defer e.migrationMutex.Unlock()
 
-	pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		if err != nil {
+			return err
+		}
+		switch {
+		case onlineDDL.StrategySetting().IsSingleton():
+			// We will reject this migration if there's any pending migration
+			if len(pendingUUIDs) > 0 {
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
+			}
+		case onlineDDL.StrategySetting().IsSingletonContext():
+			// We will reject this migration if there's any pending migration within a different context
+			for _, pendingUUID := range pendingUUIDs {
+				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
+				if err != nil {
+					return vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
+				}
+				if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
+					return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
+				}
+				// no conflict? continue looking for other pending migrations
+			}
+		}
+		return nil
+	}()
 	if err != nil {
 		return nil, err
 	}
-	switch {
-	case onlineDDL.StrategySetting().IsSingleton():
-		// We will reject this migration if there's any pending migration
-		if len(pendingUUIDs) > 0 {
-			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
-		}
-	case onlineDDL.StrategySetting().IsSingletonContext():
-		// We will reject this migration if there's any pending migration within a different context
-		for _, pendingUUID := range pendingUUIDs {
-			pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
-			if err != nil {
-				return nil, vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)
-			}
-			if e.submittedMigrationConflictsWithPendingMigrationInSingletonContext(ctx, onlineDDL, pendingOnlineDDL) {
-				return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton-context migration rejected: found pending migration: %s in different context: %s", pendingUUID, pendingOnlineDDL.MigrationContext)
-			}
-			// no conflict? continue looking for other pending migrations
-		}
-	}
-	// OK to go! We can go
+	// OK to go!
 	return callback()
 }
 
@@ -4675,11 +4638,6 @@ func (e *Executor) SubmitMigration(
 	onlineDDL, err := schema.OnlineDDLFromCommentedStatement(stmt)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Error submitting migration %s: %v", sqlparser.String(stmt), err)
-	}
-
-	if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return nil, err
 	}
 
 	// The logic below has multiple steps. We hence protect the rest of the code with a mutex, only used by this function.
@@ -4751,6 +4709,7 @@ func (e *Executor) SubmitMigration(
 	)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "submitting migration %v", onlineDDL.UUID)
+
 	}
 	log.Infof("SubmitMigration: migration %s submitted", onlineDDL.UUID)
 
@@ -4880,11 +4839,6 @@ func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *queryp
 			return nil, err
 		}
 		return sqltypes.ResultToProto3(result), nil
-	}
-
-	if err := e.initSchema(ctx); err != nil {
-		log.Error(err)
-		return nil, err
 	}
 
 	switch stmt := vx.Stmt.(type) {

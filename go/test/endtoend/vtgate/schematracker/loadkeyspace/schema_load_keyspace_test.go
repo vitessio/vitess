@@ -20,7 +20,6 @@ import (
 	"os"
 	"path"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -52,44 +51,6 @@ var (
 		) Engine=InnoDB;
 `
 )
-
-func TestBlockedLoadKeyspace(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	var err error
-
-	clusterInstance = cluster.NewCluster(cell, hostname)
-	defer clusterInstance.Teardown()
-
-	// Start topo server
-	err = clusterInstance.StartTopo()
-	require.NoError(t, err)
-
-	// Start keyspace without the --queryserver-config-schema-change-signal flag
-	keyspace := &cluster.Keyspace{
-		Name:      keyspaceName,
-		SchemaSQL: sqlSchema,
-	}
-	clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal=false"}
-	err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)
-	require.NoError(t, err)
-
-	// Start vtgate with the schema_change_signal flag
-	clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal"}
-	err = clusterInstance.StartVtgate()
-	require.NoError(t, err)
-
-	// wait for addKeyspaceToTracker to timeout
-	time.Sleep(30 * time.Second)
-
-	// check warning logs
-	logDir := clusterInstance.VtgateProcess.LogDir
-	all, err := os.ReadFile(path.Join(logDir, "vtgate-stderr.txt"))
-	require.NoError(t, err)
-	require.Contains(t, string(all), "Unable to get initial schema reload")
-
-	// This error should not be logged as the initial load itself failed.
-	require.NotContains(t, string(all), "Unable to add keyspace to tracker")
-}
 
 func TestLoadKeyspaceWithNoTablet(t *testing.T) {
 	defer cluster.PanicHandler(t)

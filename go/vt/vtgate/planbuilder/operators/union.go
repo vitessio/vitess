@@ -187,3 +187,5 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tre
 
 	return u, identity, nil
 }
+
+func (u *Union) NoLHSTableSet() {}

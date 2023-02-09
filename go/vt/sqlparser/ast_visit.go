@@ -348,6 +348,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitPartitions(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
 	case ReferenceAction:
@@ -2819,6 +2821,21 @@ func VisitRefOfPerformanceSchemaFuncExpr(in *PerformanceSchemaFuncExpr, f Visit)
 	}
 	return nil
 }
+func VisitRefOfPointExpr(in *PointExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.XCordinate, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.YCordinate, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	if in == nil {
 		return nil
@@ -4206,6 +4223,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfNtileExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4468,6 +4487,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfOrExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:

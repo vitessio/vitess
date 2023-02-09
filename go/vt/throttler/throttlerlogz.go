@@ -24,6 +24,8 @@ import (
 	"strings"
 	"time"
 
+	"golang.org/x/exp/slices"
+
 	"vitess.io/vitess/go/vt/logz"
 )
 
@@ -109,8 +111,7 @@ func throttlerlogzHandler(w http.ResponseWriter, r *http.Request, m *managerImpl
 	parts := strings.SplitN(r.URL.Path, "/", 3)
 
 	if len(parts) != 3 {
-		errMsg := fmt.Sprintf("invalid /throttlerlogz path: %q expected paths: /throttlerlogz/ or /throttlerlogz/<throttler name>", r.URL.Path)
-		http.Error(w, errMsg, http.StatusInternalServerError)
+		http.Error(w, "invalid /throttlerlogz path", http.StatusNotFound)
 		return
 	}
 
@@ -118,6 +119,11 @@ func throttlerlogzHandler(w http.ResponseWriter, r *http.Request, m *managerImpl
 	if name == "" {
 		// If no name is given, redirect to the list of throttlers at /throttlerz.
 		http.Redirect(w, r, "/throttlerz", http.StatusTemporaryRedirect)
+		return
+	}
+
+	if !slices.Contains(m.Throttlers(), name) {
+		http.Error(w, "throttler not found", http.StatusNotFound)
 		return
 	}
 
