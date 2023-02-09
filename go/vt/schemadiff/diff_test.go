@@ -150,6 +150,44 @@ func TestDiffTables(t *testing.T) {
 			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
 			action: "alter",
 		},
+		{
+			name:   "TableQualifierDefault, create",
+			to:     "create table _vt.t(id int primary key)",
+			diff:   "create table _vt.t (\n\tid int,\n\tprimary key (id)\n)",
+			cdiff:  "CREATE TABLE `_vt`.`t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			action: "create",
+			toName: "t",
+		},
+		{
+			name:   "TableQualifierDeclared, create",
+			to:     "create table _vt.t(id int primary key)",
+			diff:   "create table _vt.t (\n\tid int,\n\tprimary key (id)\n)",
+			cdiff:  "CREATE TABLE `_vt`.`t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			action: "create",
+			toName: "t",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierDeclared,
+			},
+		},
+		{
+			name:     "TableQualifierDefault, drop",
+			from:     "create table _vt.t(id int primary key)",
+			diff:     "drop table _vt.t",
+			cdiff:    "DROP TABLE `_vt`.`t`",
+			action:   "drop",
+			fromName: "t",
+		},
+		{
+			name:     "TableQualifierDeclared, drop",
+			from:     "create table _vt.t(id int primary key)",
+			diff:     "drop table _vt.t",
+			cdiff:    "DROP TABLE `_vt`.`t`",
+			action:   "drop",
+			fromName: "t",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierDeclared,
+			},
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
