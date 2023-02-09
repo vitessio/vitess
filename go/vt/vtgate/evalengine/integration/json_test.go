@@ -18,7 +18,7 @@ func mustJSON(j string) sqltypes.Value {
 	return v
 }
 
-func TestJsonExtract(t *testing.T) {
+func TestJSONExtract(t *testing.T) {
 	var cases = []struct {
 		Operator string
 		Path     string
@@ -103,7 +103,7 @@ func TestJSONArray(t *testing.T) {
 	compareRemoteExpr(t, conn, "JSON_ARRAY()")
 }
 
-var inputJsonObjects = []string{
+var inputJSONObjects = []string{
 	`[ { "a": 1 }, { "a": 2 } ]`,
 	`{ "a" : "foo", "b" : [ true, { "c" : 123, "c" : 456 } ] }`,
 	`{ "a" : "foo", "b" : [ true, { "c" : "123" } ] }`,
@@ -113,7 +113,7 @@ var inputJsonObjects = []string{
 	`[10, 20, [30, 40]]`,
 }
 
-var inputJsonPaths = []string{
+var inputJSONPaths = []string{
 	"$**.b", "$.c", "$.b[1].c", "$.b[1].c", "$.b[1]", "$[0][0]", "$**[0]", "$.a[0]",
 	"$[0].a[0]", "$**.a", "$[0][0][0].a", "$[*].b", "$[*].a", `$[1].b[0]`, `$[2][2]`,
 	`$.a`, `$.e`, `$.b`, `$.c.d`, `$.a.d`, `$[0]`, `$[1]`, `$[2][*]`, `$`,
@@ -123,16 +123,16 @@ func TestJSONPathOperations(t *testing.T) {
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
-	for _, obj := range inputJsonObjects {
+	for _, obj := range inputJSONObjects {
 		compareRemoteExpr(t, conn, fmt.Sprintf("JSON_KEYS('%s')", obj))
 
-		for _, path1 := range inputJsonPaths {
+		for _, path1 := range inputJSONPaths {
 			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_EXTRACT('%s', '%s')", obj, path1))
 			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s')", obj, path1))
 			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s')", obj, path1))
 			compareRemoteExpr(t, conn, fmt.Sprintf("JSON_KEYS('%s', '%s')", obj, path1))
 
-			for _, path2 := range inputJsonPaths {
+			for _, path2 := range inputJSONPaths {
 				compareRemoteExpr(t, conn, fmt.Sprintf("JSON_EXTRACT('%s', '%s', '%s')", obj, path1, path2))
 				compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'one', '%s', '%s')", obj, path1, path2))
 				compareRemoteExpr(t, conn, fmt.Sprintf("JSON_CONTAINS_PATH('%s', 'all', '%s', '%s')", obj, path1, path2))

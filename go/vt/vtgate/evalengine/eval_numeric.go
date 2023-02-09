@@ -111,7 +111,7 @@ func evalToNumeric(e eval) evalNumeric {
 			return &evalUint64{u: binary.BigEndian.Uint64(number[:]), hexLiteral: true}
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
-	case *evalJson:
+	case *evalJSON:
 		switch e.Type() {
 		case json.TypeTrue:
 			return newEvalBool(true)

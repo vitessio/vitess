@@ -123,7 +123,7 @@ func evalCollation(e eval) collations.TypedCollation {
 		return collationNull
 	case evalNumeric:
 		return collationNumeric
-	case *evalJson:
+	case *evalJSON:
 		return collationJSON
 	case *evalBytes:
 		return e.col

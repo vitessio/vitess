@@ -29,41 +29,41 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
-type errJsonType string
+type errJSONType string
 
-func (fn errJsonType) Error() string {
+func (fn errJSONType) Error() string {
 	return fmt.Sprintf("Invalid data type for JSON data to function %s; a JSON string or JSON type is required.", string(fn))
 }
 
-var errJsonPath = errors.New("Invalid JSON path expression.")
+var errJSONPath = errors.New("Invalid JSON path expression.")
 
-type evalJson = json.Value
+type evalJSON = json.Value
 
-var _ eval = (*evalJson)(nil)
+var _ eval = (*evalJSON)(nil)
 
-func intoJson(fn string, e eval) (*evalJson, error) {
+func intoJSON(fn string, e eval) (*evalJSON, error) {
 	switch e := e.(type) {
-	case *evalJson:
+	case *evalJSON:
 		return e, nil
 	case *evalBytes:
 		var p json.Parser
 		return p.ParseBytes(e.bytes)
 	default:
-		return nil, errJsonType(fn)
+		return nil, errJSONType(fn)
 	}
 }
 
-func intoJsonPath(e eval) (*json.Path, error) {
+func intoJSONPath(e eval) (*json.Path, error) {
 	switch e := e.(type) {
 	case *evalBytes:
 		var p json.PathParser
 		return p.ParseBytes(e.bytes)
 	default:
-		return nil, errJsonPath
+		return nil, errJSONPath
 	}
 }
 
-func evalBinaryToJson(e *evalBytes) *evalJson {
+func evalBinaryToJSON(e *evalBytes) *evalJSON {
 	const prefix = "base64:type15:"
 
 	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
@@ -72,11 +72,11 @@ func evalBinaryToJson(e *evalBytes) *evalJson {
 	return json.NewString(dst)
 }
 
-func evalToJson(e eval) (*evalJson, error) {
+func evalToJSON(e eval) (*evalJSON, error) {
 	switch e := e.(type) {
 	case nil:
 		return json.ValueNull, nil
-	case *evalJson:
+	case *evalJSON:
 		return e, nil
 	case *evalFloat:
 		f := e.ToRawBytes()
@@ -94,7 +94,7 @@ func evalToJson(e eval) (*evalJson, error) {
 		return json.NewNumber(e.ToRawBytes()), nil
 	case *evalBytes:
 		if sqltypes.IsBinary(e.SQLType()) {
-			return evalBinaryToJson(e), nil
+			return evalBinaryToJSON(e), nil
 		}
 
 		jsonText, err := collations.ConvertForJSON(nil, e.bytes, collations.Local().LookupByID(e.col.Collation))

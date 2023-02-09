@@ -112,7 +112,7 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	case "UNSIGNED", "UNSIGNED INTEGER":
 		return evalToNumeric(e).toUint64(), nil
 	case "JSON":
-		return evalToJson(e)
+		return evalToJSON(e)
 	case "DATE", "DATETIME", "YEAR", "TIME":
 		return nil, c.returnUnsupportedError()
 	default:

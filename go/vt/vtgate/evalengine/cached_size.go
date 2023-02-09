@@ -466,7 +466,7 @@ func (cached *builtinHex) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
-func (cached *builtinJsonArray) CachedSize(alloc bool) int64 {
+func (cached *builtinJSONArray) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -478,7 +478,7 @@ func (cached *builtinJsonArray) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
-func (cached *builtinJsonDepth) CachedSize(alloc bool) int64 {
+func (cached *builtinJSONDepth) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -490,7 +490,7 @@ func (cached *builtinJsonDepth) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
-func (cached *builtinJsonExtract) CachedSize(alloc bool) int64 {
+func (cached *builtinJSONExtract) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -502,7 +502,7 @@ func (cached *builtinJsonExtract) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
-func (cached *builtinJsonLength) CachedSize(alloc bool) int64 {
+func (cached *builtinJSONLength) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -514,7 +514,7 @@ func (cached *builtinJsonLength) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
-func (cached *builtinJsonObject) CachedSize(alloc bool) int64 {
+func (cached *builtinJSONObject) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -526,7 +526,7 @@ func (cached *builtinJsonObject) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
-func (cached *builtinJsonUnquote) CachedSize(alloc bool) int64 {
+func (cached *builtinJSONUnquote) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}

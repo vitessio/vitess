@@ -246,9 +246,9 @@ func translateBinaryExpr(binary *sqlparser.BinaryExpr, lookup TranslationLookup)
 	case sqlparser.ShiftRightOp:
 		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &opBitShr{}}, nil
 	case sqlparser.JSONExtractOp:
-		return builtinJsonExtractRewrite(left, right)
+		return builtinJSONExtractRewrite(left, right)
 	case sqlparser.JSONUnquoteExtractOp:
-		return builtinJsonExtractUnquoteRewrite(left, right)
+		return builtinJSONExtractUnquoteRewrite(left, right)
 	default:
 		return nil, translateExprNotSupported(binary)
 	}

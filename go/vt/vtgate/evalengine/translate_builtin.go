@@ -151,11 +151,11 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinJsonDepth{CallExpr: call}, nil
+		return &builtinJSONDepth{CallExpr: call}, nil
 	case "json_length":
 		switch len(args) {
 		case 1, 2:
-			return &builtinJsonLength{CallExpr: call}, nil
+			return &builtinJSONLength{CallExpr: call}, nil
 		default:
 			return nil, argError(method)
 		}
@@ -197,7 +197,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 		if err != nil {
 			return nil, err
 		}
-		return &builtinJsonExtract{
+		return &builtinJSONExtract{
 			CallExpr: CallExpr{
 				Arguments: args,
 				Method:    "JSON_EXTRACT",
@@ -209,7 +209,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 		if err != nil {
 			return nil, err
 		}
-		return &builtinJsonUnquote{
+		return &builtinJSONUnquote{
 			CallExpr: CallExpr{
 				Arguments: []Expr{arg},
 				Method:    "JSON_UNQUOTE",
@@ -229,7 +229,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 			}
 			args = append(args, key, val)
 		}
-		return &builtinJsonObject{
+		return &builtinJSONObject{
 			CallExpr: CallExpr{
 				Arguments: args,
 				Method:    "JSON_OBJECT",
@@ -241,7 +241,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 		if err != nil {
 			return nil, err
 		}
-		return &builtinJsonArray{CallExpr: CallExpr{
+		return &builtinJSONArray{CallExpr: CallExpr{
 			Arguments: args,
 			Method:    "JSON_ARRAY",
 		}}, nil
@@ -253,7 +253,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 		if err != nil {
 			return nil, err
 		}
-		return &builtinJsonContainsPath{CallExpr: CallExpr{
+		return &builtinJSONContainsPath{CallExpr: CallExpr{
 			Arguments: args,
 			Method:    "JSON_CONTAINS_PATH",
 		}}, nil
@@ -274,7 +274,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 			args = append(args, path)
 		}
 
-		return &builtinJsonKeys{CallExpr: CallExpr{
+		return &builtinJSONKeys{CallExpr: CallExpr{
 			Arguments: args,
 			Method:    "JSON_KEYS",
 		}}, nil
@@ -284,12 +284,12 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 	}
 }
 
-func builtinJsonExtractUnquoteRewrite(left Expr, right Expr) (Expr, error) {
-	extract, err := builtinJsonExtractRewrite(left, right)
+func builtinJSONExtractUnquoteRewrite(left Expr, right Expr) (Expr, error) {
+	extract, err := builtinJSONExtractRewrite(left, right)
 	if err != nil {
 		return nil, err
 	}
-	return &builtinJsonUnquote{
+	return &builtinJSONUnquote{
 		CallExpr: CallExpr{
 			Arguments: []Expr{extract},
 			Method:    "JSON_UNQUOTE",
@@ -297,11 +297,11 @@ func builtinJsonExtractUnquoteRewrite(left Expr, right Expr) (Expr, error) {
 	}, nil
 }
 
-func builtinJsonExtractRewrite(left Expr, right Expr) (Expr, error) {
+func builtinJSONExtractRewrite(left Expr, right Expr) (Expr, error) {
 	if _, ok := left.(*Column); !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "lhs of a JSON extract operator must be a column")
 	}
-	return &builtinJsonExtract{
+	return &builtinJSONExtract{
 		CallExpr: CallExpr{
 			Arguments: []Expr{left, right},
 			Method:    "JSON_EXTRACT",

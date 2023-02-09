@@ -30,6 +30,8 @@ import (
 	"golang.org/x/text/unicode/rangetable"
 
 	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type jpKind uint32
@@ -51,40 +53,40 @@ type Path struct {
 	next    *Path
 }
 
-func (j *Path) push(next *Path) *Path {
-	j.next = next
+func (jp *Path) push(next *Path) *Path {
+	jp.next = next
 	return next
 }
 
-func (j *Path) format(b *strings.Builder) {
-	switch j.kind {
+func (jp *Path) format(b *strings.Builder) {
+	switch jp.kind {
 	case jpDocumentRoot:
 		b.WriteByte('$')
 	case jpMember:
-		if jpIsIdentifier(j.name) {
+		if jpIsIdentifier(jp.name) {
 			b.WriteByte('.')
-			b.WriteString(j.name)
+			b.WriteString(jp.name)
 		} else {
-			_, _ = fmt.Fprintf(b, ".%q", j.name)
+			_, _ = fmt.Fprintf(b, ".%q", jp.name)
 		}
 	case jpMemberAny:
 		b.WriteString(".*")
 	case jpArrayLocation:
 		switch {
-		case j.offset0 == -1:
+		case jp.offset0 == -1:
 			b.WriteString("[last")
-		case j.offset0 >= 0:
-			_, _ = fmt.Fprintf(b, "[%d", j.offset0)
-		case j.offset0 < 0:
-			_, _ = fmt.Fprintf(b, "[last%d", j.offset0+1)
+		case jp.offset0 >= 0:
+			_, _ = fmt.Fprintf(b, "[%d", jp.offset0)
+		case jp.offset0 < 0:
+			_, _ = fmt.Fprintf(b, "[last%d", jp.offset0+1)
 		}
 		switch {
-		case j.offset1 == -1:
+		case jp.offset1 == -1:
 			b.WriteString(" to last")
-		case j.offset1 > 0:
-			_, _ = fmt.Fprintf(b, " to %d", j.offset1)
-		case j.offset1 < 0:
-			_, _ = fmt.Fprintf(b, " to last%d", j.offset1+1)
+		case jp.offset1 > 0:
+			_, _ = fmt.Fprintf(b, " to %d", jp.offset1)
+		case jp.offset1 < 0:
+			_, _ = fmt.Fprintf(b, " to last%d", jp.offset1+1)
 		}
 		b.WriteByte(']')
 	case jpArrayLocationAny:
@@ -94,33 +96,33 @@ func (j *Path) format(b *strings.Builder) {
 	}
 }
 
-func (j *Path) String() string {
+func (jp *Path) String() string {
 	var b strings.Builder
-	for j != nil {
-		j.format(&b)
-		j = j.next
+	for jp != nil {
+		jp.format(&b)
+		jp = jp.next
 	}
 	return b.String()
 }
 
-func (j *Path) ContainsWildcards() bool {
-	for j != nil {
-		switch j.kind {
+func (jp *Path) ContainsWildcards() bool {
+	for jp != nil {
+		switch jp.kind {
 		case jpAny, jpArrayLocationAny, jpMemberAny:
 			return true
 		case jpArrayLocation:
-			if j.offset1 != 0 {
+			if jp.offset1 != 0 {
 				return true
 			}
 		}
-		j = j.next
+		jp = jp.next
 	}
 	return false
 }
 
-func (j *Path) arrayOffsets(ary []*Value) (int, int) {
-	from := int(j.offset0)
-	to := int(j.offset1)
+func (jp *Path) arrayOffsets(ary []*Value) (int, int) {
+	from := int(jp.offset0)
+	to := int(jp.offset1)
 	if from < 0 {
 		from = len(ary) + from
 	}
@@ -216,37 +218,37 @@ func (jp *Path) Match(doc *Value, wrap bool, match func(value *Value)) {
 	m.value(jp, doc)
 }
 
-func (j *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
+func (jp *Path) transform(v *Value, t func(pp *Path, vv *Value)) {
 	if v == nil {
 		return
 	}
-	if j.next == nil {
-		t(j, v)
+	if jp.next == nil {
+		t(jp, v)
 		return
 	}
-	switch j.kind {
+	switch jp.kind {
 	case jpDocumentRoot:
-		j.next.transform(v, t)
+		jp.next.transform(v, t)
 	case jpMember:
 		if obj, ok := v.Object(); ok {
-			j.next.transform(obj.Get(j.name), t)
+			jp.next.transform(obj.Get(jp.name), t)
 		}
 	case jpArrayLocation:
 		if ary, ok := v.Array(); ok {
-			from, to := j.arrayOffsets(ary)
+			from, to := jp.arrayOffsets(ary)
 			if from != to {
 				panic("range in transformation path expression")
 			}
 			if from >= 0 && from < len(ary) {
-				j.next.transform(ary[from], t)
+				jp.next.transform(ary[from], t)
 			}
-		} else if j.offset0 == 0 || j.offset0 == -1 {
+		} else if jp.offset0 == 0 || jp.offset0 == -1 {
 			/*
 				If the path is evaluated against a value that is not an array,
 				the result of the evaluation is the same as if the value had been
 				wrapped in a single-element array:
 			*/
-			j.next.transform(v, t)
+			jp.next.transform(v, t)
 		}
 	case jpMemberAny, jpArrayLocationAny, jpAny:
 		panic("wildcard in transformation path expression")
@@ -296,9 +298,9 @@ func ApplyTransform(t Transformation, doc *Value, paths []*Path, values []*Value
 	return nil
 }
 
-func MatchPath(rawJson, rawPath []byte, match func(value *Value)) error {
+func MatchPath(rawJSON, rawPath []byte, match func(value *Value)) error {
 	var p1 Parser
-	doc, err := p1.ParseBytes(rawJson)
+	doc, err := p1.ParseBytes(rawJSON)
 	if err != nil {
 		return err
 	}
@@ -314,30 +316,30 @@ func MatchPath(rawJson, rawPath []byte, match func(value *Value)) error {
 }
 
 var (
-	unicodeRangeIdNeg      = rangetable.Merge(unicode.Pattern_Syntax, unicode.Pattern_White_Space)
-	unicodeRangeIdStartPos = rangetable.Merge(unicode.Letter, unicode.Nl, unicode.Other_ID_Start)
-	unicodeRangeIdContPos  = rangetable.Merge(unicodeRangeIdStartPos, unicode.Mn, unicode.Mc, unicode.Nd, unicode.Pc, unicode.Other_ID_Continue)
+	unicodeRangeIDNeg      = rangetable.Merge(unicode.Pattern_Syntax, unicode.Pattern_White_Space)
+	unicodeRangeIDStartPos = rangetable.Merge(unicode.Letter, unicode.Nl, unicode.Other_ID_Start)
+	unicodeRangeIDContPos  = rangetable.Merge(unicodeRangeIDStartPos, unicode.Mn, unicode.Mc, unicode.Nd, unicode.Pc, unicode.Other_ID_Continue)
 )
 
-func isIdStartUnicode(r rune) bool {
-	return unicode.Is(unicodeRangeIdStartPos, r) && !unicode.Is(unicodeRangeIdNeg, r)
+func isIDStartUnicode(r rune) bool {
+	return unicode.Is(unicodeRangeIDStartPos, r) && !unicode.Is(unicodeRangeIDNeg, r)
 }
 
-func isIdPartUnicode(r rune) bool {
-	return unicode.Is(unicodeRangeIdContPos, r) && !unicode.Is(unicodeRangeIdNeg, r) || r == '\u200C' || r == '\u200D'
+func isIDPartUnicode(r rune) bool {
+	return unicode.Is(unicodeRangeIDContPos, r) && !unicode.Is(unicodeRangeIDNeg, r) || r == '\u200C' || r == '\u200D'
 }
 
 func isIdentifierStart(chr rune) bool {
 	return chr == '$' || chr == '_' || chr == '\\' ||
 		'a' <= chr && chr <= 'z' || 'A' <= chr && chr <= 'Z' ||
-		chr >= utf8.RuneSelf && isIdStartUnicode(chr)
+		chr >= utf8.RuneSelf && isIDStartUnicode(chr)
 }
 
 func isIdentifierPart(chr rune) bool {
 	return chr == '$' || chr == '_' || chr == '\\' ||
 		'a' <= chr && chr <= 'z' || 'A' <= chr && chr <= 'Z' ||
 		'0' <= chr && chr <= '9' ||
-		chr >= utf8.RuneSelf && isIdPartUnicode(chr)
+		chr >= utf8.RuneSelf && isIDPartUnicode(chr)
 }
 
 func jpIsIdentifier(s string) bool {
@@ -652,7 +654,7 @@ func (p *PathParser) ParseBytes(in []byte) (*Path, error) {
 			if err == io.EOF {
 				return root, nil
 			}
-			return nil, fmt.Errorf("%w. The error is around character position %d.", err, len(in)-len(ptr))
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%w. The error is around character position %d.", err, len(in)-len(ptr))
 		}
 	}
 }
