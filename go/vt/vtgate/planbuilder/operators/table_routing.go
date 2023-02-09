@@ -14,7 +14,7 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type TableRouting struct {
+type ShardedRouting struct {
 	// here we store the possible vindexes we can use so that when we add predicates to the plan,
 	// we can quickly check if the new predicates enables any new vindex Options
 	VindexPreds []*VindexPlusPredicates
@@ -35,10 +35,10 @@ type TableRouting struct {
 	Alternates map[*vindexes.Keyspace]*Route
 }
 
-var _ Routing = (*TableRouting)(nil)
+var _ Routing = (*ShardedRouting)(nil)
 
-func newTableRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
-	routing := &TableRouting{
+func newShardedRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
+	routing := &ShardedRouting{
 		RouteOpCode: engine.Scatter,
 		keyspace:    vtable.Keyspace,
 	}
@@ -68,11 +68,11 @@ func newTableRouting(vtable *vindexes.Table, id semantics.TableSet) Routing {
 	return routing
 }
 
-func (tr *TableRouting) isScatter() bool {
+func (tr *ShardedRouting) isScatter() bool {
 	return tr.RouteOpCode == engine.Scatter
 }
 
-func (tr *TableRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
+func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
 	oldPredicates := queryTable.Predicates
 	queryTable.Predicates = nil
 	tr.SeenPredicates = nil
@@ -92,7 +92,7 @@ func (tr *TableRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable 
 	}
 
 	var ok bool
-	tr, ok = routing.(*TableRouting)
+	tr, ok = routing.(*ShardedRouting)
 	if !ok {
 		return routing, nil
 	}
@@ -116,7 +116,7 @@ func (tr *TableRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable 
 	return routing, nil
 }
 
-func (tr *TableRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (tr *ShardedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	rp.Opcode = tr.RouteOpCode
 	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
@@ -125,13 +125,13 @@ func (tr *TableRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	}
 }
 
-func (tr *TableRouting) Clone() Routing {
+func (tr *ShardedRouting) Clone() Routing {
 	var selected *VindexOption
 	if tr.Selected != nil {
 		t := *tr.Selected
 		selected = &t
 	}
-	return &TableRouting{
+	return &ShardedRouting{
 		VindexPreds:    slices.Clone(tr.VindexPreds),
 		Selected:       selected,
 		keyspace:       tr.keyspace,
@@ -141,7 +141,7 @@ func (tr *TableRouting) Clone() Routing {
 	}
 }
 
-func (tr *TableRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (tr *ShardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	tr.SeenPredicates = append(tr.SeenPredicates, expr)
 
 	newRouting, newVindexFound, err := tr.searchForNewVindexes(ctx, expr)
@@ -150,7 +150,7 @@ func (tr *TableRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, exp
 	}
 
 	if newRouting != nil {
-		// we found something that we can route with something other than TableRouting
+		// we found something that we can route with something other than ShardedRouting
 		return newRouting, nil
 	}
 
@@ -162,7 +162,7 @@ func (tr *TableRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, exp
 	return tr, nil
 }
 
-func (tr *TableRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool, error) {
+func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool, error) {
 	newVindexFound := false
 	switch node := predicate.(type) {
 	case *sqlparser.ExtractedSubquery:
@@ -189,7 +189,7 @@ func (tr *TableRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, p
 	return nil, newVindexFound, nil
 }
 
-func (tr *TableRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool, err error) {
+func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool, err error) {
 	if cmp.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right)) {
 		// we are looking at ANDed predicates in the WHERE clause.
 		// since we know that nothing returns true when compared to NULL,
@@ -220,7 +220,7 @@ func (tr *TableRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sq
 	return nil, false, nil
 }
 
-func (tr *TableRouting) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsExpr) bool {
+func (tr *ShardedRouting) planIsExpr(ctx *plancontext.PlanningContext, node *sqlparser.IsExpr) bool {
 	// we only handle IS NULL correct. IsExpr can contain other expressions as well
 	if node.Right != sqlparser.IsNullOp {
 		return false
@@ -267,7 +267,7 @@ func isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
 	return false
 }
 
-func (tr *TableRouting) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) bool {
+func (tr *ShardedRouting) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) bool {
 	switch left := cmp.Left.(type) {
 	case *sqlparser.ColName:
 		vdValue := cmp.Right
@@ -294,7 +294,7 @@ func (tr *TableRouting) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparse
 	return false
 }
 
-func (tr *TableRouting) planLikeOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
+func (tr *ShardedRouting) planLikeOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
 	if !ok {
 		return false
@@ -317,7 +317,7 @@ func (tr *TableRouting) planLikeOp(ctx *plancontext.PlanningContext, node *sqlpa
 	return tr.haveMatchingVindex(ctx, node, vdValue, column, val, selectEqual, vdx)
 }
 
-func (tr *TableRouting) Cost() int {
+func (tr *ShardedRouting) Cost() int {
 	switch tr.RouteOpCode {
 	case engine.EqualUnique:
 		return 1
@@ -334,16 +334,16 @@ func (tr *TableRouting) Cost() int {
 	}
 }
 
-func (tr *TableRouting) OpCode() engine.Opcode {
+func (tr *ShardedRouting) OpCode() engine.Opcode {
 	return tr.RouteOpCode
 }
 
-func (tr *TableRouting) Keyspace() *vindexes.Keyspace {
+func (tr *ShardedRouting) Keyspace() *vindexes.Keyspace {
 	return tr.keyspace
 }
 
 // PickBestAvailableVindex goes over the available vindexes for this route and picks the best one available.
-func (tr *TableRouting) PickBestAvailableVindex() {
+func (tr *ShardedRouting) PickBestAvailableVindex() {
 	for _, v := range tr.VindexPreds {
 		option := v.bestOption()
 		if option != nil && (tr.Selected == nil || less(option.Cost, tr.Selected.Cost)) {
@@ -353,7 +353,7 @@ func (tr *TableRouting) PickBestAvailableVindex() {
 	}
 }
 
-func (tr *TableRouting) haveMatchingVindex(
+func (tr *ShardedRouting) haveMatchingVindex(
 	ctx *plancontext.PlanningContext,
 	node sqlparser.Expr,
 	valueExpr sqlparser.Expr,
@@ -433,7 +433,7 @@ func (tr *TableRouting) haveMatchingVindex(
 	return newVindexFound
 }
 
-func (tr *TableRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
+func (tr *ShardedRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sqlparser.ComparisonExpr) bool {
 	column, ok := node.Left.(*sqlparser.ColName)
 	other := node.Right
 	vdValue := other
@@ -453,7 +453,7 @@ func (tr *TableRouting) planEqualOp(ctx *plancontext.PlanningContext, node *sqlp
 	return tr.haveMatchingVindex(ctx, node, vdValue, column, val, equalOrEqualUnique, justTheVindex)
 }
 
-func (tr *TableRouting) planCompositeInOpRecursive(
+func (tr *ShardedRouting) planCompositeInOpRecursive(
 	ctx *plancontext.PlanningContext,
 	cmp *sqlparser.ComparisonExpr,
 	left, right sqlparser.ValTuple,
@@ -500,7 +500,7 @@ func (tr *TableRouting) planCompositeInOpRecursive(
 	return foundVindex
 }
 
-func (tr *TableRouting) hasVindex(column *sqlparser.ColName) bool {
+func (tr *ShardedRouting) hasVindex(column *sqlparser.ColName) bool {
 	for _, v := range tr.VindexPreds {
 		for _, col := range v.ColVindex.Columns {
 			if column.Name.Equal(col) {
@@ -513,7 +513,7 @@ func (tr *TableRouting) hasVindex(column *sqlparser.ColName) bool {
 
 // Reset all vindex predicates on this route and re-build their options from
 // the list of seen routing predicates.
-func (tr *TableRouting) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
+func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContext) error {
 	tr.RouteOpCode = engine.Scatter
 	tr.Selected = nil
 	for i, vp := range tr.VindexPreds {
@@ -534,14 +534,14 @@ func (tr *TableRouting) resetRoutingSelections(ctx *plancontext.PlanningContext)
 	return nil
 }
 
-func (tr *TableRouting) SelectedVindex() vindexes.Vindex {
+func (tr *ShardedRouting) SelectedVindex() vindexes.Vindex {
 	if tr.Selected == nil {
 		return nil
 	}
 	return tr.Selected.FoundVindex
 }
 
-func (tr *TableRouting) VindexExpressions() []sqlparser.Expr {
+func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 	if tr.Selected == nil {
 		return nil
 	}

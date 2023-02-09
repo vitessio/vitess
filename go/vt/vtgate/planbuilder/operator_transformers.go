@@ -124,9 +124,8 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 		}
 
 		return planLimit(node.Limit, plan)
-	default:
-		panic("only SELECT and UNION implement the SelectStatement interface")
 	}
+	panic("only SELECT and UNION implement the SelectStatement interface")
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {
@@ -275,7 +274,7 @@ func replaceSubQuery(ctx *plancontext.PlanningContext, sel sqlparser.Statement) 
 }
 
 func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) sqlparser.Expr {
-	tr, ok := op.Routing.(*operators.TableRouting)
+	tr, ok := op.Routing.(*operators.ShardedRouting)
 	if !ok || tr.Selected == nil {
 		return nil
 	}

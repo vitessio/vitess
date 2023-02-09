@@ -97,7 +97,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 	subq.ExtractedSubquery.NeedsRewrite = true
 
 	switch outerRouting := outer.Routing.(type) {
-	case *TableRouting:
+	case *ShardedRouting:
 		return mergeSubQueryFromTableRouting(ctx, outer, inner, outerRouting, subq)
 	default:
 		outer.Routing = mergedRouting
@@ -111,7 +111,7 @@ func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Rout
 func mergeSubQueryFromTableRouting(
 	ctx *plancontext.PlanningContext,
 	outer, inner *Route,
-	outerRouting *TableRouting,
+	outerRouting *ShardedRouting,
 	subq *SubQueryInner,
 ) (*Route, error) {
 	// When merging an inner query with its outer query, we can remove the
@@ -139,7 +139,7 @@ func mergeSubQueryFromTableRouting(
 	}
 
 	if subQueryWasPredicate {
-		if innerTR, isTR := inner.Routing.(*TableRouting); isTR {
+		if innerTR, isTR := inner.Routing.(*ShardedRouting); isTR {
 			// Copy Vindex predicates from the inner route to the upper route.
 			// If we can route based on some of these predicates, the routing can improve
 			outerRouting.VindexPreds = append(outerRouting.VindexPreds, innerTR.VindexPreds...)
@@ -226,7 +226,7 @@ func tryMergeSubqueryWithRoute(
 	subQueryInner *SubQueryInner,
 	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
 ) (ops.Operator, error) {
-	subqueryRoute, isRoute := subq.(*Route)
+	_, isRoute := subq.(*Route)
 	if !isRoute {
 		return nil, nil
 	}
@@ -267,22 +267,22 @@ func tryMergeSubqueryWithRoute(
 	// Inner subqueries can be merged with the outer subquery as long as
 	// the inner query is a single column selection, and that single column has a matching
 	// vindex on the outer query's operand.
-	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
-		// 	merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
-		//
-		// 	if err != nil {
-		// 		return nil, err
-		// 	}
-		//
-		// 	if merged != nil {
-		// 		// since we inlined the subquery into the outer query, new vindex options might have been enabled,
-		// 		// so we go over our current options to check if anything better has come up.
-		//
-		// 		panic("todo")
-		// 		// merged.PickBestAvailableVindex()
-		// 		// return merged, err
-		// 	}
-	}
+	// if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
+	// 	merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
+	//
+	// 	if err != nil {
+	// 		return nil, err
+	// 	}
+	//
+	// 	if merged != nil {
+	// 		// since we inlined the subquery into the outer query, new vindex options might have been enabled,
+	// 		// so we go over our current options to check if anything better has come up.
+	//
+	// 		panic("todo")
+	// 		// merged.PickBestAvailableVindex()
+	// 		// return merged, err
+	// 	}
+	// }
 	return nil, nil
 }
 

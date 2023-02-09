@@ -171,7 +171,7 @@ func buildVindexTableForDML(
 		return nil, nil, err
 	}
 	if dest == nil {
-		routing := &TableRouting{
+		routing := &ShardedRouting{
 			keyspace:    vindexTable.Keyspace,
 			RouteOpCode: engine.Scatter,
 		}

@@ -327,9 +327,9 @@ func createRouteFromVSchemaTable(
 
 	plan.Routing = routing
 
-	tr, ok := plan.Routing.(*TableRouting)
+	tr, ok := plan.Routing.(*ShardedRouting)
 	if !ok {
-		// if we don't have a TableRouting, the rest of the logic doesn't really make sense,
+		// if we don't have a ShardedRouting, the rest of the logic doesn't really make sense,
 		// so we can bail out early
 		return plan, nil
 	}
@@ -365,7 +365,7 @@ func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet)
 	case !vschemaTable.Keyspace.Sharded:
 		return &UnshardedRouting{keyspace: vschemaTable.Keyspace}
 	default:
-		return newTableRouting(vschemaTable, id)
+		return newShardedRouting(vschemaTable, id)
 	}
 }
 

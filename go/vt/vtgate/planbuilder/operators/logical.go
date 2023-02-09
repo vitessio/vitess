@@ -126,7 +126,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 		return nil, err
 	}
 
-	tr, ok := routing.(*TableRouting)
+	tr, ok := routing.(*ShardedRouting)
 	if ok {
 		tr.VindexPreds = vp
 	}
@@ -197,7 +197,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 		return nil, err
 	}
 
-	tr, ok := routing.(*TableRouting)
+	tr, ok := routing.(*ShardedRouting)
 	if ok {
 		tr.VindexPreds = vindexAndPredicates
 	}

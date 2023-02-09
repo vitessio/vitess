@@ -1,7 +1,6 @@
 package operators
 
 import (
-	"fmt"
 	"reflect"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -20,7 +19,7 @@ select 1 from t1 where (id, foo) in (select id, foo from t2)
 */
 type (
 	merger interface {
-		mergeTables(r1, r2 *TableRouting, op1, op2 *Route) (ops.Operator, error)
+		mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (ops.Operator, error)
 		merge(op1, op2 *Route, r Routing) (ops.Operator, error)
 	}
 
@@ -35,6 +34,7 @@ type (
 		subq *SubQueryInner
 	}
 
+	// mergeDecorator runs the inner merge and also runs the additional function f.
 	mergeDecorator struct {
 		inner merger
 		f     func() error
@@ -44,7 +44,7 @@ type (
 )
 
 const (
-	table routingType = iota
+	sharded routingType = iota
 	infoSchema
 	ref
 	none
@@ -55,8 +55,8 @@ const (
 
 func (rt routingType) String() string {
 	switch rt {
-	case table:
-		return "table"
+	case sharded:
+		return "sharded"
 	case infoSchema:
 		return "infoSchema"
 	case ref:
@@ -94,7 +94,6 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 	// }
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
 	a, b := getRoutingType(routeA.Routing), getRoutingType(routeB.Routing)
-	fmt.Println(a, b)
 	if getTypeName(routeA.Routing) < getTypeName(routeB.Routing) {
 		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
 		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
@@ -118,14 +117,14 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 	case (a == unsharded || a == ref || b == unsharded || b == ref) && !sameKeyspace:
 		return nil, nil
 
-	case a == unsharded && b == table || b == unsharded && a == table:
+	case a == unsharded && b == sharded || b == unsharded && a == sharded:
 		return nil, nil
 
-	case a == table && b == table:
+	case a == sharded && b == sharded:
 		return mergeTables(ctx, routeA, routeB, m, joinPredicates)
 
 	// table and reference routing can be merged if they are going to the same keyspace
-	case a == table && b == ref && sameKeyspace:
+	case a == sharded && b == ref && sameKeyspace:
 		return m.merge(routeA, routeB, routeA.Routing)
 
 	// info schema routings are hard to merge with anything else
@@ -139,8 +138,8 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 
 func mergeTables(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {
 	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
-	tblA := routeA.Routing.(*TableRouting)
-	tblB := routeB.Routing.(*TableRouting)
+	tblA := routeA.Routing.(*ShardedRouting)
+	tblB := routeB.Routing.(*ShardedRouting)
 
 	switch tblA.RouteOpCode {
 	case engine.EqualUnique:
@@ -192,8 +191,8 @@ func getRoutingType(r Routing) routingType {
 		return ref
 	case *DualRouting:
 		return dual
-	case *TableRouting:
-		return table
+	case *ShardedRouting:
+		return sharded
 	case *NoneRouting:
 		return none
 	case *UnshardedRouting:
@@ -212,8 +211,8 @@ func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr,
 	}
 }
 
-func (jm *joinMerger) mergeTables(r1, r2 *TableRouting, op1, op2 *Route) (ops.Operator, error) {
-	tr := &TableRouting{
+func (jm *joinMerger) mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (ops.Operator, error) {
+	tr := &ShardedRouting{
 		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:    r1.keyspace,
 		RouteOpCode: r1.RouteOpCode,
@@ -247,7 +246,7 @@ func newSubQueryMerge(ctx *plancontext.PlanningContext, subq *SubQueryInner) mer
 	return &subQueryMerger{ctx: ctx, subq: subq}
 }
 
-func (s *subQueryMerger) mergeTables(outer, inner *TableRouting, op1, op2 *Route) (ops.Operator, error) {
+func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (ops.Operator, error) {
 	s.subq.ExtractedSubquery.NeedsRewrite = true
 
 	// When merging an inner query with its outer query, we can remove the
@@ -286,21 +285,28 @@ func (s *subQueryMerger) mergeTables(outer, inner *TableRouting, op1, op2 *Route
 
 func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
 	s.subq.ExtractedSubquery.NeedsRewrite = true
-
-	// TODO implement me
-	panic("implement me")
+	outer.Routing = r
+	return outer, nil
 }
 
-func (d *mergeDecorator) mergeTables(outer, inner *TableRouting, op1, op2 *Route) (ops.Operator, error) {
+func (d *mergeDecorator) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (ops.Operator, error) {
 	merged, err := d.inner.mergeTables(outer, inner, op1, op2)
 	if err != nil {
 		return nil, err
 	}
-	d.f()
+	if err := d.f(); err != nil {
+		return nil, err
+	}
 	return merged, nil
 }
 
 func (d *mergeDecorator) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
-	outer.Routing = r
-	return outer, nil
+	merged, err := d.inner.merge(outer, inner, r)
+	if err != nil {
+		return nil, err
+	}
+	if err := d.f(); err != nil {
+		return nil, err
+	}
+	return merged, nil
 }

@@ -1,53 +1,9 @@
 [
   {
-    "comment": "correlated subquery in exists clause with an ordering",
-    "query": "select col, id from unsharded join user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id)",
-    "v3-plan": "unsupported: cross-shard correlated subquery",
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select col, id from user where exists(select user_id from user_extra where user_id = 3 and user_id < user.id) order by id",
-      "Instructions": {
-        "OperatorType": "SemiJoin",
-        "JoinVars": {
-          "user_id": 0
-        },
-        "ProjectedIndexes": "-2,-1",
-        "TableName": "`user`_user_extra",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id, col, weight_string(id) from `user` where 1 != 1",
-            "OrderBy": "(0|2) ASC",
-            "Query": "select `user`.id, col, weight_string(id) from `user` order by id asc",
-            "Table": "`user`"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "EqualUnique",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select 1 from user_extra where 1 != 1",
-            "Query": "select 1 from user_extra where user_id = 3 and user_id < :user_id",
-            "Table": "user_extra",
-            "Values": [
-              "INT64(3)"
-            ],
-            "Vindex": "user_index"
-          }
-        ]
-      },
-      "TablesUsed": [
-        "user.user",
-        "user.user_extra"
-      ]
+    "comment": "Add your test case here for debugging and run go test -run=One.",
+    "query": "",
+    "plan": {
+
     }
   }
 ]
-
