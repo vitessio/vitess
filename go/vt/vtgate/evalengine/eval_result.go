@@ -31,7 +31,7 @@ type EvalResult struct {
 
 // Value allows for retrieval of the value we expose for public consumption
 func (er EvalResult) Value() sqltypes.Value {
-	return evalToSqlValue(er.v)
+	return evalToSQLValue(er.v)
 }
 
 func (er EvalResult) Collation() collations.ID {
@@ -48,7 +48,7 @@ func (er EvalResult) TupleValues() []sqltypes.Value {
 	case *evalTuple:
 		result := make([]sqltypes.Value, 0, len(v.t))
 		for _, val := range v.t {
-			result = append(result, evalToSqlValue(val))
+			result = append(result, evalToSQLValue(val))
 		}
 		return result
 	default:

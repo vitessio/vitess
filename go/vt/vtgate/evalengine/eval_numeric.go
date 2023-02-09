@@ -303,8 +303,8 @@ func (e *evalDecimal) toUint64() *evalUint64 {
 	if dec.Sign() < 0 {
 		i, _ := dec.Int64()
 		return newEvalUint64(uint64(i))
-	} else {
-		u, _ := dec.Uint64()
-		return newEvalUint64(u)
 	}
+
+	u, _ := dec.Uint64()
+	return newEvalUint64(u)
 }

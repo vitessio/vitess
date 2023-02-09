@@ -60,7 +60,7 @@ type eval interface {
 	hash() (HashCode, error)
 }
 
-func evalToSqlValue(e eval) sqltypes.Value {
+func evalToSQLValue(e eval) sqltypes.Value {
 	if e == nil {
 		return sqltypes.NULL
 	}
