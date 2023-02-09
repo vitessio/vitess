@@ -88,6 +88,7 @@ type Engine struct {
 
 	// vstreamer metrics
 	vstreamerPhaseTimings     *servenv.TimingsWrapper
+	vstreamerCount            *stats.Gauge
 	vstreamerEventsStreamed   *stats.Counter
 	vstreamerPacketSize       *stats.GaugeFunc
 	vstreamerNumPackets       *stats.Counter
@@ -125,6 +126,7 @@ func NewEngine(env tabletenv.Env, ts srvtopo.Server, se *schema.Engine, lagThrot
 		vschemaUpdates: env.Exporter().NewCounter("VSchemaUpdates", "Count of VSchema updates. Does not include errors"),
 
 		vstreamerPhaseTimings:     env.Exporter().NewTimings("VStreamerPhaseTiming", "Time taken for different phases during vstream copy", "phase-timing"),
+		vstreamerCount:            env.Exporter().NewGauge("VStreamerCount", "Current number of vstreamers"),
 		vstreamerEventsStreamed:   env.Exporter().NewCounter("VStreamerEventsStreamed", "Count of events streamed in VStream API"),
 		vstreamerPacketSize:       env.Exporter().NewGaugeFunc("VStreamPacketSize", "Max packet size for sending vstreamer events", getPacketSize),
 		vstreamerNumPackets:       env.Exporter().NewCounter("VStreamerNumPackets", "Number of packets in vstreamer"),

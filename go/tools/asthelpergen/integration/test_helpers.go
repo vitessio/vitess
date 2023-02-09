@@ -99,6 +99,18 @@ func Rewrite(node AST, pre, post ApplyFunc) AST {
 	return outer.AST
 }
 
-// ASTComparison is sent around to allow for overriding of equality logic for some types
-// in this test package it's never actually used
-type ASTComparison interface{ cmp() bool }
+type (
+	cow struct {
+		pre    func(node, parent AST) bool
+		post   func(cursor *cursor)
+		cloned func(old, new AST)
+		cursor cursor
+	}
+	cursor struct {
+		stop bool
+	}
+)
+
+func (c *cow) postVisit(a, b AST, d bool) (AST, bool) {
+	return a, d
+}

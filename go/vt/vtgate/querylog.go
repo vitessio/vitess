@@ -17,8 +17,8 @@ limitations under the License.
 package vtgate
 
 import (
-	"flag"
 	"net/http"
+	"sync"
 
 	"vitess.io/vitess/go/streamlog"
 )
@@ -34,17 +34,18 @@ var (
 	QueryzHandler = "/debug/queryz"
 
 	// QueryLogger enables streaming logging of queries
-	QueryLogger *streamlog.StreamLogger
-
-	// queryLogToFile controls whether query logs are sent to a file
-	queryLogToFile = flag.String("log_queries_to_file", "", "Enable query logging to the specified file")
-
-	// queryLogBufferSize controls how many query logs will be buffered before dropping them if logging is not fast enough
-	queryLogBufferSize = flag.Int("querylog-buffer-size", 10, "Maximum number of buffered query logs before throttling log output")
+	QueryLogger   *streamlog.StreamLogger
+	queryLoggerMu sync.Mutex
 )
 
+func SetQueryLogger(logger *streamlog.StreamLogger) {
+	queryLoggerMu.Lock()
+	defer queryLoggerMu.Unlock()
+	QueryLogger = logger
+}
+
 func initQueryLogger(vtg *VTGate) error {
-	QueryLogger = streamlog.New("VTGate", *queryLogBufferSize)
+	SetQueryLogger(streamlog.New("VTGate", queryLogBufferSize))
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 
 	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {
@@ -57,8 +58,8 @@ func initQueryLogger(vtg *VTGate) error {
 		queryzHandler(vtg.executor, w, r)
 	})
 
-	if *queryLogToFile != "" {
-		_, err := QueryLogger.LogToFile(*queryLogToFile, streamlog.GetFormatter(QueryLogger))
+	if queryLogToFile != "" {
+		_, err := QueryLogger.LogToFile(queryLogToFile, streamlog.GetFormatter(QueryLogger))
 		if err != nil {
 			return err
 		}

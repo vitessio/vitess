@@ -40,22 +40,6 @@ const (
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
 
-	// CreateVTDatabase creates the _vt database
-	CreateVTDatabase = `CREATE DATABASE IF NOT EXISTS _vt`
-
-	// CreateSchemaCopyTable query creates schemacopy table in _vt schema.
-	CreateSchemaCopyTable = `
-CREATE TABLE if not exists _vt.schemacopy (
-	table_schema varchar(64) NOT NULL,
-	table_name varchar(64) NOT NULL,
-	column_name varchar(64) NOT NULL,
-	ordinal_position bigint(21) unsigned NOT NULL,
-	character_set_name varchar(32) DEFAULT NULL,
-	collation_name varchar(32) DEFAULT NULL,
-	data_type varchar(64) NOT NULL,
-	column_key varchar(3) NOT NULL,
-	PRIMARY KEY (table_schema, table_name, ordinal_position))`
-
 	// DetectSchemaChange query detects if there is any schema change from previous copy.
 	DetectSchemaChange = `
 SELECT DISTINCT table_name
@@ -101,13 +85,34 @@ order by table_name, ordinal_position`
 
 	// GetColumnNamesQueryPatternForTable is used for mocking queries in unit tests
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
-)
 
-// VTDatabaseInit contains all the schema creation queries needed to
-var VTDatabaseInit = []string{
-	CreateVTDatabase,
-	CreateSchemaCopyTable,
-}
+	// Views
+	InsertIntoViewsTable = `insert into _vt.views (
+	table_name,
+	view_definition,
+	create_statement) values (:table_name, :view_definition, :create_statement)`
+
+	ReplaceIntoViewsTable = `replace into _vt.views (
+	table_name,
+	view_definition,
+	create_statement) values (:table_name, :view_definition, :create_statement)`
+
+	UpdateViewsTable = `update _vt.views 
+	set view_definition = :view_definition, create_statement = :create_statement 
+	where table_name = :table_name`
+
+	DeleteFromViewsTable = `delete from _vt.views where table_name in ::table_name`
+
+	SelectFromViewsTable = `select table_name from _vt.views where table_name in ::table_name`
+
+	SelectAllViews = `select table_name, updated_at from _vt.views`
+
+	// FetchUpdatedViews queries fetches information about updated views
+	FetchUpdatedViews = `select table_name, view_definition, create_statement from _vt.views where table_name in ::viewnames`
+
+	// FetchViews queries fetches all views
+	FetchViews = `select table_name, view_definition, create_statement from _vt.views`
+)
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
 // They are validated by the

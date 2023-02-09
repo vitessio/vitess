@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -222,8 +222,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfJSONKeysExpr(in, f)
 	case *JSONObjectExpr:
 		return VisitRefOfJSONObjectExpr(in, f)
-	case JSONObjectParam:
-		return VisitJSONObjectParam(in, f)
+	case *JSONObjectParam:
+		return VisitRefOfJSONObjectParam(in, f)
 	case *JSONOverlapsExpr:
 		return VisitRefOfJSONOverlapsExpr(in, f)
 	case *JSONPrettyExpr:
@@ -348,6 +348,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitPartitions(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
 	case ReferenceAction:
@@ -470,6 +472,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfUpdateXMLExpr(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
+	case *VExplainStmt:
+		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
 	case ValTuple:
@@ -997,6 +1001,9 @@ func VisitRefOfColumnDefinition(in *ColumnDefinition, f Visit) error {
 		return err
 	}
 	if err := VisitIdentifierCI(in.Name, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfColumnType(in.Type, f); err != nil {
 		return err
 	}
 	return nil
@@ -1948,7 +1955,10 @@ func VisitRefOfJSONObjectExpr(in *JSONObjectExpr, f Visit) error {
 	}
 	return nil
 }
-func VisitJSONObjectParam(in JSONObjectParam, f Visit) error {
+func VisitRefOfJSONObjectParam(in *JSONObjectParam, f Visit) error {
+	if in == nil {
+		return nil
+	}
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
@@ -2807,6 +2817,21 @@ func VisitRefOfPerformanceSchemaFuncExpr(in *PerformanceSchemaFuncExpr, f Visit)
 		return err
 	}
 	if err := VisitExpr(in.Argument, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPointExpr(in *PointExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.XCordinate, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.YCordinate, f); err != nil {
 		return err
 	}
 	return nil
@@ -3717,6 +3742,21 @@ func VisitRefOfUse(in *Use, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfVExplainStmt(in *VExplainStmt, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitStatement(in.Statement, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfParsedComments(in.Comments, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfVStream(in *VStream, f Visit) error {
 	if in == nil {
 		return nil
@@ -4183,6 +4223,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfNtileExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4445,6 +4487,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfOrExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4667,6 +4711,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfUpdate(in, f)
 	case *Use:
 		return VisitRefOfUse(in, f)
+	case *VExplainStmt:
+		return VisitRefOfVExplainStmt(in, f)
 	case *VStream:
 		return VisitRefOfVStream(in, f)
 	default:
@@ -4730,21 +4776,6 @@ func VisitRefOfIdentifierCS(in *IdentifierCS, f Visit) error {
 		return nil
 	}
 	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	return nil
-}
-func VisitRefOfJSONObjectParam(in *JSONObjectParam, f Visit) error {
-	if in == nil {
-		return nil
-	}
-	if cont, err := f(in); err != nil || !cont {
-		return err
-	}
-	if err := VisitExpr(in.Key, f); err != nil {
-		return err
-	}
-	if err := VisitExpr(in.Value, f); err != nil {
 		return err
 	}
 	return nil

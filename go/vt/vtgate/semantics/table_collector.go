@@ -84,19 +84,17 @@ func (tc *tableCollector) up(cursor *sqlparser.Cursor) error {
 	case sqlparser.TableName:
 		var tbl *vindexes.Table
 		var vindex vindexes.Vindex
-		var isInfSchema bool
-		if sqlparser.SystemSchema(t.Qualifier.String()) {
-			isInfSchema = true
-		} else {
-			var err error
-			tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
-			if err != nil {
-				return err
-			}
-			if tbl == nil && vindex != nil {
-				tbl = newVindexTable(t.Name)
-			}
+		isInfSchema := sqlparser.SystemSchema(t.Qualifier.String())
+		var err error
+		tbl, vindex, _, _, _, err = tc.si.FindTableOrVindex(t)
+		if err != nil && !isInfSchema {
+			// if we are dealing with a system table, it might not be available in the vschema, but that is OK
+			return err
 		}
+		if tbl == nil && vindex != nil {
+			tbl = newVindexTable(t.Name)
+		}
+
 		scope := tc.scoper.currentScope()
 		tableInfo := tc.createTable(t, node, tbl, isInfSchema, vindex)
 
@@ -138,7 +136,7 @@ func (tc *tableCollector) tableSetFor(t *sqlparser.AliasedTableExpr) TableSet {
 func (tc *tableCollector) tableInfoFor(id TableSet) (TableInfo, error) {
 	offset := id.TableOffset()
 	if offset < 0 {
-		return nil, ErrMultipleTables
+		return nil, ErrNotSingleTable
 	}
 	return tc.Tables[offset], nil
 }

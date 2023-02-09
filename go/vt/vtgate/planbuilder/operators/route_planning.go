@@ -36,7 +36,6 @@ import (
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 type (
@@ -52,7 +51,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUp(in, func(operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	op, err := rewrite.BottomUp(in, semantics.EmptyTableSet(), TableID, func(ts semantics.TableSet, operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -61,7 +60,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		case *Derived:
 			return optimizeDerived(ctx, op)
 		case *SubQuery:
-			return optimizeSubQuery(ctx, op)
+			return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
 			return optimizeFilter(op)
 		default:
@@ -75,7 +74,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 
 	err = rewrite.Visit(op, func(op ops.Operator) error {
 		if _, isPhys := op.(ops.PhysicalOperator); !isPhys {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to transform %T to a physical operator", op)
+			return vterrors.VT13001(fmt.Sprintf("failed to transform %T to a physical operator", op))
 		}
 		return nil
 	})
@@ -148,6 +147,14 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 		opCode = engine.Scatter
 	}
 
+	if vindexTable.Source != nil {
+		sourceTable, _, _, _, _, err := ctx.VSchema.FindTableOrVindex(vindexTable.Source.TableName)
+		if err != nil {
+			return nil, 0, nil, err
+		}
+		vindexTable = sourceTable
+	}
+
 	var dest key.Destination
 	var typ topodatapb.TabletType
 	var err error
@@ -159,7 +166,7 @@ func buildVindexTableForDML(ctx *plancontext.PlanningContext, tableInfo semantic
 		}
 		if dest != nil {
 			if typ != topodatapb.TabletType_PRIMARY {
-				return nil, 0, nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.InnodbReadOnly, "unsupported: %v statement with a replica target", dmlType)
+				return nil, 0, nil, vterrors.VT09002(dmlType)
 			}
 			// we are dealing with an explicitly targeted UPDATE
 			opCode = engine.ByDestination
@@ -262,7 +269,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source, err = plan.Source.AddPredicate(ctx, qg.NoDeps)
+			plan, err = plan.AddPredicate(ctx, qg.NoDeps)
 			if err != nil {
 				return nil, err
 			}
@@ -272,22 +279,21 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 	return plans, nil
 }
 
-func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (*Route, error) {
+func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
-	var src ops.Operator = &Table{
-		QTable: table,
-		VTable: &vindexes.Table{
-			Name:     table.Table.Name,
-			Keyspace: ks,
-		},
-	}
 	r := &Route{
 		RouteOpCode: engine.DBA,
-		Source:      src,
-		Keyspace:    ks,
+		Source: &Table{
+			QTable: table,
+			VTable: &vindexes.Table{
+				Name:     table.Table.Name,
+				Keyspace: ks,
+			},
+		},
+		Keyspace: ks,
 	}
 	for _, pred := range table.Predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, ctx.ReservedVars)
@@ -333,7 +339,7 @@ func mergeRoutes(ctx *plancontext.PlanningContext, qg *QueryGraph, physicalOps [
 			physicalOps = append(physicalOps, bestTree)
 		} else {
 			if crossJoinsOK {
-				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "should not happen")
+				return nil, vterrors.VT13001("should not happen: we should be able to merge cross joins")
 			}
 			// we will only fail to find a join plan when there are only cross joins left
 			// when that happens, we switch over to allow cross joins as well.
@@ -428,11 +434,11 @@ func mergeOrJoin(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPr
 
 	if len(joinPredicates) > 0 && requiresSwitchingSides(ctx, rhs) {
 		if !inner {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: LEFT JOIN not supported for derived tables")
+			return nil, vterrors.VT12001("LEFT JOIN with derived tables")
 		}
 
 		if requiresSwitchingSides(ctx, lhs) {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: JOIN not supported between derived tables")
+			return nil, vterrors.VT12001("JOIN between derived tables")
 		}
 
 		join := NewApplyJoin(Clone(rhs), Clone(lhs), nil, !inner)
@@ -463,6 +469,7 @@ func createRouteOperatorForJoin(ctx *plancontext.PlanningContext, aRoute, bRoute
 		SeenPredicates:      append(aRoute.SeenPredicates, bRoute.SeenPredicates...),
 		SysTableTableName:   sysTableName,
 		Source:              join,
+		MergedWith:          []*Route{bRoute},
 	}
 
 	if aRoute.SelectedVindex() == bRoute.SelectedVindex() {
@@ -498,6 +505,16 @@ func tryMerge(
 	}
 
 	sameKeyspace := aRoute.Keyspace == bRoute.Keyspace
+
+	if !sameKeyspace {
+		if altARoute := aRoute.AlternateInKeyspace(bRoute.Keyspace); altARoute != nil {
+			aRoute = altARoute
+			sameKeyspace = true
+		} else if altBRoute := bRoute.AlternateInKeyspace(aRoute.Keyspace); altBRoute != nil {
+			bRoute = altBRoute
+			sameKeyspace = true
+		}
+	}
 
 	if sameKeyspace || (isDualTable(aRoute) || isDualTable(bRoute)) {
 		tree, err := tryMergeReferenceTable(aRoute, bRoute, merger)
@@ -536,7 +553,7 @@ func tryMerge(
 		}
 
 		if !sameKeyspace {
-			return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: cross-shard correlated subquery")
+			return nil, nil
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)
@@ -717,10 +734,7 @@ func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) s
 			break
 		}
 
-		exp, err = semantics.RewriteDerivedTableExpression(exp, tbl)
-		if err != nil {
-			return nil
-		}
+		exp = semantics.RewriteDerivedTableExpression(exp, tbl)
 		exp = getColName(exp)
 		if exp == nil {
 			return nil

@@ -17,7 +17,6 @@ limitations under the License.
 package operators
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -82,7 +81,7 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	for i, selectExpr := range sel.SelectExprs {
 		ae, ok := selectExpr.(*sqlparser.AliasedExpr)
 		if !ok {
-			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on UNION where the first SELECT contains star or next")
+			return nil, vterrors.VT12001("pushing predicates on UNION where the first SELECT contains * or NEXT")
 		}
 		if !ae.As.IsEmpty() {
 			offsets[ae.As.String()] = i
@@ -95,33 +94,34 @@ func (u *Union) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 	}
 
 	for i := range u.Sources {
-		predicate := sqlparser.CloneExpr(expr)
 		var err error
-		predicate = sqlparser.Rewrite(predicate, func(cursor *sqlparser.Cursor) bool {
+		predicate := sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 			col, ok := cursor.Node().(*sqlparser.ColName)
 			if !ok {
-				return err == nil
+				return
 			}
 
 			idx, ok := offsets[col.Name.Lowered()]
 			if !ok {
-				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
-				return false
+				err = vterrors.VT13001("cannot push predicates on concatenate, missing columns from the UNION")
+				cursor.StopTreeWalk()
+				return
 			}
 
 			var sel *sqlparser.Select
 			sel, err = u.GetSelectFor(i)
 			if err != nil {
-				return false
+				cursor.StopTreeWalk()
+				return
 			}
 
 			ae, ok := sel.SelectExprs[idx].(*sqlparser.AliasedExpr)
 			if !ok {
-				err = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "can't push predicates on concatenate")
-				return false
+				err = vterrors.VT12001("pushing non-aliased expression predicates on concatenate")
+				cursor.StopTreeWalk()
+				return
 			}
 			cursor.Replace(ae.Expr)
-			return false
 		}, nil).(sqlparser.Expr)
 		if err != nil {
 			return nil, err
@@ -144,7 +144,7 @@ func (u *Union) GetSelectFor(source int) (*sqlparser.Select, error) {
 		case *Route:
 			src = op.Source
 		default:
-			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected all sources of the UNION to be horizons")
+			return nil, vterrors.VT13001("expected all sources of the UNION to be horizons")
 		}
 	}
 }
@@ -187,3 +187,5 @@ func (u *Union) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.Tre
 
 	return u, identity, nil
 }
+
+func (u *Union) NoLHSTableSet() {}

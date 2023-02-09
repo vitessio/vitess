@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -280,6 +281,15 @@ func (v Value) ToInt64() (int64, error) {
 	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
+func (v Value) ToInt32() (int32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseInt(v.RawStr(), 10, 32)
+	return int32(i), err
+}
+
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
 	if !IsNumber(v.typ) {
@@ -296,6 +306,15 @@ func (v Value) ToUint64() (uint64, error) {
 	}
 
 	return strconv.ParseUint(v.RawStr(), 10, 64)
+}
+
+func (v Value) ToUint32() (uint32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	u, err := strconv.ParseUint(v.RawStr(), 10, 32)
+	return uint32(u), err
 }
 
 // ToBool returns the value as a bool value
@@ -527,17 +546,12 @@ func (v *Value) decodeBitNum() ([]byte, error) {
 	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'b' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
-	bitBytes := v.val[2:]
-	ui, err := strconv.ParseUint(string(bitBytes), 2, 64)
-	if err != nil {
-		return nil, err
+	var i big.Int
+	_, ok := i.SetString(string(v.val), 0)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
-	hexVal := fmt.Sprintf("%x", ui)
-	decodedHexBytes, err := hex.DecodeString(hexVal)
-	if err != nil {
-		return nil, err
-	}
-	return decodedHexBytes, nil
+	return i.Bytes(), nil
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {

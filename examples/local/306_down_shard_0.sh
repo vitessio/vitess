@@ -15,11 +15,11 @@
 # limitations under the License.
 # this script brings down the tablets for customer/0 keyspace
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient Reshard Complete customer.cust2cust
 
 for i in 200 201 202; do
-	CELL=zone1 TABLET_UID=$i ./scripts/vttablet-down.sh
-	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-down.sh
+	CELL=zone1 TABLET_UID=$i ../common/scripts/vttablet-down.sh
+	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-down.sh
 done

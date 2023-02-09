@@ -207,6 +207,17 @@ func RegisterDialer(name string, dialer DialerFunc) {
 	dialers[name] = dialer
 }
 
+// DeregisterDialer removes the named DialerFunc from the registered list of
+// dialers. If the named DialerFunc does not exist, it is a noop.
+//
+// This is useful to avoid unbounded memory use if many different dialer
+// implementations are used throughout the lifetime of a program.
+func DeregisterDialer(name string) {
+	dialersM.Lock()
+	defer dialersM.Unlock()
+	delete(dialers, name)
+}
+
 // DialProtocol dials a specific protocol, and returns the *VTGateConn
 func DialProtocol(ctx context.Context, protocol string, address string) (*VTGateConn, error) {
 	dialersM.Lock()

@@ -18,11 +18,10 @@ package semantics
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // analyzer controls the flow of the analysis.
@@ -67,7 +66,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 
 // Analyze analyzes the parsed query.
 func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(currentDb, si)
+	analyzer := newAnalyzer(currentDb, newSchemaInfo(si))
 
 	// Analysis for initial scope
 	err := analyzer.analyze(statement)
@@ -81,7 +80,7 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	return semTable, nil
 }
 
-func (a analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
+func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
 	if isCommented {
@@ -202,7 +201,7 @@ func checkUnionColumns(union *sqlparser.Union) error {
 	}
 
 	if len(secondProj) != count {
-		return vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+		return NewError(UnionColumnsDoNotMatch)
 	}
 
 	return nil
@@ -261,23 +260,23 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
 		}
 		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return UnshardedError{Inner: vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: multiple tables in update")}
+			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUpdateableTable, "The target table %s of the UPDATE is not updatable", alias.As.String())
+			return NewError(TableNotUpdatable, alias.As.String())
 		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
-			return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "SQL_CALC_FOUND_ROWS not supported with union")
+			return NewError(UnionWithSQLCalcFoundRows)
 		}
 		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+			return NewError(SQLCalcFoundRowsUsage)
 		}
 		errMsg := "INTO"
 		nextVal := false
@@ -291,35 +290,35 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return nil
 		}
 		if a.scoper.currentScope().parent != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of '%s'", errMsg)
+			return NewError(CantUseOptionHere, errMsg)
 		}
 	case *sqlparser.Nextval:
 		currScope := a.scoper.currentScope()
 		if currScope.parent != nil {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+			return NewError(CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
 		}
 		if len(currScope.tables) != 1 {
-			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] Next statement should not contain multiple tables")
+			return NewError(NextWithMultipleTables)
 		}
 		vindexTbl := currScope.tables[0].GetVindexTable()
 		if vindexTbl == nil {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table information is not provided in vschema")
+			return NewError(MissingInVSchema)
 		}
 		if vindexTbl.Type != vindexes.TypeSequence {
-			return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "NEXT used on a non-sequence table")
+			return NewError(NotSequenceTable)
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: "+node.Join.ToString())
+			return NewError(UnsupportedNaturalJoin, node.Join.ToString())
 		}
 	case *sqlparser.LockingFunc:
-		return vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "%v allowed only with dual", sqlparser.String(node))
+		return NewError(LockOnlyWithDual, node)
 	case *sqlparser.Union:
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
-					return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Table '%s' from one of the SELECTs cannot be used in global ORDER clause", node.Qualifier.Name)
+					return false, NewError(QualifiedOrderInUnion, node.Qualifier.Name)
 				}
 			case *sqlparser.Subquery:
 				return false, nil
@@ -334,7 +333,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return err
 		}
 	case *sqlparser.JSONTableExpr:
-		return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: json_table expressions")
+		return NewError(JSONTables)
 	}
 
 	return nil

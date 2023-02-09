@@ -20,22 +20,22 @@
 source build.env
 
 set -xe
-cd "$VTROOT/examples/local"
+cd "$VTROOT/examples/common/scripts"
 
-CELL=test ./scripts/etcd-up.sh
-CELL=test ./scripts/vtctld-up.sh
+CELL=test ./etcd-up.sh
+CELL=test ./vtctld-up.sh
 
 for i in 100 101 102; do
- CELL=test TABLET_UID=$i ./scripts/mysqlctl-up.sh
- CELL=test KEYSPACE=test_keyspace TABLET_UID=$i ./scripts/vttablet-up.sh
+ CELL=test TABLET_UID=$i ./mysqlctl-up.sh
+ CELL=test KEYSPACE=test_keyspace TABLET_UID=$i ./vttablet-up.sh
 done
 
 vtctlclient --server localhost:15999 InitShardPrimary -- --force test_keyspace/0 test-100
 
-vtctlclient --server localhost:15999 ApplySchema -- --sql-file create_test_table.sql test_keyspace
+vtctlclient --server localhost:15999 ApplySchema -- --sql-file ../../local/create_test_table.sql test_keyspace
 vtctlclient --server localhost:15999 RebuildVSchemaGraph
 
-CELL=test ./scripts/vtgate-up.sh
+CELL=test ./vtgate-up.sh
 
 echo "Run Go client script..."
 go run $VTROOT/test/client/client.go --server=localhost:15991
@@ -48,13 +48,13 @@ $VTROOT/test/client_jdbc.sh
 
 # Clean up
 
-./scripts/vtgate-down.sh
+./vtgate-down.sh
 
 for i in 100 101 102; do
- CELL=test TABLET_UID=$i ./scripts/vttablet-down.sh
- CELL=test TABLET_UID=$i ./scripts/mysqlctl-down.sh
+ CELL=test TABLET_UID=$i ./vttablet-down.sh
+ CELL=test TABLET_UID=$i ./mysqlctl-down.sh
 done
 
-./scripts/vtctld-down.sh
-CELL=test ./scripts/etcd-down.sh
+./vtctld-down.sh
+CELL=test ./etcd-down.sh
 

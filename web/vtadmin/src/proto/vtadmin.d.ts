@@ -20859,7 +20859,7 @@ export namespace tabletmanagerdata {
     interface IVReplicationWaitForPosRequest {
 
         /** VReplicationWaitForPosRequest id */
-        id?: (number|Long|null);
+        id?: (number|null);
 
         /** VReplicationWaitForPosRequest position */
         position?: (string|null);
@@ -20875,7 +20875,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IVReplicationWaitForPosRequest);
 
         /** VReplicationWaitForPosRequest id. */
-        public id: (number|Long);
+        public id: number;
 
         /** VReplicationWaitForPosRequest position. */
         public position: string;
@@ -24092,8 +24092,8 @@ export namespace tabletmanagerdata {
     /** Properties of a VDiffReportOptions. */
     interface IVDiffReportOptions {
 
-        /** VDiffReportOptions only_p_k_s */
-        only_p_k_s?: (boolean|null);
+        /** VDiffReportOptions only_pks */
+        only_pks?: (boolean|null);
 
         /** VDiffReportOptions debug_query */
         debug_query?: (boolean|null);
@@ -24111,8 +24111,8 @@ export namespace tabletmanagerdata {
          */
         constructor(properties?: tabletmanagerdata.IVDiffReportOptions);
 
-        /** VDiffReportOptions only_p_k_s. */
-        public only_p_k_s: boolean;
+        /** VDiffReportOptions only_pks. */
+        public only_pks: boolean;
 
         /** VDiffReportOptions debug_query. */
         public debug_query: boolean;
@@ -30834,6 +30834,9 @@ export namespace query {
 
         /** RealtimeStats table_schema_changed */
         table_schema_changed?: (string[]|null);
+
+        /** RealtimeStats view_schema_changed */
+        view_schema_changed?: (string[]|null);
     }
 
     /** Represents a RealtimeStats. */
@@ -30865,6 +30868,9 @@ export namespace query {
 
         /** RealtimeStats table_schema_changed. */
         public table_schema_changed: string[];
+
+        /** RealtimeStats view_schema_changed. */
+        public view_schema_changed: string[];
 
         /**
          * Creates a new RealtimeStats instance using the specified properties.
@@ -32548,6 +32554,9 @@ export namespace vschema {
 
         /** Table column_list_authoritative */
         column_list_authoritative?: (boolean|null);
+
+        /** Table source */
+        source?: (string|null);
     }
 
     /** Represents a Table. */
@@ -32576,6 +32585,9 @@ export namespace vschema {
 
         /** Table column_list_authoritative. */
         public column_list_authoritative: boolean;
+
+        /** Table source. */
+        public source: string;
 
         /**
          * Creates a new Table instance using the specified properties.
@@ -33576,6 +33588,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings on_ddl */
         on_ddl?: (string|null);
+
+        /** MaterializeSettings defer_secondary_keys */
+        defer_secondary_keys?: (boolean|null);
     }
 
     /** Represents a MaterializeSettings. */
@@ -33625,6 +33640,9 @@ export namespace vtctldata {
 
         /** MaterializeSettings on_ddl. */
         public on_ddl: string;
+
+        /** MaterializeSettings defer_secondary_keys. */
+        public defer_secondary_keys: boolean;
 
         /**
          * Creates a new MaterializeSettings instance using the specified properties.
@@ -51981,6 +51999,9 @@ export namespace binlogdata {
 
         /** Rule source_unique_key_target_columns */
         source_unique_key_target_columns?: (string|null);
+
+        /** Rule convert_int_to_enum */
+        convert_int_to_enum?: ({ [k: string]: boolean }|null);
     }
 
     /** Represents a Rule. */
@@ -52012,6 +52033,9 @@ export namespace binlogdata {
 
         /** Rule source_unique_key_target_columns. */
         public source_unique_key_target_columns: string;
+
+        /** Rule convert_int_to_enum. */
+        public convert_int_to_enum: { [k: string]: boolean };
 
         /**
          * Creates a new Rule instance using the specified properties.

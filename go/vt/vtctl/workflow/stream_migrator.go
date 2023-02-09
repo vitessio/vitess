@@ -199,7 +199,7 @@ func (sm *StreamMigrator) StopStreams(ctx context.Context) ([]string, error) {
 /* tablet streams */
 
 func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.TabletInfo, constraint string) ([]*VReplicationStream, error) {
-	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type from _vt.vreplication where db_name=%s and workflow != %s",
+	query := fmt.Sprintf("select id, workflow, source, pos, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name=%s and workflow != %s",
 		encodeString(ti.DbName()), encodeString(sm.ts.ReverseWorkflowName()))
 	if constraint != "" {
 		query += fmt.Sprintf(" and %s", constraint)
@@ -214,7 +214,7 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 	tabletStreams := make([]*VReplicationStream, 0, len(qr.Rows))
 
 	for _, row := range qr.Named().Rows {
-		id, err := row["id"].ToInt64()
+		id, err := row["id"].ToInt32()
 		if err != nil {
 			return nil, err
 		}
@@ -229,11 +229,16 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 				ti.Keyspace, ti.Shard, id)
 		}
 
-		workflowType, err := row["workflow_type"].ToInt64()
+		workflowType, err := row["workflow_type"].ToInt32()
 		if err != nil {
 			return nil, err
 		}
-		workflowSubType, err := row["workflow_sub_type"].ToInt64()
+		workflowSubType, err := row["workflow_sub_type"].ToInt32()
+		if err != nil {
+			return nil, err
+		}
+
+		deferSecondaryKeys, err := row["defer_secondary_keys"].ToBool()
 		if err != nil {
 			return nil, err
 		}
@@ -263,12 +268,13 @@ func (sm *StreamMigrator) readTabletStreams(ctx context.Context, ti *topo.Tablet
 		}
 
 		tabletStreams = append(tabletStreams, &VReplicationStream{
-			ID:              uint32(id),
-			Workflow:        workflowName,
-			BinlogSource:    &bls,
-			Position:        pos,
-			WorkflowType:    binlogdatapb.VReplicationWorkflowType(workflowType),
-			WorkflowSubType: binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
+			ID:                 id,
+			Workflow:           workflowName,
+			BinlogSource:       &bls,
+			Position:           pos,
+			WorkflowType:       binlogdatapb.VReplicationWorkflowType(workflowType),
+			WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
+			DeferSecondaryKeys: deferSecondaryKeys,
 		})
 	}
 	return tabletStreams, nil
@@ -472,7 +478,7 @@ func (sm *StreamMigrator) syncSourceStreams(ctx context.Context) (map[string]mys
 				}
 
 				sm.ts.Logger().Infof("Waiting for keyspace:shard: %v:%v, position %v", sm.ts.SourceKeyspaceName(), shard, pos)
-				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, primary.Tablet, int(vrs.ID), mysql.EncodePosition(pos)); err != nil {
+				if err := sm.ts.TabletManagerClient().VReplicationWaitForPos(ctx, primary.Tablet, vrs.ID, mysql.EncodePosition(pos)); err != nil {
 					allErrors.RecordError(err)
 					return
 				}
@@ -574,7 +580,7 @@ func (sm *StreamMigrator) createTargetStreams(ctx context.Context, tmpl []*VRepl
 			}
 
 			ig.AddRow(vrs.Workflow, vrs.BinlogSource, mysql.EncodePosition(vrs.Position), "", "",
-				int64(vrs.WorkflowType), int64(vrs.WorkflowSubType))
+				vrs.WorkflowType, vrs.WorkflowSubType, vrs.DeferSecondaryKeys)
 		}
 
 		_, err := sm.ts.VReplicationExec(ctx, target.GetPrimary().GetAlias(), ig.String())

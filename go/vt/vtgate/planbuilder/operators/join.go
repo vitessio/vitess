@@ -82,7 +82,9 @@ func createOuterJoin(tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) 
 	if tableExpr.Join == sqlparser.RightJoinType {
 		lhs, rhs = rhs, lhs
 	}
-	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)}, nil
+	predicate := tableExpr.Condition.On
+	sqlparser.RemoveKeyspaceFromColName(predicate)
+	return &Join{LHS: lhs, RHS: rhs, LeftJoin: true, Predicate: predicate}, nil
 }
 
 func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Operator {
@@ -101,10 +103,11 @@ func createJoin(ctx *plancontext.PlanningContext, LHS, RHS ops.Operator) ops.Ope
 
 func createInnerJoin(ctx *plancontext.PlanningContext, tableExpr *sqlparser.JoinTableExpr, lhs, rhs ops.Operator) (ops.Operator, error) {
 	op := createJoin(ctx, lhs, rhs)
-	if tableExpr.Condition.On != nil {
+	pred := tableExpr.Condition.On
+	if pred != nil {
 		var err error
-		predicate := sqlparser.RemoveKeyspaceFromColName(tableExpr.Condition.On)
-		op, err = op.AddPredicate(ctx, predicate)
+		sqlparser.RemoveKeyspaceFromColName(pred)
+		op, err = op.AddPredicate(ctx, pred)
 		if err != nil {
 			return nil, err
 		}

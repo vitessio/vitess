@@ -1,8 +1,9 @@
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/vt/key"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -123,12 +124,14 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 		destination, keyspace, err = buildCreateView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.AlterView:
 		destination, keyspace, err = buildAlterView(vschema, ddl, reservedVars, enableOnlineDDL, enableDirectDDL)
-	case *sqlparser.DropView, *sqlparser.DropTable:
-		destination, keyspace, err = buildDropViewOrTable(vschema, ddlStatement)
+	case *sqlparser.DropView:
+		destination, keyspace, err = buildDropView(vschema, ddlStatement)
+	case *sqlparser.DropTable:
+		destination, keyspace, err = buildDropTable(vschema, ddlStatement)
 	case *sqlparser.RenameTable:
 		destination, keyspace, err = buildRenameTable(vschema, ddl)
 	default:
-		return nil, nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected ddl statement type: %T", ddlStatement)
+		return nil, nil, vterrors.VT13001(fmt.Sprintf("unexpected DDL statement type: %T", ddlStatement))
 	}
 
 	if err != nil {
@@ -149,8 +152,6 @@ func buildDDLPlans(sql string, ddlStatement sqlparser.DDLStatement, reservedVars
 			Keyspace:          keyspace,
 			TargetDestination: destination,
 			Query:             query,
-			IsDML:             false,
-			SingleShardOnly:   false,
 		}, &engine.OnlineDDL{
 			Keyspace:          keyspace,
 			TargetDestination: destination,
@@ -164,7 +165,7 @@ func checkFKError(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStateme
 		fk := &fkContraint{}
 		_ = sqlparser.Walk(fk.FkWalk, ddlStatement)
 		if fk.found {
-			return vterrors.Errorf(vtrpcpb.Code_ABORTED, "foreign key constraints are not allowed, see https://vitess.io/blog/2021-06-15-online-ddl-why-no-fk/")
+			return vterrors.VT10001()
 		}
 	}
 	return nil
@@ -207,17 +208,23 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 	if err != nil {
 		return nil, nil, err
 	}
+	if vschema.IsViewsEnabled() {
+		if keyspace == nil {
+			return nil, nil, vterrors.VT09005()
+		}
+		return destination, keyspace, nil
+	}
 	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
+		return nil, nil, vterrors.VT12001(ViewComplex)
 	}
 	if keyspace.Name != keyspaceName {
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
+		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
 	}
 	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
+		return nil, nil, vterrors.VT12001(ViewComplex)
 	}
-	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.SafeRewrite(ddl.Select, nil, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
 		case sqlparser.TableName:
 			cursor.Replace(sqlparser.TableName{
@@ -225,7 +232,7 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 			})
 		}
 		return true
-	}, nil)
+	})
 	return destination, keyspace, nil
 }
 
@@ -242,17 +249,23 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if err != nil {
 		return nil, nil, err
 	}
+	if vschema.IsViewsEnabled() {
+		if keyspace == nil {
+			return nil, nil, vterrors.VT09005()
+		}
+		return destination, keyspace, nil
+	}
 	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
+		return nil, nil, vterrors.VT12001(ViewComplex)
 	}
 	if keyspace.Name != keyspaceName {
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewDifferentKeyspace)
+		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
 	}
 	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
-		return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, ViewComplex)
+		return nil, nil, vterrors.VT12001(ViewComplex)
 	}
-	_ = sqlparser.Rewrite(ddl.Select, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.SafeRewrite(ddl.Select, nil, func(cursor *sqlparser.Cursor) bool {
 		switch tableName := cursor.Node().(type) {
 		case sqlparser.TableName:
 			cursor.Replace(sqlparser.TableName{
@@ -260,11 +273,39 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 			})
 		}
 		return true
-	}, nil)
+	})
 	return destination, keyspace, nil
 }
 
-func buildDropViewOrTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+func buildDropView(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
+	if !vschema.IsViewsEnabled() {
+		return buildDropTable(vschema, ddlStatement)
+	}
+	var ks *vindexes.Keyspace
+	viewMap := make(map[string]any)
+	for _, tbl := range ddlStatement.GetFromTables() {
+		_, ksForView, _, err := vschema.TargetDestination(tbl.Qualifier.String())
+		if err != nil {
+			return nil, nil, err
+		}
+		if ksForView == nil {
+			return nil, nil, vterrors.VT09005()
+		}
+		if ks == nil {
+			ks = ksForView
+		} else if ks.Name != ksForView.Name {
+			return nil, nil, vterrors.VT12001("cannot drop views from multiple keyspace in a single statement")
+		}
+		if _, exists := viewMap[tbl.Name.String()]; exists {
+			return nil, nil, vterrors.VT03013(tbl.Name.String())
+		}
+		viewMap[tbl.Name.String()] = nil
+		tbl.Qualifier = sqlparser.NewIdentifierCS("")
+	}
+	return key.DestinationAllShards{}, ks, nil
+}
+
+func buildDropTable(vschema plancontext.VSchema, ddlStatement sqlparser.DDLStatement) (key.Destination, *vindexes.Keyspace, error) {
 	var destination key.Destination
 	var keyspace *vindexes.Keyspace
 	for i, tab := range ddlStatement.GetFromTables() {
@@ -300,7 +341,7 @@ func buildDropViewOrTable(vschema plancontext.VSchema, ddlStatement sqlparser.DD
 			keyspace = keyspaceTab
 		}
 		if destination != destinationTab || keyspace != keyspaceTab {
-			return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, DifferentDestinations)
+			return nil, nil, vterrors.VT12001(DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil
@@ -344,7 +385,7 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 				return nil, nil, err
 			}
 			if keyspaceTo.Name != keyspaceFrom.Name {
-				return nil, nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.ForbidSchemaChange, "Changing schema from '%s' to '%s' is not allowed", keyspaceFrom.Name, keyspaceTo.Name)
+				return nil, nil, vterrors.VT03002(keyspaceFrom.Name, keyspaceTo.Name)
 			}
 			tabPair.ToTable = sqlparser.TableName{
 				Name: tabPair.ToTable.Name,
@@ -356,7 +397,7 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 			keyspace = keyspaceFrom
 		}
 		if destination != destinationFrom || keyspace != keyspaceFrom {
-			return nil, nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, DifferentDestinations)
+			return nil, nil, vterrors.VT12001(DifferentDestinations)
 		}
 	}
 	return destination, keyspace, nil

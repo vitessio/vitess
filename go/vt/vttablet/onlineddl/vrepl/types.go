@@ -27,6 +27,8 @@ import (
 	"fmt"
 	"reflect"
 	"strings"
+
+	"vitess.io/vitess/go/vt/schemadiff"
 )
 
 // ColumnType indicated some MySQL data types
@@ -90,6 +92,11 @@ func (c *Column) HasDefault() bool {
 // IsNumeric returns true if the column is of a numeric type
 func (c *Column) IsNumeric() bool {
 	return c.NumericPrecision > 0
+}
+
+// IsIntegralType returns true if the column is some form of an integer
+func (c *Column) IsIntegralType() bool {
+	return schemadiff.IsIntegralType(c.DataType)
 }
 
 // IsFloatingPoint returns true if the column is of a floating point numeric type

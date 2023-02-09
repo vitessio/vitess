@@ -24,12 +24,13 @@ import (
 )
 
 type testControllerPlan struct {
-	query        string
-	opcode       int
-	numInserts   int
-	selector     string
-	applier      string
-	delCopyState string
+	query             string
+	opcode            int
+	numInserts        int
+	selector          string
+	applier           string
+	delCopyState      string
+	delPostCopyAction string
 }
 
 func TestControllerPlan(t *testing.T) {
@@ -148,29 +149,32 @@ func TestControllerPlan(t *testing.T) {
 	}, {
 		in: "delete from _vt.vreplication where id = 1",
 		plan: &testControllerPlan{
-			query:        "delete from _vt.vreplication where id = 1",
-			opcode:       deleteQuery,
-			selector:     "select id from _vt.vreplication where id = 1",
-			applier:      "delete from _vt.vreplication where id in ::ids",
-			delCopyState: "delete from _vt.copy_state where vrepl_id in ::ids",
+			query:             "delete from _vt.vreplication where id = 1",
+			opcode:            deleteQuery,
+			selector:          "select id from _vt.vreplication where id = 1",
+			applier:           "delete from _vt.vreplication where id in ::ids",
+			delCopyState:      "delete from _vt.copy_state where vrepl_id in ::ids",
+			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
 	}, {
 		in: "delete from _vt.vreplication",
 		plan: &testControllerPlan{
-			query:        "delete from _vt.vreplication",
-			opcode:       deleteQuery,
-			selector:     "select id from _vt.vreplication",
-			applier:      "delete from _vt.vreplication where id in ::ids",
-			delCopyState: "delete from _vt.copy_state where vrepl_id in ::ids",
+			query:             "delete from _vt.vreplication",
+			opcode:            deleteQuery,
+			selector:          "select id from _vt.vreplication",
+			applier:           "delete from _vt.vreplication where id in ::ids",
+			delCopyState:      "delete from _vt.copy_state where vrepl_id in ::ids",
+			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
 	}, {
 		in: "delete from _vt.vreplication where a = 1",
 		plan: &testControllerPlan{
-			query:        "delete from _vt.vreplication where a = 1",
-			opcode:       deleteQuery,
-			selector:     "select id from _vt.vreplication where a = 1",
-			applier:      "delete from _vt.vreplication where id in ::ids",
-			delCopyState: "delete from _vt.copy_state where vrepl_id in ::ids",
+			query:             "delete from _vt.vreplication where a = 1",
+			opcode:            deleteQuery,
+			selector:          "select id from _vt.vreplication where a = 1",
+			applier:           "delete from _vt.vreplication where id in ::ids",
+			delCopyState:      "delete from _vt.copy_state where vrepl_id in ::ids",
+			delPostCopyAction: "delete from _vt.post_copy_action where vrepl_id in ::ids",
 		},
 	}, {
 		in: "delete from _vt.resharding_journal where id = 1",
@@ -245,6 +249,9 @@ func TestControllerPlan(t *testing.T) {
 			}
 			if pl.delCopyState != nil {
 				gotPlan.delCopyState = pl.delCopyState.Query
+			}
+			if pl.delPostCopyAction != nil {
+				gotPlan.delPostCopyAction = pl.delPostCopyAction.Query
 			}
 			if !reflect.DeepEqual(gotPlan, tcase.plan) {
 				t.Errorf("getPlan(%v):\n%+v, want\n%+v", tcase.in, gotPlan, tcase.plan)

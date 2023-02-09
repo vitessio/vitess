@@ -88,7 +88,7 @@ func startMysqld(uid uint32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf) {
 	var err error
 
 	if _, statErr := os.Stat(mycnfFile); os.IsNotExist(statErr) {
-		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", int32(*mysqlPort))
+		mysqld, cnf, err = mysqlctl.CreateMysqldAndMycnf(uid, "", *mysqlPort)
 		if err != nil {
 			log.Errorf("failed to initialize mysql config :%v", err)
 			exit.Return(1)
@@ -169,7 +169,6 @@ func main() {
 
 	// vtctld UI requires the cell flag
 	flags.Set("cell", tpb.Cells[0])
-	flags.Set("enable_realtime_stats", "true")
 	if flags.Lookup("log_dir") == nil {
 		flags.Set("log_dir", "$VTDATAROOT/tmp")
 	}
@@ -318,7 +317,7 @@ type vtcomboMysqld struct {
 }
 
 // SetReplicationSource implements the MysqlDaemon interface
-func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int, replicationStopBefore bool, replicationStartAfter bool) error {
+func (mysqld *vtcomboMysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
 	return nil
 }
 

@@ -220,7 +220,6 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 		// to avoid flakiness when the CI is very slow.
 		fmt.Sprintf("--queryserver-config-transaction-timeout=%d", int64(defaultTimeout.Seconds())*3),
 		fmt.Sprintf("--vreplication_copy_phase_max_innodb_history_list_length=%d", maxSourceTrxHistory),
-
 		parallelInsertWorkers,
 	}
 
@@ -270,6 +269,10 @@ func TestVreplicationCopyParallel(t *testing.T) {
 }
 
 func testBasicVreplicationWorkflow(t *testing.T) {
+	testVreplicationWorkflows(t, false)
+}
+
+func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
 	allCellNames = "zone1"
@@ -303,6 +306,10 @@ func testBasicVreplicationWorkflow(t *testing.T) {
 	shardOrders(t)
 	shardMerchant(t)
 
+	if minimal {
+		return
+	}
+
 	materializeProduct(t)
 
 	materializeMerchantOrders(t)
@@ -334,6 +341,15 @@ func TestV2WorkflowsAcrossDBVersions(t *testing.T) {
 	sourceKsOpts["DBTypeVersion"] = "mysql-5.7"
 	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
 	testBasicVreplicationWorkflow(t)
+}
+
+// TestMoveTablesMariaDBToMySQL tests that MoveTables works between a MariaDB source
+// and a MySQL target as while MariaDB is not supported in Vitess v14+ we want
+// MariaDB users to have a way to migrate into Vitess.
+func TestMoveTablesMariaDBToMySQL(t *testing.T) {
+	sourceKsOpts["DBTypeVersion"] = "mariadb-10.10"
+	targetKsOpts["DBTypeVersion"] = "mysql-8.0"
+	testVreplicationWorkflows(t, true /* only do MoveTables */)
 }
 
 func TestMultiCellVreplicationWorkflow(t *testing.T) {
@@ -765,15 +781,15 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		matchInsertQuery2 := "insert into customer(`name`, cid) values (:vtg1, :_cid0)"
 		require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
 
-		insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" //ID 101, hence due to reverse_bits in shard 80-
+		insertQuery2 = "insert into customer(name, cid) values('tempCustomer3', 101)" // ID 101, hence due to reverse_bits in shard 80-
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
 
-		insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" //ID 102, hence due to reverse_bits in shard -80
+		insertQuery2 = "insert into customer(name, cid) values('tempCustomer4', 102)" // ID 102, hence due to reverse_bits in shard -80
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
 
 		execVtgateQuery(t, vtgateConn, "customer", "update customer set meta = convert(x'7b7d' using utf8mb4) where cid = 1")
 		if testReverse {
-			//Reverse Replicate
+			// Reverse Replicate
 			switchReads(t, workflowType, allCellNames, ksWorkflow, true)
 			printShardPositions(vc, ksShards)
 			switchWrites(t, workflowType, ksWorkflow, true)
@@ -793,7 +809,7 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 			waitForNoWorkflowLag(t, vc, targetKs, workflow)
 
-			//Go forward again
+			// Go forward again
 			switchReads(t, workflowType, allCellNames, ksWorkflow, false)
 			switchWrites(t, workflowType, ksWorkflow, false)
 
@@ -823,11 +839,11 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 			assert.NoError(t, err, "Customer table not deleted from zone1-200")
 			require.True(t, found)
 
-			insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" //ID 103, hence due to reverse_bits in shard 80-
+			insertQuery2 = "insert into customer(name, cid) values('tempCustomer8', 103)" // ID 103, hence due to reverse_bits in shard 80-
 			require.False(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "customer", insertQuery2, matchInsertQuery2))
-			insertQuery2 = "insert into customer(name, cid) values('tempCustomer10', 104)" //ID 105, hence due to reverse_bits in shard -80
+			insertQuery2 = "insert into customer(name, cid) values('tempCustomer10', 104)" // ID 105, hence due to reverse_bits in shard -80
 			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab1, "customer", insertQuery2, matchInsertQuery2))
-			insertQuery2 = "insert into customer(name, cid) values('tempCustomer9', 105)" //ID 104, hence due to reverse_bits in shard 80-
+			insertQuery2 = "insert into customer(name, cid) values('tempCustomer9', 105)" // ID 104, hence due to reverse_bits in shard 80-
 			require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, customerTab2, "customer", insertQuery2, matchInsertQuery2))
 
 			execVtgateQuery(t, vtgateConn, "customer", "delete from customer where name like 'tempCustomer%'")
@@ -923,7 +939,7 @@ func reshardMerchant3to1Merge(t *testing.T) {
 	})
 }
 
-func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
+func reshardCustomer3to2SplitMerge(t *testing.T) { // -40,40-80,80-c0 => merge/split, c0- stays the same  ending up with 3
 	t.Run("reshardCustomer3to2SplitMerge", func(t *testing.T) {
 		ksName := "customer"
 		counts := map[string]int{"zone1-1000": 8, "zone1-1100": 8, "zone1-1200": 5}
@@ -931,7 +947,7 @@ func reshardCustomer3to2SplitMerge(t *testing.T) { //-40,40-80,80-c0 => merge/sp
 	})
 }
 
-func reshardCustomer3to1Merge(t *testing.T) { //to unsharded
+func reshardCustomer3to1Merge(t *testing.T) { // to unsharded
 	t.Run("reshardCustomer3to1Merge", func(t *testing.T) {
 		ksName := "customer"
 		counts := map[string]int{"zone1-1500": 21}
@@ -1022,12 +1038,12 @@ func shardOrders(t *testing.T) {
 func checkThatVDiffFails(t *testing.T, keyspace, workflow string) {
 	ksWorkflow := fmt.Sprintf("%s.%s", keyspace, workflow)
 	t.Run("check that vdiff1 won't run", func(t2 *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", ksWorkflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", ksWorkflow)
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
 	})
 	t.Run("check that vdiff2 won't run", func(t2 *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v2", ksWorkflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", ksWorkflow)
 		require.Error(t, err)
 		require.Contains(t, output, "invalid VDiff run")
 
@@ -1414,7 +1430,7 @@ func switchWrites(t *testing.T, workflowType, ksWorkflow string, reverse bool) {
 	if output != "" {
 		fmt.Printf("Output of switching writes for %s:\n++++++\n%s\n--------\n", ksWorkflow, output)
 	}
-	//printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
+	// printSwitchWritesExtraDebug is useful when debugging failures in Switch writes due to corner cases/races
 	_ = printSwitchWritesExtraDebug
 	require.NoError(t, err, fmt.Sprintf("Switch writes Error: %s: %s", err, output))
 }

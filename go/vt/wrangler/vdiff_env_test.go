@@ -135,10 +135,10 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		// migrater buildMigrationTargets
 		env.tmc.setVRResults(
 			primary.tablet,
-			"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
+			"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type",
-				"int64|varchar|varchar|varchar|varchar|int64|int64"),
+				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 				rows...,
 			),
 		)
@@ -178,6 +178,7 @@ func (env *testVDiffEnv) close() {
 		env.topoServ.DeleteTablet(context.Background(), t.tablet.Alias)
 	}
 	env.tablets = nil
+	env.topoServ.Close()
 }
 
 func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testVDiffTablet {
@@ -323,7 +324,7 @@ func (tmc *testVDiffTMClient) WaitForPosition(ctx context.Context, tablet *topod
 	return nil
 }
 
-func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

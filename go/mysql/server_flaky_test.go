@@ -225,7 +225,14 @@ func (th *testHandler) ComPrepare(c *Conn, query string, bindVars map[string]*qu
 func (th *testHandler) ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error {
 	return nil
 }
-func (th *testHandler) ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error {
+
+func (th *testHandler) ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return nil
+}
+func (th *testHandler) ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error {
+	return nil
+}
+func (th *testHandler) ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error {
 	return nil
 }
 
@@ -562,7 +569,8 @@ func TestServer(t *testing.T) {
 	output, err = runMysqlWithErr(t, params, "error after send")
 	require.Error(t, err)
 	assert.Contains(t, output, "ERROR 2013 (HY000)", "Unexpected output for 'panic'")
-	assert.Contains(t, output, "Lost connection to MySQL server during query", "Unexpected output for 'panic'")
+	// MariaDB might not print the MySQL bit here
+	assert.Regexp(t, `Lost connection to( MySQL)? server during query`, output, "Unexpected output for 'panic': %v", output)
 
 	// Run an 'insert' command, no rows, but rows affected.
 	output, err = runMysqlWithErr(t, params, "insert")
@@ -674,7 +682,8 @@ func TestServerStats(t *testing.T) {
 	output, err = runMysqlWithErr(t, params, "panic")
 	require.Error(t, err)
 	assert.Contains(t, output, "ERROR 2013 (HY000)")
-	assert.Contains(t, output, "Lost connection to MySQL server during query", "Unexpected output for 'panic': %v", output)
+	// MariaDB might not print the MySQL bit here
+	assert.Regexp(t, `Lost connection to( MySQL)? server during query`, output, "Unexpected output for 'panic': %v", output)
 
 	assert.EqualValues(t, 0, connCount.Get(), "connCount")
 	assert.EqualValues(t, 2, connAccept.Get(), "connAccept")

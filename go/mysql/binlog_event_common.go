@@ -154,6 +154,11 @@ func (ev binlogEvent) IsPreviousGTIDs() bool {
 	return ev.Type() == ePreviousGTIDsEvent
 }
 
+// IsHeartbeat implements BinlogEvent.IsHeartbeat().
+func (ev binlogEvent) IsHeartbeat() bool {
+	return ev.Type() == eHeartbeatEvent
+}
+
 // IsTableMap implements BinlogEvent.IsTableMap().
 func (ev binlogEvent) IsTableMap() bool {
 	return ev.Type() == eTableMapEvent

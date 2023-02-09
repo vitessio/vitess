@@ -79,6 +79,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	} else {
 		require.Error(t, err)
 	}
+
+	err = clusterInstance.StartVTOrc(keyspace)
+	require.NoError(t, err)
 }
 
 func initializeCluster(t *testing.T) (int, error) {
@@ -159,7 +162,6 @@ func initializeCluster(t *testing.T) (int, error) {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync,
 				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			shard.Vttablets = append(shard.Vttablets, tablet)

@@ -146,6 +146,11 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 		}
 		utils.Exec(t, mcmp.VtConn, fmt.Sprintf("insert /*vt+ QUERY_TIMEOUT_MS=1000 */ into t1(id1) values %s", str.String()))
 	}
+	// too much data added in the loop, do drop and recreate the table.
+	defer func() {
+		mcmp.Exec("drop table t1")
+		mcmp.Exec(schemaSQL)
+	}()
 
 	utils.Exec(t, mcmp.VtConn, "select count(*) from t1 where id1 > 31")
 	utils.Exec(t, mcmp.VtConn, "select /*vt+ PLANNER=gen4 QUERY_TIMEOUT_MS=100 */ count(*) from t1 where id1 > 31")
@@ -155,4 +160,45 @@ func TestQueryTimeoutWithTables(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "context deadline exceeded")
 	assert.Contains(t, err.Error(), "(errno 1317) (sqlstate 70100)")
+}
+
+// TestIntervalWithMathFunctions tests that the Interval keyword can be used with math functions.
+func TestIntervalWithMathFunctions(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// Set the time zone explicitly to UTC, otherwise the output of FROM_UNIXTIME is going to be dependent
+	// on the time zone of the system.
+	mcmp.Exec("SET time_zone = '+00:00'")
+	mcmp.AssertMatches("select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month", `[[CHAR("2020-12-01")]]`)
+	mcmp.AssertMatches("select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)", `[[DATETIME("2023-01-08 13:48:42")]]`)
+}
+
+// TestCast tests the queries that contain the cast function.
+func TestCast(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.AssertMatches("select cast('2023-01-07 12:34:56' as date) limit 1", `[[DATE("2023-01-07")]]`)
+	mcmp.AssertMatches("select cast('2023-01-07 12:34:56' as date)", `[[DATE("2023-01-07")]]`)
+	mcmp.AssertMatches("select cast('3.2' as float)", `[[FLOAT32(3.2)]]`)
+	mcmp.AssertMatches("select cast('3.2' as double)", `[[FLOAT64(3.2)]]`)
+	mcmp.AssertMatches("select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
+}
+
+func TestOuterJoinWithPredicate(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// This test uses a predicate on the outer side.
+	// These can't be pushed down to MySQL and have
+	// to be evaluated on the vtgate, so we are checking
+	// that evalengine handles the predicate correctly
+
+	mcmp.Exec("insert into t1(id1, id2) values (0,0), (1,10), (2,20), (3,30), (4,40)")
+
+	mcmp.AssertMatchesNoOrder("select A.id1, B.id2 from t1 as A left join t1 as B on A.id1*10 = B.id2 WHERE B.id2 BETWEEN 20 AND 30",
+		`[[INT64(2) INT64(20)] [INT64(3) INT64(30)]]`)
+	mcmp.AssertMatchesNoOrder("select A.id1, B.id2 from t1 as A left join t1 as B on A.id1*10 = B.id2 WHERE B.id2 NOT BETWEEN 20 AND 30",
+		`[[INT64(0) INT64(0)] [INT64(1) INT64(10)] [INT64(4) INT64(40)]]`)
 }

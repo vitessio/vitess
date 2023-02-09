@@ -22,6 +22,8 @@ import (
 	"sync"
 	"time"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sync2"
@@ -38,10 +40,14 @@ type servingState int64
 
 const (
 	// StateNotConnected is the state where tabletserver is not
-	// connected to an underlying mysql instance.
+	// connected to an underlying mysql instance. In this state we close
+	// query engine since MySQL is probably unavailable
 	StateNotConnected = servingState(iota)
 	// StateNotServing is the state where tabletserver is connected
 	// to an underlying mysql instance, but is not serving queries.
+	// We do not close the query engine to not close the pool. We keep
+	// the query engine open but prevent queries from running by blocking them
+	// in StartRequest.
 	StateNotServing
 	// StateServing is where queries are allowed.
 	StateServing
@@ -330,9 +336,23 @@ func (sm *stateManager) checkMySQL() {
 		}
 		defer sm.transitioning.Release()
 
+		// This is required to prevent new queries from running in StartRequest
+		// unless they are part of a running transaction.
+		sm.setWantState(StateNotConnected)
 		sm.closeAll()
+
+		// Now that we reached the NotConnected state, we want to go back to the
+		// Serving state. The retry will only succeed once MySQL is reachable again
+		// Until then EnsureConnectionAndDB will error out.
+		sm.setWantState(StateServing)
 		sm.retryTransition(fmt.Sprintf("Cannot connect to MySQL, shutting down query service: %v", err))
 	}()
+}
+
+func (sm *stateManager) setWantState(stateWanted servingState) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.wantState = stateWanted
 }
 
 // isCheckMySQLRunning returns 1 if CheckMySQL function is in progress
@@ -580,6 +600,9 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
+	defer func() {
+		log.Infof("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
+	}()
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {

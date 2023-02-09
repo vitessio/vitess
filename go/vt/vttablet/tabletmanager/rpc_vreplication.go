@@ -34,6 +34,6 @@ func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*q
 }
 
 // VReplicationWaitForPos waits for the specified position.
-func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
 	return tm.VREngine.WaitForPos(ctx, id, pos)
 }

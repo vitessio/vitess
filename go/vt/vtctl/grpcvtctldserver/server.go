@@ -97,6 +97,16 @@ func NewVtctldServer(ts *topo.Server) *VtctldServer {
 	}
 }
 
+// NewTestVtctldServer returns a new VtctldServer for the given topo server
+// AND tmclient for use in tests. This should NOT be used in production.
+func NewTestVtctldServer(ts *topo.Server, tmc tmclient.TabletManagerClient) *VtctldServer {
+	return &VtctldServer{
+		ts:  ts,
+		tmc: tmc,
+		ws:  workflow.NewServer(ts, tmc),
+	}
+}
+
 func panicHandler(err *error) {
 	if x := recover(); x != nil {
 		*err = fmt.Errorf("uncaught panic: %v", x)
@@ -997,7 +1007,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.NewString(ignoreReplicaAliases...),
+			IgnoreReplicas:            sets.New[string](ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
@@ -1648,10 +1658,10 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 	// Omit any cell names in the request that don't map to existing cells
 	if len(req.Cells) > 0 {
-		s1 := sets.NewString(allCells...)
-		s2 := sets.NewString(req.Cells...)
+		s1 := sets.New[string](allCells...)
+		s2 := sets.New[string](req.Cells...)
 
-		cells = s1.Intersection(s2).List()
+		cells = sets.List(s1.Intersection(s2))
 	}
 
 	span.Annotate("cells", strings.Join(cells, ","))
@@ -1920,7 +1930,7 @@ func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersi
 		return nil, err
 	}
 
-	version, err := getVersionFromTablet(tablet.Addr())
+	version, err := GetVersionFunc()(tablet.Addr())
 	if err != nil {
 		return nil, err
 	}
@@ -3614,7 +3624,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 			span, ctx := trace.NewSpan(ctx, "VtctldServer.validateAllTablets")
 			defer span.Finish()
 
-			cellSet := sets.NewString()
+			cellSet := sets.New[string]()
 			for _, keyspace := range keyspaces {
 				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				shards, err := s.ts.GetShardNames(getShardNamesCtx, keyspace)
@@ -3645,7 +3655,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 				}
 			}
 
-			for _, cell := range cellSet.List() {
+			for _, cell := range sets.List(cellSet) {
 				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				aliases, err := s.ts.GetTabletAliasesByCell(getTabletsByCellCtx, cell)
 				getTabletsByCellCancel() // don't defer in a loop
@@ -4416,7 +4426,20 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	return version, nil
 }
 
+var versionFuncMu sync.Mutex
 var getVersionFromTablet = getVersionFromTabletDebugVars
+
+func SetVersionFunc(versionFunc func(string) (string, error)) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	getVersionFromTablet = versionFunc
+}
+
+func GetVersionFunc() func(string) (string, error) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	return getVersionFromTablet
+}
 
 // helper method to asynchronously get and diff a version
 func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {

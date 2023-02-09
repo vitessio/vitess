@@ -23,11 +23,12 @@ import (
 	"os"
 	"path"
 	"regexp"
-	"runtime/debug"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/vt/log"
 
@@ -137,9 +138,10 @@ type ExpectedResult struct {
 }
 
 type exprResult struct {
-	expr   *regexp.Regexp
-	result *sqltypes.Result
-	err    string
+	queryPattern string
+	expr         *regexp.Regexp
+	result       *sqltypes.Result
+	err          string
 }
 
 // ExpectedExecuteFetch defines for an expected query the to be faked output.
@@ -414,8 +416,9 @@ func (db *DB) HandleQuery(c *mysql.Conn, query string, callback func(*sqltypes.R
 		return callback(&sqltypes.Result{})
 	}
 	// Nothing matched.
-	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v", query, db.name)
-	log.Errorf("Query not found: %s:%s", query, debug.Stack())
+	err := fmt.Errorf("fakesqldb:: query: '%s' is not supported on %v",
+		sqlparser.TruncateForUI(query), db.name)
+	log.Errorf("Query not found: %s", sqlparser.TruncateForUI(query))
 
 	return err
 }
@@ -497,8 +500,18 @@ func (db *DB) ComStmtExecute(c *mysql.Conn, prepare *mysql.PrepareData, callback
 	return nil
 }
 
+// ComRegisterReplica is part of the mysql.Handler interface.
+func (db *DB) ComRegisterReplica(c *mysql.Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error {
+	return nil
+}
+
+// ComBinlogDump is part of the mysql.Handler interface.
+func (db *DB) ComBinlogDump(c *mysql.Conn, logFile string, binlogPos uint32) error {
+	return nil
+}
+
 // ComBinlogDumpGTID is part of the mysql.Handler interface.
-func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, gtidSet mysql.GTIDSet) error {
+func (db *DB) ComBinlogDumpGTID(c *mysql.Conn, logFile string, logPos uint64, gtidSet mysql.GTIDSet) error {
 	return nil
 }
 
@@ -547,7 +560,7 @@ func (db *DB) AddQueryPattern(queryPattern string, expectedResult *sqltypes.Resu
 	result := *expectedResult
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.patternData[queryPattern] = exprResult{expr: expr, result: &result}
+	db.patternData[queryPattern] = exprResult{queryPattern: queryPattern, expr: expr, result: &result}
 }
 
 // RejectQueryPattern allows a query pattern to be rejected with an error
@@ -555,7 +568,7 @@ func (db *DB) RejectQueryPattern(queryPattern, error string) {
 	expr := regexp.MustCompile("(?is)^" + queryPattern + "$")
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	db.patternData[queryPattern] = exprResult{expr: expr, err: error}
+	db.patternData[queryPattern] = exprResult{queryPattern: queryPattern, expr: expr, err: error}
 }
 
 // ClearQueryPattern removes all query patterns set up

@@ -16,6 +16,6 @@
 
 # this script deletes the old shard 0 which has been replaced by 4 shards
 
-source ./env.sh
+source ../common/env.sh
 
-vtctldclient DeleteShards --recursive main/0
+vtctldclient DeleteShards --force --recursive main/0

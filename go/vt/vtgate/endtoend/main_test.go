@@ -18,7 +18,6 @@ package endtoend
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
@@ -33,11 +32,10 @@ import (
 )
 
 var (
-	cluster        *vttest.LocalCluster
-	vtParams       mysql.ConnParams
-	mysqlParams    mysql.ConnParams
-	grpcAddress    string
-	tabletHostName = flag.String("tablet_hostname", "", "the tablet hostname")
+	cluster     *vttest.LocalCluster
+	vtParams    mysql.ConnParams
+	mysqlParams mysql.ConnParams
+	grpcAddress string
 
 	schema = `
 create table t1(
@@ -294,8 +292,6 @@ func TestMain(m *testing.M) {
 			os.RemoveAll(cfg.SchemaDir)
 			return 1
 		}
-
-		cfg.TabletHostName = *tabletHostName
 
 		cluster = &vttest.LocalCluster{
 			Config: cfg,

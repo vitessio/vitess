@@ -128,7 +128,7 @@ func (s *scoper) down(cursor *sqlparser.Cursor) error {
 		return s.createSpecialScopePostProjection(cursor.Parent())
 	case *sqlparser.DerivedTable:
 		if node.Lateral {
-			return vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "unsupported: lateral derived tables")
+			return vterrors.VT12001("lateral derived tables")
 		}
 	}
 	return nil
@@ -268,7 +268,7 @@ func (s *scope) addTable(info TableInfo) error {
 		}
 
 		if tblName == name.Name.String() {
-			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.NonUniqTable, "Not unique table/alias: '%s'", name.Name.String())
+			return vterrors.VT03013(name.Name.String())
 		}
 	}
 	s.tables = append(s.tables, info)
