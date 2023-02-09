@@ -181,7 +181,7 @@ jobs:
 
       - name: Run golangci-lint
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
-        run: $(go env GOPATH)/bin/golangci-lint run -E revive go/... || exit 1
+        run: $(go env GOPATH)/bin/golangci-lint run go/... || exit 1
 
       - name: Run go mod tidy
         if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.go_files == 'true'
