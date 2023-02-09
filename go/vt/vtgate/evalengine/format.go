@@ -58,12 +58,12 @@ func (l *Literal) format(w *formatter, depth int) {
 			if i > 0 {
 				w.WriteString(", ")
 			}
-			w.WriteString(evalToSqlValue(val).String())
+			w.WriteString(evalToSQLValue(val).String())
 		}
 		w.WriteByte(')')
 
 	default:
-		w.WriteString(evalToSqlValue(l.inner).String())
+		w.WriteString(evalToSQLValue(l.inner).String())
 	}
 }
 
