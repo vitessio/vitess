@@ -99,6 +99,7 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
 		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
 		a, b = b, a
+		routeA, routeB = routeB, routeA
 	}
 	switch {
 
