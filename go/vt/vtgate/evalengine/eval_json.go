@@ -96,18 +96,11 @@ func evalToJSON(e eval) (*evalJSON, error) {
 		if sqltypes.IsBinary(e.SQLType()) {
 			return evalBinaryToJSON(e), nil
 		}
-
 		jsonText, err := collations.ConvertForJSON(nil, e.bytes, collations.Local().LookupByID(e.col.Collation))
 		if err != nil {
 			return nil, err
 		}
-
-		var p json.Parser
-		j, err := p.ParseBytes(jsonText)
-		if err != nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Invalid JSON text in argument 1 to function cast_as_json")
-		}
-		return j, nil
+		return json.NewString(jsonText), nil
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}

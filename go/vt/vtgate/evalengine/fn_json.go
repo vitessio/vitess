@@ -153,12 +153,12 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 		if key == nil {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
 		}
-		val, err := call.Arguments[i+1].eval(env)
+		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
 		if err != nil {
 			return nil, err
 		}
 
-		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
+		val, err := call.Arguments[i+1].eval(env)
 		if err != nil {
 			return nil, err
 		}
