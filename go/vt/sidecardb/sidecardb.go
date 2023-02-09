@@ -209,9 +209,8 @@ func Init(ctx context.Context, exec Exec) error {
 		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
 		_, _ = si.exec(si.ctx, restoreSQLModeQuery, 0, false)
 	}()
-	// Change sql_mode
-	changeSQLModeQuery := fmt.Sprintf("set @@session.sql_mode=REPLACE(REPLACE('%s', 'NO_ZERO_DATE', ''), 'NO_ZERO_IN_DATE', '')", sqlMode)
-	if _, err := si.exec(si.ctx, changeSQLModeQuery, 0, false); err != nil {
+	// Change sql_mode to most permissive
+	if _, err := si.exec(si.ctx, "set @@session.sql_mode=''", 0, false); err != nil {
 		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not change sql_mode: %v", err)
 	}
 	// end of sql_mode handling
