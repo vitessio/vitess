@@ -6206,7 +6206,7 @@ UTC_DATE func_paren_opt
   }
 | POINT openb expression ',' expression closeb
   {
-    $$ = &PointExpr{XCordinate:$3, YCordinate:$5}
+    $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
   }
 | LINESTRING openb point_param_list closeb
   {
