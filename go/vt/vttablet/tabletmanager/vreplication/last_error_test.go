@@ -44,6 +44,8 @@ func TestLastError(t *testing.T) {
 			time.Sleep(1 * time.Millisecond)
 		}
 		require.True(t, le.shouldRetry())
+
+		// same error happens after maxTimeInError, so it should retry
 		time.Sleep(150 * time.Millisecond)
 		le.record(err2)
 		require.True(t, le.shouldRetry())
