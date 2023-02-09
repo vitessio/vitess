@@ -227,10 +227,10 @@ func insertRow(keyspace, table string, id int) {
 }
 
 type numEvents struct {
-	numRowEvents, numJournalEvents              int64
-	numLessThan80Events, numGreaterThan80Events int64
-	numLessThan40Events, numGreaterThan40Events int64
-	numShard0Events                             int64
+	numRowEvents, numJournalEvents                            int64
+	numLessThan80Events, numGreaterThan80Events               int64
+	numLessThan40Events, numGreaterThan40Events               int64
+	numShard0BeforeReshardEvents, numShard0AfterReshardEvents int64
 }
 
 // tests the StopOnReshard flag
@@ -439,6 +439,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 	}()
 	// stream events from the VStream API
 	var ne numEvents
+	reshardDone := false
 	go func() {
 		var reader vtgateconn.VStreamReader
 		reader, err = vstreamConn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
@@ -454,7 +455,11 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 						shard := ev.RowEvent.Shard
 						switch shard {
 						case "0":
-							ne.numShard0Events++
+							if reshardDone {
+								ne.numShard0AfterReshardEvents++
+							} else {
+								ne.numShard0BeforeReshardEvents++
+							}
 						case "-80":
 							ne.numLessThan80Events++
 						case "80-":
@@ -490,6 +495,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 		switch tickCount {
 		case 1:
 			reshard(t, "sharded", "customer", "vstreamCopyMultiKeyspaceReshard", "-80,80-", "-40,40-", baseTabletID+400, nil, nil, nil, defaultCellName)
+			reshardDone = true
 		case 60:
 			done = true
 		}
@@ -537,7 +543,8 @@ func TestVStreamCopyMultiKeyspaceReshard(t *testing.T) {
 	log.Infof("ne=%v", ne)
 	require.Equal(t, int64(0), ne.numJournalEvents)
 	require.NotZero(t, ne.numRowEvents)
-	require.NotZero(t, ne.numShard0Events)
+	require.NotZero(t, ne.numShard0BeforeReshardEvents)
+	require.NotZero(t, ne.numShard0AfterReshardEvents)
 	require.NotZero(t, ne.numLessThan80Events)
 	require.NotZero(t, ne.numGreaterThan80Events)
 	require.NotZero(t, ne.numLessThan40Events)
