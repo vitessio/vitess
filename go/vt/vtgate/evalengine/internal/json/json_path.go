@@ -654,7 +654,7 @@ func (p *PathParser) ParseBytes(in []byte) (*Path, error) {
 			if err == io.EOF {
 				return root, nil
 			}
-			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%w. The error is around character position %d.", err, len(in)-len(ptr))
+			return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "%v. The error is around character position %d.", err, len(in)-len(ptr))
 		}
 	}
 }
