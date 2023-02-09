@@ -32,7 +32,7 @@ func TestMysqlGRParsePrimaryGroupMember(t *testing.T) {
 	}
 	parsePrimaryGroupMember(&res, rows)
 	assert.Equal(t, "host1", res.SourceHost)
-	assert.Equal(t, 10, res.SourcePort)
+	assert.Equal(t, int32(10), res.SourcePort)
 	assert.Equal(t, ReplicationStateUnknown, res.IOState)
 	assert.Equal(t, ReplicationStateUnknown, res.SQLState)
 }
@@ -44,10 +44,10 @@ func TestMysqlGRReplicationApplierLagParse(t *testing.T) {
 	}
 	parseReplicationApplierLag(&res, row)
 	// strconv.NumError will leave ReplicationLagSeconds unset
-	assert.Equal(t, uint(0), res.ReplicationLagSeconds)
+	assert.Equal(t, uint32(0), res.ReplicationLagSeconds)
 	row = []sqltypes.Value{
 		sqltypes.MakeTrusted(querypb.Type_INT32, []byte("100")),
 	}
 	parseReplicationApplierLag(&res, row)
-	assert.Equal(t, uint(100), res.ReplicationLagSeconds)
+	assert.Equal(t, uint32(100), res.ReplicationLagSeconds)
 }

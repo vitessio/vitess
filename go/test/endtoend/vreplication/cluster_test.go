@@ -252,8 +252,8 @@ func downloadDBTypeVersion(dbType string, majorVersion string, path string) erro
 		versionFile = "mysql-8.0.28-linux-glibc2.17-x86_64-minimal.tar.xz"
 		url = "https://dev.mysql.com/get/Downloads/MySQL-8.0/" + versionFile
 	} else if dbType == "mariadb" && majorVersion == "10.10" {
-		versionFile = "mariadb-10.10.2-linux-systemd-x86_64.tar.gz"
-		url = "https://ftp.osuosl.org/pub/mariadb/mariadb-10.10.2/bintar-linux-systemd-x86_64/" + versionFile
+		versionFile = "mariadb-10.10.3-linux-systemd-x86_64.tar.gz"
+		url = "https://github.com/vitessio/vitess-resources/releases/download/v4.0/" + versionFile
 	} else {
 		return fmt.Errorf("invalid/unsupported major version: %s for database: %s", majorVersion, dbType)
 	}
@@ -425,7 +425,7 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 		"--enable-lag-throttler",
 		"--heartbeat_enable",
 		"--heartbeat_interval", "250ms",
-	} //FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
+	} // FIXME: for multi-cell initial schema doesn't seem to load without "--queryserver-config-schema-reload-time"
 	options = append(options, extraVTTabletArgs...)
 
 	if mainClusterConfig.vreplicationCompressGTID {
@@ -570,7 +570,7 @@ func (vc *VitessCluster) DeleteShard(t testing.TB, cellName string, ksName strin
 		tab.Vttablet.TearDown()
 	}
 	log.Infof("Deleting Shard %s", shardName)
-	//TODO how can we avoid the use of even_if_serving?
+	// TODO how can we avoid the use of even_if_serving?
 	if output, err := vc.VtctlClient.ExecuteCommandWithOutput("DeleteShard", "--", "--recursive", "--even_if_serving", ksName+"/"+shardName); err != nil {
 		t.Fatalf("DeleteShard command failed with error %+v and output %s\n", err, output)
 	}
@@ -615,7 +615,7 @@ func (vc *VitessCluster) teardown(t testing.TB) {
 			}
 		}
 	}
-	//collect unique keyspaces across cells
+	// collect unique keyspaces across cells
 	keyspaces := make(map[string]*Keyspace)
 	for _, cell := range vc.Cells {
 		for _, keyspace := range cell.Keyspaces {

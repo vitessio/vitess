@@ -35,8 +35,9 @@ COPY docker/mini/orchestrator-vitess-mini.conf.json /etc/orchestrator.conf.json
 RUN chown vitess:vitess /etc/orchestrator.conf.json
 
 COPY docker/mini/docker-entry /vt/dist/docker/mini/docker-entry
-COPY examples/local/scripts /vt/dist/scripts
-COPY examples/local/env.sh /vt/dist/scripts/env.sh
+COPY examples/common/scripts /vt/dist/scripts
+COPY examples/common/env.sh /vt/dist/scripts/env.sh
+COPY examples/common/lib/utils.sh /vt/dist/scripts/lib/utils.sh
 COPY docker/mini/vtctld-mini-up.sh /vt/dist/scripts/vtctld-mini-up.sh
 COPY docker/mini/vttablet-mini-up.sh /vt/dist/scripts/vttablet-mini-up.sh
 COPY docker/mini/orchestrator-up.sh /vt/dist/scripts/orchestrator-up.sh

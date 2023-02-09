@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -380,4 +380,46 @@ func TestTranslationFailures(t *testing.T) {
 		})
 	}
 
+}
+
+func TestCardinalityWithBindVariables(t *testing.T) {
+	testcases := []struct {
+		expr string
+		err  string
+	}{
+		{expr: `:foo + 1`},
+		{expr: `1 IN ::bar`},
+		{expr: `:foo IN ::bar`},
+		{expr: `:foo IN _binary ::bar`, err: "syntax error"},
+		{expr: `::foo + 1`, err: "syntax error"},
+		{expr: `::foo = 1`, err: "syntax error"},
+		{expr: `::foo = ::bar`, err: "syntax error"},
+		{expr: `::foo = :bar`, err: "syntax error"},
+		{expr: `:foo = :bar`},
+		{expr: `:foo IN :bar`, err: "syntax error"},
+		{expr: `:foo IN ::bar`},
+		{expr: `(1, 2) IN ::bar`, err: "Operand should contain 1 column"},
+		{expr: `1 IN ::bar`},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.expr, func(t *testing.T) {
+			err := func() error {
+				stmt, err := sqlparser.Parse("select " + testcase.expr)
+				if err != nil {
+					return err
+				}
+
+				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+				_, err = Translate(astExpr, LookupDefaultCollation(45))
+				return err
+			}()
+
+			if testcase.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, testcase.err)
+			}
+		})
+	}
 }

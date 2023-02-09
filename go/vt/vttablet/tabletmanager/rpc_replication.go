@@ -392,7 +392,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
 		return err
 	}
 
@@ -673,7 +673,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		return err
 	}
 	host := parent.Tablet.MysqlHostname
-	port := int(parent.Tablet.MysqlPort)
+	port := parent.Tablet.MysqlPort
 	// We want to reset the replication parameters and set replication source again when forceStartReplication is provided
 	// because sometimes MySQL gets stuck due to improper initialization of master info structure or related failures and throws errors like
 	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log

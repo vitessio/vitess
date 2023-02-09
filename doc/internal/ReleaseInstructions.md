@@ -260,6 +260,8 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
 
 3. Follow the instruction prompted by the `create_release` Makefile command's output in order to push the newly created branch and create the Release Pull Request on GitHub.
 
+4. If we are doing an RC release it means we created a new branch from `main`. We need to update `main` with the next SNAPSHOT version. If `main` was on `15.0.0-SNAPSHOT`, we need to update it to `16.0.0-SNAPSHOT`. A simple find and replace in the IDE is sufficient, there only a handful of files that must be changed: `version.go` and several java files.
+
 ### How To Release Vitess
 This section is divided into two parts:
 - [Creation of the tags and release notes](#creation-of-the-tags-and-release-notes).
@@ -345,6 +347,9 @@ In this example we are going to do a code freeze on the `release-15.0` branch. I
 git fetch --all
 git checkout -b release-15.0 origin/main
 ```
+
+> Important: after creating the new branch `release-15.0`, we need to create new branch protection rules on the GitHub UI.
+> The rules can be copied from the rules that are on the `main` branch.
 
 The new branch will be based on `origin/main`, here `origin` points to `vitessio/vitess`. If we are not doing a release candidate, then the branch already exists and we can checkout on it.
 
