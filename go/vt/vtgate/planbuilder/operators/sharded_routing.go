@@ -520,10 +520,10 @@ func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContex
 		tr.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
 	}
 
-	var routing Routing
+	var routing Routing = tr
 	for _, predicate := range tr.SeenPredicates {
 		var err error
-		routing, err = tr.UpdateRoutingLogic(ctx, predicate)
+		routing, err = routing.UpdateRoutingLogic(ctx, predicate)
 		if err != nil {
 			return err
 		}

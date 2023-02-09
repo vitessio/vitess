@@ -76,24 +76,24 @@ func (rt routingType) String() string {
 // Merge checks whether two operators can be merged into a single one.
 // If they can be merged, the new Routing for the merged operator is returned.
 // If they cannot be merged, nil is returned.
-func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
-	routeA, routeB := operatorsToRoutes(opA, opB)
-	if routeA == nil || routeB == nil {
+func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
+	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
+	if lhsRoute == nil || rhsRoute == nil {
 		return nil, nil
 	}
 
 	//
 	// if !sameKeyspace {
-	// 	if altARoute := routeA.AlternateInKeyspace(routeB.Keyspace); altARoute != nil {
+	// 	if altARoute := routeA.AlternateInKeyspace(rhsRoute.Keyspace); altARoute != nil {
 	// 		routeA = altARoute
 	// 		sameKeyspace = true
-	// 	} else if altBRoute := routeB.AlternateInKeyspace(routeA.Keyspace); altBRoute != nil {
-	// 		routeB = altBRoute
+	// 	} else if altBRoute := rhsRoute.AlternateInKeyspace(routeA.Keyspace); altBRoute != nil {
+	// 		rhsRoute = altBRoute
 	// 		sameKeyspace = true
 	// 	}
 	// }
-	routingA := routeA.Routing
-	routingB := routeB.Routing
+	routingA := lhsRoute.Routing
+	routingB := rhsRoute.Routing
 	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
 	if getTypeName(routingA) < getTypeName(routingB) {
@@ -106,15 +106,15 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 
 	// if either side is a dual query, we can always merge them together
 	case a == dual:
-		return m.merge(routeA, routeB, routingB)
+		return m.merge(lhsRoute, rhsRoute, routingB)
 	case b == dual:
-		return m.merge(routeA, routeB, routingA)
+		return m.merge(lhsRoute, rhsRoute, routingA)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case (a == unsharded || a == ref) && sameKeyspace:
-		return m.merge(routeA, routeB, routingB)
+		return m.merge(lhsRoute, rhsRoute, routingB)
 	case (b == unsharded || b == ref) && sameKeyspace:
-		return m.merge(routeA, routeB, routingA)
+		return m.merge(lhsRoute, rhsRoute, routingA)
 
 	case (a == unsharded || a == ref || b == unsharded || b == ref) && !sameKeyspace:
 		return nil, nil
@@ -123,11 +123,11 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 		return nil, nil
 
 	case a == sharded && b == sharded:
-		return mergeTables(ctx, routeA, routeB, m, joinPredicates)
+		return mergeTables(ctx, lhsRoute, rhsRoute, m, joinPredicates)
 
 	// table and reference routing can be merged if they are going to the same keyspace
 	case a == sharded && b == ref && sameKeyspace:
-		return m.merge(routeA, routeB, routingA)
+		return m.merge(lhsRoute, rhsRoute, routingA)
 
 	// info schema routings are hard to merge with anything else
 	case a == infoSchema || b == infoSchema:
@@ -215,9 +215,10 @@ func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr,
 
 func (jm *joinMerger) mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (ops.Operator, error) {
 	tr := &ShardedRouting{
-		VindexPreds: append(r1.VindexPreds, r2.VindexPreds...),
-		keyspace:    r1.keyspace,
-		RouteOpCode: r1.RouteOpCode,
+		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
+		keyspace:       r1.keyspace,
+		RouteOpCode:    r1.RouteOpCode,
+		SeenPredicates: r1.SeenPredicates,
 	}
 	if r1.SelectedVindex() == r2.SelectedVindex() {
 		tr.Selected = r1.Selected
