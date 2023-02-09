@@ -92,27 +92,29 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 	// 		sameKeyspace = true
 	// 	}
 	// }
-	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
-	a, b := getRoutingType(routeA.Routing), getRoutingType(routeB.Routing)
-	if getTypeName(routeA.Routing) < getTypeName(routeB.Routing) {
+	routingA := routeA.Routing
+	routingB := routeB.Routing
+	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
+	a, b := getRoutingType(routingA), getRoutingType(routingB)
+	if getTypeName(routingA) < getTypeName(routingB) {
 		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
 		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
 		a, b = b, a
-		routeA, routeB = routeB, routeA
+		routingA, routingB = routingB, routingA
 	}
 	switch {
 
 	// if either side is a dual query, we can always merge them together
 	case a == dual:
-		return m.merge(routeA, routeB, routeB.Routing)
+		return m.merge(routeA, routeB, routingB)
 	case b == dual:
-		return m.merge(routeA, routeB, routeA.Routing)
+		return m.merge(routeA, routeB, routingA)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
 	case (a == unsharded || a == ref) && sameKeyspace:
-		return m.merge(routeA, routeB, routeB.Routing)
+		return m.merge(routeA, routeB, routingB)
 	case (b == unsharded || b == ref) && sameKeyspace:
-		return m.merge(routeA, routeB, routeA.Routing)
+		return m.merge(routeA, routeB, routingA)
 
 	case (a == unsharded || a == ref || b == unsharded || b == ref) && !sameKeyspace:
 		return nil, nil
@@ -125,7 +127,7 @@ func Merge(ctx *plancontext.PlanningContext, opA, opB ops.Operator, joinPredicat
 
 	// table and reference routing can be merged if they are going to the same keyspace
 	case a == sharded && b == ref && sameKeyspace:
-		return m.merge(routeA, routeB, routeA.Routing)
+		return m.merge(routeA, routeB, routingA)
 
 	// info schema routings are hard to merge with anything else
 	case a == infoSchema || b == infoSchema:
@@ -283,7 +285,7 @@ func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Rou
 	return op1, nil
 }
 
-func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
+func (s *subQueryMerger) merge(outer, _ *Route, r Routing) (ops.Operator, error) {
 	s.subq.ExtractedSubquery.NeedsRewrite = true
 	outer.Routing = r
 	return outer, nil
