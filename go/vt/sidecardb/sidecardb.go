@@ -194,26 +194,11 @@ func Init(ctx context.Context, exec Exec) error {
 		return err
 	}
 
-	// We need to allow zero date and zero in date, for existing tables which may happen to
-	// actually have zero (in) date values.
-	// get current sql_mode, change it to a more relaxed value, defer restoring it to original value
-	rs, err := si.exec(si.ctx, `select @@session.sql_mode as sql_mode`, 1, false)
+	resetSQLMode, err := si.setSQLMode()
 	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+		return err
 	}
-	sqlMode, err := rs.Named().Row().ToString("sql_mode")
-	if err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
-	}
-	defer func() {
-		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
-		_, _ = si.exec(si.ctx, restoreSQLModeQuery, 0, false)
-	}()
-	// Change sql_mode to most permissive
-	if _, err := si.exec(si.ctx, "set @@session.sql_mode=''", 0, false); err != nil {
-		return vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not change sql_mode: %v", err)
-	}
-	// end of sql_mode handling
+	defer resetSQLMode()
 
 	for _, table := range sidecarTables {
 		if err := si.ensureSchema(table); err != nil {
@@ -221,6 +206,30 @@ func Init(ctx context.Context, exec Exec) error {
 		}
 	}
 	return nil
+}
+
+// We need to allow zero dates for existing sidecar database tables which may happen to
+// actually have zero (in) date values. setSQLMode gets the current sql_mode, change it to a more relaxed value,
+// defer restoring it to the original value.
+func (si *schemaInit) setSQLMode() (func(), error) {
+	rs, err := si.exec(si.ctx, `select @@session.sql_mode as sql_mode`, 1, false)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	sqlMode, err := rs.Named().Row().ToString("sql_mode")
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+
+	resetSQLModeFunc := func() {
+		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
+		_, _ = si.exec(si.ctx, restoreSQLModeQuery, 0, false)
+	}
+
+	if _, err := si.exec(si.ctx, "set @@session.sql_mode=''", 0, false); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not change sql_mode: %v", err)
+	}
+	return resetSQLModeFunc, nil
 }
 
 func (si *schemaInit) doesSidecarDBExist() (bool, error) {
@@ -395,6 +404,14 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 		}
 		db.AddQuery(fmt.Sprintf(ShowCreateTableQuery, table.name), result)
 	}
+
+	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"sql_mode",
+		"varchar"),
+		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+	)
+	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
+	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 }
 
 // MatchesInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp.
