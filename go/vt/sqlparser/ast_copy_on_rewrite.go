@@ -348,6 +348,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewritePartitions(n, parent)
 	case *PerformanceSchemaFuncExpr:
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
+	case *PointExpr:
+		return c.copyOnRewriteRefOfPointExpr(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
 	case ReferenceAction:
@@ -4173,6 +4175,30 @@ func (c *cow) copyOnRewriteRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFu
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfPointExpr(n *PointExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_XCordinate, changedXCordinate := c.copyOnRewriteExpr(n.XCordinate, n)
+		_YCordinate, changedYCordinate := c.copyOnRewriteExpr(n.YCordinate, n)
+		if changedXCordinate || changedYCordinate {
+			res := *n
+			res.XCordinate, _ = _XCordinate.(Expr)
+			res.YCordinate, _ = _YCordinate.(Expr)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6241,6 +6267,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfNtileExpr(n, parent)
 	case *PerformanceSchemaFuncExpr:
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
+	case *PointExpr:
+		return c.copyOnRewriteRefOfPointExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:
@@ -6503,6 +6531,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfOrExpr(n, parent)
 	case *PerformanceSchemaFuncExpr:
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
+	case *PointExpr:
+		return c.copyOnRewriteRefOfPointExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:

@@ -89,7 +89,7 @@ func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
 	}
 
 	if len(c.GRPCDialOptions) != 0 {
-		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.DialWithOpts(context.TODO(), c.GRPCDialOptions...))
+		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.Dial(c.GRPCDialOptions...))
 	}
 
 	return sql.Open(c.DriverName, json)
