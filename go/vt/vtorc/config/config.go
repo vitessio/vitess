@@ -67,6 +67,7 @@ var (
 	waitReplicasTimeout            = 30 * time.Second
 	topoInformationRefreshDuration = 15 * time.Second
 	recoveryPollDuration           = 1 * time.Second
+	DisableGlobalRecoveries        = false
 )
 
 // RegisterFlags registers the flags required by VTOrc
@@ -86,6 +87,7 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
+	fs.BoolVar(&DisableGlobalRecoveries, "disable-global-recoveries", DisableGlobalRecoveries, "Disable global recoveries when VTOrc starts up")
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.

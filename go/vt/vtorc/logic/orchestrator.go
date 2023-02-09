@@ -366,6 +366,16 @@ func ContinuousDiscovery() {
 	servenv.OnTermSync(closeVTOrc)
 
 	log.Infof("continuous discovery: starting")
+	// Disable global recoveries according to the flags
+	// We are guaranteed that the VTOrc database has already been initialized,
+	// so this is the correct place to disable recoveries.
+	if config.DisableGlobalRecoveries {
+		log.Infof("Disabling global recoveries. VTOrc won't run any fixes until global recoveries are enabled")
+		err := DisableRecovery()
+		if err != nil {
+			log.Errorf("Unable to disable recoveries - %v", err)
+		}
+	}
 	for {
 		select {
 		case <-healthTick:
