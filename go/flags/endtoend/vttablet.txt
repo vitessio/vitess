@@ -26,6 +26,8 @@ Usage of vttablet:
       --binlog_ssl_key string                                            PITR restore parameter: Filename containing mTLS client private key for use in binlog server authentication.
       --binlog_ssl_server_name string                                    PITR restore parameter: TLS server name (common name) to verify against for the binlog server we are connecting to (If not set: use the hostname or IP supplied in --binlog_host).
       --binlog_user string                                               PITR restore parameter: username of binlog server.
+      --builtinbackup-file-read-buffer-size uint                         read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
+      --builtinbackup-file-write-buffer-size uint                        write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
       --builtinbackup_mysqld_timeout duration                            how long to wait for mysqld to shutdown at the start of the backup. (default 10m0s)
       --builtinbackup_progress duration                                  how often to send progress updates when backing up large files. (default 5s)
       --catch-sigpipe                                                    catch and ignore SIGPIPE on stdout and stderr if specified
