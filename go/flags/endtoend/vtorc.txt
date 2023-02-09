@@ -8,6 +8,7 @@ Usage of vtorc:
       --clusters_to_watch strings                    Comma-separated list of keyspaces or keyspace/shards that this instance will monitor and repair. Defaults to all clusters in the topology. Example: "ks1,ks2/-80"
       --config string                                config file name
       --consul_auth_static_file string               JSON File to read the topos/tokens from.
+      --disable-global-recoveries                    Disable global recoveries when VTOrc starts up
       --emit_stats                                   If set, emit stats to push-based monitoring and stats backends
       --grpc_auth_static_client_creds string         When using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server.
       --grpc_compression string                      Which protocol to use for compressing gRPC. Default: nothing. Supported: snappy
