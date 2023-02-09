@@ -259,6 +259,12 @@ func (vc *vcursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Tabl
 
 // FindTableOrVindex finds the specified table or vindex.
 func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	if name.Qualifier.IsEmpty() && name.Name.String() == "dual" {
+		// The magical MySQL dual table should only be resolved
+		// when it is not qualified by a database name.
+		return vc.getDualTable()
+	}
+
 	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
@@ -271,6 +277,23 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 		return nil, nil, "", destTabletType, nil, err
 	}
 	return table, vindex, destKeyspace, destTabletType, dest, nil
+}
+
+func (vc *vcursorImpl) getDualTable() (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	ksName := vc.getActualKeyspace()
+	var ks *vindexes.Keyspace
+	if ksName == "" {
+		ks = vc.vschema.FirstKeyspace()
+		ksName = ks.Name
+	} else {
+		ks = vc.vschema.Keyspaces[ksName].Keyspace
+	}
+	tbl := &vindexes.Table{
+		Name:     sqlparser.NewIdentifierCS("dual"),
+		Keyspace: ks,
+		Type:     vindexes.TypeReference,
+	}
+	return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
 }
 
 func (vc *vcursorImpl) getActualKeyspace() string {
