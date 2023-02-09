@@ -6610,7 +6610,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as textcol1",
-                      "[COLUMN 1] * [COLUMN 2] as sum(a.id)"
+                      "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as sum(a.id)"
                     ],
                     "Inputs": [
                       {
