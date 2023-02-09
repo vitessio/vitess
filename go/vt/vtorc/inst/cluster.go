@@ -16,6 +16,8 @@
 
 package inst
 
+import "vitess.io/vitess/go/vt/vtorc/config"
+
 // ClusterInfo makes for a cluster status/info summary
 type ClusterInfo struct {
 	Keyspace                                string
@@ -28,6 +30,6 @@ type ClusterInfo struct {
 
 // ReadRecoveryInfo
 func (clusterInfo *ClusterInfo) ReadRecoveryInfo() {
-	clusterInfo.HasAutomatedPrimaryRecovery = true
-	clusterInfo.HasAutomatedIntermediatePrimaryRecovery = true
+	clusterInfo.HasAutomatedPrimaryRecovery = !config.Config.DisableAutomatedMasterRecovery
+	clusterInfo.HasAutomatedIntermediatePrimaryRecovery = !config.Config.DisableAutomatedIntermediateMasterRecovery
 }

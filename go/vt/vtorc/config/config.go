@@ -54,19 +54,21 @@ const (
 )
 
 var (
-	sqliteDataFile                 = "file::memory:?mode=memory&cache=shared"
-	instancePollTime               = 5 * time.Second
-	snapshotTopologyInterval       = 0 * time.Hour
-	reasonableReplicationLag       = 10 * time.Second
-	auditFileLocation              = ""
-	auditToBackend                 = false
-	auditToSyslog                  = false
-	auditPurgeDuration             = 7 * 24 * time.Hour // Equivalent of 7 days
-	recoveryPeriodBlockDuration    = 30 * time.Second
-	preventCrossCellFailover       = false
-	waitReplicasTimeout            = 30 * time.Second
-	topoInformationRefreshDuration = 15 * time.Second
-	recoveryPollDuration           = 1 * time.Second
+	sqliteDataFile                             = "file::memory:?mode=memory&cache=shared"
+	instancePollTime                           = 5 * time.Second
+	snapshotTopologyInterval                   = 0 * time.Hour
+	reasonableReplicationLag                   = 10 * time.Second
+	auditFileLocation                          = ""
+	auditToBackend                             = false
+	auditToSyslog                              = false
+	auditPurgeDuration                         = 7 * 24 * time.Hour // Equivalent of 7 days
+	recoveryPeriodBlockDuration                = 30 * time.Second
+	preventCrossCellFailover                   = false
+	waitReplicasTimeout                        = 30 * time.Second
+	topoInformationRefreshDuration             = 15 * time.Second
+	recoveryPollDuration                       = 1 * time.Second
+	disableAutomatedMasterRecovery             = false
+	disableAutomatedIntermediateMasterRecovery = false
 )
 
 // RegisterFlags registers the flags required by VTOrc
@@ -86,6 +88,8 @@ func RegisterFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&waitReplicasTimeout, "wait-replicas-timeout", waitReplicasTimeout, "Duration for which to wait for replica's to respond when issuing RPCs")
 	fs.DurationVar(&topoInformationRefreshDuration, "topo-information-refresh-duration", topoInformationRefreshDuration, "Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topology server")
 	fs.DurationVar(&recoveryPollDuration, "recovery-poll-duration", recoveryPollDuration, "Timer duration on which VTOrc polls its database to run a recovery")
+	fs.BoolVar(&disableAutomatedMasterRecovery, "disable-automated-master-recovery", disableAutomatedMasterRecovery, "This option will disable automatic master recovery, default false, WARNING: setting this might cause downtime on master failure")
+	fs.BoolVar(&disableAutomatedIntermediateMasterRecovery, "disable-automated-intermediate-master-recovery", disableAutomatedIntermediateMasterRecovery, "This option will disable automatic intermediate-master recovery, default false, WARNING: setting this might cause replica's to fall behind on an intermediate-master failure")
 }
 
 // Configuration makes for vtorc configuration input, which can be provided by user via JSON formatted file.
@@ -93,19 +97,21 @@ func RegisterFlags(fs *pflag.FlagSet) {
 // strictly expected from user.
 // TODO(sougou): change this to yaml parsing, and possible merge with tabletenv.
 type Configuration struct {
-	SQLite3DataFile                       string // full path to sqlite3 datafile
-	InstancePollSeconds                   uint   // Number of seconds between instance reads
-	SnapshotTopologiesIntervalHours       uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
-	ReasonableReplicationLagSeconds       int    // Above this value is considered a problem
-	AuditLogFile                          string // Name of log file for audit operations. Disabled when empty.
-	AuditToSyslog                         bool   // If true, audit messages are written to syslog
-	AuditToBackendDB                      bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
-	AuditPurgeDays                        uint   // Days after which audit entries are purged from the database
-	RecoveryPeriodBlockSeconds            int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
-	PreventCrossDataCenterPrimaryFailover bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
-	WaitReplicasTimeoutSeconds            int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
-	TopoInformationRefreshSeconds         int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
-	RecoveryPollSeconds                   int    // Timer duration on which VTOrc recovery analysis runs
+	SQLite3DataFile                            string // full path to sqlite3 datafile
+	InstancePollSeconds                        uint   // Number of seconds between instance reads
+	SnapshotTopologiesIntervalHours            uint   // Interval in hour between snapshot-topologies invocation. Default: 0 (disabled)
+	ReasonableReplicationLagSeconds            int    // Above this value is considered a problem
+	AuditLogFile                               string // Name of log file for audit operations. Disabled when empty.
+	AuditToSyslog                              bool   // If true, audit messages are written to syslog
+	AuditToBackendDB                           bool   // If true, audit messages are written to the backend DB's `audit` table (default: true)
+	AuditPurgeDays                             uint   // Days after which audit entries are purged from the database
+	RecoveryPeriodBlockSeconds                 int    // (overrides `RecoveryPeriodBlockMinutes`) The time for which an instance's recovery is kept "active", so as to avoid concurrent recoveries on smae instance as well as flapping
+	PreventCrossDataCenterPrimaryFailover      bool   // When true (default: false), cross-DC primary failover are not allowed, vtorc will do all it can to only fail over within same DC, or else not fail over at all.
+	WaitReplicasTimeoutSeconds                 int    // Timeout on amount of time to wait for the replicas in case of ERS. Should be a small value because we should fail-fast. Should not be larger than LockTimeout since that is the total time we use for an ERS.
+	TopoInformationRefreshSeconds              int    // Timer duration on which VTOrc refreshes the keyspace and vttablet records from the topo-server.
+	RecoveryPollSeconds                        int    // Timer duration on which VTOrc recovery analysis runs
+	DisableAutomatedMasterRecovery             bool   // If true, the Automated Master recovery will be turned off (default: false)
+	DisableAutomatedIntermediateMasterRecovery bool   // If true, the Automated Master recovery will be turned off (default: false)
 }
 
 // ToJSONString will marshal this configuration as JSON
@@ -135,6 +141,8 @@ func UpdateConfigValuesFromFlags() {
 	Config.WaitReplicasTimeoutSeconds = int(waitReplicasTimeout / time.Second)
 	Config.TopoInformationRefreshSeconds = int(topoInformationRefreshDuration / time.Second)
 	Config.RecoveryPollSeconds = int(recoveryPollDuration / time.Second)
+	Config.DisableAutomatedMasterRecovery = disableAutomatedMasterRecovery
+	Config.DisableAutomatedIntermediateMasterRecovery = disableAutomatedIntermediateMasterRecovery
 }
 
 // LogConfigValues is used to log the config values.
@@ -145,19 +153,21 @@ func LogConfigValues() {
 
 func newConfiguration() *Configuration {
 	return &Configuration{
-		SQLite3DataFile:                       "file::memory:?mode=memory&cache=shared",
-		InstancePollSeconds:                   5,
-		SnapshotTopologiesIntervalHours:       0,
-		ReasonableReplicationLagSeconds:       10,
-		AuditLogFile:                          "",
-		AuditToSyslog:                         false,
-		AuditToBackendDB:                      false,
-		AuditPurgeDays:                        7,
-		RecoveryPeriodBlockSeconds:            30,
-		PreventCrossDataCenterPrimaryFailover: false,
-		WaitReplicasTimeoutSeconds:            30,
-		TopoInformationRefreshSeconds:         15,
-		RecoveryPollSeconds:                   1,
+		SQLite3DataFile:                            "file::memory:?mode=memory&cache=shared",
+		InstancePollSeconds:                        5,
+		SnapshotTopologiesIntervalHours:            0,
+		ReasonableReplicationLagSeconds:            10,
+		AuditLogFile:                               "",
+		AuditToSyslog:                              false,
+		AuditToBackendDB:                           false,
+		AuditPurgeDays:                             7,
+		RecoveryPeriodBlockSeconds:                 30,
+		PreventCrossDataCenterPrimaryFailover:      false,
+		WaitReplicasTimeoutSeconds:                 30,
+		TopoInformationRefreshSeconds:              15,
+		RecoveryPollSeconds:                        1,
+		DisableAutomatedMasterRecovery:             false,
+		DisableAutomatedIntermediateMasterRecovery: false,
 	}
 }
 
