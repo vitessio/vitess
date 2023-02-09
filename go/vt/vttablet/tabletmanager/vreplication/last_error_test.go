@@ -24,32 +24,63 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLastError(t *testing.T) {
-	le := newLastError("test", 100*time.Millisecond)
+const shortWait = 1 * time.Millisecond
+const longWait = 150 * time.Millisecond
+const maxTimeInError = 100 * time.Millisecond
 
-	t.Run("long running error", func(t *testing.T) {
-		err1 := fmt.Errorf("test1")
+// TestLastErrorZeroMaxTime tests maxTimeInError = 0, should always retry
+func TestLastErrorZeroMaxTime(t *testing.T) {
+	le := newLastError("test", 0)
+	err1 := fmt.Errorf("error1")
+	le.record(err1)
+	require.True(t, le.shouldRetry())
+	time.Sleep(shortWait)
+	require.True(t, le.shouldRetry())
+	time.Sleep(longWait)
+	require.True(t, le.shouldRetry())
+}
+
+// TestLastErrorNoError ensures that an uninitialized lastError always retries
+func TestLastErrorNoError(t *testing.T) {
+	le := newLastError("test", maxTimeInError)
+	require.True(t, le.shouldRetry())
+	err1 := fmt.Errorf("error1")
+	le.record(err1)
+	require.True(t, le.shouldRetry())
+	le.record(nil)
+	require.True(t, le.shouldRetry())
+}
+
+// TestLastErrorOneError validates that we retry an error if happening within the maxTimeInError, but not after
+func TestLastErrorOneError(t *testing.T) {
+	le := newLastError("test", maxTimeInError)
+	err1 := fmt.Errorf("error1")
+	le.record(err1)
+	require.True(t, le.shouldRetry())
+	time.Sleep(shortWait)
+	require.True(t, le.shouldRetry())
+	time.Sleep(shortWait)
+	require.True(t, le.shouldRetry())
+	time.Sleep(longWait)
+	require.False(t, le.shouldRetry())
+}
+
+// TestLastErrorRepeatedError confirms that if same error is repeated we don't retry
+// unless it happens after maxTimeInError
+func TestLastErrorRepeatedError(t *testing.T) {
+	le := newLastError("test", maxTimeInError)
+	err1 := fmt.Errorf("error1")
+	le.record(err1)
+	require.True(t, le.shouldRetry())
+	for i := 1; i < 10; i++ {
 		le.record(err1)
-		require.True(t, le.shouldRetry())
-		time.Sleep(150 * time.Millisecond)
-		require.False(t, le.shouldRetry())
-	})
+		time.Sleep(shortWait)
+	}
+	require.True(t, le.shouldRetry())
 
-	t.Run("new long running error", func(t *testing.T) {
-		err2 := fmt.Errorf("test2")
-		le.record(err2)
-		require.True(t, le.shouldRetry())
-		for i := 1; i < 10; i++ {
-			le.record(err2)
-		}
-		require.True(t, le.shouldRetry())
-		time.Sleep(150 * time.Millisecond)
-		le.record(err2)
-		require.False(t, le.shouldRetry())
-	})
-
-	t.Run("no error", func(t *testing.T) {
-		le.record(nil)
-		require.True(t, le.shouldRetry())
-	})
+	// same error happens after maxTimeInError, so it should retry
+	time.Sleep(longWait)
+	require.False(t, le.shouldRetry())
+	le.record(err1)
+	require.True(t, le.shouldRetry())
 }
