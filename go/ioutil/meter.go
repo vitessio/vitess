@@ -40,7 +40,7 @@ func (mtr *meter) Duration() time.Duration {
 	return mtr.duration
 }
 
-// measure tracks the measure it takes to execute f. Time is accumulated into total,
+// measure tracks the time spent and bytes processed by f. Time is accumulated into total,
 // and reported to callback fns.
 func (mtr *meter) measure(f func(p []byte) (int, error), p []byte) (b int, err error) {
 	s := time.Now()
