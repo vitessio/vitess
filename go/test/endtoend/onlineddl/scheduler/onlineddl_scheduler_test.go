@@ -803,6 +803,43 @@ func testScheduler(t *testing.T) {
 			}
 		})
 	})
+
+	t.Run("Idempotent submission, retry failed migration in singleton context", func(t *testing.T) {
+		uuid := "00000000_1111_3333_3333_444444444444"
+		ddlStrategy := ddlStrategy + " --singleton-context"
+		overrideVtctlParams = &cluster.VtctlClientParams{DDLStrategy: ddlStrategy, SkipPreflight: true, UUIDList: uuid, MigrationContext: "idempotent:1111-3333-3333"}
+		defer func() { overrideVtctlParams = nil }()
+		// create a migration and cancel it. We don't let it complete. We want it in "failed" state
+		t.Run("start and fail migration", func(t *testing.T) {
+			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy+" --postpone-completion", "vtctl", "", "", true)) // skip wait
+			require.Equal(t, uuid, executedUUID)
+			onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusRunning)
+			// let's cancel it
+			onlineddl.CheckCancelMigration(t, &vtParams, shards, uuid, true)
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusFailed, schema.OnlineDDLStatusCancelled)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusCancelled)
+		})
+
+		// now, we submit the exact same migratoin again: same UUID, same migration context.
+		t.Run("resubmit migration", func(t *testing.T) {
+			executedUUID := testOnlineDDLStatement(t, createParams(trivialAlterT1Statement, ddlStrategy, "vtctl", "", "", true)) // skip wait
+			require.Equal(t, uuid, executedUUID)
+
+			// expect it to complete
+			status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalWaitTime, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
+			onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+
+			rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+			require.NotNil(t, rs)
+			for _, row := range rs.Named().Rows {
+				retries := row.AsInt64("retries", 0)
+				assert.Greater(t, retries, int64(0))
+			}
+		})
+	})
+
 	// INSTANT DDL
 	instantDDLCapable, err := capableOf(mysql.InstantAddLastColumnFlavorCapability)
 	require.NoError(t, err)

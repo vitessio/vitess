@@ -24,9 +24,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -279,7 +279,7 @@ func TestEmergencyReparentShardPrimaryElectNotBest(t *testing.T) {
 	defer moreAdvancedReplica.StopActionLoop(t)
 
 	// run EmergencyReparentShard
-	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, newPrimary.Tablet.Alias, 10*time.Second, sets.NewString(), false)
+	err := wr.EmergencyReparentShard(ctx, newPrimary.Tablet.Keyspace, newPrimary.Tablet.Shard, newPrimary.Tablet.Alias, 10*time.Second, sets.New[string](), false)
 	cancel()
 
 	assert.NoError(t, err)

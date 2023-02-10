@@ -192,6 +192,10 @@ func (lh *LookupUnicodeLooseMD5Hash) AllowBatch() bool {
 	return lh.lkp.BatchLookup
 }
 
+func (lh *LookupUnicodeLooseMD5Hash) AutoCommitEnabled() bool {
+	return lh.lkp.Autocommit
+}
+
 // GetCommitOrder implements the LookupPlanable interface
 func (lh *LookupUnicodeLooseMD5Hash) GetCommitOrder() vtgatepb.CommitOrder {
 	return vtgatepb.CommitOrder_NORMAL
@@ -400,6 +404,10 @@ func (lhu *LookupUnicodeLooseMD5HashUnique) Query() (selQuery string, arguments 
 // AllowBatch implements the LookupPlanable interface
 func (lhu *LookupUnicodeLooseMD5HashUnique) AllowBatch() bool {
 	return lhu.lkp.BatchLookup
+}
+
+func (lhu *LookupUnicodeLooseMD5HashUnique) AutoCommitEnabled() bool {
+	return lhu.lkp.Autocommit
 }
 
 // GetCommitOrder implements the LookupPlanable interface

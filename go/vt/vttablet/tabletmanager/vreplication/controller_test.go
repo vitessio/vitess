@@ -170,7 +170,7 @@ func TestControllerBadID(t *testing.T) {
 		"id": "bad",
 	}
 	_, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil)
-	want := `strconv.Atoi: parsing "bad": invalid syntax`
+	want := `strconv.ParseInt: parsing "bad": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("newController err: %v, want %v", err, want)
 	}

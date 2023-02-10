@@ -228,14 +228,14 @@ func TestExecutorSet(t *testing.T) {
 		in: "set transaction isolation level serializable",
 		out: &vtgatepb.Session{
 			Autocommit: true,
-			Warnings:   []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}},
+			Warnings:   []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}},
 		},
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
@@ -508,10 +508,10 @@ func TestSetVar(t *testing.T) {
 	executor, _, _, sbc := createExecutorEnv()
 	executor.normalize = true
 
-	oldVersion := sqlparser.MySQLVersion
-	sqlparser.MySQLVersion = "80000"
+	oldVersion := sqlparser.GetParserVersion()
+	sqlparser.SetParserVersion("80000")
 	defer func() {
-		sqlparser.MySQLVersion = oldVersion
+		sqlparser.SetParserVersion(oldVersion)
 	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 
@@ -552,10 +552,10 @@ func TestSetVarShowVariables(t *testing.T) {
 	executor, _, _, sbc := createExecutorEnv()
 	executor.normalize = true
 
-	oldVersion := sqlparser.MySQLVersion
-	sqlparser.MySQLVersion = "80000"
+	oldVersion := sqlparser.GetParserVersion()
+	sqlparser.SetParserVersion("80000")
 	defer func() {
-		sqlparser.MySQLVersion = oldVersion
+		sqlparser.SetParserVersion(oldVersion)
 	}()
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded})
 

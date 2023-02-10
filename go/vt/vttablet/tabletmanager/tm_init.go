@@ -44,11 +44,11 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
@@ -153,9 +153,6 @@ type TabletManager struct {
 
 	// tmState manages the TabletManager state.
 	tmState *tmState
-
-	// replManager manages replication.
-	replManager *replManager
 
 	// tabletAlias is saved away from tablet for read-only access
 	tabletAlias *topodatapb.TabletAlias
@@ -297,7 +294,7 @@ func getBuildTags(buildTags map[string]string, skipTagsCSV string) (map[string]s
 		}
 	}
 
-	skippedTags := sets.NewString()
+	skippedTags := sets.New[string]()
 	for tag := range buildTags {
 		for _, skipFn := range skippers {
 			if skipFn(tag) {
@@ -344,7 +341,6 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	}()
 	log.Infof("TabletManager Start")
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
-	tm.replManager = newReplManager(tm.BatchCtx, tm, healthCheckInterval)
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
 	tm.actionSema = sync2.NewSemaphore(1, 0)
@@ -886,7 +882,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return nil, nil
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, int(currentPrimary.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
 		return nil, vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 

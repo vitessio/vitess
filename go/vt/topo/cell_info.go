@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -194,7 +194,7 @@ func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, erro
 	var (
 		err         error
 		inputCells  []string
-		outputCells = sets.NewString() // Use a set to dedupe if the input cells list includes an alias and a cell in that alias.
+		outputCells = sets.New[string]() // Use a set to dedupe if the input cells list includes an alias and a cell in that alias.
 	)
 
 	if cells == "" {
@@ -238,5 +238,5 @@ func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, erro
 		}
 	}
 
-	return outputCells.List(), nil
+	return sets.List(outputCells), nil
 }

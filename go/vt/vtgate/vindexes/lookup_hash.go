@@ -171,6 +171,10 @@ func (lh *LookupHash) AllowBatch() bool {
 	return lh.lkp.BatchLookup
 }
 
+func (lh *LookupHash) AutoCommitEnabled() bool {
+	return lh.lkp.Autocommit
+}
+
 // GetCommitOrder implements the LookupPlanable interface
 func (lh *LookupHash) GetCommitOrder() vtgatepb.CommitOrder {
 	return vtgatepb.CommitOrder_NORMAL
@@ -401,6 +405,10 @@ func (lhu *LookupHashUnique) IsBackfilling() bool {
 
 func (lhu *LookupHashUnique) AllowBatch() bool {
 	return lhu.lkp.BatchLookup
+}
+
+func (lhu *LookupHashUnique) AutoCommitEnabled() bool {
+	return lhu.lkp.Autocommit
 }
 
 func (lhu *LookupHashUnique) Query() (selQuery string, arguments []string) {

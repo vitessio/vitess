@@ -1,5 +1,5 @@
 /*
-Copyright 2020 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -18,68 +18,48 @@ package evalengine
 
 import (
 	"fmt"
-	"math"
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/sqltypes"
 )
 
 func TestEvalResultToBooleanStrict(t *testing.T) {
-	trueValues := []*EvalResult{{
-		type_:    int16(sqltypes.Int64),
-		numeric_: 1,
-	}, {
-		type_:    int16(sqltypes.Uint64),
-		numeric_: 1,
-	}, {
-		type_:    int16(sqltypes.Int8),
-		numeric_: 1,
-	}}
+	trueValues := []eval{
+		newEvalInt64(1),
+		newEvalUint64(1),
+	}
 
-	falseValues := []*EvalResult{{
-		type_:    int16(sqltypes.Int64),
-		numeric_: 0,
-	}, {
-		type_:    int16(sqltypes.Uint64),
-		numeric_: 0,
-	}, {
-		type_:    int16(sqltypes.Int8),
-		numeric_: 0,
-	}}
+	falseValues := []eval{
+		newEvalInt64(0),
+		newEvalUint64(0),
+	}
 
-	invalid := []*EvalResult{{
-		type_:  int16(sqltypes.VarChar),
-		bytes_: []byte("foobar"),
-	}, {
-		type_:    int16(sqltypes.Float32),
-		numeric_: math.Float64bits(1.0),
-	}, {
-		type_:    int16(sqltypes.Int64),
-		numeric_: 12,
-	}}
+	invalid := []eval{
+		newEvalText([]byte("foobar"), collationBinary),
+		newEvalFloat(1.0),
+		newEvalInt64(12),
+	}
 
 	for _, res := range trueValues {
-		name := res.debugString()
+		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected true (success)", name), func(t *testing.T) {
-			result, err := res.ToBooleanStrict()
+			result, err := (&EvalResult{res}).ToBooleanStrict()
 			require.NoError(t, err, name)
 			require.Equal(t, true, result, name)
 		})
 	}
 	for _, res := range falseValues {
-		name := res.debugString()
+		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s expected false (success)", name), func(t *testing.T) {
-			result, err := res.ToBooleanStrict()
+			result, err := (&EvalResult{res}).ToBooleanStrict()
 			require.NoError(t, err, name)
 			require.Equal(t, false, result, name)
 		})
 	}
 	for _, res := range invalid {
-		name := res.debugString()
+		name := evalToSQLValue(res).String()
 		t.Run(fmt.Sprintf("ToBooleanStrict() %s  expected fail", name), func(t *testing.T) {
-			_, err := res.ToBooleanStrict()
+			_, err := (&EvalResult{res}).ToBooleanStrict()
 			require.Error(t, err)
 		})
 	}

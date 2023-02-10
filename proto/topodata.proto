@@ -210,7 +210,7 @@ message Shard {
   // of that shard will run filtered replication.
   message SourceShard {
     // Uid is the unique ID for this SourceShard object.
-    uint32 uid = 1;
+    int32 uid = 1;
 
     // the source keyspace
     string keyspace = 2;

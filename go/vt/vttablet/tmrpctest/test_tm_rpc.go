@@ -930,11 +930,11 @@ func tmRPCTestVReplicationExecPanic(ctx context.Context, t *testing.T, client tm
 }
 
 var (
-	wfpid  = 3
+	wfpid  = int32(3)
 	wfppos = ""
 )
 
-func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

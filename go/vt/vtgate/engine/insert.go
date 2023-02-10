@@ -466,11 +466,11 @@ func (ins *Insert) getInsertSelectQueries(
 		bvs := sqltypes.CopyBindVariables(bindVars) // we don't want to create one huge bindvars for all values
 		var mids sqlparser.Values
 		for _, indexValue := range indexesPerRss[i] {
-			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
+			index, _ := strconv.Atoi(string(indexValue.Value))
 			if keyspaceIDs[index] != nil {
 				row := sqlparser.ValTuple{}
 				for colOffset, value := range rows[index] {
-					bvName := insertVarOffset(int(index), colOffset)
+					bvName := insertVarOffset(index, colOffset)
 					bvs[bvName] = sqltypes.ValueBindVariable(value)
 					row = append(row, sqlparser.NewArgument(bvName))
 				}

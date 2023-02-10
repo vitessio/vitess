@@ -17,6 +17,6 @@
 # this script copies over all the data from commerce keyspace to
 # customer keyspace for the customer and corder tables
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient MoveTables -- --source commerce --tables 'customer,corder' Create customer.commerce2customer

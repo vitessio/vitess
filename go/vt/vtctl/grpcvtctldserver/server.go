@@ -31,11 +31,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
@@ -1007,7 +1007,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.NewString(ignoreReplicaAliases...),
+			IgnoreReplicas:            sets.New[string](ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
@@ -1658,10 +1658,10 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 	// Omit any cell names in the request that don't map to existing cells
 	if len(req.Cells) > 0 {
-		s1 := sets.NewString(allCells...)
-		s2 := sets.NewString(req.Cells...)
+		s1 := sets.New[string](allCells...)
+		s2 := sets.New[string](req.Cells...)
 
-		cells = s1.Intersection(s2).List()
+		cells = sets.List(s1.Intersection(s2))
 	}
 
 	span.Annotate("cells", strings.Join(cells, ","))
@@ -3624,7 +3624,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 			span, ctx := trace.NewSpan(ctx, "VtctldServer.validateAllTablets")
 			defer span.Finish()
 
-			cellSet := sets.NewString()
+			cellSet := sets.New[string]()
 			for _, keyspace := range keyspaces {
 				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				shards, err := s.ts.GetShardNames(getShardNamesCtx, keyspace)
@@ -3655,7 +3655,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 				}
 			}
 
-			for _, cell := range cellSet.List() {
+			for _, cell := range sets.List(cellSet) {
 				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				aliases, err := s.ts.GetTabletAliasesByCell(getTabletsByCellCtx, cell)
 				getTabletsByCellCancel() // don't defer in a loop
