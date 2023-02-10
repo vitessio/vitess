@@ -17,6 +17,7 @@
 package logic
 
 import (
+	"fmt"
 	"os"
 	"os/signal"
 	"sync"
@@ -373,7 +374,7 @@ func ContinuousDiscovery() {
 		log.Infof("Disabling global recoveries. VTOrc won't run any fixes until global recoveries are enabled")
 		err := DisableRecovery()
 		if err != nil {
-			log.Errorf("Unable to disable recoveries - %v", err)
+			panic(fmt.Sprintf("Unable to disable recoveries - %v", err))
 		}
 	}
 	for {
