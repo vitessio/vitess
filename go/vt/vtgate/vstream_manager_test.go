@@ -893,6 +893,14 @@ func TestResolveVStreamParams(t *testing.T) {
 		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "TestVStream",
+				Gtid:     "other",
+			}},
+		},
+		err: "if shards are unspecified, the Gtid value must be 'current' or empty",
+	}, {
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestVStream",
 			}},
 		},
 		output: &binlogdatapb.VGtid{
