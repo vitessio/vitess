@@ -286,9 +286,10 @@ func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Rou
 	return op1, nil
 }
 
-func (s *subQueryMerger) merge(outer, _ *Route, r Routing) (ops.Operator, error) {
+func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
 	s.subq.ExtractedSubquery.NeedsRewrite = true
 	outer.Routing = r
+	outer.MergedWith = append(outer.MergedWith, inner)
 	return outer, nil
 }
 
