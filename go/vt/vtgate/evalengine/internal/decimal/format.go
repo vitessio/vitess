@@ -180,9 +180,10 @@ func (d *Decimal) formatFast(prec int, round bool, trim bool) []byte {
 			}
 		}
 		if prec > 0 {
+			var ovf int
 			// if prec > 0, perform string-based rounding on the integral to
-			integral = roundString(integral, prec)
-			exp = int(d.exp) + iprec - len(integral)
+			integral, ovf = roundString(integral, prec)
+			exp = int(d.exp) + iprec - len(integral) + ovf
 			sign = d.value.Sign()
 		} else if prec < 0 {
 			integral = nil
@@ -263,15 +264,15 @@ func allZeros(b []byte) bool {
 }
 
 // roundString rounds the plain numeric string (e.g., "1234") b.
-func roundString(b []byte, prec int) []byte {
+func roundString(b []byte, prec int) ([]byte, int) {
 	if prec >= len(b) {
-		return appendZeroes(b, prec-len(b))
+		return appendZeroes(b, prec-len(b)), 0
 	}
 
 	// Trim zeros until prec. This is useful when we can round exactly by simply
 	// chopping zeros off the end of the number.
 	if allZeros(b[prec:]) {
-		return b[:prec]
+		return b[:prec], 0
 	}
 
 	b = b[:prec+1]
@@ -283,7 +284,7 @@ func roundString(b []byte, prec int) []byte {
 		b[i]++
 	}
 	if b[i] != '9'+1 {
-		return b[:prec]
+		return b[:prec], 0
 	}
 	b[i] = '0'
 	for i--; i >= 0; i-- {
@@ -302,7 +303,7 @@ func roundString(b []byte, prec int) []byte {
 		// We might end up with an extra digit of precision. E.g., given the
 		// decimal 9.9 with a requested precision of 1, we'd convert 99 -> 10.
 		// Let the calling code handle that case.
-		prec++
+		return b[:prec+1], 1
 	}
-	return b[:prec]
+	return b[:prec], 0
 }
