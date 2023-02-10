@@ -478,6 +478,18 @@ func (cached *builtinJSONArray) CachedSize(alloc bool) int64 {
 	size += cached.CallExpr.CachedSize(false)
 	return size
 }
+func (cached *builtinJSONContainsPath) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
 func (cached *builtinJSONDepth) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -491,6 +503,18 @@ func (cached *builtinJSONDepth) CachedSize(alloc bool) int64 {
 	return size
 }
 func (cached *builtinJSONExtract) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONKeys) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
