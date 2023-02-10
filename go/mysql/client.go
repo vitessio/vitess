@@ -720,7 +720,7 @@ func (c *Conn) writeHandshakeResponse41(capabilities uint32, scrambledPassword [
 		c.schemaName = params.DbName
 	}
 
-	// Assume native client during response
+	// Auth plugin name
 	pos = writeNullString(data, pos, c.authPluginName)
 
 	// Sanity-check the length.
@@ -770,6 +770,10 @@ func (c *Conn) requestPublicKey() (rsaKey *rsa.PublicKey, err error) {
 	}
 
 	block, _ := pem.Decode(response[1:])
+	if block == nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to decode response from server: %v", err)
+	}
+
 	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "failed to parse public key from server: %v", err)
