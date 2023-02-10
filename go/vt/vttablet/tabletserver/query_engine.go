@@ -171,7 +171,7 @@ type QueryEngine struct {
 	consolidatorMode sync2.AtomicString
 
 	// stats
-	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains errorCode as additional dimension
+	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains error code as an additional dimension
 	queryCounts, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
 
 	// Loggers
@@ -486,8 +486,8 @@ func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName string,
 	qe.queryCounts.Add(keys, queryCount)
 	qe.queryTimes.Add(keys, int64(duration))
 	qe.queryErrorCounts.Add(keys, errorCount)
-	// queryErrorCountsWithCode is similar to queryErrorCounts except we have additional dimension
-	// of errorCode.
+	// queryErrorCountsWithCode is similar to queryErrorCounts except we have an additional dimension
+	// of error code.
 	if errorCount > 0 {
 		errorKeys := []string{tableName, planType.String(), errorCode}
 		qe.queryErrorCountsWithCode.Add(errorKeys, errorCount)
