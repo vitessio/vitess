@@ -6204,13 +6204,13 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
-| POINT openb expression ',' expression closeb
-  {
-    $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
-  }
 | LINESTRING openb point_param_list closeb
   {
     $$ = &LineStringExpr{ PointParams:$3 }
+  }
+| POINT openb expression ',' expression closeb
+  {
+    $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
   }
 | argument_less_window_expr_type openb closeb over_clause
   {
@@ -7749,7 +7749,7 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINES
-| LINESTRING
+| LINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | LIST
 | LOAD
 | LOCAL
