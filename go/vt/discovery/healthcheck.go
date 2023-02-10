@@ -404,12 +404,15 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 		// key: keyspace.shard.tabletType -> val: map[tabletAlias]tabletHealth
 		for _, tabletType := range topoproto.AllTabletTypes {
 			key := keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tabletType)))
+			log.Infof("[DELETE TABLET]: deleting key from cache %s", key)
 			// delete from map by keyspace.shard.tabletType
 			ths, ok := hc.healthData[key]
 			if !ok {
+				log.Infof("[DELETE TABLET]: could not find key in cache %s", key)
 				continue
 			}
 			delete(ths, tabletAlias)
+			log.Infof("[DELETE TABLET]: deleted key from cache %s", key)
 			// delete from healthy list
 			healthy, ok := hc.healthy[key]
 			if ok && len(healthy) > 0 {
