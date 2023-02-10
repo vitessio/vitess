@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -301,7 +300,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	if setSuperReadOnly {
 		// Setting super_read_only off so that we can run the DDL commands
 		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
 				log.Warningf("server does not know about super_read_only, continuing anyway...")
 			} else {
 				return "", err
@@ -470,7 +469,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if setSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
 				log.Warningf("server does not know about super_read_only, continuing anyway...")
 			} else {
 				return nil, err

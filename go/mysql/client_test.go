@@ -37,7 +37,7 @@ import (
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code int, sqlState, subtext, query, pattern string) {
+func assertSQLError(t *testing.T, err error, code ErrorCode, sqlState, subtext, query, pattern string) {
 	t.Helper()
 
 	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
