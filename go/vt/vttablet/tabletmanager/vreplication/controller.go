@@ -78,13 +78,12 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 
 	ct := &controller{
-		vre:               vre,
-		dbClientFactory:   dbClientFactory,
-		mysqld:            mysqld,
-		blpStats:          blpStats,
-		done:              make(chan struct{}),
-		source:            &binlogdatapb.BinlogSource{},
-		lastWorkflowError: newLastError("VReplication Controller", maxTimeToRetryError),
+		vre:             vre,
+		dbClientFactory: dbClientFactory,
+		mysqld:          mysqld,
+		blpStats:        blpStats,
+		done:            make(chan struct{}),
+		source:          &binlogdatapb.BinlogSource{},
 	}
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
@@ -95,6 +94,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = int32(id)
 	ct.workflow = params["workflow"]
+	ct.lastWorkflowError = newLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
 	blpStats.State.Set(state)

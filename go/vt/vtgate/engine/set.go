@@ -313,7 +313,7 @@ func (svs *SysVarReservedConn) Execute(ctx context.Context, vcursor VCursor, env
 	queries := make([]*querypb.BoundQuery, len(rss))
 	for i := 0; i < len(rss); i++ {
 		queries[i] = &querypb.BoundQuery{
-			Sql:           fmt.Sprintf("set @@%s = %s", svs.Name, svs.Expr),
+			Sql:           fmt.Sprintf("set %s = %s", svs.Name, svs.Expr),
 			BindVariables: env.BindVars,
 		}
 	}
