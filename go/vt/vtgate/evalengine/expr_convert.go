@@ -148,14 +148,8 @@ func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 }
 
 func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
-	if c.HasLength {
-		if c.Length > 64*1024 {
-			return sqltypes.Blob
-		}
-	} else {
-		if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
-			return sqltypes.Blob
-		}
+	if (c.HasLength && c.Length > 64*1024) || tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+		return sqltypes.Blob
 	}
 	return sqltypes.VarBinary
 }
@@ -167,10 +161,8 @@ func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
 		if length > 64*1024 {
 			return sqltypes.Text
 		}
-	} else {
-		if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
-			return sqltypes.Text
-		}
+	} else if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+		return sqltypes.Text
 	}
 	return sqltypes.VarChar
 }

@@ -1,3 +1,20 @@
+/*
+Copyright 2018 Aliaksandr Valialkin
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package json
 
 import (
@@ -88,29 +105,4 @@ func TestValueDelSet(t *testing.T) {
 	if len(a) != 2 {
 		t.Fatalf("unexpected number of items left in the array; got %d; want %d", len(a), 2)
 	}
-
-	/*
-		// Update the first element in the array
-		vNew := MustParse(`"foobar"`)
-		va.Set("0", vNew)
-
-		// Add third element to the array
-		vNew = MustParse(`[3]`)
-		va.Set("3", vNew)
-
-		// Add invalid array index to the array
-		va.Set("invalid", MustParse(`"nonsense"`))
-
-		str := v.String()
-		strExpected := `{"x":["foobar",3,null,[3]]}`
-		if str != strExpected {
-			t.Fatalf("unexpected string representation for o: got %q; want %q", str, strExpected)
-		}
-
-		// Set and Del function as no-op on nil value
-		v = nil
-		v.Del("x")
-		v.Set("x", MustParse(`[]`))
-		v.SetArrayItem(1, MustParse(`[]`))
-	*/
 }

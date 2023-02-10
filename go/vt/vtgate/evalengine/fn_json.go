@@ -75,6 +75,7 @@ func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
+	// if any of the arguments are NULL, return NULL
 	for _, arg := range args {
 		if arg == nil {
 			return nil, nil

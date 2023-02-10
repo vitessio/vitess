@@ -164,7 +164,7 @@ func NewVarChar(v string) Value {
 func NewJSON(v string) (Value, error) {
 	j := []byte(v)
 	if !json.Valid(j) {
-		return Value{}, fmt.Errorf("invalid JSON value: %q", v)
+		return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid JSON value: %q", v)
 	}
 	return MakeTrusted(TypeJSON, j), nil
 }

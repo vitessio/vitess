@@ -65,7 +65,7 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 	var typedcol collations.TypedCollation
 
 	if b, ok := e.(*evalBytes); ok && convert {
-		if b.isText() && b.col.Collation == col {
+		if b.isVarChar() && b.col.Collation == col {
 			return b, nil
 		}
 
@@ -118,7 +118,7 @@ func (e *evalBytes) isHexOrBitLiteral() bool {
 	return e.isHexLiteral || e.isBitLiteral
 }
 
-func (e *evalBytes) isText() bool {
+func (e *evalBytes) isVarChar() bool {
 	return e.SQLType() == sqltypes.VarChar
 }
 

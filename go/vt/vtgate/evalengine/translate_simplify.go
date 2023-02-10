@@ -81,7 +81,7 @@ func (expr *LikeExpr) simplify(env *ExpressionEnv) error {
 	}
 
 	if lit, ok := expr.Right.(*Literal); ok {
-		if b, ok := lit.inner.(*evalBytes); ok && (b.isText() || b.isBinary()) {
+		if b, ok := lit.inner.(*evalBytes); ok && (b.isVarChar() || b.isBinary()) {
 			expr.MatchCollation = b.col.Collation
 			coll := collations.Local().LookupByID(expr.MatchCollation)
 			expr.Match = coll.Wildcard(b.bytes, 0, 0, 0)
