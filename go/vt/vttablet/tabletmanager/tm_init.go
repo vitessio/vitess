@@ -44,11 +44,11 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"

@@ -31,10 +31,10 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -2131,7 +2131,7 @@ func (c *Cluster) reloadShardSchemas(ctx context.Context, req *vtadminpb.ReloadS
 	)
 
 	for ks, shards := range shardSets {
-		for _, shard := range shards.UnsortedList() {
+		for _, shard := range sets.List(shards) {
 			wg.Add(1)
 			go func(keyspace, shard string) {
 				defer wg.Done()
