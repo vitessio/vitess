@@ -118,6 +118,10 @@ func NormalizeAlphabetically(query string) (normalized string, err error) {
 // replaces any cases of the provided database qualifiers with a
 // replacement database qualifier.
 func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
+	if newdb == olddb {
+		// Nothing to do here.
+		return query, nil
+	}
 	in, err := Parse(query)
 	if err != nil {
 		return "", err
@@ -136,7 +140,6 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 		}
 		return true
 	}, nil)
-
 	// If we didn't modify anything, return the original query.
 	// This is particularly helpful with unit tests that
 	// execute a query which slightly differs from the parsed

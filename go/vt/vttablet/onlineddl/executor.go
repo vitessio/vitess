@@ -55,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -76,13 +77,13 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
-	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2'`,
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`,
+	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where mysql_schema='val2'`, sidecardb.GetSidecarDBNameIdentifier()),
+	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`, sidecardb.GetSidecarDBNameIdentifier()),
+	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`, sidecardb.GetSidecarDBNameIdentifier()),
 }
 
 var vexecInsertTemplates = []string{
-	`INSERT IGNORE INTO _vt.schema_migrations (
+	fmt.Sprintf(`INSERT IGNORE INTO %s.schema_migrations (
 		migration_uuid,
 		keyspace,
 		shard,
@@ -97,7 +98,7 @@ var vexecInsertTemplates = []string{
 		migration_status
 	) VALUES (
 		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
-	)`,
+	)`, sidecardb.GetSidecarDBNameIdentifier()),
 }
 
 var emptyResult = &sqltypes.Result{}
@@ -211,11 +212,8 @@ type Executor struct {
 	tickReentranceFlag            int64
 	reviewedRunningMigrationsFlag bool
 
-	ticks             *timer.Timer
-	isOpen            bool
-	schemaInitialized bool
-
-	initVreplicationDDLOnce sync.Once
+	ticks  *timer.Timer
+	isOpen bool
 }
 
 type cancellableMigration struct {
@@ -283,6 +281,11 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 		return result, err
 	}
 	defer conn.Recycle()
+	// Replace sidecardb table qualifiers if needed.
+	query, err = sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultSidecarDBName, sidecardb.GetSidecarDBName())
+	if err != nil {
+		return result, err
+	}
 	return conn.Exec(ctx, query, math.MaxInt32, true)
 }
 
@@ -654,7 +657,8 @@ func (e *Executor) doesConnectionInfoMatch(ctx context.Context, connID int64, su
 	return len(rs.Rows) == 1, nil
 }
 
-// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent or a child in at least one foreign key constraint
+// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent or a child
+// in at least one foreign key constraint
 func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context, schema string, table string) (bool, error) {
 	for _, fkQuery := range []string{selSelectCountFKParentConstraints, selSelectCountFKChildConstraints} {
 		query, err := sqlparser.ParseAndBind(fkQuery,
@@ -680,7 +684,8 @@ func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context
 	return false, nil
 }
 
-// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
+// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns
+// detailed error if not.
 func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
 	if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
 		// Validate table does not participate in foreign key relationship:
@@ -707,7 +712,8 @@ func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err
 	return pos, err
 }
 
-// terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
+// terminateVReplMigration stops vreplication, then removes the vreplication table
+// record for the given migration
 func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
 	tmClient := e.tabletManagerClient()
 	defer tmClient.Close()
@@ -723,7 +729,8 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	if err != nil {
 		return err
 	}
-	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
+	// silently skip error; stopping the stream is just a graceful act; later deleting it
+	// is more important
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 		log.Errorf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err)
 	}
@@ -734,7 +741,8 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	return nil
 }
 
-// cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
+// cutOverVReplMigration stops vreplication, then removes the vreplication record for
+// the given migration
 func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
 	if err := e.incrementCutoverAttempts(ctx, s.workflow); err != nil {
 		return err
@@ -1412,9 +1420,10 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		}
 
 		{
-			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
-			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
-				binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
+			// temporary hack. todo: this should be done when inserting any vreplication record across
+			// all workflow types
+			query := fmt.Sprintf("update %s.vreplication set workflow_type = %d where workflow = '%s'",
+				sidecardb.GetSidecarDBNameIdentifier(), binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
 			if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
 			}
@@ -3352,7 +3361,7 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 	return err
 }
 
-// readVReplStream reads _vt.vreplication entries for given workflow
+// readVReplStream reads the vreplication record for given workflow
 func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing bool) (*VReplStream, error) {
 	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
 		sqltypes.StringBindVariable(uuid),
@@ -3539,7 +3548,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
-				// We check the _vt.vreplication table
+				// We check the vreplication table
 				s, err := e.readVReplStream(ctx, uuid, true)
 				if err != nil {
 					return countRunnning, cancellable, err
@@ -3775,8 +3784,8 @@ func (e *Executor) reloadSchema(ctx context.Context) error {
 	return tmClient.ReloadSchema(ctx, tablet.Tablet, "")
 }
 
-// deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of
-// migration termination and as part of artifact cleanup
+// deleteVReplicationEntry cleans up a vreplication table record; this function is
+// called as part of migration termination and as part of artifact cleanup
 func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) error {
 	query, err := sqlparser.ParseAndBind(sqlDeleteVReplStream,
 		sqltypes.StringBindVariable(e.dbName),

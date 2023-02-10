@@ -47,6 +47,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/tableacl"
@@ -723,6 +724,12 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 
 	if transactionID != 0 && reservedID != 0 && transactionID != reservedID {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "[BUG] transactionID and reserveID must match if both are non-zero")
+	}
+
+	// Rewrite any sidecar database usage if needed.
+	sql, err = sqlparser.ReplaceTableQualifiers(sql, sidecardb.DefaultSidecarDBName, sidecardb.GetSidecarDBName())
+	if err != nil {
+		return nil, err
 	}
 
 	return tsv.execute(ctx, target, sql, bindVariables, transactionID, reservedID, nil, options)
