@@ -16,6 +16,10 @@ limitations under the License.
 
 package mysql
 
+import (
+	"strings"
+)
+
 const (
 	// MaxPacketSize is the maximum payload length of a packet
 	// the server supports.
@@ -33,6 +37,9 @@ const (
 
 	// MysqlClearPassword transmits the password in the clear.
 	MysqlClearPassword = "mysql_clear_password"
+
+	// CachingSha2Password uses a salt and transmits a SHA256 hash on the wire.
+	CachingSha2Password = "caching_sha2_password"
 
 	// MysqlDialog uses the dialog plugin on the client side.
 	// It transmits data in the clear.
@@ -128,10 +135,37 @@ const (
 	// Can set SERVER_SESSION_STATE_CHANGED in the Status Flags
 	// and send session-state change data after a OK packet.
 	// Not yet supported.
+	CapabilityClientSessionTrack = 1 << 23
 
 	// CapabilityClientDeprecateEOF is CLIENT_DEPRECATE_EOF
 	// Expects an OK (instead of EOF) after the resultset rows of a Text Resultset.
 	CapabilityClientDeprecateEOF = 1 << 24
+)
+
+// Status flags. They are returned by the server in a few cases.
+// Originally found in include/mysql/mysql_com.h
+// See http://dev.mysql.com/doc/internals/en/status-flags.html
+const (
+	// ServerInTransaction is SERVER_STATUS_IN_TRANS (a transaction is active)
+	ServerInTransaction = 0x0001
+
+	// ServerStatusAutocommit is SERVER_STATUS_AUTOCOMMIT.
+	ServerStatusAutocommit = 0x0002
+
+	// ServerMoreResultsExists is SERVER_MORE_RESULTS_EXISTS
+	ServerMoreResultsExists = 0x0008
+)
+
+// State Change Information
+const (
+	// one or more system variables changed.
+	SessionTrackSystemVariables uint8 = 0x00
+	// schema changed.
+	SessionTrackSchema uint8 = 0x01
+	// "track state change" changed.
+	SessionTrackStateChange uint8 = 0x02
+	// "track GTIDs" changed.
+	SessionTrackGtids uint8 = 0x03
 )
 
 // Packet types.
@@ -190,9 +224,6 @@ const (
 
 	LocalInfilePacket = 0xFB
 
-	// AuthSwitchRequestPacket is used to switch auth method.
-	AuthSwitchRequestPacket = 0xfe
-
 	// ErrPacket is the header of the error packet.
 	ErrPacket = 0xff
 
@@ -200,9 +231,24 @@ const (
 	NullValue = 0xfb
 )
 
+// Auth packet types
+const (
+	// AuthMoreDataPacket is sent when server requires more data to authenticate
+	AuthMoreDataPacket = 0x01
+
+	// CachingSha2FastAuth is sent before OKPacket when server authenticates using cache
+	CachingSha2FastAuth = 0x03
+
+	// CachingSha2FullAuth is sent when server requests un-scrambled password to authenticate
+	CachingSha2FullAuth = 0x04
+
+	// AuthSwitchRequestPacket is used to switch auth method.
+	AuthSwitchRequestPacket = 0xfe
+)
+
 // Error codes for client-side errors.
 // Originally found in include/mysql/errmsg.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-client.html
+// https://dev.mysql.com/doc/mysql-errors/en/client-error-reference.html
 const (
 	// CRUnknownError is CR_UNKNOWN_ERROR
 	CRUnknownError = 2000
@@ -214,6 +260,10 @@ const (
 	// CRConnHostError is CR_CONN_HOST_ERROR
 	// This is returned if a connection via a TCP socket fails.
 	CRConnHostError = 2003
+
+	// CRUnknownHost is CR_UNKNOWN_HOST
+	// This is returned if the host name cannot be resolved.
+	CRUnknownHost = 2005
 
 	// CRServerGone is CR_SERVER_GONE_ERROR.
 	// This is returned if the client tries to send a command but it fails.
@@ -231,6 +281,7 @@ const (
 	// - the client cannot write an initial auth packet.
 	// - the client cannot read an initial auth packet.
 	// - the client cannot read a response from the server.
+	//     This happens when a running query is killed.
 	CRServerLost = 2013
 
 	// CRCommandsOutOfSync is CR_COMMANDS_OUT_OF_SYNC
@@ -260,12 +311,15 @@ const (
 
 // Error codes for server-side errors.
 // Originally found in include/mysql/mysqld_error.h and
-// https://dev.mysql.com/doc/refman/5.7/en/error-messages-server.html
+// https://dev.mysql.com/doc/mysql-errors/en/server-error-reference.html
 // The below are in sorted order by value, grouped by vterror code they should be bucketed into.
 // See above reference for more information on each code.
 const (
 	// unknown
 	ERUnknownError = 1105
+
+	// internal
+	ERInternalError = 1815
 
 	// unimplemented
 	ERNotSupportedYet = 1235
@@ -330,21 +384,28 @@ const (
 	ERRowIsReferenced               = 1217
 	ERCantUpdateWithReadLock        = 1223
 	ERNoDefault                     = 1230
+	ERMasterFatalReadingBinlog      = 1236
 	EROperandColumns                = 1241
 	ERSubqueryNo1Row                = 1242
+	ERWarnDataOutOfRange            = 1264
 	ERNonUpdateableTable            = 1288
 	ERFeatureDisabled               = 1289
 	EROptionPreventsStatement       = 1290
 	ERDuplicatedValueInType         = 1291
+	ERSPDoesNotExist                = 1305
+	ERNoDefaultForField             = 1364
+	ErSPNotVarArg                   = 1414
 	ERRowIsReferenced2              = 1451
 	ErNoReferencedRow2              = 1452
+	ERDupIndex                      = 1831
+	ERInnodbReadOnly                = 1874
 
 	// already exists
+	ERDbCreateExists = 1007
 	ERTableExists    = 1050
 	ERDupEntry       = 1062
 	ERFileExists     = 1086
 	ERUDFExists      = 1125
-	ERDbCreateExists = 1007
 
 	// aborted
 	ERGotSignal          = 1078
@@ -413,6 +474,7 @@ const (
 	ERBlobKeyWithoutLength         = 1170
 	ERPrimaryCantHaveNull          = 1171
 	ERTooManyRows                  = 1172
+	ERLockOrActiveTransaction      = 1192
 	ERUnknownSystemVariable        = 1193
 	ERSetConstantsOnly             = 1204
 	ERWrongArguments               = 1210
@@ -429,7 +491,11 @@ const (
 	ERWrongFKDef                   = 1239
 	ERKeyRefDoNotMatchTableRef     = 1240
 	ERCyclicReference              = 1245
+	ERIllegalReference             = 1247
+	ERDerivedMustHaveAlias         = 1248
+	ERTableNameNotAllowedHere      = 1250
 	ERCollationCharsetMismatch     = 1253
+	ERWarnDataTruncated            = 1265
 	ERCantAggregate2Collations     = 1267
 	ERCantAggregate3Collations     = 1270
 	ERCantAggregateNCollations     = 1271
@@ -443,13 +509,33 @@ const (
 	ERInvalidOnUpdate              = 1294
 	ERUnknownTimeZone              = 1298
 	ERInvalidCharacterString       = 1300
-	ERIllegalReference             = 1247
-	ERDerivedMustHaveAlias         = 1248
-	ERTableNameNotAllowedHere      = 1250
 	ERQueryInterrupted             = 1317
 	ERTruncatedWrongValueForField  = 1366
+	ERIllegalValueForType          = 1367
 	ERDataTooLong                  = 1406
+	ErrWrongValueForType           = 1411
+	ERForbidSchemaChange           = 1450
+	ERWrongValue                   = 1525
 	ERDataOutOfRange               = 1690
+	ERInvalidJSONText              = 3140
+	ERInvalidJSONTextInParams      = 3141
+	ERInvalidJSONBinaryData        = 3142
+	ERInvalidJSONCharset           = 3144
+	ERInvalidCastToJSON            = 3147
+	ERJSONValueTooBig              = 3150
+	ERJSONDocumentTooDeep          = 3157
+
+	// max execution time exceeded
+	ERQueryTimeout = 3024
+
+	ErrCantCreateGeometryObject      = 1416
+	ErrGISDataWrongEndianess         = 3055
+	ErrNotImplementedForCartesianSRS = 3704
+	ErrNotImplementedForProjectedSRS = 3705
+	ErrNonPositiveRadius             = 3706
+
+	// server not available
+	ERServerIsntAvailable = 3168
 )
 
 // Sql states for errors.
@@ -461,11 +547,17 @@ const (
 	// in client.c. So using that one.
 	SSUnknownSQLState = "HY000"
 
+	// SSNetError is network related error
+	SSNetError = "08S01"
+
 	// SSUnknownComError is ER_UNKNOWN_COM_ERROR
 	SSUnknownComError = "08S01"
 
-	// SSHandshakeError is ER_HANDSHAKE_ERROR
-	SSHandshakeError = "08S01"
+	// SSWrongNumberOfColumns is related to columns error
+	SSWrongNumberOfColumns = "21000"
+
+	// SSWrongValueCountOnRow is related to columns count mismatch error
+	SSWrongValueCountOnRow = "21S01"
 
 	// SSServerShutdown is ER_SERVER_SHUTDOWN
 	SSServerShutdown = "08S01"
@@ -476,11 +568,8 @@ const (
 	// SSDataOutOfRange is ER_DATA_OUT_OF_RANGE
 	SSDataOutOfRange = "22003"
 
-	// SSBadNullError is ER_BAD_NULL_ERROR
-	SSBadNullError = "23000"
-
-	// SSBadFieldError is ER_BAD_FIELD_ERROR
-	SSBadFieldError = "42S22"
+	// SSConstraintViolation is constraint violation
+	SSConstraintViolation = "23000"
 
 	// SSDupKey is ER_DUP_KEY
 	SSDupKey = "23000"
@@ -492,22 +581,26 @@ const (
 	// SSAccessDeniedError is ER_ACCESS_DENIED_ERROR
 	SSAccessDeniedError = "28000"
 
+	// SSNoDB is ER_NO_DB_ERROR
+	SSNoDB = "3D000"
+
 	// SSLockDeadlock is ER_LOCK_DEADLOCK
 	SSLockDeadlock = "40001"
-)
 
-// Status flags. They are returned by the server in a few cases.
-// Originally found in include/mysql/mysql_com.h
-// See http://dev.mysql.com/doc/internals/en/status-flags.html
-const (
-	// ServerInTransaction is SERVER_STATUS_IN_TRANS (a transaction is active)
-	ServerInTransaction = 0x0001
+	// SSClientError is the state on client errors
+	SSClientError = "42000"
 
-	// ServerStatusAutocommit is SERVER_STATUS_AUTOCOMMIT.
-	ServerStatusAutocommit = 0x0002
+	// SSDupFieldName is ER_DUP_FIELD_NAME
+	SSDupFieldName = "42S21"
 
-	// ServerMoreResultsExists is SERVER_MORE_RESULTS_EXISTS
-	ServerMoreResultsExists = 0x0008
+	// SSBadFieldError is ER_BAD_FIELD_ERROR
+	SSBadFieldError = "42S22"
+
+	// SSUnknownTable is ER_UNKNOWN_TABLE
+	SSUnknownTable = "42S02"
+
+	// SSQueryInterrupted is ER_QUERY_INTERRUPTED;
+	SSQueryInterrupted = "70100"
 )
 
 // A few interesting character set values.
@@ -567,18 +660,30 @@ var CharacterSetMap = map[string]uint8{
 
 // IsNum returns true if a MySQL type is a numeric value.
 // It is the same as IS_NUM defined in mysql.h.
-//
-// FIXME(alainjobart) This needs to use the constants in
-// replication/constants.go, so we are using numerical values here.
 func IsNum(typ uint8) bool {
-	return ((typ <= 9 /* MYSQL_TYPE_INT24 */ && typ != 7 /* MYSQL_TYPE_TIMESTAMP */) || typ == 13 /* MYSQL_TYPE_YEAR */ || typ == 246 /* MYSQL_TYPE_NEWDECIMAL */)
+	return (typ <= TypeInt24 && typ != TypeTimestamp) ||
+		typ == TypeYear ||
+		typ == TypeNewDecimal
 }
 
 // IsConnErr returns true if the error is a connection error.
 func IsConnErr(err error) bool {
+	if IsTooManyConnectionsErr(err) {
+		return false
+	}
 	if sqlErr, ok := err.(*SQLError); ok {
 		num := sqlErr.Number()
 		return (num >= CRUnknownError && num <= CRNamedPipeStateError) || num == ERQueryInterrupted
+	}
+	return false
+}
+
+// IsTooManyConnectionsErr returns true if the error is due to too many connections.
+func IsTooManyConnectionsErr(err error) bool {
+	if sqlErr, ok := err.(*SQLError); ok {
+		if sqlErr.Number() == CRServerHandshakeErr && strings.Contains(sqlErr.Message, "Too many connections") {
+			return true
+		}
 	}
 	return false
 }

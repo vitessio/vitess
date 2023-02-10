@@ -72,6 +72,13 @@ type Getter interface {
 // Use Connect on the client side to create a connection.
 // Use NewListener to create a server side and listen for connections.
 type Conn struct {
+	// salt is sent by the server during initial handshake to be used for authentication
+	salt []byte
+
+	// authPluginName is the name of server's authentication plugin.
+	// It is set during the initial handshake.
+	authPluginName string
+
 	// conn is the underlying network connection.
 	// Calling Close() on the Conn will close this connection.
 	// If there are any ongoing reads or writes, they may get interrupted.
@@ -1241,7 +1248,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 // formatID returns a quoted identifier from the one given. Adapted from ast.go
 func formatID(original string) string {
 	var sb strings.Builder
-	
+
 	sb.WriteByte('`')
 	for _, c := range original {
 		sb.WriteRune(c)
@@ -1250,7 +1257,7 @@ func formatID(original string) string {
 		}
 	}
 	sb.WriteByte('`')
-	
+
 	return sb.String()
 }
 
