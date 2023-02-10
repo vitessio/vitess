@@ -30,7 +30,7 @@ type meter struct {
 	duration time.Duration
 }
 
-// Bytes reports the total bytes read in calls to f so far.
+// Bytes reports the total bytes processed in calls to measure().
 func (mtr *meter) Bytes() int64 {
 	return mtr.bytes
 }
