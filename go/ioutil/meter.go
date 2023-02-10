@@ -35,7 +35,7 @@ func (mtr *meter) Bytes() int64 {
 	return mtr.bytes
 }
 
-// Duration reports the total time spend in calls to f so far.
+// Duration reports the total time spent in calls to measure().
 func (mtr *meter) Duration() time.Duration {
 	return mtr.duration
 }
