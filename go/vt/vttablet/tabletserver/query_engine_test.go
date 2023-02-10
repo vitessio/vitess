@@ -574,82 +574,87 @@ func TestPlanCachePollution(t *testing.T) {
 
 func TestAddQueryStats(t *testing.T) {
 	testcases := []struct {
-		name                      string
-		planType                  planbuilder.PlanType
-		tableName                 string
-		queryCount                int64
-		duration                  time.Duration
-		mysqlTime                 time.Duration
-		rowsAffected              int64
-		rowsReturned              int64
-		errorCount                int64
-		errorCode                 string
-		expectedQueryCounts       string
-		expectedQueryTimes        string
-		expectedQueryRowsAffected string
-		expectedQueryRowsReturned string
-		expectedQueryErrorCounts  string
+		name                             string
+		planType                         planbuilder.PlanType
+		tableName                        string
+		queryCount                       int64
+		duration                         time.Duration
+		mysqlTime                        time.Duration
+		rowsAffected                     int64
+		rowsReturned                     int64
+		errorCount                       int64
+		errorCode                        string
+		expectedQueryCounts              string
+		expectedQueryTimes               string
+		expectedQueryRowsAffected        string
+		expectedQueryRowsReturned        string
+		expectedQueryErrorCounts         string
+		expectedQueryErrorCountsWithCode string
 	}{
 		{
-			name:                      "select query",
-			planType:                  planbuilder.PlanSelect,
-			tableName:                 "A",
-			queryCount:                1,
-			duration:                  10,
-			rowsAffected:              0,
-			rowsReturned:              15,
-			errorCount:                0,
-			errorCode:                 "OK",
-			expectedQueryCounts:       `{"A.Select": 1}`,
-			expectedQueryTimes:        `{"A.Select": 10}`,
-			expectedQueryRowsAffected: `{}`,
-			expectedQueryRowsReturned: `{"A.Select": 15}`,
-			expectedQueryErrorCounts:  `{}`,
+			name:                             "select query",
+			planType:                         planbuilder.PlanSelect,
+			tableName:                        "A",
+			queryCount:                       1,
+			duration:                         10,
+			rowsAffected:                     0,
+			rowsReturned:                     15,
+			errorCount:                       0,
+			errorCode:                        "OK",
+			expectedQueryCounts:              `{"A.Select": 1}`,
+			expectedQueryTimes:               `{"A.Select": 10}`,
+			expectedQueryRowsAffected:        `{}`,
+			expectedQueryRowsReturned:        `{"A.Select": 15}`,
+			expectedQueryErrorCounts:         `{"A.Select": 0}`,
+			expectedQueryErrorCountsWithCode: `{}`,
 		}, {
-			name:                      "select into query",
-			planType:                  planbuilder.PlanSelect,
-			tableName:                 "A",
-			queryCount:                1,
-			duration:                  10,
-			rowsAffected:              15,
-			rowsReturned:              0,
-			errorCount:                0,
-			errorCode:                 "OK",
-			expectedQueryCounts:       `{"A.Select": 1}`,
-			expectedQueryTimes:        `{"A.Select": 10}`,
-			expectedQueryRowsAffected: `{"A.Select": 15}`,
-			expectedQueryRowsReturned: `{"A.Select": 0}`,
-			expectedQueryErrorCounts:  `{}`,
+			name:                             "select into query",
+			planType:                         planbuilder.PlanSelect,
+			tableName:                        "A",
+			queryCount:                       1,
+			duration:                         10,
+			rowsAffected:                     15,
+			rowsReturned:                     0,
+			errorCount:                       0,
+			errorCode:                        "OK",
+			expectedQueryCounts:              `{"A.Select": 1}`,
+			expectedQueryTimes:               `{"A.Select": 10}`,
+			expectedQueryRowsAffected:        `{"A.Select": 15}`,
+			expectedQueryRowsReturned:        `{"A.Select": 0}`,
+			expectedQueryErrorCounts:         `{"A.Select": 0}`,
+			expectedQueryErrorCountsWithCode: `{}`,
 		}, {
-			name:                      "error",
-			planType:                  planbuilder.PlanSelect,
-			tableName:                 "A",
-			queryCount:                1,
-			duration:                  10,
-			rowsAffected:              0,
-			rowsReturned:              0,
-			errorCount:                1,
-			errorCode:                 "RESOURCE_EXHAUSTED",
-			expectedQueryCounts:       `{"A.Select": 1}`,
-			expectedQueryTimes:        `{"A.Select": 10}`,
-			expectedQueryRowsAffected: `{}`,
-			expectedQueryRowsReturned: `{"A.Select": 0}`,
-			expectedQueryErrorCounts:  `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
+			name:                             "error",
+			planType:                         planbuilder.PlanSelect,
+			tableName:                        "A",
+			queryCount:                       1,
+			duration:                         10,
+			rowsAffected:                     0,
+			rowsReturned:                     0,
+			errorCount:                       1,
+			errorCode:                        "RESOURCE_EXHAUSTED",
+			expectedQueryCounts:              `{"A.Select": 1}`,
+			expectedQueryTimes:               `{"A.Select": 10}`,
+			expectedQueryRowsAffected:        `{}`,
+			expectedQueryRowsReturned:        `{"A.Select": 0}`,
+			expectedQueryErrorCounts:         `{"A.Select": 1}`,
+			expectedQueryErrorCountsWithCode: `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
 		}, {
-			name:                      "insert query",
-			planType:                  planbuilder.PlanInsert,
-			tableName:                 "A",
-			queryCount:                1,
-			duration:                  10,
-			rowsAffected:              15,
-			rowsReturned:              0,
-			errorCount:                0,
-			errorCode:                 "OK",
-			expectedQueryCounts:       `{"A.Insert": 1}`,
-			expectedQueryTimes:        `{"A.Insert": 10}`,
-			expectedQueryRowsAffected: `{"A.Insert": 15}`,
-			expectedQueryRowsReturned: `{}`,
-			expectedQueryErrorCounts:  `{}`,
+			name:                             "insert query",
+			planType:                         planbuilder.PlanInsert,
+			tableName:                        "A",
+			queryCount:                       1,
+			duration:                         10,
+			rowsAffected:                     15,
+			rowsReturned:                     0,
+			errorCount:                       0,
+			errorCode:                        "OK",
+			expectedQueryCounts:              `{"A.Insert": 1}`,
+			expectedQueryTimes:               `{"A.Insert": 10}`,
+			expectedQueryRowsAffected:        `{"A.Insert": 15}`,
+			expectedQueryRowsReturned:        `{}`,
+			expectedQueryErrorCounts:         `{"A.Insert": 0}`,
+			expectedQueryErrorCountsWithCode: `{}`,
 		},
 	}
 
@@ -667,6 +672,7 @@ func TestAddQueryStats(t *testing.T) {
 			assert.Equal(t, testcase.expectedQueryRowsAffected, qe.queryRowsAffected.String())
 			assert.Equal(t, testcase.expectedQueryRowsReturned, qe.queryRowsReturned.String())
 			assert.Equal(t, testcase.expectedQueryErrorCounts, qe.queryErrorCounts.String())
+			assert.Equal(t, testcase.expectedQueryErrorCountsWithCode, qe.queryErrorCountsWithCode.String())
 		})
 	}
 }

@@ -117,7 +117,6 @@ func (qre *QueryExecutor) shouldConsolidate() bool {
 func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	planName := qre.plan.PlanID.String()
 	qre.logStats.PlanType = planName
-
 	defer func(start time.Time) {
 		duration := time.Since(start)
 		qre.tsv.stats.QueryTimings.Add(planName, duration)

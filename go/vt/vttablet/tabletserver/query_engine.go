@@ -171,7 +171,8 @@ type QueryEngine struct {
 	consolidatorMode sync2.AtomicString
 
 	// stats
-	queryCounts, queryTimes, queryErrorCounts, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
+	// Note: queryErrorCountsWithCode is similar to queryErrorCounts except it contains errorCode as additional dimension
+	queryCounts, queryTimes, queryErrorCounts, queryErrorCountsWithCode, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
 
 	// Loggers
 	accessCheckerLogger *logutil.ThrottledLogger
@@ -250,7 +251,8 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 	qe.queryTimes = env.Exporter().NewCountersWithMultiLabels("QueryTimesNs", "query times in ns", []string{"Table", "Plan"})
 	qe.queryRowsAffected = env.Exporter().NewCountersWithMultiLabels("QueryRowsAffected", "query rows affected", []string{"Table", "Plan"})
 	qe.queryRowsReturned = env.Exporter().NewCountersWithMultiLabels("QueryRowsReturned", "query rows returned", []string{"Table", "Plan"})
-	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan", "Code"})
+	qe.queryErrorCounts = env.Exporter().NewCountersWithMultiLabels("QueryErrorCounts", "query error counts", []string{"Table", "Plan"})
+	qe.queryErrorCountsWithCode = env.Exporter().NewCountersWithMultiLabels("QueryErrorCountsWithCode", "query error counts with error code", []string{"Table", "Plan", "Code"})
 
 	env.Exporter().HandleFunc("/debug/hotrows", qe.txSerializer.ServeHTTP)
 	env.Exporter().HandleFunc("/debug/tablet_plans", qe.handleHTTPQueryPlans)
@@ -483,9 +485,12 @@ func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName string,
 	keys := []string{tableName, planType.String()}
 	qe.queryCounts.Add(keys, queryCount)
 	qe.queryTimes.Add(keys, int64(duration))
+	qe.queryErrorCounts.Add(keys, errorCount)
+	// queryErrorCountsWithCode is similar to queryErrorCounts except we have additional dimension
+	// of errorCode.
 	if errorCount > 0 {
 		errorKeys := []string{tableName, planType.String(), errorCode}
-		qe.queryErrorCounts.Add(errorKeys, errorCount)
+		qe.queryErrorCountsWithCode.Add(errorKeys, errorCount)
 	}
 
 	// For certain plan types like select, we only want to add their metrics to rows returned
