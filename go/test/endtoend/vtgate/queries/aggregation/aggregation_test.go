@@ -385,6 +385,7 @@ func TestAggregateRandom(t *testing.T) {
 	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
 }
 
+// TestAggregateLeftJoin tests that aggregates work with left joins and does not ignore the count when column value does not match the right side table.
 func TestAggregateLeftJoin(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
