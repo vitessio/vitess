@@ -413,6 +413,7 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 			}
 			delete(ths, tabletAlias)
 			log.Infof("[DELETE TABLET]: deleted key from cache %s", key)
+			log.Infof("[DELETE TABLET]: healthData: %v", hc.healthData[key])
 			// delete from healthy list
 			healthy, ok := hc.healthy[key]
 			if ok && len(healthy) > 0 {
