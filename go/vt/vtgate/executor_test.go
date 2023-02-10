@@ -973,8 +973,8 @@ func TestExecutorShow(t *testing.T) {
 
 	query = "show warnings"
 	session.Warnings = []*querypb.QueryWarning{
-		{Code: mysql.ERBadTable, Message: "bad table"},
-		{Code: mysql.EROutOfResources, Message: "ks/-40: query timed out"},
+		{Code: uint32(mysql.ERBadTable), Message: "bad table"},
+		{Code: uint32(mysql.EROutOfResources), Message: "ks/-40: query timed out"},
 	}
 	qr, err = executor.Execute(ctx, "TestExecute", session, query, nil)
 	require.NoError(t, err)
@@ -986,8 +986,8 @@ func TestExecutorShow(t *testing.T) {
 		},
 
 		Rows: [][]sqltypes.Value{
-			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.ERBadTable), sqltypes.NewVarChar("bad table")},
-			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(mysql.EROutOfResources), sqltypes.NewVarChar("ks/-40: query timed out")},
+			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(uint32(mysql.ERBadTable)), sqltypes.NewVarChar("bad table")},
+			{sqltypes.NewVarChar("Warning"), sqltypes.NewUint32(uint32(mysql.EROutOfResources)), sqltypes.NewVarChar("ks/-40: query timed out")},
 		},
 	}
 	utils.MustMatch(t, wantqr, qr, query)
