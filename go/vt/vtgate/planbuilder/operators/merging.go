@@ -18,8 +18,8 @@ select 1 from t1 where (id, foo) in (select id, foo from t2)
 */
 type (
 	merger interface {
-		mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (ops.Operator, error)
-		merge(op1, op2 *Route, r Routing) (ops.Operator, error)
+		mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
+		merge(op1, op2 *Route, r Routing) (*Route, error)
 	}
 
 	joinMerger struct {
@@ -217,7 +217,7 @@ func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr,
 	}
 }
 
-func (jm *joinMerger) mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (ops.Operator, error) {
+func (jm *joinMerger) mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error) {
 	tr := &ShardedRouting{
 		VindexPreds:    append(r1.VindexPreds, r2.VindexPreds...),
 		keyspace:       r1.keyspace,
@@ -241,7 +241,7 @@ func (jm *joinMerger) getApplyJoin(op1, op2 *Route) *ApplyJoin {
 	return NewApplyJoin(op1.Source, op2.Source, jm.ctx.SemTable.AndExpressions(jm.predicates...), !jm.innerJoin)
 }
 
-func (jm *joinMerger) merge(op1, op2 *Route, r Routing) (ops.Operator, error) {
+func (jm *joinMerger) merge(op1, op2 *Route, r Routing) (*Route, error) {
 	return &Route{
 		Source:     jm.getApplyJoin(op1, op2),
 		MergedWith: []*Route{op2},
@@ -253,7 +253,7 @@ func newSubQueryMerge(ctx *plancontext.PlanningContext, subq *SubQueryInner) mer
 	return &subQueryMerger{ctx: ctx, subq: subq}
 }
 
-func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (ops.Operator, error) {
+func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
 	s.subq.ExtractedSubquery.NeedsRewrite = true
 
 	// When merging an inner query with its outer query, we can remove the
@@ -290,14 +290,14 @@ func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Rou
 	return op1, nil
 }
 
-func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
+func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (*Route, error) {
 	s.subq.ExtractedSubquery.NeedsRewrite = true
 	outer.Routing = r
 	outer.MergedWith = append(outer.MergedWith, inner)
 	return outer, nil
 }
 
-func (d *mergeDecorator) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (ops.Operator, error) {
+func (d *mergeDecorator) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
 	merged, err := d.inner.mergeTables(outer, inner, op1, op2)
 	if err != nil {
 		return nil, err
@@ -308,7 +308,7 @@ func (d *mergeDecorator) mergeTables(outer, inner *ShardedRouting, op1, op2 *Rou
 	return merged, nil
 }
 
-func (d *mergeDecorator) merge(outer, inner *Route, r Routing) (ops.Operator, error) {
+func (d *mergeDecorator) merge(outer, inner *Route, r Routing) (*Route, error) {
 	merged, err := d.inner.merge(outer, inner, r)
 	if err != nil {
 		return nil, err

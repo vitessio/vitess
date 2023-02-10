@@ -241,7 +241,7 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	merged, err := Merge(ctx, outerOp, subq, joinPredicates, merger) // TODO: need to fix this
+	merged, err := Merge(ctx, outerOp, subq, joinPredicates, merger)
 	if err != nil {
 		return nil, err
 	}
@@ -267,22 +267,21 @@ func tryMergeSubqueryWithRoute(
 	// Inner subqueries can be merged with the outer subquery as long as
 	// the inner query is a single column selection, and that single column has a matching
 	// vindex on the outer query's operand.
-	// if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
-	// 	merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
-	//
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	//
-	// 	if merged != nil {
-	// 		// since we inlined the subquery into the outer query, new vindex options might have been enabled,
-	// 		// so we go over our current options to check if anything better has come up.
-	//
-	// 		panic("todo")
-	// 		// merged.PickBestAvailableVindex()
-	// 		// return merged, err
-	// 	}
-	// }
+	if canMergeSubqueryOnColumnSelection(ctx, outerOp, subqueryRoute, subQueryInner.ExtractedSubquery) {
+		// TODO: clean up. All this casting is not pretty
+		outerRouting, ok := outerOp.Routing.(*ShardedRouting)
+		if !ok {
+			return nil, nil
+		}
+		innerRouting := subqueryRoute.Routing.(*ShardedRouting)
+		if !ok {
+			return nil, nil
+		}
+		merged, err := merger.mergeTables(outerRouting, innerRouting, outerOp, subqueryRoute)
+		mergedRouting := merged.Routing.(*ShardedRouting)
+		mergedRouting.PickBestAvailableVindex()
+		return merged, err
+	}
 	return nil, nil
 }
 
