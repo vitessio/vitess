@@ -1015,7 +1015,6 @@ func TestExecutorShow(t *testing.T) {
 	wantqr = &sqltypes.Result{
 		Fields: buildVarCharFields("Tables"),
 		Rows: [][]sqltypes.Value{
-			buildVarCharRow("dual"),
 			buildVarCharRow("erl_lu_idx"),
 			buildVarCharRow("ins_lookup"),
 			buildVarCharRow("lu_idx"),

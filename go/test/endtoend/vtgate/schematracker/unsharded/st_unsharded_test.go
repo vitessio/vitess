@@ -98,7 +98,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	// ensuring our initial table "main" is in the schema
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
+		`[[VARCHAR("main")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"initial table list not complete")
@@ -109,7 +109,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	// waiting for the vttablet's schema_reload interval to kick in
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("new_table_tracked")]]`,
+		`[[VARCHAR("main")] [VARCHAR("new_table_tracked")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"new_table_tracked not in vschema tables")
@@ -128,7 +128,7 @@ func TestNewUnshardedTable(t *testing.T) {
 	// waiting for the vttablet's schema_reload interval to kick in
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("main")]]`,
+		`[[VARCHAR("main")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"new_table_tracked not in vschema tables")
