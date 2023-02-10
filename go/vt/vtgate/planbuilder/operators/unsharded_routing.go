@@ -59,13 +59,11 @@ func (tr *TargetedRouting) Keyspace() *vindexes.Keyspace {
 }
 
 func (n *NoneRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	// TODO implement me
-	panic("implement me")
+	rp.Keyspace = n.keyspace
 }
 
 func (n *NoneRouting) Clone() Routing {
-	// TODO implement me
-	panic("implement me")
+	return n
 }
 
 func (n *NoneRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {

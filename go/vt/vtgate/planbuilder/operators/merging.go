@@ -9,7 +9,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
-	"vitess.io/vitess/go/test/dbg"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
@@ -133,8 +132,13 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	case a == infoSchema || b == infoSchema:
 		return nil, nil
 
+	case a == none && sameKeyspace:
+		return m.merge(lhsRoute, rhsRoute, routingA)
+	case b == none && sameKeyspace:
+		return m.merge(lhsRoute, rhsRoute, routingB)
+
 	default:
-		panic(dbg.S(a, b))
+		panic(a.String() + ":" + b.String())
 	}
 }
 

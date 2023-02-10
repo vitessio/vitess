@@ -226,14 +226,14 @@ func tryMergeSubqueryWithRoute(
 	subQueryInner *SubQueryInner,
 	lhs semantics.TableSet, // these are the tables made available because we are on the RHS of a join
 ) (ops.Operator, error) {
-	_, isRoute := subq.(*Route)
+	subqueryRoute, isRoute := subq.(*Route)
 	if !isRoute {
 		return nil, nil
 	}
 
-	// if outerOp.Routing.OpCode() == engine.Reference && !subqueryRoute.IsSingleShard() {
-	// 	return nil, nil
-	// }
+	if outerOp.Routing.OpCode() == engine.Reference && !subqueryRoute.IsSingleShard() {
+		return nil, nil
+	}
 
 	deps := ctx.SemTable.DirectDeps(subQueryInner.ExtractedSubquery.Subquery)
 	outer := lhs.Merge(TableID(outerOp))
