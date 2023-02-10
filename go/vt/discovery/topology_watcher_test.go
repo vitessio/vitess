@@ -464,7 +464,7 @@ func TestFilterByKeyspace(t *testing.T) {
 //   - does not add or remove these filtered out tablets from the its healtcheck
 func TestFilterByKeypsaceSkipsIgnoredTablets(t *testing.T) {
 	ts := memorytopo.NewServer("aa")
-	fhc := NewFakeHealthCheck(nil)
+	fhc := NewFakeHealthCheck()
 	topologyWatcherOperations.ZeroAll()
 	counts := topologyWatcherOperations.Counts()
 	f := NewFilterByKeyspace(testKeyspacesToWatch)
