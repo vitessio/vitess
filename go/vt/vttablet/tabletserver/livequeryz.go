@@ -98,13 +98,13 @@ func livequeryzTerminateHandler(queryLists []*QueryList, w http.ResponseWriter, 
 		return
 	}
 	connID := r.FormValue("connID")
-	c, err := strconv.Atoi(connID)
+	c, err := strconv.ParseInt(connID, 10, 64)
 	if err != nil {
 		http.Error(w, "invalid connID", http.StatusInternalServerError)
 		return
 	}
 	for _, ql := range queryLists {
-		if ql.Terminate(int64(c)) {
+		if ql.Terminate(c) {
 			break
 		}
 	}

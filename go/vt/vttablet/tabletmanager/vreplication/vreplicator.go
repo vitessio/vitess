@@ -749,7 +749,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	if idqr == nil || len(idqr.Rows) != 1 {
 		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
 	}
-	connID, err := idqr.Rows[0][0].ToUint64()
+	connID, err := idqr.Rows[0][0].ToInt64()
 	if err != nil || connID == 0 {
 		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
 	}

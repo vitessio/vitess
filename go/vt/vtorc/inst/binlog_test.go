@@ -41,7 +41,7 @@ func TestPreviousFileCoordinates(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, previous.LogFile, "mysql-bin.000009")
-	require.Equal(t, previous.LogPos, int64(0))
+	require.Equal(t, previous.LogPos, uint32(0))
 }
 
 func TestNextFileCoordinates(t *testing.T) {
@@ -49,7 +49,7 @@ func TestNextFileCoordinates(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Equal(t, next.LogFile, "mysql-bin.000011")
-	require.Equal(t, next.LogPos, int64(0))
+	require.Equal(t, next.LogPos, uint32(0))
 }
 
 func TestBinlogCoordinates(t *testing.T) {

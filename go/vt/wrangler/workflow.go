@@ -233,12 +233,12 @@ func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 // WorkflowError has per stream errors if present in a workflow
 type WorkflowError struct {
 	Tablet      string
-	ID          int64
+	ID          int32
 	Description string
 }
 
 // NewWorkflowError returns a new WorkflowError object
-func NewWorkflowError(tablet string, id int64, description string) *WorkflowError {
+func NewWorkflowError(tablet string, id int32, description string) *WorkflowError {
 	wfErr := &WorkflowError{
 		Tablet:      tablet,
 		ID:          id,

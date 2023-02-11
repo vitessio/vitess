@@ -145,7 +145,7 @@ func (this *RowMap) GetUint(key string) uint {
 }
 
 func (this *RowMap) GetUintD(key string, def uint) uint {
-	res, err := strconv.Atoi(this.GetString(key))
+	res, err := strconv.ParseUint(this.GetString(key), 10, 0)
 	if err != nil {
 		return def
 	}
@@ -163,6 +163,11 @@ func (this *RowMap) GetUint64D(key string, def uint64) uint64 {
 		return def
 	}
 	return res
+}
+
+func (this *RowMap) GetUint32(key string) uint32 {
+	res, _ := strconv.ParseUint(this.GetString(key), 10, 32)
+	return uint32(res)
 }
 
 func (this *RowMap) GetBool(key string) bool {
