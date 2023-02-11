@@ -2306,10 +2306,8 @@ func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
-	for _, el := range in.PointParams {
-		if err := VisitRefOfPointExpr(el, f); err != nil {
-			return err
-		}
+	if err := VisitExprs(in.PointParams, f); err != nil {
+		return err
 	}
 	return nil
 }

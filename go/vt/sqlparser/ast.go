@@ -2712,7 +2712,7 @@ type (
 
 	//LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
 	LineStringExpr struct {
-		PointParams []*PointExpr
+		PointParams Exprs
 	}
 
 	AggrFunc interface {

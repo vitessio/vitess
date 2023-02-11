@@ -3357,18 +3357,10 @@ func (c *cow) copyOnRewriteRefOfLineStringExpr(n *LineStringExpr, parent SQLNode
 	}
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
-		var changedPointParams bool
-		_PointParams := make([]*PointExpr, len(n.PointParams))
-		for x, el := range n.PointParams {
-			this, changed := c.copyOnRewriteRefOfPointExpr(el, n)
-			_PointParams[x] = this.(*PointExpr)
-			if changed {
-				changedPointParams = true
-			}
-		}
+		_PointParams, changedPointParams := c.copyOnRewriteExprs(n.PointParams, n)
 		if changedPointParams {
 			res := *n
-			res.PointParams = _PointParams
+			res.PointParams, _ = _PointParams.(Exprs)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

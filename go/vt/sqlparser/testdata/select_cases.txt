@@ -21337,8 +21337,8 @@ END
 INPUT
 select point(b, b) IS NULL, linestring(b) IS NULL, polygon(b) IS NULL, multipoint(b) IS NULL, multilinestring(b) IS NULL, multipolygon(b) IS NULL, geometrycollection(b) IS NULL from t1;
 END
-ERROR
-syntax error at position 41 near 'b'
+OUTPUT
+select point(b, b) is null, linestring(b) is null, polygon(b) is null, multipoint(b) is null, multilinestring(b) is null, multipolygon(b) is null, geometrycollection(b) is null from t1
 END
 INPUT
 select * from information_schema.table_privileges where grantee like '%user%' and table_schema !='mysql' order by grantee;

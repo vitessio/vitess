@@ -4396,14 +4396,10 @@ func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStrin
 			return true
 		}
 	}
-	for x, el := range node.PointParams {
-		if !a.rewriteRefOfPointExpr(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent SQLNode) {
-				parent.(*LineStringExpr).PointParams[idx] = newNode.(*PointExpr)
-			}
-		}(x)) {
-			return false
-		}
+	if !a.rewriteExprs(node, node.PointParams, func(newNode, parent SQLNode) {
+		parent.(*LineStringExpr).PointParams = newNode.(Exprs)
+	}) {
+		return false
 	}
 	if a.post != nil {
 		a.cur.replacer = replacer

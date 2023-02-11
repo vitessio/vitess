@@ -3042,7 +3042,7 @@ func (cmp *Comparator) RefOfLineStringExpr(a, b *LineStringExpr) bool {
 	if a == nil || b == nil {
 		return false
 	}
-	return cmp.SliceOfRefOfPointExpr(a.PointParams, b.PointParams)
+	return cmp.Exprs(a.PointParams, b.PointParams)
 }
 
 // RefOfLiteral does deep equals between the two objects.
@@ -6716,19 +6716,6 @@ func (cmp *Comparator) RefOfJtNestedPathColDef(a, b *JtNestedPathColDef) bool {
 	}
 	return cmp.Expr(a.Path, b.Path) &&
 		cmp.SliceOfRefOfJtColumnDefinition(a.Columns, b.Columns)
-}
-
-// SliceOfRefOfPointExpr does deep equals between the two objects.
-func (cmp *Comparator) SliceOfRefOfPointExpr(a, b []*PointExpr) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := 0; i < len(a); i++ {
-		if !cmp.RefOfPointExpr(a[i], b[i]) {
-			return false
-		}
-	}
-	return true
 }
 
 // TableAndLockTypes does deep equals between the two objects.

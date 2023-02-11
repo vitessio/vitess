@@ -1834,7 +1834,7 @@ func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
 		return nil
 	}
 	out := *n
-	out.PointParams = CloneSliceOfRefOfPointExpr(n.PointParams)
+	out.PointParams = CloneExprs(n.PointParams)
 	return &out
 }
 
@@ -4128,18 +4128,6 @@ func CloneRefOfJtNestedPathColDef(n *JtNestedPathColDef) *JtNestedPathColDef {
 	out.Path = CloneExpr(n.Path)
 	out.Columns = CloneSliceOfRefOfJtColumnDefinition(n.Columns)
 	return &out
-}
-
-// CloneSliceOfRefOfPointExpr creates a deep clone of the input.
-func CloneSliceOfRefOfPointExpr(n []*PointExpr) []*PointExpr {
-	if n == nil {
-		return nil
-	}
-	res := make([]*PointExpr, len(n))
-	for i, x := range n {
-		res[i] = CloneRefOfPointExpr(x)
-	}
-	return res
 }
 
 // CloneTableAndLockTypes creates a deep clone of the input.
