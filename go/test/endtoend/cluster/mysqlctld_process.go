@@ -146,12 +146,12 @@ func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
 // configured with the given Config.
 func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctldProcess {
 	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
-	/*if isSQL, err := isSQLFlavor(); err == nil {
+	if isSQL, err := isSQLFlavor(); err == nil {
 		if !isSQL {
 			// execute init_db without `super_read_only`
 			initFile = path.Join(os.Getenv("VTROOT"), "config/init_testserver_db.sql")
 		}
-	}*/
+	}
 	mysqlctld := &MysqlctldProcess{
 		Name:         "mysqlctld",
 		Binary:       "mysqlctld",

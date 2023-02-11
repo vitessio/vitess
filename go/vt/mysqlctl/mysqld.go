@@ -35,6 +35,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"runtime/debug"
 	"strconv"
 	"strings"
 	"sync"
@@ -696,7 +697,7 @@ func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string
 		return err
 	}
 
-	log.Infof("InitDBSQLFile: %s", initDBSQLFile)
+	log.Infof("InitDBSQLFile: %s %s", initDBSQLFile, debug.Stack())
 	if initDBSQLFile == "" { // default to built-in
 		if err := mysqld.executeMysqlScript(params, strings.NewReader(config.DefaultInitDB)); err != nil {
 			return fmt.Errorf("failed to initialize mysqld: %v", err)
