@@ -238,12 +238,12 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 // configured with the given Config.
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
 	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
-	if isSQL, err := isSQLFlavor(); err == nil {
+	/*if isSQL, err := isSQLFlavor(); err == nil {
 		if !isSQL {
 			// execute init_db without `super_read_only`
 			initFile = path.Join(os.Getenv("VTROOT"), "config/init_testserver_db.sql")
 		}
-	}
+	}*/
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
 		Binary:       "mysqlctl",
