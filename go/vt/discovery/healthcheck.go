@@ -568,6 +568,7 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 	for _, ths := range hc.healthData {
 		for _, th := range ths {
 			key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
+			log.Infof("[SHOW TABLETS] Found key in map: %s", key)
 			var tcs *TabletsCacheStatus
 			var ok bool
 			if tcs, ok = tcsMap[key]; !ok {
