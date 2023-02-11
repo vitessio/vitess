@@ -2883,7 +2883,7 @@
                         "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
                         "Table": "name_user_vdx",
                         "Values": [
-                          ":name"
+                          "::name"
                         ],
                         "Vindex": "user_index"
                       },
@@ -2926,7 +2926,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as count(*)"
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(*)"
             ],
             "Inputs": [
               {
@@ -3045,7 +3045,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 0] as a",
-              "[COLUMN 2] * [COLUMN 3] as count(*)",
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(*)",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -3108,7 +3108,7 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 0] as a",
-              "[COLUMN 2] * [COLUMN 3] as count(user_extra.a)",
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(user_extra.a)",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -3170,8 +3170,8 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "([COLUMN 2] * [COLUMN 3]) * [COLUMN 4] as count(u.textcol1)",
-              "([COLUMN 5] * [COLUMN 6]) * [COLUMN 7] as count(ue.foo)",
+              "([COLUMN 2] * COALESCE([COLUMN 3], INT64(1))) * COALESCE([COLUMN 4], INT64(1)) as count(u.textcol1)",
+              "([COLUMN 5] * COALESCE([COLUMN 6], INT64(1))) * COALESCE([COLUMN 7], INT64(1)) as count(ue.foo)",
               "[COLUMN 0] as bar",
               "[COLUMN 1]"
             ],
@@ -3804,7 +3804,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 2] * [COLUMN 3] as sum(col)"
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as sum(col)"
             ],
             "Inputs": [
               {
@@ -4063,7 +4063,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as id",
-                      "[COLUMN 2] * [COLUMN 3] as count(u.`name`)",
+                      "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(u.`name`)",
                       "[COLUMN 1]"
                     ],
                     "Inputs": [
@@ -4190,7 +4190,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as id",
-                      "[COLUMN 2] * [COLUMN 3] as count(*)",
+                      "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as count(*)",
                       "[COLUMN 1]"
                     ],
                     "Inputs": [
@@ -4847,7 +4847,7 @@
             "Expressions": [
               "[COLUMN 0] as id",
               "[COLUMN 2] as name",
-              "[COLUMN 3] * [COLUMN 4] as count(m.predef1)",
+              "[COLUMN 3] * COALESCE([COLUMN 4], INT64(1)) as count(m.predef1)",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -4892,6 +4892,66 @@
                         "Vindex": "user_index"
                       }
                     ]
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Aggregation in a left join query",
+    "query": "select count (u.id) from user u left join user_extra ue on u.col = ue.col",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count (u.id) from user u left join user_extra ue on u.col = ue.col",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "sum_count(0) AS count(u.id)",
+        "Inputs": [
+          {
+            "OperatorType": "Projection",
+            "Expressions": [
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as count(u.id)"
+            ],
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "L:1,R:1",
+                "JoinVars": {
+                  "u_col": 0
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select u.col, count(u.id) from `user` as u where 1 != 1 group by u.col",
+                    "Query": "select u.col, count(u.id) from `user` as u group by u.col",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select 1, count(*) from user_extra as ue where 1 != 1 group by 1",
+                    "Query": "select 1, count(*) from user_extra as ue where ue.col = :u_col group by 1",
+                    "Table": "user_extra"
                   }
                 ]
               }

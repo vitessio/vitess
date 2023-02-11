@@ -53,14 +53,14 @@ func (flv *filePosFlavor) primaryGTIDSet(c *Conn) (GTIDSet, error) {
 	if err != nil {
 		return nil, err
 	}
-	pos, err := strconv.Atoi(resultMap["Position"])
+	pos, err := strconv.ParseUint(resultMap["Position"], 0, 32)
 	if err != nil {
 		return nil, fmt.Errorf("invalid FilePos GTID (%v): expecting pos to be an integer", resultMap["Position"])
 	}
 
 	return filePosGTID{
 		file: resultMap["File"],
-		pos:  pos,
+		pos:  uint32(pos),
 	}, nil
 }
 
@@ -126,7 +126,7 @@ func (flv *filePosFlavor) sendBinlogDumpCommand(c *Conn, serverID uint32, binlog
 	}
 
 	flv.file = rpos.file
-	return c.WriteComBinlogDump(serverID, rpos.file, uint32(rpos.pos), 0)
+	return c.WriteComBinlogDump(serverID, rpos.file, rpos.pos, 0)
 }
 
 // readBinlogEvent is part of the Flavor interface.

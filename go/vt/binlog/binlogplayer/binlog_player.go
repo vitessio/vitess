@@ -179,7 +179,7 @@ type BinlogPlayer struct {
 	tables []string
 
 	// common to all
-	uid            uint32
+	uid            int32
 	position       mysql.Position
 	stopPosition   mysql.Position
 	blplStats      *Stats
@@ -192,7 +192,7 @@ type BinlogPlayer struct {
 // replicating the provided keyrange and updating _vt.vreplication
 // with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid uint32, blplStats *Stats) *BinlogPlayer {
+func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRange *topodatapb.KeyRange, uid int32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
 		tablet:        tablet,
 		dbClient:      dbClient,
@@ -208,7 +208,7 @@ func NewBinlogPlayerKeyRange(dbClient DBClient, tablet *topodatapb.Tablet, keyRa
 // replicating the provided tables and updating _vt.vreplication
 // with uid=startPosition.Uid.
 // If !stopPosition.IsZero(), it will stop when reaching that position.
-func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables []string, uid uint32, blplStats *Stats) *BinlogPlayer {
+func NewBinlogPlayerTables(dbClient DBClient, tablet *topodatapb.Tablet, tables []string, uid int32, blplStats *Stats) *BinlogPlayer {
 	result := &BinlogPlayer{
 		tablet:        tablet,
 		dbClient:      dbClient,
@@ -530,15 +530,15 @@ type VRSettings struct {
 	MaxTPS             int64
 	MaxReplicationLag  int64
 	State              string
-	WorkflowType       int32
-	WorkflowSubType    int32
+	WorkflowType       binlogdatapb.VReplicationWorkflowType
+	WorkflowSubType    binlogdatapb.VReplicationWorkflowSubType
 	WorkflowName       string
 	DeferSecondaryKeys bool
 }
 
 // ReadVRSettings retrieves the throttler settings for
 // vreplication from the checkpoint table.
-func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
+func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from _vt.vreplication where id=%v", uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
@@ -566,13 +566,11 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse stop_pos column: %v", err)
 	}
-	workflowTypeTmp, err := vrRow.ToInt64("workflow_type")
-	workflowType := int32(workflowTypeTmp)
+	workflowType, err := vrRow.ToInt32("workflow_type")
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_type column: %v", err)
 	}
-	workflowSubTypeTmp, err := vrRow.ToInt64("workflow_sub_type")
-	workflowSubType := int32(workflowSubTypeTmp)
+	workflowSubType, err := vrRow.ToInt32("workflow_sub_type")
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("failed to parse workflow_sub_type column: %v", err)
 	}
@@ -586,9 +584,9 @@ func ReadVRSettings(dbClient DBClient, uid uint32) (VRSettings, error) {
 		MaxTPS:             maxTPS,
 		MaxReplicationLag:  maxReplicationLag,
 		State:              vrRow.AsString("state", ""),
-		WorkflowType:       workflowType,
+		WorkflowType:       binlogdatapb.VReplicationWorkflowType(workflowType),
 		WorkflowName:       vrRow.AsString("workflow", ""),
-		WorkflowSubType:    workflowSubType,
+		WorkflowSubType:    binlogdatapb.VReplicationWorkflowSubType(workflowSubType),
 		DeferSecondaryKeys: deferSecondaryKeys,
 	}, nil
 }
@@ -599,9 +597,9 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType, deferSecondaryKeys bool) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v, %v)",
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS, maxReplicationLag,
-		timeUpdated, BlpRunning, encodeString(dbName), int64(workflowType), int64(workflowSubType), deferSecondaryKeys)
+		timeUpdated, BlpRunning, encodeString(dbName), workflowType, workflowSubType, deferSecondaryKeys)
 }
 
 // CreateVReplicationState returns a statement to create a stopped vreplication.
@@ -609,14 +607,14 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 	workflowType binlogdatapb.VReplicationWorkflowType, workflowSubType binlogdatapb.VReplicationWorkflowSubType) string {
 	return fmt.Sprintf("insert into _vt.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
-		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %v, %v)",
+		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",
 		encodeString(workflow), encodeString(source.String()), encodeString(position), throttler.MaxRateModuleDisabled,
 		throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName),
-		int64(workflowType), int64(workflowSubType))
+		workflowType, workflowSubType)
 }
 
 // GenerateUpdatePos returns a statement to record the latest processed gtid in the _vt.vreplication table.
-func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
+func GenerateUpdatePos(uid int32, pos mysql.Position, timeUpdated int64, txTimestamp int64, rowsCopied int64, compress bool) string {
 	strGTID := encodeString(mysql.EncodePosition(pos))
 	if compress {
 		strGTID = fmt.Sprintf("compress(%s)", strGTID)
@@ -631,12 +629,12 @@ func GenerateUpdatePos(uid uint32, pos mysql.Position, timeUpdated int64, txTime
 }
 
 // GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the _vt.vreplication table.
-func GenerateUpdateRowsCopied(uid uint32, rowsCopied int64) string {
+func GenerateUpdateRowsCopied(uid int32, rowsCopied int64) string {
 	return fmt.Sprintf("update _vt.vreplication set rows_copied=%v where id=%v", rowsCopied, uid)
 }
 
 // GenerateUpdateHeartbeat returns a statement to record the latest heartbeat in the _vt.vreplication table.
-func GenerateUpdateHeartbeat(uid uint32, timeUpdated int64) (string, error) {
+func GenerateUpdateHeartbeat(uid int32, timeUpdated int64) (string, error) {
 	if timeUpdated == 0 {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
@@ -644,7 +642,7 @@ func GenerateUpdateHeartbeat(uid uint32, timeUpdated int64) (string, error) {
 }
 
 // GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the _vt.vreplication table.
-func GenerateUpdateTimeThrottled(uid uint32, timeThrottledUnix int64, componentThrottled string) (string, error) {
+func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentThrottled string) (string, error) {
 	if timeThrottledUnix == 0 {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
@@ -652,28 +650,28 @@ func GenerateUpdateTimeThrottled(uid uint32, timeThrottledUnix int64, componentT
 }
 
 // StartVReplication returns a statement to start the replication.
-func StartVReplication(uid uint32) string {
+func StartVReplication(uid int32) string {
 	return fmt.Sprintf(
 		"update _vt.vreplication set state='%v', stop_pos=NULL where id=%v",
 		BlpRunning, uid)
 }
 
 // StartVReplicationUntil returns a statement to start the replication with a stop position.
-func StartVReplicationUntil(uid uint32, pos string) string {
+func StartVReplicationUntil(uid int32, pos string) string {
 	return fmt.Sprintf(
 		"update _vt.vreplication set state='%v', stop_pos=%v where id=%v",
 		BlpRunning, encodeString(pos), uid)
 }
 
 // StopVReplication returns a statement to stop the replication.
-func StopVReplication(uid uint32, message string) string {
+func StopVReplication(uid int32, message string) string {
 	return fmt.Sprintf(
 		"update _vt.vreplication set state='%v', message=%v where id=%v",
 		BlpStopped, encodeString(MessageTruncate(message)), uid)
 }
 
 // DeleteVReplication returns a statement to delete the replication.
-func DeleteVReplication(uid uint32) string {
+func DeleteVReplication(uid int32) string {
 	return fmt.Sprintf("delete from _vt.vreplication where id=%v", uid)
 }
 
@@ -691,13 +689,13 @@ func encodeString(in string) string {
 
 // ReadVReplicationPos returns a statement to query the gtid for a
 // given stream from the _vt.vreplication table.
-func ReadVReplicationPos(index uint32) string {
+func ReadVReplicationPos(index int32) string {
 	return fmt.Sprintf("select pos from _vt.vreplication where id=%v", index)
 }
 
 // ReadVReplicationStatus returns a statement to query the status fields for a
 // given stream from the _vt.vreplication table.
-func ReadVReplicationStatus(index uint32) string {
+func ReadVReplicationStatus(index int32) string {
 	return fmt.Sprintf("select pos, state, message from _vt.vreplication where id=%v", index)
 }
 

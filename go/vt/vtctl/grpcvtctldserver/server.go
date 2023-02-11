@@ -31,11 +31,11 @@ import (
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"

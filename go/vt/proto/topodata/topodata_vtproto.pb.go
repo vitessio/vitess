@@ -2798,7 +2798,7 @@ func (m *Shard_SourceShard) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-				m.Uid |= uint32(b&0x7F) << shift
+				m.Uid |= int32(b&0x7F) << shift
 				if b < 0x80 {
 					break
 				}

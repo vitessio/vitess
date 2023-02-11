@@ -161,7 +161,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "57000"
+	sqlparser.SetParserVersion("57000")
 	setVarEnabled = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
@@ -197,7 +197,7 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80000"
+	sqlparser.SetParserVersion("80000")
 	setVarEnabled = false
 	defer func() {
 		setVarEnabled = true
@@ -235,7 +235,7 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80001"
+	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -283,7 +283,7 @@ func TestSetSystemVariables(t *testing.T) {
 	executor, _, _, lookup := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80001"
+	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 

@@ -715,7 +715,7 @@ func TestPlannedReparentShardRelayLogErrorStartReplication(t *testing.T) {
 	goodReplica1.FakeMysqlDaemon.IOThreadRunning = false
 	goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica1.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	goodReplica1.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
-	goodReplica1.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
+	goodReplica1.FakeMysqlDaemon.CurrentSourcePort = primary.Tablet.MysqlPort
 	goodReplica1.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// simulate error that will trigger a call to RestartReplication
 		// These 3 statements come from tablet startup

@@ -28,12 +28,12 @@ import (
 func TestInsertGenerator(t *testing.T) {
 	ig := NewInsertGenerator(binlogplayer.BlpStopped, "a")
 	ig.now = 111
-	ig.AddRow("b", &binlogdatapb.BinlogSource{Keyspace: "c"}, "d", "e", "f", int64(binlogdatapb.VReplicationWorkflowType_Materialize), int64(binlogdatapb.VReplicationWorkflowSubType_None), false)
+	ig.AddRow("b", &binlogdatapb.BinlogSource{Keyspace: "c"}, "d", "e", "f", binlogdatapb.VReplicationWorkflowType_Materialize, binlogdatapb.VReplicationWorkflowSubType_None, false)
 	want := `insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values ` +
 		`('b', 'keyspace:\"c\"', 'd', 9223372036854775807, 9223372036854775807, 'e', 'f', 111, 0, 'Stopped', 'a', 0, 0, false)`
 	assert.Equal(t, ig.String(), want)
 
-	ig.AddRow("g", &binlogdatapb.BinlogSource{Keyspace: "h"}, "i", "j", "k", int64(binlogdatapb.VReplicationWorkflowType_Reshard), int64(binlogdatapb.VReplicationWorkflowSubType_Partial), true)
+	ig.AddRow("g", &binlogdatapb.BinlogSource{Keyspace: "h"}, "i", "j", "k", binlogdatapb.VReplicationWorkflowType_Reshard, binlogdatapb.VReplicationWorkflowSubType_Partial, true)
 	want += `, ('g', 'keyspace:\"h\"', 'i', 9223372036854775807, 9223372036854775807, 'j', 'k', 111, 0, 'Stopped', 'a', 4, 1, true)`
 	assert.Equal(t, ig.String(), want)
 }

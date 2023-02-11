@@ -20,7 +20,8 @@ import (
 	"strings"
 
 	"github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/util/sets"
+
+	"vitess.io/vitess/go/sets"
 )
 
 var _ pflag.Value = (*StringSetFlag)(nil)

@@ -17,6 +17,7 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -26,14 +27,11 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
-
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 

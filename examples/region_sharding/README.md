@@ -5,12 +5,8 @@ This document contains the summary of the commands to be run.
 
 
 ```
-# Edit main_vschema_sharded.json and set region_map to full path of countries.json file
-# Example:
-	    "region_map": "/home/user/vitess/examples/region_sharding/countries.json",
-
 # setup environment and aliases
-source env.sh
+source ../common/env.sh
 
 # Bring up initial cluster and main keyspace (unsharded)
 ./101_initial_cluster.sh

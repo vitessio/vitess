@@ -109,6 +109,7 @@ func (*nameLkpIndex) Cost() int                            { return 3 }
 func (*nameLkpIndex) IsUnique() bool                       { return false }
 func (*nameLkpIndex) NeedsVCursor() bool                   { return false }
 func (*nameLkpIndex) AllowBatch() bool                     { return true }
+func (*nameLkpIndex) AutoCommitEnabled() bool              { return false }
 func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
@@ -677,6 +678,22 @@ func (vw *vschemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStat
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	if tab.Qualifier.IsEmpty() && tab.Name.String() == "dual" {
+		ksName := vw.getActualKeyspace()
+		var ks *vindexes.Keyspace
+		if ksName == "" {
+			ks = vw.getfirstKeyspace()
+			ksName = ks.Name
+		} else {
+			ks = vw.v.Keyspaces[ksName].Keyspace
+		}
+		tbl := &vindexes.Table{
+			Name:     sqlparser.NewIdentifierCS("dual"),
+			Keyspace: ks,
+			Type:     vindexes.TypeReference,
+		}
+		return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
+	}
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
@@ -691,6 +708,16 @@ func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	return table, vindex, destKeyspace, destTabletType, destTarget, nil
 }
 
+func (vw *vschemaWrapper) getfirstKeyspace() (ks *vindexes.Keyspace) {
+	var f string
+	for name, schema := range vw.v.Keyspaces {
+		if f == "" || f > name {
+			f = name
+			ks = schema.Keyspace
+		}
+	}
+	return
+}
 func (vw *vschemaWrapper) getActualKeyspace() string {
 	if vw.keyspace == nil {
 		return ""

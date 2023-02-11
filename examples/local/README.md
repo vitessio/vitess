@@ -6,7 +6,7 @@ This document contains the summary of the commands to be run.
 
 ```
 # Setup environment and aliases
-source env.sh
+source ../common/env.sh
 
 # Bring up initial cluster and commerce keyspace
 ./101_initial_cluster.sh
@@ -47,7 +47,7 @@ vtctlclient Reshard -- --tablet_types=primary SwitchTraffic customer.cust2cust
 
 # Down shard 0
 ./306_down_shard_0.sh
-vtctlclient DeleteShard -- --recursive customer/0
+vtctlclient DeleteShard -- --force --recursive customer/0
 
 # Down cluster
 ./401_teardown.sh
