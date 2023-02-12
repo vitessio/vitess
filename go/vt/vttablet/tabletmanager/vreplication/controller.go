@@ -68,7 +68,7 @@ type controller struct {
 	// The following fields are updated after start. So, they need synchronization.
 	sourceTablet sync2.AtomicString
 
-	lastWorkflowError *lastError
+	lastWorkflowError *vterrors.LastError
 }
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
@@ -79,13 +79,12 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 
 	ct := &controller{
-		vre:               vre,
-		dbClientFactory:   dbClientFactory,
-		mysqld:            mysqld,
-		blpStats:          blpStats,
-		done:              make(chan struct{}),
-		source:            &binlogdatapb.BinlogSource{},
-		lastWorkflowError: newLastError("VReplication Controller", maxTimeToRetryError),
+		vre:             vre,
+		dbClientFactory: dbClientFactory,
+		mysqld:          mysqld,
+		blpStats:        blpStats,
+		done:            make(chan struct{}),
+		source:          &binlogdatapb.BinlogSource{},
 	}
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
@@ -96,6 +95,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 	ct.id = uint32(id)
 	ct.workflow = params["workflow"]
+	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
 	blpStats.State.Set(state)
@@ -271,10 +271,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		err = vr.Replicate(ctx)
-		ct.lastWorkflowError.record(err)
+		ct.lastWorkflowError.Record(err)
 		// If this is a mysql error that we know needs manual intervention OR
 		// we cannot identify this as non-recoverable, but it has persisted beyond the retry limit (maxTimeToRetryError)
-		if isUnrecoverableError(err) || !ct.lastWorkflowError.shouldRetry() {
+		if isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
 				return err // yes, err and not errSetState.
