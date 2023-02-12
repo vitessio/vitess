@@ -37,7 +37,7 @@ const TopoTemplate = `
     padding: 0.2rem;
   }
 </style>
-<table>
+<table id="TopologyCache">
   <tr>
     <th colspan="4">SrvKeyspace Names Cache</th>
   </tr>

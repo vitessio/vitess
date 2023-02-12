@@ -81,6 +81,26 @@ var statusHTML = `<!DOCTYPE html>
 <html>
 <head>
 <title>Status for {{.BinaryName}}</title>
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
+<script>
+function refreshTableContentIfTableHasID() {
+  $.get("/debug/status", function(data) {
+    var data = $.parseHTML(data);
+    $("table").each(function() {
+  	  var findTableID = $(this).attr("id");
+  	  if (typeof findTableID !== "undefined") {
+  	    var newTable = $(data).filter("#" + findTableID);
+  	    if (newTable.length > 0) {
+  	  	  $(this).empty().append(newTable.html());
+  	    }
+  	  }
+    });
+  });
+}
+$(document).ready(function() {
+	setInterval(refreshTableContentIfTableHasID, 5000);
+});
+</script>
 <style>
 body {
 font-family: sans-serif;
