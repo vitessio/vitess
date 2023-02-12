@@ -629,32 +629,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 	return vttablet
 }
 
-// SetSuperReadOnly switch-off super-read-only flag in db
-func (vttablet *VttabletProcess) SetSuperReadOnly(dbname string, enableSuperReadOnly bool) error {
-	conn, err := vttablet.defaultConn(dbname)
-	if err != nil {
-		log.Infof("error in getting connection object %s", err)
-		return err
-	}
-	defer conn.Close()
-
-	_, err = conn.SetSuperReadOnly(enableSuperReadOnly)
-	return err
-}
-
-// SetReadOnly switch-off read-only flag in db
-func (vttablet *VttabletProcess) SetReadOnly(dbname string, enableReadOnly bool) error {
-	conn, err := vttablet.defaultConn(dbname)
-	if err != nil {
-		log.Infof("error in getting connection object %s", err)
-		return err
-	}
-	defer conn.Close()
-
-	_, err = conn.SetReadOnly(enableReadOnly)
-	return err
-}
-
 // QueryTabletWithSuperReadOnlyHandling lets you execute a query in this tablet while disabling super-read-only and get the result
 // It will enable super-read-only once its done executing the query.
 func (vttablet *VttabletProcess) QueryTabletWithSuperReadOnlyHandling(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {

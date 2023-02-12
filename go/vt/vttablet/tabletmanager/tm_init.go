@@ -76,13 +76,14 @@ const denyListQueryList string = "DenyListQueryRules"
 
 var (
 	// The following flags initialize the tablet record.
-	tabletHostname       string
-	initKeyspace         string
-	initShard            string
-	initTabletType       string
-	initDbNameOverride   string
-	skipBuildInfoTags    = "/.*/"
-	initTags             flagutil.StringMapValue
+	tabletHostname     string
+	initKeyspace       string
+	initShard          string
+	initTabletType     string
+	initDbNameOverride string
+	skipBuildInfoTags  = "/.*/"
+	initTags           flagutil.StringMapValue
+
 	initPopulateMetadata bool
 	initTimeout          = 1 * time.Minute
 )

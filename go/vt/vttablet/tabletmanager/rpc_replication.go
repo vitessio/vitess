@@ -37,11 +37,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var setSuperReadOnly = true
 var disableReplicationManager bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
-	fs.BoolVar(&setSuperReadOnly, "use_super_read_only", setSuperReadOnly, "Set super_read_only flag when performing planned failover.")
+	fs.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
+	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always starts as super_read_only=`true`")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
 }
