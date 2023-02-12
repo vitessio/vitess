@@ -6,7 +6,7 @@
 
 #### Dedicated stats for VTGate Prepare operations
 
-Previously Vitess did not generate independent stats for VTGate Execute and Prepare operations. The two operations shared the same stat key (`Execute`). In v16 Prepare operations generate independent stats.
+Previously Vitess did not generate independent stats for VTGate Execute and Prepare operations. The two operations shared the same stat key (`Execute`). In v17 Prepare operations generate independent stats.
 
 For example:
 
