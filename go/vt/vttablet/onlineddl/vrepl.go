@@ -81,14 +81,14 @@ func (v *VReplStream) isRunning() bool {
 }
 
 // isFailed() returns true when the workflow has failed and will not retry
-func (v *VReplStream) isFailed() bool {
+func (v *VReplStream) isFailed() (failed bool, message string) {
 	switch {
 	case v.state == binlogplayer.BlpError:
-		return true
+		return true, v.message
 	case strings.Contains(strings.ToLower(v.message), "error"):
-		return true
+		return true, v.message
 	}
-	return false
+	return false, ""
 }
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
