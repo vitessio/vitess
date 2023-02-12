@@ -26,6 +26,7 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -44,7 +45,7 @@ type VStreamer interface {
 	Stream(ctx context.Context, startPos string, tablePKs []*binlogdatapb.TableLastPK, filter *binlogdatapb.Filter, send func([]*binlogdatapb.VEvent) error) error
 }
 
-// Tracker watches the replication and saves the latest schema into _vt.schema_version when a DDL is encountered.
+// Tracker watches the replication and saves the latest schema into the schema_version table when a DDL is encountered.
 type Tracker struct {
 	enabled bool
 
@@ -172,7 +173,8 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 		return false, err
 	}
 	defer conn.Recycle()
-	result, err := conn.Exec(ctx, "select id from _vt.schema_version limit 1", 1, false)
+	result, err := conn.Exec(ctx, fmt.Sprintf("select id from %s.schema_version limit 1",
+		sidecardb.GetSidecarDBIdentifier()), 1, false)
 	if err != nil {
 		return false, err
 	}
@@ -190,7 +192,7 @@ func (tr *Tracker) possiblyInsertInitialSchema(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	if !needsWarming { // _vt.schema_version is not empty, nothing to do here
+	if !needsWarming { // the schema_version table is not empty, nothing to do here
 		return nil
 	}
 	if err = tr.engine.Reload(ctx); err != nil {
@@ -235,9 +237,10 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 	}
 	defer conn.Recycle()
 
-	query := fmt.Sprintf("insert into _vt.schema_version "+
+	query := fmt.Sprintf("insert into %s.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
-		"values (%v, %v, %v, %d)", encodeString(gtid), encodeString(ddl), encodeString(string(blob)), timestamp)
+		"values (%v, %v, %v, %d)", sidecardb.GetSidecarDBIdentifier(), encodeString(gtid),
+		encodeString(ddl), encodeString(string(blob)), timestamp)
 	_, err = conn.Exec(ctx, query, 1, false)
 	if err != nil {
 		return err

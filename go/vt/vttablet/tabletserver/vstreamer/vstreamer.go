@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/timer"
 	vtschema "vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/mysql"
@@ -654,7 +655,8 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		return err
 	}
 	defer conn.Close()
-	qr, err := conn.ExecuteFetch("select * from _vt.resharding_journal where 1 != 1", 1, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %s.resharding_journal where 1 != 1",
+		sidecardb.GetSidecarDBIdentifier()), 1, true)
 	if err != nil {
 		return err
 	}
@@ -663,7 +665,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:   "_vt.resharding_journal",
+		Name:   fmt.Sprintf("%s.resharding_journal", sidecardb.GetSidecarDBIdentifier()),
 		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
@@ -687,7 +689,8 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 		return err
 	}
 	defer conn.Close()
-	qr, err := conn.ExecuteFetch("select * from _vt.schema_version where 1 != 1", 1, true)
+	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %s.schema_version where 1 != 1",
+		sidecardb.GetSidecarDBIdentifier()), 1, true)
 	if err != nil {
 		return err
 	}
@@ -696,7 +699,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:   "_vt.schema_version",
+		Name:   fmt.Sprintf("%s.schema_version", sidecardb.GetSidecarDBIdentifier()),
 		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows

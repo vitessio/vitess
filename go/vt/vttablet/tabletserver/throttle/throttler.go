@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -87,7 +88,8 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 }
 
 var (
-	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
+	replicationLagQuery = fmt.Sprintf(`select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat`,
+		sidecardb.GetSidecarDBIdentifier())
 
 	ErrThrottlerNotReady = errors.New("throttler not enabled/ready")
 )

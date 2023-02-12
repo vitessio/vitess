@@ -127,12 +127,16 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 		return "", err
 	}
 
+	oldQualifier := NewIdentifierCS(olddb)
+	newQualifier := NewIdentifierCS(newdb)
+
 	modified := false
 	upd := Rewrite(in, func(cursor *Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case TableName:
 			if !node.Qualifier.IsEmpty() &&
-				node.Qualifier.String() == olddb && node.Qualifier.String() != newdb {
+				node.Qualifier.String() == oldQualifier.String() &&
+				node.Qualifier.String() != newQualifier.String() {
 				node.Qualifier = NewIdentifierCS(newdb)
 				cursor.Replace(node)
 				modified = true

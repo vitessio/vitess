@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -393,7 +394,7 @@ func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlpar
 		return nil
 	}
 	// run the select to know which views exist.
-	sel, err := sqlparser.Parse(mysql.SelectFromViewsTable)
+	sel, err := sqlparser.Parse(fmt.Sprintf(mysql.SelectFromViewsTable, sidecardb.GetSidecarDBIdentifier()))
 	if err != nil {
 		return err
 	}

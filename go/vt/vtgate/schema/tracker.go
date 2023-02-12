@@ -18,6 +18,7 @@ package schema
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
@@ -110,7 +111,8 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
-	ftRes, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
+	ftRes, err := conn.Execute(t.ctx, target, fmt.Sprintf(mysql.FetchTables, "_vt"),
+		nil, 0, 0, nil)
 	if err != nil {
 		return err
 	}
@@ -134,7 +136,8 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return nil
 	}
 
-	fvRes, err := conn.Execute(t.ctx, target, mysql.FetchViews, nil, 0, 0, nil)
+	fvRes, err := conn.Execute(t.ctx, target, fmt.Sprintf(mysql.FetchViews, "_vt"),
+		nil, 0, 0, nil)
 	if err != nil {
 		return err
 	}
@@ -259,7 +262,8 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 		return false
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
-	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
+	res, err := th.Conn.Execute(t.ctx, th.Target, fmt.Sprintf(mysql.FetchUpdatedTables, "_vt"),
+		bv, 0, 0, nil)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the tables that got errored out.
@@ -306,7 +310,8 @@ func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
 		return false
 	}
 	bv := map[string]*querypb.BindVariable{"viewNames": views}
-	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedViews, bv, 0, 0, nil)
+	res, err := th.Conn.Execute(t.ctx, th.Target, fmt.Sprintf(mysql.FetchUpdatedViews, "_vt"),
+		bv, 0, 0, nil)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the views that got errored out.

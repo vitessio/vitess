@@ -27,6 +27,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -380,7 +381,8 @@ func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string,
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	err := conn.Stream(ctx, mysql.DetectSchemaChange, callback, alloc, bufferSize, 0)
+	err := conn.Stream(ctx, fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetSidecarDBIdentifier()),
+		callback, alloc, bufferSize, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -391,8 +393,8 @@ func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string,
 	}
 
 	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(tableNames, ", "))
-	del := fmt.Sprintf("%s AND %s", mysql.ClearSchemaCopy, tableNamePredicate)
-	upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicate)
+	del := fmt.Sprintf("%s AND %s", fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetSidecarDBIdentifier()), tableNamePredicate)
+	upd := fmt.Sprintf("%s AND %s", fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetSidecarDBIdentifier()), tableNamePredicate)
 
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
@@ -433,7 +435,8 @@ func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpoo
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	err := conn.Stream(ctx, mysql.SelectAllViews, callback, alloc, bufferSize, 0)
+	err := conn.Stream(ctx, fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetSidecarDBIdentifier()),
+		callback, alloc, bufferSize, 0)
 	if err != nil {
 		return nil, err
 	}

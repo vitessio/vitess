@@ -562,8 +562,9 @@ func (se *Engine) populatePrimaryKeys(ctx context.Context, conn *connpool.DBConn
 	return nil
 }
 
-// RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
-// It triggers the historian to load the newer rows from the database to update its cache
+// RegisterVersionEvent is called by the vstream when it encounters a version event (an
+// insert into the schema_tracking table). It triggers the historian to load the newer
+// rows from the database to update its cache.
 func (se *Engine) RegisterVersionEvent() error {
 	return se.historian.RegisterVersionEvent()
 }

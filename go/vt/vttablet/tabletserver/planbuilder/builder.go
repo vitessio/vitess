@@ -17,9 +17,11 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
 	"strings"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -226,9 +228,9 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch viewDDL := stmt.(type) {
 	case *sqlparser.CreateView:
-		query := mysql.InsertIntoViewsTable
+		query := fmt.Sprintf(mysql.InsertIntoViewsTable, sidecardb.GetSidecarDBIdentifier())
 		if viewDDL.IsReplace {
-			query = mysql.ReplaceIntoViewsTable
+			query = fmt.Sprintf(mysql.ReplaceIntoViewsTable, sidecardb.GetSidecarDBIdentifier())
 		}
 		insert, err := sqlparser.Parse(query)
 		if err != nil {
@@ -236,13 +238,13 @@ func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
 	case *sqlparser.AlterView:
-		update, err := sqlparser.Parse(mysql.UpdateViewsTable)
+		update, err := sqlparser.Parse(fmt.Sprintf(mysql.UpdateViewsTable, sidecardb.GetSidecarDBIdentifier()))
 		if err != nil {
 			return nil, err
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
 	case *sqlparser.DropView:
-		del, err := sqlparser.Parse(mysql.DeleteFromViewsTable)
+		del, err := sqlparser.Parse(fmt.Sprintf(mysql.DeleteFromViewsTable, sidecardb.GetSidecarDBIdentifier()))
 		if err != nil {
 			return nil, err
 		}

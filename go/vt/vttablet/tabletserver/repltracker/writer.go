@@ -43,7 +43,7 @@ const (
 	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
 )
 
-// heartbeatWriter runs on primary tablets and writes heartbeats to the _vt.heartbeat
+// heartbeatWriter runs on primary tablets and writes heartbeats to the heartbeat
 // table at a regular interval, defined by heartbeat_interval.
 type heartbeatWriter struct {
 	env tabletenv.Env

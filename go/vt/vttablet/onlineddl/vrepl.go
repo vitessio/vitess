@@ -38,6 +38,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/onlineddl/vrepl"
@@ -573,7 +574,7 @@ func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 
 // generateStartStatement Generates the statement to start VReplication running on the workflow
 func (v *VRepl) generateStartStatement(ctx context.Context) (string, error) {
-	return sqlparser.ParseAndBind(sqlStartVReplStream,
+	return sqlparser.ParseAndBind(fmt.Sprintf(sqlStartVReplStream, sidecardb.GetSidecarDBIdentifier()),
 		sqltypes.StringBindVariable(v.dbName),
 		sqltypes.StringBindVariable(v.workflow),
 	)
