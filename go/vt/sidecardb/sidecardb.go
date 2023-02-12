@@ -412,6 +412,8 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
 	)
 	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
+
+	db.AddQuery("set @@session.sql_mode=''", &sqltypes.Result{})
 }
 
 // MatchesInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp.
