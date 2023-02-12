@@ -38,7 +38,7 @@ func TestAll(t *testing.T) {
 	require.NoError(t, err)
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetSidecarDBNameIdentifier()), maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetSidecarDBIdentifier()), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
@@ -50,8 +50,8 @@ func TestAll(t *testing.T) {
 		"int64"),
 		sidecarDBName,
 	)
-	db.AddQuery(fmt.Sprintf(sidecarDBExistsQuery, GetSidecarDBNameIdentifier()), result)
-	db.AddQuery(fmt.Sprintf(createSidecarDBQuery, GetSidecarDBNameIdentifier()), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(sidecarDBExistsQuery, GetSidecarDBIdentifier()), result)
+	db.AddQuery(fmt.Sprintf(createSidecarDBQuery, GetSidecarDBIdentifier()), &sqltypes.Result{})
 	AddSchemaInitQueries(db, false)
 
 	// tests init on empty db

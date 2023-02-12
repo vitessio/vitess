@@ -48,7 +48,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 	}
 	return fmt.Sprintf("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%v, '%v', '%v', '%v')", sidecardb.GetSidecarDBNameIdentifier(),
+		"VALUES (%v, '%v', '%v', '%v')", sidecardb.GetSidecarDBIdentifier(),
 		timeCreatedNS, actionName, primaryAlias, posStr)
 }
 
@@ -56,7 +56,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
 	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), timeCreatedNS)
+		sidecardb.GetSidecarDBIdentifier(), timeCreatedNS)
 }
 
 // WaitForReparentJournal will wait until the context is done for

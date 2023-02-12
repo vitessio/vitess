@@ -169,10 +169,10 @@ func GetSidecarDBName() string {
 	return sidecarDBName
 }
 
-// GetSidecarDBNameIdentifier returns the sidecar database name as an SQL
+// GetSidecarDBIdentifier returns the sidecar database name as an SQL
 // identifier string, most importantly this means that it will be properly
 // escaped if/as needed.
-func GetSidecarDBNameIdentifier() string {
+func GetSidecarDBIdentifier() string {
 	ident := sqlparser.NewIdentifierCS(sidecarDBName)
 	return sqlparser.String(ident)
 }
@@ -211,7 +211,7 @@ func Init(ctx context.Context, exec Exec) error {
 		si.dbCreated = true
 	}
 
-	if err := si.setCurrentDatabase(GetSidecarDBNameIdentifier()); err != nil {
+	if err := si.setCurrentDatabase(GetSidecarDBIdentifier()); err != nil {
 		return err
 	}
 
@@ -394,7 +394,7 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 func MatchesInitQuery(query string) bool {
 	query = strings.ToLower(query)
 	for _, q := range sidecarDBInitQueries {
-		if strings.EqualFold(fmt.Sprintf(q, GetSidecarDBNameIdentifier()), query) {
+		if strings.EqualFold(fmt.Sprintf(q, GetSidecarDBIdentifier()), query) {
 			return true
 		}
 	}

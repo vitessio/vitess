@@ -386,7 +386,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 		return settings, numTablesToCopy, fmt.Errorf("error reading VReplication settings: %v", err)
 	}
 
-	query := fmt.Sprintf("select count(distinct table_name) from %s.copy_state where vrepl_id=%d", sidecardb.GetSidecarDBNameIdentifier(), vr.id)
+	query := fmt.Sprintf("select count(distinct table_name) from %s.copy_state where vrepl_id=%d", sidecardb.GetSidecarDBIdentifier(), vr.id)
 	qr, err := vr.dbClient.ExecuteFetch(query, maxRows)
 	if err != nil {
 		return settings, numTablesToCopy, err
@@ -408,7 +408,7 @@ func (vr *vreplicator) setMessage(message string) error {
 		Message: message,
 	})
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update %s.vreplication set message=%s where id=%d", sidecardb.GetSidecarDBNameIdentifier(), encodeString(message), vr.id)
+	buf.Myprintf("update %s.vreplication set message=%s where id=%d", sidecardb.GetSidecarDBIdentifier(), encodeString(message), vr.id)
 	query := buf.ParsedQuery().Query
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
@@ -431,7 +431,7 @@ func (vr *vreplicator) setState(state, message string) error {
 		})
 	}
 	vr.stats.State.Set(state)
-	query := fmt.Sprintf("update %s.vreplication set state='%v', message=%v where id=%v", sidecardb.GetSidecarDBNameIdentifier(),
+	query := fmt.Sprintf("update %s.vreplication set state='%v', message=%v where id=%v", sidecardb.GetSidecarDBIdentifier(),
 		state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
@@ -637,7 +637,7 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		if err != nil {
 			return err
 		}
-		insert, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlCreatePostCopyAction, sidecardb.GetSidecarDBNameIdentifier()),
+		insert, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlCreatePostCopyAction, sidecardb.GetSidecarDBIdentifier()),
 			sqltypes.Int32BindVariable(vr.id), sqltypes.StringBindVariable(tableName), sqltypes.StringBindVariable(string(action)))
 		if err != nil {
 			return err
@@ -721,7 +721,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	defer dbClient.Close()
 
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlGetPostCopyActions, sidecardb.GetSidecarDBNameIdentifier()),
+	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlGetPostCopyActions, sidecardb.GetSidecarDBIdentifier()),
 		sqltypes.Int32BindVariable(vr.id), sqltypes.StringBindVariable(tableName))
 	if err != nil {
 		return err
@@ -756,7 +756,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 
 	deleteAction := func(dbc *vdbClient, id int64, vid int32, tn string) error {
-		delq, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlDeletePostCopyAction, sidecardb.GetSidecarDBNameIdentifier()),
+		delq, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlDeletePostCopyAction, sidecardb.GetSidecarDBIdentifier()),
 			sqltypes.Int32BindVariable(vid), sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
 		if err != nil {
 			return err
@@ -853,8 +853,8 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		if err != nil {
 			return err
 		}
-		vrsq, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlGetAndLockPostCopyActionsForTable, sidecardb.GetSidecarDBNameIdentifier(),
-			sidecardb.GetSidecarDBNameIdentifier(), sidecardb.GetSidecarDBNameIdentifier()), sqltypes.StringBindVariable(tableName))
+		vrsq, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlGetAndLockPostCopyActionsForTable, sidecardb.GetSidecarDBIdentifier(),
+			sidecardb.GetSidecarDBIdentifier(), sidecardb.GetSidecarDBIdentifier()), sqltypes.StringBindVariable(tableName))
 		if err != nil {
 			return err
 		}

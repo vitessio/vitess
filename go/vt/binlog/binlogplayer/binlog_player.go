@@ -518,7 +518,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 	}
 	blp.blplStats.State.Set(state)
 	query := fmt.Sprintf("update %s.vreplication set state='%v', message=%v where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), state, encodeString(MessageTruncate(message)), blp.uid)
+		sidecardb.GetSidecarDBIdentifier(), state, encodeString(MessageTruncate(message)), blp.uid)
 	if _, err := blp.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
@@ -542,7 +542,7 @@ type VRSettings struct {
 // vreplication from the checkpoint table.
 func ReadVRSettings(dbClient DBClient, uid int32) (VRSettings, error) {
 	query := fmt.Sprintf("select pos, stop_pos, max_tps, max_replication_lag, state, workflow_type, workflow, workflow_sub_type, defer_secondary_keys from %s.vreplication where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), uid)
+		sidecardb.GetSidecarDBIdentifier(), uid)
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
 		return VRSettings{}, fmt.Errorf("error %v in selecting vreplication settings %v", err, query)
@@ -601,7 +601,7 @@ func CreateVReplication(workflow string, source *binlogdatapb.BinlogSource, posi
 	return fmt.Sprintf("insert into %s.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d, %v)",
-		sidecardb.GetSidecarDBNameIdentifier(), encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS,
+		sidecardb.GetSidecarDBIdentifier(), encodeString(workflow), encodeString(source.String()), encodeString(position), maxTPS,
 		maxReplicationLag, timeUpdated, BlpRunning, encodeString(dbName), workflowType, workflowSubType, deferSecondaryKeys)
 }
 
@@ -611,7 +611,7 @@ func CreateVReplicationState(workflow string, source *binlogdatapb.BinlogSource,
 	return fmt.Sprintf("insert into %s.vreplication "+
 		"(workflow, source, pos, max_tps, max_replication_lag, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type) "+
 		"values (%v, %v, %v, %v, %v, %v, 0, '%v', %v, %d, %d)",
-		sidecardb.GetSidecarDBNameIdentifier(), encodeString(workflow), encodeString(source.String()), encodeString(position),
+		sidecardb.GetSidecarDBIdentifier(), encodeString(workflow), encodeString(source.String()), encodeString(position),
 		throttler.MaxRateModuleDisabled, throttler.ReplicationLagModuleDisabled, time.Now().Unix(), state, encodeString(dbName),
 		workflowType, workflowSubType)
 }
@@ -625,17 +625,17 @@ func GenerateUpdatePos(uid int32, pos mysql.Position, timeUpdated int64, txTimes
 	if txTimestamp != 0 {
 		return fmt.Sprintf(
 			"update %s.vreplication set pos=%v, time_updated=%v, transaction_timestamp=%v, rows_copied=%v, message='' where id=%v",
-			sidecardb.GetSidecarDBNameIdentifier(), strGTID, timeUpdated, txTimestamp, rowsCopied, uid)
+			sidecardb.GetSidecarDBIdentifier(), strGTID, timeUpdated, txTimestamp, rowsCopied, uid)
 	}
 	return fmt.Sprintf(
 		"update %s.vreplication set pos=%v, time_updated=%v, rows_copied=%v, message='' where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), strGTID, timeUpdated, rowsCopied, uid)
+		sidecardb.GetSidecarDBIdentifier(), strGTID, timeUpdated, rowsCopied, uid)
 }
 
 // GenerateUpdateRowsCopied returns a statement to update the rows_copied value in the vreplication table.
 func GenerateUpdateRowsCopied(uid int32, rowsCopied int64) string {
 	return fmt.Sprintf("update %s.vreplication set rows_copied=%v where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), rowsCopied, uid)
+		sidecardb.GetSidecarDBIdentifier(), rowsCopied, uid)
 }
 
 // GenerateUpdateHeartbeat returns a statement to record the latest heartbeat in the vreplication table.
@@ -644,7 +644,7 @@ func GenerateUpdateHeartbeat(uid int32, timeUpdated int64) (string, error) {
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update %s.vreplication set time_updated=%v, time_heartbeat=%v where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), timeUpdated, timeUpdated, uid), nil
+		sidecardb.GetSidecarDBIdentifier(), timeUpdated, timeUpdated, uid), nil
 }
 
 // GenerateUpdateTimeThrottled returns a statement to record the latest throttle time in the vreplication table.
@@ -653,34 +653,34 @@ func GenerateUpdateTimeThrottled(uid int32, timeThrottledUnix int64, componentTh
 		return "", fmt.Errorf("timeUpdated cannot be zero")
 	}
 	return fmt.Sprintf("update %s.vreplication set time_updated=%v, time_throttled=%v, component_throttled='%v' where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
+		sidecardb.GetSidecarDBIdentifier(), timeThrottledUnix, timeThrottledUnix, componentThrottled, uid), nil
 }
 
 // StartVReplication returns a statement to start the replication.
 func StartVReplication(uid int32) string {
 	return fmt.Sprintf(
 		"update %s.vreplication set state='%v', stop_pos=NULL where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), BlpRunning, uid)
+		sidecardb.GetSidecarDBIdentifier(), BlpRunning, uid)
 }
 
 // StartVReplicationUntil returns a statement to start the replication with a stop position.
 func StartVReplicationUntil(uid int32, pos string) string {
 	return fmt.Sprintf(
 		"update %s.vreplication set state='%v', stop_pos=%v where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), BlpRunning, encodeString(pos), uid)
+		sidecardb.GetSidecarDBIdentifier(), BlpRunning, encodeString(pos), uid)
 }
 
 // StopVReplication returns a statement to stop the replication.
 func StopVReplication(uid int32, message string) string {
 	return fmt.Sprintf(
 		"update %s.vreplication set state='%v', message=%v where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), BlpStopped, encodeString(MessageTruncate(message)), uid)
+		sidecardb.GetSidecarDBIdentifier(), BlpStopped, encodeString(MessageTruncate(message)), uid)
 }
 
 // DeleteVReplication returns a statement to delete the replication.
 func DeleteVReplication(uid int32) string {
 	return fmt.Sprintf("delete from %s.vreplication where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), uid)
+		sidecardb.GetSidecarDBIdentifier(), uid)
 }
 
 // MessageTruncate truncates the message string to a safe length.
@@ -699,14 +699,14 @@ func encodeString(in string) string {
 // given stream from the vreplication table.
 func ReadVReplicationPos(index uint32) string {
 	return fmt.Sprintf("select pos from %s.vreplication where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), index)
+		sidecardb.GetSidecarDBIdentifier(), index)
 }
 
 // ReadVReplicationStatus returns a statement to query the status fields for a
 // given stream from the vreplication table.
 func ReadVReplicationStatus(index int32) string {
 	return fmt.Sprintf("select pos, state, message from %s.vreplication where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), index)
+		sidecardb.GetSidecarDBIdentifier(), index)
 }
 
 // MysqlUncompress will uncompress a binary string in the format stored by mysql's compress() function

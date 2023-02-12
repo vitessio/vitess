@@ -77,9 +77,9 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
-	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where mysql_schema='val2'`, sidecardb.GetSidecarDBNameIdentifier()),
-	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`, sidecardb.GetSidecarDBNameIdentifier()),
-	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`, sidecardb.GetSidecarDBNameIdentifier()),
+	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where mysql_schema='val2'`, sidecardb.GetSidecarDBIdentifier()),
+	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`, sidecardb.GetSidecarDBIdentifier()),
+	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`, sidecardb.GetSidecarDBIdentifier()),
 }
 
 var vexecInsertTemplates = []string{
@@ -98,7 +98,7 @@ var vexecInsertTemplates = []string{
 		migration_status
 	) VALUES (
 		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
-	)`, sidecardb.GetSidecarDBNameIdentifier()),
+	)`, sidecardb.GetSidecarDBIdentifier()),
 }
 
 var emptyResult = &sqltypes.Result{}
@@ -1423,7 +1423,7 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 			// temporary hack. todo: this should be done when inserting any vreplication record across
 			// all workflow types
 			query := fmt.Sprintf("update %s.vreplication set workflow_type = %d where workflow = '%s'",
-				sidecardb.GetSidecarDBNameIdentifier(), binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
+				sidecardb.GetSidecarDBIdentifier(), binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
 			if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
 			}

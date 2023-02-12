@@ -228,7 +228,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 	// Insert the table list only if at least one table matches.
 	if len(plan.TargetTables) != 0 {
 		var buf strings.Builder
-		buf.WriteString(fmt.Sprintf("insert into %s.copy_state(vrepl_id, table_name) values ", sidecardb.GetSidecarDBNameIdentifier()))
+		buf.WriteString(fmt.Sprintf("insert into %s.copy_state(vrepl_id, table_name) values ", sidecardb.GetSidecarDBIdentifier()))
 		prefix := ""
 		for name := range plan.TargetTables {
 			fmt.Fprintf(&buf, "%s(%d, %s)", prefix, vc.vr.id, encodeString(name))
@@ -294,7 +294,7 @@ func (vc *vcopier) initTablesForCopy(ctx context.Context) error {
 // A table that was fully copied is removed from copyState.
 func (vc *vcopier) copyNext(ctx context.Context, settings binlogplayer.VRSettings) error {
 	qr, err := vc.vr.dbClient.Execute(fmt.Sprintf("select table_name, lastpk from %s.copy_state where vrepl_id = %d and id in (select max(id) from %s.copy_state group by vrepl_id, table_name)",
-		sidecardb.GetSidecarDBNameIdentifier(), vc.vr.id, sidecardb.GetSidecarDBNameIdentifier()))
+		sidecardb.GetSidecarDBIdentifier(), vc.vr.id, sidecardb.GetSidecarDBIdentifier()))
 	if err != nil {
 		return err
 	}
@@ -443,7 +443,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 				// the workflow.
 				go func() {
 					gcQuery := fmt.Sprintf("delete from %s.copy_state where vrepl_id = %d and table_name = %s and id < (select maxid from (select max(id) as maxid from %s.copy_state where vrepl_id = %d and table_name = %s) as depsel)",
-						sidecardb.GetSidecarDBNameIdentifier(), vc.vr.id, encodeString(tableName), sidecardb.GetSidecarDBNameIdentifier(), vc.vr.id, encodeString(tableName))
+						sidecardb.GetSidecarDBIdentifier(), vc.vr.id, encodeString(tableName), sidecardb.GetSidecarDBIdentifier(), vc.vr.id, encodeString(tableName))
 					dbClient := vc.vr.vre.getDBClient(false)
 					if err := dbClient.Connect(); err != nil {
 						log.Errorf("Error while garbage collecting older copy_state rows, could not connect to database: %v", err)
@@ -492,7 +492,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf(
 				"insert into %s.copy_state (lastpk, vrepl_id, table_name) ",
-				sidecardb.GetSidecarDBNameIdentifier())
+				sidecardb.GetSidecarDBIdentifier())
 			buf.Myprintf(
 				"values (%a, %s, %s)", ":lastpk",
 				strconv.Itoa(int(vc.vr.id)),
@@ -662,8 +662,8 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	buf := sqlparser.NewTrackedBuffer(nil)
 	buf.Myprintf(
 		"delete cs, pca from %s.%s as cs left join %s.%s as pca on cs.vrepl_id=pca.vrepl_id and cs.table_name=pca.table_name where cs.vrepl_id=%d and cs.table_name=%s",
-		sidecardb.GetSidecarDBNameIdentifier(), copyStateTableName,
-		sidecardb.GetSidecarDBNameIdentifier(), postCopyActionTableName,
+		sidecardb.GetSidecarDBIdentifier(), copyStateTableName,
+		sidecardb.GetSidecarDBIdentifier(), postCopyActionTableName,
 		vc.vr.id, encodeString(tableName),
 	)
 	if _, err := vc.vr.dbClient.Execute(buf.String()); err != nil {

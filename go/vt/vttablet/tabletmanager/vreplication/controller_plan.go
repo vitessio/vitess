@@ -152,7 +152,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), vreplicationTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), vreplicationTableName),
 		upd.Where)
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
@@ -196,7 +196,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), vreplicationTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), vreplicationTableName),
 		del.Where)
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
@@ -220,12 +220,12 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
 	buf3.Myprintf("delete from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), copyStateTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), copyStateTableName),
 		copyStateWhere)
 
 	buf4 := sqlparser.NewTrackedBuffer(nil)
 	buf4.Myprintf("delete from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBNameIdentifier(), postCopyActionTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), postCopyActionTableName),
 		copyStateWhere)
 
 	return &controllerPlan{

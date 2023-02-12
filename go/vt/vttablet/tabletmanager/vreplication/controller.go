@@ -293,7 +293,7 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 		Message: message,
 	})
 	query := fmt.Sprintf("update %s.vreplication set message=%v where id=%v",
-		sidecardb.GetSidecarDBNameIdentifier(), encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+		sidecardb.GetSidecarDBIdentifier(), encodeString(binlogplayer.MessageTruncate(message)), ct.id)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}
