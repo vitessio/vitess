@@ -208,9 +208,10 @@ func Init(ctx context.Context, exec Exec) error {
 	return nil
 }
 
-// We need to allow zero dates for existing sidecar database tables which may happen to
-// actually have zero (in) date values. setPermissiveSQLMode gets the current sql_mode, change it to a more relaxed value,
-// defer restoring it to the original value.
+// setPermissiveSQLMode gets the current sql_mode for the session, removes any
+// restrictions, and returns a function to restore it back to the original session value.
+// We need to allow for the recreation of any data that currently exists in the table, such
+// as e.g. allowing any zero dates that may already exist in a preexisting sidecar table.
 func (si *schemaInit) setPermissiveSQLMode() (func(), error) {
 	rs, err := si.exec(si.ctx, `select @@session.sql_mode as sql_mode`, 1, false)
 	if err != nil {
@@ -411,7 +412,6 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
 	)
 	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
-	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 }
 
 // MatchesInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp.
