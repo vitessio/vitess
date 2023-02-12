@@ -14,22 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vreplication
+package vterrors
 
 import (
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 /*
- * lastError tracks the most recent error for any ongoing process and how long it has persisted.
+ * LastError tracks the most recent error for any ongoing process and how long it has persisted.
  * The err field should be a vterror to ensure we have meaningful error codes, causes, stack
  * traces, etc.
  */
-type lastError struct {
+type LastError struct {
 	name           string
 	err            error
 	firstSeen      time.Time
@@ -38,15 +37,15 @@ type lastError struct {
 	maxTimeInError time.Duration // if error persists for this long, shouldRetry() will return false
 }
 
-func newLastError(name string, maxTimeInError time.Duration) *lastError {
+func NewLastError(name string, maxTimeInError time.Duration) *LastError {
 	log.Infof("Created last error: %s, with maxTimeInError: %s", name, maxTimeInError)
-	return &lastError{
+	return &LastError{
 		name:           name,
 		maxTimeInError: maxTimeInError,
 	}
 }
 
-func (le *lastError) record(err error) {
+func (le *LastError) Record(err error) {
 	le.mu.Lock()
 	defer le.mu.Unlock()
 	if err == nil {
@@ -56,7 +55,7 @@ func (le *lastError) record(err error) {
 		le.lastSeen = time.Time{}
 		return
 	}
-	if !vterrors.Equals(err, le.err) {
+	if !Equals(err, le.err) {
 		log.Infof("Got new last error %+v for %s, was %+v", err, le.name, le.err)
 		le.firstSeen = time.Now()
 		le.lastSeen = time.Now()
@@ -73,7 +72,7 @@ func (le *lastError) record(err error) {
 	}
 }
 
-func (le *lastError) shouldRetry() bool {
+func (le *LastError) ShouldRetry() bool {
 	le.mu.Lock()
 	defer le.mu.Unlock()
 	if le.maxTimeInError == 0 {
@@ -87,7 +86,7 @@ func (le *lastError) shouldRetry() bool {
 		// within the max time range
 		return true
 	}
-	log.Errorf("VReplication encountered the same error continuously since %s, we will assume this is a non-recoverable error and will not retry anymore; the workflow will need to be manually restarted once error '%s' has been addressed",
-		le.firstSeen.UTC(), le.err)
+	log.Errorf("%s: the same error was encountered continuously since %s, it is now assumed to be unrecoverable; any affected workflows will need to be manually restarted once error '%s' has been addressed",
+		le.name, le.firstSeen.UTC(), le.err)
 	return false
 }
