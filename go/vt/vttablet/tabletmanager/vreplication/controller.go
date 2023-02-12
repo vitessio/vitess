@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
@@ -26,8 +27,6 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"context"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
@@ -40,6 +39,13 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
+const (
+	// How many times to retry tablet selection before we
+	// give up and return an error message that the user
+	// can see and act upon if needed.
+	tabletPickerRetries = 5
+)
+
 // controller is created by Engine. Members are initialized upfront.
 // There is no mutex within a controller becaust its members are
 // either read-only or self-synchronized.
@@ -49,7 +55,7 @@ type controller struct {
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
-	id           uint32
+	id           int32
 	workflow     string
 	source       *binlogdatapb.BinlogSource
 	stopPos      string
@@ -72,23 +78,23 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 
 	ct := &controller{
-		vre:               vre,
-		dbClientFactory:   dbClientFactory,
-		mysqld:            mysqld,
-		blpStats:          blpStats,
-		done:              make(chan struct{}),
-		source:            &binlogdatapb.BinlogSource{},
-		lastWorkflowError: newLastError("VReplication Controller", maxTimeToRetryError),
+		vre:             vre,
+		dbClientFactory: dbClientFactory,
+		mysqld:          mysqld,
+		blpStats:        blpStats,
+		done:            make(chan struct{}),
+		source:          &binlogdatapb.BinlogSource{},
 	}
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
 	// id
-	id, err := strconv.Atoi(params["id"])
+	id, err := strconv.ParseInt(params["id"], 10, 32)
 	if err != nil {
 		return nil, err
 	}
-	ct.id = uint32(id)
+	ct.id = int32(id)
 	ct.workflow = params["workflow"]
+	ct.lastWorkflowError = newLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
 	blpStats.State.Set(state)
@@ -196,17 +202,14 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	if err := dbClient.Connect(); err != nil {
 		return vterrors.Wrap(err, "can't connect to database")
 	}
-	for _, query := range withDDLInitialQueries {
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
-		}
-	}
 	defer dbClient.Close()
 
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
-		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
+		tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
+		defer tpCancel()
+		tablet, err = ct.tabletPicker.PickForStreaming(tpCtx)
 		if err != nil {
 			select {
 			case <-ctx.Done():

@@ -104,8 +104,8 @@ type Configuration struct {
 	MySQLTopologyUseMutualTLS                   bool   // Turn on TLS authentication with the Topology MySQL instances
 	MySQLTopologyUseMixedTLS                    bool   // Mixed TLS and non-TLS authentication with the Topology MySQL instances
 	TLSCacheTTLFactor                           uint   // Factor of InstancePollSeconds that we set as TLS info cache expiry
-	BackendDB                                   string // EXPERIMENTAL: type of backend db; either "mysql" or "sqlite3"
-	SQLite3DataFile                             string // when BackendDB == "sqlite3", full path to sqlite3 datafile
+	BackendDB                                   string // EXPERIMENTAL: type of backend db; either "mysql" or "sqlite"
+	SQLite3DataFile                             string // when BackendDB == "sqlite", full path to sqlite3 datafile
 	SkipOrchestratorDatabaseUpdate              bool   // When true, do not check backend database schema nor attempt to update it. Useful when you may be running multiple versions of orchestrator, and you only wish certain boxes to dictate the db structure (or else any time a different orchestrator version runs it will rebuild database schema)
 	PanicIfDifferentDatabaseDeploy              bool   // When true, and this process finds the orchestrator backend DB was provisioned by a different version, panic
 	RaftEnabled                                 bool   // When true, setup orchestrator in a raft consensus layout. When false (default) all Raft* variables are ignored
@@ -477,7 +477,7 @@ func (config *Configuration) postReadAdjustments() error {
 	}
 
 	if config.IsSQLite() && config.SQLite3DataFile == "" {
-		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite3")
+		return fmt.Errorf("SQLite3DataFile must be set when BackendDB is sqlite")
 	}
 	if config.RaftEnabled && config.RaftDataDir == "" {
 		return fmt.Errorf("RaftDataDir must be defined since raft is enabled (RaftEnabled)")

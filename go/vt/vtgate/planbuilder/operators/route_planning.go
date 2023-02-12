@@ -51,7 +51,7 @@ type (
 // Here we try to merge query parts into the same route primitives. At the end of this process,
 // all the operators in the tree are guaranteed to be PhysicalOperators
 func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops.Operator, error) {
-	op, err := rewrite.BottomUp(in, func(operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	op, err := rewrite.BottomUp(in, semantics.EmptyTableSet(), TableID, func(ts semantics.TableSet, operator ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch op := operator.(type) {
 		case *QueryGraph:
 			return optimizeQueryGraph(ctx, op)
@@ -60,7 +60,7 @@ func transformToPhysical(ctx *plancontext.PlanningContext, in ops.Operator) (ops
 		case *Derived:
 			return optimizeDerived(ctx, op)
 		case *SubQuery:
-			return optimizeSubQuery(ctx, op)
+			return optimizeSubQuery(ctx, op, ts)
 		case *Filter:
 			return optimizeFilter(op)
 		default:
@@ -269,7 +269,7 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 			return nil, err
 		}
 		if qg.NoDeps != nil {
-			plan.Source, err = plan.Source.AddPredicate(ctx, qg.NoDeps)
+			plan, err = plan.AddPredicate(ctx, qg.NoDeps)
 			if err != nil {
 				return nil, err
 			}
@@ -279,22 +279,21 @@ func seedOperatorList(ctx *plancontext.PlanningContext, qg *QueryGraph) ([]ops.O
 	return plans, nil
 }
 
-func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (*Route, error) {
+func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (ops.Operator, error) {
 	ks, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
 		return nil, err
 	}
-	var src ops.Operator = &Table{
-		QTable: table,
-		VTable: &vindexes.Table{
-			Name:     table.Table.Name,
-			Keyspace: ks,
-		},
-	}
 	r := &Route{
 		RouteOpCode: engine.DBA,
-		Source:      src,
-		Keyspace:    ks,
+		Source: &Table{
+			QTable: table,
+			VTable: &vindexes.Table{
+				Name:     table.Table.Name,
+				Keyspace: ks,
+			},
+		},
+		Keyspace: ks,
 	}
 	for _, pred := range table.Predicates {
 		isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(pred, ctx.ReservedVars)
@@ -554,7 +553,7 @@ func tryMerge(
 		}
 
 		if !sameKeyspace {
-			return nil, vterrors.VT12001("cross-shard correlated subquery")
+			return nil, nil
 		}
 
 		canMerge := canMergeOnFilters(ctx, aRoute, bRoute, joinPredicates)
@@ -735,10 +734,7 @@ func unwrapDerivedTables(ctx *plancontext.PlanningContext, exp sqlparser.Expr) s
 			break
 		}
 
-		exp, err = semantics.RewriteDerivedTableExpression(exp, tbl)
-		if err != nil {
-			return nil
-		}
+		exp = semantics.RewriteDerivedTableExpression(exp, tbl)
 		exp = getColName(exp)
 		if exp == nil {
 			return nil

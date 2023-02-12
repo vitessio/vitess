@@ -354,7 +354,7 @@ message VReplicationExecResponse {
 }
 
 message VReplicationWaitForPosRequest {
-  int64 id = 1;
+  int32 id = 1;
   string position = 2;
 }
 

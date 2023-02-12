@@ -192,7 +192,7 @@
             "Query": "select 1 from `user` where :__sq_has_values1 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -2935,15 +2935,15 @@
   },
   {
     "comment": "join of information_schema with normal table",
-    "query": "select unsharded.foo from information_schema.a join unsharded",
+    "query": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from information_schema.a join unsharded",
+      "Original": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "R:0",
-        "TableName": "information_schema.a_unsharded",
+        "TableName": "information_schema.CHARACTER_SETS_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2952,9 +2952,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           },
           {
             "OperatorType": "Route",
@@ -2972,12 +2972,12 @@
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from information_schema.a join unsharded",
+      "Original": "select unsharded.foo from information_schema.CHARACTER_SETS join unsharded",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "R:0",
-        "TableName": "information_schema.a_unsharded",
+        "TableName": "information_schema.CHARACTER_SETS_unsharded",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -2986,9 +2986,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           },
           {
             "OperatorType": "Route",
@@ -3010,15 +3010,15 @@
   },
   {
     "comment": "join of normal table with information_schema",
-    "query": "select unsharded.foo from unsharded join information_schema.a",
+    "query": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
     "v3-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from unsharded join information_schema.a",
+      "Original": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "unsharded_information_schema.a",
+        "TableName": "unsharded_information_schema.CHARACTER_SETS",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3038,21 +3038,21 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           }
         ]
       }
     },
     "gen4-plan": {
       "QueryType": "SELECT",
-      "Original": "select unsharded.foo from unsharded join information_schema.a",
+      "Original": "select unsharded.foo from unsharded join information_schema.CHARACTER_SETS",
       "Instructions": {
         "OperatorType": "Join",
         "Variant": "Join",
         "JoinColumnIndexes": "L:0",
-        "TableName": "unsharded_information_schema.a",
+        "TableName": "unsharded_information_schema.CHARACTER_SETS",
         "Inputs": [
           {
             "OperatorType": "Route",
@@ -3072,9 +3072,9 @@
               "Name": "main",
               "Sharded": false
             },
-            "FieldQuery": "select 1 from information_schema.a where 1 != 1",
-            "Query": "select 1 from information_schema.a",
-            "Table": "information_schema.a"
+            "FieldQuery": "select 1 from information_schema.CHARACTER_SETS where 1 != 1",
+            "Query": "select 1 from information_schema.CHARACTER_SETS",
+            "Table": "information_schema.CHARACTER_SETS"
           }
         ]
       },
@@ -5107,7 +5107,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -5159,7 +5159,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -5293,7 +5293,7 @@
                 "Query": "select id from `user` where col = :__sq1 and :__sq_has_values2 = 1 and id in ::__vals",
                 "Table": "`user`",
                 "Values": [
-                  ":__sq2"
+                  "::__sq2"
                 ],
                 "Vindex": "user_index"
               }
@@ -5360,7 +5360,7 @@
                 "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and col = :__sq2",
                 "Table": "`user`",
                 "Values": [
-                  ":__sq1"
+                  "::__sq1"
                 ],
                 "Vindex": "user_index"
               }
@@ -6165,7 +6165,7 @@
     }
   },
   {
-    "comment": "select * from (select bar as push_it from (select foo as bar from (select id as foo from user) as t1) as t2) as t3 where push_it = 12",
+    "comment": "derived table inside derived table with a where clause depending on columns from the derived table",
     "query": "select * from (select bar as push_it from (select foo as bar from (select id as foo from user) as t1) as t2) as t3 where push_it = 12",
     "v3-plan": {
       "QueryType": "SELECT",
@@ -6278,6 +6278,65 @@
         "FieldQuery": "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where 1 != 1) as user_details_view where 1 != 1",
         "Query": "select user_details_view.id, user_details_view.col from (select `user`.id, user_extra.col from `user`, user_extra where `user`.id = user_extra.user_id) as user_details_view",
         "Table": "`user`, user_extra"
+      },
+      "TablesUsed": [
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "left join where clauses #3 - assert that we can evaluate BETWEEN with the evalengine",
+    "query": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col between 10 and 20",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select user.id from user left join user_extra on user.col = user_extra.col where user_extra.col between 10 and 20",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          1
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "user_extra.col between 10 and 20",
+            "Inputs": [
+              {
+                "OperatorType": "Join",
+                "Variant": "LeftJoin",
+                "JoinColumnIndexes": "R:0,L:1",
+                "JoinVars": {
+                  "user_col": 0
+                },
+                "TableName": "`user`_user_extra",
+                "Inputs": [
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select `user`.col, `user`.id from `user` where 1 != 1",
+                    "Query": "select `user`.col, `user`.id from `user`",
+                    "Table": "`user`"
+                  },
+                  {
+                    "OperatorType": "Route",
+                    "Variant": "Scatter",
+                    "Keyspace": {
+                      "Name": "user",
+                      "Sharded": true
+                    },
+                    "FieldQuery": "select user_extra.col from user_extra where 1 != 1",
+                    "Query": "select user_extra.col from user_extra where user_extra.col = :user_col",
+                    "Table": "user_extra"
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "TablesUsed": [
         "user.user",

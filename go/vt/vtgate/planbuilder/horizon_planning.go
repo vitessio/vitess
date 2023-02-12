@@ -267,7 +267,7 @@ func (hp *horizonPlanning) planAggrUsingOA(
 
 	if hp.sel.Having != nil {
 		rewriter := hp.qp.AggrRewriter(ctx)
-		sqlparser.Rewrite(hp.sel.Having.Expr, rewriter.Rewrite(), nil)
+		sqlparser.SafeRewrite(hp.sel.Having.Expr, rewriter.RewriteDown(), rewriter.RewriteUp())
 		if rewriter.Err != nil {
 			return nil, rewriter.Err
 		}
@@ -381,7 +381,13 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 					aggrExpr = &sqlparser.BinaryExpr{
 						Operator: sqlparser.MultOp,
 						Left:     aggrExpr,
-						Right:    curr,
+						Right: &sqlparser.FuncExpr{
+							Name: sqlparser.NewIdentifierCI("coalesce"),
+							Exprs: sqlparser.SelectExprs{
+								&sqlparser.AliasedExpr{Expr: curr},
+								&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
+							},
+						},
 					}
 				}
 			}

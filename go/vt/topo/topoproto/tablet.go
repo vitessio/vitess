@@ -28,9 +28,8 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"vitess.io/vitess/go/netutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -108,8 +107,8 @@ func ParseTabletAlias(aliasStr string) (*topodatapb.TabletAlias, error) {
 }
 
 // ParseTabletSet returns a set of tablets based on a provided comma separated list of tablets.
-func ParseTabletSet(tabletListStr string) sets.String {
-	set := sets.NewString()
+func ParseTabletSet(tabletListStr string) sets.Set[string] {
+	set := sets.New[string]()
 	if tabletListStr == "" {
 		return set
 	}

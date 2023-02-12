@@ -19,8 +19,7 @@ package inst
 import (
 	"errors"
 
-	"github.com/openark/golib/sqlutils"
-
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/db"

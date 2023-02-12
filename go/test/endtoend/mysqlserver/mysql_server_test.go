@@ -19,6 +19,7 @@ package mysqlserver
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"io"
 	"net/http"
@@ -33,8 +34,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	"database/sql"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -119,7 +118,7 @@ func TestTimeout(t *testing.T) {
 	require.NotNilf(t, err, "quiry timeout error expected")
 	mysqlErr, ok := err.(*mysql.SQLError)
 	require.Truef(t, ok, "invalid error type")
-	assert.Equal(t, 1317, mysqlErr.Number(), err)
+	assert.Equal(t, mysql.ERQueryInterrupted, mysqlErr.Number(), err)
 }
 
 // TestInvalidField tries to fetch invalid column and verifies the error.
@@ -135,7 +134,7 @@ func TestInvalidField(t *testing.T) {
 	require.NotNil(t, err, "invalid field error expected")
 	mysqlErr, ok := err.(*mysql.SQLError)
 	require.Truef(t, ok, "invalid error type")
-	assert.Equal(t, 1054, mysqlErr.Number(), err)
+	assert.Equal(t, mysql.ERBadFieldError, mysqlErr.Number(), err)
 }
 
 // TestWarnings validates the behaviour of SHOW WARNINGS.

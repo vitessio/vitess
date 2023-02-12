@@ -254,12 +254,6 @@ func (dbcfgs *DBConfigs) ExternalRepl() Connector {
 // ExternalReplWithDB returns connection parameters for repl with dbname set.
 func (dbcfgs *DBConfigs) ExternalReplWithDB() Connector {
 	params := dbcfgs.makeParams(&dbcfgs.externalReplParams, true)
-	// TODO @rafael: This is a hack to allows to configure external databases by providing
-	// db-config-erepl-dbname.
-	if params.connParams.DeprecatedDBName != "" {
-		params.connParams.DbName = params.connParams.DeprecatedDBName
-		return params
-	}
 	return params
 }
 
@@ -280,7 +274,7 @@ func (dbcfgs *DBConfigs) IsZero() bool {
 }
 
 // HasGlobalSettings returns true if DBConfigs contains values
-// for gloabl configs.
+// for global configs.
 func (dbcfgs *DBConfigs) HasGlobalSettings() bool {
 	return dbcfgs.Host != "" || dbcfgs.Socket != ""
 }

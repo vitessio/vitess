@@ -34,6 +34,7 @@ func TestIsDirect(t *testing.T) {
 	assert.False(t, DDLStrategy("online").IsDirect())
 	assert.False(t, DDLStrategy("gh-ost").IsDirect())
 	assert.False(t, DDLStrategy("pt-osc").IsDirect())
+	assert.False(t, DDLStrategy("mysql").IsDirect())
 	assert.True(t, DDLStrategy("something").IsDirect())
 }
 
@@ -46,6 +47,7 @@ func TestParseDDLStrategy(t *testing.T) {
 		isSingleton          bool
 		isPostponeLaunch     bool
 		isPostponeCompletion bool
+		isInOrderCompletion  bool
 		isAllowConcurrent    bool
 		fastOverRevertible   bool
 		fastRangeRotation    bool
@@ -72,6 +74,10 @@ func TestParseDDLStrategy(t *testing.T) {
 		{
 			strategyVariable: "pt-osc",
 			strategy:         DDLStrategyPTOSC,
+		},
+		{
+			strategyVariable: "mysql",
+			strategy:         DDLStrategyMySQL,
 		},
 		{
 			strategy: DDLStrategyDirect,
@@ -117,6 +123,13 @@ func TestParseDDLStrategy(t *testing.T) {
 			options:              "-postpone-completion",
 			runtimeOptions:       "",
 			isPostponeCompletion: true,
+		},
+		{
+			strategyVariable:    "online --in-order-completion",
+			strategy:            DDLStrategyOnline,
+			options:             "--in-order-completion",
+			runtimeOptions:      "",
+			isInOrderCompletion: true,
 		},
 		{
 			strategyVariable:  "online -allow-concurrent",

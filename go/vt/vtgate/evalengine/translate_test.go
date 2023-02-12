@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -104,6 +104,9 @@ func TestTranslateSimplification(t *testing.T) {
 		{"ifnull(null, 23)", ok(`CASE WHEN NULL IS NULL THEN INT64(23) ELSE NULL`), ok(`INT64(23)`)},
 		{"nullif(1, 1)", ok(`CASE WHEN INT64(1) = INT64(1) THEN NULL ELSE INT64(1)`), ok(`NULL`)},
 		{"nullif(1, 2)", ok(`CASE WHEN INT64(1) = INT64(2) THEN NULL ELSE INT64(1)`), ok(`INT64(1)`)},
+		{"12 between 5 and 20", ok("(INT64(12) >= INT64(5)) AND (INT64(12) <= INT64(20))"), ok(`INT64(1)`)},
+		{"12 not between 5 and 20", ok("(INT64(12) < INT64(5)) OR (INT64(12) > INT64(20))"), ok(`INT64(0)`)},
+		{"2 not between 5 and 20", ok("(INT64(2) < INT64(5)) OR (INT64(2) > INT64(20))"), ok(`INT64(1)`)},
 	}
 
 	for _, tc := range testCases {
@@ -341,6 +344,82 @@ func TestEvaluateTuple(t *testing.T) {
 			require.NotNil(t, r)
 			gotValues := r.TupleValues()
 			assert.Equal(t, test.expected, gotValues, "expected: %s, got: %s", test.expected, gotValues)
+		})
+	}
+}
+
+// TestTranslationFailures tests that translation fails for functions that we don't support evaluation for.
+func TestTranslationFailures(t *testing.T) {
+	testcases := []struct {
+		expression  string
+		expectedErr string
+	}{
+		{
+			expression:  "cast('2023-01-07 12:34:56' as date)",
+			expectedErr: "Unsupported type conversion: DATE",
+		}, {
+			expression:  "cast('2023-01-07 12:34:56' as datetime(5))",
+			expectedErr: "Unsupported type conversion: DATETIME(5)",
+		}, {
+			expression:  "cast('3.4' as FLOAT)",
+			expectedErr: "Unsupported type conversion: FLOAT",
+		}, {
+			expression:  "cast('3.4' as FLOAT(3))",
+			expectedErr: "Unsupported type conversion: FLOAT(3)",
+		},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.expression, func(t *testing.T) {
+			// Given
+			stmt, err := sqlparser.Parse("select " + testcase.expression)
+			require.NoError(t, err)
+			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+			_, err = Translate(astExpr, LookupDefaultCollation(45))
+			require.EqualError(t, err, testcase.expectedErr)
+		})
+	}
+
+}
+
+func TestCardinalityWithBindVariables(t *testing.T) {
+	testcases := []struct {
+		expr string
+		err  string
+	}{
+		{expr: `:foo + 1`},
+		{expr: `1 IN ::bar`},
+		{expr: `:foo IN ::bar`},
+		{expr: `:foo IN _binary ::bar`, err: "syntax error"},
+		{expr: `::foo + 1`, err: "syntax error"},
+		{expr: `::foo = 1`, err: "syntax error"},
+		{expr: `::foo = ::bar`, err: "syntax error"},
+		{expr: `::foo = :bar`, err: "syntax error"},
+		{expr: `:foo = :bar`},
+		{expr: `:foo IN :bar`, err: "syntax error"},
+		{expr: `:foo IN ::bar`},
+		{expr: `(1, 2) IN ::bar`, err: "Operand should contain 1 column"},
+		{expr: `1 IN ::bar`},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.expr, func(t *testing.T) {
+			err := func() error {
+				stmt, err := sqlparser.Parse("select " + testcase.expr)
+				if err != nil {
+					return err
+				}
+
+				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+				_, err = Translate(astExpr, LookupDefaultCollation(45))
+				return err
+			}()
+
+			if testcase.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, testcase.err)
+			}
 		})
 	}
 }

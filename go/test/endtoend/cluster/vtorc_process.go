@@ -27,6 +27,7 @@ import (
 	"path"
 	"strings"
 	"syscall"
+	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
@@ -193,10 +194,46 @@ func (orc *VTOrcProcess) MakeAPICall(endpoint string) (status int, response stri
 	url := fmt.Sprintf("http://localhost:%d/%s", orc.Port, endpoint)
 	resp, err := http.Get(url)
 	if err != nil {
-		return resp.StatusCode, "", err
+		if resp != nil {
+			status = resp.StatusCode
+		}
+		return status, "", err
 	}
-	defer resp.Body.Close()
+	defer func() {
+		if resp != nil && resp.Body != nil {
+			resp.Body.Close()
+		}
+	}()
 
 	respByte, _ := io.ReadAll(resp.Body)
 	return resp.StatusCode, string(respByte), err
+}
+
+// MakeAPICallRetry is used to make an API call and retries until success
+func (orc *VTOrcProcess) MakeAPICallRetry(t *testing.T, url string) {
+	t.Helper()
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatal("timed out waiting for api to work")
+			return
+		default:
+			status, _, err := orc.MakeAPICall(url)
+			if err == nil && status == 200 {
+				return
+			}
+			time.Sleep(1 * time.Second)
+		}
+	}
+}
+
+// DisableGlobalRecoveries stops VTOrc from running any recoveries
+func (orc *VTOrcProcess) DisableGlobalRecoveries(t *testing.T) {
+	orc.MakeAPICallRetry(t, "/api/disable-global-recoveries")
+}
+
+// EnableGlobalRecoveries allows VTOrc to run any recoveries
+func (orc *VTOrcProcess) EnableGlobalRecoveries(t *testing.T) {
+	orc.MakeAPICallRetry(t, "/api/enable-global-recoveries")
 }

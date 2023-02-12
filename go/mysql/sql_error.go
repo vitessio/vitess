@@ -30,7 +30,7 @@ import (
 
 // SQLError is the error structure returned from calling a db library function
 type SQLError struct {
-	Num     int
+	Num     ErrorCode
 	State   string
 	Message string
 	Query   string
@@ -39,7 +39,7 @@ type SQLError struct {
 // NewSQLError creates a new SQLError.
 // If sqlState is left empty, it will default to "HY000" (general error).
 // TODO: Should be aligned with vterrors, stack traces and wrapping
-func NewSQLError(number int, sqlState string, format string, args ...any) *SQLError {
+func NewSQLError(number ErrorCode, sqlState string, format string, args ...any) *SQLError {
 	if sqlState == "" {
 		sqlState = SSUnknownSQLState
 	}
@@ -69,7 +69,7 @@ func (se *SQLError) Error() string {
 }
 
 // Number returns the internal MySQL error code.
-func (se *SQLError) Number() int {
+func (se *SQLError) Number() ErrorCode {
 	return se.Num
 }
 
@@ -106,7 +106,7 @@ func NewSQLErrorFromError(err error) error {
 }
 
 func extractSQLErrorFromMessage(match []string, msg string) *SQLError {
-	num, err := strconv.Atoi(match[1])
+	num, err := strconv.ParseUint(match[1], 10, 16)
 	if err != nil {
 		return &SQLError{
 			Num:     ERUnknownError,
@@ -116,7 +116,7 @@ func extractSQLErrorFromMessage(match []string, msg string) *SQLError {
 	}
 
 	return &SQLError{
-		Num:     num,
+		Num:     ErrorCode(num),
 		State:   match[2],
 		Message: msg,
 	}
@@ -153,7 +153,7 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 }
 
 type mysqlCode struct {
-	num   int
+	num   ErrorCode
 	state string
 }
 
@@ -213,7 +213,7 @@ func getStateToMySQLState(state vterrors.State) mysqlCode {
 // If the state is == 0, an empty string is returned
 func ConvertStateToMySQLErrorCode(state vterrors.State) string {
 	s := getStateToMySQLState(state)
-	return strconv.Itoa(s.num)
+	return s.num.ToString()
 }
 
 // ConvertStateToMySQLState returns MySQL state for the given vterrors.State
@@ -243,7 +243,7 @@ func convertToMysqlError(err error) error {
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)
 
-func demuxResourceExhaustedErrors(msg string) int {
+func demuxResourceExhaustedErrors(msg string) ErrorCode {
 	switch {
 	case isGRPCOverflowRE.Match([]byte(msg)):
 		return ERNetPacketTooLarge

@@ -148,7 +148,7 @@ func TestAcquireSameConnID(t *testing.T) {
 		}
 	}
 
-	// We run the above loop 100 times so we execute 200 queries, off which only some should fail due to MySQL restart.
+	// We run the above loop 100 times so we execute 200 queries, of which only some should fail due to MySQL restart.
 	assert.Less(t, totalErrCount, 10, "MySQL restart can cause some errors, but not too many.")
 
 	// prs should happen without any error.

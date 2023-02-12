@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -312,9 +312,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	m := sync.Mutex{} // guards access to the following maps during concurrent calls to scanWorkflow
 	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
 	sourceKeyspaceByWorkflow := make(map[string]string, len(results))
-	sourceShardsByWorkflow := make(map[string]sets.String, len(results))
+	sourceShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	targetKeyspaceByWorkflow := make(map[string]string, len(results))
-	targetShardsByWorkflow := make(map[string]sets.String, len(results))
+	targetShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	maxVReplicationLagByWorkflow := make(map[string]float64, len(results))
 
 	// We guarantee the following invariants when this function is called for a
@@ -370,8 +370,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		if tags != "" {
 			tagArray = strings.Split(tags, ",")
 		}
-		workflowType, _ := row["workflow_type"].ToInt64()
-		workflowSubType, _ := row["workflow_sub_type"].ToInt64()
+		workflowType, _ := row["workflow_type"].ToInt32()
+		workflowSubType, _ := row["workflow_sub_type"].ToInt32()
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -390,8 +390,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			Message: message,
 			Tags:    tagArray,
 		}
-		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)]
-		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)]
+		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
+		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err
@@ -496,8 +496,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				}
 
 				workflowsMap[workflowName] = workflow
-				sourceShardsByWorkflow[workflowName] = sets.NewString()
-				targetShardsByWorkflow[workflowName] = sets.NewString()
+				sourceShardsByWorkflow[workflowName] = sets.New[string]()
+				targetShardsByWorkflow[workflowName] = sets.New[string]()
 			}
 
 			scanWorkflowWg.Add(1)
@@ -682,12 +682,12 @@ ORDER BY
 
 		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: sourceKeyspace,
-			Shards:   sourceShards.List(),
+			Shards:   sets.List(sourceShards),
 		}
 
 		workflow.Target = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: targetKeyspace,
-			Shards:   targetShards.List(),
+			Shards:   sets.List(targetShards),
 		}
 
 		workflow.MaxVReplicationLag = int64(maxVReplicationLag)

@@ -50,11 +50,6 @@ var _ SessionActions = (*noopVCursor)(nil)
 type noopVCursor struct {
 }
 
-func (t *noopVCursor) SetTransactionIsolation(isolation querypb.ExecuteOptions_TransactionIsolation) {
-	//TODO implement me
-	panic("implement me")
-}
-
 func (t *noopVCursor) InTransaction() bool {
 	return false
 }
@@ -107,6 +102,10 @@ func (t *noopVCursor) ConnCollation() collations.ID {
 }
 
 func (t *noopVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(ctx, t, bindVars, wantfields)
+}
+
+func (t *noopVCursor) ExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return primitive.TryExecute(ctx, t, bindVars, wantfields)
 }
 
@@ -356,6 +355,8 @@ type loggingVCursor struct {
 
 	// map different shards to keyspaces in the test.
 	ksShardMap map[string][]string
+
+	shardSession []*srvtopo.ResolvedShard
 }
 
 type tableRoutes struct {
@@ -363,6 +364,10 @@ type tableRoutes struct {
 }
 
 func (f *loggingVCursor) ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	return primitive.TryExecute(ctx, f, bindVars, wantfields)
+}
+
+func (f *loggingVCursor) ExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	return primitive.TryExecute(ctx, f, bindVars, wantfields)
 }
 
@@ -417,7 +422,7 @@ func (f *loggingVCursor) InReservedConn() bool {
 }
 
 func (f *loggingVCursor) ShardSession() []*srvtopo.ResolvedShard {
-	return nil
+	return f.shardSession
 }
 
 func (f *loggingVCursor) ExecuteVSchema(context.Context, string, *sqlparser.AlterVschema) error {

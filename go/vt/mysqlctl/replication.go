@@ -21,6 +21,7 @@ Handle creating replicas and setting up the replication streams.
 package mysqlctl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"net"
@@ -29,8 +30,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/netutil"
@@ -233,6 +232,17 @@ func (mysqld *Mysqld) IsReadOnly() (bool, error) {
 
 // SetReadOnly set/unset the read_only flag
 func (mysqld *Mysqld) SetReadOnly(on bool) error {
+	// temp logging, to be removed in v17
+	var newState string
+	switch on {
+	case false:
+		newState = "ReadWrite"
+	case true:
+		newState = "ReadOnly"
+	}
+	log.Infof("SetReadOnly setting connection setting of %s:%d to : %s",
+		mysqld.dbcfgs.Host, mysqld.dbcfgs.Port, newState)
+
 	query := "SET GLOBAL read_only = "
 	if on {
 		query += "ON"
@@ -381,7 +391,7 @@ func (mysqld *Mysqld) SetReplicationPosition(ctx context.Context, pos mysql.Posi
 
 // SetReplicationSource makes the provided host / port the primary. It optionally
 // stops replication before, and starts it after.
-func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int, replicationStopBefore bool, replicationStartAfter bool) error {
+func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error {
 	params, err := mysqld.dbcfgs.ReplConnector().MysqlParams()
 	if err != nil {
 		return err
@@ -393,7 +403,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	defer conn.Recycle()
 
 	cmds := []string{}
-	if replicationStopBefore {
+	if stopReplicationBefore {
 		cmds = append(cmds, conn.StopReplicationCommand())
 	}
 	// Reset replication parameters commands makes the instance forget the source host port
@@ -406,7 +416,7 @@ func (mysqld *Mysqld) SetReplicationSource(ctx context.Context, host string, por
 	cmds = append(cmds, conn.ResetReplicationParametersCommands()...)
 	smc := conn.SetReplicationSourceCommand(params, host, port, int(replicationConnectRetry.Seconds()))
 	cmds = append(cmds, smc)
-	if replicationStartAfter {
+	if startReplicationAfter {
 		cmds = append(cmds, conn.StartReplicationCommand())
 	}
 	return mysqld.executeSuperQueryListConn(ctx, conn, cmds)
@@ -673,7 +683,7 @@ func (mysqld *Mysqld) SemiSyncClients() uint32 {
 		return 0
 	}
 	countStr := qr.Rows[0][1].ToString()
-	count, _ := strconv.ParseUint(countStr, 10, 0)
+	count, _ := strconv.ParseUint(countStr, 10, 32)
 	return uint32(count)
 }
 
@@ -683,8 +693,8 @@ func (mysqld *Mysqld) SemiSyncSettings() (timeout uint64, numReplicas uint32) {
 	if err != nil {
 		return 0, 0
 	}
-	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 0)
-	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 0)
+	timeout, _ = strconv.ParseUint(vars["rpl_semi_sync_master_timeout"], 10, 64)
+	numReplicasUint, _ := strconv.ParseUint(vars["rpl_semi_sync_master_wait_for_slave_count"], 10, 32)
 	return timeout, uint32(numReplicasUint)
 }
 

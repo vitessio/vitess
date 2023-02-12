@@ -17,10 +17,11 @@ limitations under the License.
 package throttler
 
 import (
-	"fmt"
 	"html/template"
 	"net/http"
 	"strings"
+
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/vt/log"
 )
@@ -59,14 +60,18 @@ func throttlerzHandler(w http.ResponseWriter, r *http.Request, m *managerImpl) {
 	parts := strings.SplitN(r.URL.Path, "/", 3)
 
 	if len(parts) != 3 {
-		errMsg := fmt.Sprintf("invalid /throttlerz path: %q expected paths: /throttlerz or /throttlerz/<throttler name>", r.URL.Path)
-		http.Error(w, errMsg, http.StatusInternalServerError)
+		http.Error(w, "invalid /throttlerz path", http.StatusNotFound)
 		return
 	}
 
 	name := parts[2]
 	if name == "" {
 		listThrottlers(w, m)
+		return
+	}
+
+	if !slices.Contains(m.Throttlers(), name) {
+		http.Error(w, "throttler not found", http.StatusNotFound)
 		return
 	}
 

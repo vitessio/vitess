@@ -224,6 +224,18 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table t1 (id int primary key, name tinytext not null, fulltext key name_ft(name) with parser ngram)",
 			"CREATE TABLE `t1` (\n\t`id` int PRIMARY KEY,\n\t`name` tinytext NOT NULL,\n\tFULLTEXT KEY `name_ft` (`name`) WITH PARSER ngram\n)",
 		},
+		{
+			"select convert('abc' using utf8mb4)",
+			"SELECT CONVERT('abc' USING utf8mb4) FROM `dual`",
+		},
+		{
+			"select point(4, 5)",
+			"SELECT POINT(4, 5) FROM `dual`",
+		},
+		{
+			"create table x(location geometry default (point(7.0, 3.0)))",
+			"CREATE TABLE `x` (\n\t`location` geometry DEFAULT (POINT(7.0, 3.0))\n)",
+		},
 	}
 
 	for _, tc := range testcases {

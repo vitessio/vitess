@@ -107,8 +107,6 @@ func TestMain(m *testing.M) {
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 		}
-		// We do not need semiSync for this test case.
-		clusterInstance.EnableSemiSync = false
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -626,12 +626,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfJSONObjectExpr(a, b)
-	case JSONObjectParam:
-		b, ok := inB.(JSONObjectParam)
+	case *JSONObjectParam:
+		b, ok := inB.(*JSONObjectParam)
 		if !ok {
 			return false
 		}
-		return cmp.JSONObjectParam(a, b)
+		return cmp.RefOfJSONObjectParam(a, b)
 	case *JSONOverlapsExpr:
 		b, ok := inB.(*JSONOverlapsExpr)
 		if !ok {
@@ -1004,6 +1004,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
@@ -1917,7 +1923,7 @@ func (cmp *Comparator) RefOfColumnDefinition(a, b *ColumnDefinition) bool {
 		return false
 	}
 	return cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.ColumnType(a.Type, b.Type)
+		cmp.RefOfColumnType(a.Type, b.Type)
 }
 
 // RefOfColumnType does deep equals between the two objects.
@@ -2747,8 +2753,14 @@ func (cmp *Comparator) RefOfJSONObjectExpr(a, b *JSONObjectExpr) bool {
 	return cmp.SliceOfRefOfJSONObjectParam(a.Params, b.Params)
 }
 
-// JSONObjectParam does deep equals between the two objects.
-func (cmp *Comparator) JSONObjectParam(a, b JSONObjectParam) bool {
+// RefOfJSONObjectParam does deep equals between the two objects.
+func (cmp *Comparator) RefOfJSONObjectParam(a, b *JSONObjectParam) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
 	return cmp.Expr(a.Key, b.Key) &&
 		cmp.Expr(a.Value, b.Value)
 }
@@ -3498,6 +3510,18 @@ func (cmp *Comparator) RefOfPerformanceSchemaFuncExpr(a, b *PerformanceSchemaFun
 	}
 	return a.Type == b.Type &&
 		cmp.Expr(a.Argument, b.Argument)
+}
+
+// RefOfPointExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfPointExpr(a, b *PointExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.XCordinate, b.XCordinate) &&
+		cmp.Expr(a.YCordinate, b.YCordinate)
 }
 
 // RefOfPrepareStmt does deep equals between the two objects.
@@ -5051,6 +5075,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5747,6 +5777,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -6469,18 +6505,6 @@ func (cmp *Comparator) SliceOfRefOfWhen(a, b []*When) bool {
 	return true
 }
 
-// ColumnType does deep equals between the two objects.
-func (cmp *Comparator) ColumnType(a, b ColumnType) bool {
-	return a.Type == b.Type &&
-		a.Unsigned == b.Unsigned &&
-		a.Zerofill == b.Zerofill &&
-		cmp.RefOfColumnTypeOptions(a.Options, b.Options) &&
-		cmp.RefOfLiteral(a.Length, b.Length) &&
-		cmp.RefOfLiteral(a.Scale, b.Scale) &&
-		cmp.ColumnCharset(a.Charset, b.Charset) &&
-		cmp.SliceOfString(a.EnumValues, b.EnumValues)
-}
-
 // RefOfColumnTypeOptions does deep equals between the two objects.
 func (cmp *Comparator) RefOfColumnTypeOptions(a, b *ColumnTypeOptions) bool {
 	if a == b {
@@ -6613,18 +6637,6 @@ func (cmp *Comparator) SliceOfRefOfJSONObjectParam(a, b []*JSONObjectParam) bool
 	return true
 }
 
-// RefOfJSONObjectParam does deep equals between the two objects.
-func (cmp *Comparator) RefOfJSONObjectParam(a, b *JSONObjectParam) bool {
-	if a == b {
-		return true
-	}
-	if a == nil || b == nil {
-		return false
-	}
-	return cmp.Expr(a.Key, b.Key) &&
-		cmp.Expr(a.Value, b.Value)
-}
-
 // SliceOfRefOfJtColumnDefinition does deep equals between the two objects.
 func (cmp *Comparator) SliceOfRefOfJtColumnDefinition(a, b []*JtColumnDefinition) bool {
 	if len(a) != len(b) {
@@ -6659,7 +6671,7 @@ func (cmp *Comparator) RefOfJtPathColDef(a, b *JtPathColDef) bool {
 	}
 	return a.JtColExists == b.JtColExists &&
 		cmp.IdentifierCI(a.Name, b.Name) &&
-		cmp.ColumnType(a.Type, b.Type) &&
+		cmp.RefOfColumnType(a.Type, b.Type) &&
 		cmp.Expr(a.Path, b.Path) &&
 		cmp.RefOfJtOnResponse(a.EmptyOnResponse, b.EmptyOnResponse) &&
 		cmp.RefOfJtOnResponse(a.ErrorOnResponse, b.ErrorOnResponse)

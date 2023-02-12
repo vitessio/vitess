@@ -161,7 +161,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "57000"
+	sqlparser.SetParserVersion("57000")
 	setVarEnabled = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
@@ -186,7 +186,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "set @@sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
@@ -197,7 +197,7 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80000"
+	sqlparser.SetParserVersion("80000")
 	setVarEnabled = false
 	defer func() {
 		setVarEnabled = true
@@ -224,7 +224,7 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, 'only_full_group_by' new"},
-		{Sql: "set @@sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set sql_mode = 'only_full_group_by'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 
@@ -235,7 +235,7 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80001"
+	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -283,7 +283,7 @@ func TestSetSystemVariables(t *testing.T) {
 	executor, _, _, lookup := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80001"
+	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
@@ -386,7 +386,7 @@ func TestSetSystemVariables(t *testing.T) {
 
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select 1 from dual where @@max_tmp_tables != 1"},
-		{Sql: "set @@max_tmp_tables = '1', @@sql_mode = 'only_full_group_by', @@sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
+		{Sql: "set max_tmp_tables = '1', sql_mode = 'only_full_group_by', sql_safe_updates = '0'", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 		{Sql: "select :vtg1 from information_schema.`table`", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
 	utils.MustMatch(t, wantQueries, lookup.Queries)
@@ -416,7 +416,7 @@ func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
 	require.True(t, session.InReservedConn())
 	wantQueries := []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new"},
-		{Sql: "set @@sql_mode = ''"},
+		{Sql: "set sql_mode = ''"},
 		{Sql: "select age, city, weight_string(age) from `user` group by age, weight_string(age) order by age asc"},
 	}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
@@ -426,7 +426,7 @@ func TestSetSystemVariablesWithReservedConnection(t *testing.T) {
 	require.True(t, session.InReservedConn())
 	wantQueries = []*querypb.BoundQuery{
 		{Sql: "select @@sql_mode orig, '' new"},
-		{Sql: "set @@sql_mode = ''"},
+		{Sql: "set sql_mode = ''"},
 		{Sql: "select age, city, weight_string(age) from `user` group by age, weight_string(age) order by age asc"},
 		{Sql: "select age, city + :vtg1, weight_string(age) from `user` group by age, weight_string(age) order by age asc", BindVariables: map[string]*querypb.BindVariable{"vtg1": {Type: sqltypes.Int64, Value: []byte("1")}}},
 	}
@@ -447,7 +447,7 @@ func TestCreateTableValidTimestamp(t *testing.T) {
 	require.True(t, session.InReservedConn())
 
 	wantQueries := []*querypb.BoundQuery{
-		{Sql: "set @@sql_mode = ALLOW_INVALID_DATES", BindVariables: map[string]*querypb.BindVariable{}},
+		{Sql: "set sql_mode = ALLOW_INVALID_DATES", BindVariables: map[string]*querypb.BindVariable{}},
 		{Sql: "create table aa (\n\tt timestamp default 0\n)", BindVariables: map[string]*querypb.BindVariable{}},
 	}
 
@@ -459,13 +459,14 @@ func TestGen4SelectDBA(t *testing.T) {
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
-	query := "select * from INFORMATION_SCHEMA.foo"
+	query := "select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
 	_, err := executor.Execute(context.Background(), "TestSelectDBA",
 		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{Sql: query, BindVariables: map[string]*querypb.BindVariable{}}}
+	expected := "select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_TYPE, `ENFORCED` from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
+	wantQueries := []*querypb.BoundQuery{{Sql: expected, BindVariables: map[string]*querypb.BindVariable{}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	sbc1.Queries = nil
@@ -3882,8 +3883,8 @@ func TestSelectCFC(t *testing.T) {
 		_, err := executor.Execute(context.Background(), "TestSelectCFC", session,
 			"select /*vt+ PLANNER=gen4 */ c2 from tbl_cfc where c1 like 'A%'", nil)
 		require.NoError(t, err)
-		assert.EqualValues(t, 1, executor.plans.Misses())
-		assert.EqualValues(t, i-1, executor.plans.Hits())
+		assert.EqualValues(t, 1, executor.plans.Misses(), "missed count:")
+		assert.EqualValues(t, i-1, executor.plans.Hits(), "hit count:")
 	}
 }
 

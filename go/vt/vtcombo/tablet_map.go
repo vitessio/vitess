@@ -859,7 +859,7 @@ func (itmc *internalTabletManagerClient) VReplicationExec(context.Context, *topo
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) VReplicationWaitForPos(context.Context, *topodatapb.Tablet, int, string) error {
+func (itmc *internalTabletManagerClient) VReplicationWaitForPos(context.Context, *topodatapb.Tablet, int32, string) error {
 	return fmt.Errorf("not implemented in vtcombo")
 }
 

@@ -667,7 +667,7 @@ func (ts *TableSpec) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (col *ColumnDefinition) Format(buf *TrackedBuffer) {
-	buf.astPrintf(col, "%v %v", col.Name, &col.Type)
+	buf.astPrintf(col, "%v %v", col.Name, col.Type)
 }
 
 // Format returns a canonical string representation of the type and all relevant options
@@ -1773,7 +1773,7 @@ func (node *ConvertExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "convert(%v using %s)", node.Expr, node.Type)
+	buf.astPrintf(node, "convert(%v using %#s)", node.Expr, node.Type)
 }
 
 // Format formats the node.
@@ -2477,7 +2477,7 @@ func (node *JSONObjectExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node JSONObjectParam) Format(buf *TrackedBuffer) {
+func (node *JSONObjectParam) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "%v, %v", node.Key, node.Value)
 }
 
@@ -2753,4 +2753,9 @@ func (node *Variable) Format(buf *TrackedBuffer) {
 		buf.literal("@@")
 	}
 	buf.astPrintf(node, "%v", node.Name)
+}
+
+// Format formats the node.
+func (node *PointExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "point(%v, %v)", node.XCordinate, node.YCordinate)
 }

@@ -118,6 +118,24 @@ func TestBuildBindVariable(t *testing.T) {
 			Value: []byte("1"),
 		},
 	}, {
+		in: uint(1),
+		out: &querypb.BindVariable{
+			Type:  querypb.Type_UINT64,
+			Value: []byte("1"),
+		},
+	}, {
+		in: int32(1),
+		out: &querypb.BindVariable{
+			Type:  querypb.Type_INT32,
+			Value: []byte("1"),
+		},
+	}, {
+		in: uint32(1),
+		out: &querypb.BindVariable{
+			Type:  querypb.Type_UINT32,
+			Value: []byte("1"),
+		},
+	}, {
 		in: int64(1),
 		out: &querypb.BindVariable{
 			Type:  querypb.Type_INT64,
@@ -198,6 +216,42 @@ func TestBuildBindVariable(t *testing.T) {
 				Value: []byte("1"),
 			}, {
 				Type:  querypb.Type_INT64,
+				Value: []byte("2"),
+			}},
+		},
+	}, {
+		in: []uint{1, 2},
+		out: &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{{
+				Type:  querypb.Type_UINT64,
+				Value: []byte("1"),
+			}, {
+				Type:  querypb.Type_UINT64,
+				Value: []byte("2"),
+			}},
+		},
+	}, {
+		in: []int32{1, 2},
+		out: &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{{
+				Type:  querypb.Type_INT32,
+				Value: []byte("1"),
+			}, {
+				Type:  querypb.Type_INT32,
+				Value: []byte("2"),
+			}},
+		},
+	}, {
+		in: []uint32{1, 2},
+		out: &querypb.BindVariable{
+			Type: querypb.Type_TUPLE,
+			Values: []*querypb.Value{{
+				Type:  querypb.Type_UINT32,
+				Value: []byte("1"),
+			}, {
+				Type:  querypb.Type_UINT32,
 				Value: []byte("2"),
 			}},
 		},

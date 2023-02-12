@@ -41,7 +41,6 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
 	"vitess.io/vitess/go/vt/vtctl/localvtctldclient"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/workflow"
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
@@ -133,8 +132,6 @@ func main() {
 	ts := topo.Open()
 	defer ts.Close()
 
-	vtctl.WorkflowManager = workflow.NewManager(ts)
-
 	ctx, cancel := context.WithTimeout(context.Background(), waitTime)
 	installSignalHandlers(cancel)
 
@@ -177,7 +174,7 @@ func main() {
 		args = args[1:]
 		fallthrough
 	default:
-		log.Warningf("WARNING: vtctl should only be used for VDiff workflows. Consider using vtctldclient for all other commands.")
+		log.Warningf("WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.")
 
 		wr := wrangler.New(logutil.NewConsoleLogger(), ts, tmclient.NewTabletManagerClient())
 
