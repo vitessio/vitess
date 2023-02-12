@@ -80,4 +80,3 @@ These flags are applicable to the following programs:
  - `vtctld`
  - `vttablet`
  - `vttestserver`
->>>>>>> main
