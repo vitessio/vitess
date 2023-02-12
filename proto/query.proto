@@ -973,3 +973,13 @@ message TransactionMetadata {
   int64 time_created = 3;
   repeated Target participants = 4;
 }
+
+// InternalAPIRequest is the payload to InternalAPI
+message InternalAPIRequest {
+  string request = 1;
+}
+
+// InternalAPIResponse is the returned value from InternalAPI
+message InternalAPIResponse {
+    string response = 1;
+}

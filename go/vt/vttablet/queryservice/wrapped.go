@@ -324,6 +324,15 @@ func (ws *wrappedService) Release(ctx context.Context, target *querypb.Target, t
 	})
 }
 
+func (ws *wrappedService) InternalAPI(ctx context.Context, request string) (response string, err error) {
+	err = ws.wrapper(ctx, nil, ws.impl, "InternalAPI", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		var innerErr error
+		response, innerErr = conn.InternalAPI(ctx, request)
+		return canRetry(ctx, innerErr), innerErr
+	})
+	return response, err
+}
+
 func (ws *wrappedService) Close(ctx context.Context) error {
 	return ws.wrapper(ctx, nil, ws.impl, "Close", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		// No point retrying Close.

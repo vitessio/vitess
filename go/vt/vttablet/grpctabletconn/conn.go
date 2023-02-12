@@ -1018,6 +1018,24 @@ func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target
 	return nil
 }
 
+// InternalAPI implements the queryservice interface
+func (conn *gRPCQueryClient) InternalAPI(ctx context.Context, request string) (string, error) {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return "", tabletconn.ConnClosed
+	}
+
+	req := &querypb.InternalAPIRequest{
+		Request: request,
+	}
+	reply, err := conn.c.InternalAPI(ctx, req)
+	if err != nil {
+		return "", tabletconn.ErrorFromGRPC(err)
+	}
+	return reply.GetResponse(), nil
+}
+
 // Close closes underlying gRPC channel.
 func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 	conn.mu.Lock()

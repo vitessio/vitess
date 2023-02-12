@@ -749,6 +749,11 @@ func (f *FakeQueryService) Release(ctx context.Context, target *querypb.Target, 
 	panic("implement me")
 }
 
+// InternalAPI implements the QueryService interface
+func (f *FakeQueryService) InternalAPI(ctx context.Context, request string) (string, error) {
+	panic("implement me")
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t testing.TB) *FakeQueryService {
 	return &FakeQueryService{

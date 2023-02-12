@@ -576,6 +576,11 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 	return sbc.getError()
 }
 
+// InternalAPI implements the QueryService interface
+func (sbc *SandboxConn) InternalAPI(ctx context.Context, request string) (response string, err error) {
+	panic("not implemented")
+}
+
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close(ctx context.Context) error {
 	return nil

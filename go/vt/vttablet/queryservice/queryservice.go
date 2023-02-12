@@ -117,6 +117,8 @@ type QueryService interface {
 
 	Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 
+	InternalAPI(ctx context.Context, request string) (string, error)
+
 	// Close must be called for releasing resources.
 	Close(ctx context.Context) error
 }

@@ -81,6 +81,8 @@ type QueryClient interface {
 	VStreamRows(ctx context.Context, in *binlogdata.VStreamRowsRequest, opts ...grpc.CallOption) (Query_VStreamRowsClient, error)
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error)
+	// InternalAPI returns the result for the requested type.
+	InternalAPI(ctx context.Context, in *query.InternalAPIRequest, opts ...grpc.CallOption) (*query.InternalAPIResponse, error)
 }
 
 type queryClient struct {
@@ -532,6 +534,15 @@ func (x *queryVStreamResultsClient) Recv() (*binlogdata.VStreamResultsResponse, 
 	return m, nil
 }
 
+func (c *queryClient) InternalAPI(ctx context.Context, in *query.InternalAPIRequest, opts ...grpc.CallOption) (*query.InternalAPIResponse, error) {
+	out := new(query.InternalAPIResponse)
+	err := c.cc.Invoke(ctx, "/queryservice.Query/InternalAPI", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility
@@ -593,6 +604,8 @@ type QueryServer interface {
 	VStreamRows(*binlogdata.VStreamRowsRequest, Query_VStreamRowsServer) error
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error
+	// InternalAPI returns the result for the requested type.
+	InternalAPI(context.Context, *query.InternalAPIRequest) (*query.InternalAPIResponse, error)
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -677,6 +690,9 @@ func (UnimplementedQueryServer) VStreamRows(*binlogdata.VStreamRowsRequest, Quer
 }
 func (UnimplementedQueryServer) VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStreamResults not implemented")
+}
+func (UnimplementedQueryServer) InternalAPI(context.Context, *query.InternalAPIRequest) (*query.InternalAPIResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method InternalAPI not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 
@@ -1186,6 +1202,24 @@ func (x *queryVStreamResultsServer) Send(m *binlogdata.VStreamResultsResponse) e
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Query_InternalAPI_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(query.InternalAPIRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(QueryServer).InternalAPI(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/queryservice.Query/InternalAPI",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(QueryServer).InternalAPI(ctx, req.(*query.InternalAPIRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1260,6 +1294,10 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "Release",
 			Handler:    _Query_Release_Handler,
+		},
+		{
+			MethodName: "InternalAPI",
+			Handler:    _Query_InternalAPI_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

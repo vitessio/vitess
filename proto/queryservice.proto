@@ -108,4 +108,7 @@ service Query {
 
   // VStreamResults streams results along with the gtid of the snapshot.
   rpc VStreamResults(binlogdata.VStreamResultsRequest) returns (stream binlogdata.VStreamResultsResponse) {};
+
+  // InternalAPI returns the result for the requested type.
+  rpc InternalAPI(query.InternalAPIRequest) returns (query.InternalAPIResponse) {};
 }

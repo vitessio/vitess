@@ -661,6 +661,12 @@ func (itc *internalTabletConn) Release(ctx context.Context, target *querypb.Targ
 	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
+// InternalAPI is part of the QueryService interface.
+func (itc *internalTabletConn) InternalAPI(ctx context.Context, request string) (string, error) {
+	response, err := itc.tablet.qsc.QueryService().InternalAPI(ctx, request)
+	return response, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+}
+
 // Close is part of queryservice.QueryService
 func (itc *internalTabletConn) Close(ctx context.Context) error {
 	return nil

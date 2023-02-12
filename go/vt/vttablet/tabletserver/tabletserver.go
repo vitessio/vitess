@@ -1689,6 +1689,12 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 	}
 }
 
+// InternalAPI returns results from internal queries.
+func (tsv *TabletServer) InternalAPI(ctx context.Context, request string) (string, error) {
+	//TODO implement me
+	panic("implement me")
+}
+
 // Close is a no-op.
 func (tsv *TabletServer) Close(ctx context.Context) error {
 	return nil
