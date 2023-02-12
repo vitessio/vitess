@@ -405,7 +405,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 	tableData, err := conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
 
 	err = se.updateInnoDBRowsRead(ctx, conn)
@@ -456,7 +456,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[3].ToString())
 		if err != nil {
-			rec.RecordError(err)
+			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
 		if includeStats {
