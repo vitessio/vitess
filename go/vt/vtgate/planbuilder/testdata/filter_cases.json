@@ -6610,7 +6610,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as textcol1",
-                      "[COLUMN 1] * [COLUMN 2] as sum(a.id)"
+                      "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as sum(a.id)"
                     ],
                     "Inputs": [
                       {
@@ -6693,6 +6693,70 @@
         "Table": "`user`"
       },
       "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "must merge subquery with the right side of the join",
+    "query": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+      "Instructions": {
+        "OperatorType": "SemiJoin",
+        "JoinVars": {
+          "u1_bar": 0
+        },
+        "ProjectedIndexes": "-2",
+        "TableName": "unsharded_`user`_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0,L:0",
+            "TableName": "unsharded_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded where 1 != 1",
+                "Query": "select 1 from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u1.bar from `user` as u1 where 1 != 1",
+                "Query": "select u1.bar from `user` as u1",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
+            "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
         "user.user"
       ]
     }

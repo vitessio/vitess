@@ -695,7 +695,7 @@ func TestDescribeVindex(t *testing.T) {
 	_, err := conn.ExecuteFetch("describe hash", 1000, false)
 	require.Error(t, err)
 	mysqlErr := err.(*mysql.SQLError)
-	assert.Equal(t, 1146, mysqlErr.Num)
+	assert.Equal(t, mysql.ERNoSuchTable, mysqlErr.Num)
 	assert.Equal(t, "42S02", mysqlErr.State)
 	assert.Contains(t, mysqlErr.Message, "NotFound desc")
 }

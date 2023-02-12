@@ -147,7 +147,7 @@ func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
 	if err != nil {
 		return sqltypes.Value{}, err
 	}
-	return evalToSqlValue(lit.inner), nil
+	return evalToSQLValue(lit.inner), nil
 }
 
 // ToNative converts Value to a native go type.

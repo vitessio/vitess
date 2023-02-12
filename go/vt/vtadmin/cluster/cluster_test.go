@@ -28,10 +28,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"

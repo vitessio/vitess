@@ -48,7 +48,7 @@ func addNumericWithError(left, right eval) (eval, error) {
 	case *evalFloat:
 		return floatPlusAny(v1.f, v2)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSqlValue(v1), evalToSqlValue(v2))
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSQLValue(v1), evalToSQLValue(v2))
 }
 
 func subtractNumericWithError(left, right eval) (eval, error) {
@@ -87,7 +87,7 @@ func subtractNumericWithError(left, right eval) (eval, error) {
 			return decimalMinusAny(v1, v2)
 		}
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSqlValue(v1), evalToSqlValue(v2))
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSQLValue(v1), evalToSQLValue(v2))
 }
 
 func multiplyNumericWithError(left, right eval) (eval, error) {
@@ -107,7 +107,7 @@ func multiplyNumericWithError(left, right eval) (eval, error) {
 	case *evalDecimal:
 		return decimalTimesAny(v1, v2)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSqlValue(v1), evalToSqlValue(v2))
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSQLValue(v1), evalToSQLValue(v2))
 }
 
 func divideNumericWithError(left, right eval, precise bool) (eval, error) {

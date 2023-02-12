@@ -17,19 +17,17 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
@@ -351,7 +349,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// This is safe, since we're restarting MySQL after the restore anyway
 	params.Logger.Infof("Restore: disabling super_read_only")
 	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
-		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+		if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
 			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
 		} else {
 			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)

@@ -271,7 +271,7 @@ func TestArithmetics(t *testing.T) {
 		operator: "/",
 		f:        Divide,
 		cases: []tcase{{
-			//All Nulls
+			// All Nulls
 			v1:  NULL,
 			v2:  NULL,
 			out: NULL,
@@ -355,7 +355,7 @@ func TestArithmetics(t *testing.T) {
 		operator: "*",
 		f:        Multiply,
 		cases: []tcase{{
-			//All Nulls
+			// All Nulls
 			v1:  NULL,
 			v2:  NULL,
 			out: NULL,
@@ -424,7 +424,7 @@ func TestArithmetics(t *testing.T) {
 			v2:  NewUint64(1),
 			out: NewUint64(math.MaxUint64),
 		}, {
-			//Checking whether maxInt value can be passed as uint value
+			// Checking whether maxInt value can be passed as uint value
 			v1:  NewUint64(math.MaxInt64),
 			v2:  NewInt64(3),
 			err: dataOutOfRangeError(math.MaxInt64, 3, "BIGINT UNSIGNED", "*").Error(),
@@ -984,10 +984,10 @@ func TestPrioritize(t *testing.T) {
 		out2: ival,
 	}}
 	for _, tcase := range tcases {
-		t.Run(fmt.Sprintf("%s - %s", evalToSqlValue(tcase.v1), evalToSqlValue(tcase.v2)), func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s - %s", evalToSQLValue(tcase.v1), evalToSQLValue(tcase.v2)), func(t *testing.T) {
 			got1, got2 := makeNumericAndPrioritize(tcase.v1, tcase.v2)
-			utils.MustMatch(t, evalToSqlValue(tcase.out1), evalToSqlValue(got1), "makeNumericAndPrioritize")
-			utils.MustMatch(t, evalToSqlValue(tcase.out2), evalToSqlValue(got2), "makeNumericAndPrioritize")
+			utils.MustMatch(t, evalToSQLValue(tcase.out1), evalToSQLValue(got1), "makeNumericAndPrioritize")
+			utils.MustMatch(t, evalToSQLValue(tcase.out2), evalToSQLValue(got2), "makeNumericAndPrioritize")
 		})
 	}
 }
@@ -1089,7 +1089,7 @@ func TestCompareNumeric(t *testing.T) {
 
 	for aIdx, aVal := range values {
 		for bIdx, bVal := range values {
-			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, evalToSqlValue(aVal), evalToSqlValue(bVal)), func(t *testing.T) {
+			t.Run(fmt.Sprintf("[%d/%d] %s %s", aIdx, bIdx, evalToSQLValue(aVal), evalToSQLValue(bVal)), func(t *testing.T) {
 				result, err := compareNumeric(aVal, bVal)
 				require.NoError(t, err)
 				assert.Equal(t, cmpResults[aIdx][bIdx], result)

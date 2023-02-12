@@ -1233,7 +1233,7 @@ func TestErrorCodes(t *testing.T) {
 	// internal vitess errors
 	tests := []struct {
 		err      error
-		code     int
+		code     ErrorCode
 		sqlState string
 		text     string
 	}{
