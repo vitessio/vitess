@@ -8,6 +8,7 @@ The following is the full list, alphabetically ordered.
 * Dan Kozlowski ([dkhenry](https://github.com/dkhenry)) dan.kozlowski@gmail.com
 * Deepthi Sigireddi ([deepthi](https://github.com/deepthi)) deepthi@planetscale.com
 * Derek Perkins ([derekperkins](https://github.com/derekperkins)) derek@nozzle.io
+* Dirkjan Bussink ([dbussink](https://github.com/dbussink)) dbussink@planetscale.com
 * Florent Poinsard ([frouioui](https://github.com/frouioui)) florent@planetscale.com
 * Frances Thai ([notfelineit](https://github.com/notfelineit)) frances@planetscale.com
 * Harshit Gangal ([harshit-gangal](https://github.com/harshit-gangal)) harshit.gangal@gmail.com
@@ -29,16 +30,25 @@ dkhenry, shlomi-noach, ajm188, vmg, GuptaManan100, frouioui
 rohit-nayak-ps, deepthi, mattlord
 
 ### Parser
-systay, harshit-gangal, vmg, GuptaManan100
+systay, harshit-gangal, vmg, GuptaManan100, dbussink
+
+### Evaluation Engine
+vmg
 
 ### Planner
-systay, harshit-gangal, GuptaManan100, frouioui
+systay, harshit-gangal, GuptaManan100, frouioui 
+
+### Query Serving
+systay, harshit-gangal, GuptaManan100, frouioui, vmg, dbussink
+
+### Online DDL
+shlomi-noach, dbussink
 
 ### Performance
 vmg
 
 ### Cluster Management
-deepthi, shlomi-noach, ajm188, GuptaManan100
+deepthi, ajm188, GuptaManan100, dbussink
 
 ### Java
 harshit-gangal
