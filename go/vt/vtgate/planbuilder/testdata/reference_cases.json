@@ -406,7 +406,7 @@
       "Original": "update user.ambiguous_ref_with_source set col = 1",
       "Instructions": {
         "OperatorType": "Update",
-        "Variant": "Scatter",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -453,7 +453,7 @@
       "Original": "delete from user.ambiguous_ref_with_source where col = 1",
       "Instructions": {
         "OperatorType": "Delete",
-        "Variant": "Scatter",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false

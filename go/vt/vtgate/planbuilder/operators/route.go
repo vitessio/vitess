@@ -398,29 +398,25 @@ func createRouteFromVSchemaTable(
 
 	plan.Routing = routing
 
-	tr, ok := plan.Routing.(*ShardedRouting)
-	if !ok {
-		// if we don't have a ShardedRouting, the rest of the logic doesn't really make sense,
-		// so we can bail out early
-		return plan, nil
-	}
-
-	if tr.isScatter() && len(queryTable.Predicates) > 0 {
-		var err error
-		// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
-		plan.Routing, err = tr.tryImprove(ctx, queryTable)
-		if err != nil {
-			return nil, err
+	switch routing := routing.(type) {
+	case *ShardedRouting:
+		if routing.isScatter() && len(queryTable.Predicates) > 0 {
+			var err error
+			// If we have a scatter query, it's worth spending a little extra time seeing if we can't improve it
+			plan.Routing, err = routing.tryImprove(ctx, queryTable)
+			if err != nil {
+				return nil, err
+			}
+		}
+	case *ReferenceRouting:
+		if planAlternates {
+			alternates, err := createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
+			if err != nil {
+				return nil, err
+			}
+			routing.Alternates = alternates
 		}
 	}
-
-	// if planAlternates {
-	// 	alternates, err := createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	plan.Alternates = alternates
-	// }
 
 	return plan, nil
 }
@@ -505,18 +501,6 @@ func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Ex
 func (r *Route) AddColumn(ctx *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
 	return r.Source.AddColumn(ctx, e)
 }
-
-// func (r *Route) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
-// 	if keyspace.Name == r.Keyspace.Name {
-// 		return nil
-// 	}
-//
-// 	if route, ok := r.Alternates[keyspace]; ok {
-// 		return route
-// 	}
-//
-// 	return nil
-// }
 
 // TablesUsed returns tables used by MergedWith routes, which are not included
 // in Inputs() and thus not a part of the operator tree

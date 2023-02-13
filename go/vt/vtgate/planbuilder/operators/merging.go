@@ -81,19 +81,8 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 		return nil, nil
 	}
 
-	//
-	// if !sameKeyspace {
-	// 	if altARoute := routeA.AlternateInKeyspace(rhsRoute.Keyspace); altARoute != nil {
-	// 		routeA = altARoute
-	// 		sameKeyspace = true
-	// 	} else if altBRoute := rhsRoute.AlternateInKeyspace(routeA.Keyspace); altBRoute != nil {
-	// 		rhsRoute = altBRoute
-	// 		sameKeyspace = true
-	// 	}
-	// }
-	routingA := lhsRoute.Routing
-	routingB := rhsRoute.Routing
-	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
+	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
+
 	a, b := getRoutingType(routingA), getRoutingType(routingB)
 	if getTypeName(routingA) < getTypeName(routingB) {
 		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
@@ -143,6 +132,36 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	default:
 		panic(a.String() + ":" + b.String())
 	}
+}
+
+// getRoutesOrAlternates gets the Routings from each Route. If they are from different keyspaces,
+// we check if this is a table with alternates in other keyspaces that we can use
+func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, Routing, bool) {
+	routingA := lhsRoute.Routing
+	routingB := rhsRoute.Routing
+	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
+
+	if !sameKeyspace {
+		refA, ok := routingA.(*ReferenceRouting)
+		if ok {
+			if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
+				lhsRoute = altARoute
+				routingA = lhsRoute.Routing
+				sameKeyspace = true
+			}
+		}
+	}
+	if !sameKeyspace {
+		refB, ok := routingB.(*ReferenceRouting)
+		if ok {
+			if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
+				rhsRoute = altBRoute
+				routingB = rhsRoute.Routing
+				sameKeyspace = true
+			}
+		}
+	}
+	return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
 }
 
 func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {

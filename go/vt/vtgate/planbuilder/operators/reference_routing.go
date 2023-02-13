@@ -8,7 +8,8 @@ import (
 )
 
 type ReferenceRouting struct {
-	keyspace *vindexes.Keyspace
+	keyspace   *vindexes.Keyspace
+	Alternates map[*vindexes.Keyspace]*Route
 }
 
 var _ Routing = (*ReferenceRouting)(nil)
@@ -35,6 +36,18 @@ func (rr *ReferenceRouting) OpCode() engine.Opcode {
 
 func (rr *ReferenceRouting) Keyspace() *vindexes.Keyspace {
 	return rr.keyspace
+}
+
+func (rr *ReferenceRouting) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
+	if keyspace.Name == rr.keyspace.Name {
+		return nil
+	}
+
+	if route, ok := rr.Alternates[keyspace]; ok {
+		return route
+	}
+
+	return nil
 }
 
 type DualRouting struct{}

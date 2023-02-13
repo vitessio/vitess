@@ -252,8 +252,8 @@ func TestPlan(t *testing.T) {
 	testFile(t, "show_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "info_schema80_cases.json", testOutputTempDir, vschemaWrapper, false)
-	// testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
-	// testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSystemTables57(t *testing.T) {
