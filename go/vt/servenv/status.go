@@ -104,11 +104,10 @@ text-align: right;
 }
 </style>
 </head>
-
 <h1>Status for {{.BinaryName}}</h1>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
 <script>
-function refreshTableContentIfTableHasID() {
+function refreshTablesHaveClassrefreshRequired() {
 	$.get("/debug/status", function(data) {
 	  var data = $.parseHTML(data);
 	  var counter = 0;
@@ -123,7 +122,7 @@ function refreshTableContentIfTableHasID() {
 	});
 }  
 $(document).ready(function() {
-	setInterval(refreshTableContentIfTableHasID, ` + strconv.Itoa(tableRefreshRate) + `);
+	setInterval(refreshTablesHaveClassrefreshRequired, ` + strconv.Itoa(tableRefreshRate) + `);
 });
 </script>
 <div>
