@@ -581,10 +581,10 @@ func (vs *vstreamer) parseEvent(ev mysql.BinlogEvent) ([]*binlogdatapb.VEvent, e
 			log.Infof("table map changed: id %d for %s has changed to %s", id, plan.Table.Name, tm.Name)
 		}
 
-		if tm.Database == "_vt" && tm.Name == "resharding_journal" {
+		if tm.Database == sidecardb.GetName() && tm.Name == "resharding_journal" {
 			// A journal is a special case that generates a JOURNAL event.
 			return nil, vs.buildJournalPlan(id, tm)
-		} else if tm.Database == "_vt" && tm.Name == "schema_version" && !vs.se.SkipMetaCheck {
+		} else if tm.Database == sidecardb.GetName() && tm.Name == "schema_version" && !vs.se.SkipMetaCheck {
 			// Generates a Version event when it detects that a schema is stored in the schema_version table.
 			return nil, vs.buildVersionPlan(id, tm)
 		}

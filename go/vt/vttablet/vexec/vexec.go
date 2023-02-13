@@ -8,11 +8,6 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const (
-	// TableQualifier is the standard schema used by VExec commands
-	TableQualifier = "_vt"
-)
-
 var (
 	// ErrColumNotFound is returned when we expect some column to exist and it does not
 	ErrColumNotFound = errors.New("Column not found")

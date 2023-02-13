@@ -142,6 +142,14 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 				cursor.Replace(node)
 				modified = true
 			}
+		case *ShowBasic: // for things like 'show tables from _vt'
+			if !node.DbName.IsEmpty() &&
+				node.DbName.String() == oldQualifier.String() &&
+				node.DbName.String() != newQualifier.String() {
+				node.DbName = newQualifier
+				cursor.Replace(node)
+				modified = true
+			}
 		}
 		return true
 	}, nil)
