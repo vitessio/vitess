@@ -404,16 +404,12 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 		// key: keyspace.shard.tabletType -> val: map[tabletAlias]tabletHealth
 		for _, tabletType := range topoproto.AllTabletTypes {
 			key := keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tabletType)))
-			log.Infof("[DELETE TABLET]: deleting key from cache %s", key)
 			// delete from map by keyspace.shard.tabletType
 			ths, ok := hc.healthData[key]
 			if !ok {
-				log.Infof("[DELETE TABLET]: could not find key in cache %s", key)
 				continue
 			}
 			delete(ths, tabletAlias)
-			log.Infof("[DELETE TABLET]: deleted key from cache %s", key)
-			log.Infof("[DELETE TABLET]: healthData: %v", hc.healthData[key])
 			// delete from healthy list
 			healthy, ok := hc.healthy[key]
 			if ok && len(healthy) > 0 {
@@ -566,11 +562,8 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 	for _, ths := range hc.healthData {
-		for aliasString, th := range ths {
+		for _, th := range ths {
 			key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
-			if th.Target.Keyspace == "loadtest" {
-				log.Infof("[SHOW TABLETS] Found alias in map: %s", aliasString)
-			}
 
 			var tcs *TabletsCacheStatus
 			var ok bool
