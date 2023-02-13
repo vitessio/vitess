@@ -649,6 +649,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		BaseKeyspace:     req.BaseKeyspace,
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
+		SidecarDbName:    req.SidecarDbName,
 	}
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)

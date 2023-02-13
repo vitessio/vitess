@@ -61,6 +61,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -486,6 +487,34 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	}); err != nil {
 		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 	}
+
+	// Ensure that this table is not trying to come up with a sidecar
+	// database name that does not line up with the keyspace.
+	ks, err := tm.TopoServer.GetKeyspace(ctx, tablet.Keyspace)
+	if err != nil {
+		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
+	}
+	// If the keyspace exists but this is the first tablet added, then
+	// update the keyspace record.
+	if ks.SidecarDbName == "" {
+		ks.SidecarDbName = sidecardb.GetName()
+		ctx, unlock, lockErr := tm.TopoServer.LockKeyspace(ctx, tablet.Keyspace, "Setting sidecar database name")
+		if lockErr != nil {
+			return nil, vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
+		}
+		err = tm.TopoServer.UpdateKeyspace(ctx, ks)
+		if err != nil {
+			unlock(&lockErr)
+			return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
+		}
+		unlock(&lockErr)
+		if lockErr != nil {
+			return nil, vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
+		}
+	}
+	// Have the tablet use the sidecar database that's set for the keyspace.
+	sidecardb.SetName(ks.SidecarDbName)
+
 	tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil)
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell

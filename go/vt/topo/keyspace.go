@@ -213,6 +213,17 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 	return "none", nil
 }
 
+func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return "", err
+	}
+	if keyspaceInfo.SidecarDbName != "" {
+		return keyspaceInfo.SidecarDbName, nil
+	}
+	return "_vt", nil
+}
+
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.
 func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	// make sure it is locked first

@@ -27,8 +27,6 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -73,10 +71,6 @@ type sidecarTable struct {
 
 func (t *sidecarTable) String() string {
 	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), t.name, t.module)
-}
-
-func RegisterFlags(fs *pflag.FlagSet) {
-	fs.StringVar(&sidecarDBName, "sidecar-db-name", DefaultName, "Name of the Vitess sidecar database used for internal metadata.")
 }
 
 // validateSchemaDefinition ensures that the provided schema
@@ -170,6 +164,10 @@ type schemaInit struct {
 // Exec is a callback that has to be passed to Init() to
 // execute the specified query within the database.
 type Exec func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error)
+
+func SetName(name string) {
+	sidecarDBName = name
+}
 
 func GetName() string {
 	return sidecarDBName

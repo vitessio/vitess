@@ -56,7 +56,6 @@ vttablet \
  --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \
  --vtctld_addr http://$hostname:$vtctld_web_port/ \
  --disable_active_reparents \
- --sidecar-db-name '_vt_test' \
  > $VTDATAROOT/$tablet_dir/vttablet.out 2>&1 &
 
 # Block waiting for the tablet to be listening

@@ -19,6 +19,8 @@
 
 source ../common/env.sh
 
+SIDECAR_DB_NAME=${SIDECAR_DB_NAME:-"_vt_test"}
+
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
 	CELL=zone1 ../common/scripts/zk-up.sh
@@ -33,14 +35,15 @@ fi
 # start vtctld
 CELL=zone1 ../common/scripts/vtctld-up.sh
 
+# Create the keyspace with a non-default sidecar database name
+# and set the correct durability policy
+vtctldclient --server localhost:15999 CreateKeyspace --sidecar-db-name="${SIDECAR_DB_NAME}" --durability-policy=semi_sync commerce || fail "Failed to create and configure the commerce keyspace"
+
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
 	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
 	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
-
-# set the correct durability policy for the keyspace
-vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce || fail "Failed to set keyspace durability policy on the commerce keyspace"
 
 # start vtorc
 ../common/scripts/vtorc-up.sh

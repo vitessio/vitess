@@ -304,6 +304,11 @@ message Keyspace {
   // DurabilityPolicy is the durability policy to be
   // used for the keyspace.
   string durability_policy = 8;
+
+  // SidecarDBName is the name of the Vitess sidecar database
+  // used for various system metadata that is stored in each
+  // tablet's mysqld instance.
+  string sidecar_db_name = 9;
 }
 
 // ShardReplication describes the MySQL replication relationships

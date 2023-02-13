@@ -13241,6 +13241,9 @@ export namespace topodata {
 
         /** Keyspace durability_policy */
         durability_policy?: (string|null);
+
+        /** Keyspace sidecar_db_name */
+        sidecar_db_name?: (string|null);
     }
 
     /** Represents a Keyspace. */
@@ -13266,6 +13269,9 @@ export namespace topodata {
 
         /** Keyspace durability_policy. */
         public durability_policy: string;
+
+        /** Keyspace sidecar_db_name. */
+        public sidecar_db_name: string;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -36369,6 +36375,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest durability_policy */
         durability_policy?: (string|null);
+
+        /** CreateKeyspaceRequest sidecar_db_name */
+        sidecar_db_name?: (string|null);
     }
 
     /** Represents a CreateKeyspaceRequest. */
@@ -36403,6 +36412,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest durability_policy. */
         public durability_policy: string;
+
+        /** CreateKeyspaceRequest sidecar_db_name. */
+        public sidecar_db_name: string;
 
         /**
          * Creates a new CreateKeyspaceRequest instance using the specified properties.
