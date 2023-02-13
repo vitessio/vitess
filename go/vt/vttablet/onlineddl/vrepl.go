@@ -71,7 +71,7 @@ func (v *VReplStream) livenessTimeIndicator() int64 {
 	return v.timeUpdated
 }
 
-// isFailed() returns true when the workflow is actively running
+// isRunning() returns true when the workflow is actively running
 func (v *VReplStream) isRunning() bool {
 	switch v.state {
 	case binlogplayer.VReplicationInit, binlogplayer.VReplicationCopying, binlogplayer.BlpRunning:
@@ -80,15 +80,15 @@ func (v *VReplStream) isRunning() bool {
 	return false
 }
 
-// isFailed() returns true when the workflow has failed and will not retry
-func (v *VReplStream) isFailed() (failed bool, message string) {
+// hasError() returns true when the workflow has failed and will not retry
+func (v *VReplStream) hasError() (hasErr bool, isTerminal bool, message string) {
 	switch {
 	case v.state == binlogplayer.BlpError:
-		return true, v.message
+		return true, true, v.message
 	case strings.Contains(strings.ToLower(v.message), "error"):
-		return true, v.message
+		return true, false, v.message
 	}
-	return false, ""
+	return false, false, ""
 }
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")

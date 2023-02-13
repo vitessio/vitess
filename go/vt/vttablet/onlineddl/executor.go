@@ -3569,12 +3569,13 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					)
 				}
 				lastError := e.vreplicationLastError[uuid]
-				if failed, message := s.isFailed(); failed {
+				hasErr, isTerminal, message := s.hasError()
+				if hasErr {
 					lastError.Record(errors.New(message))
 				} else {
 					lastError.Record(nil)
 				}
-				if !lastError.ShouldRetry() {
+				if isTerminal || !lastError.ShouldRetry() {
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				}
 				if s.isRunning() {
