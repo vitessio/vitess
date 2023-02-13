@@ -79,11 +79,11 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 	switch ins.Table.Name.String() {
-	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName):
+	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), reshardingJournalTableName):
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
 		}, nil
-	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName):
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), vreplicationTableName):
 		// no-op
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(ins.Table))
@@ -132,11 +132,11 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 
 func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	switch sqlparser.String(upd.TableExprs) {
-	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName):
+	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), reshardingJournalTableName):
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
 		}, nil
-	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName):
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), vreplicationTableName):
 		// no-op
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(upd.TableExprs))
@@ -152,7 +152,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), vreplicationTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), vreplicationTableName),
 		upd.Where)
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
@@ -175,11 +175,11 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 
 func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	switch sqlparser.String(del.TableExprs) {
-	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName):
+	case reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), reshardingJournalTableName):
 		return &controllerPlan{
 			opcode: reshardingJournalQuery,
 		}, nil
-	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName):
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), vreplicationTableName):
 		// no-op
 	default:
 		return nil, fmt.Errorf("invalid table name: %v", sqlparser.String(del.TableExprs))
@@ -196,7 +196,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
 	buf1.Myprintf("select id from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), vreplicationTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), vreplicationTableName),
 		del.Where)
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
@@ -220,12 +220,12 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
 	buf3.Myprintf("delete from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), copyStateTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), copyStateTableName),
 		copyStateWhere)
 
 	buf4 := sqlparser.NewTrackedBuffer(nil)
 	buf4.Myprintf("delete from %s%v",
-		fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBIdentifier(), postCopyActionTableName),
+		fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), postCopyActionTableName),
 		copyStateWhere)
 
 	return &controllerPlan{
@@ -239,10 +239,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
 	switch sqlparser.ToString(sel.From) {
-	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationTableName),
-		reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), reshardingJournalTableName),
-		copyStateTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), copyStateTableName),
-		vreplicationLogTableName, fmt.Sprintf("%s.%s", sidecardb.GetSidecarDBName(), vreplicationLogTableName):
+	case vreplicationTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), vreplicationTableName),
+		reshardingJournalTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), reshardingJournalTableName),
+		copyStateTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), copyStateTableName),
+		vreplicationLogTableName, fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), vreplicationLogTableName):
 		return &controllerPlan{
 			opcode: selectQuery,
 		}, nil

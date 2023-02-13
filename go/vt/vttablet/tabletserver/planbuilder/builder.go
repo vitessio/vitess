@@ -228,9 +228,9 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch viewDDL := stmt.(type) {
 	case *sqlparser.CreateView:
-		query := fmt.Sprintf(mysql.InsertIntoViewsTable, sidecardb.GetSidecarDBIdentifier())
+		query := fmt.Sprintf(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier())
 		if viewDDL.IsReplace {
-			query = fmt.Sprintf(mysql.ReplaceIntoViewsTable, sidecardb.GetSidecarDBIdentifier())
+			query = fmt.Sprintf(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier())
 		}
 		insert, err := sqlparser.Parse(query)
 		if err != nil {
@@ -238,13 +238,13 @@ func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
 	case *sqlparser.AlterView:
-		update, err := sqlparser.Parse(fmt.Sprintf(mysql.UpdateViewsTable, sidecardb.GetSidecarDBIdentifier()))
+		update, err := sqlparser.Parse(fmt.Sprintf(mysql.UpdateViewsTable, sidecardb.GetIdentifier()))
 		if err != nil {
 			return nil, err
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
 	case *sqlparser.DropView:
-		del, err := sqlparser.Parse(fmt.Sprintf(mysql.DeleteFromViewsTable, sidecardb.GetSidecarDBIdentifier()))
+		del, err := sqlparser.Parse(fmt.Sprintf(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()))
 		if err != nil {
 			return nil, err
 		}

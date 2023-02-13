@@ -145,7 +145,7 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 	log.Infof("stopTargetVReplicationStreams")
 	ct := td.wd.ct
 	query := fmt.Sprintf("update %s.vreplication set state = 'Stopped', message='for vdiff' %s",
-		sidecardb.GetSidecarDBIdentifier(), ct.workflowFilter)
+		sidecardb.GetIdentifier(), ct.workflowFilter)
 	if _, err := ct.vde.vre.Exec(query); err != nil {
 		return err
 	}
@@ -153,7 +153,7 @@ func (td *tableDiffer) stopTargetVReplicationStreams(ctx context.Context, dbClie
 
 	// update position of all source streams
 	query = fmt.Sprintf("select id, source, pos from %s.vreplication %s",
-		sidecardb.GetSidecarDBIdentifier(), ct.workflowFilter)
+		sidecardb.GetIdentifier(), ct.workflowFilter)
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
@@ -284,7 +284,7 @@ func (td *tableDiffer) syncTargetStreams(ctx context.Context) error {
 
 	if err := td.forEachSource(func(source *migrationSource) error {
 		query := fmt.Sprintf("update %s.vreplication set state='Running', stop_pos='%s', message='synchronizing for vdiff' where id=%d",
-			sidecardb.GetSidecarDBIdentifier(), source.snapshotPosition, source.vrID)
+			sidecardb.GetIdentifier(), source.snapshotPosition, source.vrID)
 		if _, err := ct.tmc.VReplicationExec(waitCtx, ct.vde.thisTablet, query); err != nil {
 			return err
 		}
@@ -334,7 +334,7 @@ func (td *tableDiffer) startSourceDataStreams(ctx context.Context) error {
 func (td *tableDiffer) restartTargetVReplicationStreams(ctx context.Context) error {
 	ct := td.wd.ct
 	query := fmt.Sprintf("update %s.vreplication set state='Running', message='', stop_pos='' where db_name=%s and workflow=%s",
-		sidecardb.GetSidecarDBIdentifier(), encodeString(ct.vde.dbName), encodeString(ct.workflow))
+		sidecardb.GetIdentifier(), encodeString(ct.vde.dbName), encodeString(ct.workflow))
 	log.Infof("Restarting the %q VReplication workflow using %q", ct.workflow, query)
 	var err error
 	// Let's retry a few times if we get a retryable error.
@@ -445,7 +445,7 @@ func (td *tableDiffer) diff(ctx context.Context, rowsToCompare int64, debug, onl
 	// We need to continue were we left off when appropriate. This can be an
 	// auto-retry on error, or a manual retry via the resume command.
 	// Otherwise the existing state will be empty and we start from scratch.
-	query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetSidecarDBIdentifier(), sidecardb.GetSidecarDBIdentifier(),
+	query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetIdentifier(), sidecardb.GetIdentifier(),
 		td.wd.ct.id, encodeString(td.table.Name))
 	cs, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
@@ -665,10 +665,10 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 			return err
 		}
 
-		query = fmt.Sprintf(sqlUpdateTableProgress, sidecardb.GetSidecarDBIdentifier(), dr.ProcessedRows, encodeString(string(lastPK)),
+		query = fmt.Sprintf(sqlUpdateTableProgress, sidecardb.GetIdentifier(), dr.ProcessedRows, encodeString(string(lastPK)),
 			encodeString(string(rpt)), td.wd.ct.id, encodeString(td.table.Name))
 	} else {
-		query = fmt.Sprintf(sqlUpdateTableNoProgress, sidecardb.GetSidecarDBIdentifier(), dr.ProcessedRows, encodeString(string(rpt)),
+		query = fmt.Sprintf(sqlUpdateTableNoProgress, sidecardb.GetIdentifier(), dr.ProcessedRows, encodeString(string(rpt)),
 			td.wd.ct.id, encodeString(td.table.Name))
 	}
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
@@ -678,7 +678,7 @@ func (td *tableDiffer) updateTableProgress(dbClient binlogplayer.DBClient, dr *D
 }
 
 func (td *tableDiffer) updateTableState(ctx context.Context, dbClient binlogplayer.DBClient, state VDiffState) error {
-	query := fmt.Sprintf(sqlUpdateTableState, sidecardb.GetSidecarDBIdentifier(), encodeString(string(state)),
+	query := fmt.Sprintf(sqlUpdateTableState, sidecardb.GetIdentifier(), encodeString(string(state)),
 		td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -699,7 +699,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 	} else {
 		report = "{}"
 	}
-	query := fmt.Sprintf(sqlUpdateTableStateAndReport, sidecardb.GetSidecarDBIdentifier(), encodeString(string(state)),
+	query := fmt.Sprintf(sqlUpdateTableStateAndReport, sidecardb.GetIdentifier(), encodeString(string(state)),
 		dr.ProcessedRows, encodeString(report), td.wd.ct.id, encodeString(td.table.Name))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
@@ -710,7 +710,7 @@ func (td *tableDiffer) updateTableStateAndReport(ctx context.Context, dbClient b
 }
 
 func updateTableMismatch(dbClient binlogplayer.DBClient, vdiffID int64, table string) error {
-	query := fmt.Sprintf(sqlUpdateTableMismatch, sidecardb.GetSidecarDBIdentifier(), vdiffID, encodeString(table))
+	query := fmt.Sprintf(sqlUpdateTableMismatch, sidecardb.GetIdentifier(), vdiffID, encodeString(table))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}

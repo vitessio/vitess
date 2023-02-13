@@ -163,7 +163,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 			return vterrors.Errorf(vtrpcpb.Code_CANCELED, "context has expired")
 		default:
 		}
-		query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetSidecarDBIdentifier(), sidecardb.GetSidecarDBIdentifier(),
+		query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetIdentifier(), sidecardb.GetIdentifier(),
 			wd.ct.id, encodeString(td.table.Name))
 		qr, err := dbClient.ExecuteFetch(query, 1)
 		if err != nil {
@@ -194,7 +194,7 @@ func (wd *workflowDiffer) diff(ctx context.Context) error {
 }
 
 func (wd *workflowDiffer) markIfCompleted(ctx context.Context, dbClient binlogplayer.DBClient) error {
-	query := fmt.Sprintf(sqlGetIncompleteTables, sidecardb.GetSidecarDBIdentifier(), wd.ct.id)
+	query := fmt.Sprintf(sqlGetIncompleteTables, sidecardb.GetIdentifier(), wd.ct.id)
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
@@ -264,7 +264,7 @@ func (wd *workflowDiffer) buildPlan(dbClient binlogplayer.DBClient, filter *binl
 
 // getTableLastPK gets the lastPK protobuf message for a given vdiff table.
 func (wd *workflowDiffer) getTableLastPK(dbClient binlogplayer.DBClient, tableName string) (*querypb.QueryResult, error) {
-	query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetSidecarDBIdentifier(), sidecardb.GetSidecarDBIdentifier(),
+	query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetIdentifier(), sidecardb.GetIdentifier(),
 		wd.ct.id, encodeString(tableName))
 	qr, err := dbClient.ExecuteFetch(query, 1)
 	if err != nil {
@@ -304,17 +304,17 @@ func (wd *workflowDiffer) initVDiffTables(dbClient binlogplayer.DBClient) error 
 		tableName, _ := row.ToString("table_name")
 		tableRows, _ := row.ToInt64("table_rows")
 
-		query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetSidecarDBIdentifier(), sidecardb.GetSidecarDBIdentifier(),
+		query := fmt.Sprintf(sqlGetVDiffTable, sidecardb.GetIdentifier(), sidecardb.GetIdentifier(),
 			wd.ct.id, encodeString(tableName))
 		qr, err := dbClient.ExecuteFetch(query, -1)
 		if err != nil {
 			return err
 		}
 		if len(qr.Rows) == 0 {
-			query = fmt.Sprintf(sqlNewVDiffTable, sidecardb.GetSidecarDBIdentifier(), wd.ct.id,
+			query = fmt.Sprintf(sqlNewVDiffTable, sidecardb.GetIdentifier(), wd.ct.id,
 				encodeString(tableName), tableRows)
 		} else if len(qr.Rows) == 1 {
-			query = fmt.Sprintf(sqlUpdateTableRows, sidecardb.GetSidecarDBIdentifier(),
+			query = fmt.Sprintf(sqlUpdateTableRows, sidecardb.GetIdentifier(),
 				tableRows, wd.ct.id, encodeString(tableName))
 		} else {
 			return fmt.Errorf("invalid state found for vdiff table %s for vdiff_id %d on tablet %s",

@@ -166,7 +166,7 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, sidecardb.GetSidecarDBIdentifier(),
+	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, sidecardb.GetIdentifier(),
 		h.lastID), 10000, true)
 	if err != nil {
 		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)

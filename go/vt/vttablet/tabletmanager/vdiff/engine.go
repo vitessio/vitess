@@ -277,7 +277,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 
 	// We have to use ExecIgnore here so as not to block quick tablet state
 	// transitions from primary to non-primary when starting the engine
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffsToRun, sidecardb.GetSidecarDBIdentifier()), -1)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffsToRun, sidecardb.GetIdentifier()), -1)
 	if err != nil {
 		return nil, err
 	}
@@ -288,7 +288,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffsToRetry, sidecardb.GetSidecarDBIdentifier()), -1)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffsToRetry, sidecardb.GetIdentifier()), -1)
 	if err != nil {
 		return nil, err
 	}
@@ -299,7 +299,7 @@ func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.D
 }
 
 func (vde *Engine) getVDiffByID(ctx context.Context, dbClient binlogplayer.DBClient, id int64) (*sqltypes.Result, error) {
-	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffByID, sidecardb.GetSidecarDBIdentifier(), id), -1)
+	qr, err := dbClient.ExecuteFetch(fmt.Sprintf(sqlGetVDiffByID, sidecardb.GetIdentifier(), id), -1)
 	if err != nil {
 		return nil, err
 	}
@@ -342,8 +342,8 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 			return err
 		}
 		log.Infof("Retrying vdiff %s that had an ephemeral error of '%v'", uuid, lastError)
-		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, sidecardb.GetSidecarDBIdentifier(),
-			sidecardb.GetSidecarDBIdentifier(), id), 1); err != nil {
+		if _, err = dbClient.ExecuteFetch(fmt.Sprintf(sqlRetryVDiff, sidecardb.GetIdentifier(),
+			sidecardb.GetIdentifier(), id), 1); err != nil {
 			return err
 		}
 		options := &tabletmanagerdata.VDiffOptions{}

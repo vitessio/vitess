@@ -394,7 +394,7 @@ func (qre *QueryExecutor) checkViewExists(conn *StatefulConnection, stmt *sqlpar
 		return nil
 	}
 	// run the select to know which views exist.
-	sel, err := sqlparser.Parse(fmt.Sprintf(mysql.SelectFromViewsTable, sidecardb.GetSidecarDBIdentifier()))
+	sel, err := sqlparser.Parse(fmt.Sprintf(mysql.SelectFromViewsTable, sidecardb.GetIdentifier()))
 	if err != nil {
 		return err
 	}

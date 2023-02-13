@@ -177,12 +177,12 @@ func TestReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQueryPattern(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetSidecarDBIdentifier())+".*", &sqltypes.Result{})
-	db.AddQueryPattern(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetSidecarDBIdentifier())+".*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetSidecarDBIdentifier()),
+	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"table_name",
@@ -191,7 +191,7 @@ func TestReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetSidecarDBIdentifier()), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -290,12 +290,12 @@ func TestInitialReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQueryPattern(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetSidecarDBIdentifier())+".*", &sqltypes.Result{})
-	db.AddQueryPattern(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetSidecarDBIdentifier())+".*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
+	db.AddQueryPattern(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetSidecarDBIdentifier()),
+	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"table_name",
@@ -304,7 +304,7 @@ func TestInitialReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetSidecarDBIdentifier()), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -348,8 +348,8 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetSidecarDBIdentifier()), &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetSidecarDBIdentifier()), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()), &sqltypes.Result{})
+	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -376,7 +376,7 @@ func TestReloadView(t *testing.T) {
 	}}
 
 	// setting first test case result.
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetSidecarDBIdentifier()), tcases[0].res)
+	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), tcases[0].res)
 
 	var tcCount sync2.AtomicInt32
 	ch := make(chan struct{})
@@ -399,7 +399,7 @@ func TestReloadView(t *testing.T) {
 			if tcCount.Get() == int32(len(tcases)) {
 				return
 			}
-			db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetSidecarDBIdentifier()), tcases[tcCount.Get()].res)
+			db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), tcases[tcCount.Get()].res)
 		case <-time.After(1000 * time.Second):
 			t.Fatalf("timed out")
 		}

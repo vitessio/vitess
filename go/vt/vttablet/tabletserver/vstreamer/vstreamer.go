@@ -656,7 +656,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 	}
 	defer conn.Close()
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %s.resharding_journal where 1 != 1",
-		sidecardb.GetSidecarDBIdentifier()), 1, true)
+		sidecardb.GetIdentifier()), 1, true)
 	if err != nil {
 		return err
 	}
@@ -665,7 +665,7 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:   fmt.Sprintf("%s.resharding_journal", sidecardb.GetSidecarDBIdentifier()),
+		Name:   fmt.Sprintf("%s.resharding_journal", sidecardb.GetIdentifier()),
 		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows
@@ -690,7 +690,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 	}
 	defer conn.Close()
 	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %s.schema_version where 1 != 1",
-		sidecardb.GetSidecarDBIdentifier()), 1, true)
+		sidecardb.GetIdentifier()), 1, true)
 	if err != nil {
 		return err
 	}
@@ -699,7 +699,7 @@ func (vs *vstreamer) buildVersionPlan(id uint64, tm *mysql.TableMap) error {
 		return fmt.Errorf("cannot determine table columns for %s: event has %v, schema has %v", tm.Name, tm.Types, fields)
 	}
 	table := &Table{
-		Name:   fmt.Sprintf("%s.schema_version", sidecardb.GetSidecarDBIdentifier()),
+		Name:   fmt.Sprintf("%s.schema_version", sidecardb.GetIdentifier()),
 		Fields: fields[:len(tm.Types)],
 	}
 	// Build a normal table plan, which means, return all rows

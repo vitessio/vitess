@@ -86,20 +86,20 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			// reset schemacopy
-			_, err := conn.ExecuteFetch(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetSidecarDBIdentifier()),
+			_, err := conn.ExecuteFetch(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()),
 				1000, true)
 			require.NoError(t, err)
 			_, err = conn.ExecuteFetch(dropTestTable, 1000, true)
 			require.NoError(t, err)
 			_, err = conn.ExecuteFetch(createUserTable, 1000, true)
 			require.NoError(t, err)
-			rs, err := conn.ExecuteFetch(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetSidecarDBIdentifier()),
+			rs, err := conn.ExecuteFetch(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()),
 				1000, true)
 			require.NoError(t, err)
 			require.NotZero(t, rs.RowsAffected)
 
 			// make sure no changes are detected
-			rs, err = conn.ExecuteFetch(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetSidecarDBIdentifier()),
+			rs, err = conn.ExecuteFetch(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
 				1000, true)
 			require.NoError(t, err)
 			require.Empty(t, rs.Rows)
@@ -111,7 +111,7 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 			}
 
 			// make sure the change is detected
-			rs, err = conn.ExecuteFetch(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetSidecarDBIdentifier()),
+			rs, err = conn.ExecuteFetch(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
 				1000, true)
 			require.NoError(t, err)
 			require.NotEmpty(t, rs.Rows)
@@ -122,8 +122,8 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 				tables = append(tables, "table_name = "+sqlparser.String(apa))
 			}
 			tableNamePredicates := strings.Join(tables, " OR ")
-			del := fmt.Sprintf("%s AND %s", fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetSidecarDBIdentifier()), tableNamePredicates)
-			upd := fmt.Sprintf("%s AND %s", fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetSidecarDBIdentifier()), tableNamePredicates)
+			del := fmt.Sprintf("%s AND %s", fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()), tableNamePredicates)
+			upd := fmt.Sprintf("%s AND %s", fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()), tableNamePredicates)
 
 			_, err = conn.ExecuteFetch(del, 1000, true)
 			require.NoError(t, err)
@@ -131,7 +131,7 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 			require.NoError(t, err)
 
 			// make sure the change is detected
-			rs, err = conn.ExecuteFetch(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetSidecarDBIdentifier()),
+			rs, err = conn.ExecuteFetch(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
 				1000, true)
 			require.NoError(t, err)
 			require.Empty(t, rs.Rows)

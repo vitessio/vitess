@@ -727,7 +727,7 @@ func (tsv *TabletServer) Execute(ctx context.Context, target *querypb.Target, sq
 	}
 
 	// Rewrite any sidecar database usage if needed.
-	sql, err = sqlparser.ReplaceTableQualifiers(sql, sidecardb.DefaultSidecarDBName, sidecardb.GetSidecarDBName())
+	sql, err = sqlparser.ReplaceTableQualifiers(sql, sidecardb.DefaultName, sidecardb.GetName())
 	if err != nil {
 		return nil, err
 	}

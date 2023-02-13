@@ -174,7 +174,7 @@ func (tr *Tracker) isSchemaVersionTableEmpty(ctx context.Context) (bool, error) 
 	}
 	defer conn.Recycle()
 	result, err := conn.Exec(ctx, fmt.Sprintf("select id from %s.schema_version limit 1",
-		sidecardb.GetSidecarDBIdentifier()), 1, false)
+		sidecardb.GetIdentifier()), 1, false)
 	if err != nil {
 		return false, err
 	}
@@ -239,7 +239,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 
 	query := fmt.Sprintf("insert into %s.schema_version "+
 		"(pos, ddl, schemax, time_updated) "+
-		"values (%v, %v, %v, %d)", sidecardb.GetSidecarDBIdentifier(), encodeString(gtid),
+		"values (%v, %v, %v, %d)", sidecardb.GetIdentifier(), encodeString(gtid),
 		encodeString(ddl), encodeString(string(blob)), timestamp)
 	_, err = conn.Exec(ctx, query, 1, false)
 	if err != nil {

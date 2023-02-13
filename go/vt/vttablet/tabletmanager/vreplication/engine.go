@@ -375,7 +375,7 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetSidecarDBIdentifier()), 1); err != nil {
+	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetIdentifier()), 1); err != nil {
 		return nil, err
 	}
 
@@ -831,7 +831,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 	}
 	defer dbClient.Close()
 	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from %s.vreplication where db_name=%v",
-		sidecardb.GetSidecarDBIdentifier(), encodeString(vre.dbName)), maxRows)
+		sidecardb.GetIdentifier(), encodeString(vre.dbName)), maxRows)
 	if err != nil {
 		return nil, err
 	}
@@ -848,7 +848,7 @@ func (vre *Engine) readAllRows(ctx context.Context) ([]map[string]string, error)
 
 func readRow(dbClient binlogplayer.DBClient, id int32) (map[string]string, error) {
 	qr, err := dbClient.ExecuteFetch(fmt.Sprintf("select * from %s.vreplication where id = %d",
-		sidecardb.GetSidecarDBIdentifier(), id), 10)
+		sidecardb.GetIdentifier(), id), 10)
 	if err != nil {
 		return nil, err
 	}

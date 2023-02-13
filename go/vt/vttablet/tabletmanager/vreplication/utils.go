@@ -67,7 +67,7 @@ const (
 func getLastLog(dbClient *vdbClient, vreplID int32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
 	query := fmt.Sprintf("select id, type, state, message from %s.vreplication_log where vrepl_id = %d order by id desc limit 1",
-		sidecardb.GetSidecarDBIdentifier(), vreplID)
+		sidecardb.GetIdentifier(), vreplID)
 	if qr, err = dbClient.Execute(query); err != nil {
 		return 0, "", "", "", err
 	}
@@ -96,11 +96,11 @@ func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message st
 	var query string
 	if id > 0 && message == lastLogMessage {
 		query = fmt.Sprintf("update %s.vreplication_log set count = count + 1 where id = %d",
-			sidecardb.GetSidecarDBIdentifier(), id)
+			sidecardb.GetIdentifier(), id)
 	} else {
 		buf := sqlparser.NewTrackedBuffer(nil)
 		buf.Myprintf("insert into %s.vreplication_log(vrepl_id, type, state, message) values(%s, %s, %s, %s)",
-			sidecardb.GetSidecarDBIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state),
+			sidecardb.GetIdentifier(), strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state),
 			encodeString(message))
 		query = buf.ParsedQuery().Query
 	}

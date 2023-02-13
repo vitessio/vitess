@@ -574,7 +574,7 @@ func (v *VRepl) generateInsertStatement(ctx context.Context) (string, error) {
 
 // generateStartStatement Generates the statement to start VReplication running on the workflow
 func (v *VRepl) generateStartStatement(ctx context.Context) (string, error) {
-	return sqlparser.ParseAndBind(fmt.Sprintf(sqlStartVReplStream, sidecardb.GetSidecarDBIdentifier()),
+	return sqlparser.ParseAndBind(fmt.Sprintf(sqlStartVReplStream, sidecardb.GetIdentifier()),
 		sqltypes.StringBindVariable(v.dbName),
 		sqltypes.StringBindVariable(v.workflow),
 	)

@@ -35,7 +35,7 @@ import (
 // GenerateInitialBinlogEntry is used to create a binlog entry when a primary comes up and we need to get a
 // MySQL position so that we can set it as the starting position for replicas to do MySQL Replication from.
 func GenerateInitialBinlogEntry() string {
-	return sidecardb.GetCreateSidecarDBQuery()
+	return sidecardb.GetCreateQuery()
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
@@ -48,7 +48,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 	}
 	return fmt.Sprintf("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%v, '%v', '%v', '%v')", sidecardb.GetSidecarDBIdentifier(),
+		"VALUES (%v, '%v', '%v', '%v')", sidecardb.GetIdentifier(),
 		timeCreatedNS, actionName, primaryAlias, posStr)
 }
 
@@ -56,7 +56,7 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
 	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%v",
-		sidecardb.GetSidecarDBIdentifier(), timeCreatedNS)
+		sidecardb.GetIdentifier(), timeCreatedNS)
 }
 
 // WaitForReparentJournal will wait until the context is done for
