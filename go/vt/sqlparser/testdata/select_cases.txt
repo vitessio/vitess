@@ -9491,10 +9491,10 @@ OUTPUT
 select count(test.t1.b) from t1
 END
 INPUT
-select st_difference((convert(st_polygonfromwkb(linestring(point(1,1), point(2,2))) using gb18030)), st_geomcollfromwkb(point(1,1)));
+select st_difference((convert(st_polygonfromwkb(linestring(point(1,1))) using gb18030)), st_geomcollfromwkb(point(1,1)));
 END
 OUTPUT
-select st_difference(convert(st_polygonfromwkb(linestring(point(1, 1), point(2, 2))) using gb18030), st_geomcollfromwkb(point(1, 1))) from dual
+select st_difference(convert(st_polygonfromwkb(linestring(point(1, 1))) using gb18030), st_geomcollfromwkb(point(1, 1))) from dual
 END
 INPUT
 select convert(_koi8r'�' using utf8mb4) < convert(_koi8r'�' using utf8mb4);
