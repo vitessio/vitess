@@ -45,9 +45,8 @@ type (
 const (
 	sharded routingType = iota
 	infoSchema
-	ref
+	anyShard
 	none
-	unsharded
 	dual
 	targeted
 )
@@ -58,12 +57,10 @@ func (rt routingType) String() string {
 		return "sharded"
 	case infoSchema:
 		return "infoSchema"
-	case ref:
-		return "ref"
+	case anyShard:
+		return "anyShard"
 	case none:
 		return "none"
-	case unsharded:
-		return "unsharded"
 	case dual:
 		return "dual"
 	case targeted:
@@ -99,22 +96,19 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
 	// an unsharded/reference route can be merged with anything going to that keyspace
-	case (a == unsharded || a == ref) && sameKeyspace:
+	case a == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingB)
-	case (b == unsharded || b == ref) && sameKeyspace:
+	case b == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
-	case (a == unsharded || a == ref || b == unsharded || b == ref) && !sameKeyspace:
-		return nil, nil
-
-	case a == unsharded && b == sharded || b == unsharded && a == sharded:
+	case (a == anyShard || b == anyShard) && !sameKeyspace:
 		return nil, nil
 
 	case a == sharded && b == sharded:
 		return mergeTables(ctx, lhsRoute, rhsRoute, m, joinPredicates)
 
 	// table and reference routing can be merged if they are going to the same keyspace
-	case a == sharded && b == ref && sameKeyspace:
+	case a == sharded && b == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
 	case a == infoSchema && b == infoSchema:
@@ -142,7 +136,11 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
 
 	if !sameKeyspace {
-		refA, ok := routingA.(*ReferenceRouting)
+		if routingA.Keyspace() == nil || routingB.Keyspace() == nil {
+			// if either of these is missing a keyspace, we are not going to be able to find an alternative
+			return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
+		}
+		refA, ok := routingA.(*AnyShardRouting)
 		if ok {
 			if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
 				lhsRoute = altARoute
@@ -152,7 +150,7 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 		}
 	}
 	if !sameKeyspace {
-		refB, ok := routingB.(*ReferenceRouting)
+		refB, ok := routingB.(*AnyShardRouting)
 		if ok {
 			if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
 				rhsRoute = altBRoute
@@ -247,16 +245,14 @@ func getRoutingType(r Routing) routingType {
 	switch r.(type) {
 	case *InfoSchemaRouting:
 		return infoSchema
-	case *ReferenceRouting:
-		return ref
+	case *AnyShardRouting:
+		return anyShard
 	case *DualRouting:
 		return dual
 	case *ShardedRouting:
 		return sharded
 	case *NoneRouting:
 		return none
-	case *UnshardedRouting:
-		return unsharded
 	case *TargetedRouting:
 		return targeted
 	}

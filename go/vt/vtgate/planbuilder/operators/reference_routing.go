@@ -7,38 +7,43 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-type ReferenceRouting struct {
+// AnyShardRouting is used for routing logic where any shard in the keyspace can be used.
+// Shared by unsharded and reference routing
+type AnyShardRouting struct {
 	keyspace   *vindexes.Keyspace
 	Alternates map[*vindexes.Keyspace]*Route
 }
 
-var _ Routing = (*ReferenceRouting)(nil)
+var _ Routing = (*AnyShardRouting)(nil)
 
-func (rr *ReferenceRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (rr *AnyShardRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	rp.Keyspace = rr.keyspace
 }
 
-func (rr *ReferenceRouting) Clone() Routing {
-	return &ReferenceRouting{keyspace: rr.keyspace}
+func (rr *AnyShardRouting) Clone() Routing {
+	return &AnyShardRouting{keyspace: rr.keyspace}
 }
 
-func (rr *ReferenceRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (rr *AnyShardRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	return rr, nil
 }
 
-func (rr *ReferenceRouting) Cost() int {
+func (rr *AnyShardRouting) Cost() int {
 	return 0
 }
 
-func (rr *ReferenceRouting) OpCode() engine.Opcode {
-	return engine.Reference
+func (rr *AnyShardRouting) OpCode() engine.Opcode {
+	if rr.keyspace.Sharded {
+		return engine.Reference
+	}
+	return engine.Unsharded
 }
 
-func (rr *ReferenceRouting) Keyspace() *vindexes.Keyspace {
+func (rr *AnyShardRouting) Keyspace() *vindexes.Keyspace {
 	return rr.keyspace
 }
 
-func (rr *ReferenceRouting) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
+func (rr *AnyShardRouting) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Route {
 	if keyspace.Name == rr.keyspace.Name {
 		return nil
 	}

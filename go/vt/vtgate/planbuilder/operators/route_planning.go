@@ -155,7 +155,7 @@ func buildVindexTableForDML(
 	}
 
 	if !vindexTable.Keyspace.Sharded {
-		return vindexTable, &UnshardedRouting{keyspace: vindexTable.Keyspace}, nil
+		return vindexTable, &AnyShardRouting{keyspace: vindexTable.Keyspace}, nil
 	}
 
 	var dest key.Destination

@@ -9,10 +9,6 @@ import (
 )
 
 type (
-	UnshardedRouting struct {
-		keyspace *vindexes.Keyspace
-	}
-
 	NoneRouting struct {
 		keyspace *vindexes.Keyspace
 	}
@@ -26,7 +22,6 @@ type (
 )
 
 var (
-	_ Routing = (*UnshardedRouting)(nil)
 	_ Routing = (*NoneRouting)(nil)
 	_ Routing = (*TargetedRouting)(nil)
 )
@@ -79,29 +74,4 @@ func (n *NoneRouting) OpCode() engine.Opcode {
 
 func (n *NoneRouting) Keyspace() *vindexes.Keyspace {
 	return n.keyspace
-}
-
-func (ur *UnshardedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	rp.Keyspace = ur.keyspace
-	rp.Opcode = ur.OpCode()
-}
-
-func (ur *UnshardedRouting) Clone() Routing {
-	return &UnshardedRouting{keyspace: ur.keyspace}
-}
-
-func (ur *UnshardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	return ur, nil
-}
-
-func (ur *UnshardedRouting) Cost() int {
-	return 0
-}
-
-func (ur *UnshardedRouting) OpCode() engine.Opcode {
-	return engine.Unsharded
-}
-
-func (ur *UnshardedRouting) Keyspace() *vindexes.Keyspace {
-	return ur.keyspace
 }

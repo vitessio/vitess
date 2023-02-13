@@ -408,7 +408,7 @@ func createRouteFromVSchemaTable(
 				return nil, err
 			}
 		}
-	case *ReferenceRouting:
+	case *AnyShardRouting:
 		if planAlternates {
 			alternates, err := createAlternateRoutesFromVSchemaTable(ctx, queryTable, vschemaTable, solves)
 			if err != nil {
@@ -427,10 +427,8 @@ func createRoutingForVTable(vschemaTable *vindexes.Table, id semantics.TableSet)
 		return &SequenceRouting{}
 	case vschemaTable.Type == vindexes.TypeReference && vschemaTable.Name.String() == "dual":
 		return &DualRouting{}
-	case vschemaTable.Type == vindexes.TypeReference:
-		return &ReferenceRouting{keyspace: vschemaTable.Keyspace}
-	case !vschemaTable.Keyspace.Sharded:
-		return &UnshardedRouting{keyspace: vschemaTable.Keyspace}
+	case vschemaTable.Type == vindexes.TypeReference || !vschemaTable.Keyspace.Sharded:
+		return &AnyShardRouting{keyspace: vschemaTable.Keyspace}
 	default:
 		return newShardedRouting(vschemaTable, id)
 	}

@@ -22,7 +22,7 @@
       "Original": "select * from ambiguous_ref_with_source",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -116,7 +116,7 @@
       "Original": "select r1.col from ambiguous_ref_with_source r1 join ambiguous_ref_with_source",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
