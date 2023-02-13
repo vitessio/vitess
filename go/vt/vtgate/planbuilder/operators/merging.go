@@ -287,7 +287,6 @@ func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Rou
 	s.subq.ExtractedSubquery.Merged = true
 
 	s.markPredicateInOuterRouting(outer, inner)
-
 	routing, err := outer.ResetRoutingLogic(s.ctx)
 	if err != nil {
 		return nil, err
@@ -300,7 +299,18 @@ func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Rou
 
 func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (*Route, error) {
 	s.subq.ExtractedSubquery.Merged = true
-	// outer.Routing = r
+
+	if outerSR, ok := outer.Routing.(*ShardedRouting); ok {
+		s.markPredicateInOuterRouting(outerSR, inner.Routing)
+		var err error
+		outer.Routing, err = outerSR.ResetRoutingLogic(s.ctx)
+		if err != nil {
+			return nil, err
+		}
+	} else {
+		outer.Routing = r
+	}
+
 	outer.MergedWith = append(outer.MergedWith, inner)
 	return outer, nil
 }

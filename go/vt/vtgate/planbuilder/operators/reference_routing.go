@@ -26,10 +26,6 @@ func (rr *ReferenceRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext,
 	panic("implement me")
 }
 
-func (rr *ReferenceRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
-	return rr, nil
-}
-
 func (rr *ReferenceRouting) Cost() int {
 	return 0
 }
@@ -58,10 +54,6 @@ func (dr *DualRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr
 	return dr, nil
 }
 
-func (dr *DualRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
-	return dr, nil
-}
-
 func (dr *DualRouting) Cost() int {
 	return 0
 }
@@ -87,10 +79,6 @@ func (sr *SequenceRouting) Clone() Routing {
 }
 
 func (sr *SequenceRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	return sr, nil
-}
-
-func (sr *SequenceRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
 	return sr, nil
 }
 
