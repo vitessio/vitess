@@ -17,57 +17,47 @@
 # this script brings up zookeeper and all the vitess components
 # required for a single shard deployment.
 
-source ./env.sh
+source ../common/env.sh
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
-	CELL=zone1 ./scripts/zk-up.sh
+	CELL=zone1 ../common/scripts/zk-up.sh
 elif [ "${TOPO}" = "k8s" ]; then
-	CELL=zone1 ./scripts/k3s-up.sh
+	CELL=zone1 ../common/scripts/k3s-up.sh
 elif [ "${TOPO}" = "consul" ]; then
-	CELL=zone1 ./scripts/consul-up.sh
+	CELL=zone1 ../common/scripts/consul-up.sh
 else
-	CELL=zone1 ./scripts/etcd-up.sh
+	CELL=zone1 ../common/scripts/etcd-up.sh
 fi
 
 # start vtctld
-CELL=zone1 ./scripts/vtctld-up.sh
+CELL=zone1 ../common/scripts/vtctld-up.sh
 
 # start vttablets for keyspace commerce
 for i in 100 101 102; do
-	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
-	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ./scripts/vttablet-up.sh
+	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
+	CELL=zone1 KEYSPACE=commerce TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 
 # set the correct durability policy for the keyspace
-vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce
+vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync commerce || fail "Failed to set keyspace durability policy on the commerce keyspace"
 
 # start vtorc
-./scripts/vtorc-up.sh
+../common/scripts/vtorc-up.sh
 
 # Wait for all the tablets to be up and registered in the topology server
-for _ in $(seq 0 200); do
-	vtctldclient GetTablets --keyspace commerce --shard 0 | wc -l | grep -q "3" && break
-	sleep 1
-done;
-vtctldclient GetTablets --keyspace commerce --shard 0 | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in commerce/0" && exit 1)
-
-# Wait for a primary tablet to be elected in the shard
-for _ in $(seq 0 200); do
-	vtctldclient GetTablets --keyspace commerce --shard 0 | grep -q "primary" && break
-	sleep 1
-done;
-vtctldclient GetTablets --keyspace commerce --shard 0 | grep "primary" || (echo "Timed out waiting for primary to be elected in commerce/0" && exit 1)
+# and for a primary tablet to be elected in the shard and become healthy/serving.
+wait_for_healthy_shard commerce 0 || exit 1
 
 # create the schema
-vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce
+vtctldclient ApplySchema --sql-file create_commerce_schema.sql commerce || fail "Failed to apply schema for the commerce keyspace"
 
 # create the vschema
-vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce
+vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce || fail "Failed to apply vschema for the commerce keyspace"
 
 # start vtgate
-CELL=zone1 ./scripts/vtgate-up.sh
+CELL=zone1 ../common/scripts/vtgate-up.sh
 
 # start vtadmin
-./scripts/vtadmin-up.sh
+../common/scripts/vtadmin-up.sh
 

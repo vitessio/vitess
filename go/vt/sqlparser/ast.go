@@ -2704,6 +2704,12 @@ type (
 		JSONValue Expr
 	}
 
+	//PointExpr represents POINT(x,y) expression
+	PointExpr struct {
+		XCordinate Expr
+		YCordinate Expr
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3030,6 +3036,7 @@ func (*VarPop) iExpr()                             {}
 func (*VarSamp) iExpr()                            {}
 func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
+func (*PointExpr) iExpr()                          {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3083,6 +3090,7 @@ func (*ExtractValueExpr) iCallable()                   {}
 func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
+func (*PointExpr) iCallable()                          {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

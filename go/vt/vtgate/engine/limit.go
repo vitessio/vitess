@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"strconv"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -188,13 +189,13 @@ func getIntFrom(env *evalengine.ExpressionEnv, expr evalengine.Expr) (int, error
 		return 0, nil
 	}
 
-	num, err := value.ToUint64()
-	if err != nil {
-		return 0, err
+	if !value.IsIntegral() {
+		return 0, sqltypes.ErrIncompatibleTypeCast
 	}
-	count := int(num)
-	if count < 0 {
-		return 0, fmt.Errorf("requested limit is out of range: %v", num)
+
+	count, err := strconv.Atoi(value.RawStr())
+	if err != nil || count < 0 {
+		return 0, fmt.Errorf("requested limit is out of range: %v", value.RawStr())
 	}
 	return count, nil
 }

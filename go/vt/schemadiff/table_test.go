@@ -2032,6 +2032,21 @@ func TestNormalize(t *testing.T) {
 			from: "create table t (id int primary key, i1 int invisible)",
 			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`i1` int INVISIBLE,\n\tPRIMARY KEY (`id`)\n)",
 		},
+		{
+			name: "normalize boolean, default true",
+			from: "create table t (id int primary key, b boolean default true)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`b` tinyint(1) DEFAULT '1',\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize boolean, default false",
+			from: "create table t (id int primary key, b boolean default false)",
+			to:   "CREATE TABLE `t` (\n\t`id` int,\n\t`b` tinyint(1) DEFAULT '0',\n\tPRIMARY KEY (`id`)\n)",
+		},
+		{
+			name: "normalize primary key and column with no default, with type boolean",
+			from: "create table t (id boolean primary key, b boolean)",
+			to:   "CREATE TABLE `t` (\n\t`id` tinyint(1),\n\t`b` tinyint(1),\n\tPRIMARY KEY (`id`)\n)",
+		},
 	}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {

@@ -437,6 +437,32 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
+		// Normalize boolean to tinyint(1). Otherwise we get a diff if the desired schema has a boolean column because
+		// "show create table" reports it as a tinyint(1).
+		if col.Type.Type == "boolean" {
+			col.Type.Type = "tinyint"
+			col.Type.Length = &sqlparser.Literal{
+				Type: sqlparser.IntVal,
+				Val:  "1",
+			}
+
+			if col.Type.Options.Default != nil {
+				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
+				if ok {
+					defaultVal := "0"
+					if val {
+						defaultVal = "1"
+					}
+					col.Type.Options.Default = &sqlparser.Literal{
+						Type: sqlparser.StrVal,
+						Val:  defaultVal,
+					}
+				} else {
+					col.Type.Options.Default = nil
+				}
+			}
+		}
+
 		if _, ok := floatTypes[col.Type.Type]; ok {
 			// First, normalize the actual type
 			switch col.Type.Type {
@@ -724,6 +750,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: c.CreateTable.Table,
 	}
+	if hints.TableQualifierHint == TableQualifierDeclared {
+		alterTable.Table.Qualifier = other.Table.Qualifier
+	}
+
 	diffedTableCharset := ""
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
@@ -777,6 +807,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
 	if tableSpecHasChanged {
 		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{

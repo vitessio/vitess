@@ -129,7 +129,7 @@ func TestConsistentLookup(t *testing.T) {
 	utils.Exec(t, conn, "rollback")
 	require.Error(t, err)
 	mysqlErr := err.(*mysql.SQLError)
-	assert.Equal(t, 1062, mysqlErr.Num)
+	assert.Equal(t, mysql.ERDupEntry, mysqlErr.Num)
 	assert.Equal(t, "23000", mysqlErr.State)
 	assert.Contains(t, mysqlErr.Message, "reverted partial DML execution")
 

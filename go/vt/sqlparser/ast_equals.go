@@ -1004,6 +1004,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
@@ -3506,6 +3512,18 @@ func (cmp *Comparator) RefOfPerformanceSchemaFuncExpr(a, b *PerformanceSchemaFun
 		cmp.Expr(a.Argument, b.Argument)
 }
 
+// RefOfPointExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfPointExpr(a, b *PointExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.XCordinate, b.XCordinate) &&
+		cmp.Expr(a.YCordinate, b.YCordinate)
+}
+
 // RefOfPrepareStmt does deep equals between the two objects.
 func (cmp *Comparator) RefOfPrepareStmt(a, b *PrepareStmt) bool {
 	if a == b {
@@ -5057,6 +5075,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5753,6 +5777,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {

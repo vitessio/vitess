@@ -198,9 +198,8 @@ func TestBuiltinRepeat(t *testing.T) {
 	}
 	for _, str := range cases {
 		for _, cnt := range counts {
-			query := fmt.Sprintf("Repeat(%s, %s)", str, cnt)
+			query := fmt.Sprintf("repeat(%s, %s)", str, cnt)
 			compareRemoteExpr(t, conn, query)
 		}
-
 	}
 }

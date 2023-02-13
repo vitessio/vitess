@@ -17,6 +17,7 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"testing"
 	"time"
 
@@ -24,8 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vtctl/reparentutil"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
@@ -88,7 +87,7 @@ func TestShardReplicationStatuses(t *testing.T) {
 		},
 	}
 	replica.FakeMysqlDaemon.CurrentSourceHost = primary.Tablet.MysqlHostname
-	replica.FakeMysqlDaemon.CurrentSourcePort = int(primary.Tablet.MysqlPort)
+	replica.FakeMysqlDaemon.CurrentSourcePort = primary.Tablet.MysqlPort
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
 		// These 3 statements come from tablet startup
