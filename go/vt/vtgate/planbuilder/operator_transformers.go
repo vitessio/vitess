@@ -201,7 +201,9 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
 	ast := upd.AST
 	replaceSubQuery(ctx, ast)
-	rp := &engine.RoutingParameters{}
+	rp := &engine.RoutingParameters{
+		Opcode: op.Routing.OpCode(),
+	}
 	op.Routing.UpdateRoutingParams(rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
@@ -212,7 +214,7 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		RoutingParameters: rp,
 	}
 
-	apa(upd.AST, upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
+	transformDMLPlan(upd.AST, upd.VTable, edml, op.Routing, len(upd.ChangedVindexValues) > 0)
 
 	e := &engine.Update{
 		ChangedVindexValues: upd.ChangedVindexValues,
@@ -225,7 +227,9 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
 	ast := del.AST
 	replaceSubQuery(ctx, ast)
-	rp := &engine.RoutingParameters{}
+	rp := &engine.RoutingParameters{
+		Opcode: op.Routing.OpCode(),
+	}
 	op.Routing.UpdateRoutingParams(rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
@@ -236,7 +240,7 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 		RoutingParameters: rp,
 	}
 
-	apa(del.AST, del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
+	transformDMLPlan(del.AST, del.VTable, edml, op.Routing, del.OwnedVindexQuery != "")
 
 	e := &engine.Delete{
 		DML: edml,
@@ -245,14 +249,14 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	return &primitiveWrapper{prim: e}, nil
 }
 
-func apa(stmt sqlparser.Commented, vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
+func transformDMLPlan(stmt sqlparser.Commented, vtable *vindexes.Table, edml *engine.DML, routing operators.Routing, setVindex bool) {
 	directives := stmt.GetParsedComments().Directives()
 	if directives.IsSet(sqlparser.DirectiveMultiShardAutocommit) {
 		edml.MultiShardAutocommit = true
 	}
 	edml.QueryTimeout = queryTimeout(directives)
 
-	if routing.OpCode() == engine.Unsharded || !setVindex {
+	if routing.OpCode() != engine.Unsharded || setVindex {
 		primary := vtable.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
 		edml.KsidLength = len(primary.Columns)

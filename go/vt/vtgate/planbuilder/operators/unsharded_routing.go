@@ -32,18 +32,17 @@ var (
 )
 
 func (tr *TargetedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	// TODO implement me
-	panic("implement me")
+	tr.keyspace = rp.Keyspace
+	tr.TargetDestination = rp.TargetDestination
 }
 
 func (tr *TargetedRouting) Clone() Routing {
-	// TODO implement me
-	panic("implement me")
+	newTr := *tr
+	return &newTr
 }
 
-func (tr *TargetedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	// TODO implement me
-	panic("implement me")
+func (tr *TargetedRouting) UpdateRoutingLogic(_ *plancontext.PlanningContext, _ sqlparser.Expr) (Routing, error) {
+	return tr, nil
 }
 
 func (tr *TargetedRouting) Cost() int {

@@ -117,7 +117,6 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 }
 
 func (tr *ShardedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	rp.Opcode = tr.RouteOpCode
 	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex
