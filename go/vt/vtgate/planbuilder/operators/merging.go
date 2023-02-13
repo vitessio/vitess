@@ -101,8 +101,8 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 		a, b = b, a
 		routingA, routingB = routingB, routingA
 	}
-	switch {
 
+	switch {
 	// if either side is a dual query, we can always merge them together
 	case a == dual:
 		return m.merge(lhsRoute, rhsRoute, routingB)
@@ -128,6 +128,9 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	case a == sharded && b == ref && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
+	case a == infoSchema && b == infoSchema:
+		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
+
 	// info schema routings are hard to merge with anything else
 	case a == infoSchema || b == infoSchema:
 		return nil, nil
@@ -140,6 +143,38 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	default:
 		panic(a.String() + ":" + b.String())
 	}
+}
+
+func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {
+	// we have already checked type earlier, so this should always be safe
+	isrA := routingA.(*InfoSchemaRouting)
+	isrB := routingB.(*InfoSchemaRouting)
+	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema) == 0
+	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema) == 0
+
+	switch {
+	// if either side has no predicates to help us route, we can merge them
+	case emptyA:
+		return m.merge(lhsRoute, rhsRoute, isrB)
+	case emptyB:
+		return m.merge(lhsRoute, rhsRoute, isrA)
+
+	// if both sides have the same schema predicate, we can safely merge them
+	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+		for k, expr := range isrB.SysTableTableName {
+			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
+				// schema names are the same, but we have contradicting table names, so we give up
+				return nil, nil
+			}
+			isrA.SysTableTableName[k] = expr
+		}
+		return m.merge(lhsRoute, rhsRoute, isrA)
+
+	// give up
+	default:
+		return nil, nil
+	}
+
 }
 
 func mergeTables(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {

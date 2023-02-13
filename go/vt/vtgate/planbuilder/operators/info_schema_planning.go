@@ -36,14 +36,31 @@ import (
 
 type InfoSchemaRouting struct {
 	// The following two fields are used when Routing information_schema queries
-	SysTableTableSchema []evalengine.Expr
-	SysTableTableName   map[string]evalengine.Expr
+	SysTableTableSchema []sqlparser.Expr
+	SysTableTableName   map[string]sqlparser.Expr
 	Table               *QueryTable
 }
 
 func (isr *InfoSchemaRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	rp.SysTableTableSchema = isr.SysTableTableSchema
-	rp.SysTableTableName = isr.SysTableTableName
+	rp.SysTableTableSchema = nil
+	for _, expr := range isr.SysTableTableSchema {
+		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})
+		if err != nil {
+			// we have already tried this earlier, so we can expect it to work again
+			panic("not expected: " + err.Error())
+		}
+		rp.SysTableTableSchema = append(rp.SysTableTableSchema, eexpr)
+	}
+
+	rp.SysTableTableName = make(map[string]evalengine.Expr, len(isr.SysTableTableName))
+	for k, expr := range isr.SysTableTableName {
+		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})
+		if err != nil {
+			// we have already tried this earlier, so we can expect it to work again
+			panic("not expected: " + err.Error())
+		}
+		rp.SysTableTableName[k] = eexpr
+	}
 }
 
 func (isr *InfoSchemaRouting) Clone() Routing {
@@ -54,16 +71,13 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 }
 
 func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
-	if err != nil {
-		return nil, err
-	}
+	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
 	if out == nil {
 		return isr, nil
 	}
 
 	if isr.SysTableTableName == nil {
-		isr.SysTableTableName = map[string]evalengine.Expr{}
+		isr.SysTableTableName = map[string]sqlparser.Expr{}
 	}
 
 	if isTableSchema {
@@ -86,25 +100,24 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
+func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, sqlparser.Expr) {
 	cmp, ok := in.(*sqlparser.ComparisonExpr)
 	if !ok || cmp.Operator != sqlparser.EqualOp {
-		return false, "", nil, nil
+		return false, "", nil
 	}
 
 	isSchemaName, col := isTableOrSchemaRouteable(cmp)
-	if col == nil || !shouldRewrite(cmp.Right) {
-		return false, "", nil, nil
+	rhs := cmp.Right
+	if col == nil || !shouldRewrite(rhs) {
+		return false, "", nil
 	}
 
-	evalExpr, err := evalengine.Translate(cmp.Right, &notImplementedSchemaInfoConverter{})
+	_, err := evalengine.Translate(rhs, &notImplementedSchemaInfoConverter{})
 	if err != nil {
-		if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
-			// This just means we can't rewrite this particular expression,
-			// not that we have to exit altogether
-			return false, "", nil, nil
-		}
-		return false, "", nil, err
+		// if we can't translate this to an evalengine expression,
+		// we are not going to be able to route based on this expression,
+		// and might as well move on
+		return false, "", nil
 	}
 	var name string
 	if isSchemaName {
@@ -113,7 +126,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		name = reservedVars.ReserveColName(col)
 	}
 	cmp.Right = sqlparser.NewArgument(name)
-	return isSchemaName, name, evalExpr, nil
+	return isSchemaName, name, rhs
 }
 
 // isTableOrSchemaRouteable searches for a comparison where one side is a table or schema name column.
