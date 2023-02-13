@@ -75,6 +75,9 @@ var (
 	blockProfileRate = 0
 
 	globalStatus = newStatusPage("")
+	// tableRefreshRate defines the time interval in milliseconds of tables get updated,
+	// and only update tables those have "refreshRequired" class
+	tableRefreshRate = 10000
 )
 
 var statusHTML = `<!DOCTYPE html>
@@ -103,7 +106,26 @@ text-align: right;
 </head>
 
 <h1>Status for {{.BinaryName}}</h1>
-
+<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
+<script>
+function refreshTableContentIfTableHasID() {
+	$.get("/debug/status", function(data) {
+	  var data = $.parseHTML(data);
+	  var counter = 0;
+	  $("table.refreshRequired").each(function() {
+		var currentTable = $(this);
+		var newTable = $(data).filter("table.refreshRequired").eq(counter);
+		if (newTable.length > 0) {
+		  currentTable.empty().append(newTable.html());
+		}
+		counter++;
+	  });
+	});
+}  
+$(document).ready(function() {
+	setInterval(refreshTableContentIfTableHasID, ` + strconv.Itoa(tableRefreshRate) + `);
+});
+</script>
 <div>
 <div class=lefthand>
 Started: {{.StartTime}}<br>
