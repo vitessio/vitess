@@ -113,7 +113,7 @@ const (
     padding: 0.2rem;
   }
 </style>
-<table id="HealthCheckTabletCache">
+<table class="refreshRequired">
   <tr>
     <th colspan="5">HealthCheck Tablet Cache</th>
   </tr>

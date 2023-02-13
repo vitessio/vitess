@@ -48,7 +48,7 @@ const (
     background-color: #fff;
   }
 </style>
-<table id="GatewayStatus">
+<table class="refreshRequired">
   <tr>
     <th>Keyspace</th>
     <th>Shard</th>

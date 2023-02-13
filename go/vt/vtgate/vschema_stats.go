@@ -77,7 +77,7 @@ const (
     padding: 0.2rem;
   }
 </style>
-<table id="VSchemaCache">
+<table class="refreshRequired">
   <tr>
     <th colspan="5">VSchema Cache <i><a href="/debug/vschema">in JSON</a></i></th>
   </tr>
