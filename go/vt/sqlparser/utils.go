@@ -115,8 +115,9 @@ func NormalizeAlphabetically(query string) (normalized string, err error) {
 }
 
 // ReplaceTableQualifiers takes a statement's table expressions and
-// replaces any cases of the provided database qualifiers with a
-// replacement database qualifier.
+// replaces any cases of the provided database name with the
+// specified replacement name.
+// Note: both database names provided should be unescaped strings.
 func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 	if newdb == olddb {
 		// Nothing to do here.
@@ -137,7 +138,7 @@ func ReplaceTableQualifiers(query, olddb, newdb string) (string, error) {
 			if !node.Qualifier.IsEmpty() &&
 				node.Qualifier.String() == oldQualifier.String() &&
 				node.Qualifier.String() != newQualifier.String() {
-				node.Qualifier = NewIdentifierCS(newdb)
+				node.Qualifier = newQualifier
 				cursor.Replace(node)
 				modified = true
 			}

@@ -54,7 +54,7 @@ const (
 var (
 	sidecarDBName = DefaultName
 	sidecarTables []*sidecarTable
-	ddlCount      = stats.NewCounter("SidecarDbDDLQueryCount", "Number of create/upgrade queries executed")
+	ddlCount      = stats.NewCounter("SidecarDbDDLQueryCount", "Number of create/alter queries executed")
 
 	// All tables needed in the sidecar database have
 	// their schema in the schema subdirectory.
@@ -72,13 +72,16 @@ type sidecarTable struct {
 }
 
 func (t *sidecarTable) String() string {
-	return fmt.Sprintf("%s.%s (%s)", sidecarDBName, t.name, t.module)
+	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), t.name, t.module)
 }
 
 func RegisterFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&sidecarDBName, "sidecar-db-name", DefaultName, "Name of the Vitess sidecar database used for internal metadata.")
 }
 
+// validateSchemaDefinition ensures that the provided schema
+// definition is in an expected form and returns the
+// canonical SQL statement.
 func validateSchemaDefinition(name, schema string) (string, error) {
 	stmt, err := sqlparser.ParseStrictDDL(schema)
 
@@ -106,6 +109,8 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 	return normalizedSchema, nil
 }
 
+// loadSchemaDefinitions loads the embedded schema definitions
+// into a slice of sidecarTables for processing.
 func loadSchemaDefinitions() {
 	sqlFileExtension := ".sql"
 	err := fs.WalkDir(schemaLocation, ".", func(path string, entry fs.DirEntry, err error) error {
@@ -163,7 +168,7 @@ type schemaInit struct {
 }
 
 // Exec is a callback that has to be passed to Init() to
-// execute the specified query in the database.
+// execute the specified query within the database.
 type Exec func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error)
 
 func GetName() string {
@@ -178,18 +183,20 @@ func GetIdentifier() string {
 	return sqlparser.String(ident)
 }
 
+// GetCreateQuery returns the CREATE DATABASE SQL statement
+// used to create the sidecar database.
 func GetCreateQuery() string {
-	return fmt.Sprintf(createSidecarDBQuery, sidecarDBName)
+	return fmt.Sprintf(createSidecarDBQuery, GetIdentifier())
 }
 
-// GetDDLCount metric returns the count of sidecardb ddls that
+// GetDDLCount metric returns the count of sidecardb DDLs that
 // have been run as part of this vttablet's init process.
 func GetDDLCount() int64 {
 	return ddlCount.Get()
 }
 
 // Init creates or upgrades the sidecar database based on
-// declarative schema for all tables in the schema.
+// the declarative schema defined for all tables.
 func Init(ctx context.Context, exec Exec) error {
 	printCallerDetails() // for debug purposes only, remove in v17
 	log.Infof("Starting sidecardb.Init()")
@@ -203,9 +210,9 @@ func Init(ctx context.Context, exec Exec) error {
 
 	// There are paths in the tablet initialization where we
 	// are in read-only mode but the schema is already updated.
-	// Hence, we should not always try to create the
-	// database, since it will then error out as the db is
-	// read-only.
+	// Hence, we should not always try to CREATE the
+	// database, since it will then error out as the instance
+	// is read-only.
 	dbExists, err := si.doesSidecarDBExist()
 	if err != nil {
 		return err
@@ -250,7 +257,7 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 }
 
 func (si *schemaInit) createSidecarDB() error {
-	_, err := si.exec(si.ctx, fmt.Sprintf(createSidecarDBQuery, sidecarDBName), 1, false)
+	_, err := si.exec(si.ctx, GetCreateQuery(), 1, false)
 	if err != nil {
 		log.Error(err)
 		return err
@@ -259,8 +266,7 @@ func (si *schemaInit) createSidecarDB() error {
 	return nil
 }
 
-// Sets db of current connection, returning the currently
-// selected database.
+// Sets the current db in the used connection.
 func (si *schemaInit) setCurrentDatabase(dbName string) error {
 	_, err := si.exec(si.ctx, fmt.Sprintf("use %s", dbName), 1, false)
 	return err
@@ -270,7 +276,7 @@ func (si *schemaInit) setCurrentDatabase(dbName string) error {
 func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	var currentTableSchema string
 
-	rs, err := si.exec(si.ctx, fmt.Sprintf(showCreateTableQuery, sidecarDBName, tableName), 1, false)
+	rs, err := si.exec(si.ctx, fmt.Sprintf(showCreateTableQuery, GetIdentifier(), tableName), 1, false)
 	if err != nil {
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERNoSuchTable {
 			// table does not exist in the sidecar database
@@ -288,7 +294,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 // findTableSchemaDiff gets the diff that needs to be applied
 // to current table schema to get the desired one. Will be an
 // empty string if they match.
-// This could be a CREATE statement if the table does not exist
+// This will be a CREATE statement if the table does not exist
 // or an ALTER if table exists but has a different schema.
 func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
@@ -316,11 +322,9 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 	return ddl, nil
 }
 
-// ensureSchema first checks if the table exist, in which case
-// it runs the create script provided in the schema directory.
-// If the table exists, schemadiff is used to compare the
-// existing schema with the desired one. If it needs to be
-// altered then we run the alter script.
+// ensureSchema uses schemadiff to compare the live schema
+// with the desired one and applies any DDL statements
+// necessary to converge on the desired schema.
 func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 	ctx := si.ctx
 	desiredTableSchema := table.schema
@@ -337,11 +341,11 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 
 	if ddl != "" {
 		if !si.dbCreated {
-			// We use createSidecarDBQuery to also create the
+			// We use createSidecarDB to also create the
 			// first binlog entry when a primary comes up.
 			// That statement doesn't make it to the
-			// replicas, so we run the query again so that it
-			// is replicated to the replicas so that the
+			// replicas, so we run the query again so that
+			// it is replicated to the replicas so that the
 			// replicas can create the sidecar database.
 			if err := si.createSidecarDB(); err != nil {
 				return err
@@ -363,7 +367,7 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 
 // region unit-test-only
 // This section uses helpers used in tests, but also in
-// the go/vt/vtexplain/vtexplain_vttablet.go.
+// go/vt/vtexplain/vtexplain_vttablet.go.
 // Hence, it is here and not in the _test.go file.
 const (
 	createTableRegexp = "(?i)CREATE TABLE .* `?\\_vt\\`?..*"
@@ -385,15 +389,16 @@ var (
 
 // AddSchemaInitQueries adds sidecar database schema related
 // queries to a mock db.
+// This is for unit tests only!
 func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	once.Do(loadSchemaDefinitions)
 	result := &sqltypes.Result{}
-	db.AddQuery(fmt.Sprintf("use %s", sidecarDBName), result)
+	db.AddQuery(fmt.Sprintf("use %s", GetIdentifier()), result)
 	for _, q := range sidecarDBInitQueryPatterns {
 		db.AddQueryPattern(q, result)
 	}
 	for _, q := range sidecarDBInitQueries {
-		db.AddQuery(fmt.Sprintf(q, sidecarDBName), result)
+		db.AddQuery(fmt.Sprintf(q, GetIdentifier()), result)
 	}
 	for _, table := range sidecarTables {
 		result = &sqltypes.Result{}
@@ -404,12 +409,13 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 				fmt.Sprintf("%s|%s", table.name, table.schema),
 			)
 		}
-		db.AddQuery(fmt.Sprintf(showCreateTableQuery, sidecarDBName, table.name), result)
+		db.AddQuery(fmt.Sprintf(showCreateTableQuery, GetIdentifier(), table.name), result)
 	}
 }
 
 // MatchesInitQuery returns true if query has one of the test
 // patterns as a substring, or it matches a provided regexp.
+// This is for unit tests only!
 func MatchesInitQuery(query string) bool {
 	query = strings.ToLower(query)
 	for _, q := range sidecarDBInitQueries {

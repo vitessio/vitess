@@ -32,8 +32,10 @@ import (
 	"context"
 )
 
-// GenerateInitialBinlogEntry is used to create a binlog entry when a primary comes up and we need to get a
-// MySQL position so that we can set it as the starting position for replicas to do MySQL Replication from.
+// GenerateInitialBinlogEntry is used to create a binlog entry when
+// a primary comes up and we need to get a MySQL position so that we
+// can set it as the starting position for replicas to start MySQL
+// Replication from.
 func GenerateInitialBinlogEntry() string {
 	return sidecardb.GetCreateQuery()
 }
