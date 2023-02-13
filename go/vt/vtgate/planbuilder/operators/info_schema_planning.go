@@ -53,6 +53,10 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 	}
 }
 
+func (isr *InfoSchemaRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+	return isr, nil
+}
+
 func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
 	if err != nil || out == nil {

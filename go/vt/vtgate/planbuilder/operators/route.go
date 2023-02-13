@@ -68,9 +68,16 @@ type (
 	}
 
 	Routing interface {
+		// UpdateRoutingParams allows a Routing to control the routing params that will be used by the engine Route
 		UpdateRoutingParams(rp *engine.RoutingParameters)
+
+		// Clone returns a copy of the routing. Since we are trying different variation of merging,
+		// one Routing can be used in different constellations.
+		// We don't want these different alternatives to influence each other, and cloning allows this
 		Clone() Routing
+
 		UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error)
+		ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error)
 		Cost() int
 		OpCode() engine.Opcode
 		Keyspace() *vindexes.Keyspace // note that all routings do not have a keyspace, so this method can return nil

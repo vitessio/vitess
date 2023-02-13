@@ -26,6 +26,10 @@ func (rr *ReferenceRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext,
 	panic("implement me")
 }
 
+func (rr *ReferenceRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+	return rr, nil
+}
+
 func (rr *ReferenceRouting) Cost() int {
 	return 0
 }
@@ -42,27 +46,31 @@ type DualRouting struct{}
 
 var _ Routing = (*DualRouting)(nil)
 
-func (rr *DualRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (dr *DualRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
 	// intentionally empty
 }
 
-func (rr *DualRouting) Clone() Routing {
+func (dr *DualRouting) Clone() Routing {
 	return &DualRouting{}
 }
 
-func (rr *DualRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	return rr, nil
+func (dr *DualRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+	return dr, nil
 }
 
-func (rr *DualRouting) Cost() int {
+func (dr *DualRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+	return dr, nil
+}
+
+func (dr *DualRouting) Cost() int {
 	return 0
 }
 
-func (rr *DualRouting) OpCode() engine.Opcode {
+func (dr *DualRouting) OpCode() engine.Opcode {
 	return engine.Reference
 }
 
-func (rr *DualRouting) Keyspace() *vindexes.Keyspace {
+func (dr *DualRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
 
@@ -79,6 +87,10 @@ func (sr *SequenceRouting) Clone() Routing {
 }
 
 func (sr *SequenceRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+	return sr, nil
+}
+
+func (sr *SequenceRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
 	return sr, nil
 }
 

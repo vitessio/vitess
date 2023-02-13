@@ -162,6 +162,24 @@ func (tr *ShardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, e
 	return tr, nil
 }
 
+func (tr *ShardedRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+	tr.RouteOpCode = engine.Scatter
+	tr.Selected = nil
+	for i, vp := range tr.VindexPreds {
+		tr.VindexPreds[i] = &VindexPlusPredicates{ColVindex: vp.ColVindex, TableID: vp.TableID}
+	}
+
+	var routing Routing = tr
+	for _, predicate := range tr.SeenPredicates {
+		var err error
+		routing, err = routing.UpdateRoutingLogic(ctx, predicate)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return routing, nil
+}
+
 func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext, predicate sqlparser.Expr) (Routing, bool, error) {
 	newVindexFound := false
 	switch node := predicate.(type) {

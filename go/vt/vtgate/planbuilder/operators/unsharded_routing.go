@@ -46,6 +46,10 @@ func (tr *TargetedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, 
 	panic("implement me")
 }
 
+func (tr *TargetedRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+	return tr, nil
+}
+
 func (tr *TargetedRouting) Cost() int {
 	return 1
 }
@@ -71,6 +75,10 @@ func (n *NoneRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr 
 	panic("implement me")
 }
 
+func (n *NoneRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
+	return n, nil
+}
+
 func (n *NoneRouting) Cost() int {
 	return 0
 }
@@ -93,6 +101,10 @@ func (ur *UnshardedRouting) Clone() Routing {
 }
 
 func (ur *UnshardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+	return ur, nil
+}
+
+func (ur *UnshardedRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (Routing, error) {
 	return ur, nil
 }
 
