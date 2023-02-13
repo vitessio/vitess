@@ -380,3 +380,17 @@ func TestAggregateRandom(t *testing.T) {
 	utils.Exec(t, mcmp.MySQLConn, "set sql_mode=''")
 	mcmp.AssertMatches("SELECT /*vt+ PLANNER=gen4 */ t1.shardKey, t1.name, count(t2.id) FROM t1 JOIN t2 ON t1.value != t2.shardKey GROUP BY t1.t1_id", `[[INT64(1) VARCHAR("name 1") INT64(2)] [INT64(2) VARCHAR("name 2") INT64(2)]]`)
 }
+
+// TestAggregateLeftJoin tests that aggregates work with left joins and does not ignore the count when column value does not match the right side table.
+func TestAggregateLeftJoin(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(t1_id, name, value, shardKey) values (11, 'r', 'r', 1), (3, 'r', 'r', 0)")
+	mcmp.Exec("insert into t2(id, shardKey) values (11, 1)")
+
+	mcmp.AssertMatchesNoOrder("SELECT t1.shardkey FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(1)] [INT64(0)]]`)
+	mcmp.AssertMatches("SELECT count(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(2)]]`)
+	mcmp.AssertMatches("SELECT count(*) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[INT64(2)]]`)
+	mcmp.AssertMatches("SELECT sum(t1.shardkey) FROM t1 LEFT JOIN t2 ON t1.t1_id = t2.id", `[[DECIMAL(1)]]`)
+}
