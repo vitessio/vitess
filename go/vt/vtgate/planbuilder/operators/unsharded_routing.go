@@ -32,8 +32,8 @@ var (
 )
 
 func (tr *TargetedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	tr.keyspace = rp.Keyspace
-	tr.TargetDestination = rp.TargetDestination
+	rp.Keyspace = tr.keyspace
+	rp.TargetDestination = tr.TargetDestination
 }
 
 func (tr *TargetedRouting) Clone() Routing {

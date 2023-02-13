@@ -256,7 +256,7 @@ func transformDMLPlan(stmt sqlparser.Commented, vtable *vindexes.Table, edml *en
 	}
 	edml.QueryTimeout = queryTimeout(directives)
 
-	if routing.OpCode() != engine.Unsharded || setVindex {
+	if routing.OpCode() != engine.Unsharded && setVindex {
 		primary := vtable.ColumnVindexes[0]
 		edml.KsidVindex = primary.Vindex
 		edml.KsidLength = len(primary.Columns)
