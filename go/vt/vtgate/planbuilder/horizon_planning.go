@@ -395,7 +395,13 @@ func generateAggregateParams(aggrs []abstract.Aggr, aggrParamOffsets [][]offsets
 					aggrExpr = &sqlparser.BinaryExpr{
 						Operator: sqlparser.MultOp,
 						Left:     aggrExpr,
-						Right:    curr,
+						Right: &sqlparser.FuncExpr{
+							Name: sqlparser.NewIdentifierCI("coalesce"),
+							Exprs: sqlparser.SelectExprs{
+								&sqlparser.AliasedExpr{Expr: curr},
+								&sqlparser.AliasedExpr{Expr: sqlparser.NewIntLiteral("1")},
+							},
+						},
 					}
 				}
 			}
