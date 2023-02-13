@@ -280,6 +280,7 @@ func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inne
 		// Copy Vindex predicates from the inner route to the upper route.
 		// If we can route based on some of these predicates, the routing can improve
 		outer.VindexPreds = append(outer.VindexPreds, innerSR.VindexPreds...)
+		outer.SeenPredicates = append(outer.SeenPredicates, innerSR.SeenPredicates...)
 	}
 }
 
