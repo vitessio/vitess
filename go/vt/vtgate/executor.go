@@ -910,7 +910,6 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 
 	rows := [][]sqltypes.Value{}
 	if UsingLegacyGateway() {
-		log.Info("[SHOW TABLETS] Using legacy functions")
 		status := e.scatterConn.GetLegacyHealthCheckCacheStatus()
 		for _, s := range status {
 			for _, ts := range s.TabletsStats {
@@ -950,7 +949,6 @@ func (e *Executor) showTablets(show *sqlparser.ShowLegacy) (*sqltypes.Result, er
 			}
 		}
 	} else {
-		log.Info("[SHOW TABLETS] Using tabletgateway functions")
 		status := e.scatterConn.GetHealthCheckCacheStatus()
 		for _, s := range status {
 			for _, ts := range s.TabletsStats {
