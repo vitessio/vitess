@@ -134,11 +134,6 @@ func TestMain(m *testing.M) {
 				return 1, err
 			}
 		}
-		vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
-		if err != nil {
-			return 1, err
-		}
-		log.Infof("cluster.VtTabletMajorVersion: %d", vtTabletVersion)
 
 		if localCluster.VtTabletMajorVersion >= 16 {
 			// If vttablets are any lower than version 16, then they are running the replication manager.
