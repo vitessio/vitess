@@ -256,7 +256,7 @@ func newSubQueryMerge(ctx *plancontext.PlanningContext, subq *SubQueryInner) mer
 // markPredicateInOuterRouting merges a subquery with the outer routing.
 // If the subquery was a predicate on the outer side, we see if we can use
 // predicates from the subquery to help with routing
-func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inner Routing) {
+func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inner Routing) (Routing, error) {
 	// When merging an inner query with its outer query, we can remove the
 	// inner query from the list of predicates that can influence routing of
 	// the outer query.
@@ -276,42 +276,55 @@ func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inne
 		}
 	}
 
-	if innerSR, ok := inner.(*ShardedRouting); ok && subQueryWasPredicate {
+	if !subQueryWasPredicate {
+		// if the subquery was not a predicate, we are done here
+		return outer, nil
+	}
+
+	switch inner := inner.(type) {
+	case *ShardedRouting:
 		// Copy Vindex predicates from the inner route to the upper route.
 		// If we can route based on some of these predicates, the routing can improve
-		outer.VindexPreds = append(outer.VindexPreds, innerSR.VindexPreds...)
-		outer.SeenPredicates = append(outer.SeenPredicates, innerSR.SeenPredicates...)
+		outer.VindexPreds = append(outer.VindexPreds, inner.VindexPreds...)
+		outer.SeenPredicates = append(outer.SeenPredicates, inner.SeenPredicates...)
+		routing, err := outer.ResetRoutingLogic(s.ctx)
+		if err != nil {
+			return nil, err
+		}
+		return routing, nil
+	case *NoneRouting:
+		// if we have an ANDed subquery and we know that it will not find anything,
+		// we can safely assume that the outer query will also not return anything
+		return &NoneRouting{keyspace: outer.keyspace}, nil
+	default:
+		return outer, nil
 	}
 }
 
 func (s *subQueryMerger) mergeTables(outer, inner *ShardedRouting, op1, op2 *Route) (*Route, error) {
 	s.subq.ExtractedSubquery.Merged = true
 
-	s.markPredicateInOuterRouting(outer, inner)
-	routing, err := outer.ResetRoutingLogic(s.ctx)
+	routing, err := s.markPredicateInOuterRouting(outer, inner)
 	if err != nil {
 		return nil, err
 	}
-
 	op1.Routing = routing
 	op1.MergedWith = append(op1.MergedWith, op2)
 	return op1, nil
 }
 
-func (s *subQueryMerger) merge(outer, inner *Route, r Routing) (*Route, error) {
+func (s *subQueryMerger) merge(outer, inner *Route, routing Routing) (*Route, error) {
 	s.subq.ExtractedSubquery.Merged = true
 
 	if outerSR, ok := outer.Routing.(*ShardedRouting); ok {
-		s.markPredicateInOuterRouting(outerSR, inner.Routing)
 		var err error
-		outer.Routing, err = outerSR.ResetRoutingLogic(s.ctx)
+		routing, err = s.markPredicateInOuterRouting(outerSR, inner.Routing)
 		if err != nil {
 			return nil, err
 		}
-	} else {
-		outer.Routing = r
 	}
 
+	outer.Routing = routing
 	outer.MergedWith = append(outer.MergedWith, inner)
 	return outer, nil
 }

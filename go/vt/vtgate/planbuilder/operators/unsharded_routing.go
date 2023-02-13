@@ -67,8 +67,7 @@ func (n *NoneRouting) Clone() Routing {
 }
 
 func (n *NoneRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
-	// TODO implement me
-	panic("implement me")
+	return n, nil
 }
 
 func (n *NoneRouting) Cost() int {
