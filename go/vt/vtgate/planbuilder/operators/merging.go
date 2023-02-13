@@ -12,10 +12,61 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 )
 
-/*
-select 1 from t1 where exists(select 1 from t2 where t1.id = t2.id and t1.foo = t2.foo)
-select 1 from t1 where (id, foo) in (select id, foo from t2)
-*/
+// Merge checks whether two operators can be merged into a single one.
+// If they can be merged, the new Routing for the merged operator is returned.
+// If they cannot be merged, nil is returned.
+func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
+	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
+	if lhsRoute == nil || rhsRoute == nil {
+		return nil, nil
+	}
+
+	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
+
+	a, b := getRoutingType(routingA), getRoutingType(routingB)
+	if getTypeName(routingA) < getTypeName(routingB) {
+		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
+		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
+		a, b = b, a
+		routingA, routingB = routingB, routingA
+	}
+
+	switch {
+	// if either side is a dual query, we can always merge them together
+	case a == dual:
+		return m.merge(lhsRoute, rhsRoute, routingB)
+	case b == dual:
+		return m.merge(lhsRoute, rhsRoute, routingA)
+
+	// an unsharded/reference route can be merged with anything going to that keyspace
+	case a == anyShard && sameKeyspace:
+		return m.merge(lhsRoute, rhsRoute, routingB)
+	case b == anyShard && sameKeyspace:
+		return m.merge(lhsRoute, rhsRoute, routingA)
+
+	// table and reference routing can be merged if they are going to the same keyspace
+	case a == sharded && b == anyShard && sameKeyspace:
+		return m.merge(lhsRoute, rhsRoute, routingA)
+
+	// None routing can always be merged, as long as we are aiming for the same keyspace
+	case a == none && sameKeyspace:
+		return m.merge(lhsRoute, rhsRoute, routingA)
+	case b == none && sameKeyspace:
+		return m.merge(lhsRoute, rhsRoute, routingB)
+
+	case a == infoSchema && b == infoSchema:
+		// infoSchema routing is complex, so we handle it in a separate method
+		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
+
+	case a == sharded && b == sharded:
+		// sharded routing is complex, so we handle it in a separate method
+		return mergeTables(ctx, lhsRoute, rhsRoute, m, joinPredicates)
+
+	default:
+		return nil, nil
+	}
+}
+
 type (
 	merger interface {
 		mergeTables(r1, r2 *ShardedRouting, op1, op2 *Route) (*Route, error)
@@ -67,65 +118,6 @@ func (rt routingType) String() string {
 		return "targeted"
 	}
 	panic("switch should be exhaustive")
-}
-
-// Merge checks whether two operators can be merged into a single one.
-// If they can be merged, the new Routing for the merged operator is returned.
-// If they cannot be merged, nil is returned.
-func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
-	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
-	if lhsRoute == nil || rhsRoute == nil {
-		return nil, nil
-	}
-
-	lhsRoute, rhsRoute, routingA, routingB, sameKeyspace := getRoutesOrAlternates(lhsRoute, rhsRoute)
-
-	a, b := getRoutingType(routingA), getRoutingType(routingB)
-	if getTypeName(routingA) < getTypeName(routingB) {
-		// while deciding if two routes can be merged, the LHS/RHS order of the routes is not important.
-		// for the actual merging, we still need to remember which side was inner and which was outer for subqueries
-		a, b = b, a
-		routingA, routingB = routingB, routingA
-	}
-
-	switch {
-	// if either side is a dual query, we can always merge them together
-	case a == dual:
-		return m.merge(lhsRoute, rhsRoute, routingB)
-	case b == dual:
-		return m.merge(lhsRoute, rhsRoute, routingA)
-
-	// an unsharded/reference route can be merged with anything going to that keyspace
-	case a == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingB)
-	case b == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
-
-	case (a == anyShard || b == anyShard) && !sameKeyspace:
-		return nil, nil
-
-	case a == sharded && b == sharded:
-		return mergeTables(ctx, lhsRoute, rhsRoute, m, joinPredicates)
-
-	// table and reference routing can be merged if they are going to the same keyspace
-	case a == sharded && b == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
-
-	case a == infoSchema && b == infoSchema:
-		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
-
-	// info schema routings are hard to merge with anything else
-	case a == infoSchema || b == infoSchema:
-		return nil, nil
-
-	case a == none && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
-	case b == none && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingB)
-
-	default:
-		panic(a.String() + ":" + b.String())
-	}
 }
 
 // getRoutesOrAlternates gets the Routings from each Route. If they are from different keyspaces,
