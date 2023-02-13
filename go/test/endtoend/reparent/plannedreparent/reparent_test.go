@@ -427,7 +427,12 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, primaryStatus.PrimaryStatus.String(), "vt-0000000101-bin")
 	assert.Equal(t, primaryStatus.GtidPurged, "MySQL56/")
 	assert.False(t, primaryStatus.ReadOnly)
-	assert.False(t, primaryStatus.SuperReadOnly)
+	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
+	require.NoError(t, err)
+	// For all version above v15, each replica will start in super-read-only mode.
+	if vtTabletVersion > 16 {
+		assert.False(t, primaryStatus.SuperReadOnly)
+	}
 	assert.True(t, primaryStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, primaryStatus.SemiSyncReplicaEnabled)
 	assert.True(t, primaryStatus.SemiSyncPrimaryStatus)
@@ -480,7 +485,10 @@ func TestFullStatus(t *testing.T) {
 	assert.Contains(t, replicaStatus.PrimaryStatus.String(), "vt-0000000102-bin")
 	assert.Equal(t, replicaStatus.GtidPurged, "MySQL56/")
 	assert.True(t, replicaStatus.ReadOnly)
-	assert.True(t, replicaStatus.SuperReadOnly)
+	// For all version above v15, each replica will start in super-read-only mode.
+	if vtTabletVersion > 16 {
+		assert.True(t, replicaStatus.SuperReadOnly)
+	}
 	assert.False(t, replicaStatus.SemiSyncPrimaryEnabled)
 	assert.True(t, replicaStatus.SemiSyncReplicaEnabled)
 	assert.False(t, replicaStatus.SemiSyncPrimaryStatus)

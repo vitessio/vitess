@@ -361,41 +361,6 @@ func (c *Conn) ExecuteFetchWithSuperReadOnlyHandling(query string, maxrows int, 
 	return result, err
 }
 
-// SetSuperReadOnly tries to set super-read-only either `true` or `false`
-// Since setting global super-read-only is idempotent we set them with finding current status
-func (c *Conn) SetSuperReadOnly(enableSuperReadOnly bool) (result *sqltypes.Result, err error) {
-	var val = "OFF"
-	if enableSuperReadOnly {
-		val = "ON"
-	}
-	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
-	if !c.IsMariaDB() {
-		query := fmt.Sprintf("SET GLOBAL super_read_only='%s'", val)
-		if err = c.WriteComQuery(query); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, fmt.Errorf("MariaDB not supported for super-read-only")
-	}
-
-	return result, err
-}
-
-// SetReadOnly tries to set read-only to false only if it is currently enable
-func (c *Conn) SetReadOnly(enableReadOnly bool) (result *sqltypes.Result, err error) {
-	var val = "OFF"
-	if enableReadOnly {
-		val = "ON"
-	}
-
-	query := fmt.Sprintf("SET GLOBAL read_only='%s'", val)
-	if err = c.WriteComQuery(query); err != nil {
-		return nil, err
-	}
-
-	return result, err
-}
-
 // ExecuteFetchWithWarningCount is for fetching results and a warning count
 // Note: In a future iteration this should be abolished and merged into the
 // ExecuteFetch API.

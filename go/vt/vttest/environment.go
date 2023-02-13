@@ -144,11 +144,9 @@ func (env *LocalTestEnv) BinaryPath(binary string) string {
 
 // MySQLManager implements MySQLManager for LocalTestEnv
 func (env *LocalTestEnv) MySQLManager(mycnf []string, snapshot string) (MySQLManager, error) {
-	// maria db doesn't recognize super-read-only, therefore we have separate sql for that.
-	var initFile = path.Join(os.Getenv("VTROOT"), "config/init_db.sql")
 	return &Mysqlctl{
 		Binary:    env.BinaryPath("mysqlctl"),
-		InitFile:  initFile,
+		InitFile:  path.Join(os.Getenv("VTROOT"), "config/init_db.sql"),
 		Directory: env.TmpPath,
 		Port:      env.PortForProtocol("mysql", ""),
 		MyCnf:     append(env.DefaultMyCnf, mycnf...),
