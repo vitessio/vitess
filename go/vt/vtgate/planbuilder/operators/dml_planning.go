@@ -148,9 +148,9 @@ func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) 
 	if sq, ok := expr.(*sqlparser.ExtractedSubquery); ok {
 		// if we are planning an update that needs one or more values from the outside, we can trust that they have
 		// been correctly extracted from this query before we reach this far
-		// if NeedsRewrite is true, it means that this subquery was happily merged with the outer.
+		// if Merged is true, it means that this subquery was happily merged with the outer.
 		// But in that case we should not be here, so we fail
-		if sq.NeedsRewrite {
+		if sq.Merged {
 			return nil, invalidUpdateExpr(upd, expr)
 		}
 		expr = sqlparser.NewArgument(sq.GetArgName())

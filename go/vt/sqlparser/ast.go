@@ -2470,11 +2470,11 @@ type (
 	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
 	// CAUTION: you should only change argName and hasValuesArg through the setter methods
 	ExtractedSubquery struct {
-		Original     Expr // original expression that was replaced by this ExtractedSubquery
-		OpCode       int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
-		Subquery     *Subquery
-		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
-		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
+		Original  Expr // original expression that was replaced by this ExtractedSubquery
+		OpCode    int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		Subquery  *Subquery
+		OtherSide Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+		Merged    bool // tells whether we need to rewrite this subquery to Original or not
 
 		hasValuesArg string
 		argName      string

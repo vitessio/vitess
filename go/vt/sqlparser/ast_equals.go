@@ -2367,7 +2367,7 @@ func (cmp *Comparator) RefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 		return false
 	}
 	return a.OpCode == b.OpCode &&
-		a.NeedsRewrite == b.NeedsRewrite &&
+		a.Merged == b.Merged &&
 		a.hasValuesArg == b.hasValuesArg &&
 		a.argName == b.argName &&
 		cmp.Expr(a.Original, b.Original) &&

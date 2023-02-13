@@ -94,7 +94,7 @@ func unresolvedAndSource(ctx *plancontext.PlanningContext, op ops.Operator) ([]s
 }
 
 func mergeSubQueryOp(ctx *plancontext.PlanningContext, outer *Route, inner *Route, subq *SubQueryInner, mergedRouting Routing) (*Route, error) {
-	subq.ExtractedSubquery.NeedsRewrite = true
+	subq.ExtractedSubquery.Merged = true
 
 	switch outerRouting := outer.Routing.(type) {
 	case *ShardedRouting:
