@@ -55,8 +55,11 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 
 func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
-	if err != nil || out == nil {
+	if err != nil {
 		return nil, err
+	}
+	if out == nil {
+		return isr, nil
 	}
 
 	if isr.SysTableTableName == nil {

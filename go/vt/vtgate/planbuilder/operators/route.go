@@ -85,6 +85,71 @@ type (
 
 var _ ops.PhysicalOperator = (*Route)(nil)
 
+func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) (Routing, error) {
+	ks := r.Keyspace()
+	if ks == nil {
+		var err error
+		ks, err = ctx.VSchema.AnyKeyspace()
+		if err != nil {
+			return nil, err
+		}
+	}
+	nr := &NoneRouting{keyspace: ks}
+
+	if isConstantFalse(expr) {
+		return nr, nil
+	}
+
+	switch expr := expr.(type) {
+	case *sqlparser.ComparisonExpr:
+		if expr.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(expr.Left) || sqlparser.IsNull(expr.Right)) {
+			// we are looking at ANDed predicates in the WHERE clause.
+			// since we know that nothing returns true when compared to NULL,
+			// so we can safely bail out here
+
+			return nr, nil
+		}
+		switch expr.Operator {
+		case sqlparser.NotInOp:
+			switch node := expr.Right.(type) {
+			case sqlparser.ValTuple:
+				for _, n := range node {
+					if sqlparser.IsNull(n) {
+						return nr, nil
+					}
+				}
+			}
+		case sqlparser.InOp:
+			switch nodeR := expr.Right.(type) {
+			case sqlparser.ValTuple:
+				// WHERE col IN (null)
+				if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
+					return nr, nil
+				}
+			}
+		}
+	}
+
+	return r.UpdateRoutingLogic(ctx, expr)
+}
+
+func isConstantFalse(expr sqlparser.Expr) bool {
+	eenv := evalengine.EmptyExpressionEnv()
+	eexpr, err := evalengine.Translate(expr, nil)
+	if err != nil {
+		return false
+	}
+	eres, err := eenv.Evaluate(eexpr)
+	if err != nil {
+		return false
+	}
+	b, err := eres.ToBooleanStrict()
+	if err != nil {
+		return false
+	}
+	return !b
+}
+
 // IPhysical implements the PhysicalOperator interface
 func (*Route) IPhysical() {}
 
@@ -325,7 +390,7 @@ func createRouteFromVSchemaTable(
 	routing := createRoutingForVTable(vschemaTable, solves)
 	for _, predicate := range queryTable.Predicates {
 		var err error
-		plan.Routing, err = routing.UpdateRoutingLogic(ctx, predicate)
+		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return nil, err
 		}
@@ -422,7 +487,7 @@ func createAlternateRoutesFromVSchemaTable(
 
 func (r *Route) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	// first we see if the predicate changes how we route
-	newRouting, err := r.Routing.UpdateRoutingLogic(ctx, expr)
+	newRouting, err := UpdateRoutingLogic(ctx, expr, r.Routing)
 	if err != nil {
 		return nil, err
 	}

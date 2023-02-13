@@ -84,7 +84,7 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 		for _, predicate := range predicates {
 			queryTable.Predicates = append(queryTable.Predicates, predicate)
 
-			routing, err = routing.UpdateRoutingLogic(ctx, predicate)
+			routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 			if err != nil {
 				return nil, err
 			}
@@ -105,7 +105,7 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 				continue
 			}
 			for _, predicate := range sqlparser.ExtractINFromOR(or) {
-				routing, err = routing.UpdateRoutingLogic(ctx, predicate)
+				routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 				if err != nil {
 					return nil, err
 				}
@@ -171,7 +171,7 @@ func (tr *ShardedRouting) ResetRoutingLogic(ctx *plancontext.PlanningContext) (R
 	var routing Routing = tr
 	for _, predicate := range tr.SeenPredicates {
 		var err error
-		routing, err = routing.UpdateRoutingLogic(ctx, predicate)
+		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return nil, err
 		}
@@ -540,7 +540,7 @@ func (tr *ShardedRouting) resetRoutingSelections(ctx *plancontext.PlanningContex
 	var routing Routing = tr
 	for _, predicate := range tr.SeenPredicates {
 		var err error
-		routing, err = routing.UpdateRoutingLogic(ctx, predicate)
+		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return err
 		}

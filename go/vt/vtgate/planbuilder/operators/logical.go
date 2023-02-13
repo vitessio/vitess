@@ -133,7 +133,7 @@ func createOperatorFromUpdate(ctx *plancontext.PlanningContext, updStmt *sqlpars
 
 	for _, predicate := range qt.Predicates {
 		var err error
-		routing, err = routing.UpdateRoutingLogic(ctx, predicate)
+		routing, err = UpdateRoutingLogic(ctx, predicate, routing)
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +212,7 @@ func createOperatorFromDelete(ctx *plancontext.PlanningContext, deleteStmt *sqlp
 
 	for _, predicate := range qt.Predicates {
 		var err error
-		route.Routing, err = route.Routing.UpdateRoutingLogic(ctx, predicate)
+		route.Routing, err = UpdateRoutingLogic(ctx, predicate, route.Routing)
 		if err != nil {
 			return nil, err
 		}
