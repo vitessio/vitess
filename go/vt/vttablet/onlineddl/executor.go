@@ -3569,12 +3569,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					)
 				}
 				lastError := e.vreplicationLastError[uuid]
-				hasErr, isTerminal, message := s.hasError()
-				if hasErr {
-					lastError.Record(errors.New(message))
-				} else {
-					lastError.Record(nil)
-				}
+				isTerminal, vreplError := s.hasError()
+				lastError.Record(vreplError)
 				if isTerminal || !lastError.ShouldRetry() {
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				}
