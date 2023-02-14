@@ -136,30 +136,25 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 	routingB := rhsRoute.Routing
 	sameKeyspace := routingA.Keyspace() == routingB.Keyspace()
 
-	if !sameKeyspace {
-		if routingA.Keyspace() == nil || routingB.Keyspace() == nil {
-			// if either of these is missing a keyspace, we are not going to be able to find an alternative
-			return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
-		}
-		refA, ok := routingA.(*AnyShardRouting)
-		if ok {
-			if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
-				lhsRoute = altARoute
-				routingA = lhsRoute.Routing
-				sameKeyspace = true
-			}
+	if sameKeyspace ||
+		// if either of these is missing a keyspace, we are not going to be able to find an alternative
+		routingA.Keyspace() == nil ||
+		routingB.Keyspace() == nil {
+		return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
+	}
+
+	if refA, ok := routingA.(*AnyShardRouting); ok {
+		if altARoute := refA.AlternateInKeyspace(routingB.Keyspace()); altARoute != nil {
+			return altARoute, rhsRoute, altARoute.Routing, routingB, true
 		}
 	}
-	if !sameKeyspace {
-		refB, ok := routingB.(*AnyShardRouting)
-		if ok {
-			if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
-				rhsRoute = altBRoute
-				routingB = rhsRoute.Routing
-				sameKeyspace = true
-			}
+
+	if refB, ok := routingB.(*AnyShardRouting); ok {
+		if altBRoute := refB.AlternateInKeyspace(routingA.Keyspace()); altBRoute != nil {
+			return lhsRoute, altBRoute, routingA, altBRoute.Routing, true
 		}
 	}
+
 	return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
 }
 
