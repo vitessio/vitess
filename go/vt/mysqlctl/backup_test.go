@@ -17,14 +17,122 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"io"
 	"os"
 	"path"
 	"reflect"
 	"sort"
 	"testing"
+	"time"
+
+	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
+	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 )
+
+// TestBackupExecutesBackupWithScopedParams tests that Backup passes
+// a Scope()-ed stats to backupengine ExecuteBackup.
+func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+
+	require.Equal(t, 1, len(env.backupEngine.ExecuteBackupCalls))
+	executeBackupParams := env.backupEngine.ExecuteBackupCalls[0].BackupParams
+	var executeBackupStats *backupstats.FakeStats
+	for _, sr := range env.stats.ScopeReturns {
+		if sr == executeBackupParams.Stats {
+			executeBackupStats = sr.(*backupstats.FakeStats)
+		}
+	}
+	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeComponent)
+	require.Equal(t, backupstats.BackupEngine.String(), executeBackupStats.ScopeV[backupstats.ScopeComponent])
+	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeImplementation)
+	require.Equal(t, "Fake", executeBackupStats.ScopeV[backupstats.ScopeImplementation])
+}
+
+// TestBackupNoStats tests that if BackupParams.Stats is nil, then Backup will
+// pass non-nil Stats to sub-components.
+func TestBackupNoStats(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	env.setStats(nil)
+
+	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+
+	// It parameterizes the backup storage with nop stats.
+	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
+}
+
+// TestBackupParameterizesBackupStorageWithScopedStats tests that Backup passes
+// a Scope()-ed stats to BackupStorage.WithParams.
+func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+
+	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	var storageStats *backupstats.FakeStats
+	for _, sr := range env.stats.ScopeReturns {
+		if sr == env.backupStorage.WithParamsCalls[0].Stats {
+			storageStats = sr.(*backupstats.FakeStats)
+		}
+	}
+	require.Contains(t, storageStats.ScopeV, backupstats.ScopeComponent)
+	require.Equal(t, backupstats.BackupStorage.String(), storageStats.ScopeV[backupstats.ScopeComponent])
+	require.Contains(t, storageStats.ScopeV, backupstats.ScopeImplementation)
+	require.Equal(t, "Fake", storageStats.ScopeV[backupstats.ScopeImplementation])
+}
+
+// TestBackupEmitsStats tests that Backup emits stats.
+func TestBackupEmitsStats(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	// Force ExecuteBackup to take time so we can test stats emission.
+	env.backupEngine.ExecuteBackupDuration = 1001 * time.Millisecond
+
+	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+
+	require.NotZero(t, backupstats.DeprecatedBackupDurationS.Get())
+	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
+	require.Equal(t, 0, len(env.stats.ScopeV))
+}
+
+// TestBackupTriesToParameterizeBackupStorage tests that Backup tries to pass
+// backupstorage.Params to backupstorage, but only if it responds to
+// backupstorage.WithParams.
+func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
+
+	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
+	var scopedStats backupstats.Stats
+	for _, sr := range env.stats.ScopeReturns {
+		if sr != env.backupStorage.WithParamsCalls[0].Stats {
+			continue
+		}
+		if scopedStats != nil {
+			require.Fail(t, "backupstorage stats matches multiple scoped stats produced by parent stats")
+		}
+		scopedStats = sr
+	}
+	require.NotNil(t, scopedStats)
+}
 
 func TestFindFilesToBackupWithoutRedoLog(t *testing.T) {
 	root := t.TempDir()
@@ -209,8 +317,233 @@ func TestFindFilesToBackupWithRedoLog(t *testing.T) {
 	}
 }
 
+// TestRestoreEmitsStats tests that Restore emits stats.
+func TestRestoreEmitsStats(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	// Force ExecuteRestore to take time so we can test stats emission.
+	env.backupEngine.ExecuteRestoreDuration = 1001 * time.Millisecond
+
+	_, err := Restore(env.ctx, env.restoreParams)
+	require.Nil(t, err, env.logger.Events)
+
+	require.NotZero(t, backupstats.DeprecatedRestoreDurationS.Get())
+	require.Equal(t, 0, len(env.stats.TimedIncrementCalls))
+	require.Equal(t, 0, len(env.stats.ScopeV))
+}
+
+// TestRestoreExecutesRestoreWithScopedParams tests that Restore passes
+// a Scope()-ed stats to backupengine ExecuteRestore.
+func TestRestoreExecutesRestoreWithScopedParams(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	_, err := Restore(env.ctx, env.restoreParams)
+	require.Nil(t, err, env.logger.Events)
+
+	require.Equal(t, 1, len(env.backupEngine.ExecuteRestoreCalls))
+	executeRestoreParams := env.backupEngine.ExecuteRestoreCalls[0].RestoreParams
+	var executeRestoreStats *backupstats.FakeStats
+	for _, sr := range env.stats.ScopeReturns {
+		if sr == executeRestoreParams.Stats {
+			executeRestoreStats = sr.(*backupstats.FakeStats)
+		}
+	}
+	require.Contains(t, executeRestoreStats.ScopeV, backupstats.ScopeComponent)
+	require.Equal(t, backupstats.BackupEngine.String(), executeRestoreStats.ScopeV[backupstats.ScopeComponent])
+	require.Contains(t, executeRestoreStats.ScopeV, backupstats.ScopeImplementation)
+	require.Equal(t, "Fake", executeRestoreStats.ScopeV[backupstats.ScopeImplementation])
+}
+
+// TestRestoreNoStats tests that if RestoreParams.Stats is nil, then Restore will
+// pass non-nil Stats to sub-components.
+func TestRestoreNoStats(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	env.setStats(nil)
+
+	_, err := Restore(env.ctx, env.restoreParams)
+	require.Nil(t, err, env.logger.Events)
+
+	// It parameterizes the backup storage with nop stats.
+	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
+}
+
+// TestRestoreParameterizesBackupStorageWithScopedStats tests that Restore passes
+// a Scope()-ed stats to BackupStorage.WithParams.
+func TestRestoreParameterizesBackupStorageWithScopedStats(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	_, err := Restore(env.ctx, env.restoreParams)
+	require.Nil(t, err, env.logger.Events)
+
+	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	var storageStats *backupstats.FakeStats
+	for _, sr := range env.stats.ScopeReturns {
+		if sr == env.backupStorage.WithParamsCalls[0].Stats {
+			storageStats = sr.(*backupstats.FakeStats)
+		}
+	}
+	require.Contains(t, storageStats.ScopeV, backupstats.ScopeComponent)
+	require.Equal(t, backupstats.BackupStorage.String(), storageStats.ScopeV[backupstats.ScopeComponent])
+	require.Contains(t, storageStats.ScopeV, backupstats.ScopeImplementation)
+	require.Equal(t, "Fake", storageStats.ScopeV[backupstats.ScopeImplementation])
+}
+
+// TestRestoreTriesToParameterizeBackupStorage tests that Restore tries to pass
+// backupstorage.Params to backupstorage, but only if it responds to
+// backupstorage.WithParams.
+func TestRestoreTriesToParameterizeBackupStorage(t *testing.T) {
+	env, closer := createFakeBackupRestoreEnv(t)
+	defer closer()
+
+	_, err := Restore(env.ctx, env.restoreParams)
+	require.Nil(t, err, env.logger.Events)
+
+	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
+	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
+	var scopedStats backupstats.Stats
+	for _, sr := range env.stats.ScopeReturns {
+		if sr != env.backupStorage.WithParamsCalls[0].Stats {
+			continue
+		}
+		if scopedStats != nil {
+			require.Fail(t, "backupstorage stats matches multiple scoped stats produced by parent stats")
+		}
+		scopedStats = sr
+	}
+	require.NotNil(t, scopedStats)
+}
+
 type forTest []FileEntry
 
 func (f forTest) Len() int           { return len(f) }
 func (f forTest) Swap(i, j int)      { f[i], f[j] = f[j], f[i] }
 func (f forTest) Less(i, j int) bool { return f[i].Base+f[i].Name < f[j].Base+f[j].Name }
+
+type fakeBackupRestoreEnv struct {
+	backupEngine  *FakeBackupEngine
+	backupParams  BackupParams
+	backupStorage *FakeBackupStorage
+	ctx           context.Context
+	logger        *logutil.MemoryLogger
+	restoreParams RestoreParams
+	mysqld        *FakeMysqlDaemon
+	stats         *backupstats.FakeStats
+}
+
+func createFakeBackupRestoreEnv(t *testing.T) (*fakeBackupRestoreEnv, func()) {
+	ctx := context.Background()
+	logger := logutil.NewMemoryLogger()
+
+	sqldb := fakesqldb.New(t)
+	sqldb.SetNeverFail(true)
+	mysqld := NewFakeMysqlDaemon(sqldb)
+	require.Nil(t, mysqld.Shutdown(ctx, nil, false))
+	defer mysqld.Close()
+
+	dirName, err := os.MkdirTemp("", "vt_backup_test")
+	require.Nil(t, err)
+
+	cnf := &Mycnf{
+		DataDir: dirName,
+	}
+
+	stats := backupstats.NewFakeStats()
+
+	backupParams := BackupParams{
+		Cnf:                cnf,
+		Logger:             logger,
+		Mysqld:             mysqld,
+		Concurrency:        1,
+		HookExtraEnv:       map[string]string{},
+		TopoServer:         nil,
+		Keyspace:           "test",
+		Shard:              "-",
+		BackupTime:         time.Now(),
+		IncrementalFromPos: "",
+		Stats:              stats,
+	}
+
+	restoreParams := RestoreParams{
+		Cnf:                 cnf,
+		Logger:              logger,
+		Mysqld:              mysqld,
+		Concurrency:         1,
+		HookExtraEnv:        map[string]string{},
+		DeleteBeforeRestore: false,
+		DbName:              "test",
+		Keyspace:            "test",
+		Shard:               "-",
+		StartTime:           time.Now(),
+		RestoreToPos:        mysql.Position{},
+		DryRun:              false,
+		Stats:               stats,
+	}
+
+	manifest := BackupManifest{
+		BackupTime:   time.Now().Add(-1 * time.Hour).Format(time.RFC3339),
+		BackupMethod: "fake",
+		Keyspace:     "test",
+		Shard:        "-",
+	}
+
+	manifestBytes, err := json.Marshal(manifest)
+	require.Nil(t, err)
+
+	testBackupEngine := FakeBackupEngine{}
+	testBackupEngine.ExecuteRestoreReturn = FakeBackupEngineExecuteRestoreReturn{&manifest, nil}
+
+	previousBackupEngineImplementation := backupEngineImplementation
+	BackupRestoreEngineMap["fake"] = &testBackupEngine
+	backupEngineImplementation = "fake"
+
+	testBackupStorage := FakeBackupStorage{}
+	testBackupStorage.ListBackupsReturn = FakeBackupStorageListBackupsReturn{
+		BackupHandles: []backupstorage.BackupHandle{
+			&FakeBackupHandle{
+				ReadFileReturnF: func(context.Context, string) (io.ReadCloser, error) {
+					return io.NopCloser(bytes.NewBuffer(manifestBytes)), nil
+				},
+			},
+		},
+	}
+	testBackupStorage.StartBackupReturn = FakeBackupStorageStartBackupReturn{&FakeBackupHandle{}, nil}
+	testBackupStorage.WithParamsReturn = &testBackupStorage
+
+	backupstorage.BackupStorageMap["fake"] = &testBackupStorage
+	previousBackupStorageImplementation := backupstorage.BackupStorageImplementation
+	backupstorage.BackupStorageImplementation = "fake"
+
+	closer := func() {
+		backupstats.DeprecatedBackupDurationS.Reset()
+		backupstats.DeprecatedRestoreDurationS.Reset()
+
+		delete(BackupRestoreEngineMap, "fake")
+		backupEngineImplementation = previousBackupEngineImplementation
+
+		delete(backupstorage.BackupStorageMap, "fake")
+		backupstorage.BackupStorageImplementation = previousBackupStorageImplementation
+	}
+
+	return &fakeBackupRestoreEnv{
+		backupEngine:  &testBackupEngine,
+		backupParams:  backupParams,
+		backupStorage: &testBackupStorage,
+		ctx:           ctx,
+		logger:        logger,
+		mysqld:        mysqld,
+		restoreParams: restoreParams,
+		stats:         stats,
+	}, closer
+}
+
+func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
+	fbe.backupParams.Stats = nil
+	fbe.restoreParams.Stats = nil
+	fbe.stats = nil
+}
