@@ -46,9 +46,10 @@ var (
 	_ Routing = (*TargetedRouting)(nil)
 )
 
-func (tr *TargetedRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (tr *TargetedRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Keyspace = tr.keyspace
 	rp.TargetDestination = tr.TargetDestination
+	return nil
 }
 
 func (tr *TargetedRouting) Clone() Routing {
@@ -72,8 +73,9 @@ func (tr *TargetedRouting) Keyspace() *vindexes.Keyspace {
 	return tr.keyspace
 }
 
-func (n *NoneRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (n *NoneRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Keyspace = n.keyspace
+	return nil
 }
 
 func (n *NoneRouting) Clone() Routing {

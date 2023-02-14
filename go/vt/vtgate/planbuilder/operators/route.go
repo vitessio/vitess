@@ -71,7 +71,8 @@ type (
 	// this object is updated when predicates are found, and when merging `Route`s together
 	Routing interface {
 		// UpdateRoutingParams allows a Routing to control the routing params that will be used by the engine Route
-		UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters)
+		// OpCode is already set, and the default keyspace is set for read queries
+		UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error
 
 		// Clone returns a copy of the routing. Since we are trying different variation of merging,
 		// one Routing can be used in different constellations.

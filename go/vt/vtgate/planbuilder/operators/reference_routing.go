@@ -32,15 +32,19 @@ type AnyShardRouting struct {
 
 var _ Routing = (*AnyShardRouting)(nil)
 
-func (rr *AnyShardRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (rr *AnyShardRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Keyspace = rr.keyspace
+	return nil
 }
 
 func (rr *AnyShardRouting) Clone() Routing {
-	return &AnyShardRouting{keyspace: rr.keyspace}
+	return &AnyShardRouting{
+		keyspace:   rr.keyspace,
+		Alternates: rr.Alternates,
+	}
 }
 
-func (rr *AnyShardRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (rr *AnyShardRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
 	return rr, nil
 }
 
@@ -77,24 +81,25 @@ type DualRouting struct{}
 
 var _ Routing = (*DualRouting)(nil)
 
-func (dr *DualRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (dr *DualRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	if rp.Keyspace != nil {
-		return
+		return nil
 	}
 
 	// if we don't already have an assigned keyspace, any will do
 	keyspace, err := ctx.VSchema.AnyKeyspace()
 	if err != nil {
-		return
+		return nil
 	}
 	rp.Keyspace = keyspace
+	return nil
 }
 
 func (dr *DualRouting) Clone() Routing {
 	return &DualRouting{}
 }
 
-func (dr *DualRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (dr *DualRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
 	return dr, nil
 }
 
@@ -114,15 +119,16 @@ type SequenceRouting struct{}
 
 var _ Routing = (*SequenceRouting)(nil)
 
-func (sr *SequenceRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (sr *SequenceRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Opcode = engine.Next
+	return nil
 }
 
 func (sr *SequenceRouting) Clone() Routing {
 	return &SequenceRouting{}
 }
 
-func (sr *SequenceRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (sr *SequenceRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
 	return sr, nil
 }
 

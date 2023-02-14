@@ -158,18 +158,26 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 		return nil, err
 	}
 
-	ks, _ := ctx.VSchema.DefaultKeyspace() // we don't want to fail here - maybe the op knows where it is going
-
-	rp := &engine.RoutingParameters{
-		Opcode:   op.Routing.OpCode(),
-		Keyspace: ks,
+	rp := newRoutingParams(ctx, op.Routing.OpCode())
+	err = op.Routing.UpdateRoutingParams(ctx, rp)
+	if err != nil {
+		return nil, err
 	}
-	op.Routing.UpdateRoutingParams(ctx, rp)
 
 	return &engine.Route{
 		TableName:         strings.Join(tableNames, ", "),
 		RoutingParameters: rp,
 	}, nil
+}
+
+func newRoutingParams(ctx *plancontext.PlanningContext, opCode engine.Opcode) *engine.RoutingParameters {
+	ks, _ := ctx.VSchema.DefaultKeyspace()
+	// we don't want to fail here
+	// if no keyspace has been selected, the operator still sets it
+	return &engine.RoutingParameters{
+		Opcode:   opCode,
+		Keyspace: ks,
+	}
 }
 
 func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (logicalPlan, error) {
@@ -201,10 +209,11 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, upd *operators.Update) (logicalPlan, error) {
 	ast := upd.AST
 	replaceSubQuery(ctx, ast)
-	rp := &engine.RoutingParameters{
-		Opcode: op.Routing.OpCode(),
+	rp := newRoutingParams(ctx, op.Routing.OpCode())
+	err := op.Routing.UpdateRoutingParams(ctx, rp)
+	if err != nil {
+		return nil, err
 	}
-	op.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
 		Table: []*vindexes.Table{
@@ -227,10 +236,11 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, del *operators.Delete) (logicalPlan, error) {
 	ast := del.AST
 	replaceSubQuery(ctx, ast)
-	rp := &engine.RoutingParameters{
-		Opcode: op.Routing.OpCode(),
+	rp := newRoutingParams(ctx, op.Routing.OpCode())
+	err := op.Routing.UpdateRoutingParams(ctx, rp)
+	if err != nil {
+		return nil, err
 	}
-	op.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
 		Table: []*vindexes.Table{

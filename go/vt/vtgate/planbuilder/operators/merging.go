@@ -51,23 +51,23 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	case b == dual:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
-		// an unsharded/reference route can be merged with anything going to that keyspace
+	// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
-		// None routing can always be merged, as long as we are aiming for the same keyspace
+	// None routing can always be merged, as long as we are aiming for the same keyspace
 	case a == none && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 	case b == none && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingB)
 
-		// infoSchema routing is complex, so we handle it in a separate method
+	// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
 		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
 
-		// sharded routing is complex, so we handle it in a separate method
+	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:
 		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates)
 

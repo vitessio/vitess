@@ -35,20 +35,21 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
+// InfoSchemaRouting used for information_schema queries.
+// They are special because we usually don't know at plan-time
+// what keyspace the query go to, because we don't see normalized literal values
 type InfoSchemaRouting struct {
-	// The following two fields are used when Routing information_schema queries
 	SysTableTableSchema []sqlparser.Expr
 	SysTableTableName   map[string]sqlparser.Expr
 	Table               *QueryTable
 }
 
-func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
 		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})
 		if err != nil {
-			// we have already tried this earlier, so we can expect it to work again
-			panic("not expected: " + err.Error())
+			return err
 		}
 		rp.SysTableTableSchema = append(rp.SysTableTableSchema, eexpr)
 	}
@@ -57,17 +58,19 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningConte
 	for k, expr := range isr.SysTableTableName {
 		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})
 		if err != nil {
-			// we have already tried this earlier, so we can expect it to work again
-			panic("not expected: " + err.Error())
+			return err
 		}
+
 		rp.SysTableTableName[k] = eexpr
 	}
+	return nil
 }
 
 func (isr *InfoSchemaRouting) Clone() Routing {
 	return &InfoSchemaRouting{
 		SysTableTableSchema: slices.Clone(isr.SysTableTableSchema),
 		SysTableTableName:   maps.Clone(isr.SysTableTableName),
+		Table:               isr.Table,
 	}
 }
 

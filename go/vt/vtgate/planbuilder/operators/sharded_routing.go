@@ -137,12 +137,13 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 	return routing, nil
 }
 
-func (tr *ShardedRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+func (tr *ShardedRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex
 		rp.Values = tr.Selected.Values
 	}
+	return nil
 }
 
 func (tr *ShardedRouting) Clone() Routing {
