@@ -368,7 +368,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 					if len(evs) == c.expectedEventNum {
 						sortCopyCompletedEvents(completedEvs)
 						for i, ev := range completedEvs {
-							require.Regexp(t, c.expectedCompletedEvents[i], ev.String())
+							require.Equal(t, c.expectedCompletedEvents[i], ev.String())
 						}
 						t.Logf("TestVStreamCopyWithoutKeyspaceShard was successful")
 						return
