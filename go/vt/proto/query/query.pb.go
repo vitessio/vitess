@@ -475,6 +475,56 @@ func (TransactionState) EnumDescriptor() ([]byte, []int) {
 	return file_query_proto_rawDescGZIP(), []int{3}
 }
 
+// RequestType represents the type of request.
+type RequestType int32
+
+const (
+	RequestType_VIEWS            RequestType = 0
+	RequestType_TABLES           RequestType = 1
+	RequestType_ALL_TABLES_VIEWS RequestType = 2
+)
+
+// Enum value maps for RequestType.
+var (
+	RequestType_name = map[int32]string{
+		0: "VIEWS",
+		1: "TABLES",
+		2: "ALL_TABLES_VIEWS",
+	}
+	RequestType_value = map[string]int32{
+		"VIEWS":            0,
+		"TABLES":           1,
+		"ALL_TABLES_VIEWS": 2,
+	}
+)
+
+func (x RequestType) Enum() *RequestType {
+	p := new(RequestType)
+	*p = x
+	return p
+}
+
+func (x RequestType) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (RequestType) Descriptor() protoreflect.EnumDescriptor {
+	return file_query_proto_enumTypes[4].Descriptor()
+}
+
+func (RequestType) Type() protoreflect.EnumType {
+	return &file_query_proto_enumTypes[4]
+}
+
+func (x RequestType) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use RequestType.Descriptor instead.
+func (RequestType) EnumDescriptor() ([]byte, []int) {
+	return file_query_proto_rawDescGZIP(), []int{4}
+}
+
 type ExecuteOptions_IncludedFields int32
 
 const (
@@ -508,11 +558,11 @@ func (x ExecuteOptions_IncludedFields) String() string {
 }
 
 func (ExecuteOptions_IncludedFields) Descriptor() protoreflect.EnumDescriptor {
-	return file_query_proto_enumTypes[4].Descriptor()
+	return file_query_proto_enumTypes[5].Descriptor()
 }
 
 func (ExecuteOptions_IncludedFields) Type() protoreflect.EnumType {
-	return &file_query_proto_enumTypes[4]
+	return &file_query_proto_enumTypes[5]
 }
 
 func (x ExecuteOptions_IncludedFields) Number() protoreflect.EnumNumber {
@@ -560,11 +610,11 @@ func (x ExecuteOptions_Workload) String() string {
 }
 
 func (ExecuteOptions_Workload) Descriptor() protoreflect.EnumDescriptor {
-	return file_query_proto_enumTypes[5].Descriptor()
+	return file_query_proto_enumTypes[6].Descriptor()
 }
 
 func (ExecuteOptions_Workload) Type() protoreflect.EnumType {
-	return &file_query_proto_enumTypes[5]
+	return &file_query_proto_enumTypes[6]
 }
 
 func (x ExecuteOptions_Workload) Number() protoreflect.EnumNumber {
@@ -625,11 +675,11 @@ func (x ExecuteOptions_TransactionIsolation) String() string {
 }
 
 func (ExecuteOptions_TransactionIsolation) Descriptor() protoreflect.EnumDescriptor {
-	return file_query_proto_enumTypes[6].Descriptor()
+	return file_query_proto_enumTypes[7].Descriptor()
 }
 
 func (ExecuteOptions_TransactionIsolation) Type() protoreflect.EnumType {
-	return &file_query_proto_enumTypes[6]
+	return &file_query_proto_enumTypes[7]
 }
 
 func (x ExecuteOptions_TransactionIsolation) Number() protoreflect.EnumNumber {
@@ -686,11 +736,11 @@ func (x ExecuteOptions_PlannerVersion) String() string {
 }
 
 func (ExecuteOptions_PlannerVersion) Descriptor() protoreflect.EnumDescriptor {
-	return file_query_proto_enumTypes[7].Descriptor()
+	return file_query_proto_enumTypes[8].Descriptor()
 }
 
 func (ExecuteOptions_PlannerVersion) Type() protoreflect.EnumType {
-	return &file_query_proto_enumTypes[7]
+	return &file_query_proto_enumTypes[8]
 }
 
 func (x ExecuteOptions_PlannerVersion) Number() protoreflect.EnumNumber {
@@ -738,11 +788,11 @@ func (x ExecuteOptions_Consolidator) String() string {
 }
 
 func (ExecuteOptions_Consolidator) Descriptor() protoreflect.EnumDescriptor {
-	return file_query_proto_enumTypes[8].Descriptor()
+	return file_query_proto_enumTypes[9].Descriptor()
 }
 
 func (ExecuteOptions_Consolidator) Type() protoreflect.EnumType {
-	return &file_query_proto_enumTypes[8]
+	return &file_query_proto_enumTypes[9]
 }
 
 func (x ExecuteOptions_Consolidator) Number() protoreflect.EnumNumber {
@@ -787,11 +837,11 @@ func (x ExecuteOptions_TransactionAccessMode) String() string {
 }
 
 func (ExecuteOptions_TransactionAccessMode) Descriptor() protoreflect.EnumDescriptor {
-	return file_query_proto_enumTypes[9].Descriptor()
+	return file_query_proto_enumTypes[10].Descriptor()
 }
 
 func (ExecuteOptions_TransactionAccessMode) Type() protoreflect.EnumType {
-	return &file_query_proto_enumTypes[9]
+	return &file_query_proto_enumTypes[10]
 }
 
 func (x ExecuteOptions_TransactionAccessMode) Number() protoreflect.EnumNumber {
@@ -837,11 +887,11 @@ func (x StreamEvent_Statement_Category) String() string {
 }
 
 func (StreamEvent_Statement_Category) Descriptor() protoreflect.EnumDescriptor {
-	return file_query_proto_enumTypes[10].Descriptor()
+	return file_query_proto_enumTypes[11].Descriptor()
 }
 
 func (StreamEvent_Statement_Category) Type() protoreflect.EnumType {
-	return &file_query_proto_enumTypes[10]
+	return &file_query_proto_enumTypes[11]
 }
 
 func (x StreamEvent_Statement_Category) Number() protoreflect.EnumNumber {
@@ -5371,7 +5421,9 @@ type InternalAPIRequest struct {
 	sizeCache     protoimpl.SizeCache
 	unknownFields protoimpl.UnknownFields
 
-	Request string `protobuf:"bytes,1,opt,name=request,proto3" json:"request,omitempty"`
+	Type    RequestType `protobuf:"varint,1,opt,name=type,proto3,enum=query.RequestType" json:"type,omitempty"`
+	Target  *Target     `protobuf:"bytes,2,opt,name=target,proto3" json:"target,omitempty"`
+	Request string      `protobuf:"bytes,3,opt,name=request,proto3" json:"request,omitempty"`
 }
 
 func (x *InternalAPIRequest) Reset() {
@@ -5404,6 +5456,20 @@ func (x *InternalAPIRequest) ProtoReflect() protoreflect.Message {
 // Deprecated: Use InternalAPIRequest.ProtoReflect.Descriptor instead.
 func (*InternalAPIRequest) Descriptor() ([]byte, []int) {
 	return file_query_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *InternalAPIRequest) GetType() RequestType {
+	if x != nil {
+		return x.Type
+	}
+	return RequestType_VIEWS
+}
+
+func (x *InternalAPIRequest) GetTarget() *Target {
+	if x != nil {
+		return x.Target
+	}
+	return nil
 }
 
 func (x *InternalAPIRequest) GetRequest() string {
@@ -6364,81 +6430,90 @@ var file_query_proto_rawDesc = []byte{
 	0x70, 0x61, 0x72, 0x74, 0x69, 0x63, 0x69, 0x70, 0x61, 0x6e, 0x74, 0x73, 0x18, 0x04, 0x20, 0x03,
 	0x28, 0x0b, 0x32, 0x0d, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x54, 0x61, 0x72, 0x67, 0x65,
 	0x74, 0x52, 0x0c, 0x70, 0x61, 0x72, 0x74, 0x69, 0x63, 0x69, 0x70, 0x61, 0x6e, 0x74, 0x73, 0x22,
-	0x2e, 0x0a, 0x12, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x41, 0x50, 0x49, 0x52, 0x65,
-	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74,
-	0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22,
-	0x31, 0x0a, 0x13, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x41, 0x50, 0x49, 0x52, 0x65,
-	0x73, 0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e,
-	0x73, 0x65, 0x2a, 0x92, 0x03, 0x0a, 0x09, 0x4d, 0x79, 0x53, 0x71, 0x6c, 0x46, 0x6c, 0x61, 0x67,
-	0x12, 0x09, 0x0a, 0x05, 0x45, 0x4d, 0x50, 0x54, 0x59, 0x10, 0x00, 0x12, 0x11, 0x0a, 0x0d, 0x4e,
-	0x4f, 0x54, 0x5f, 0x4e, 0x55, 0x4c, 0x4c, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x01, 0x12, 0x10,
-	0x0a, 0x0c, 0x50, 0x52, 0x49, 0x5f, 0x4b, 0x45, 0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x02,
-	0x12, 0x13, 0x0a, 0x0f, 0x55, 0x4e, 0x49, 0x51, 0x55, 0x45, 0x5f, 0x4b, 0x45, 0x59, 0x5f, 0x46,
-	0x4c, 0x41, 0x47, 0x10, 0x04, 0x12, 0x15, 0x0a, 0x11, 0x4d, 0x55, 0x4c, 0x54, 0x49, 0x50, 0x4c,
-	0x45, 0x5f, 0x4b, 0x45, 0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x08, 0x12, 0x0d, 0x0a, 0x09,
-	0x42, 0x4c, 0x4f, 0x42, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x10, 0x12, 0x11, 0x0a, 0x0d, 0x55,
-	0x4e, 0x53, 0x49, 0x47, 0x4e, 0x45, 0x44, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x20, 0x12, 0x11,
-	0x0a, 0x0d, 0x5a, 0x45, 0x52, 0x4f, 0x46, 0x49, 0x4c, 0x4c, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10,
-	0x40, 0x12, 0x10, 0x0a, 0x0b, 0x42, 0x49, 0x4e, 0x41, 0x52, 0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47,
-	0x10, 0x80, 0x01, 0x12, 0x0e, 0x0a, 0x09, 0x45, 0x4e, 0x55, 0x4d, 0x5f, 0x46, 0x4c, 0x41, 0x47,
-	0x10, 0x80, 0x02, 0x12, 0x18, 0x0a, 0x13, 0x41, 0x55, 0x54, 0x4f, 0x5f, 0x49, 0x4e, 0x43, 0x52,
-	0x45, 0x4d, 0x45, 0x4e, 0x54, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x04, 0x12, 0x13, 0x0a,
-	0x0e, 0x54, 0x49, 0x4d, 0x45, 0x53, 0x54, 0x41, 0x4d, 0x50, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10,
-	0x80, 0x08, 0x12, 0x0d, 0x0a, 0x08, 0x53, 0x45, 0x54, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80,
-	0x10, 0x12, 0x1a, 0x0a, 0x15, 0x4e, 0x4f, 0x5f, 0x44, 0x45, 0x46, 0x41, 0x55, 0x4c, 0x54, 0x5f,
-	0x56, 0x41, 0x4c, 0x55, 0x45, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x20, 0x12, 0x17, 0x0a,
-	0x12, 0x4f, 0x4e, 0x5f, 0x55, 0x50, 0x44, 0x41, 0x54, 0x45, 0x5f, 0x4e, 0x4f, 0x57, 0x5f, 0x46,
-	0x4c, 0x41, 0x47, 0x10, 0x80, 0x40, 0x12, 0x0e, 0x0a, 0x08, 0x4e, 0x55, 0x4d, 0x5f, 0x46, 0x4c,
-	0x41, 0x47, 0x10, 0x80, 0x80, 0x02, 0x12, 0x13, 0x0a, 0x0d, 0x50, 0x41, 0x52, 0x54, 0x5f, 0x4b,
-	0x45, 0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x80, 0x01, 0x12, 0x10, 0x0a, 0x0a, 0x47,
-	0x52, 0x4f, 0x55, 0x50, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x80, 0x02, 0x12, 0x11, 0x0a,
-	0x0b, 0x55, 0x4e, 0x49, 0x51, 0x55, 0x45, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x80, 0x04,
-	0x12, 0x11, 0x0a, 0x0b, 0x42, 0x49, 0x4e, 0x43, 0x4d, 0x50, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10,
-	0x80, 0x80, 0x08, 0x1a, 0x02, 0x10, 0x01, 0x2a, 0x6b, 0x0a, 0x04, 0x46, 0x6c, 0x61, 0x67, 0x12,
-	0x08, 0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0f, 0x0a, 0x0a, 0x49, 0x53, 0x49,
-	0x4e, 0x54, 0x45, 0x47, 0x52, 0x41, 0x4c, 0x10, 0x80, 0x02, 0x12, 0x0f, 0x0a, 0x0a, 0x49, 0x53,
-	0x55, 0x4e, 0x53, 0x49, 0x47, 0x4e, 0x45, 0x44, 0x10, 0x80, 0x04, 0x12, 0x0c, 0x0a, 0x07, 0x49,
-	0x53, 0x46, 0x4c, 0x4f, 0x41, 0x54, 0x10, 0x80, 0x08, 0x12, 0x0d, 0x0a, 0x08, 0x49, 0x53, 0x51,
-	0x55, 0x4f, 0x54, 0x45, 0x44, 0x10, 0x80, 0x10, 0x12, 0x0b, 0x0a, 0x06, 0x49, 0x53, 0x54, 0x45,
-	0x58, 0x54, 0x10, 0x80, 0x20, 0x12, 0x0d, 0x0a, 0x08, 0x49, 0x53, 0x42, 0x49, 0x4e, 0x41, 0x52,
-	0x59, 0x10, 0x80, 0x40, 0x2a, 0xc0, 0x03, 0x0a, 0x04, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0d, 0x0a,
-	0x09, 0x4e, 0x55, 0x4c, 0x4c, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x04,
-	0x49, 0x4e, 0x54, 0x38, 0x10, 0x81, 0x02, 0x12, 0x0a, 0x0a, 0x05, 0x55, 0x49, 0x4e, 0x54, 0x38,
-	0x10, 0x82, 0x06, 0x12, 0x0a, 0x0a, 0x05, 0x49, 0x4e, 0x54, 0x31, 0x36, 0x10, 0x83, 0x02, 0x12,
-	0x0b, 0x0a, 0x06, 0x55, 0x49, 0x4e, 0x54, 0x31, 0x36, 0x10, 0x84, 0x06, 0x12, 0x0a, 0x0a, 0x05,
-	0x49, 0x4e, 0x54, 0x32, 0x34, 0x10, 0x85, 0x02, 0x12, 0x0b, 0x0a, 0x06, 0x55, 0x49, 0x4e, 0x54,
-	0x32, 0x34, 0x10, 0x86, 0x06, 0x12, 0x0a, 0x0a, 0x05, 0x49, 0x4e, 0x54, 0x33, 0x32, 0x10, 0x87,
-	0x02, 0x12, 0x0b, 0x0a, 0x06, 0x55, 0x49, 0x4e, 0x54, 0x33, 0x32, 0x10, 0x88, 0x06, 0x12, 0x0a,
-	0x0a, 0x05, 0x49, 0x4e, 0x54, 0x36, 0x34, 0x10, 0x89, 0x02, 0x12, 0x0b, 0x0a, 0x06, 0x55, 0x49,
-	0x4e, 0x54, 0x36, 0x34, 0x10, 0x8a, 0x06, 0x12, 0x0c, 0x0a, 0x07, 0x46, 0x4c, 0x4f, 0x41, 0x54,
-	0x33, 0x32, 0x10, 0x8b, 0x08, 0x12, 0x0c, 0x0a, 0x07, 0x46, 0x4c, 0x4f, 0x41, 0x54, 0x36, 0x34,
-	0x10, 0x8c, 0x08, 0x12, 0x0e, 0x0a, 0x09, 0x54, 0x49, 0x4d, 0x45, 0x53, 0x54, 0x41, 0x4d, 0x50,
-	0x10, 0x8d, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x44, 0x41, 0x54, 0x45, 0x10, 0x8e, 0x10, 0x12, 0x09,
-	0x0a, 0x04, 0x54, 0x49, 0x4d, 0x45, 0x10, 0x8f, 0x10, 0x12, 0x0d, 0x0a, 0x08, 0x44, 0x41, 0x54,
-	0x45, 0x54, 0x49, 0x4d, 0x45, 0x10, 0x90, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x59, 0x45, 0x41, 0x52,
-	0x10, 0x91, 0x06, 0x12, 0x0b, 0x0a, 0x07, 0x44, 0x45, 0x43, 0x49, 0x4d, 0x41, 0x4c, 0x10, 0x12,
-	0x12, 0x09, 0x0a, 0x04, 0x54, 0x45, 0x58, 0x54, 0x10, 0x93, 0x30, 0x12, 0x09, 0x0a, 0x04, 0x42,
-	0x4c, 0x4f, 0x42, 0x10, 0x94, 0x50, 0x12, 0x0c, 0x0a, 0x07, 0x56, 0x41, 0x52, 0x43, 0x48, 0x41,
-	0x52, 0x10, 0x95, 0x30, 0x12, 0x0e, 0x0a, 0x09, 0x56, 0x41, 0x52, 0x42, 0x49, 0x4e, 0x41, 0x52,
-	0x59, 0x10, 0x96, 0x50, 0x12, 0x09, 0x0a, 0x04, 0x43, 0x48, 0x41, 0x52, 0x10, 0x97, 0x30, 0x12,
-	0x0b, 0x0a, 0x06, 0x42, 0x49, 0x4e, 0x41, 0x52, 0x59, 0x10, 0x98, 0x50, 0x12, 0x08, 0x0a, 0x03,
-	0x42, 0x49, 0x54, 0x10, 0x99, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x45, 0x4e, 0x55, 0x4d, 0x10, 0x9a,
-	0x10, 0x12, 0x08, 0x0a, 0x03, 0x53, 0x45, 0x54, 0x10, 0x9b, 0x10, 0x12, 0x09, 0x0a, 0x05, 0x54,
-	0x55, 0x50, 0x4c, 0x45, 0x10, 0x1c, 0x12, 0x0d, 0x0a, 0x08, 0x47, 0x45, 0x4f, 0x4d, 0x45, 0x54,
-	0x52, 0x59, 0x10, 0x9d, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x4a, 0x53, 0x4f, 0x4e, 0x10, 0x9e, 0x10,
-	0x12, 0x0e, 0x0a, 0x0a, 0x45, 0x58, 0x50, 0x52, 0x45, 0x53, 0x53, 0x49, 0x4f, 0x4e, 0x10, 0x1f,
-	0x12, 0x0b, 0x0a, 0x06, 0x48, 0x45, 0x58, 0x4e, 0x55, 0x4d, 0x10, 0xa0, 0x20, 0x12, 0x0b, 0x0a,
-	0x06, 0x48, 0x45, 0x58, 0x56, 0x41, 0x4c, 0x10, 0xa1, 0x20, 0x12, 0x0b, 0x0a, 0x06, 0x42, 0x49,
-	0x54, 0x4e, 0x55, 0x4d, 0x10, 0xa2, 0x20, 0x2a, 0x46, 0x0a, 0x10, 0x54, 0x72, 0x61, 0x6e, 0x73,
-	0x61, 0x63, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55,
-	0x4e, 0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x52, 0x45, 0x50,
-	0x41, 0x52, 0x45, 0x10, 0x01, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x4f, 0x4d, 0x4d, 0x49, 0x54, 0x10,
-	0x02, 0x12, 0x0c, 0x0a, 0x08, 0x52, 0x4f, 0x4c, 0x4c, 0x42, 0x41, 0x43, 0x4b, 0x10, 0x03, 0x42,
-	0x35, 0x0a, 0x0f, 0x69, 0x6f, 0x2e, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x70, 0x72, 0x6f,
-	0x74, 0x6f, 0x5a, 0x22, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69,
-	0x74, 0x65, 0x73, 0x73, 0x2f, 0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f,
-	0x2f, 0x71, 0x75, 0x65, 0x72, 0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
+	0x7d, 0x0a, 0x12, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x41, 0x50, 0x49, 0x52, 0x65,
+	0x71, 0x75, 0x65, 0x73, 0x74, 0x12, 0x26, 0x0a, 0x04, 0x74, 0x79, 0x70, 0x65, 0x18, 0x01, 0x20,
+	0x01, 0x28, 0x0e, 0x32, 0x12, 0x2e, 0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x52, 0x65, 0x71, 0x75,
+	0x65, 0x73, 0x74, 0x54, 0x79, 0x70, 0x65, 0x52, 0x04, 0x74, 0x79, 0x70, 0x65, 0x12, 0x25, 0x0a,
+	0x06, 0x74, 0x61, 0x72, 0x67, 0x65, 0x74, 0x18, 0x02, 0x20, 0x01, 0x28, 0x0b, 0x32, 0x0d, 0x2e,
+	0x71, 0x75, 0x65, 0x72, 0x79, 0x2e, 0x54, 0x61, 0x72, 0x67, 0x65, 0x74, 0x52, 0x06, 0x74, 0x61,
+	0x72, 0x67, 0x65, 0x74, 0x12, 0x18, 0x0a, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x18,
+	0x03, 0x20, 0x01, 0x28, 0x09, 0x52, 0x07, 0x72, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x22, 0x31,
+	0x0a, 0x13, 0x49, 0x6e, 0x74, 0x65, 0x72, 0x6e, 0x61, 0x6c, 0x41, 0x50, 0x49, 0x52, 0x65, 0x73,
+	0x70, 0x6f, 0x6e, 0x73, 0x65, 0x12, 0x1a, 0x0a, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x18, 0x01, 0x20, 0x01, 0x28, 0x09, 0x52, 0x08, 0x72, 0x65, 0x73, 0x70, 0x6f, 0x6e, 0x73,
+	0x65, 0x2a, 0x92, 0x03, 0x0a, 0x09, 0x4d, 0x79, 0x53, 0x71, 0x6c, 0x46, 0x6c, 0x61, 0x67, 0x12,
+	0x09, 0x0a, 0x05, 0x45, 0x4d, 0x50, 0x54, 0x59, 0x10, 0x00, 0x12, 0x11, 0x0a, 0x0d, 0x4e, 0x4f,
+	0x54, 0x5f, 0x4e, 0x55, 0x4c, 0x4c, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x01, 0x12, 0x10, 0x0a,
+	0x0c, 0x50, 0x52, 0x49, 0x5f, 0x4b, 0x45, 0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x02, 0x12,
+	0x13, 0x0a, 0x0f, 0x55, 0x4e, 0x49, 0x51, 0x55, 0x45, 0x5f, 0x4b, 0x45, 0x59, 0x5f, 0x46, 0x4c,
+	0x41, 0x47, 0x10, 0x04, 0x12, 0x15, 0x0a, 0x11, 0x4d, 0x55, 0x4c, 0x54, 0x49, 0x50, 0x4c, 0x45,
+	0x5f, 0x4b, 0x45, 0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x08, 0x12, 0x0d, 0x0a, 0x09, 0x42,
+	0x4c, 0x4f, 0x42, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x10, 0x12, 0x11, 0x0a, 0x0d, 0x55, 0x4e,
+	0x53, 0x49, 0x47, 0x4e, 0x45, 0x44, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x20, 0x12, 0x11, 0x0a,
+	0x0d, 0x5a, 0x45, 0x52, 0x4f, 0x46, 0x49, 0x4c, 0x4c, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x40,
+	0x12, 0x10, 0x0a, 0x0b, 0x42, 0x49, 0x4e, 0x41, 0x52, 0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10,
+	0x80, 0x01, 0x12, 0x0e, 0x0a, 0x09, 0x45, 0x4e, 0x55, 0x4d, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10,
+	0x80, 0x02, 0x12, 0x18, 0x0a, 0x13, 0x41, 0x55, 0x54, 0x4f, 0x5f, 0x49, 0x4e, 0x43, 0x52, 0x45,
+	0x4d, 0x45, 0x4e, 0x54, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x04, 0x12, 0x13, 0x0a, 0x0e,
+	0x54, 0x49, 0x4d, 0x45, 0x53, 0x54, 0x41, 0x4d, 0x50, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80,
+	0x08, 0x12, 0x0d, 0x0a, 0x08, 0x53, 0x45, 0x54, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x10,
+	0x12, 0x1a, 0x0a, 0x15, 0x4e, 0x4f, 0x5f, 0x44, 0x45, 0x46, 0x41, 0x55, 0x4c, 0x54, 0x5f, 0x56,
+	0x41, 0x4c, 0x55, 0x45, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x20, 0x12, 0x17, 0x0a, 0x12,
+	0x4f, 0x4e, 0x5f, 0x55, 0x50, 0x44, 0x41, 0x54, 0x45, 0x5f, 0x4e, 0x4f, 0x57, 0x5f, 0x46, 0x4c,
+	0x41, 0x47, 0x10, 0x80, 0x40, 0x12, 0x0e, 0x0a, 0x08, 0x4e, 0x55, 0x4d, 0x5f, 0x46, 0x4c, 0x41,
+	0x47, 0x10, 0x80, 0x80, 0x02, 0x12, 0x13, 0x0a, 0x0d, 0x50, 0x41, 0x52, 0x54, 0x5f, 0x4b, 0x45,
+	0x59, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x80, 0x01, 0x12, 0x10, 0x0a, 0x0a, 0x47, 0x52,
+	0x4f, 0x55, 0x50, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x80, 0x02, 0x12, 0x11, 0x0a, 0x0b,
+	0x55, 0x4e, 0x49, 0x51, 0x55, 0x45, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80, 0x80, 0x04, 0x12,
+	0x11, 0x0a, 0x0b, 0x42, 0x49, 0x4e, 0x43, 0x4d, 0x50, 0x5f, 0x46, 0x4c, 0x41, 0x47, 0x10, 0x80,
+	0x80, 0x08, 0x1a, 0x02, 0x10, 0x01, 0x2a, 0x6b, 0x0a, 0x04, 0x46, 0x6c, 0x61, 0x67, 0x12, 0x08,
+	0x0a, 0x04, 0x4e, 0x4f, 0x4e, 0x45, 0x10, 0x00, 0x12, 0x0f, 0x0a, 0x0a, 0x49, 0x53, 0x49, 0x4e,
+	0x54, 0x45, 0x47, 0x52, 0x41, 0x4c, 0x10, 0x80, 0x02, 0x12, 0x0f, 0x0a, 0x0a, 0x49, 0x53, 0x55,
+	0x4e, 0x53, 0x49, 0x47, 0x4e, 0x45, 0x44, 0x10, 0x80, 0x04, 0x12, 0x0c, 0x0a, 0x07, 0x49, 0x53,
+	0x46, 0x4c, 0x4f, 0x41, 0x54, 0x10, 0x80, 0x08, 0x12, 0x0d, 0x0a, 0x08, 0x49, 0x53, 0x51, 0x55,
+	0x4f, 0x54, 0x45, 0x44, 0x10, 0x80, 0x10, 0x12, 0x0b, 0x0a, 0x06, 0x49, 0x53, 0x54, 0x45, 0x58,
+	0x54, 0x10, 0x80, 0x20, 0x12, 0x0d, 0x0a, 0x08, 0x49, 0x53, 0x42, 0x49, 0x4e, 0x41, 0x52, 0x59,
+	0x10, 0x80, 0x40, 0x2a, 0xc0, 0x03, 0x0a, 0x04, 0x54, 0x79, 0x70, 0x65, 0x12, 0x0d, 0x0a, 0x09,
+	0x4e, 0x55, 0x4c, 0x4c, 0x5f, 0x54, 0x59, 0x50, 0x45, 0x10, 0x00, 0x12, 0x09, 0x0a, 0x04, 0x49,
+	0x4e, 0x54, 0x38, 0x10, 0x81, 0x02, 0x12, 0x0a, 0x0a, 0x05, 0x55, 0x49, 0x4e, 0x54, 0x38, 0x10,
+	0x82, 0x06, 0x12, 0x0a, 0x0a, 0x05, 0x49, 0x4e, 0x54, 0x31, 0x36, 0x10, 0x83, 0x02, 0x12, 0x0b,
+	0x0a, 0x06, 0x55, 0x49, 0x4e, 0x54, 0x31, 0x36, 0x10, 0x84, 0x06, 0x12, 0x0a, 0x0a, 0x05, 0x49,
+	0x4e, 0x54, 0x32, 0x34, 0x10, 0x85, 0x02, 0x12, 0x0b, 0x0a, 0x06, 0x55, 0x49, 0x4e, 0x54, 0x32,
+	0x34, 0x10, 0x86, 0x06, 0x12, 0x0a, 0x0a, 0x05, 0x49, 0x4e, 0x54, 0x33, 0x32, 0x10, 0x87, 0x02,
+	0x12, 0x0b, 0x0a, 0x06, 0x55, 0x49, 0x4e, 0x54, 0x33, 0x32, 0x10, 0x88, 0x06, 0x12, 0x0a, 0x0a,
+	0x05, 0x49, 0x4e, 0x54, 0x36, 0x34, 0x10, 0x89, 0x02, 0x12, 0x0b, 0x0a, 0x06, 0x55, 0x49, 0x4e,
+	0x54, 0x36, 0x34, 0x10, 0x8a, 0x06, 0x12, 0x0c, 0x0a, 0x07, 0x46, 0x4c, 0x4f, 0x41, 0x54, 0x33,
+	0x32, 0x10, 0x8b, 0x08, 0x12, 0x0c, 0x0a, 0x07, 0x46, 0x4c, 0x4f, 0x41, 0x54, 0x36, 0x34, 0x10,
+	0x8c, 0x08, 0x12, 0x0e, 0x0a, 0x09, 0x54, 0x49, 0x4d, 0x45, 0x53, 0x54, 0x41, 0x4d, 0x50, 0x10,
+	0x8d, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x44, 0x41, 0x54, 0x45, 0x10, 0x8e, 0x10, 0x12, 0x09, 0x0a,
+	0x04, 0x54, 0x49, 0x4d, 0x45, 0x10, 0x8f, 0x10, 0x12, 0x0d, 0x0a, 0x08, 0x44, 0x41, 0x54, 0x45,
+	0x54, 0x49, 0x4d, 0x45, 0x10, 0x90, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x59, 0x45, 0x41, 0x52, 0x10,
+	0x91, 0x06, 0x12, 0x0b, 0x0a, 0x07, 0x44, 0x45, 0x43, 0x49, 0x4d, 0x41, 0x4c, 0x10, 0x12, 0x12,
+	0x09, 0x0a, 0x04, 0x54, 0x45, 0x58, 0x54, 0x10, 0x93, 0x30, 0x12, 0x09, 0x0a, 0x04, 0x42, 0x4c,
+	0x4f, 0x42, 0x10, 0x94, 0x50, 0x12, 0x0c, 0x0a, 0x07, 0x56, 0x41, 0x52, 0x43, 0x48, 0x41, 0x52,
+	0x10, 0x95, 0x30, 0x12, 0x0e, 0x0a, 0x09, 0x56, 0x41, 0x52, 0x42, 0x49, 0x4e, 0x41, 0x52, 0x59,
+	0x10, 0x96, 0x50, 0x12, 0x09, 0x0a, 0x04, 0x43, 0x48, 0x41, 0x52, 0x10, 0x97, 0x30, 0x12, 0x0b,
+	0x0a, 0x06, 0x42, 0x49, 0x4e, 0x41, 0x52, 0x59, 0x10, 0x98, 0x50, 0x12, 0x08, 0x0a, 0x03, 0x42,
+	0x49, 0x54, 0x10, 0x99, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x45, 0x4e, 0x55, 0x4d, 0x10, 0x9a, 0x10,
+	0x12, 0x08, 0x0a, 0x03, 0x53, 0x45, 0x54, 0x10, 0x9b, 0x10, 0x12, 0x09, 0x0a, 0x05, 0x54, 0x55,
+	0x50, 0x4c, 0x45, 0x10, 0x1c, 0x12, 0x0d, 0x0a, 0x08, 0x47, 0x45, 0x4f, 0x4d, 0x45, 0x54, 0x52,
+	0x59, 0x10, 0x9d, 0x10, 0x12, 0x09, 0x0a, 0x04, 0x4a, 0x53, 0x4f, 0x4e, 0x10, 0x9e, 0x10, 0x12,
+	0x0e, 0x0a, 0x0a, 0x45, 0x58, 0x50, 0x52, 0x45, 0x53, 0x53, 0x49, 0x4f, 0x4e, 0x10, 0x1f, 0x12,
+	0x0b, 0x0a, 0x06, 0x48, 0x45, 0x58, 0x4e, 0x55, 0x4d, 0x10, 0xa0, 0x20, 0x12, 0x0b, 0x0a, 0x06,
+	0x48, 0x45, 0x58, 0x56, 0x41, 0x4c, 0x10, 0xa1, 0x20, 0x12, 0x0b, 0x0a, 0x06, 0x42, 0x49, 0x54,
+	0x4e, 0x55, 0x4d, 0x10, 0xa2, 0x20, 0x2a, 0x46, 0x0a, 0x10, 0x54, 0x72, 0x61, 0x6e, 0x73, 0x61,
+	0x63, 0x74, 0x69, 0x6f, 0x6e, 0x53, 0x74, 0x61, 0x74, 0x65, 0x12, 0x0b, 0x0a, 0x07, 0x55, 0x4e,
+	0x4b, 0x4e, 0x4f, 0x57, 0x4e, 0x10, 0x00, 0x12, 0x0b, 0x0a, 0x07, 0x50, 0x52, 0x45, 0x50, 0x41,
+	0x52, 0x45, 0x10, 0x01, 0x12, 0x0a, 0x0a, 0x06, 0x43, 0x4f, 0x4d, 0x4d, 0x49, 0x54, 0x10, 0x02,
+	0x12, 0x0c, 0x0a, 0x08, 0x52, 0x4f, 0x4c, 0x4c, 0x42, 0x41, 0x43, 0x4b, 0x10, 0x03, 0x2a, 0x3a,
+	0x0a, 0x0b, 0x52, 0x65, 0x71, 0x75, 0x65, 0x73, 0x74, 0x54, 0x79, 0x70, 0x65, 0x12, 0x09, 0x0a,
+	0x05, 0x56, 0x49, 0x45, 0x57, 0x53, 0x10, 0x00, 0x12, 0x0a, 0x0a, 0x06, 0x54, 0x41, 0x42, 0x4c,
+	0x45, 0x53, 0x10, 0x01, 0x12, 0x14, 0x0a, 0x10, 0x41, 0x4c, 0x4c, 0x5f, 0x54, 0x41, 0x42, 0x4c,
+	0x45, 0x53, 0x5f, 0x56, 0x49, 0x45, 0x57, 0x53, 0x10, 0x02, 0x42, 0x35, 0x0a, 0x0f, 0x69, 0x6f,
+	0x2e, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x5a, 0x22, 0x76,
+	0x69, 0x74, 0x65, 0x73, 0x73, 0x2e, 0x69, 0x6f, 0x2f, 0x76, 0x69, 0x74, 0x65, 0x73, 0x73, 0x2f,
+	0x67, 0x6f, 0x2f, 0x76, 0x74, 0x2f, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x2f, 0x71, 0x75, 0x65, 0x72,
+	0x79, 0x62, 0x06, 0x70, 0x72, 0x6f, 0x74, 0x6f, 0x33,
 }
 
 var (
@@ -6453,233 +6528,236 @@ func file_query_proto_rawDescGZIP() []byte {
 	return file_query_proto_rawDescData
 }
 
-var file_query_proto_enumTypes = make([]protoimpl.EnumInfo, 11)
+var file_query_proto_enumTypes = make([]protoimpl.EnumInfo, 12)
 var file_query_proto_msgTypes = make([]protoimpl.MessageInfo, 66)
 var file_query_proto_goTypes = []interface{}{
 	(MySqlFlag)(0),                            // 0: query.MySqlFlag
 	(Flag)(0),                                 // 1: query.Flag
 	(Type)(0),                                 // 2: query.Type
 	(TransactionState)(0),                     // 3: query.TransactionState
-	(ExecuteOptions_IncludedFields)(0),        // 4: query.ExecuteOptions.IncludedFields
-	(ExecuteOptions_Workload)(0),              // 5: query.ExecuteOptions.Workload
-	(ExecuteOptions_TransactionIsolation)(0),  // 6: query.ExecuteOptions.TransactionIsolation
-	(ExecuteOptions_PlannerVersion)(0),        // 7: query.ExecuteOptions.PlannerVersion
-	(ExecuteOptions_Consolidator)(0),          // 8: query.ExecuteOptions.Consolidator
-	(ExecuteOptions_TransactionAccessMode)(0), // 9: query.ExecuteOptions.TransactionAccessMode
-	(StreamEvent_Statement_Category)(0),       // 10: query.StreamEvent.Statement.Category
-	(*Target)(nil),                            // 11: query.Target
-	(*VTGateCallerID)(nil),                    // 12: query.VTGateCallerID
-	(*EventToken)(nil),                        // 13: query.EventToken
-	(*Value)(nil),                             // 14: query.Value
-	(*BindVariable)(nil),                      // 15: query.BindVariable
-	(*BoundQuery)(nil),                        // 16: query.BoundQuery
-	(*ExecuteOptions)(nil),                    // 17: query.ExecuteOptions
-	(*Field)(nil),                             // 18: query.Field
-	(*Row)(nil),                               // 19: query.Row
-	(*QueryResult)(nil),                       // 20: query.QueryResult
-	(*QueryWarning)(nil),                      // 21: query.QueryWarning
-	(*StreamEvent)(nil),                       // 22: query.StreamEvent
-	(*ExecuteRequest)(nil),                    // 23: query.ExecuteRequest
-	(*ExecuteResponse)(nil),                   // 24: query.ExecuteResponse
-	(*ResultWithError)(nil),                   // 25: query.ResultWithError
-	(*StreamExecuteRequest)(nil),              // 26: query.StreamExecuteRequest
-	(*StreamExecuteResponse)(nil),             // 27: query.StreamExecuteResponse
-	(*BeginRequest)(nil),                      // 28: query.BeginRequest
-	(*BeginResponse)(nil),                     // 29: query.BeginResponse
-	(*CommitRequest)(nil),                     // 30: query.CommitRequest
-	(*CommitResponse)(nil),                    // 31: query.CommitResponse
-	(*RollbackRequest)(nil),                   // 32: query.RollbackRequest
-	(*RollbackResponse)(nil),                  // 33: query.RollbackResponse
-	(*PrepareRequest)(nil),                    // 34: query.PrepareRequest
-	(*PrepareResponse)(nil),                   // 35: query.PrepareResponse
-	(*CommitPreparedRequest)(nil),             // 36: query.CommitPreparedRequest
-	(*CommitPreparedResponse)(nil),            // 37: query.CommitPreparedResponse
-	(*RollbackPreparedRequest)(nil),           // 38: query.RollbackPreparedRequest
-	(*RollbackPreparedResponse)(nil),          // 39: query.RollbackPreparedResponse
-	(*CreateTransactionRequest)(nil),          // 40: query.CreateTransactionRequest
-	(*CreateTransactionResponse)(nil),         // 41: query.CreateTransactionResponse
-	(*StartCommitRequest)(nil),                // 42: query.StartCommitRequest
-	(*StartCommitResponse)(nil),               // 43: query.StartCommitResponse
-	(*SetRollbackRequest)(nil),                // 44: query.SetRollbackRequest
-	(*SetRollbackResponse)(nil),               // 45: query.SetRollbackResponse
-	(*ConcludeTransactionRequest)(nil),        // 46: query.ConcludeTransactionRequest
-	(*ConcludeTransactionResponse)(nil),       // 47: query.ConcludeTransactionResponse
-	(*ReadTransactionRequest)(nil),            // 48: query.ReadTransactionRequest
-	(*ReadTransactionResponse)(nil),           // 49: query.ReadTransactionResponse
-	(*BeginExecuteRequest)(nil),               // 50: query.BeginExecuteRequest
-	(*BeginExecuteResponse)(nil),              // 51: query.BeginExecuteResponse
-	(*BeginStreamExecuteRequest)(nil),         // 52: query.BeginStreamExecuteRequest
-	(*BeginStreamExecuteResponse)(nil),        // 53: query.BeginStreamExecuteResponse
-	(*MessageStreamRequest)(nil),              // 54: query.MessageStreamRequest
-	(*MessageStreamResponse)(nil),             // 55: query.MessageStreamResponse
-	(*MessageAckRequest)(nil),                 // 56: query.MessageAckRequest
-	(*MessageAckResponse)(nil),                // 57: query.MessageAckResponse
-	(*ReserveExecuteRequest)(nil),             // 58: query.ReserveExecuteRequest
-	(*ReserveExecuteResponse)(nil),            // 59: query.ReserveExecuteResponse
-	(*ReserveStreamExecuteRequest)(nil),       // 60: query.ReserveStreamExecuteRequest
-	(*ReserveStreamExecuteResponse)(nil),      // 61: query.ReserveStreamExecuteResponse
-	(*ReserveBeginExecuteRequest)(nil),        // 62: query.ReserveBeginExecuteRequest
-	(*ReserveBeginExecuteResponse)(nil),       // 63: query.ReserveBeginExecuteResponse
-	(*ReserveBeginStreamExecuteRequest)(nil),  // 64: query.ReserveBeginStreamExecuteRequest
-	(*ReserveBeginStreamExecuteResponse)(nil), // 65: query.ReserveBeginStreamExecuteResponse
-	(*ReleaseRequest)(nil),                    // 66: query.ReleaseRequest
-	(*ReleaseResponse)(nil),                   // 67: query.ReleaseResponse
-	(*StreamHealthRequest)(nil),               // 68: query.StreamHealthRequest
-	(*RealtimeStats)(nil),                     // 69: query.RealtimeStats
-	(*AggregateStats)(nil),                    // 70: query.AggregateStats
-	(*StreamHealthResponse)(nil),              // 71: query.StreamHealthResponse
-	(*TransactionMetadata)(nil),               // 72: query.TransactionMetadata
-	(*InternalAPIRequest)(nil),                // 73: query.InternalAPIRequest
-	(*InternalAPIResponse)(nil),               // 74: query.InternalAPIResponse
-	nil,                                       // 75: query.BoundQuery.BindVariablesEntry
-	(*StreamEvent_Statement)(nil),             // 76: query.StreamEvent.Statement
-	(topodata.TabletType)(0),                  // 77: topodata.TabletType
-	(*vtrpc.CallerID)(nil),                    // 78: vtrpc.CallerID
-	(*vtrpc.RPCError)(nil),                    // 79: vtrpc.RPCError
-	(*topodata.TabletAlias)(nil),              // 80: topodata.TabletAlias
+	(RequestType)(0),                          // 4: query.RequestType
+	(ExecuteOptions_IncludedFields)(0),        // 5: query.ExecuteOptions.IncludedFields
+	(ExecuteOptions_Workload)(0),              // 6: query.ExecuteOptions.Workload
+	(ExecuteOptions_TransactionIsolation)(0),  // 7: query.ExecuteOptions.TransactionIsolation
+	(ExecuteOptions_PlannerVersion)(0),        // 8: query.ExecuteOptions.PlannerVersion
+	(ExecuteOptions_Consolidator)(0),          // 9: query.ExecuteOptions.Consolidator
+	(ExecuteOptions_TransactionAccessMode)(0), // 10: query.ExecuteOptions.TransactionAccessMode
+	(StreamEvent_Statement_Category)(0),       // 11: query.StreamEvent.Statement.Category
+	(*Target)(nil),                            // 12: query.Target
+	(*VTGateCallerID)(nil),                    // 13: query.VTGateCallerID
+	(*EventToken)(nil),                        // 14: query.EventToken
+	(*Value)(nil),                             // 15: query.Value
+	(*BindVariable)(nil),                      // 16: query.BindVariable
+	(*BoundQuery)(nil),                        // 17: query.BoundQuery
+	(*ExecuteOptions)(nil),                    // 18: query.ExecuteOptions
+	(*Field)(nil),                             // 19: query.Field
+	(*Row)(nil),                               // 20: query.Row
+	(*QueryResult)(nil),                       // 21: query.QueryResult
+	(*QueryWarning)(nil),                      // 22: query.QueryWarning
+	(*StreamEvent)(nil),                       // 23: query.StreamEvent
+	(*ExecuteRequest)(nil),                    // 24: query.ExecuteRequest
+	(*ExecuteResponse)(nil),                   // 25: query.ExecuteResponse
+	(*ResultWithError)(nil),                   // 26: query.ResultWithError
+	(*StreamExecuteRequest)(nil),              // 27: query.StreamExecuteRequest
+	(*StreamExecuteResponse)(nil),             // 28: query.StreamExecuteResponse
+	(*BeginRequest)(nil),                      // 29: query.BeginRequest
+	(*BeginResponse)(nil),                     // 30: query.BeginResponse
+	(*CommitRequest)(nil),                     // 31: query.CommitRequest
+	(*CommitResponse)(nil),                    // 32: query.CommitResponse
+	(*RollbackRequest)(nil),                   // 33: query.RollbackRequest
+	(*RollbackResponse)(nil),                  // 34: query.RollbackResponse
+	(*PrepareRequest)(nil),                    // 35: query.PrepareRequest
+	(*PrepareResponse)(nil),                   // 36: query.PrepareResponse
+	(*CommitPreparedRequest)(nil),             // 37: query.CommitPreparedRequest
+	(*CommitPreparedResponse)(nil),            // 38: query.CommitPreparedResponse
+	(*RollbackPreparedRequest)(nil),           // 39: query.RollbackPreparedRequest
+	(*RollbackPreparedResponse)(nil),          // 40: query.RollbackPreparedResponse
+	(*CreateTransactionRequest)(nil),          // 41: query.CreateTransactionRequest
+	(*CreateTransactionResponse)(nil),         // 42: query.CreateTransactionResponse
+	(*StartCommitRequest)(nil),                // 43: query.StartCommitRequest
+	(*StartCommitResponse)(nil),               // 44: query.StartCommitResponse
+	(*SetRollbackRequest)(nil),                // 45: query.SetRollbackRequest
+	(*SetRollbackResponse)(nil),               // 46: query.SetRollbackResponse
+	(*ConcludeTransactionRequest)(nil),        // 47: query.ConcludeTransactionRequest
+	(*ConcludeTransactionResponse)(nil),       // 48: query.ConcludeTransactionResponse
+	(*ReadTransactionRequest)(nil),            // 49: query.ReadTransactionRequest
+	(*ReadTransactionResponse)(nil),           // 50: query.ReadTransactionResponse
+	(*BeginExecuteRequest)(nil),               // 51: query.BeginExecuteRequest
+	(*BeginExecuteResponse)(nil),              // 52: query.BeginExecuteResponse
+	(*BeginStreamExecuteRequest)(nil),         // 53: query.BeginStreamExecuteRequest
+	(*BeginStreamExecuteResponse)(nil),        // 54: query.BeginStreamExecuteResponse
+	(*MessageStreamRequest)(nil),              // 55: query.MessageStreamRequest
+	(*MessageStreamResponse)(nil),             // 56: query.MessageStreamResponse
+	(*MessageAckRequest)(nil),                 // 57: query.MessageAckRequest
+	(*MessageAckResponse)(nil),                // 58: query.MessageAckResponse
+	(*ReserveExecuteRequest)(nil),             // 59: query.ReserveExecuteRequest
+	(*ReserveExecuteResponse)(nil),            // 60: query.ReserveExecuteResponse
+	(*ReserveStreamExecuteRequest)(nil),       // 61: query.ReserveStreamExecuteRequest
+	(*ReserveStreamExecuteResponse)(nil),      // 62: query.ReserveStreamExecuteResponse
+	(*ReserveBeginExecuteRequest)(nil),        // 63: query.ReserveBeginExecuteRequest
+	(*ReserveBeginExecuteResponse)(nil),       // 64: query.ReserveBeginExecuteResponse
+	(*ReserveBeginStreamExecuteRequest)(nil),  // 65: query.ReserveBeginStreamExecuteRequest
+	(*ReserveBeginStreamExecuteResponse)(nil), // 66: query.ReserveBeginStreamExecuteResponse
+	(*ReleaseRequest)(nil),                    // 67: query.ReleaseRequest
+	(*ReleaseResponse)(nil),                   // 68: query.ReleaseResponse
+	(*StreamHealthRequest)(nil),               // 69: query.StreamHealthRequest
+	(*RealtimeStats)(nil),                     // 70: query.RealtimeStats
+	(*AggregateStats)(nil),                    // 71: query.AggregateStats
+	(*StreamHealthResponse)(nil),              // 72: query.StreamHealthResponse
+	(*TransactionMetadata)(nil),               // 73: query.TransactionMetadata
+	(*InternalAPIRequest)(nil),                // 74: query.InternalAPIRequest
+	(*InternalAPIResponse)(nil),               // 75: query.InternalAPIResponse
+	nil,                                       // 76: query.BoundQuery.BindVariablesEntry
+	(*StreamEvent_Statement)(nil),             // 77: query.StreamEvent.Statement
+	(topodata.TabletType)(0),                  // 78: topodata.TabletType
+	(*vtrpc.CallerID)(nil),                    // 79: vtrpc.CallerID
+	(*vtrpc.RPCError)(nil),                    // 80: vtrpc.RPCError
+	(*topodata.TabletAlias)(nil),              // 81: topodata.TabletAlias
 }
 var file_query_proto_depIdxs = []int32{
-	77,  // 0: query.Target.tablet_type:type_name -> topodata.TabletType
+	78,  // 0: query.Target.tablet_type:type_name -> topodata.TabletType
 	2,   // 1: query.Value.type:type_name -> query.Type
 	2,   // 2: query.BindVariable.type:type_name -> query.Type
-	14,  // 3: query.BindVariable.values:type_name -> query.Value
-	75,  // 4: query.BoundQuery.bind_variables:type_name -> query.BoundQuery.BindVariablesEntry
-	4,   // 5: query.ExecuteOptions.included_fields:type_name -> query.ExecuteOptions.IncludedFields
-	5,   // 6: query.ExecuteOptions.workload:type_name -> query.ExecuteOptions.Workload
-	6,   // 7: query.ExecuteOptions.transaction_isolation:type_name -> query.ExecuteOptions.TransactionIsolation
-	7,   // 8: query.ExecuteOptions.planner_version:type_name -> query.ExecuteOptions.PlannerVersion
-	8,   // 9: query.ExecuteOptions.consolidator:type_name -> query.ExecuteOptions.Consolidator
-	9,   // 10: query.ExecuteOptions.transaction_access_mode:type_name -> query.ExecuteOptions.TransactionAccessMode
+	15,  // 3: query.BindVariable.values:type_name -> query.Value
+	76,  // 4: query.BoundQuery.bind_variables:type_name -> query.BoundQuery.BindVariablesEntry
+	5,   // 5: query.ExecuteOptions.included_fields:type_name -> query.ExecuteOptions.IncludedFields
+	6,   // 6: query.ExecuteOptions.workload:type_name -> query.ExecuteOptions.Workload
+	7,   // 7: query.ExecuteOptions.transaction_isolation:type_name -> query.ExecuteOptions.TransactionIsolation
+	8,   // 8: query.ExecuteOptions.planner_version:type_name -> query.ExecuteOptions.PlannerVersion
+	9,   // 9: query.ExecuteOptions.consolidator:type_name -> query.ExecuteOptions.Consolidator
+	10,  // 10: query.ExecuteOptions.transaction_access_mode:type_name -> query.ExecuteOptions.TransactionAccessMode
 	2,   // 11: query.Field.type:type_name -> query.Type
-	18,  // 12: query.QueryResult.fields:type_name -> query.Field
-	19,  // 13: query.QueryResult.rows:type_name -> query.Row
-	76,  // 14: query.StreamEvent.statements:type_name -> query.StreamEvent.Statement
-	13,  // 15: query.StreamEvent.event_token:type_name -> query.EventToken
-	78,  // 16: query.ExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 17: query.ExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 18: query.ExecuteRequest.target:type_name -> query.Target
-	16,  // 19: query.ExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 20: query.ExecuteRequest.options:type_name -> query.ExecuteOptions
-	20,  // 21: query.ExecuteResponse.result:type_name -> query.QueryResult
-	79,  // 22: query.ResultWithError.error:type_name -> vtrpc.RPCError
-	20,  // 23: query.ResultWithError.result:type_name -> query.QueryResult
-	78,  // 24: query.StreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 25: query.StreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 26: query.StreamExecuteRequest.target:type_name -> query.Target
-	16,  // 27: query.StreamExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 28: query.StreamExecuteRequest.options:type_name -> query.ExecuteOptions
-	20,  // 29: query.StreamExecuteResponse.result:type_name -> query.QueryResult
-	78,  // 30: query.BeginRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 31: query.BeginRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 32: query.BeginRequest.target:type_name -> query.Target
-	17,  // 33: query.BeginRequest.options:type_name -> query.ExecuteOptions
-	80,  // 34: query.BeginResponse.tablet_alias:type_name -> topodata.TabletAlias
-	78,  // 35: query.CommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 36: query.CommitRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 37: query.CommitRequest.target:type_name -> query.Target
-	78,  // 38: query.RollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 39: query.RollbackRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 40: query.RollbackRequest.target:type_name -> query.Target
-	78,  // 41: query.PrepareRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 42: query.PrepareRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 43: query.PrepareRequest.target:type_name -> query.Target
-	78,  // 44: query.CommitPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 45: query.CommitPreparedRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 46: query.CommitPreparedRequest.target:type_name -> query.Target
-	78,  // 47: query.RollbackPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 48: query.RollbackPreparedRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 49: query.RollbackPreparedRequest.target:type_name -> query.Target
-	78,  // 50: query.CreateTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 51: query.CreateTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 52: query.CreateTransactionRequest.target:type_name -> query.Target
-	11,  // 53: query.CreateTransactionRequest.participants:type_name -> query.Target
-	78,  // 54: query.StartCommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 55: query.StartCommitRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 56: query.StartCommitRequest.target:type_name -> query.Target
-	78,  // 57: query.SetRollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 58: query.SetRollbackRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 59: query.SetRollbackRequest.target:type_name -> query.Target
-	78,  // 60: query.ConcludeTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 61: query.ConcludeTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 62: query.ConcludeTransactionRequest.target:type_name -> query.Target
-	78,  // 63: query.ReadTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 64: query.ReadTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 65: query.ReadTransactionRequest.target:type_name -> query.Target
-	72,  // 66: query.ReadTransactionResponse.metadata:type_name -> query.TransactionMetadata
-	78,  // 67: query.BeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 68: query.BeginExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 69: query.BeginExecuteRequest.target:type_name -> query.Target
-	16,  // 70: query.BeginExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 71: query.BeginExecuteRequest.options:type_name -> query.ExecuteOptions
-	79,  // 72: query.BeginExecuteResponse.error:type_name -> vtrpc.RPCError
-	20,  // 73: query.BeginExecuteResponse.result:type_name -> query.QueryResult
-	80,  // 74: query.BeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	78,  // 75: query.BeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 76: query.BeginStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 77: query.BeginStreamExecuteRequest.target:type_name -> query.Target
-	16,  // 78: query.BeginStreamExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 79: query.BeginStreamExecuteRequest.options:type_name -> query.ExecuteOptions
-	79,  // 80: query.BeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
-	20,  // 81: query.BeginStreamExecuteResponse.result:type_name -> query.QueryResult
-	80,  // 82: query.BeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	78,  // 83: query.MessageStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 84: query.MessageStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 85: query.MessageStreamRequest.target:type_name -> query.Target
-	20,  // 86: query.MessageStreamResponse.result:type_name -> query.QueryResult
-	78,  // 87: query.MessageAckRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 88: query.MessageAckRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 89: query.MessageAckRequest.target:type_name -> query.Target
-	14,  // 90: query.MessageAckRequest.ids:type_name -> query.Value
-	20,  // 91: query.MessageAckResponse.result:type_name -> query.QueryResult
-	78,  // 92: query.ReserveExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 93: query.ReserveExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 94: query.ReserveExecuteRequest.target:type_name -> query.Target
-	16,  // 95: query.ReserveExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 96: query.ReserveExecuteRequest.options:type_name -> query.ExecuteOptions
-	79,  // 97: query.ReserveExecuteResponse.error:type_name -> vtrpc.RPCError
-	20,  // 98: query.ReserveExecuteResponse.result:type_name -> query.QueryResult
-	80,  // 99: query.ReserveExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	78,  // 100: query.ReserveStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 101: query.ReserveStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 102: query.ReserveStreamExecuteRequest.target:type_name -> query.Target
-	16,  // 103: query.ReserveStreamExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 104: query.ReserveStreamExecuteRequest.options:type_name -> query.ExecuteOptions
-	79,  // 105: query.ReserveStreamExecuteResponse.error:type_name -> vtrpc.RPCError
-	20,  // 106: query.ReserveStreamExecuteResponse.result:type_name -> query.QueryResult
-	80,  // 107: query.ReserveStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	78,  // 108: query.ReserveBeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 109: query.ReserveBeginExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 110: query.ReserveBeginExecuteRequest.target:type_name -> query.Target
-	16,  // 111: query.ReserveBeginExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 112: query.ReserveBeginExecuteRequest.options:type_name -> query.ExecuteOptions
-	79,  // 113: query.ReserveBeginExecuteResponse.error:type_name -> vtrpc.RPCError
-	20,  // 114: query.ReserveBeginExecuteResponse.result:type_name -> query.QueryResult
-	80,  // 115: query.ReserveBeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	78,  // 116: query.ReserveBeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 117: query.ReserveBeginStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 118: query.ReserveBeginStreamExecuteRequest.target:type_name -> query.Target
-	16,  // 119: query.ReserveBeginStreamExecuteRequest.query:type_name -> query.BoundQuery
-	17,  // 120: query.ReserveBeginStreamExecuteRequest.options:type_name -> query.ExecuteOptions
-	79,  // 121: query.ReserveBeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
-	20,  // 122: query.ReserveBeginStreamExecuteResponse.result:type_name -> query.QueryResult
-	80,  // 123: query.ReserveBeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
-	78,  // 124: query.ReleaseRequest.effective_caller_id:type_name -> vtrpc.CallerID
-	12,  // 125: query.ReleaseRequest.immediate_caller_id:type_name -> query.VTGateCallerID
-	11,  // 126: query.ReleaseRequest.target:type_name -> query.Target
-	11,  // 127: query.StreamHealthResponse.target:type_name -> query.Target
-	69,  // 128: query.StreamHealthResponse.realtime_stats:type_name -> query.RealtimeStats
-	80,  // 129: query.StreamHealthResponse.tablet_alias:type_name -> topodata.TabletAlias
+	19,  // 12: query.QueryResult.fields:type_name -> query.Field
+	20,  // 13: query.QueryResult.rows:type_name -> query.Row
+	77,  // 14: query.StreamEvent.statements:type_name -> query.StreamEvent.Statement
+	14,  // 15: query.StreamEvent.event_token:type_name -> query.EventToken
+	79,  // 16: query.ExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 17: query.ExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 18: query.ExecuteRequest.target:type_name -> query.Target
+	17,  // 19: query.ExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 20: query.ExecuteRequest.options:type_name -> query.ExecuteOptions
+	21,  // 21: query.ExecuteResponse.result:type_name -> query.QueryResult
+	80,  // 22: query.ResultWithError.error:type_name -> vtrpc.RPCError
+	21,  // 23: query.ResultWithError.result:type_name -> query.QueryResult
+	79,  // 24: query.StreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 25: query.StreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 26: query.StreamExecuteRequest.target:type_name -> query.Target
+	17,  // 27: query.StreamExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 28: query.StreamExecuteRequest.options:type_name -> query.ExecuteOptions
+	21,  // 29: query.StreamExecuteResponse.result:type_name -> query.QueryResult
+	79,  // 30: query.BeginRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 31: query.BeginRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 32: query.BeginRequest.target:type_name -> query.Target
+	18,  // 33: query.BeginRequest.options:type_name -> query.ExecuteOptions
+	81,  // 34: query.BeginResponse.tablet_alias:type_name -> topodata.TabletAlias
+	79,  // 35: query.CommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 36: query.CommitRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 37: query.CommitRequest.target:type_name -> query.Target
+	79,  // 38: query.RollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 39: query.RollbackRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 40: query.RollbackRequest.target:type_name -> query.Target
+	79,  // 41: query.PrepareRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 42: query.PrepareRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 43: query.PrepareRequest.target:type_name -> query.Target
+	79,  // 44: query.CommitPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 45: query.CommitPreparedRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 46: query.CommitPreparedRequest.target:type_name -> query.Target
+	79,  // 47: query.RollbackPreparedRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 48: query.RollbackPreparedRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 49: query.RollbackPreparedRequest.target:type_name -> query.Target
+	79,  // 50: query.CreateTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 51: query.CreateTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 52: query.CreateTransactionRequest.target:type_name -> query.Target
+	12,  // 53: query.CreateTransactionRequest.participants:type_name -> query.Target
+	79,  // 54: query.StartCommitRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 55: query.StartCommitRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 56: query.StartCommitRequest.target:type_name -> query.Target
+	79,  // 57: query.SetRollbackRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 58: query.SetRollbackRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 59: query.SetRollbackRequest.target:type_name -> query.Target
+	79,  // 60: query.ConcludeTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 61: query.ConcludeTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 62: query.ConcludeTransactionRequest.target:type_name -> query.Target
+	79,  // 63: query.ReadTransactionRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 64: query.ReadTransactionRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 65: query.ReadTransactionRequest.target:type_name -> query.Target
+	73,  // 66: query.ReadTransactionResponse.metadata:type_name -> query.TransactionMetadata
+	79,  // 67: query.BeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 68: query.BeginExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 69: query.BeginExecuteRequest.target:type_name -> query.Target
+	17,  // 70: query.BeginExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 71: query.BeginExecuteRequest.options:type_name -> query.ExecuteOptions
+	80,  // 72: query.BeginExecuteResponse.error:type_name -> vtrpc.RPCError
+	21,  // 73: query.BeginExecuteResponse.result:type_name -> query.QueryResult
+	81,  // 74: query.BeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	79,  // 75: query.BeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 76: query.BeginStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 77: query.BeginStreamExecuteRequest.target:type_name -> query.Target
+	17,  // 78: query.BeginStreamExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 79: query.BeginStreamExecuteRequest.options:type_name -> query.ExecuteOptions
+	80,  // 80: query.BeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
+	21,  // 81: query.BeginStreamExecuteResponse.result:type_name -> query.QueryResult
+	81,  // 82: query.BeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	79,  // 83: query.MessageStreamRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 84: query.MessageStreamRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 85: query.MessageStreamRequest.target:type_name -> query.Target
+	21,  // 86: query.MessageStreamResponse.result:type_name -> query.QueryResult
+	79,  // 87: query.MessageAckRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 88: query.MessageAckRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 89: query.MessageAckRequest.target:type_name -> query.Target
+	15,  // 90: query.MessageAckRequest.ids:type_name -> query.Value
+	21,  // 91: query.MessageAckResponse.result:type_name -> query.QueryResult
+	79,  // 92: query.ReserveExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 93: query.ReserveExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 94: query.ReserveExecuteRequest.target:type_name -> query.Target
+	17,  // 95: query.ReserveExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 96: query.ReserveExecuteRequest.options:type_name -> query.ExecuteOptions
+	80,  // 97: query.ReserveExecuteResponse.error:type_name -> vtrpc.RPCError
+	21,  // 98: query.ReserveExecuteResponse.result:type_name -> query.QueryResult
+	81,  // 99: query.ReserveExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	79,  // 100: query.ReserveStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 101: query.ReserveStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 102: query.ReserveStreamExecuteRequest.target:type_name -> query.Target
+	17,  // 103: query.ReserveStreamExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 104: query.ReserveStreamExecuteRequest.options:type_name -> query.ExecuteOptions
+	80,  // 105: query.ReserveStreamExecuteResponse.error:type_name -> vtrpc.RPCError
+	21,  // 106: query.ReserveStreamExecuteResponse.result:type_name -> query.QueryResult
+	81,  // 107: query.ReserveStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	79,  // 108: query.ReserveBeginExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 109: query.ReserveBeginExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 110: query.ReserveBeginExecuteRequest.target:type_name -> query.Target
+	17,  // 111: query.ReserveBeginExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 112: query.ReserveBeginExecuteRequest.options:type_name -> query.ExecuteOptions
+	80,  // 113: query.ReserveBeginExecuteResponse.error:type_name -> vtrpc.RPCError
+	21,  // 114: query.ReserveBeginExecuteResponse.result:type_name -> query.QueryResult
+	81,  // 115: query.ReserveBeginExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	79,  // 116: query.ReserveBeginStreamExecuteRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 117: query.ReserveBeginStreamExecuteRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 118: query.ReserveBeginStreamExecuteRequest.target:type_name -> query.Target
+	17,  // 119: query.ReserveBeginStreamExecuteRequest.query:type_name -> query.BoundQuery
+	18,  // 120: query.ReserveBeginStreamExecuteRequest.options:type_name -> query.ExecuteOptions
+	80,  // 121: query.ReserveBeginStreamExecuteResponse.error:type_name -> vtrpc.RPCError
+	21,  // 122: query.ReserveBeginStreamExecuteResponse.result:type_name -> query.QueryResult
+	81,  // 123: query.ReserveBeginStreamExecuteResponse.tablet_alias:type_name -> topodata.TabletAlias
+	79,  // 124: query.ReleaseRequest.effective_caller_id:type_name -> vtrpc.CallerID
+	13,  // 125: query.ReleaseRequest.immediate_caller_id:type_name -> query.VTGateCallerID
+	12,  // 126: query.ReleaseRequest.target:type_name -> query.Target
+	12,  // 127: query.StreamHealthResponse.target:type_name -> query.Target
+	70,  // 128: query.StreamHealthResponse.realtime_stats:type_name -> query.RealtimeStats
+	81,  // 129: query.StreamHealthResponse.tablet_alias:type_name -> topodata.TabletAlias
 	3,   // 130: query.TransactionMetadata.state:type_name -> query.TransactionState
-	11,  // 131: query.TransactionMetadata.participants:type_name -> query.Target
-	15,  // 132: query.BoundQuery.BindVariablesEntry.value:type_name -> query.BindVariable
-	10,  // 133: query.StreamEvent.Statement.category:type_name -> query.StreamEvent.Statement.Category
-	18,  // 134: query.StreamEvent.Statement.primary_key_fields:type_name -> query.Field
-	19,  // 135: query.StreamEvent.Statement.primary_key_values:type_name -> query.Row
-	136, // [136:136] is the sub-list for method output_type
-	136, // [136:136] is the sub-list for method input_type
-	136, // [136:136] is the sub-list for extension type_name
-	136, // [136:136] is the sub-list for extension extendee
-	0,   // [0:136] is the sub-list for field type_name
+	12,  // 131: query.TransactionMetadata.participants:type_name -> query.Target
+	4,   // 132: query.InternalAPIRequest.type:type_name -> query.RequestType
+	12,  // 133: query.InternalAPIRequest.target:type_name -> query.Target
+	16,  // 134: query.BoundQuery.BindVariablesEntry.value:type_name -> query.BindVariable
+	11,  // 135: query.StreamEvent.Statement.category:type_name -> query.StreamEvent.Statement.Category
+	19,  // 136: query.StreamEvent.Statement.primary_key_fields:type_name -> query.Field
+	20,  // 137: query.StreamEvent.Statement.primary_key_values:type_name -> query.Row
+	138, // [138:138] is the sub-list for method output_type
+	138, // [138:138] is the sub-list for method input_type
+	138, // [138:138] is the sub-list for extension type_name
+	138, // [138:138] is the sub-list for extension extendee
+	0,   // [0:138] is the sub-list for field type_name
 }
 
 func init() { file_query_proto_init() }
@@ -7474,7 +7552,7 @@ func file_query_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: file_query_proto_rawDesc,
-			NumEnums:      11,
+			NumEnums:      12,
 			NumMessages:   66,
 			NumExtensions: 0,
 			NumServices:   0,

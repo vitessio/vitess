@@ -1395,6 +1395,27 @@ func txToReserveState(state queryservice.TransactionState) queryservice.Reserved
 	}
 }
 
+// InternalAPI returns results from internal queries.
+func (tsv *TabletServer) InternalAPI(ctx context.Context, target *querypb.Target, rType querypb.RequestType) (response string, err error) {
+	err = tsv.execRequest(
+		ctx, tsv.QueryTimeout.Get(),
+		"InternalAPI", "", nil,
+		target, nil, false, /* allowOnShutdown */
+		func(ctx context.Context, logStats *tabletenv.LogStats) error {
+			defer tsv.stats.QueryTimings.Record("InternalAPI", time.Now())
+
+			qre := &QueryExecutor{
+				query:    request,
+				ctx:      ctx,
+				logStats: logStats,
+			}
+			response, err = qre.InternalExecute()
+			return err
+		},
+	)
+	return
+}
+
 // execRequest performs verifications, sets up the necessary environments
 // and calls the supplied function for executing the request.
 func (tsv *TabletServer) execRequest(
@@ -1687,12 +1708,6 @@ func (tsv *TabletServer) HandlePanic(err *error) {
 	if x := recover(); x != nil {
 		*err = fmt.Errorf("uncaught panic: %v\n. Stack-trace:\n%s", x, tb.Stack(4))
 	}
-}
-
-// InternalAPI returns results from internal queries.
-func (tsv *TabletServer) InternalAPI(ctx context.Context, request string) (string, error) {
-	//TODO implement me
-	panic("implement me")
 }
 
 // Close is a no-op.

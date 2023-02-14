@@ -974,12 +974,22 @@ message TransactionMetadata {
   repeated Target participants = 4;
 }
 
+
+// RequestType represents the type of request.
+enum RequestType {
+  VIEWS = 0;
+  TABLES = 1;
+  ALL_TABLES_VIEWS = 2;
+}
+
 // InternalAPIRequest is the payload to InternalAPI
 message InternalAPIRequest {
-  string request = 1;
+  RequestType type = 1;
+  Target target = 2;
+  string request = 3;
 }
 
 // InternalAPIResponse is the returned value from InternalAPI
 message InternalAPIResponse {
-    string response = 1;
+  string response = 1;
 }

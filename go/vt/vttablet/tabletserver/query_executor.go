@@ -1234,3 +1234,16 @@ func (qre *QueryExecutor) generateBindVarsForViewDDLInsert(createView *sqlparser
 	bindVars["create_statement"] = sqltypes.StringBindVariable(sqlparser.String(createView))
 	return bindVars
 }
+
+func (qre *QueryExecutor) InternalExecute() (string, error) {
+	conn, err := qre.getConn()
+	if err != nil {
+		return "", err
+	}
+	defer conn.Recycle()
+	res, err := qre.execDBConn(conn, sql, true)
+	if err != nil {
+		return nil, err
+	}
+	return res, nil
+}
