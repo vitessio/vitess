@@ -430,8 +430,8 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 	done := false
 
 	id := 1000
-	// first goroutine that keeps inserting rows into table being streamed until a minute after reshard
-	// we should keep getting events on the new shards
+	// First goroutine that keeps inserting rows into the table being streamed until a minute after reshard
+	// We should keep getting events on the new shards
 	go func() {
 		for {
 			if done {
