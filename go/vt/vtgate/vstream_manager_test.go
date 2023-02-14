@@ -898,6 +898,7 @@ func TestResolveVStreamParams(t *testing.T) {
 		},
 		err: "if shards are unspecified, the Gtid value must be 'current' or empty",
 	}, {
+		// Verify that the function maps the input missing the shard to a list of all shards in the topology.
 		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "TestVStream",
