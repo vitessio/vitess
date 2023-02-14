@@ -398,9 +398,9 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 		// merge workflow going from 2 shards to 1 shard, we
 		// will be inserting multiple rows. To get the ids of
 		// subsequent streams we need to know what the
-		// auto_increment_increment step is. In a multi-master
-		// environment, for example, we will often encounter
-		// auto_increment steps > 1.
+		// auto_increment_increment step is. In a multi-primary
+		// environment, like a Galera cluster, for example,
+		// we will often encounter auto_increment steps > 1.
 		autoIncrementStep, err := vre.getAutoIncrementStep(dbClient)
 		if err != nil {
 			return nil, err

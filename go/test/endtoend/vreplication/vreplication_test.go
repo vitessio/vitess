@@ -982,7 +982,7 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		}
 		tablets := vc.getVttabletsInKeyspace(t, defaultCell, ksName, "primary")
 
-		// Test multi-master setups with auto increment steps > 1.
+		// Test multi-primary setups, like a Galera cluster, which have auto increment steps > 1.
 		for _, tablet := range tablets {
 			autoIncrementSetQuery := fmt.Sprintf("set @@session.auto_increment_increment = %d; set @@global.auto_increment_increment = %d",
 				autoIncrementStep, autoIncrementStep)
