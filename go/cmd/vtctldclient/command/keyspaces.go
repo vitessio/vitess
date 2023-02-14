@@ -25,6 +25,7 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -409,7 +410,7 @@ func init() {
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
-	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SidecarDBName, "sidecar-db-name", "_vt", "Vitess sidecar database used for internal metadata.")
+	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SidecarDBName, "sidecar-db-name", sidecardb.DefaultName, "Vitess sidecar database used for internal metadata.")
 	Root.AddCommand(CreateKeyspace)
 
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")

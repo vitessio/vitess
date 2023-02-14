@@ -81,8 +81,13 @@ func TestAPI(t *testing.T) {
 	server := httptest.NewServer(nil)
 	defer server.Close()
 
+	ks1 := &topodatapb.Keyspace{
+		DurabilityPolicy: "semi_sync",
+		SidecarDbName:    "_vt_sidecar_ks1",
+	}
+
 	// Populate topo. Remove ServedTypes from shards to avoid ordering issues.
-	ts.CreateKeyspace(ctx, "ks1", &topodatapb.Keyspace{DurabilityPolicy: "semi_sync"})
+	ts.CreateKeyspace(ctx, "ks1", ks1)
 	ts.CreateShard(ctx, "ks1", "-80")
 	ts.CreateShard(ctx, "ks1", "80-")
 
@@ -229,7 +234,7 @@ func TestAPI(t *testing.T) {
 		statusCode               int
 	}{
 		// Create snapshot keyspace with durability policy specified
-		{"POST", "vtctl/", `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "--durability-policy=semi_sync", "ks3"]`, `{
+		{"POST", "vtctl/", `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "--durability-policy=semi_sync", "--sidecar-db-name=_vt_sidecar_ks3", "ks3"]`, `{
   "Error": "durability-policy cannot be specified while creating a snapshot keyspace"`, http.StatusOK},
 		// Create snapshot keyspace using API
 		{"POST", "vtctl/", `["CreateKeyspace", "--keyspace_type=SNAPSHOT", "--base_keyspace=ks1", "--snapshot_time=2006-01-02T15:04:05+00:00", "ks3"]`, `{
@@ -305,7 +310,8 @@ func TestAPI(t *testing.T) {
 				"keyspace_type":0,
 				"base_keyspace":"",
 				"snapshot_time":null,
-				"durability_policy":"semi_sync"
+				"durability_policy":"semi_sync",
+				"sidecar_db_name":"_vt_sidecar_ks1"
 			}`, http.StatusOK},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
@@ -440,11 +446,11 @@ func TestAPI(t *testing.T) {
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\"\n}\n\n"
+		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"sidecar_db_name\": \"_vt_sidecar_ks1\"\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\"\n}\n\n"
+		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"sidecar_db_name\": \"_vt\"\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",
