@@ -426,7 +426,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 			Match: "/customer.*/",
 		}},
 	}
-	flags := &vtgatepb.VStreamFlags{HeartbeatInterval: 3600}
+	flags := &vtgatepb.VStreamFlags{}
 	done := false
 
 	id := 1000
