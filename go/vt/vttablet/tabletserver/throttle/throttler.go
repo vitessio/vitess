@@ -60,6 +60,8 @@ const (
 
 	shardStoreName = "shard"
 	selfStoreName  = "self"
+
+	defaultReplicationLagQuery = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
 )
 
 var (
@@ -88,9 +90,6 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 }
 
 var (
-	replicationLagQuery = fmt.Sprintf(`select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat`,
-		sidecardb.GetIdentifier())
-
 	ErrThrottlerNotReady = errors.New("throttler not enabled/ready")
 )
 
@@ -204,7 +203,9 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
-	throttler.metricsQuery.Store(replicationLagQuery) // default
+	// The query needs to be dynamically built because the sidecar db name is not known
+	// when the TabletServer is created, which in turn creates the Throttler.
+	throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier())) // default
 	if throttleMetricQuery != "" {
 		throttler.metricsQuery.Store(throttleMetricQuery) // override
 	}
@@ -336,7 +337,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		return
 	}
 	if throttlerConfig.CustomQuery == "" {
-		throttler.metricsQuery.Store(replicationLagQuery)
+		throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier()))
 	} else {
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
@@ -443,6 +444,9 @@ func (throttler *Throttler) Open() error {
 	} else {
 		// backwards-cmpatible: check for --enable-lag-throttler flag in vttablet
 		// this will be removed in a future version
+		// Ensure that the query is updated with the correct sidecar database name
+		// which is read during tablet manager initialization.
+		throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier()))
 		if throttler.env.Config().EnableLagThrottler {
 			go throttler.Enable(ctx)
 		}

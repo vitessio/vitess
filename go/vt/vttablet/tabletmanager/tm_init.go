@@ -488,14 +488,14 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 	}
 
-	// Ensure that this table is not trying to come up with a sidecar
-	// database name that does not line up with the keyspace.
+	// Ensure that this tablet comes up with the sidecar database
+	// name that is set for the keyspace.
 	ks, err := tm.TopoServer.GetKeyspace(ctx, tablet.Keyspace)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 	}
 	// If the keyspace exists but this is the first tablet added, then
-	// update the keyspace record.
+	// update the keyspace record to the default.
 	if ks.SidecarDbName == "" {
 		ks.SidecarDbName = sidecardb.GetName()
 		ctx, unlock, lockErr := tm.TopoServer.LockKeyspace(ctx, tablet.Keyspace, "Setting sidecar database name")
