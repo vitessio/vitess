@@ -1023,7 +1023,9 @@ func TestResolveVStreamParams(t *testing.T) {
 		require.False(t, flags.MinimizeSkew)
 	}
 
-	// Special-case: empty keyspace because output is too big.
+	// Special-case: empty keyspace or keyspace containing wildcards because output is too big.
+	// Verify that the function resolves input for multiple keyspaces into a list of all corresponding shards.
+	// Ensure that the number of shards returned is greater than the number of shards in a single keyspace named 'TestVStream.'
 	specialCases := []struct {
 		input *binlogdatapb.ShardGtid
 	}{
@@ -1055,8 +1057,8 @@ func TestResolveVStreamParams(t *testing.T) {
 		}
 		vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
 		require.NoError(t, err, tcase.input)
-		if got, want := len(vgtid.ShardGtids), 8; want >= got {
-			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)
+		if got, expectTestVStreamShardNumber := len(vgtid.ShardGtids), 8; expectTestVStreamShardNumber >= got {
+			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
 		}
 		for _, s := range vgtid.ShardGtids {
 			require.Equal(t, tcase.input.Gtid, s.Gtid)
