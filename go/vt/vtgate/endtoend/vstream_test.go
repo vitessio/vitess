@@ -263,18 +263,18 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 
 	conn, err := mysql.Connect(ctx, &vtParams)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 	defer conn.Close()
 
 	_, err = conn.ExecuteFetch("insert into t1_copy_all(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 
 	_, err = conn.ExecuteFetch("insert into t1_copy_all_ks2(id1,id2) values(10,10), (20,20)", 1, false)
 	if err != nil {
-		t.Fatal(err)
+		require.NoError(t, err)
 	}
 
 	filter := &binlogdatapb.Filter{
@@ -346,7 +346,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 			reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
 			_, _ = conn, mconn
 			if err != nil {
-				t.Fatal(err)
+				require.NoError(t, err)
 			}
 			require.NotNil(t, reader)
 			var evs []*binlogdatapb.VEvent
