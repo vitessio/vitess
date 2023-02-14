@@ -287,26 +287,30 @@ func getVindexPredicate(ctx *plancontext.PlanningContext, op *operators.Route) s
 		condition = tr.Selected.ValueExprs[0]
 	}
 	_, isMultiColumn := tr.Selected.FoundVindex.(vindexes.MultiColumn)
-	for idx, predicate := range tr.Selected.Predicates {
-		switch predicate := predicate.(type) {
-		case *sqlparser.ComparisonExpr:
-			if predicate.Operator == sqlparser.InOp {
-				switch predicate.Left.(type) {
-				case *sqlparser.ColName:
-					if subq, isSubq := predicate.Right.(*sqlparser.Subquery); isSubq {
-						extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
-						if extractedSubquery != nil {
-							extractedSubquery.SetArgName(engine.ListVarName)
-						}
-					}
-					if isMultiColumn {
-						predicate.Right = sqlparser.ListArg(engine.ListVarName + strconv.Itoa(idx))
-						continue
-					}
-					predicate.Right = sqlparser.ListArg(engine.ListVarName)
-				}
+	for idx, expr := range tr.Selected.Predicates {
+		cmp, ok := expr.(*sqlparser.ComparisonExpr)
+		if !ok || cmp.Operator != sqlparser.InOp {
+			continue
+		}
+		_, ok = cmp.Left.(*sqlparser.ColName)
+		if !ok {
+			continue
+		}
+
+		var argName string
+		if isMultiColumn {
+			argName = engine.ListVarName + strconv.Itoa(idx)
+		} else {
+			argName = engine.ListVarName
+		}
+
+		if subq, isSubq := cmp.Right.(*sqlparser.Subquery); isSubq {
+			extractedSubquery := ctx.SemTable.FindSubqueryReference(subq)
+			if extractedSubquery != nil {
+				extractedSubquery.SetArgName(argName)
 			}
 		}
+		cmp.Right = sqlparser.ListArg(argName)
 	}
 	return condition
 }

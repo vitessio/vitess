@@ -1,7 +1,22 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package operators
 
 import (
-	"golang.org/x/exp/maps"
 	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -14,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
+// ShardedRouting is what we use for all tables that exist in a sharded keyspace
+// It knows about available vindexes and can use them for routing when applicable
 type ShardedRouting struct {
 	// here we store the possible vindexes we can use so that when we add predicates to the plan,
 	// we can quickly check if the new predicates enables any new vindex Options
@@ -29,10 +46,6 @@ type ShardedRouting struct {
 	// SeenPredicates contains all the predicates that have had a chance to influence routing.
 	// If we need to replan routing, we'll use this list
 	SeenPredicates []sqlparser.Expr
-
-	// Alternates contains alternate routes to equivalent sources in
-	// other keyspaces.
-	Alternates map[*vindexes.Keyspace]*Route
 }
 
 var _ Routing = (*ShardedRouting)(nil)
@@ -72,6 +85,12 @@ func (tr *ShardedRouting) isScatter() bool {
 	return tr.RouteOpCode == engine.Scatter
 }
 
+// tryImprove rewrites the predicates for this query to see if we can produce a better plan.
+// The rewrites are two:
+//  1. first we turn the predicate a conjunctive normal form - an AND of ORs.
+//     This can sometimes push a predicate to the top so it's not hiding inside of an OR
+//  2. If that is not enough, an additional rewrite pass is performed where we try to
+//     turn ORs into IN, which is easier for the planner to plan
 func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTable *QueryTable) (Routing, error) {
 	oldPredicates := queryTable.Predicates
 	queryTable.Predicates = nil
@@ -136,11 +155,10 @@ func (tr *ShardedRouting) Clone() Routing {
 		keyspace:       tr.keyspace,
 		RouteOpCode:    tr.RouteOpCode,
 		SeenPredicates: slices.Clone(tr.SeenPredicates),
-		Alternates:     maps.Clone(tr.Alternates),
 	}
 }
 
-func (tr *ShardedRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (tr *ShardedRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	tr.SeenPredicates = append(tr.SeenPredicates, expr)
 
 	newRouting, newVindexFound, err := tr.searchForNewVindexes(ctx, expr)
@@ -207,28 +225,13 @@ func (tr *ShardedRouting) searchForNewVindexes(ctx *plancontext.PlanningContext,
 }
 
 func (tr *ShardedRouting) planComparison(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) (routing Routing, foundNew bool, err error) {
-	if cmp.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right)) {
-		// we are looking at ANDed predicates in the WHERE clause.
-		// since we know that nothing returns true when compared to NULL,
-		// so we can safely bail out here
-		return &NoneRouting{keyspace: tr.keyspace}, false, nil
-	}
-
 	switch cmp.Operator {
 	case sqlparser.EqualOp:
 		found := tr.planEqualOp(ctx, cmp)
 		return nil, found, nil
 	case sqlparser.InOp:
-		if isImpossibleIN(cmp) {
-			return &NoneRouting{keyspace: tr.keyspace}, true, nil
-		}
 		found := tr.planInOp(ctx, cmp)
 		return nil, found, nil
-	case sqlparser.NotInOp:
-		// NOT IN is always a scatter, except when we can be sure it would return nothing
-		if isImpossibleNotIN(cmp) {
-			return &NoneRouting{keyspace: tr.keyspace}, true, nil
-		}
 	case sqlparser.LikeOp:
 		found := tr.planLikeOp(ctx, cmp)
 		return nil, found, nil
@@ -259,29 +262,6 @@ func (tr *ShardedRouting) planIsExpr(ctx *plancontext.PlanningContext, node *sql
 	}
 
 	return tr.haveMatchingVindex(ctx, node, vdValue, column, val, opcodeF, justTheVindex)
-}
-
-func isImpossibleIN(node *sqlparser.ComparisonExpr) bool {
-	tuples, ok := node.Right.(sqlparser.ValTuple)
-	if !ok {
-		return false
-	}
-	return len(tuples) == 1 && sqlparser.IsNull(tuples[0])
-}
-
-func isImpossibleNotIN(node *sqlparser.ComparisonExpr) bool {
-	tuples, ok := node.Right.(sqlparser.ValTuple)
-	if !ok {
-		return false
-	}
-
-	for _, n := range tuples {
-		if sqlparser.IsNull(n) {
-			return true
-		}
-	}
-
-	return false
 }
 
 func (tr *ShardedRouting) planInOp(ctx *plancontext.PlanningContext, cmp *sqlparser.ComparisonExpr) bool {

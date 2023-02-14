@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package operators
 
 import (
@@ -9,10 +25,14 @@ import (
 )
 
 type (
+	// NoneRouting is used when we know that this Route will return no results.
+	// Can be merged with any other route going to the same keyspace
 	NoneRouting struct {
 		keyspace *vindexes.Keyspace
 	}
 
+	// TargetedRouting is used when the user has used syntax to target the
+	// Route against a specific set of shards and/or tablet type. Can't be merged with anything else.
 	TargetedRouting struct {
 		keyspace *vindexes.Keyspace
 
@@ -36,7 +56,7 @@ func (tr *TargetedRouting) Clone() Routing {
 	return &newTr
 }
 
-func (tr *TargetedRouting) UpdateRoutingLogic(_ *plancontext.PlanningContext, _ sqlparser.Expr) (Routing, error) {
+func (tr *TargetedRouting) updateRoutingLogic(_ *plancontext.PlanningContext, _ sqlparser.Expr) (Routing, error) {
 	return tr, nil
 }
 
@@ -60,7 +80,7 @@ func (n *NoneRouting) Clone() Routing {
 	return n
 }
 
-func (n *NoneRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (n *NoneRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	return n, nil
 }
 

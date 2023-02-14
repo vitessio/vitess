@@ -255,15 +255,6 @@ func tryMergeSubqueryWithRoute(
 		return nil, nil
 	}
 
-	// Special case: Inner query won't return any results / is not routable.
-	// if subqueryRoute.Routing.OpCode() == engine.None {
-	// 	merged, err := merger(outerOp, subqueryRoute, nil) // TODO: routing should not be nil
-	// 	if err != nil {
-	// 		return nil, err
-	// 	}
-	// 	return merged, err
-	// }
-
 	// Inner subqueries can be merged with the outer subquery as long as
 	// the inner query is a single column selection, and that single column has a matching
 	// vindex on the outer query's operand.

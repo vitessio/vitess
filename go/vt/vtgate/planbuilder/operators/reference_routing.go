@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package operators
 
 import (
@@ -24,7 +40,7 @@ func (rr *AnyShardRouting) Clone() Routing {
 	return &AnyShardRouting{keyspace: rr.keyspace}
 }
 
-func (rr *AnyShardRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (rr *AnyShardRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	return rr, nil
 }
 
@@ -55,6 +71,8 @@ func (rr *AnyShardRouting) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Rou
 	return nil
 }
 
+// DualRouting represents the dual-table.
+// It is special compared to all other tables because it can be merged with tables in any keyspace
 type DualRouting struct{}
 
 var _ Routing = (*DualRouting)(nil)
@@ -67,7 +85,7 @@ func (dr *DualRouting) Clone() Routing {
 	return &DualRouting{}
 }
 
-func (dr *DualRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (dr *DualRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	return dr, nil
 }
 
@@ -95,7 +113,7 @@ func (sr *SequenceRouting) Clone() Routing {
 	return &SequenceRouting{}
 }
 
-func (sr *SequenceRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (sr *SequenceRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	return sr, nil
 }
 

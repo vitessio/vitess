@@ -67,6 +67,8 @@ type (
 		OpCode     engine.Opcode
 	}
 
+	// Routing is used for the routing and merging logic of `Route`s. Every Route has a Routing object, and
+	// this object is updated when predicates are found, and when merging `Route`s together
 	Routing interface {
 		// UpdateRoutingParams allows a Routing to control the routing params that will be used by the engine Route
 		UpdateRoutingParams(rp *engine.RoutingParameters)
@@ -76,15 +78,20 @@ type (
 		// We don't want these different alternatives to influence each other, and cloning allows this
 		Clone() Routing
 
-		UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error)
+		// Cost returns the cost of this Route.
 		Cost() int
 		OpCode() engine.Opcode
 		Keyspace() *vindexes.Keyspace // note that all routings do not have a keyspace, so this method can return nil
+
+		// updateRoutingLogic updates the routing to take predicates into account. This can be used for routing
+		// using vindexes or for figuring out which keyspace an information_schema query should be sent to.
+		updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error)
 	}
 )
 
 var _ ops.PhysicalOperator = (*Route)(nil)
 
+// UpdateRoutingLogic first checks if we are dealing with a predicate that
 func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r Routing) (Routing, error) {
 	ks := r.Keyspace()
 	if ks == nil {
@@ -100,39 +107,46 @@ func UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr, r
 		return nr, nil
 	}
 
-	switch expr := expr.(type) {
-	case *sqlparser.ComparisonExpr:
-		if expr.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(expr.Left) || sqlparser.IsNull(expr.Right)) {
-			// we are looking at ANDed predicates in the WHERE clause.
-			// since we know that nothing returns true when compared to NULL,
-			// so we can safely bail out here
+	exit := func() (Routing, error) {
+		return r.updateRoutingLogic(ctx, expr)
+	}
 
-			return nr, nil
+	// For some expressions, even if we can't evaluate them, we know that they will always return false or null
+	cmp, ok := expr.(*sqlparser.ComparisonExpr)
+	if !ok {
+		return exit()
+	}
+
+	if cmp.Operator != sqlparser.NullSafeEqualOp && (sqlparser.IsNull(cmp.Left) || sqlparser.IsNull(cmp.Right)) {
+		// any comparison against a literal null, except a null safe equality (<=>), will return null
+		return nr, nil
+	}
+
+	tuples, ok := cmp.Right.(sqlparser.ValTuple)
+	if !ok {
+		return exit()
+	}
+
+	switch cmp.Operator {
+	case sqlparser.NotInOp:
+		for _, n := range tuples {
+			// If any of the values in the tuple is a literal null, we know that this comparison will always return NULL
+			if sqlparser.IsNull(n) {
+				return nr, nil
+			}
 		}
-		switch expr.Operator {
-		case sqlparser.NotInOp:
-			switch node := expr.Right.(type) {
-			case sqlparser.ValTuple:
-				for _, n := range node {
-					if sqlparser.IsNull(n) {
-						return nr, nil
-					}
-				}
-			}
-		case sqlparser.InOp:
-			switch nodeR := expr.Right.(type) {
-			case sqlparser.ValTuple:
-				// WHERE col IN (null)
-				if len(nodeR) == 1 && sqlparser.IsNull(nodeR[0]) {
-					return nr, nil
-				}
-			}
+	case sqlparser.InOp:
+		// WHERE col IN (null)
+		if len(tuples) == 1 && sqlparser.IsNull(tuples[0]) {
+			return nr, nil
 		}
 	}
 
-	return r.UpdateRoutingLogic(ctx, expr)
+	return exit()
 }
 
+// isConstantFalse checks whether this predicate can be evaluated at plan-time. If it returns `false` or `null`,
+// we know that the query will not return anything, and this can be used to produce better plans
 func isConstantFalse(expr sqlparser.Expr) bool {
 	eenv := evalengine.EmptyExpressionEnv()
 	eexpr, err := evalengine.Translate(expr, nil)
@@ -141,6 +155,9 @@ func isConstantFalse(expr sqlparser.Expr) bool {
 	}
 	eres, err := eenv.Evaluate(eexpr)
 	if err != nil {
+		return false
+	}
+	if eres.Value().IsNull() {
 		return false
 	}
 	b, err := eres.ToBooleanStrict()

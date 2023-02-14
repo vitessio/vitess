@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package operators
 
 import (
@@ -13,7 +29,7 @@ import (
 )
 
 // Merge checks whether two operators can be merged into a single one.
-// If they can be merged, the new Routing for the merged operator is returned.
+// If they can be merged, a new operator with the merged routing is returned
 // If they cannot be merged, nil is returned.
 func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicates []sqlparser.Expr, m merger) (ops.Operator, error) {
 	lhsRoute, rhsRoute := operatorsToRoutes(lhs, rhs)
@@ -44,18 +60,13 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	case b == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
-	// table and reference routing can be merged if they are going to the same keyspace
-	case a == sharded && b == anyShard && sameKeyspace:
-		return m.merge(lhsRoute, rhsRoute, routingA)
-
 	// None routing can always be merged, as long as we are aiming for the same keyspace
 	case a == none && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 	case b == none && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingB)
-
-	case a == infoSchema && b == infoSchema:
 		// infoSchema routing is complex, so we handle it in a separate method
+	case a == infoSchema && b == infoSchema:
 		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
 
 	case a == sharded && b == sharded:

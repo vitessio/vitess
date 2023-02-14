@@ -1,5 +1,5 @@
 /*
-Copyright 2022 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -70,7 +70,7 @@ func (isr *InfoSchemaRouting) Clone() Routing {
 	}
 }
 
-func (isr *InfoSchemaRouting) UpdateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
+func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (Routing, error) {
 	isTableSchema, bvName, out := extractInfoSchemaRoutingPredicate(expr, ctx.ReservedVars)
 	if out == nil {
 		return isr, nil
@@ -97,6 +97,8 @@ func (isr *InfoSchemaRouting) OpCode() engine.Opcode {
 }
 
 func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
+	// TODO: for some info schema, we do know which keyspace it will go to
+	// if we had this information, more routes could be merged.
 	return nil
 }
 
@@ -112,6 +114,8 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		return false, "", nil
 	}
 
+	// here we are just checking if this query can be translated to an evalengine expression
+	// we'll need to do this translation again later when building the engine.Route
 	_, err := evalengine.Translate(rhs, &notImplementedSchemaInfoConverter{})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,
