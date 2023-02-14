@@ -19,6 +19,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -187,20 +188,24 @@ func TestThreadsRunning(t *testing.T) {
 		}(i)
 	}
 	t.Run("exceeds threshold", func(t *testing.T) {
-		time.Sleep(sleepDuration / 2)
+		time.Sleep(sleepDuration)
 		// by this time we will have testThreshold+1 threads_running, and we should hit the threshold
 		// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
 		{
 			resp, err := throttleCheck(primaryTablet)
 			require.NoError(t, err)
 			defer resp.Body.Close()
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+			b, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "Response: %s", string(b))
 		}
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
 			require.NoError(t, err)
 			defer resp.Body.Close()
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
+			b, err := io.ReadAll(resp.Body)
+			require.NoError(t, err)
+			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "Response: %s", string(b))
 		}
 	})
 	t.Run("wait for queries to terminate", func(t *testing.T) {

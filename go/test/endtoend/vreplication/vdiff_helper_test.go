@@ -67,11 +67,12 @@ func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 	t.Run(fmt.Sprintf("vdiff1 %s", ksWorkflow), func(t *testing.T) {
 		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
 		log.Infof("vdiff1 err: %+v, output: %+v", err, output)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		require.NotNil(t, output)
 		diffReports := make(map[string]*wrangler.DiffReport)
+		t.Logf("vdiff1 output: %s", output)
 		err = json.Unmarshal([]byte(output), &diffReports)
-		require.Nil(t, err)
+		require.NoError(t, err)
 		if len(diffReports) < 1 {
 			t.Fatal("VDiff did not return a valid json response " + output + "\n")
 		}

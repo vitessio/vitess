@@ -92,3 +92,12 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 	}
 	return vtctldclient
 }
+
+// CreateKeyspace executes vtctl command to create keyspace
+func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sidecarDBName string) (err error) {
+	output, err := vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--sidecar-db-name", sidecarDBName)
+	if err != nil {
+		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
+	}
+	return err
+}

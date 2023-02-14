@@ -214,8 +214,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 		throttler.MetricsThreshold.Set(throttleMetricThreshold) // override
 	}
 
-	throttler.initConfig()
-
 	return throttler
 }
 
@@ -404,7 +402,11 @@ func (throttler *Throttler) Open() error {
 		// already open
 		return nil
 	}
+	// Ensure that the query is updated with the correct sidecar database name
+	// which is read during tablet manager initialization.
+	throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier()))
 	ctx := context.Background()
+	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
@@ -444,9 +446,6 @@ func (throttler *Throttler) Open() error {
 	} else {
 		// backwards-cmpatible: check for --enable-lag-throttler flag in vttablet
 		// this will be removed in a future version
-		// Ensure that the query is updated with the correct sidecar database name
-		// which is read during tablet manager initialization.
-		throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier()))
 		if throttler.env.Config().EnableLagThrottler {
 			go throttler.Enable(ctx)
 		}

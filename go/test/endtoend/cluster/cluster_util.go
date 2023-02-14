@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -380,4 +381,18 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	}
 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
+}
+
+// GetSidecarDBName returns the sidecar db name configured for
+// the keyspace in the topo server.
+func (cluster LocalProcessCluster) GetSidecarDBName(keyspace string) (string, error) {
+	res, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspace)
+	if err != nil {
+		return "", err
+	}
+	sdbn, err := jsonparser.GetString([]byte(res), "sidecar_db_name")
+	if err != nil {
+		return "", err
+	}
+	return sdbn, nil
 }

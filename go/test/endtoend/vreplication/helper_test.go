@@ -614,7 +614,7 @@ func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	// MySQL doesn't always immediately update information_schema so we wait.
 	tmr := time.NewTimer(defaultTimeout)
 	defer tmr.Stop()
-	query := "select data_free, auto_increment from information_schema.tables where table_schema='_vt' and table_name='copy_state'"
+	query := fmt.Sprintf("select data_free, auto_increment from information_schema.tables where table_schema='%s' and table_name='copy_state'", sidecarDBName)
 	var dataFree, autoIncrement int64
 	for {
 		res, err := tablet.QueryTablet(query, "", false)

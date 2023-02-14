@@ -1309,7 +1309,7 @@ func waitForLowLag(t *testing.T, keyspace, workflow string) {
 }
 
 func catchup(t *testing.T, vttablet *cluster.VttabletProcess, workflow, info string) {
-	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), maxWait)
+	vttablet.WaitForVReplicationToCatchup(t, workflow, fmt.Sprintf("vt_%s", vttablet.Keyspace), sidecarDBName, maxWait)
 }
 
 func moveTablesAction(t *testing.T, action, cell, workflow, sourceKs, targetKs, tables string, extraFlags ...string) {
