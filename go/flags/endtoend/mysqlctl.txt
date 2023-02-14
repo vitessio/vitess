@@ -78,4 +78,4 @@ Global flags:
       --v Level                                         log level for V logs
   -v, --version                                         print binary version
       --vmodule moduleSpec                              comma-separated list of pattern=N settings for file-filtered logging
-      --table-refresh-rate int                          interval in milliseconds to refresh tables in status page with refreshRequired class (default 0)
+      --table-refresh-interval int                      interval in milliseconds to refresh tables in status page with refreshRequired class (default 0)

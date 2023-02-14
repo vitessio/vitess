@@ -101,7 +101,9 @@ text-align: right;
 }
 </style>
 </head>
+
 <h1>Status for {{.BinaryName}}</h1>
+
 <script>
 function refreshTablesHaveClassRefreshRequired() {
   var xhr = new XMLHttpRequest();
