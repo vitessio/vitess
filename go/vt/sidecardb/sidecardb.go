@@ -26,6 +26,7 @@ import (
 	"runtime"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"vitess.io/vitess/go/mysql"
 
@@ -50,7 +51,8 @@ const (
 )
 
 var (
-	sidecarDBName = DefaultName
+	// This should be accessed via GetName()
+	sidecarDBName atomic.Value
 	sidecarTables []*sidecarTable
 	ddlCount      = stats.NewCounter("SidecarDbDDLQueryCount", "Number of create/alter queries executed")
 
@@ -61,6 +63,10 @@ var (
 	// Load the schema definitions one time.
 	once sync.Once
 )
+
+func init() {
+	sidecarDBName.Store(DefaultName)
+}
 
 type sidecarTable struct {
 	module string // which module uses this table
@@ -92,7 +98,7 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 	if qualifier != "" {
 		return "", fmt.Errorf("database qualifier of %s specified for the %s table when there should not be one", qualifier, name)
 	}
-	createTable.Table.Qualifier = sqlparser.NewIdentifierCS(sidecarDBName)
+	createTable.Table.Qualifier = sqlparser.NewIdentifierCS(GetName())
 	if !strings.EqualFold(tableName, name) {
 		return "", fmt.Errorf("table name of %s does not match the table name specified within the file: %s", name, tableName)
 	}
@@ -151,7 +157,7 @@ func printCallerDetails() {
 	pc, _, line, ok := runtime.Caller(2)
 	details := runtime.FuncForPC(pc)
 	if ok && details != nil {
-		log.Infof("%s schema init called from %s:%d\n", sidecarDBName, details.Name(), line)
+		log.Infof("%s schema init called from %s:%d\n", GetName(), details.Name(), line)
 	}
 }
 
@@ -166,18 +172,18 @@ type schemaInit struct {
 type Exec func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error)
 
 func SetName(name string) {
-	sidecarDBName = name
+	sidecarDBName.Store(name)
 }
 
 func GetName() string {
-	return sidecarDBName
+	return sidecarDBName.Load().(string)
 }
 
 // GetIdentifier returns the sidecar database name as an SQL
 // identifier string, most importantly this means that it will
 // be properly escaped if/as needed.
 func GetIdentifier() string {
-	ident := sqlparser.NewIdentifierCS(sidecarDBName)
+	ident := sqlparser.NewIdentifierCS(GetName())
 	return sqlparser.String(ident)
 }
 
@@ -266,7 +272,7 @@ func (si *schemaInit) setPermissiveSQLMode() (func(), error) {
 }
 
 func (si *schemaInit) doesSidecarDBExist() (bool, error) {
-	rs, err := si.exec(si.ctx, fmt.Sprintf(sidecarDBExistsQuery, sidecarDBName), 2, false)
+	rs, err := si.exec(si.ctx, fmt.Sprintf(sidecarDBExistsQuery, GetName()), 2, false)
 	if err != nil {
 		log.Error(err)
 		return false, err
@@ -274,14 +280,14 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 
 	switch len(rs.Rows) {
 	case 0:
-		log.Infof("doesSidecarDBExist: %s not found", sidecarDBName)
+		log.Infof("doesSidecarDBExist: %s not found", GetName())
 		return false, nil
 	case 1:
-		log.Infof("doesSidecarDBExist: found %s", sidecarDBName)
+		log.Infof("doesSidecarDBExist: found %s", GetName())
 		return true, nil
 	default:
-		log.Errorf("found too many rows for sidecarDB %s: %d", sidecarDBName, len(rs.Rows))
-		return false, fmt.Errorf("found too many rows for sidecarDB %s: %d", sidecarDBName, len(rs.Rows))
+		log.Errorf("found too many rows for sidecarDB %s: %d", GetName(), len(rs.Rows))
+		return false, fmt.Errorf("found too many rows for sidecarDB %s: %d", GetName(), len(rs.Rows))
 	}
 }
 
@@ -291,7 +297,7 @@ func (si *schemaInit) createSidecarDB() error {
 		log.Error(err)
 		return err
 	}
-	log.Infof("createSidecarDB: %s", sidecarDBName)
+	log.Infof("createSidecarDB: %s", GetName())
 	return nil
 }
 
@@ -390,7 +396,7 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 		ddlCount.Add(1)
 		return nil
 	}
-	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, sidecarDBName)
+	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, GetName())
 	return nil
 }
 

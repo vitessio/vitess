@@ -188,7 +188,7 @@ func TestThreadsRunning(t *testing.T) {
 		}(i)
 	}
 	t.Run("exceeds threshold", func(t *testing.T) {
-		time.Sleep(sleepDuration)
+		time.Sleep(sleepDuration / 2)
 		// by this time we will have testThreshold+1 threads_running, and we should hit the threshold
 		// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
 		{

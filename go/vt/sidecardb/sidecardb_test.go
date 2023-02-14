@@ -48,7 +48,7 @@ func TestAllSidecarDB(t *testing.T) {
 	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"dbexists",
 		"int64"),
-		sidecarDBName,
+		GetName(),
 	)
 	db.AddQuery(fmt.Sprintf(sidecarDBExistsQuery, GetIdentifier()), result)
 	db.AddQuery(fmt.Sprintf(createSidecarDBQuery, GetIdentifier()), &sqltypes.Result{})
@@ -75,7 +75,7 @@ func TestAllSidecarDB(t *testing.T) {
 		exec: exec,
 	}
 
-	err = si.setCurrentDatabase(sidecarDBName)
+	err = si.setCurrentDatabase(GetName())
 	require.NoError(t, err)
 
 	require.False(t, MatchesInitQuery("abc"))
