@@ -56,6 +56,10 @@ func NewLiteralInt(i int64) *Literal {
 	return &Literal{newEvalInt64(i)}
 }
 
+func NewLiteralBool(b bool) *Literal {
+	return &Literal{newEvalBool(b)}
+}
+
 // NewLiteralUint returns a literal expression
 func NewLiteralUint(i uint64) *Literal {
 	return &Literal{newEvalUint64(i)}

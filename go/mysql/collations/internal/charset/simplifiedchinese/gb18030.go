@@ -199,3 +199,7 @@ func (Charset_gb18030) DecodeRune(src []byte) (rune, int) {
 func (c Charset_gb18030) SupportsSupplementaryChars() bool {
 	return false
 }
+
+func (Charset_gb18030) MaxWidth() int {
+	return 4
+}
