@@ -289,6 +289,21 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 	}
 	flags := &vtgatepb.VStreamFlags{}
 
+	// We have 2 shards in each keyspace. We assume the rows are
+	// evenly split across each shard. For each INSERT statement, which
+	// is a transaction and gets a global transaction identifier or GTID, we
+	// have 1 each of the following events:
+	//    begin, field, position, lastpk, commit (5)
+	// For each row created in the INSERT statement -- 8 on ks1 and
+	// 2 on ks2 -- we have 1 row event between the begin and commit.
+	// When we have copied all rows for a table in the shard, the shard
+	// also gets events marking the transition from the copy phase to
+	// the streaming phase for that table with 1 each of the following:
+	//    begin, vgtid, commit (3)
+	// As the copy phase completes for all tables on the shard, the shard
+	// gets 1 copy phase completed event.
+	// Lastly the stream has 1 final event to mark the final end to all
+	// copy phase operations in the vstream.
 	expectedKs1EventNum := 2 /* num shards */ * (9 /* begin/field/vgtid:pos/4 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
 	expectedKs2EventNum := 2 /* num shards */ * (6 /* begin/field/vgtid:pos/1 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
 	expectedFullyCopyCompletedNum := 1
