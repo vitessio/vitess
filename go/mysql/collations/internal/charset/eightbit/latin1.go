@@ -226,3 +226,7 @@ func (Charset_latin1) DecodeRune(src []byte) (rune, int) {
 func (Charset_latin1) Length(src []byte) int {
 	return len(src)
 }
+
+func (Charset_latin1) MaxWidth() int {
+	return 1
+}

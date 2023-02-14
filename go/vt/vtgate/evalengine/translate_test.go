@@ -20,9 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -107,6 +106,8 @@ func TestTranslateSimplification(t *testing.T) {
 		{"12 between 5 and 20", ok("(INT64(12) >= INT64(5)) AND (INT64(12) <= INT64(20))"), ok(`INT64(1)`)},
 		{"12 not between 5 and 20", ok("(INT64(12) < INT64(5)) OR (INT64(12) > INT64(20))"), ok(`INT64(0)`)},
 		{"2 not between 5 and 20", ok("(INT64(2) < INT64(5)) OR (INT64(2) > INT64(20))"), ok(`INT64(1)`)},
+		{"column0->\"$.c\"", ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))"), ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))")},
+		{"column0->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))"), ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))")},
 	}
 
 	for _, tc := range testCases {
@@ -117,7 +118,7 @@ func TestTranslateSimplification(t *testing.T) {
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := TranslateEx(astExpr, LookupDefaultCollation(45), false)
+			converted, err := TranslateEx(astExpr, &LookupIntegrationTest{45}, false)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -129,7 +130,7 @@ func TestTranslateSimplification(t *testing.T) {
 			}
 			assert.Equal(t, tc.converted.literal, FormatExpr(converted))
 
-			simplified, err := TranslateEx(astExpr, LookupDefaultCollation(45), true)
+			simplified, err := TranslateEx(astExpr, &LookupIntegrationTest{45}, true)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
