@@ -32,7 +32,7 @@ type AnyShardRouting struct {
 
 var _ Routing = (*AnyShardRouting)(nil)
 
-func (rr *AnyShardRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (rr *AnyShardRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = rr.keyspace
 }
 
@@ -77,8 +77,17 @@ type DualRouting struct{}
 
 var _ Routing = (*DualRouting)(nil)
 
-func (dr *DualRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
-	// intentionally empty
+func (dr *DualRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
+	if rp.Keyspace != nil {
+		return
+	}
+
+	// if we don't already have an assigned keyspace, any will do
+	keyspace, err := ctx.VSchema.AnyKeyspace()
+	if err != nil {
+		return
+	}
+	rp.Keyspace = keyspace
 }
 
 func (dr *DualRouting) Clone() Routing {
@@ -105,7 +114,7 @@ type SequenceRouting struct{}
 
 var _ Routing = (*SequenceRouting)(nil)
 
-func (sr *SequenceRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (sr *SequenceRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Opcode = engine.Next
 }
 

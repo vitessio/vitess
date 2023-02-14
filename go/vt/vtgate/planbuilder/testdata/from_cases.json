@@ -6343,5 +6343,42 @@
         "user.user_extra"
       ]
     }
+  },
+  {
+    "comment": "dual query that has to be sent down to a tablet",
+    "query": "select @@max_allowed_packet",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id()",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":__lastInsertId as last_insert_id()"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select last_insert_id()",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          ":__lastInsertId as last_insert_id()"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "SingleRow"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.dual"
+      ]
+    }
   }
 ]

@@ -135,7 +135,7 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 	return routing, nil
 }
 
-func (tr *ShardedRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (tr *ShardedRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex

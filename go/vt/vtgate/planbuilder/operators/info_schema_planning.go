@@ -41,7 +41,7 @@ type InfoSchemaRouting struct {
 	Table               *QueryTable
 }
 
-func (isr *InfoSchemaRouting) UpdateRoutingParams(rp *engine.RoutingParameters) {
+func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
 		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})

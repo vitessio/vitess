@@ -164,7 +164,7 @@ func routeToEngineRoute(ctx *plancontext.PlanningContext, op *operators.Route) (
 		Opcode:   op.Routing.OpCode(),
 		Keyspace: ks,
 	}
-	op.Routing.UpdateRoutingParams(rp)
+	op.Routing.UpdateRoutingParams(ctx, rp)
 
 	return &engine.Route{
 		TableName:         strings.Join(tableNames, ", "),
@@ -204,7 +204,7 @@ func transformUpdatePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	rp := &engine.RoutingParameters{
 		Opcode: op.Routing.OpCode(),
 	}
-	op.Routing.UpdateRoutingParams(rp)
+	op.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
 		Table: []*vindexes.Table{
@@ -230,7 +230,7 @@ func transformDeletePlan(ctx *plancontext.PlanningContext, op *operators.Route, 
 	rp := &engine.RoutingParameters{
 		Opcode: op.Routing.OpCode(),
 	}
-	op.Routing.UpdateRoutingParams(rp)
+	op.Routing.UpdateRoutingParams(ctx, rp)
 	edml := &engine.DML{
 		Query: generateQuery(ast),
 		Table: []*vindexes.Table{
