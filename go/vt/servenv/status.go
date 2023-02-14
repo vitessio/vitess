@@ -75,9 +75,6 @@ var (
 	blockProfileRate = 0
 
 	globalStatus = newStatusPage("")
-	// tableRefreshRate defines the time interval in milliseconds of tables get updated,
-	// and only update tables those have "refreshRequired" class
-	tableRefreshRate = 10000
 )
 
 var statusHTML = `<!DOCTYPE html>
