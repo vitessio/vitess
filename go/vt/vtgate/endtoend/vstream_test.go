@@ -371,15 +371,15 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 						t.Logf("TestVStreamCopyWithoutKeyspaceShard was successful")
 						return
 					} else if c.expectedEventNum < len(evs) {
-						t.Fatalf("len(events)=%v are not expected\n", len(evs))
 						printEvents(evs) // for debugging ci failures
+						require.FailNow(t, "len(events)=%v are not expected\n", len(evs))
 					}
 				case io.EOF:
 					log.Infof("stream ended\n")
 					cancel()
 				default:
 					log.Errorf("Returned err %v", err)
-					t.Fatalf("remote error: %v\n", err)
+					require.FailNow(t, "remote error: %v\n", err)
 				}
 			}
 		})
