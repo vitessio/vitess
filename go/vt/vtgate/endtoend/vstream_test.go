@@ -329,7 +329,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 			},
 		},
 		{
-			name: "copy from all shards in the keyspace",
+			name: "copy from all shards in one keyspace",
 			shardGtid: &binlogdatapb.ShardGtid{
 				Keyspace: "ks",
 			},
