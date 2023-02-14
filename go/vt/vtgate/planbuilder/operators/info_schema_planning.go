@@ -19,6 +19,7 @@ package operators
 import (
 	"strings"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"golang.org/x/exp/maps"
@@ -81,6 +82,13 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 	}
 
 	if isTableSchema {
+		for _, s := range isr.SysTableTableSchema {
+			if sqlparser.Equals.Expr(out, s) {
+				// we already have this expression in the list
+				// stating it again does not add value
+				return isr, nil
+			}
+		}
 		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
 	} else {
 		isr.SysTableTableName[bvName] = out
@@ -97,7 +105,7 @@ func (isr *InfoSchemaRouting) OpCode() engine.Opcode {
 }
 
 func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
-	// TODO: for some info schema, we do know which keyspace it will go to
+	// TODO: for some info schema queries, we do know which keyspace it will go to
 	// if we had this information, more routes could be merged.
 	return nil
 }
@@ -150,6 +158,38 @@ func isTableOrSchemaRouteable(cmp *sqlparser.ComparisonExpr) (
 	}
 
 	return false, nil
+}
+
+func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {
+	// we have already checked type earlier, so this should always be safe
+	isrA := routingA.(*InfoSchemaRouting)
+	isrB := routingB.(*InfoSchemaRouting)
+	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema) == 0
+	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema) == 0
+
+	switch {
+	// if either side has no predicates to help us route, we can merge them
+	case emptyA:
+		return m.merge(lhsRoute, rhsRoute, isrB)
+	case emptyB:
+		return m.merge(lhsRoute, rhsRoute, isrA)
+
+	// if both sides have the same schema predicate, we can safely merge them
+	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+		for k, expr := range isrB.SysTableTableName {
+			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
+				// schema names are the same, but we have contradicting table names, so we give up
+				return nil, nil
+			}
+			isrA.SysTableTableName[k] = expr
+		}
+		return m.merge(lhsRoute, rhsRoute, isrA)
+
+	// give up
+	default:
+		return nil, nil
+	}
+
 }
 
 var (

@@ -19,10 +19,7 @@ package operators
 import (
 	"reflect"
 
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -54,24 +51,25 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 	case b == dual:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
-	// an unsharded/reference route can be merged with anything going to that keyspace
+		// an unsharded/reference route can be merged with anything going to that keyspace
 	case a == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingB)
 	case b == anyShard && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 
-	// None routing can always be merged, as long as we are aiming for the same keyspace
+		// None routing can always be merged, as long as we are aiming for the same keyspace
 	case a == none && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingA)
 	case b == none && sameKeyspace:
 		return m.merge(lhsRoute, rhsRoute, routingB)
+
 		// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
 		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
 
-	case a == sharded && b == sharded:
 		// sharded routing is complex, so we handle it in a separate method
-		return mergeTables(ctx, lhsRoute, rhsRoute, m, joinPredicates)
+	case a == sharded && b == sharded:
+		return tryMergeShardedRouting(ctx, lhsRoute, rhsRoute, m, joinPredicates)
 
 	default:
 		return nil, nil
@@ -163,81 +161,6 @@ func getRoutesOrAlternates(lhsRoute, rhsRoute *Route) (*Route, *Route, Routing, 
 		}
 	}
 	return lhsRoute, rhsRoute, routingA, routingB, sameKeyspace
-}
-
-func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {
-	// we have already checked type earlier, so this should always be safe
-	isrA := routingA.(*InfoSchemaRouting)
-	isrB := routingB.(*InfoSchemaRouting)
-	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema) == 0
-	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema) == 0
-
-	switch {
-	// if either side has no predicates to help us route, we can merge them
-	case emptyA:
-		return m.merge(lhsRoute, rhsRoute, isrB)
-	case emptyB:
-		return m.merge(lhsRoute, rhsRoute, isrA)
-
-	// if both sides have the same schema predicate, we can safely merge them
-	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
-		for k, expr := range isrB.SysTableTableName {
-			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
-				// schema names are the same, but we have contradicting table names, so we give up
-				return nil, nil
-			}
-			isrA.SysTableTableName[k] = expr
-		}
-		return m.merge(lhsRoute, rhsRoute, isrA)
-
-	// give up
-	default:
-		return nil, nil
-	}
-
-}
-
-func mergeTables(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {
-	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
-	tblA := routeA.Routing.(*ShardedRouting)
-	tblB := routeB.Routing.(*ShardedRouting)
-
-	switch tblA.RouteOpCode {
-	case engine.EqualUnique:
-		// If the two routes fully match, they can be merged together.
-		if tblB.RouteOpCode == engine.EqualUnique {
-			aVdx := tblA.SelectedVindex()
-			bVdx := tblB.SelectedVindex()
-			aExpr := tblA.VindexExpressions()
-			bExpr := tblB.VindexExpressions()
-			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
-				return m.mergeTables(tblA, tblB, routeA, routeB)
-			}
-		}
-
-		// If the two routes don't match, fall through to the next case and see if we
-		// can merge via join predicates instead.
-		fallthrough
-
-	case engine.Scatter, engine.IN, engine.None:
-		if len(joinPredicates) == 0 {
-			// If we are doing two Scatters, we have to make sure that the
-			// joins are on the correct vindex to allow them to be merged
-			// no join predicates - no vindex
-			return nil, nil
-		}
-
-		if !sameKeyspace {
-			return nil, vterrors.VT12001("cross-shard correlated subquery")
-		}
-
-		canMerge := canMergeOnFilters(ctx, routeA, routeB, joinPredicates)
-		if !canMerge {
-			return nil, nil
-		}
-		return m.mergeTables(tblA, tblB, routeA, routeB)
-	}
-	return nil, nil
 }
 
 func getTypeName(myvar interface{}) string {

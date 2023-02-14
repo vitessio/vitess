@@ -19,6 +19,8 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -545,11 +547,50 @@ func (tr *ShardedRouting) VindexExpressions() []sqlparser.Expr {
 	return tr.Selected.ValueExprs
 }
 
-// makePlanValue transforms the given sqlparser.Expr into a sqltypes.PlanValue.
-// If the given sqlparser.Expr is an argument and can be found in the r.argToReplaceBySelect then the
-// method will stops and return nil values.
-// Otherwise, the method will try to apply makePlanValue for any equality the sqlparser.Expr n has.
-// The first PlanValue that is successfully produced will be returned.
+func tryMergeShardedRouting(ctx *plancontext.PlanningContext, routeA *Route, routeB *Route, m merger, joinPredicates []sqlparser.Expr) (ops.Operator, error) {
+	sameKeyspace := routeA.Routing.Keyspace() == routeB.Routing.Keyspace()
+	tblA := routeA.Routing.(*ShardedRouting)
+	tblB := routeB.Routing.(*ShardedRouting)
+
+	switch tblA.RouteOpCode {
+	case engine.EqualUnique:
+		// If the two routes fully match, they can be merged together.
+		if tblB.RouteOpCode == engine.EqualUnique {
+			aVdx := tblA.SelectedVindex()
+			bVdx := tblB.SelectedVindex()
+			aExpr := tblA.VindexExpressions()
+			bExpr := tblB.VindexExpressions()
+			if aVdx == bVdx && gen4ValuesEqual(ctx, aExpr, bExpr) {
+				return m.mergeTables(tblA, tblB, routeA, routeB)
+			}
+		}
+
+		// If the two routes don't match, fall through to the next case and see if we
+		// can merge via join predicates instead.
+		fallthrough
+
+	case engine.Scatter, engine.IN, engine.None:
+		if len(joinPredicates) == 0 {
+			// If we are doing two Scatters, we have to make sure that the
+			// joins are on the correct vindex to allow them to be merged
+			// no join predicates - no vindex
+			return nil, nil
+		}
+
+		if !sameKeyspace {
+			return nil, vterrors.VT12001("cross-shard correlated subquery")
+		}
+
+		canMerge := canMergeOnFilters(ctx, routeA, routeB, joinPredicates)
+		if !canMerge {
+			return nil, nil
+		}
+		return m.mergeTables(tblA, tblB, routeA, routeB)
+	}
+	return nil, nil
+}
+
+// makeEvalEngineExpr transforms the given sqlparser.Expr into an evalengine expression
 func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) evalengine.Expr {
 	if ctx.IsSubQueryToReplace(n) {
 		return nil
@@ -568,9 +609,9 @@ func makeEvalEngineExpr(ctx *plancontext.PlanningContext, n sqlparser.Expr) eval
 				expr = sqlparser.NewArgument(extractedSubquery.GetArgName())
 			}
 		}
-		pv, _ := evalengine.Translate(expr, ctx.SemTable)
-		if pv != nil {
-			return pv
+		ee, _ := evalengine.Translate(expr, ctx.SemTable)
+		if ee != nil {
+			return ee
 		}
 	}
 
