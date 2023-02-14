@@ -363,8 +363,6 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 						}
 					}
 
-					printEvents(evs) // for debugging ci failures
-
 					if len(evs) == c.expectedEventNum {
 						sortCopyCompletedEvents(completedEvs)
 						for i, ev := range completedEvs {
@@ -374,6 +372,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 						return
 					} else if c.expectedEventNum < len(evs) {
 						t.Fatalf("len(events)=%v are not expected\n", len(evs))
+						printEvents(evs) // for debugging ci failures
 					}
 				case io.EOF:
 					log.Infof("stream ended\n")
