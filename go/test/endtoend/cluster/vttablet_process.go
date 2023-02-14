@@ -503,19 +503,19 @@ func (vttablet *VttabletProcess) ToggleProfiling() error {
 }
 
 // WaitForVReplicationToCatchup waits for "workflow" to finish copying
-func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecarDBName string, duration time.Duration) {
-	if sidecarDBName == "" {
-		sidecarDBName = sidecardb.DefaultName
+func (vttablet *VttabletProcess) WaitForVReplicationToCatchup(t testing.TB, workflow, database string, sidecar string, duration time.Duration) {
+	if sidecar == "" {
+		sidecar = sidecardb.DefaultName
 	}
 	// Escape it if/as needed
-	ics := sqlparser.NewIdentifierCS(sidecarDBName)
-	sidecarDBIdentifier := sqlparser.String(ics)
+	ics := sqlparser.NewIdentifierCS(sidecar)
+	sdbi := sqlparser.String(ics)
 	queries := [3]string{
 		fmt.Sprintf(`select count(*) from %s.vreplication where workflow = "%s" and db_name = "%s" and pos = ''`,
-			sidecarDBIdentifier, workflow, database),
-		fmt.Sprintf("select count(*) from information_schema.tables where table_schema='%s' and table_name='copy_state' limit 1", sidecarDBName),
+			sdbi, workflow, database),
+		fmt.Sprintf("select count(*) from information_schema.tables where table_schema='%s' and table_name='copy_state' limit 1", sidecar),
 		fmt.Sprintf(`select count(*) from %s.copy_state where vrepl_id in (select id from %s.vreplication where workflow = "%s" and db_name = "%s" )`,
-			sidecarDBIdentifier, sidecarDBIdentifier, workflow, database),
+			sdbi, sdbi, workflow, database),
 	}
 	results := [3]string{"[INT64(0)]", "[INT64(1)]", "[INT64(0)]"}
 

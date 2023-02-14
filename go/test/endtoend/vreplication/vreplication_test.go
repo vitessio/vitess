@@ -1398,9 +1398,9 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 		productTab := productKs.Shards["0"].Tablets["zone1-100"].Vttablet
 		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
 		queries := []string{
-			"select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from _vt.vreplication",
-			"select * from _vt.copy_state",
-			"select * from _vt.resharding_journal",
+			fmt.Sprintf("select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from %s.vreplication", sidecarDBIdentifier),
+			fmt.Sprintf("select * from %s.copy_state", sidecarDBIdentifier),
+			fmt.Sprintf("select * from %s.resharding_journal", sidecarDBIdentifier),
 		}
 		for _, tab := range tabs {
 			for _, query := range queries {

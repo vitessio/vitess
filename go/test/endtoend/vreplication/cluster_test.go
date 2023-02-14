@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/require"
@@ -44,9 +45,10 @@ var (
 
 	originalVtdataroot string
 	vtdataroot         string
-	// If you query the sidecar database directly against mysqld then you will need to specify the sidecarDBName
-	// after escaping it using sqlparser.String(sqlparser.NewIdenfitiferCS(sidecarDBName)).
+	// If you query the sidecar database directly against mysqld then you will need to specify the
+	// sidecarDBIdentifier
 	sidecarDBName         = "__vt_e2e-test" // test a non-default sidecar db name that also needs to be escaped
+	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
 	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}

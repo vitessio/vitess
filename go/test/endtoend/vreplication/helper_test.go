@@ -491,7 +491,7 @@ func checkIfDenyListExists(t *testing.T, vc *VitessCluster, ksShard string, tabl
 }
 
 func expectNumberOfStreams(t *testing.T, vtgateConn *mysql.Conn, name string, workflow string, database string, want int) {
-	query := fmt.Sprintf("select count(*) from _vt.vreplication where workflow='%s';", workflow)
+	query := fmt.Sprintf("select count(*) from %s.vreplication where workflow='%s'", sidecarDBIdentifier, workflow)
 	waitForQueryResult(t, vtgateConn, database, query, fmt.Sprintf(`[[INT64(%d)]]`, want))
 }
 
@@ -607,7 +607,7 @@ func getShardRoutingRules(t *testing.T) string {
 
 func verifyCopyStateIsOptimized(t *testing.T, tablet *cluster.VttabletProcess) {
 	// Update information_schem with the latest data
-	_, err := tablet.QueryTablet("analyze table _vt.copy_state", "", false)
+	_, err := tablet.QueryTablet(fmt.Sprintf("analyze table %s.copy_state", sidecarDBIdentifier), "", false)
 	require.NoError(t, err)
 
 	// Verify that there's no delete marked rows and we reset the auto-inc value.
