@@ -3624,3 +3624,10 @@ func (node *PointExpr) formatFast(buf *TrackedBuffer) {
 	buf.printExpr(node, node.YCordinate, true)
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node.
+func (node *LineStringExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("linestring(")
+	node.PointParams.formatFast(buf)
+	buf.WriteByte(')')
+}
