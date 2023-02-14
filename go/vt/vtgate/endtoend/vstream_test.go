@@ -234,12 +234,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 			printEvents(evs) // for debugging ci failures
 
 			if len(evs) == numExpectedEvents {
-				// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
-				// On the other hand, the last event should always be a fully COPY_COMPLETED event.
-				// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
-				sort.Slice(completedEvs[:len(completedEvs)-1], func(i, j int) bool {
-					return completedEvs[i].GetShard() < completedEvs[j].GetShard()
-				})
+				sortCopyCompletedEvents(completedEvs)
 				for i, ev := range completedEvs {
 					require.Regexp(t, expectedCompletedEvents[i], ev.String())
 				}
@@ -371,15 +366,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 					printEvents(evs) // for debugging ci failures
 
 					if len(evs) == c.expectedEventNum {
-						// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
-						// On the other hand, the last event should always be a fully COPY_COMPLETED event.
-						// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
-						sort.Slice(completedEvs[:len(completedEvs)-1], func(i, j int) bool {
-							if completedEvs[i].GetKeyspace() != completedEvs[j].GetKeyspace() {
-								return completedEvs[i].GetKeyspace() < completedEvs[j].GetKeyspace()
-							}
-							return completedEvs[i].GetShard() < completedEvs[j].GetShard()
-						})
+						sortCopyCompletedEvents(completedEvs)
 						for i, ev := range completedEvs {
 							require.Regexp(t, c.expectedCompletedEvents[i], ev.String())
 						}
@@ -704,4 +691,20 @@ func (v VEventSorter) Less(i, j int) bool {
 		return v[i].Timestamp < v[j].Timestamp
 	}
 	return valI < valJ
+}
+
+// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
+// On the other hand, the last event should always be a fully COPY_COMPLETED event.
+// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
+func sortCopyCompletedEvents(completedEvs []*binlogdatapb.VEvent) {
+	sortVEventByKeyspaceAndShard(completedEvs[:len(completedEvs)-1])
+}
+
+func sortVEventByKeyspaceAndShard(evs []*binlogdatapb.VEvent) {
+	sort.Slice(evs, func(i, j int) bool {
+		if evs[i].Keyspace == evs[j].Keyspace {
+			return evs[i].Shard < evs[j].Shard
+		}
+		return evs[i].Keyspace < evs[j].Keyspace
+	})
 }
