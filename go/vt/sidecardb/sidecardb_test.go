@@ -28,7 +28,7 @@ import (
 )
 
 // Tests all non-error code paths in sidecardb
-func TestAll(t *testing.T) {
+func TestAllSidecarDB(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 

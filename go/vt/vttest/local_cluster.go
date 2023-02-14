@@ -506,8 +506,7 @@ func (db *LocalCluster) createVTSchema() error {
 				return nil, err
 			}
 		}
-		err := db.Execute([]string{query}, "")
-		return &sqltypes.Result{}, err
+		return db.ExecuteFetch(query, "")
 	}
 
 	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
@@ -562,6 +561,21 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
+}
+
+// ExecuteFetch runs a SQL statement on the MySQL instance backing
+// this local cluster and returns the result.
+func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Result, error) {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
+	rs, err := conn.ExecuteFetch(sql, -1, true)
+	return rs, err
 }
 
 // Query runs a  SQL query on the MySQL instance backing this local cluster and returns
