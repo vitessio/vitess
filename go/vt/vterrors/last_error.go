@@ -86,7 +86,7 @@ func (le *LastError) ShouldRetry() bool {
 		// within the max time range
 		return true
 	}
-	log.Errorf("%s: the same error was encountered continuously since %s, it is now assumed to be unrecoverable; any affected workflows will need to be manually restarted once error '%s' has been addressed",
+	log.Errorf("%s: the same error was encountered continuously since %s, it is now assumed to be unrecoverable; any affected operations will need to be manually restarted once error '%s' has been addressed",
 		le.name, le.firstSeen.UTC(), le.err)
 	return false
 }
