@@ -549,6 +549,43 @@ func TestDatetimeQuery(t *testing.T) {
 	}
 }
 
+func TestEmptyValues(t *testing.T) {
+	var testcases = []struct {
+		desc   string
+		in     []driver.NamedValue
+		out    map[string]*querypb.BindVariable
+		outErr string
+	}{{
+		desc: "empty bytes",
+		in: []driver.NamedValue{{
+			Name:  "n1",
+			Value: []byte(nil),
+		}, {
+			Name:  "n2",
+			Value: []byte(""),
+		}},
+		out: map[string]*querypb.BindVariable{
+			"n1": sqltypes.NullBindVariable,
+			"n2": sqltypes.BytesBindVariable([]byte{}),
+		},
+	}}
+
+	converter := &converter{}
+
+	for _, tc := range testcases {
+		t.Run(tc.desc, func(t *testing.T) {
+			bv, err := converter.bindVarsFromNamedValues(tc.in)
+			if tc.outErr != "" {
+				assert.EqualError(t, err, tc.outErr)
+			} else {
+				if !reflect.DeepEqual(bv, tc.out) {
+					t.Errorf("%s: %v, want %v", tc.desc, bv, tc.out)
+				}
+			}
+		})
+	}
+}
+
 func TestTx(t *testing.T) {
 	c := Configuration{
 		Protocol: "grpc",

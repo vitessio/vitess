@@ -132,6 +132,9 @@ func StringBindVariable(v string) *querypb.BindVariable {
 
 // BytesBindVariable converts a []byte to a bind var.
 func BytesBindVariable(v []byte) *querypb.BindVariable {
+	if v == nil {
+		return NullBindVariable
+	}
 	return &querypb.BindVariable{Type: VarBinary, Value: v}
 }
 
