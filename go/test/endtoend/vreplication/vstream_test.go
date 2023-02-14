@@ -384,8 +384,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 // Ensure that there are no missing row events during the resharding process.
 func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEvents {
 	defaultCellName := "zone1"
-	allCells := []string{"zone1"}
-	allCellNames = "zone1"
+	allCellNames = defaultCellName
+	allCells := []string{allCellNames}
 	vc = NewVitessCluster(t, "VStreamCopyMultiKeyspaceReshard", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
