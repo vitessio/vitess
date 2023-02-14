@@ -420,6 +420,9 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 
 	filter := &binlogdatapb.Filter{
 		Rules: []*binlogdatapb.Rule{{
+			// We want to confirm that the following two tables are streamed.
+			// 1. the customer_seq in the unsharded keyspace
+			// 2. the customer table in the sharded keyspace
 			Match: "/customer.*/",
 		}},
 	}
