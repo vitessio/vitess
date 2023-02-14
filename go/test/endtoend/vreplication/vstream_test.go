@@ -380,7 +380,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 	return &ne
 }
 
-// tests the VCopy with multiple keyspaces and resharding
+// Validate that we can continue streaming from multiple keyspaces after first copying some tables and then resharding one of the keyspaces
+// Ensure that there are no missing row events during the resharding process.
 func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEvents {
 	defaultCellName := "zone1"
 	allCells := []string{"zone1"}
