@@ -472,7 +472,10 @@ func createAlternateRoutesFromVSchemaTable(
 			if err != nil {
 				return nil, err
 			}
-			routes[vschemaTable.Keyspace] = route
+			keyspace := route.Routing.Keyspace()
+			if keyspace != nil {
+				routes[keyspace] = route
+			}
 		}
 	}
 
