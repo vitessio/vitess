@@ -203,12 +203,6 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
-	// The query needs to be dynamically built because the sidecar db name is not known
-	// when the TabletServer is created, which in turn creates the Throttler.
-	throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier())) // default
-	if throttleMetricQuery != "" {
-		throttler.metricsQuery.Store(throttleMetricQuery) // override
-	}
 	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds()) //default
 	if throttleMetricThreshold != math.MaxFloat64 {
 		throttler.MetricsThreshold.Set(throttleMetricThreshold) // override
@@ -402,10 +396,14 @@ func (throttler *Throttler) Open() error {
 		// already open
 		return nil
 	}
-	// Ensure that the query is updated with the correct sidecar database name
-	// which is read during tablet manager initialization.
-	throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier()))
 	ctx := context.Background()
+	throttlerConfig, err := throttler.readThrottlerConfig(ctx)
+	// The query needs to be dynamically built because the sidecar db name is not known
+	// when the TabletServer is created, which in turn creates the Throttler.
+	throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier())) // default
+	if throttleMetricQuery != "" {
+		throttler.metricsQuery.Store(throttleMetricQuery) // override
+	}
 	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
@@ -427,7 +425,6 @@ func (throttler *Throttler) Open() error {
 					return
 				}
 
-				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
 				if err == nil {
 					// it's possible that during a retry-sleep, the throttler is closed and opened again, leading
 					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all

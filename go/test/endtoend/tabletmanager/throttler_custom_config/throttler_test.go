@@ -19,7 +19,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"sync"
@@ -195,17 +194,13 @@ func TestThreadsRunning(t *testing.T) {
 			resp, err := throttleCheck(primaryTablet)
 			require.NoError(t, err)
 			defer resp.Body.Close()
-			b, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "Response: %s", string(b))
+			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
 		{
 			resp, err := throttleCheckSelf(primaryTablet)
 			require.NoError(t, err)
 			defer resp.Body.Close()
-			b, err := io.ReadAll(resp.Body)
-			require.NoError(t, err)
-			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "Response: %s", string(b))
+			assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 		}
 	})
 	t.Run("wait for queries to terminate", func(t *testing.T) {
