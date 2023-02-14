@@ -258,7 +258,11 @@ func TestVStreamCopyBasic(t *testing.T) {
 	}
 }
 
-func TestVStreamCopyWithoutKeyspaceShard(t *testing.T) {
+// TestVStreamCopyUnspecifiedShardGtid tests the case where the keyspace contains wildcards and/or the shard is not specified in the request.
+// Verify that the Vstream API resolves the unspecified ShardGtid input to a list of all the matching keyspaces and all the shards in the topology.
+// - If the keyspace contains wildcards and the shard is not specified, the copy operation should be performed on all shards of all matching keyspaces.
+// - If the keyspace is specified and the shard is not specified, the copy operation should be performed on all shards of the specified keyspace.
+func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
