@@ -53,7 +53,7 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := TranslateEx(astExpr, LookupDefaultCollation(collations.CollationUtf8mb4ID), simplify)
+	converted, err := TranslateEx(astExpr, &LookupIntegrationTest{collations.CollationUtf8mb4ID}, simplify)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return nil, errKnownBadQuery
@@ -126,7 +126,7 @@ func TestMySQLGolden(t *testing.T) {
 }
 
 func TestDebug1(t *testing.T) {
-	// Debu	g
-	eval, err := testSingle(t, `SELECT NULL & 0`)
+	// Debug
+	eval, err := testSingle(t, `SELECT 12.0 * 0`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupByID(eval.Collation()).Name())
 }

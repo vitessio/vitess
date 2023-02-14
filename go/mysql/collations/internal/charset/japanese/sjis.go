@@ -103,6 +103,10 @@ func (Charset_sjis) DecodeRune(src []byte) (rune, int) {
 	return decodeSJIS(src, &table_sjisDecode)
 }
 
+func (Charset_sjis) MaxWidth() int {
+	return 2
+}
+
 type Charset_cp932 struct{}
 
 func (Charset_cp932) Name() string {
@@ -128,4 +132,8 @@ func (Charset_cp932) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_cp932) DecodeRune(src []byte) (rune, int) {
 	return decodeSJIS(src, &table_cp932Decode)
+}
+
+func (Charset_cp932) MaxWidth() int {
+	return 2
 }
