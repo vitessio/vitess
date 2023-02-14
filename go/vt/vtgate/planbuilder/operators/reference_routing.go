@@ -81,17 +81,7 @@ type DualRouting struct{}
 
 var _ Routing = (*DualRouting)(nil)
 
-func (dr *DualRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
-	if rp.Keyspace != nil {
-		return nil
-	}
-
-	// if we don't already have an assigned keyspace, any will do
-	keyspace, err := ctx.VSchema.AnyKeyspace()
-	if err != nil {
-		return nil
-	}
-	rp.Keyspace = keyspace
+func (dr *DualRouting) UpdateRoutingParams(*plancontext.PlanningContext, *engine.RoutingParameters) error {
 	return nil
 }
 

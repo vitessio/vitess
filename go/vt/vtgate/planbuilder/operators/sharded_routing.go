@@ -112,13 +112,12 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 		}
 	}
 
-	var ok bool
-	tr, ok = routing.(*ShardedRouting)
+	sr, ok := routing.(*ShardedRouting)
 	if !ok {
 		return routing, nil
 	}
 
-	if tr.isScatter() {
+	if sr.isScatter() {
 		// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
 		for _, expr := range queryTable.Predicates {
 			or, ok := expr.(*sqlparser.OrExpr)
@@ -137,7 +136,7 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 	return routing, nil
 }
 
-func (tr *ShardedRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+func (tr *ShardedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Keyspace = tr.keyspace
 	if tr.Selected != nil {
 		rp.Vindex = tr.Selected.FoundVindex
@@ -421,7 +420,7 @@ func (tr *ShardedRouting) haveMatchingVindex(
 			}
 			v.Options = append(v.Options, newOption...)
 
-			// multi column vindex - just always add as new option
+			// multi-column vindex - just always add as new option
 			option := createOption(v.ColVindex, vfunc)
 			optionReady := option.updateWithNewColumn(colLoweredName, valueExpr, indexOfCol, value, node, v.ColVindex, opcode)
 			if optionReady {

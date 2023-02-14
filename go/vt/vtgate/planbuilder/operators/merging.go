@@ -264,7 +264,7 @@ func (s *subQueryMerger) markPredicateInOuterRouting(outer *ShardedRouting, inne
 		}
 		return routing, nil
 	case *NoneRouting:
-		// if we have an ANDed subquery and we know that it will not find anything,
+		// if we have an ANDed subquery, and we know that it will not find anything,
 		// we can safely assume that the outer query will also not return anything
 		return &NoneRouting{keyspace: outer.keyspace}, nil
 	default:

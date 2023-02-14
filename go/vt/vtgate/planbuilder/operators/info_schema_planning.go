@@ -119,7 +119,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 		return false, "", nil
 	}
 
-	isSchemaName, col := isTableOrSchemaRouteable(cmp)
+	isSchemaName, col := isTableOrSchemaRoutable(cmp)
 	rhs := cmp.Right
 	if col == nil || !shouldRewrite(rhs) {
 		return false, "", nil
@@ -144,10 +144,10 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 	return isSchemaName, name, rhs
 }
 
-// isTableOrSchemaRouteable searches for a comparison where one side is a table or schema name column.
+// isTableOrSchemaRoutable searches for a comparison where one side is a table or schema name column.
 // if it finds the correct column name being used,
 // it also makes sure that the LHS of the comparison contains the column, and the RHS the value sought after
-func isTableOrSchemaRouteable(cmp *sqlparser.ComparisonExpr) (
+func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
 	isSchema bool, // tells if we are dealing with a table or a schema name comparator
 	col *sqlparser.ColName, // which is the colName we are comparing against
 ) {
