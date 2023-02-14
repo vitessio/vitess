@@ -389,8 +389,9 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 	vc = NewVitessCluster(t, "VStreamCopyMultiKeyspaceReshard", allCells, mainClusterConfig)
 
 	require.NotNil(t, vc)
+	ogdr := defaultReplicas
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
-	defer func() { defaultReplicas = 1 }()
+	defer func(dr int) { defaultReplicas = dr }(ogdr)
 
 	defer vc.TearDown(t)
 
