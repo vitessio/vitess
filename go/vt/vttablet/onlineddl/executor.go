@@ -3887,7 +3887,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			if err != nil {
 				return vterrors.Wrapf(err, "in gcArtifacts() for %s", artifactTable)
 			}
-			log.Infof("Executor.gcArtifacts: renamed away artifact %s into %s", artifactTable, toTableName)
+			log.Infof("Executor.gcArtifacts: renamed away artifact %s to %s", artifactTable, toTableName)
 		}
 
 		// Remove logs:
