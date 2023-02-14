@@ -508,6 +508,19 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 			break
 		}
 	}
+	log.Infof("ne=%v", ne)
+
+	// The number of row events streamed by the VStream API should match the number of rows inserted.
+	// This is important for sharded tables, where we need to ensure that no row events are missed during the resharding process.
+	//
+	// On the other hand, we don't verify the exact number of row events for the unsharded keyspace
+	// because the keyspace remains unsharded and the number of rows in the customer_seq table is always 1.
+	// We believe that checking the number of row events for the unsharded keyspace, which should always be greater than 0 before and after resharding,
+	// is sufficient to confirm that the resharding of one keyspace does not affect another keyspace, while keeping the test straightforward.
+	customerResult := execVtgateQuery(t, vtgateConn, "sharded", "select count(*) from customer")
+	insertedCustomerRows, err := evalengine.ToInt64(customerResult.Rows[0][0])
+	require.NoError(t, err)
+	require.Equal(t, insertedCustomerRows, ne.numLessThan80Events+ne.numGreaterThan80Events+ne.numLessThan40Events+ne.numGreaterThan40Events)
 	return &ne
 }
 
@@ -545,7 +558,6 @@ func TestVStreamWithKeyspacesToWatch(t *testing.T) {
 
 func TestVStreamCopyMultiKeyspaceReshard(t *testing.T) {
 	ne := testVStreamCopyMultiKeyspaceReshard(t, 3000)
-	log.Infof("ne=%v", ne)
 	require.Equal(t, int64(0), ne.numJournalEvents)
 	require.NotZero(t, ne.numRowEvents)
 	require.NotZero(t, ne.numShard0BeforeReshardEvents)
