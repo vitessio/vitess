@@ -25,6 +25,7 @@ package onlineddl
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"strconv"
@@ -81,14 +82,14 @@ func (v *VReplStream) isRunning() bool {
 }
 
 // hasError() returns true when the workflow has failed and will not retry
-func (v *VReplStream) hasError() (hasErr bool, isTerminal bool, message string) {
+func (v *VReplStream) hasError() (isTerminal bool, vreplError error) {
 	switch {
 	case v.state == binlogplayer.BlpError:
-		return true, true, v.message
+		return true, errors.New(v.message)
 	case strings.Contains(strings.ToLower(v.message), "error"):
-		return true, false, v.message
+		return false, errors.New(v.message)
 	}
-	return false, false, ""
+	return false, nil
 }
 
 // VRepl is an online DDL helper for VReplication based migrations (ddl_strategy="online")
