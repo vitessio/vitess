@@ -382,7 +382,7 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 
 // Validate that we can continue streaming from multiple keyspaces after first copying some tables and then resharding one of the keyspaces
 // Ensure that there are no missing row events during the resharding process.
-func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEvents {
+func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) numEvents {
 	defaultCellName := "zone1"
 	allCellNames = defaultCellName
 	allCells := []string{allCellNames}
@@ -521,7 +521,7 @@ func testVStreamCopyMultiKeyspaceReshard(t *testing.T, baseTabletID int) *numEve
 	insertedCustomerRows, err := evalengine.ToInt64(customerResult.Rows[0][0])
 	require.NoError(t, err)
 	require.Equal(t, insertedCustomerRows, ne.numLessThan80Events+ne.numGreaterThan80Events+ne.numLessThan40Events+ne.numGreaterThan40Events)
-	return &ne
+	return ne
 }
 
 func TestVStreamFailover(t *testing.T) {
