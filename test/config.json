@@ -777,6 +777,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_tablet_healthcheck_cache": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/tablet_healthcheck_cache", "-timeout", "45m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_tablet_healthcheck_cache",
+			"RetryMax": 2,
+			"Tags": []
+		},
 		"vtgate_transaction": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],

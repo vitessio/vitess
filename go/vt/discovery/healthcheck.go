@@ -169,7 +169,7 @@ type TabletRecorder interface {
 type keyspaceShardTabletType string
 type tabletAliasString string
 
-//HealthCheck declares what the TabletGateway needs from the HealthCheck
+// HealthCheck declares what the TabletGateway needs from the HealthCheck
 type HealthCheck interface {
 	// CacheStatus returns a displayable version of the health check cache.
 	CacheStatus() TabletsCacheStatusList
@@ -250,18 +250,27 @@ type HealthCheckImpl struct {
 // NewHealthCheck creates a new HealthCheck object.
 // Parameters:
 // retryDelay.
-//   The duration to wait before retrying to connect (e.g. after a failed connection
-//   attempt).
+//
+//	The duration to wait before retrying to connect (e.g. after a failed connection
+//	attempt).
+//
 // healthCheckTimeout.
-//   The duration for which we consider a health check response to be 'fresh'. If we don't get
-//   a health check response from a tablet for more than this duration, we consider the tablet
-//   not healthy.
+//
+//	The duration for which we consider a health check response to be 'fresh'. If we don't get
+//	a health check response from a tablet for more than this duration, we consider the tablet
+//	not healthy.
+//
 // topoServer.
-//   The topology server that this healthcheck object can use to retrieve cell or tablet information
+//
+//	The topology server that this healthcheck object can use to retrieve cell or tablet information
+//
 // localCell.
-//   The localCell for this healthcheck
+//
+//	The localCell for this healthcheck
+//
 // callback.
-//   A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
+//
+//	A function to call when there is a primary change. Used to notify vtgate's buffer to stop buffering.
 func NewHealthCheck(ctx context.Context, retryDelay, healthCheckTimeout time.Duration, topoServer *topo.Server, localCell, cellsToWatch string) *HealthCheckImpl {
 	log.Infof("loading tablets for cells: %v", cellsToWatch)
 
@@ -385,8 +394,29 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	hc.mu.Lock()
 	defer hc.mu.Unlock()
 
-	key := hc.keyFromTablet(tablet)
 	tabletAlias := tabletAliasString(topoproto.TabletAliasString(tablet.Alias))
+	defer func() {
+		// We want to be sure the tablet is gone from the secondary
+		// maps even if it's already gone from the authoritative map.
+		// The tablet's type also may have recently changed as well,
+		// so ensure that the tablet we're removing is removed from
+		// any possible secondary map keys:
+		// key: keyspace.shard.tabletType -> val: map[tabletAlias]tabletHealth
+		for _, tabletType := range topoproto.AllTabletTypes {
+			key := keyspaceShardTabletType(fmt.Sprintf("%s.%s.%s", tablet.Keyspace, tablet.Shard, topoproto.TabletTypeLString(tabletType)))
+			// delete from map by keyspace.shard.tabletType
+			ths, ok := hc.healthData[key]
+			if !ok {
+				continue
+			}
+			delete(ths, tabletAlias)
+			// delete from healthy list
+			healthy, ok := hc.healthy[key]
+			if ok && len(healthy) > 0 {
+				hc.recomputeHealthy(key)
+			}
+		}
+	}()
 	// delete from authoritative map
 	th, ok := hc.healthByAlias[tabletAlias]
 	if !ok {
@@ -397,18 +427,6 @@ func (hc *HealthCheckImpl) deleteTablet(tablet *topodata.Tablet) {
 	// which will call finalizeConn, which will close the connection.
 	th.cancelFunc()
 	delete(hc.healthByAlias, tabletAlias)
-	// delete from map by keyspace.shard.tabletType
-	ths, ok := hc.healthData[key]
-	if !ok {
-		log.Warningf("We have no health data for target: %v", key)
-		return
-	}
-	delete(ths, tabletAlias)
-	// delete from healthy list
-	healthy, ok := hc.healthy[key]
-	if ok && len(healthy) > 0 {
-		hc.recomputeHealthy(key)
-	}
 }
 
 func (hc *HealthCheckImpl) updateHealth(th *TabletHealth, prevTarget *query.Target, trivialUpdate bool, up bool) {
@@ -546,6 +564,7 @@ func (hc *HealthCheckImpl) cacheStatusMap() map[string]*TabletsCacheStatus {
 	for _, ths := range hc.healthData {
 		for _, th := range ths {
 			key := fmt.Sprintf("%v.%v.%v.%v", th.Tablet.Alias.Cell, th.Target.Keyspace, th.Target.Shard, th.Target.TabletType.String())
+
 			var tcs *TabletsCacheStatus
 			var ok bool
 			if tcs, ok = tcsMap[key]; !ok {
