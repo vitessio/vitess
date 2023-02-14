@@ -102,25 +102,31 @@ text-align: right;
 </style>
 </head>
 <h1>Status for {{.BinaryName}}</h1>
-<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.3/jquery.min.js"></script>
 <script>
-function refreshTablesHaveClassrefreshRequired() {
-	$.get("/debug/status", function(data) {
-	  var data = $.parseHTML(data);
-	  var counter = 0;
-	  $("table.refreshRequired").each(function() {
-		var currentTable = $(this);
-		var newTable = $(data).filter("table.refreshRequired").eq(counter);
-		if (newTable.length > 0) {
-		  currentTable.empty().append(newTable.html());
-		}
-		counter++;
-	  });
-	});
-}  
-$(document).ready(function() {
-	setInterval(refreshTablesHaveClassrefreshRequired, ` + strconv.Itoa(tableRefreshRate) + `);
-});
+function refreshTablesHaveClassRefreshRequired() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/debug/status", true);
+  xhr.onreadystatechange = function() {
+    if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+  	  var data = this.responseText;
+  	  var parser = new DOMParser();
+  	  var htmlDoc = parser.parseFromString(data, "text/html");
+  	  var tables = document.getElementsByClassName("refreshRequired");
+  	  var counter = 0;
+  	  for (var i = 0; i < tables.length; i++) {
+  	    var newTable = htmlDoc.querySelectorAll("table.refreshRequired")[counter];
+  	    if (newTable) {
+  	  	tables[i].innerHTML = newTable.innerHTML;
+  	    }
+  	    counter++;
+  	  }
+    }
+  };
+  xhr.send();
+}
+if (` + strconv.Itoa(tableRefreshInterval) + ` !== 0) {
+	setInterval(refreshTablesHaveClassRefreshRequired, ` + strconv.Itoa(tableRefreshInterval) + `);
+}
 </script>
 <div>
 <div class=lefthand>

@@ -90,3 +90,4 @@ Usage of mysqlctld:
   -v, --version                                                          print binary version
       --vmodule moduleSpec                                               comma-separated list of pattern=N settings for file-filtered logging
       --wait_time duration                                               How long to wait for mysqld startup or shutdown (default 5m0s)
+      --table-refresh-rate int                                           interval in milliseconds to refresh tables in status page with refreshRequired class (default 0)
