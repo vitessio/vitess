@@ -667,7 +667,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 
 		resp := make(map[string]any)
 		resp["activeReparents"] = !mysqlctl.DisableActiveReparents
-		resp["showStatus"] = enableRealtimeStats
+		resp["showStatus"] = false /* enableRealtimeStats = false, always */
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {
 			return fmt.Errorf("json error: %v", err)
