@@ -1778,7 +1778,7 @@ func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ConvertType) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s", node.Type)
+	buf.astPrintf(node, "%#s", node.Type)
 	if node.Length != nil {
 		buf.astPrintf(node, "(%v", node.Length)
 		if node.Scale != nil {
