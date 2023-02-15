@@ -21,8 +21,8 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 )

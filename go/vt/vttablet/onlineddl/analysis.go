@@ -73,7 +73,7 @@ func (p *SpecialAlterPlan) String() string {
 func (e *Executor) getCreateTableStatement(ctx context.Context, tableName string) (*sqlparser.CreateTable, error) {
 	showCreateTable, err := e.showCreateTable(ctx, tableName)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "in Executor.getCreateTableStatement()")
 	}
 	stmt, err := sqlparser.ParseStrictDDL(showCreateTable)
 	if err != nil {
@@ -360,7 +360,7 @@ func (e *Executor) analyzeSpecialAlterPlan(ctx context.Context, onlineDDL *schem
 
 	createTable, err := e.getCreateTableStatement(ctx, onlineDDL.Table)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "in Executor.analyzeSpecialAlterPlan(), uuid=%v, table=%v", onlineDDL.UUID, onlineDDL.Table)
 	}
 
 	// special plans which support reverts are trivially desired:

@@ -36,6 +36,7 @@ func TestDiffTables(t *testing.T) {
 		toName   string
 		action   string
 		isError  bool
+		hints    *DiffHints
 	}{
 		{
 			name: "identical",
@@ -48,6 +49,46 @@ func TestDiffTables(t *testing.T) {
 			to:       "create table t(id int primary key, i int)",
 			diff:     "alter table t add column i int",
 			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int",
+			action:   "alter",
+			fromName: "t",
+			toName:   "t",
+		},
+		{
+			name:     "change of columns, boolean type",
+			from:     "create table t(id int primary key)",
+			to:       "create table t(id int primary key, i int, b boolean)",
+			diff:     "alter table t add column i int, add column b tinyint(1)",
+			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int, ADD COLUMN `b` tinyint(1)",
+			action:   "alter",
+			fromName: "t",
+			toName:   "t",
+		},
+		{
+			name: "alter columns from tinyint(1) to boolean",
+			from: "create table t(id int primary key, b tinyint(1))",
+			to:   "create table t(id int primary key, b boolean)",
+		},
+		{
+			name: "alter columns from boolean to tinyint(1)",
+			from: "create table t(id int primary key, b boolean)",
+			to:   "create table t(id int primary key, b tinyint(1))",
+		},
+		{
+			name:     "change of columns, boolean type, default true",
+			from:     "create table t(id int primary key)",
+			to:       "create table t(id int primary key, i int, b boolean default true)",
+			diff:     "alter table t add column i int, add column b tinyint(1) default '1'",
+			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int, ADD COLUMN `b` tinyint(1) DEFAULT '1'",
+			action:   "alter",
+			fromName: "t",
+			toName:   "t",
+		},
+		{
+			name:     "change of columns, boolean type, invalid default",
+			from:     "create table t(id int primary key)",
+			to:       "create table t(id int primary key, i int, b boolean default 'red')",
+			diff:     "alter table t add column i int, add column b tinyint(1)",
+			cdiff:    "ALTER TABLE `t` ADD COLUMN `i` int, ADD COLUMN `b` tinyint(1)",
 			action:   "alter",
 			fromName: "t",
 			toName:   "t",
@@ -71,11 +112,90 @@ func TestDiffTables(t *testing.T) {
 		{
 			name: "none",
 		},
+		{
+			name:   "TableQualifierDeclared hint, to has qualifier",
+			from:   "create table t1 (id int primary key, name int)",
+			to:     "create table _vt.t1 (id int primary key, name bigint)",
+			diff:   "alter table _vt.t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierDeclared,
+			},
+		},
+		{
+			name:   "TableQualifierDeclared hint, from has qualifier",
+			from:   "create table _vt.t1 (id int primary key, name int)",
+			to:     "create table t1 (id int primary key, name bigint)",
+			diff:   "alter table t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierDeclared,
+			},
+		},
+		{
+			name:   "TableQualifierDefault, from has qualifier",
+			from:   "create table _vt.t1 (id int primary key, name int)",
+			to:     "create table t1 (id int primary key, name bigint)",
+			diff:   "alter table _vt.t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
+		},
+		{
+			name:   "TableQualifierDefault, both have qualifiers",
+			from:   "create table _vt.t1 (id int primary key, name int)",
+			to:     "create table _vt.t1 (id int primary key, name bigint)",
+			diff:   "alter table _vt.t1 modify column `name` bigint",
+			cdiff:  "ALTER TABLE `_vt`.`t1` MODIFY COLUMN `name` bigint",
+			action: "alter",
+		},
+		{
+			name:   "TableQualifierDefault, create",
+			to:     "create table _vt.t(id int primary key)",
+			diff:   "create table _vt.t (\n\tid int,\n\tprimary key (id)\n)",
+			cdiff:  "CREATE TABLE `_vt`.`t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			action: "create",
+			toName: "t",
+		},
+		{
+			name:   "TableQualifierDeclared, create",
+			to:     "create table _vt.t(id int primary key)",
+			diff:   "create table _vt.t (\n\tid int,\n\tprimary key (id)\n)",
+			cdiff:  "CREATE TABLE `_vt`.`t` (\n\t`id` int,\n\tPRIMARY KEY (`id`)\n)",
+			action: "create",
+			toName: "t",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierDeclared,
+			},
+		},
+		{
+			name:     "TableQualifierDefault, drop",
+			from:     "create table _vt.t(id int primary key)",
+			diff:     "drop table _vt.t",
+			cdiff:    "DROP TABLE `_vt`.`t`",
+			action:   "drop",
+			fromName: "t",
+		},
+		{
+			name:     "TableQualifierDeclared, drop",
+			from:     "create table _vt.t(id int primary key)",
+			diff:     "drop table _vt.t",
+			cdiff:    "DROP TABLE `_vt`.`t`",
+			action:   "drop",
+			fromName: "t",
+			hints: &DiffHints{
+				TableQualifierHint: TableQualifierDeclared,
+			},
+		},
 	}
-	hints := &DiffHints{}
 	for _, ts := range tt {
 		t.Run(ts.name, func(t *testing.T) {
 			var fromCreateTable *sqlparser.CreateTable
+			hints := &DiffHints{}
+			if ts.hints != nil {
+				hints = ts.hints
+			}
 			if ts.from != "" {
 				fromStmt, err := sqlparser.ParseStrictDDL(ts.from)
 				assert.NoError(t, err)

@@ -28,7 +28,7 @@ import (
 func TestDumuxResourceExhaustedErrors(t *testing.T) {
 	type testCase struct {
 		msg  string
-		want int
+		want ErrorCode
 	}
 
 	cases := []testCase{
@@ -53,7 +53,7 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 func TestNewSQLErrorFromError(t *testing.T) {
 	var tCases = []struct {
 		err error
-		num int
+		num ErrorCode
 		ss  string
 	}{
 		{

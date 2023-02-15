@@ -289,7 +289,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -359,7 +359,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -429,7 +429,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -499,7 +499,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -569,7 +569,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -639,7 +639,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -709,7 +709,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -824,7 +824,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -894,7 +894,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -964,7 +964,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -1105,7 +1105,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -1150,7 +1150,7 @@
       "Original": "select Id from user where 1 in ('aa', 'bb')",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "None",
         "Keyspace": {
           "Name": "user",
           "Sharded": true
@@ -1249,7 +1249,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -1319,7 +1319,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -1358,7 +1358,7 @@
         "Query": "select id from `user` where `name` in ::__vals",
         "Table": "`user`",
         "Values": [
-          ":list"
+          "::list"
         ],
         "Vindex": "name_user_map"
       }
@@ -1374,7 +1374,7 @@
           "Sharded": true
         },
         "Values": [
-          ":list"
+          "::list"
         ],
         "Vindex": "name_user_map",
         "Inputs": [
@@ -1389,7 +1389,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -2029,7 +2029,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -2099,7 +2099,7 @@
             "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
             "Table": "name_user_vdx",
             "Values": [
-              ":name"
+              "::name"
             ],
             "Vindex": "user_index"
           },
@@ -2993,7 +2993,7 @@
             "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -3033,7 +3033,7 @@
             "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -4004,7 +4004,7 @@
                 "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals and (:__sq_has_values2 = 0 or id not in ::__sq2)",
                 "Table": "`user`",
                 "Values": [
-                  ":__sq1"
+                  "::__sq1"
                 ],
                 "Vindex": "user_index"
               }
@@ -4073,7 +4073,7 @@
                 "Query": "select id from `user` where (:__sq_has_values1 = 0 or id not in ::__sq1) and (:__sq_has_values2 = 1 and id in ::__vals)",
                 "Table": "`user`",
                 "Values": [
-                  ":__sq2"
+                  "::__sq2"
                 ],
                 "Vindex": "user_index"
               }
@@ -4288,7 +4288,7 @@
             "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -4328,7 +4328,7 @@
             "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -6610,7 +6610,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as textcol1",
-                      "[COLUMN 1] * [COLUMN 2] as sum(a.id)"
+                      "[COLUMN 1] * COALESCE([COLUMN 2], INT64(1)) as sum(a.id)"
                     ],
                     "Inputs": [
                       {
@@ -6693,6 +6693,70 @@
         "Table": "`user`"
       },
       "TablesUsed": [
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "must merge subquery with the right side of the join",
+    "query": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+    "v3-plan": "VT12001: unsupported: cross-shard correlated subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select 1 from unsharded join user u1 where exists (select 1 from unsharded u2 where u1.bar = u2.baz)",
+      "Instructions": {
+        "OperatorType": "SemiJoin",
+        "JoinVars": {
+          "u1_bar": 0
+        },
+        "ProjectedIndexes": "-2",
+        "TableName": "unsharded_`user`_unsharded",
+        "Inputs": [
+          {
+            "OperatorType": "Join",
+            "Variant": "Join",
+            "JoinColumnIndexes": "R:0,L:0",
+            "TableName": "unsharded_`user`",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Unsharded",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select 1 from unsharded where 1 != 1",
+                "Query": "select 1 from unsharded",
+                "Table": "unsharded"
+              },
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select u1.bar from `user` as u1 where 1 != 1",
+                "Query": "select u1.bar from `user` as u1",
+                "Table": "`user`"
+              }
+            ]
+          },
+          {
+            "OperatorType": "Route",
+            "Variant": "Unsharded",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "FieldQuery": "select 1 from unsharded as u2 where 1 != 1",
+            "Query": "select 1 from unsharded as u2 where u2.baz = :u1_bar",
+            "Table": "unsharded"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
         "user.user"
       ]
     }

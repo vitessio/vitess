@@ -47,19 +47,19 @@ type ReplicationStatus struct {
 	RelayLogSourceBinlogEquivalentPosition Position
 	// RelayLogFilePosition stores the position in the relay log file
 	RelayLogFilePosition  Position
-	SourceServerID        uint
+	SourceServerID        uint32
 	IOState               ReplicationState
 	LastIOError           string
 	SQLState              ReplicationState
 	LastSQLError          string
-	ReplicationLagSeconds uint
+	ReplicationLagSeconds uint32
 	ReplicationLagUnknown bool
 	SourceHost            string
-	SourcePort            int
+	SourcePort            int32
 	SourceUser            string
-	ConnectRetry          int
+	ConnectRetry          int32
 	SourceUUID            SID
-	SQLDelay              uint
+	SQLDelay              uint32
 	AutoPosition          bool
 	UsingGTID             bool
 	HasReplicationFilters bool
@@ -97,15 +97,15 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		RelayLogPosition:                       EncodePosition(s.RelayLogPosition),
 		FilePosition:                           EncodePosition(s.FilePosition),
 		RelayLogSourceBinlogEquivalentPosition: EncodePosition(s.RelayLogSourceBinlogEquivalentPosition),
-		SourceServerId:                         uint32(s.SourceServerID),
-		ReplicationLagSeconds:                  uint32(s.ReplicationLagSeconds),
+		SourceServerId:                         s.SourceServerID,
+		ReplicationLagSeconds:                  s.ReplicationLagSeconds,
 		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
-		SqlDelay:                               uint32(s.SQLDelay),
+		SqlDelay:                               s.SQLDelay,
 		RelayLogFilePosition:                   EncodePosition(s.RelayLogFilePosition),
 		SourceHost:                             s.SourceHost,
 		SourceUser:                             s.SourceUser,
-		SourcePort:                             int32(s.SourcePort),
-		ConnectRetry:                           int32(s.ConnectRetry),
+		SourcePort:                             s.SourcePort,
+		ConnectRetry:                           s.ConnectRetry,
 		SourceUuid:                             s.SourceUUID.String(),
 		IoState:                                int32(s.IOState),
 		LastIoError:                            s.LastIOError,
@@ -154,14 +154,14 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		FilePosition:                           filePos,
 		RelayLogSourceBinlogEquivalentPosition: fileRelayPos,
 		RelayLogFilePosition:                   relayFilePos,
-		SourceServerID:                         uint(s.SourceServerId),
-		ReplicationLagSeconds:                  uint(s.ReplicationLagSeconds),
+		SourceServerID:                         s.SourceServerId,
+		ReplicationLagSeconds:                  s.ReplicationLagSeconds,
 		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
-		SQLDelay:                               uint(s.SqlDelay),
+		SQLDelay:                               s.SqlDelay,
 		SourceHost:                             s.SourceHost,
 		SourceUser:                             s.SourceUser,
-		SourcePort:                             int(s.SourcePort),
-		ConnectRetry:                           int(s.ConnectRetry),
+		SourcePort:                             s.SourcePort,
+		ConnectRetry:                           s.ConnectRetry,
 		SourceUUID:                             sid,
 		IOState:                                ReplicationState(s.IoState),
 		LastIOError:                            s.LastIoError,

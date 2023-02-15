@@ -19,7 +19,6 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -301,7 +300,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	if setSuperReadOnly {
 		// Setting super_read_only off so that we can run the DDL commands
 		if err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
 				log.Warningf("server does not know about super_read_only, continuing anyway...")
 			} else {
 				return "", err
@@ -392,7 +391,7 @@ func (tm *TabletManager) InitReplica(ctx context.Context, parent *topodatapb.Tab
 	if err := tm.MysqlDaemon.SetReplicationPosition(ctx, pos); err != nil {
 		return err
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, int(ti.Tablet.MysqlPort), false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, ti.Tablet.MysqlHostname, ti.Tablet.MysqlPort, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
 		return err
 	}
 
@@ -470,7 +469,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	if setSuperReadOnly {
 		// Setting super_read_only also sets read_only
 		if err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-			if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
 				log.Warningf("server does not know about super_read_only, continuing anyway...")
 			} else {
 				return nil, err
@@ -673,7 +672,7 @@ func (tm *TabletManager) setReplicationSourceLocked(ctx context.Context, parentA
 		return err
 	}
 	host := parent.Tablet.MysqlHostname
-	port := int(parent.Tablet.MysqlPort)
+	port := parent.Tablet.MysqlPort
 	// We want to reset the replication parameters and set replication source again when forceStartReplication is provided
 	// because sometimes MySQL gets stuck due to improper initialization of master info structure or related failures and throws errors like
 	// ERROR 1201 (HY000): Could not initialize master info structure; more error messages can be found in the MySQL error log

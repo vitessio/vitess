@@ -1778,7 +1778,7 @@ func (node *ConvertUsingExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node *ConvertType) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "%s", node.Type)
+	buf.astPrintf(node, "%#s", node.Type)
 	if node.Length != nil {
 		buf.astPrintf(node, "(%v", node.Length)
 		if node.Scale != nil {
@@ -2753,4 +2753,14 @@ func (node *Variable) Format(buf *TrackedBuffer) {
 		buf.literal("@@")
 	}
 	buf.astPrintf(node, "%v", node.Name)
+}
+
+// Format formats the node.
+func (node *PointExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "point(%v, %v)", node.XCordinate, node.YCordinate)
+}
+
+// Format formats the node.
+func (node *LineStringExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "linestring(%v)", node.PointParams)
 }
