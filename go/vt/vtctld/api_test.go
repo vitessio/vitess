@@ -136,13 +136,6 @@ func TestAPI(t *testing.T) {
 			"type": 2,
 			"mysql_hostname": "mysql1-cell1.test.net",
 			"mysql_port": 3306,
-			"stats": {
-				"realtime": {
-					"replication_lag_seconds": 100
-				},
-				"serving": true,
-				"up": true
-			},
 			"url": "http://mysql1-cell1.test.net:100"
 		},
 		{
@@ -207,13 +200,6 @@ func TestAPI(t *testing.T) {
 				"type": 2,
 				"mysql_hostname": "mysql1-cell1.test.net",
 				"mysql_port": 3306,
-				"stats": {
-					"realtime": {
-						"replication_lag_seconds": 100
-					},
-					"serving": true,
-					"up": true
-				},
 				"url": "http://mysql1-cell1.test.net:100"
 			}
 		]`, http.StatusOK},

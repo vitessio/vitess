@@ -44,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -61,16 +60,8 @@ const (
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-// TabletStats represents realtime stats from a discovery.TabletHealth struct.
-type TabletStats struct {
-	LastError string                 `json:"last_error,omitempty"`
-	Realtime  *querypb.RealtimeStats `json:"realtime,omitempty"`
-	Serving   bool                   `json:"serving"`
-	Up        bool                   `json:"up"`
-}
-
-// TabletWithStatsAndURL wraps topo.Tablet, adding a URL property and optional realtime stats.
-type TabletWithStatsAndURL struct {
+// TabletWithURL wraps topo.Tablet, adding a URL property.
+type TabletWithURL struct {
 	Alias                *topodatapb.TabletAlias `json:"alias,omitempty"`
 	Hostname             string                  `json:"hostname,omitempty"`
 	PortMap              map[string]int32        `json:"port_map,omitempty"`
@@ -83,7 +74,6 @@ type TabletWithStatsAndURL struct {
 	MysqlHostname        string                  `json:"mysql_hostname,omitempty"`
 	MysqlPort            int32                   `json:"mysql_port,omitempty"`
 	PrimaryTermStartTime *vttime.Time            `json:"primary_term_start_time,omitempty"`
-	Stats                *TabletStats            `json:"stats,omitempty"`
 	URL                  string                  `json:"url,omitempty"`
 }
 
@@ -100,8 +90,8 @@ func registerVtctldAPIFlags(fs *pflag.FlagSet) {
 	fs.MarkDeprecated("vtctld_show_topology_crud", "It is no longer applicable because vtctld no longer provides a UI.")
 }
 
-func newTabletWithStatsAndURL(t *topodatapb.Tablet) *TabletWithStatsAndURL {
-	tablet := &TabletWithStatsAndURL{
+func newTabletWithURL(t *topodatapb.Tablet) *TabletWithURL {
+	tablet := &TabletWithURL{
 		Alias:                t.Alias,
 		Hostname:             t.Hostname,
 		PortMap:              t.PortMap,
@@ -279,7 +269,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 			filterCells = strings.Split(cells, ",") // list of cells
 		}
 
-		tablets := [](*TabletWithStatsAndURL){}
+		tablets := [](*TabletWithURL){}
 		for _, shard := range shardNames {
 			// Get tablets for this shard.
 			tabletAliases, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, filterCells)
@@ -291,7 +281,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 				if err != nil {
 					return nil, err
 				}
-				tablet := newTabletWithStatsAndURL(t.Tablet)
+				tablet := newTabletWithURL(t.Tablet)
 				tablets = append(tablets, tablet)
 			}
 		}
@@ -464,7 +454,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 			return nil, err
 		}
 
-		return newTabletWithStatsAndURL(t.Tablet), nil
+		return newTabletWithURL(t.Tablet), nil
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
