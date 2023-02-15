@@ -2470,11 +2470,11 @@ type (
 	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
 	// CAUTION: you should only change argName and hasValuesArg through the setter methods
 	ExtractedSubquery struct {
-		Original     Expr // original expression that was replaced by this ExtractedSubquery
-		OpCode       int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
-		Subquery     *Subquery
-		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
-		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
+		Original  Expr // original expression that was replaced by this ExtractedSubquery
+		OpCode    int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		Subquery  *Subquery
+		OtherSide Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+		Merged    bool // tells whether we need to rewrite this subquery to Original or not
 
 		hasValuesArg string
 		argName      string
@@ -2708,6 +2708,11 @@ type (
 	PointExpr struct {
 		XCordinate Expr
 		YCordinate Expr
+	}
+
+	//LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
+	LineStringExpr struct {
+		PointParams Exprs
 	}
 
 	AggrFunc interface {
@@ -3037,6 +3042,7 @@ func (*VarSamp) iExpr()                            {}
 func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
 func (*PointExpr) iExpr()                          {}
+func (*LineStringExpr) iExpr()                     {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3091,6 +3097,7 @@ func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
 func (*PointExpr) iCallable()                          {}
+func (*LineStringExpr) iCallable()                     {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

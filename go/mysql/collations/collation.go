@@ -200,3 +200,9 @@ func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collat
 func Length(collation Collation, input []byte) int {
 	return charset.Length(collation.Charset(), input)
 }
+
+// ConvertForJSON behaves like Convert, but the output string is always utf8mb4 encoded,
+// as it is required for JSON strings in MySQL.
+func ConvertForJSON(dst []byte, src []byte, srcCollation Collation) ([]byte, error) {
+	return charset.Convert(dst, charset.Charset_utf8mb4{}, src, srcCollation.Charset())
+}

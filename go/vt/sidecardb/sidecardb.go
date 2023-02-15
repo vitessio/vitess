@@ -194,12 +194,43 @@ func Init(ctx context.Context, exec Exec) error {
 		return err
 	}
 
+	resetSQLMode, err := si.setPermissiveSQLMode()
+	if err != nil {
+		return err
+	}
+	defer resetSQLMode()
+
 	for _, table := range sidecarTables {
 		if err := si.ensureSchema(table); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// setPermissiveSQLMode gets the current sql_mode for the session, removes any
+// restrictions, and returns a function to restore it back to the original session value.
+// We need to allow for the recreation of any data that currently exists in the table, such
+// as e.g. allowing any zero dates that may already exist in a preexisting sidecar table.
+func (si *schemaInit) setPermissiveSQLMode() (func(), error) {
+	rs, err := si.exec(si.ctx, `select @@session.sql_mode as sql_mode`, 1, false)
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+	sqlMode, err := rs.Named().Row().ToString("sql_mode")
+	if err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not read sql_mode: %v", err)
+	}
+
+	resetSQLModeFunc := func() {
+		restoreSQLModeQuery := fmt.Sprintf("set @@session.sql_mode='%s'", sqlMode)
+		_, _ = si.exec(si.ctx, restoreSQLModeQuery, 0, false)
+	}
+
+	if _, err := si.exec(si.ctx, "set @@session.sql_mode=''", 0, false); err != nil {
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not change sql_mode: %v", err)
+	}
+	return resetSQLModeFunc, nil
 }
 
 func (si *schemaInit) doesSidecarDBExist() (bool, error) {
@@ -374,6 +405,15 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 		}
 		db.AddQuery(fmt.Sprintf(ShowCreateTableQuery, table.name), result)
 	}
+
+	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"sql_mode",
+		"varchar"),
+		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+	)
+	db.AddQuery("select @@session.sql_mode as sql_mode", sqlModeResult)
+
+	db.AddQuery("set @@session.sql_mode=''", &sqltypes.Result{})
 }
 
 // MatchesInitQuery returns true if query has one of the test patterns as a substring, or it matches a provided regexp.

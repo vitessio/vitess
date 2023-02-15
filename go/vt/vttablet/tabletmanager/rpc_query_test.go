@@ -27,7 +27,7 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -38,7 +38,7 @@ func TestTabletManager_ExecuteFetchAsDba(t *testing.T) {
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
-	daemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
 
 	dbName := " escap`e me "
 	tm := &TabletManager{

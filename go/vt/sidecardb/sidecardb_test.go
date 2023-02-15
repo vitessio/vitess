@@ -27,11 +27,18 @@ import (
 )
 
 // Tests all non-error code paths in sidecardb
-func TestAll(t *testing.T) {
+func TestAllSidecarDB(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	AddSchemaInitQueries(db, false)
 	db.AddQuery("use dbname", &sqltypes.Result{})
+	sqlMode := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"sql_mode",
+		"varchar"),
+		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
+	)
+	db.AddQuery("select @@session.sql_mode as sql_mode", sqlMode)
+	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 
 	ctx := context.Background()
 	cp := db.ConnParams()
