@@ -1,0 +1,27 @@
+{
+  "sharded": false,
+  "tables": {
+    "user_seq": {
+      "type": "sequence"
+    },
+    "music_user_map": {},
+    "name_user_map": {},
+    "name_lastname_keyspace_id_map": {},
+    "user_msgs": {},
+    "ins_lookup": {},
+    "main1": {
+      "auto_increment": {
+        "column": "id",
+        "sequence": "user_seq"
+      }
+    },
+    "wo_lu_idx": {},
+    "erl_lu_idx": {},
+    "srl_lu_idx": {},
+    "nrl_lu_idx": {},
+    "nv_lu_idx": {},
+    "lu_idx": {},
+    "simple": {},
+    "zip_detail": {}
+  }
+}
