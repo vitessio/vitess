@@ -576,6 +576,11 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 	return sbc.getError()
 }
 
+// GetSchema implements the QueryService interface
+func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.TableType, tableNames []string) (map[string]string, error) {
+	panic("not implemented")
+}
+
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close(ctx context.Context) error {
 	return nil
