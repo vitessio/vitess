@@ -177,13 +177,20 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 	case emptyB:
 		return m.merge(lhsRoute, rhsRoute, isrA)
 
-	// if both sides have the same schema predicate, we can safely merge them
-	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+	// if we have no schema predicates on either side, we can merge if the table info is the same
+	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
 		for k, expr := range isrB.SysTableTableName {
 			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
 				// schema names are the same, but we have contradicting table names, so we give up
 				return nil, nil
 			}
+			isrA.SysTableTableName[k] = expr
+		}
+		return m.merge(lhsRoute, rhsRoute, isrA)
+
+	// if both sides have the same schema predicate, we can safely merge them
+	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}
 		return m.merge(lhsRoute, rhsRoute, isrA)

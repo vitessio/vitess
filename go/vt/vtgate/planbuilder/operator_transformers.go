@@ -125,7 +125,7 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 
 		return planLimit(node.Limit, plan)
 	}
-	panic("only SELECT and UNION implement the SelectStatement interface")
+	return nil, vterrors.VT13001("only SELECT and UNION implement the SelectStatement interface")
 }
 
 func transformApplyJoinPlan(ctx *plancontext.PlanningContext, n *operators.ApplyJoin) (logicalPlan, error) {

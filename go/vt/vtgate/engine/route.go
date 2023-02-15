@@ -158,9 +158,6 @@ func (route *Route) RouteType() string {
 
 // GetKeyspaceName specifies the Keyspace that this primitive routes to.
 func (route *Route) GetKeyspaceName() string {
-	if route.Keyspace == nil {
-		return ""
-	}
 	return route.Keyspace.Name
 }
 

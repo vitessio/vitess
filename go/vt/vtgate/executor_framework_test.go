@@ -46,10 +46,10 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-//go:embed executorVSchema.json
+//go:embed testdata/executorVSchema.json
 var executorVSchema string
 
-//go:embed unshardedVschema.json
+//go:embed testdata/unshardedVschema.json
 var unshardedVSchema string
 
 var badVSchema = `
