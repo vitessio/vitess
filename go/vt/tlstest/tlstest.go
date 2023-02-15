@@ -337,12 +337,18 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	crlList, err := x509.ParseCRL(data) //nolint:staticcheck
+
+	block, _ := pem.Decode(data)
+	if block == nil || block.Type != "X509 CRL" {
+		log.Fatal("failed to parse CRL PEM")
+	}
+
+	crlList, err := x509.ParseRevocationList(block.Bytes)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	revoked := crlList.TBSCertList.RevokedCertificates
+	revoked := crlList.RevokedCertificates
 	revoked = append(revoked, pkix.RevokedCertificate{
 		SerialNumber:   certificate.SerialNumber,
 		RevocationTime: time.Now(),
@@ -357,9 +363,10 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 		log.Fatal(err)
 	}
 
+	var crlNumber big.Int
 	newCrl, err := x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
 		RevokedCertificates: revoked,
-		Number:              big.NewInt(int64(crlList.TBSCertList.Version) + 1),
+		Number:              crlNumber.Add(crlList.Number, big.NewInt(1)),
 	}, caCert, caKey.(crypto.Signer))
 	if err != nil {
 		log.Fatal(err)
