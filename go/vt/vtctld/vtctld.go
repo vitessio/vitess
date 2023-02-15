@@ -128,7 +128,7 @@ func InitVtctld(ts *topo.Server) error {
 		})
 
 	// Serve the REST API
-	initAPI(context.Background(), ts, actionRepo, nil /* no healthcheck */)
+	initAPI(context.Background(), ts, actionRepo)
 
 	// Serve the topology endpoint in the REST API at /topodata
 	initExplorer(ts)
