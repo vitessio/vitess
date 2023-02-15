@@ -559,7 +559,7 @@ func TestEmptyValues(t *testing.T) {
 		desc: "empty bytes",
 		in: []driver.NamedValue{{
 			Name:  "n1",
-			Value: []byte(nil),
+			Value: nil,
 		}, {
 			Name:  "n2",
 			Value: []byte(""),
