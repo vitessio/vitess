@@ -431,7 +431,7 @@ func TestFullStatus(t *testing.T) {
 	require.NoError(t, err)
 	vtcltlVersion, err := cluster.GetMajorVersion("vtctl")
 	require.NoError(t, err)
-	// For all version above v15, each replica will start in super-read-only mode.
+	// For all version above v16, each replica will start in super-read-only mode.
 	if vtTabletVersion > 16 && vtcltlVersion > 16 {
 		assert.False(t, primaryStatus.SuperReadOnly)
 	}

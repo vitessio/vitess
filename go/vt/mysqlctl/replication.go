@@ -271,6 +271,7 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 }
 
 // SetSuperReadOnly set/unset the super_read_only flag
+// Returns a function which is called to set super_read_only back to its original value.
 func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
 	//  return function for switching `OFF` super_read_only
 	var returnFunc ResetSuperReadOnlyFunc

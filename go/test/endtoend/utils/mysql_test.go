@@ -23,13 +23,11 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/vt/mysqlctl"
-
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/vt/mysqlctl"
 )
 
 var (
@@ -70,7 +68,6 @@ func TestCreateMySQL(t *testing.T) {
 	ctx := context.Background()
 	conn, err := mysql.Connect(ctx, &mysqlParams)
 	require.NoError(t, err)
-	require.NoError(t, clusterInstance.Err())
 	AssertMatches(t, conn, "show databases;", `[[VARCHAR("information_schema")] [VARCHAR("ks")] [VARCHAR("mysql")] [VARCHAR("performance_schema")] [VARCHAR("sys")]]`)
 	AssertMatches(t, conn, "show tables;", `[[VARCHAR("t1")]]`)
 	Exec(t, conn, "insert into t1(id1, id2, id3) values (1, 1, 1), (2, 2, 2), (3, 3, 3)")

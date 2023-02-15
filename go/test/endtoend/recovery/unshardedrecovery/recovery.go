@@ -95,8 +95,7 @@ func TestMainImpl(m *testing.M) {
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
-		// Since password update is DML we need to insert it before we disable
-		// super-read-only therefore doing the split below.
+		// since original initDb does not have updated passwords. Therefore, update the init file with passwords SQL.
 		oldAlterTableMode := `SET GLOBAL old_alter_table = ON;`
 		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), oldAlterTableMode)
 		if err != nil {
