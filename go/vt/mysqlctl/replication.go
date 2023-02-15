@@ -293,10 +293,14 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 		return nil, err
 	}
 
-	// if non-idempotent then set the right call-back
+	// If non-idempotent then set the right call-back
+	// We are asked to turn on super_read_only but original value is false
+	// then return resetFunc, that can be used as defer by caller
 	if on && !superReadOnlyEnabled {
 		returnFunc = resetFunc
 	}
+	// We are asked to turn off super_read_only but original value is true
+	// then return setFunc, that can be used as defer by caller
 	if !on && superReadOnlyEnabled {
 		returnFunc = setFunc
 	}
@@ -310,11 +314,8 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 	if err := mysqld.ExecuteSuperQuery(context.TODO(), query); err != nil {
 		return nil, err
 	}
-	if superReadOnlyEnabled {
-		return returnFunc, nil
-	}
 
-	return nil, nil
+	return returnFunc, nil
 }
 
 // WaitSourcePos lets replicas wait to given replication position

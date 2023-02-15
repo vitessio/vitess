@@ -22,10 +22,10 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"strings"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -92,12 +92,10 @@ func TestMain(m *testing.M) {
 		sql := string(initDb)
 		// Since password update is DML we need to insert it before we disable
 		// super-read-only therefore doing the split below.
-		splitString := strings.Split(sql, "# add custom sql here")
-		if len(splitString) < 2 {
-			return 1, fmt.Errorf("missing `# add custom sql here` in init_db.sql file")
+		sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
+		if err != nil {
+			return 1, err
 		}
-		firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
-		sql = firstPart + splitString[1]
 		newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 		err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 		if err != nil {

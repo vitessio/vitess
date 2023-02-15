@@ -28,19 +28,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // constants for test variants
@@ -120,12 +120,10 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	sql := string(initDb)
 	// Since password update is DML we need to insert it before we disable
 	// super-read-only therefore doing the split below.
-	splitString := strings.Split(sql, "# add custom sql here")
-	if len(splitString) < 2 {
-		return 1, fmt.Errorf("missing `# add custom sql here` in init_db.sql file")
+	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
+	if err != nil {
+		return 1, err
 	}
-	firstPart := splitString[0] + cluster.GetPasswordUpdateSQL(localCluster)
-	sql = firstPart + splitString[1]
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {

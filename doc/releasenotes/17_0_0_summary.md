@@ -34,3 +34,5 @@ the replication no other component or offline system can mutate replica DB resul
 
 Reference PR for this change is [PR #12206](https://github.com/vitessio/vitess/pull/12206)
 
+### VTTablet flags:
+The flag `use_super_read_only` is deprecated and will be removed in a later release.

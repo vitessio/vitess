@@ -22,16 +22,14 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/utils"
 )
 
 // AssertContains ensures the given query result contains the expected results.
@@ -288,4 +286,22 @@ func getTableT2Map(res *interface{}, ks, tbl string) map[string]interface{} {
 func convertToMap(input interface{}) map[string]interface{} {
 	output := input.(map[string]interface{})
 	return output
+}
+
+func GetInitDBSQL(initDBSQL string, updatedPasswords string, oldAlterTableMode string) (string, error) {
+	splitString := strings.Split(initDBSQL, "# add custom sql here")
+	if len(splitString) < 2 {
+		return "", fmt.Errorf("missing `# add custom sql here` in init_db.sql file")
+	}
+	var builder strings.Builder
+	builder.WriteString(splitString[0])
+	builder.WriteString(updatedPasswords)
+
+	// https://github.com/vitessio/vitess/issues/8315
+	if oldAlterTableMode != "" {
+		builder.WriteString(oldAlterTableMode)
+	}
+	builder.WriteString(splitString[1])
+
+	return builder.String(), nil
 }

@@ -238,11 +238,9 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 // configured with the given Config.
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
 	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
-	if isSQL, err := isSQLFlavor(); err == nil {
-		if !isSQL {
-			// execute init_db without `super_read_only`
-			initFile = path.Join(os.Getenv("VTROOT"), "config/init_testserver_db.sql")
-		}
+	updatedInitFile, err := getInitDBFile()
+	if err == nil {
+		initFile = updatedInitFile
 	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
@@ -257,20 +255,19 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 	return mysqlctl
 }
 
-func isSQLFlavor() (bool, error) {
+func getInitDBFile() (string, error) {
 	versionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	flavor, _, err := mysqlctl.ParseVersionString(versionStr)
 	if err != nil {
-		return false, err
+		return "", err
 	}
 	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
-		return true, nil
+		return path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"), err
 	}
-
-	return false, nil
+	return path.Join(os.Getenv("VTROOT"), "config/init_testserver_db.sql"), err
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
