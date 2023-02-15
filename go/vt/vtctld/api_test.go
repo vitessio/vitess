@@ -307,10 +307,10 @@ func TestAPI(t *testing.T) {
 		// Tablet Health
 		{"GET", "tablet_health/cell1/100", "", "can't get tablet_health: healthcheck not initialized", http.StatusInternalServerError},
 		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>", http.StatusInternalServerError},
-		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid", http.StatusInternalServerError},
+		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: healthcheck not initialized", http.StatusInternalServerError},
 
 		// Topology Info
-		{"GET", "topology_info/?keyspace=all&cell=all", "", "can't get topology_info: healthcheck not initialized", http.StatusInternalServerError},
+		{"GET", "topology_info/?keyspace=all&cell=all", "", "can't get topology_info: realtimeStats not initialized", http.StatusInternalServerError},
 
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
