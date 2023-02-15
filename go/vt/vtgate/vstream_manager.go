@@ -181,7 +181,7 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 	}
 	// To fetch from all keyspaces, the input must contain a single ShardGtid
 	// that has an empty keyspace, and the Gtid must be "current".
-	// Or the input must contain a single ShardGtid that has a keyspace wildcard.
+	// Or the input must contain a single ShardGtid that has keyspace wildcards.
 	if len(vgtid.ShardGtids) == 1 {
 		inputKeyspace := vgtid.ShardGtids[0].Keyspace
 		isEmpty := inputKeyspace == ""

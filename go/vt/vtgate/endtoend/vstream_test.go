@@ -368,7 +368,7 @@ func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
 						for i, ev := range completedEvs {
 							require.Equal(t, c.expectedCompletedEvents[i], ev.String())
 						}
-						t.Logf("TestVStreamCopyWithoutKeyspaceShard was successful")
+						t.Logf("TestVStreamCopyUnspecifiedShardGtid was successful")
 						return
 					} else if c.expectedEventNum < len(evs) {
 						printEvents(evs) // for debugging ci failures
