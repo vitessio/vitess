@@ -105,17 +105,20 @@ func (dr *DualRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
 
-type SequenceRouting struct{}
+type SequenceRouting struct {
+	keyspace *vindexes.Keyspace
+}
 
 var _ Routing = (*SequenceRouting)(nil)
 
 func (sr *SequenceRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Opcode = engine.Next
+	rp.Keyspace = sr.keyspace
 	return nil
 }
 
 func (sr *SequenceRouting) Clone() Routing {
-	return &SequenceRouting{}
+	return &SequenceRouting{keyspace: sr.keyspace}
 }
 
 func (sr *SequenceRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
