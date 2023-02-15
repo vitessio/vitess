@@ -973,3 +973,27 @@ message TransactionMetadata {
   int64 time_created = 3;
   repeated Target participants = 4;
 }
+
+
+// TableType represents the type of table requested.
+enum TableType {
+  VIEWS = 0;
+  TABLES = 1;
+  ALL_TABLES_VIEWS = 2;
+}
+
+// GetSchemaRequest is the payload to GetSchema
+message GetSchemaRequest {
+  TableType type = 1;
+  Target target = 2;
+  repeated string table_names = 3;
+}
+
+// GetSchemaResponse is the returned value from GetSchema
+message GetSchemaResponse {
+  // this is for application level error message.
+  vtrpc.RPCError error = 1;
+
+  // this is for the schema definition for the requested tables.
+  map<string, string> table_definition = 2;
+}
