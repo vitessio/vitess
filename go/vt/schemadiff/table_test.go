@@ -1114,6 +1114,24 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t1 comment ''",
 			cdiff: "ALTER TABLE `t1` COMMENT ''",
 		},
+		// expressions
+		{
+			// validates that CannonicalString prints 'signed' and not 'SIGNED', as MySQL's `SHOW CREATE TABLE` outputs lower case 'signed'
+			name: "cast as",
+			from: `
+				CREATE TABLE t4 (
+					id int NOT NULL PRIMARY KEY,
+					properties json NOT NULL
+				)`,
+			to: `
+				CREATE TABLE t4 (
+					id int NOT NULL PRIMARY KEY,
+					properties json NOT NULL,
+					KEY index_on_company_id ((cast(json_unquote(json_extract(properties,_utf8mb4'$.company_id')) as signed)))
+				)`,
+			diff:  "alter table t4 add key index_on_company_id ((cast(json_unquote(json_extract(properties, _utf8mb4 '$.company_id')) as signed)))",
+			cdiff: "ALTER TABLE `t4` ADD KEY `index_on_company_id` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(`properties`, _utf8mb4 '$.company_id')) AS signed)))",
+		},
 	}
 	standardHints := DiffHints{}
 	for _, ts := range tt {
@@ -1157,7 +1175,8 @@ func TestCreateTableDiff(t *testing.T) {
 				assert.NoError(t, err)
 				assert.True(t, alter.IsEmpty(), "expected empty diff, found changes")
 				if !alter.IsEmpty() {
-					t.Logf("statements[0]: %v", alter.StatementString())
+					t.Logf(" statements[0]: %v", alter.StatementString())
+					t.Logf("cstatements[0]: %v", alter.CanonicalStatementString())
 					t.Logf("c: %v", sqlparser.CanonicalString(c.CreateTable))
 					t.Logf("other: %v", sqlparser.CanonicalString(other.CreateTable))
 				}
