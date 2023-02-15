@@ -113,7 +113,7 @@ func multiplyNumericWithError(left, right eval) (eval, error) {
 func divideNumericWithError(left, right eval, precise bool) (eval, error) {
 	v1 := evalToNumeric(left)
 	v2 := evalToNumeric(right)
-	if !precise && v1.sqlType() != sqltypes.Decimal && v2.sqlType() != sqltypes.Decimal {
+	if !precise && v1.SQLType() != sqltypes.Decimal && v2.SQLType() != sqltypes.Decimal {
 		switch v1 := v1.(type) {
 		case *evalInt64:
 			return floatDivideAnyWithError(float64(v1.i), v2)
@@ -141,17 +141,17 @@ func divideNumericWithError(left, right eval, precise bool) (eval, error) {
 func makeNumericAndPrioritize(left, right eval) (evalNumeric, evalNumeric) {
 	i1 := evalToNumeric(left)
 	i2 := evalToNumeric(right)
-	switch i1.sqlType() {
+	switch i1.SQLType() {
 	case sqltypes.Int64:
-		if i2.sqlType() == sqltypes.Uint64 || i2.sqlType() == sqltypes.Float64 || i2.sqlType() == sqltypes.Decimal {
+		if i2.SQLType() == sqltypes.Uint64 || i2.SQLType() == sqltypes.Float64 || i2.SQLType() == sqltypes.Decimal {
 			return i2, i1
 		}
 	case sqltypes.Uint64:
-		if i2.sqlType() == sqltypes.Float64 || i2.sqlType() == sqltypes.Decimal {
+		if i2.SQLType() == sqltypes.Float64 || i2.SQLType() == sqltypes.Decimal {
 			return i2, i1
 		}
 	case sqltypes.Decimal:
-		if i2.sqlType() == sqltypes.Float64 {
+		if i2.SQLType() == sqltypes.Float64 {
 			return i2, i1
 		}
 	}
@@ -309,7 +309,7 @@ func decimalTimesAny(v1 *evalDecimal, v2 evalNumeric) (eval, error) {
 	v2d := v2.toDecimal(0, 0)
 	return &evalDecimal{
 		dec:    v1.dec.Mul(v2d.dec),
-		length: maxprec(v1.length, v2d.length),
+		length: v1.length + v2d.length,
 	}, nil
 }
 

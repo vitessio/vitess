@@ -144,7 +144,7 @@ func (vte *VTExplain) newTablet(opts *Options, t *topodatapb.Tablet) *explainTab
 	tsv.StartService(&target, dbcfgs, nil /* mysqld */)
 
 	// clear all the schema initialization queries out of the tablet
-	// to avoid clutttering the output
+	// to avoid cluttering the output
 	tablet.mysqlQueries = nil
 
 	return &tablet
@@ -294,6 +294,15 @@ func newTabletEnvironment(ddls []sqlparser.DDLStatement, opts *Options) (*tablet
 		},
 		"select @@global.sql_mode": {
 			Fields: []*querypb.Field{{
+				Type: sqltypes.VarChar,
+			}},
+			Rows: [][]sqltypes.Value{
+				{sqltypes.NewVarBinary("STRICT_TRANS_TABLES")},
+			},
+		},
+		"select @@session.sql_mode as sql_mode": {
+			Fields: []*querypb.Field{{
+				Name: "sql_mode",
 				Type: sqltypes.VarChar,
 			}},
 			Rows: [][]sqltypes.Value{

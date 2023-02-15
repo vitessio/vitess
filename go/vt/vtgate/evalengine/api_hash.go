@@ -98,5 +98,5 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	if e, ok := e.(*evalBytes); ok {
 		e.col.Collation = collation
 	}
-	return e.hash()
+	return e.Hash()
 }

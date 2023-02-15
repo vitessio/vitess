@@ -22,7 +22,7 @@
       "Original": "select * from ambiguous_ref_with_source",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -116,7 +116,7 @@
       "Original": "select r1.col from ambiguous_ref_with_source r1 join ambiguous_ref_with_source",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -406,7 +406,7 @@
       "Original": "update user.ambiguous_ref_with_source set col = 1",
       "Instructions": {
         "OperatorType": "Update",
-        "Variant": "Scatter",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -453,7 +453,7 @@
       "Original": "delete from user.ambiguous_ref_with_source where col = 1",
       "Instructions": {
         "OperatorType": "Delete",
-        "Variant": "Scatter",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false

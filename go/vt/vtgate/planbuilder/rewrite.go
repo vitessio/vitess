@@ -88,6 +88,8 @@ func (r *rewriter) rewriteDown(cursor *sqlparser.Cursor) bool {
 		// replace the table name with the original table
 		tableName.Name = vindexTable.Name
 		node.Expr = tableName
+	case *sqlparser.ExtractedSubquery:
+		return false
 	case *sqlparser.Subquery:
 		err := rewriteSubquery(cursor, r, node)
 		if err != nil {
@@ -111,9 +113,9 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 		return nil
 	}
 
-	semTableSQ, found := r.semTable.SubqueryRef[subq]
-	if !found {
-		return vterrors.VT13001("got subquery that was not in the subq map")
+	semTableSQ, err := r.getSubQueryRef(subq)
+	if err != nil {
+		return err
 	}
 
 	r.inSubquery++
@@ -125,9 +127,9 @@ func rewriteInSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Co
 }
 
 func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subquery) error {
-	semTableSQ, found := r.semTable.SubqueryRef[node]
-	if !found {
-		return vterrors.VT13001("got subquery that was not in the subq map")
+	semTableSQ, err := r.getSubQueryRef(node)
+	if err != nil {
+		return err
 	}
 	if semTableSQ.GetArgName() != "" || engine.PulloutOpcode(semTableSQ.OpCode) != engine.PulloutValue {
 		return nil
@@ -140,9 +142,9 @@ func rewriteSubquery(cursor *sqlparser.Cursor, r *rewriter, node *sqlparser.Subq
 }
 
 func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlparser.ExistsExpr) error {
-	semTableSQ, found := r.semTable.SubqueryRef[node.Subquery]
-	if !found {
-		return vterrors.VT13001("got subquery that was not in the subq map")
+	semTableSQ, err := r.getSubQueryRef(node.Subquery)
+	if err != nil {
+		return err
 	}
 
 	r.inSubquery++
@@ -150,6 +152,14 @@ func (r *rewriter) rewriteExistsSubquery(cursor *sqlparser.Cursor, node *sqlpars
 	semTableSQ.SetHasValuesArg(hasValuesArg)
 	cursor.Replace(semTableSQ)
 	return nil
+}
+
+func (r *rewriter) getSubQueryRef(sq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
+	semTableSQ, found := r.semTable.SubqueryRef[sq]
+	if !found {
+		return nil, vterrors.VT13001("got subquery that was not in the subq map")
+	}
+	return semTableSQ, nil
 }
 
 func rewriteHavingClause(node *sqlparser.Select) {

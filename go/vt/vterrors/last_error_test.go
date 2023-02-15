@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package vreplication
+package vterrors
 
 import (
 	"fmt"
@@ -30,57 +30,57 @@ const maxTimeInError = 100 * time.Millisecond
 
 // TestLastErrorZeroMaxTime tests maxTimeInError = 0, should always retry
 func TestLastErrorZeroMaxTime(t *testing.T) {
-	le := newLastError("test", 0)
+	le := NewLastError("test", 0)
 	err1 := fmt.Errorf("error1")
-	le.record(err1)
-	require.True(t, le.shouldRetry())
+	le.Record(err1)
+	require.True(t, le.ShouldRetry())
 	time.Sleep(shortWait)
-	require.True(t, le.shouldRetry())
+	require.True(t, le.ShouldRetry())
 	time.Sleep(longWait)
-	require.True(t, le.shouldRetry())
+	require.True(t, le.ShouldRetry())
 }
 
 // TestLastErrorNoError ensures that an uninitialized lastError always retries
 func TestLastErrorNoError(t *testing.T) {
-	le := newLastError("test", maxTimeInError)
-	require.True(t, le.shouldRetry())
+	le := NewLastError("test", maxTimeInError)
+	require.True(t, le.ShouldRetry())
 	err1 := fmt.Errorf("error1")
-	le.record(err1)
-	require.True(t, le.shouldRetry())
-	le.record(nil)
-	require.True(t, le.shouldRetry())
+	le.Record(err1)
+	require.True(t, le.ShouldRetry())
+	le.Record(nil)
+	require.True(t, le.ShouldRetry())
 }
 
 // TestLastErrorOneError validates that we retry an error if happening within the maxTimeInError, but not after
 func TestLastErrorOneError(t *testing.T) {
-	le := newLastError("test", maxTimeInError)
+	le := NewLastError("test", maxTimeInError)
 	err1 := fmt.Errorf("error1")
-	le.record(err1)
-	require.True(t, le.shouldRetry())
+	le.Record(err1)
+	require.True(t, le.ShouldRetry())
 	time.Sleep(shortWait)
-	require.True(t, le.shouldRetry())
+	require.True(t, le.ShouldRetry())
 	time.Sleep(shortWait)
-	require.True(t, le.shouldRetry())
+	require.True(t, le.ShouldRetry())
 	time.Sleep(longWait)
-	require.False(t, le.shouldRetry())
+	require.False(t, le.ShouldRetry())
 }
 
 // TestLastErrorRepeatedError confirms that if same error is repeated we don't retry
 // unless it happens after maxTimeInError
 func TestLastErrorRepeatedError(t *testing.T) {
-	le := newLastError("test", maxTimeInError)
+	le := NewLastError("test", maxTimeInError)
 	err1 := fmt.Errorf("error1")
-	le.record(err1)
-	require.True(t, le.shouldRetry())
+	le.Record(err1)
+	require.True(t, le.ShouldRetry())
 	for i := 1; i < 10; i++ {
-		le.record(err1)
+		le.Record(err1)
 		time.Sleep(shortWait)
 	}
-	require.True(t, le.shouldRetry())
+	require.True(t, le.ShouldRetry())
 
 	// same error happens after maxTimeInError, so it should retry
 	time.Sleep(longWait)
-	require.False(t, le.shouldRetry())
-	le.record(err1)
-	require.True(t, le.shouldRetry())
+	require.False(t, le.ShouldRetry())
+	le.Record(err1)
+	require.True(t, le.ShouldRetry())
 }

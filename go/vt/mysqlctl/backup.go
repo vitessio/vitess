@@ -26,15 +26,18 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -81,8 +84,7 @@ var (
 	// once before the writer blocks
 	backupCompressBlocks = 2
 
-	backupDuration  = stats.NewGauge("backup_duration_seconds", "How long it took to complete the last backup operation (in seconds)")
-	restoreDuration = stats.NewGauge("restore_duration_seconds", "How long it took to complete the last restore operation (in seconds)")
+	titleCase = cases.Title(language.English).String
 )
 
 func init() {
@@ -102,6 +104,10 @@ func registerBackupFlags(fs *pflag.FlagSet) {
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, params BackupParams) error {
+	if params.Stats == nil {
+		params.Stats = stats.NoStats()
+	}
+
 	startTs := time.Now()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 	name := fmt.Sprintf("%v.%v", params.BackupTime.UTC().Format(BackupTimestampFormat), params.TabletAlias)
@@ -111,6 +117,19 @@ func Backup(ctx context.Context, params BackupParams) error {
 		return vterrors.Wrap(err, "unable to get backup storage")
 	}
 	defer bs.Close()
+
+	// Scope bsStats to selected storage engine.
+	bsStats := params.Stats.Scope(
+		stats.Component(stats.BackupStorage),
+		stats.Implementation(
+			titleCase(backupstorage.BackupStorageImplementation),
+		),
+	)
+	bs = bs.WithParams(backupstorage.Params{
+		Logger: params.Logger,
+		Stats:  bsStats,
+	})
+
 	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
@@ -120,9 +139,14 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
-
+	// Scope stats to selected backup engine.
+	beParams := params.Copy()
+	beParams.Stats = params.Stats.Scope(
+		stats.Component(stats.BackupEngine),
+		stats.Implementation(titleCase(backupEngineImplementation)),
+	)
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, params, bh)
+	usable, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 	var finishErr error
 	if usable {
@@ -142,7 +166,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// The backup worked, so just return the finish error, if any.
-	backupDuration.Set(int64(time.Since(startTs).Seconds()))
+	stats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(stats.Operation("Backup")).TimedIncrement(time.Since(startTs))
 	return finishErr
 }
 
@@ -270,6 +295,10 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
+	if params.Stats == nil {
+		params.Stats = stats.NoStats()
+	}
+
 	startTs := time.Now()
 	// find the right backup handle: most recent one, with a MANIFEST
 	params.Logger.Infof("Restore: looking for a suitable backup to restore")
@@ -278,6 +307,18 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 	defer bs.Close()
+
+	// Scope bsStats to selected storage engine.
+	bsStats := params.Stats.Scope(
+		stats.Component(backupstats.BackupStorage),
+		stats.Implementation(
+			titleCase(backupstorage.BackupStorageImplementation),
+		),
+	)
+	bs = bs.WithParams(backupstorage.Params{
+		Logger: params.Logger,
+		Stats:  bsStats,
+	})
 
 	// Backups are stored in a directory structure that starts with
 	// <keyspace>/<shard>
@@ -321,7 +362,13 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	if params.DryRun {
 		return nil, nil
 	}
-	manifest, err := re.ExecuteRestore(ctx, params, bh)
+	// Scope stats to selected backup engine.
+	reParams := params.Copy()
+	reParams.Stats = params.Stats.Scope(
+		stats.Component(backupstats.BackupEngine),
+		stats.Implementation(titleCase(backupEngineImplementation)),
+	)
+	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
 		return nil, err
 	}
@@ -374,7 +421,8 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
-	restoreDuration.Set(int64(time.Since(startTs).Seconds()))
+	stats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(stats.Operation("Restore")).TimedIncrement(time.Since(startTs))
 	params.Logger.Infof("Restore: complete")
 	return manifest, nil
 }
