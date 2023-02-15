@@ -112,23 +112,21 @@ func (tr *ShardedRouting) tryImprove(ctx *plancontext.PlanningContext, queryTabl
 		}
 	}
 
-	sr, ok := routing.(*ShardedRouting)
-	if !ok {
+	// If we have something other than a sharded routing with scatter, we are done
+	if sr, ok := routing.(*ShardedRouting); !ok || !sr.isScatter() {
 		return routing, nil
 	}
 
-	if sr.isScatter() {
-		// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
-		for _, expr := range queryTable.Predicates {
-			or, ok := expr.(*sqlparser.OrExpr)
-			if !ok {
-				continue
-			}
-			for _, predicate := range sqlparser.ExtractINFromOR(or) {
-				routing, err = UpdateRoutingLogic(ctx, predicate, routing)
-				if err != nil {
-					return nil, err
-				}
+	// if we _still_ haven't found a better route, we can run this additional rewrite on any ORs we have
+	for _, expr := range queryTable.Predicates {
+		or, ok := expr.(*sqlparser.OrExpr)
+		if !ok {
+			continue
+		}
+		for _, predicate := range sqlparser.ExtractINFromOR(or) {
+			routing, err = UpdateRoutingLogic(ctx, predicate, routing)
+			if err != nil {
+				return nil, err
 			}
 		}
 	}

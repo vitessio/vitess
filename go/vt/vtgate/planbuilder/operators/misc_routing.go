@@ -17,20 +17,104 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
-// AnyShardRouting is used for routing logic where any shard in the keyspace can be used.
-// Shared by unsharded and reference routing
-type AnyShardRouting struct {
-	keyspace   *vindexes.Keyspace
-	Alternates map[*vindexes.Keyspace]*Route
+type (
+	// NoneRouting is used when we know that this Route will return no results.
+	// Can be merged with any other route going to the same keyspace
+	NoneRouting struct {
+		keyspace *vindexes.Keyspace
+	}
+
+	// TargetedRouting is used when the user has used syntax to target the
+	// Route against a specific set of shards and/or tablet type. Can't be merged with anything else.
+	TargetedRouting struct {
+		keyspace *vindexes.Keyspace
+
+		// targetDestination specifies an explicit target destination tablet type
+		TargetDestination key.Destination
+	}
+
+	// AnyShardRouting is used for routing logic where any shard in the keyspace can be used.
+	// Shared by unsharded and reference routing
+	AnyShardRouting struct {
+		keyspace   *vindexes.Keyspace
+		Alternates map[*vindexes.Keyspace]*Route
+	}
+
+	// DualRouting represents the dual-table.
+	// It is special compared to all other tables because it can be merged with tables in any keyspace
+	DualRouting struct{}
+
+	SequenceRouting struct {
+		keyspace *vindexes.Keyspace
+	}
+)
+
+var (
+	_ Routing = (*NoneRouting)(nil)
+	_ Routing = (*TargetedRouting)(nil)
+	_ Routing = (*AnyShardRouting)(nil)
+	_ Routing = (*DualRouting)(nil)
+	_ Routing = (*SequenceRouting)(nil)
+)
+
+func (tr *TargetedRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+	rp.Keyspace = tr.keyspace
+	rp.TargetDestination = tr.TargetDestination
+	return nil
 }
 
-var _ Routing = (*AnyShardRouting)(nil)
+func (tr *TargetedRouting) Clone() Routing {
+	newTr := *tr
+	return &newTr
+}
+
+func (tr *TargetedRouting) updateRoutingLogic(_ *plancontext.PlanningContext, _ sqlparser.Expr) (Routing, error) {
+	return tr, nil
+}
+
+func (tr *TargetedRouting) Cost() int {
+	return 1
+}
+
+func (tr *TargetedRouting) OpCode() engine.Opcode {
+	return engine.ByDestination
+}
+
+func (tr *TargetedRouting) Keyspace() *vindexes.Keyspace {
+	return tr.keyspace
+}
+
+func (n *NoneRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+	rp.Keyspace = n.keyspace
+	return nil
+}
+
+func (n *NoneRouting) Clone() Routing {
+	return n
+}
+
+func (n *NoneRouting) updateRoutingLogic(*plancontext.PlanningContext, sqlparser.Expr) (Routing, error) {
+	return n, nil
+}
+
+func (n *NoneRouting) Cost() int {
+	return 0
+}
+
+func (n *NoneRouting) OpCode() engine.Opcode {
+	return engine.None
+}
+
+func (n *NoneRouting) Keyspace() *vindexes.Keyspace {
+	return n.keyspace
+}
 
 func (rr *AnyShardRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Keyspace = rr.keyspace
@@ -75,12 +159,6 @@ func (rr *AnyShardRouting) AlternateInKeyspace(keyspace *vindexes.Keyspace) *Rou
 	return nil
 }
 
-// DualRouting represents the dual-table.
-// It is special compared to all other tables because it can be merged with tables in any keyspace
-type DualRouting struct{}
-
-var _ Routing = (*DualRouting)(nil)
-
 func (dr *DualRouting) UpdateRoutingParams(*plancontext.PlanningContext, *engine.RoutingParameters) error {
 	return nil
 }
@@ -104,12 +182,6 @@ func (dr *DualRouting) OpCode() engine.Opcode {
 func (dr *DualRouting) Keyspace() *vindexes.Keyspace {
 	return nil
 }
-
-type SequenceRouting struct {
-	keyspace *vindexes.Keyspace
-}
-
-var _ Routing = (*SequenceRouting)(nil)
 
 func (sr *SequenceRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.Opcode = engine.Next

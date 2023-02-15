@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"fmt"
 	"reflect"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -177,7 +178,7 @@ func getRoutingType(r Routing) routingType {
 	case *TargetedRouting:
 		return targeted
 	}
-	panic("switch should be exhaustive")
+	panic(fmt.Sprintf("switch should be exhaustive, got %T", r))
 }
 
 func newJoinMerge(ctx *plancontext.PlanningContext, predicates []sqlparser.Expr, innerJoin bool) merger {
