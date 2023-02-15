@@ -66,7 +66,7 @@ var divisionPrecision = 16
 
 // Zero constant, to make computations faster.
 // Zero should never be compared with == or != directly, please use decimal.Equal or decimal.Cmp instead.
-var Zero = New(0, 1)
+var Zero = New(0, 0)
 
 var zeroInt = big.NewInt(0)
 var oneInt = big.NewInt(1)

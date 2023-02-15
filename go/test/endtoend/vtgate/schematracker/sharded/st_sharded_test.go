@@ -162,7 +162,7 @@ func TestInitAndUpdate(t *testing.T) {
 
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
+		`[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"initial table list not complete")
@@ -171,7 +171,7 @@ func TestInitAndUpdate(t *testing.T) {
 	_ = utils.Exec(t, conn, "create table test_sc (id bigint primary key)")
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`,
+		`[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"test_sc not in vschema tables")
@@ -180,7 +180,7 @@ func TestInitAndUpdate(t *testing.T) {
 	_ = utils.Exec(t, conn, "create table test_sc1 (id bigint primary key)")
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`,
+		`[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"test_sc1 not in vschema tables")
@@ -188,7 +188,7 @@ func TestInitAndUpdate(t *testing.T) {
 	_ = utils.Exec(t, conn, "drop table test_sc, test_sc1")
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
+		`[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"test_sc and test_sc_1 should not be in vschema tables")
@@ -207,7 +207,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	// wait for vttablet's schema reload interval to pass
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
+		`[[VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`,
 		100*time.Millisecond,
 		3*time.Second,
 		"test_sc not in vschema tables")

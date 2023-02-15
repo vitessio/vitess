@@ -133,6 +133,10 @@ func (sizegen *sizegen) generateType(pkg *types.Package, file *codeFile, named *
 	}
 	ts.generated = true
 
+	if named.Obj().Pkg() != pkg {
+		panic("trying to define external type in wrong package")
+	}
+
 	switch tt := named.Underlying().(type) {
 	case *types.Struct:
 		if impl, flag := sizegen.sizeImplForStruct(named.Obj(), tt); impl != nil {
@@ -145,7 +149,7 @@ func (sizegen *sizegen) generateType(pkg *types.Package, file *codeFile, named *
 	case *types.Interface:
 		findImplementations(pkg.Scope(), tt, func(tt types.Type) {
 			if _, isStruct := tt.Underlying().(*types.Struct); isStruct {
-				sizegen.generateType(pkg, file, tt.(*types.Named))
+				sizegen.generateKnownType(tt.(*types.Named))
 			}
 		})
 	default:
@@ -483,15 +487,12 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 	}
 }
 
-type typePaths []string
-
-func (t *typePaths) String() string {
-	return fmt.Sprintf("%v", *t)
-}
-
-func (t *typePaths) Set(path string) error {
-	*t = append(*t, path)
-	return nil
+var defaultGenTypes = []string{
+	"vitess.io/vitess/go/pools.Setting",
+	"vitess.io/vitess/go/vt/schema.DDLStrategySetting",
+	"vitess.io/vitess/go/vt/vtgate/engine.Plan",
+	"vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan",
+	"vitess.io/vitess/go/sqltypes.Result",
 }
 
 func main() {
@@ -500,8 +501,8 @@ func main() {
 		verify             bool
 	)
 
-	pflag.StringSliceVar(&patterns, "in", nil, "Go packages to load the generator")
-	pflag.StringSliceVar(&generate, "gen", nil, "Typename of the Go struct to generate size info for")
+	pflag.StringSliceVar(&patterns, "in", []string{`./go/...`}, "Go packages to load the generator")
+	pflag.StringSliceVar(&generate, "gen", defaultGenTypes, "Typename of the Go struct to generate size info for")
 	pflag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
 	pflag.Parse()
 

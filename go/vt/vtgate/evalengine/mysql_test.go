@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -53,7 +53,7 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := TranslateEx(astExpr, LookupDefaultCollation(collations.CollationUtf8mb4ID), simplify)
+	converted, err := TranslateEx(astExpr, &LookupIntegrationTest{collations.CollationUtf8mb4ID}, simplify)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return nil, errKnownBadQuery
@@ -65,10 +65,10 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 
 func testSingle(t *testing.T, query string) (EvalResult, error) {
 	converted, err := convert(t, query, true)
-	if err == nil {
-		return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).Evaluate(converted)
+	if err != nil {
+		return EvalResult{}, err
 	}
-	return EvalResult{}, err
+	return EnvWithBindVars(nil, collations.CollationUtf8mb4ID).Evaluate(converted)
 }
 
 func TestMySQLGolden(t *testing.T) {
@@ -126,7 +126,7 @@ func TestMySQLGolden(t *testing.T) {
 }
 
 func TestDebug1(t *testing.T) {
-	// Debu	g
-	eval, err := testSingle(t, `SELECT LCASE(-999999999999999999999999)`)
+	// Debug
+	eval, err := testSingle(t, `SELECT 12.0 * 0`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, collations.Local().LookupByID(eval.Collation()).Name())
 }

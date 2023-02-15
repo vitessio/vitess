@@ -29,9 +29,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -435,6 +434,8 @@ type ReplicationStatus struct {
 	WorkflowSubType string
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
+	// RowsCopied shows the number of rows copied per stream, only valid when workflow state is "Copying"
+	RowsCopied int64
 	// sourceTimeZone represents the time zone of each stream, only set if not UTC
 	sourceTimeZone string
 	// targetTimeZone is set to the sourceTimeZone of the forward stream, if it was provided in the workflow
@@ -450,7 +451,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
-
+	var rowsCopied int64
 	id, err = row.ToInt64("id")
 	if err != nil {
 		return nil, "", err
@@ -518,6 +519,10 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	workflowType, _ = row.ToInt32("workflow_type")
 	workflowSubType, _ = row.ToInt32("workflow_sub_type")
 	deferSecondaryKeys, _ = row.ToBool("defer_secondary_keys")
+	rowsCopied = row.AsInt64("rows_copied", 0)
+	if err != nil {
+		return nil, "", err
+	}
 
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
@@ -540,6 +545,7 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[workflowType],
 		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType],
 		deferSecondaryKeys:   deferSecondaryKeys,
+		RowsCopied:           rowsCopied,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -572,7 +578,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		tags,
 		workflow_type, 
 		workflow_sub_type,
-		defer_secondary_keys
+		defer_secondary_keys,
+		rows_copied
 	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
@@ -675,7 +682,6 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		Keyspace: keyspace,
 		Shards:   sets.List(targetShards),
 	}
-
 	return &rsr, nil
 }
 

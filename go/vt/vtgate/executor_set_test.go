@@ -228,14 +228,14 @@ func TestExecutorSet(t *testing.T) {
 		in: "set transaction isolation level serializable",
 		out: &vtgatepb.Session{
 			Autocommit: true,
-			Warnings:   []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}},
+			Warnings:   []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}},
 		},
 	}, {
 		in:  "set transaction read only",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set transaction read write",
-		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: mysql.ERNotSupportedYet, Message: "converted 'next transaction' scope to 'session' scope"}}},
+		out: &vtgatepb.Session{Autocommit: true, Warnings: []*querypb.QueryWarning{{Code: uint32(mysql.ERNotSupportedYet), Message: "converted 'next transaction' scope to 'session' scope"}}},
 	}, {
 		in:  "set session transaction read write",
 		out: &vtgatepb.Session{Autocommit: true},
