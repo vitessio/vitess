@@ -97,7 +97,7 @@ const failOnSchemaInitError = false
 
 func init() {
 	initSchemaFiles()
-	ddlCount = stats.NewCounter("SidecarDBDDLQueryCount", "Number of create/upgrade queries executed")
+	ddlCount = stats.NewCounter("SidecarDBDDLQueryCount", "Number of queries executed")
 	ddlErrorCount = stats.NewCounter("SidecarDBDDLErrorCount", "Number of errors during sidecar schema upgrade")
 	ddlErrorHistory = history.New(maxDDLErrorHistoryLength)
 	stats.Publish("SidecarDBDDLErrors", stats.StringMapFunc(func() map[string]string {
