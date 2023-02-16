@@ -267,7 +267,7 @@ func getInitDBFile() (string, error) {
 	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
 		return path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"), err
 	}
-	return path.Join(os.Getenv("VTROOT"), "config/init_testserver_db.sql"), err
+	return path.Join(os.Getenv("VTROOT"), "go/test/endtoend/vreplication/testdata/config/init_testserver_db.sql"), err
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
