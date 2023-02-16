@@ -1407,6 +1407,7 @@ func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, 
 			qre := &QueryExecutor{
 				ctx:      ctx,
 				logStats: logStats,
+				tsv:      tsv,
 			}
 			schemaDef, err = qre.GetSchemaDef(tableType, tableNames)
 			return err
