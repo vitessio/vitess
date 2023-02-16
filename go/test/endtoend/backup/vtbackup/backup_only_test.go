@@ -65,8 +65,8 @@ func TestTabletInitialBackup(t *testing.T) {
 
 	vtTabletVersion, err := cluster.GetMajorVersion("vttablet")
 	require.NoError(t, err)
-	// For all version above v15, each replica will start in super-read-only mode.
-	if vtTabletVersion > 16 {
+	// For all version at or above v17.0.0, each replica will start in super-read-only mode. Let's verify that is working correctly.
+	if vtTabletVersion >= 17 {
 		err := primary.VttabletProcess.CreateDB("testDB")
 		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 		err = replica1.VttabletProcess.CreateDB("testDB")

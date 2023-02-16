@@ -1259,9 +1259,9 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		resetFunc, err := mysqld.SetSuperReadOnly(false)
 		if err != nil {
 			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
-				log.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
+				log.Warningf("applyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
-				log.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
+				log.Errorf("applyBinlogFile: unexpected error while trying to set super_read_only: %v", err)
 				return err
 			}
 		}

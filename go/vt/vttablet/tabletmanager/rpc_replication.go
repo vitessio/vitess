@@ -41,7 +41,7 @@ var disableReplicationManager bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
-	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always starts as super_read_only=`true`")
+	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always start with super_read_only=ON")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
 }

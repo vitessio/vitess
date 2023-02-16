@@ -239,7 +239,7 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
 	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
 	updatedInitFile, err := getInitDBFile()
-	if err == nil {
+	if err != nil {
 		initFile = updatedInitFile
 	}
 	mysqlctl := &MysqlctlProcess{
@@ -265,9 +265,9 @@ func getInitDBFile() (string, error) {
 		return "", err
 	}
 	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
-		return path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"), err
+		return path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"), nil
 	}
-	return path.Join(os.Getenv("VTROOT"), "go/test/endtoend/vreplication/testdata/config/init_testserver_db.sql"), err
+	return path.Join(os.Getenv("VTROOT"), "go/test/endtoend/vreplication/testdata/config/init_testserver_db.sql"), nil
 }
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process

@@ -629,9 +629,13 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 	return vttablet
 }
 
-// QueryTabletWithSuperReadOnlyHandling lets you execute a query in this tablet while disabling super-read-only and get the result
-// It will enable super-read-only once its done executing the query.
+// QueryTabletWithSuperReadOnlyHandling will retry the query up to 10 times with a small sleep in between each try.
+// This allows the tests to be more robust in the face of transient failures. It disables super-read-only during query execution.
 func (vttablet *VttabletProcess) QueryTabletWithSuperReadOnlyHandling(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
+	var (
+		err    error
+		result *sqltypes.Result
+	)
 	if !useDb {
 		keyspace = ""
 	}
@@ -641,30 +645,47 @@ func (vttablet *VttabletProcess) QueryTabletWithSuperReadOnlyHandling(query stri
 		return nil, err
 	}
 	defer conn.Close()
-	return executeQueryWithSuperReadOnlyHandling(conn, query)
-}
-
-// executeQuery will retry the query up to 10 times with a small sleep in between each try.
-// This allows the tests to be more robust in the face of transient failures. It disables
-// super-read-only during query execution.
-func executeQueryWithSuperReadOnlyHandling(dbConn *mysql.Conn, query string) (*sqltypes.Result, error) {
-	var (
-		err    error
-		result *sqltypes.Result
-	)
 	retries := 10
 	retryDelay := 1 * time.Second
 	for i := 0; i < retries; i++ {
 		if i > 0 {
 			// We only audit from 2nd attempt and onwards, otherwise this is just too verbose.
-			log.Infof("Executing query %s (attempt %d of %d)", query, (i + 1), retries)
+			log.Infof("Executing query %s (attempt %d of %d)", query, i+1, retries)
 		}
-		result, err = dbConn.ExecuteFetchWithSuperReadOnlyHandling(query, 10000, true)
+		result, err = executeFetchWithSuperReadOnlyHandling(conn, query, 10000, true)
 		if err == nil {
 			break
 		}
 		time.Sleep(retryDelay)
 	}
+
+	return result, err
+}
+
+// This function will temporarily turn `OFF` super_read_only global variable and reverts it back after query is executed.
+func executeFetchWithSuperReadOnlyHandling(dbConn *mysql.Conn, query string, maxRows int, wantFields bool) (result *sqltypes.Result, err error) {
+	// Note: MariaDB does not have super_read_only but support for it is EOL in v14.0+
+	if !dbConn.IsMariaDB() {
+		if err := dbConn.WriteComQuery("SELECT @@global.super_read_only"); err != nil {
+			return nil, err
+		}
+		res, _, _, err := dbConn.ReadQueryResult(1, false)
+		if err == nil && len(res.Rows) == 1 {
+			sro := res.Rows[0][0].ToString()
+			if sro == "1" || sro == "ON" {
+				if _, err = dbConn.ExecuteFetch("SET GLOBAL super_read_only='OFF'", 1, false); err != nil {
+					return nil, err
+				}
+				defer func() {
+					if _, err := dbConn.ExecuteFetch("SET GLOBAL super_read_only='ON'", 1, false); err != nil {
+						log.Errorf("error setting super_read_only value %s", err.Error())
+					}
+				}()
+			}
+		}
+	}
+
+	result, _, err = dbConn.ExecuteFetchMulti(query, maxRows, wantFields)
 
 	return result, err
 }

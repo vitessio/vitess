@@ -40,7 +40,7 @@ import (
 // The mysql.ConnParams to connect to the new database is returned, along with a function to
 // teardown the database.
 func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...string) (mysql.ConnParams, func(), error) {
-	mysqlParam, _, closer, error := NewMySQLWithDetails(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
+	mysqlParam, _, closer, error := NewMySQLWithMysqld(cluster.GetAndReservePort(), cluster.Hostname, dbName, schemaSQL...)
 	return mysqlParam, closer, error
 }
 
@@ -61,7 +61,7 @@ func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (
 	return mysqlctl.NewMysqld(&cfg), mycnf, nil
 }
 
-func NewMySQLWithDetails(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, *mysqlctl.Mysqld, func(), error) {
+func NewMySQLWithMysqld(port int, hostname, dbName string, schemaSQL ...string) (mysql.ConnParams, *mysqlctl.Mysqld, func(), error) {
 	mysqlDir, err := createMySQLDir()
 	if err != nil {
 		return mysql.ConnParams{}, nil, nil, err
@@ -115,7 +115,10 @@ func createInitSQLFile(mysqlDir, ksName string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
-	_, _ = f.WriteString("SET GLOBAL super_read_only='OFF';")
+	_, err = f.WriteString("SET GLOBAL super_read_only='OFF';")
+	if err != nil {
+		return "", err
+	}
 	_, err = f.WriteString(fmt.Sprintf("CREATE DATABASE IF NOT EXISTS %s;", ksName))
 	if err != nil {
 		return "", err

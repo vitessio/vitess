@@ -319,8 +319,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	replicaStartRequired := false
 	sourceIsPrimary := false
 	superReadOnly := true //nolint
+	readOnly := true      //nolint
 	var replicationPosition mysql.Position
-	var resetSuperReadOnlyFunc ResetSuperReadOnlyFunc
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
 	// See if we need to restart replication after backup.
@@ -337,7 +337,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// get the read-only flag
-	readOnly, err := params.Mysqld.IsReadOnly()
+	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get read_only status")
 	}
@@ -349,9 +349,10 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 
 	// get the replication position
 	if sourceIsPrimary {
+		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
 		if !superReadOnly {
 			params.Logger.Infof("turning primary super-read-only before backup")
-			if resetSuperReadOnlyFunc, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
+			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
 				return false, vterrors.Wrap(err, "can't set super-read-only status")
 			}
 		}
@@ -404,12 +405,10 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
-	// And set read-only mode
-	if resetSuperReadOnlyFunc != nil {
-		err := resetSuperReadOnlyFunc()
-		if err != nil {
-			log.Info("not able to set super_read_only to its original value during backup")
-		}
+	// Resetting super_read_only back to its original value
+	params.Logger.Infof("resetting mysqld super_read-only to %v", superReadOnly)
+	if _, err := params.Mysqld.SetSuperReadOnly(superReadOnly); err != nil {
+		return usable, err
 	}
 
 	// Restore original mysqld state that we saved above.

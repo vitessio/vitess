@@ -53,7 +53,7 @@ func TestMain(m *testing.M) {
 
 		var closer func()
 		var err error
-		mysqlParams, mysqld, closer, err = NewMySQLWithDetails(clusterInstance.GetAndReservePort(), clusterInstance.Hostname, keyspaceName, schemaSQL)
+		mysqlParams, mysqld, closer, err = NewMySQLWithMysqld(clusterInstance.GetAndReservePort(), clusterInstance.Hostname, keyspaceName, schemaSQL)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -79,7 +79,7 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 	assert.NotNil(t, retFunc1, "SetSuperReadOnly is suppose to return a defer function")
 	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
 
-	// if value is already true then there is no retFunc being returned.
+	// if value is already true then retFunc will be nil
 	retFunc2, err := mysqld.SetSuperReadOnly(true)
 	assert.Nil(t, retFunc2, "SetSuperReadOnly is suppose to return a nil function")
 	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
@@ -100,7 +100,7 @@ func TestSetSuperReadOnlyMySQL(t *testing.T) {
 	assert.NotNil(t, retFunc1, "SetSuperReadOnly is suppose to return a defer function")
 	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
 
-	// if value is already true then there is no retFunc being returned.
+	// if value is already false then retFunc will be nil
 	retFunc2, err = mysqld.SetSuperReadOnly(false)
 	assert.Nil(t, retFunc2, "SetSuperReadOnly is suppose to return a nil function")
 	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
