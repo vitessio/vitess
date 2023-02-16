@@ -252,10 +252,14 @@ varsLoop:
 		// increasing order (except for 6 which occurs in the place of 2) to allow
 		// for backward compatibility.
 		switch code {
-		case QFlags2Code, QAutoIncrement:
+		case QFlags2Code:
+			query.Options = binary.LittleEndian.Uint32(vars[pos : pos+4])
 			pos += 4
 		case QSQLModeCode:
+			query.SqlMode = binary.LittleEndian.Uint64(vars[pos : pos+8])
 			pos += 8
+		case QAutoIncrement:
+			pos += 4
 		case QCatalog: // Used in MySQL 5.0.0 - 5.0.3
 			if pos+1 > len(vars) {
 				return query, vterrors.Errorf(vtrpc.Code_INTERNAL, "Q_CATALOG status var overflows buffer (%v + 1 > %v)", pos, len(vars))
