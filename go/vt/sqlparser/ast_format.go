@@ -2764,3 +2764,8 @@ func (node *PointExpr) Format(buf *TrackedBuffer) {
 func (node *LineStringExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "linestring(%v)", node.PointParams)
 }
+
+// Format formats the node.
+func (node *PolygonExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "polygon(%v)", node.LinestringParams)
+}

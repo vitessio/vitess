@@ -240,6 +240,10 @@ func TestCanonicalOutput(t *testing.T) {
 			"create table x(location geometry default (linestring(point(7.0, 3.0), point(7.0, 3.0))))",
 			"CREATE TABLE `x` (\n\t`location` geometry DEFAULT (LINESTRING(POINT(7.0, 3.0), POINT(7.0, 3.0)))\n)",
 		},
+		{
+			"create table x(a geometry default (polygon(linestring(point(7.0, 3.0), point(7.0, 3.0)))))",
+			"CREATE TABLE `x` (\n\t`a` geometry DEFAULT (POLYGON(LINESTRING(POINT(7.0, 3.0), POINT(7.0, 3.0))))\n)",
+		},
 	}
 
 	for _, tc := range testcases {
