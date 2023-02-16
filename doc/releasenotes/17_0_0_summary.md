@@ -9,6 +9,7 @@
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
+    - [VTtablet Error count with code ](#vttablet-error-count-with-code)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -160,3 +161,10 @@ Some notes to help understand these metrics:
  * `DurationByPhaseSeconds["CatchUpReplication"]` measures how long it took to catch-up replication after the restore phase.
  * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
  * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
+
+#### <a id="vttablet-error-count-with-code"/> VTTablet error count with error code
+
+##### VTTablet Error Count
+
+We are introducing new error counter `QueryErrorCountsWithCode` for VTTablet. It is similar to existing [QueryErrorCounts](https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletserver/query_engine.go#L174) except it contains errorCode as additional dimension.
+We will deprecate `QueryErrorCounts` in v18.
