@@ -81,6 +81,8 @@ func init() {
 }
 
 func TestVTGateExecute(t *testing.T) {
+	counts := rpcVTGate.timings.Timings.Counts()
+
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -105,19 +107,21 @@ func TestVTGateExecute(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	counts := rpcVTGate.timings.Timings.Counts()
-	require.Len(t, counts, 2)
-	require.Contains(t, counts, "All")
-	require.Equal(t, int64(1), counts["All"])
-	require.Contains(t, counts, "Execute..primary")
-	require.Equal(t, int64(1), counts["Execute..primary"])
+	newCounts := rpcVTGate.timings.Timings.Counts()
+	require.Contains(t, newCounts, "All")
+	require.Equal(t, counts["All"]+1, newCounts["All"])
+	require.Contains(t, newCounts, "Execute..primary")
+	require.Equal(t, counts["Execute..primary"]+1, newCounts["Execute..primary"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Prepare") {
+			require.Equal(t, v, counts[k])
+		}
+	}
 }
 
 func TestVTGateExecuteError(t *testing.T) {
-	defer errorCounts.ResetAll()
-
 	counts := errorCounts.Counts()
-	require.Len(t, counts, 0)
 
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
@@ -136,12 +140,19 @@ func TestVTGateExecuteError(t *testing.T) {
 	require.Nil(t, qr)
 
 	newCounts := errorCounts.Counts()
-	require.Len(t, newCounts, 1)
 	require.Contains(t, newCounts, "Execute..primary.INVALID_ARGUMENT")
-	require.Equal(t, int64(1), newCounts["Execute..primary.INVALID_ARGUMENT"])
+	require.Equal(t, counts["Execute..primary.INVALID_ARGUMENT"]+1, newCounts["Execute..primary.INVALID_ARGUMENT"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Prepare") {
+			require.Equal(t, v, counts[k])
+		}
+	}
 }
 
 func TestVTGatePrepare(t *testing.T) {
+	counts := rpcVTGate.timings.Timings.Counts()
+
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -165,19 +176,21 @@ func TestVTGatePrepare(t *testing.T) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
 	}
 
-	counts := rpcVTGate.timings.Timings.Counts()
-	require.Len(t, counts, 2)
-	require.Contains(t, counts, "All")
-	require.Equal(t, int64(1), counts["All"])
-	require.Contains(t, counts, "Prepare..primary")
-	require.Equal(t, int64(1), counts["Prepare..primary"])
+	newCounts := rpcVTGate.timings.Timings.Counts()
+	require.Contains(t, newCounts, "All")
+	require.Equal(t, counts["All"]+1, newCounts["All"])
+	require.Contains(t, newCounts, "Prepare..primary")
+	require.Equal(t, counts["Prepare..primary"]+1, newCounts["Prepare..primary"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Execute") {
+			require.Equal(t, v, counts[k])
+		}
+	}
 }
 
 func TestVTGatePrepareError(t *testing.T) {
-	defer errorCounts.ResetAll()
-
 	counts := errorCounts.Counts()
-	require.Len(t, counts, 0)
 
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
@@ -196,9 +209,14 @@ func TestVTGatePrepareError(t *testing.T) {
 	require.Nil(t, qr)
 
 	newCounts := errorCounts.Counts()
-	require.Len(t, newCounts, 1)
 	require.Contains(t, newCounts, "Prepare..primary.INTERNAL")
-	require.Equal(t, int64(1), newCounts["Prepare..primary.INTERNAL"])
+	require.Equal(t, counts["Prepare..primary.INTERNAL"]+1, newCounts["Prepare..primary.INTERNAL"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Execute") {
+			require.Equal(t, v, counts[k])
+		}
+	}
 }
 
 func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
