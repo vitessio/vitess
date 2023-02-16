@@ -750,7 +750,7 @@ func (f *FakeQueryService) Release(ctx context.Context, target *querypb.Target, 
 }
 
 // GetSchema implements the QueryService interface
-func (f *FakeQueryService) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.TableType, tableNames []string) (map[string]string, error) {
+func (f *FakeQueryService) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
 	panic("implement me")
 }
 

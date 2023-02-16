@@ -1235,21 +1235,21 @@ func generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[stri
 	return bindVars
 }
 
-func (qre *QueryExecutor) GetSchemaDef(tableType querypb.TableType, tableNames []string) (map[string]string, error) {
+func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
 	switch tableType {
-	case querypb.TableType_VIEWS:
-		return qre.getViewDef(tableNames)
+	case querypb.SchemaTableType_VIEWS:
+		return qre.getViewDefinitions(tableNames)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
 }
 
-func (qre *QueryExecutor) getViewDef(tableNames []string) (map[string]string, error) {
+func (qre *QueryExecutor) getViewDefinitions(viewNames []string) (map[string]string, error) {
 	query := mysql.FetchViews
 	var bindVars map[string]*querypb.BindVariable
-	if len(tableNames) > 0 {
+	if len(viewNames) > 0 {
 		query = mysql.FetchUpdatedViews
 		bindVars = map[string]*querypb.BindVariable{
-			"viewnames": sqltypes.StringBindVariable(strings.Join(tableNames, ",")),
+			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
 		}
 	}
 	res, err := qre.execQuery(query, bindVars)

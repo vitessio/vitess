@@ -585,7 +585,7 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 }
 
 // GetSchema implements the QueryService interface
-func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.TableType, tableNames []string) (map[string]string, error) {
+func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
 	sbc.GetSchemaCount.Add(1)
 	var resp map[string]string
 	if len(sbc.getSchemaResult) > 0 {

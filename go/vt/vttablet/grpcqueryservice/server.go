@@ -487,7 +487,7 @@ func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (r
 func (q *query) GetSchema(ctx context.Context, request *querypb.GetSchemaRequest) (response *querypb.GetSchemaResponse, err error) {
 	defer q.server.HandlePanic(&err)
 	var resp map[string]string
-	resp, err = q.server.GetSchema(ctx, request.Target, request.Type, request.TableNames)
+	resp, err = q.server.GetSchema(ctx, request.Target, request.TableType, request.TableNames)
 	if err != nil {
 		return nil, vterrors.ToGRPC(err)
 	}
