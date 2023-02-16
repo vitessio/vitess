@@ -58,3 +58,7 @@ func (c Charset_binary) Convert(_, in []byte, _ types.Charset) ([]byte, error) {
 func (Charset_binary) Length(src []byte) int {
 	return len(src)
 }
+
+func (Charset_binary) MaxWidth() int {
+	return 1
+}

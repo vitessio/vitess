@@ -89,6 +89,7 @@ var (
 		regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
 		regexp.MustCompile(`You have an error in your SQL syntax; (.*?)`),
 		regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
+		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
 	}
 )
 
@@ -118,7 +119,7 @@ func errorsMatch(remote, local error) bool {
 	return false
 }
 
-func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
+func safeEvaluate(env *evalengine.ExpressionEnv, query string) (evalengine.EvalResult, sqltypes.Type, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, 0, err
@@ -131,7 +132,8 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
-		expr, err = evalengine.TranslateEx(astExpr, evalengine.LookupDefaultCollation(collations.CollationUtf8mb4ID), debugSimplify)
+		lookup := &evalengine.LookupIntegrationTest{Collation: collations.CollationUtf8mb4ID}
+		expr, err = evalengine.TranslateEx(astExpr, lookup, debugSimplify)
 		return
 	}()
 
@@ -144,7 +146,6 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 					err = fmt.Errorf("PANIC: %v", r)
 				}
 			}()
-			env := evalengine.EnvWithBindVars(nil, 255)
 			eval, err = env.Evaluate(local)
 			if err == nil && debugCheckTypes {
 				tt, err = env.TypeOf(local)
@@ -181,7 +182,8 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		eval, _, localErr := safeEvaluate(query)
+		env := evalengine.EnvWithBindVars(nil, 255)
+		eval, _, localErr := safeEvaluate(env, query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {

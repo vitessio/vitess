@@ -88,30 +88,32 @@ order by table_name, ordinal_position`
 
 	// Views
 	InsertIntoViewsTable = `insert into _vt.views (
+    table_schema,
 	table_name,
 	view_definition,
-	create_statement) values (:table_name, :view_definition, :create_statement)`
+	create_statement) values (database(), :table_name, :view_definition, :create_statement)`
 
 	ReplaceIntoViewsTable = `replace into _vt.views (
+	table_schema,
 	table_name,
 	view_definition,
-	create_statement) values (:table_name, :view_definition, :create_statement)`
+	create_statement) values (database(), :table_name, :view_definition, :create_statement)`
 
 	UpdateViewsTable = `update _vt.views 
 	set view_definition = :view_definition, create_statement = :create_statement 
-	where table_name = :table_name`
+	where table_schema = database() and table_name = :table_name`
 
-	DeleteFromViewsTable = `delete from _vt.views where table_name in ::table_name`
+	DeleteFromViewsTable = `delete from _vt.views where table_schema = database() and table_name in ::table_name`
 
-	SelectFromViewsTable = `select table_name from _vt.views where table_name in ::table_name`
+	SelectFromViewsTable = `select table_name from _vt.views where table_schema = database() and table_name in ::table_name`
 
-	SelectAllViews = `select table_name, updated_at from _vt.views`
+	SelectAllViews = `select table_name, updated_at from _vt.views where table_schema = database()`
 
 	// FetchUpdatedViews queries fetches information about updated views
-	FetchUpdatedViews = `select table_name, view_definition, create_statement from _vt.views where table_name in ::viewnames`
+	FetchUpdatedViews = `select table_name, view_definition, create_statement from _vt.views where table_schema = database() and table_name in ::viewnames`
 
 	// FetchViews queries fetches all views
-	FetchViews = `select table_name, view_definition, create_statement from _vt.views`
+	FetchViews = `select table_name, view_definition, create_statement from _vt.views where table_schema = database()`
 )
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.

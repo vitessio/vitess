@@ -25,7 +25,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -47,7 +47,7 @@ func TestReplTracker(t *testing.T) {
 		Uid:  1,
 	}
 	target := &querypb.Target{}
-	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(nil)
+	mysqld := mysqlctl.NewFakeMysqlDaemon(nil)
 
 	rt := NewReplTracker(env, alias)
 	rt.InitDBConfig(target, mysqld)

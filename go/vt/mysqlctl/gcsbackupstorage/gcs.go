@@ -254,6 +254,11 @@ func (bs *GCSBackupStorage) Close() error {
 	return nil
 }
 
+func (bs *GCSBackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new GCSBackupStorage that uses params.
+	return bs
+}
+
 // client returns the GCS Storage client instance.
 // If there isn't one yet, it tries to create one.
 func (bs *GCSBackupStorage) client(ctx context.Context) (*storage.Client, error) {

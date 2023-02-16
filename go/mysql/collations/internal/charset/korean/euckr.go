@@ -135,3 +135,7 @@ func (Charset_euckr) DecodeRune(src []byte) (rune, int) {
 	}
 
 }
+
+func (Charset_euckr) MaxWidth() int {
+	return 2
+}

@@ -266,6 +266,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *Limit:
 		return VisitRefOfLimit(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -2297,6 +2299,18 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PointParams, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
 		return nil
@@ -4205,6 +4219,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
@@ -4455,6 +4471,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
