@@ -749,6 +749,12 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
+
+			workload := ""
+			// Only spend time getting the actual workload from the query if we are using per workload metrics
+			if tsv.Config().EnablePerWorkloadTableMetrics {
+				workload = sqlparser.GetWorkloadFromComments(query, tsv.config.WorkloadLabel)
+			}
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
@@ -783,6 +789,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				tsv:            tsv,
 				tabletType:     target.GetTabletType(),
 				setting:        connSetting,
+				workload:       workload,
 			}
 			result, err = qre.Execute()
 			if err != nil {
