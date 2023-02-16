@@ -253,10 +253,10 @@ varsLoop:
 		// for backward compatibility.
 		switch code {
 		case QFlags2Code:
-			query.Options = binary.LittleEndian.Uint32(data[pos : pos+4])
+			query.Options = binary.LittleEndian.Uint32(vars[pos : pos+4])
 			pos += 4
 		case QSQLModeCode:
-			query.SqlMode = binary.LittleEndian.Uint64(data[pos : pos+8])
+			query.SqlMode = binary.LittleEndian.Uint64(vars[pos : pos+8])
 			pos += 8
 		case QAutoIncrement:
 			pos += 4

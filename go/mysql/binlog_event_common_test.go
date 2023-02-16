@@ -253,6 +253,8 @@ eid bigint,
 id int,
 primary key(eid, id)
 ) Engine=InnoDB`,
+		Options: QFlagOptionAutoIsNull,
+		SqlMode: QSqlModeStrictTransTables,
 	}
 	got, err := input.Query(f)
 	if err != nil {
