@@ -163,6 +163,8 @@ type Query struct {
 	Database string
 	Charset  *binlogdatapb.Charset
 	SQL      string
+	Options  uint32
+	SqlMode  uint64
 }
 
 // String pretty-prints a Query.

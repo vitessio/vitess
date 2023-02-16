@@ -30,23 +30,24 @@ import (
 // into flavor-specific event types to pull in common parsing code.
 //
 // The default v4 header format is:
-//                  offset : size
-//   +============================+
-//   | timestamp         0 : 4    |
-//   +----------------------------+
-//   | type_code         4 : 1    |
-//   +----------------------------+
-//   | server_id         5 : 4    |
-//   +----------------------------+
-//   | event_length      9 : 4    |
-//   +----------------------------+
-//   | next_position    13 : 4    |
-//   +----------------------------+
-//   | flags            17 : 2    |
-//   +----------------------------+
-//   | extra_headers    19 : x-19 |
-//   +============================+
-//   http://dev.mysql.com/doc/internals/en/event-header-fields.html
+//
+//	               offset : size
+//	+============================+
+//	| timestamp         0 : 4    |
+//	+----------------------------+
+//	| type_code         4 : 1    |
+//	+----------------------------+
+//	| server_id         5 : 4    |
+//	+----------------------------+
+//	| event_length      9 : 4    |
+//	+----------------------------+
+//	| next_position    13 : 4    |
+//	+----------------------------+
+//	| flags            17 : 2    |
+//	+----------------------------+
+//	| extra_headers    19 : x-19 |
+//	+============================+
+//	http://dev.mysql.com/doc/internals/en/event-header-fields.html
 type binlogEvent []byte
 
 // IsValid implements BinlogEvent.IsValid().
@@ -170,15 +171,16 @@ func (ev binlogEvent) IsPseudo() bool {
 // Format implements BinlogEvent.Format().
 //
 // Expected format (L = total length of event data):
-//   # bytes   field
-//   2         format version
-//   50        server version string, 0-padded but not necessarily 0-terminated
-//   4         timestamp (same as timestamp header field)
-//   1         header length
-//   p         (one byte per packet type) event type header lengths
-//             Rest was inferred from reading source code:
-//   1         checksum algorithm
-//   4         checksum
+//
+//	# bytes   field
+//	2         format version
+//	50        server version string, 0-padded but not necessarily 0-terminated
+//	4         timestamp (same as timestamp header field)
+//	1         header length
+//	p         (one byte per packet type) event type header lengths
+//	          Rest was inferred from reading source code:
+//	1         checksum algorithm
+//	4         checksum
 func (ev binlogEvent) Format() (f BinlogFormat, err error) {
 	// FORMAT_DESCRIPTION_EVENT has a fixed header size of 19
 	// because we have to read it before we know the header_length.
@@ -207,15 +209,16 @@ func (ev binlogEvent) Format() (f BinlogFormat, err error) {
 // Query implements BinlogEvent.Query().
 //
 // Expected format (L = total length of event data):
-//   # bytes   field
-//   4         thread_id
-//   4         execution time
-//   1         length of db_name, not including NULL terminator (X)
-//   2         error code
-//   2         length of status vars block (Y)
-//   Y         status vars block
-//   X+1       db_name + NULL terminator
-//   L-X-1-Y   SQL statement (no NULL terminator)
+//
+//	# bytes   field
+//	4         thread_id
+//	4         execution time
+//	1         length of db_name, not including NULL terminator (X)
+//	2         error code
+//	2         length of status vars block (Y)
+//	Y         status vars block
+//	X+1       db_name + NULL terminator
+//	L-X-1-Y   SQL statement (no NULL terminator)
 func (ev binlogEvent) Query(f BinlogFormat) (query Query, err error) {
 	const varsPos = 4 + 4 + 1 + 2 + 2
 
@@ -252,10 +255,14 @@ varsLoop:
 		// increasing order (except for 6 which occurs in the place of 2) to allow
 		// for backward compatibility.
 		switch code {
-		case QFlags2Code, QAutoIncrement:
+		case QFlags2Code:
+			query.Options = binary.LittleEndian.Uint32(data[pos : pos+4])
 			pos += 4
 		case QSQLModeCode:
+			query.SqlMode = binary.LittleEndian.Uint64(data[pos : pos+8])
 			pos += 8
+		case QAutoIncrement:
+			pos += 4
 		case QCatalog: // Used in MySQL 5.0.0 - 5.0.3
 			if pos+1 > len(vars) {
 				return query, vterrors.Errorf(vtrpc.Code_INTERNAL, "Q_CATALOG status var overflows buffer (%v + 1 > %v)", pos, len(vars))
@@ -288,9 +295,10 @@ varsLoop:
 // IntVar implements BinlogEvent.IntVar().
 //
 // Expected format (L = total length of event data):
-//   # bytes   field
-//   1         variable ID
-//   8         variable value
+//
+//	# bytes   field
+//	1         variable ID
+//	8         variable value
 func (ev binlogEvent) IntVar(f BinlogFormat) (byte, uint64, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
@@ -306,9 +314,10 @@ func (ev binlogEvent) IntVar(f BinlogFormat) (byte, uint64, error) {
 // Rand implements BinlogEvent.Rand().
 //
 // Expected format (L = total length of event data):
-//   # bytes   field
-//   8         seed 1
-//   8         seed 2
+//
+//	# bytes   field
+//	8         seed 1
+//	8         seed 2
 func (ev binlogEvent) Rand(f BinlogFormat) (seed1 uint64, seed2 uint64, err error) {
 	data := ev.Bytes()[f.HeaderLength:]
 	seed1 = binary.LittleEndian.Uint64(data[0:8])

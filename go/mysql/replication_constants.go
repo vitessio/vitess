@@ -225,3 +225,49 @@ const (
 	// QCatalogNZCode is Q_CATALOG_NZ_CODE
 	QCatalogNZCode = 6
 )
+
+// These constants describe the values in the QFlags2Code bitmask field of Query events.
+// From: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication_binlog_event.html#sect_protocol_replication_event_query_03
+const (
+	QFlagOptionAutoIsNull          = 0x00004000
+	QFlagOptionNotAutocommit       = 0x00080000
+	QFlagOptionNoForeignKeyChecks  = 0x04000000
+	QFlagOptionRelaxedUniqueChecks = 0x08000000
+)
+
+// These constants describe the values in the QSQLModeCode bitmask field of Query events.
+// From: https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_replication_binlog_event.html#sect_protocol_replication_event_query_03
+const (
+	QSqlModeRealAsFloat            = 0x00000001
+	QSqlModePipesAsConcat          = 0x00000002
+	QSqlModeAnsiQuotes             = 0x00000004
+	QSqlModeIgnoreSpace            = 0x00000008
+	QSqlModeNotUsed                = 0x00000010
+	QSqlModeOnlyFullGroupBy        = 0x00000020
+	QSqlModeNoUnsignedSubtraction  = 0x00000040
+	QSqlModeNoDirInCreate          = 0x00000080
+	QSqlModePostgreSql             = 0x00000100
+	QSqlModeOracle                 = 0x00000200
+	QSqlModeMsSql                  = 0x00000400
+	QSqlModeDb2                    = 0x00000800
+	QSqlModeMaxDb                  = 0x00001000
+	QSqlModeNoKeyOptions           = 0x00002000
+	QSqlModeNoTableOptions         = 0x00004000
+	QSqlModeNoFieldOptions         = 0x00008000
+	QSqlModeMySql323               = 0x00010000
+	QSqlModeMySql40                = 0x00020000
+	QSqlModeAnsi                   = 0x00040000
+	QSqlModeNoAutoValueOnZero      = 0x00080000
+	QSqlModeNoBackslashEscapes     = 0x00100000
+	QSqlModeStrictTransTables      = 0x00200000
+	QSqlModeStrictAllTables        = 0x00400000
+	QSqlModeNoZeroInDate           = 0x00800000
+	QSqlModeNoZeroDate             = 0x01000000
+	QSqlModeInvalidDates           = 0x02000000
+	QSqlModeErrorForDivisionByZero = 0x04000000
+	QSqlModeTraditional            = 0x08000000
+	QSqlModeNoAutoCreateUser       = 0x10000000
+	QSqlModeHighNotPrecedence      = 0x20000000
+	QSqlModeNoEngineSubstitution   = 0x40000000
+	QSqlModePadCharToFullLength    = 0x80000000
+)
