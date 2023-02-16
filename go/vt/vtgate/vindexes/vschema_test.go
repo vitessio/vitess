@@ -310,7 +310,8 @@ func TestVSchemaViews(t *testing.T) {
 	require.NoError(t, vschema.Keyspaces["unsharded"].Error)
 
 	// add view to unsharded keyspace.
-	vschema.AddView("unsharded", "v1", "SELECT c1+c2 AS added FROM t1")
+	err := vschema.AddView("unsharded", "v1", "SELECT c1+c2 AS added FROM t1")
+	require.NoError(t, err)
 
 	view := vschema.FindView("unsharded", "v1")
 	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
@@ -343,6 +344,11 @@ func TestVSchemaViews(t *testing.T) {
   }
 }`
 	require.JSONEq(t, want, got)
+
+	err = vschema.AddView("unsharded", "t1", "select 42")
+	require.Error(t, err)
+	err = vschema.AddView("unsharded", "v1", "select 42")
+	require.Error(t, err)
 }
 
 func TestVSchemaColumnListAuthoritative(t *testing.T) {

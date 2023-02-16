@@ -285,6 +285,14 @@ func (vschema *VSchema) AddView(ksname string, viewName, query string) error {
 	if !ok {
 		return fmt.Errorf("keyspace %s not found in vschema", ksname)
 	}
+	_, found := ks.Views[viewName]
+	if found {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "name [%s] already in use for a view", viewName)
+	}
+	_, found = ks.Tables[viewName]
+	if found {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "name [%s] already in use for a table", viewName)
+	}
 	ast, err := sqlparser.Parse(query)
 	if err != nil {
 		return err
