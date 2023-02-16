@@ -1239,8 +1239,6 @@ func (qre *QueryExecutor) GetSchemaDef(tableType querypb.TableType, tableNames [
 	switch tableType {
 	case querypb.TableType_VIEWS:
 		return qre.getViewDef(tableNames)
-	case querypb.TableType_TABLES:
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
 }
@@ -1261,7 +1259,7 @@ func (qre *QueryExecutor) getViewDef(tableNames []string) (map[string]string, er
 
 	schemaDef := make(map[string]string)
 	for _, row := range res.Rows {
-		schemaDef[row[0].ToString()] = row[2].ToString()
+		schemaDef[row[0].ToString()] = row[1].ToString()
 	}
 	return schemaDef, nil
 }
