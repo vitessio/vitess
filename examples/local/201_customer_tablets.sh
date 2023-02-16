@@ -18,26 +18,16 @@
 # resharding it also splits the vschema between the two keyspaces
 # old (commerce) and new (customer)
 
-source ./env.sh
+source ../common/env.sh
 
 for i in 200 201 202; do
-	CELL=zone1 TABLET_UID=$i ./scripts/mysqlctl-up.sh
-	CELL=zone1 KEYSPACE=customer TABLET_UID=$i ./scripts/vttablet-up.sh
+	CELL=zone1 TABLET_UID=$i ../common/scripts/mysqlctl-up.sh
+	CELL=zone1 KEYSPACE=customer TABLET_UID=$i ../common/scripts/vttablet-up.sh
 done
 
 # set the correct durability policy for the keyspace
-vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync customer
+vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=semi_sync customer || fail "Failed to set keyspace durability policy on the customer keyspace"
 
 # Wait for all the tablets to be up and registered in the topology server
-for _ in $(seq 0 200); do
-	vtctldclient GetTablets --keyspace customer --shard 0 | wc -l | grep -q "3" && break
-	sleep 1
-done;
-vtctldclient GetTablets --keyspace customer --shard 0 | wc -l | grep -q "3" || (echo "Timed out waiting for tablets to be up in customer/0" && exit 1)
-
-# Wait for a primary tablet to be elected in the shard
-for _ in $(seq 0 200); do
-	vtctldclient GetTablets --keyspace customer --shard 0 | grep -q "primary" && break
-	sleep 1
-done;
-vtctldclient GetTablets --keyspace customer --shard 0 | grep "primary" || (echo "Timed out waiting for primary to be elected in customer/0" && exit 1)
+# and for a primary tablet to be elected in the shard and become healthy/serving.
+wait_for_healthy_shard customer 0 || exit 1
