@@ -23,12 +23,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// This file provides a few utility variables and methods, mostly for tests.
-// The assumptions made about the types of fields and data returned
-// by MySQl are validated in schema_test.go. This way all tests
-// can use these variables and methods to simulate a MySQL server
-// (using fakesqldb/ package for instance) and still be guaranteed correct
-// data.
+// This file contains the mysql queries used by different parts of the code.
 
 const (
 	// BaseShowPrimary is the base query for fetching primary key info.

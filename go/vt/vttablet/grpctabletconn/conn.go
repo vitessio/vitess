@@ -1019,7 +1019,7 @@ func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target
 }
 
 // GetSchema implements the queryservice interface
-func (conn *gRPCQueryClient) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.TableType, tableNames []string) (map[string]string, error) {
+func (conn *gRPCQueryClient) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
 	conn.mu.RLock()
 	defer conn.mu.RUnlock()
 	if conn.cc == nil {
@@ -1028,17 +1028,14 @@ func (conn *gRPCQueryClient) GetSchema(ctx context.Context, target *querypb.Targ
 
 	req := &querypb.GetSchemaRequest{
 		Target:     target,
-		Type:       tableType,
+		TableType:  tableType,
 		TableNames: tableNames,
 	}
 	reply, err := conn.c.GetSchema(ctx, req)
 	if err != nil {
 		return nil, tabletconn.ErrorFromGRPC(err)
 	}
-	if reply.Error != nil {
-		return nil, tabletconn.ErrorFromVTRPC(reply.Error)
-	}
-	return reply.GetTableDefinition(), nil
+	return reply.TableDefinition, nil
 }
 
 // Close closes underlying gRPC channel.

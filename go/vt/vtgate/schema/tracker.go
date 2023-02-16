@@ -134,7 +134,7 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return nil
 	}
 
-	fvRes, err := conn.GetSchema(t.ctx, target, querypb.TableType_VIEWS, nil)
+	fvRes, err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_VIEWS, nil)
 	if err != nil {
 		return err
 	}
@@ -300,7 +300,7 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 
 func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
 	viewsUpdated := th.Stats.ViewSchemaChanged
-	res, err := th.Conn.GetSchema(t.ctx, th.Target, querypb.TableType_VIEWS, viewsUpdated)
+	res, err := th.Conn.GetSchema(t.ctx, th.Target, querypb.SchemaTableType_VIEWS, viewsUpdated)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the views that got errored out.
