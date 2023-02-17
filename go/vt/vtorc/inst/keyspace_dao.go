@@ -43,7 +43,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 		Keyspace: &topodatapb.Keyspace{},
 	}
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
-		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt("keyspace_type"))
+		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
 		keyspace.SetKeyspaceName(keyspaceName)
 		return nil
