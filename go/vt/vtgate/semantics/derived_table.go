@@ -25,17 +25,18 @@ import (
 
 // DerivedTable contains the information about the projection, tables involved in derived table.
 type DerivedTable struct {
-	tableName   string
-	ASTNode     *sqlparser.AliasedTableExpr
-	columnNames []string
-	cols        []sqlparser.Expr
-	tables      TableSet
+	tableName       string
+	ASTNode         *sqlparser.AliasedTableExpr
+	columnNames     []string
+	cols            []sqlparser.Expr
+	tables          TableSet
+	isAuthoritative bool
 }
 
 var _ TableInfo = (*DerivedTable)(nil)
 
 func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sqlparser.Columns, tables []TableInfo, org originable) *DerivedTable {
-	vTbl := &DerivedTable{}
+	vTbl := &DerivedTable{isAuthoritative: true}
 	for i, selectExpr := range expressions {
 		switch expr := selectExpr.(type) {
 		case *sqlparser.AliasedExpr:
@@ -56,6 +57,9 @@ func createDerivedTableForExpressions(expressions sqlparser.SelectExprs, cols sq
 		case *sqlparser.StarExpr:
 			for _, table := range tables {
 				vTbl.tables = vTbl.tables.Merge(table.getTableSet(org))
+				if !table.authoritative() {
+					vTbl.isAuthoritative = false
+				}
 			}
 		}
 	}
@@ -91,7 +95,7 @@ func (dt *DerivedTable) matches(name sqlparser.TableName) bool {
 }
 
 func (dt *DerivedTable) authoritative() bool {
-	return true
+	return dt.isAuthoritative
 }
 
 // Name implements the TableInfo interface

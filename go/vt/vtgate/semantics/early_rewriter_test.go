@@ -152,6 +152,13 @@ func TestExpandStar(t *testing.T) {
 	}, {
 		sql:    "select * from (select 12) as t",
 		expSQL: "select t.`12` from (select 12 from dual) as t",
+	}, {
+		sql:    "SELECT * FROM (SELECT *, 12 AS foo FROM t3) as results",
+		expSQL: "select * from (select *, 12 as foo from t3) as results",
+	}, {
+		// if we are only star-expanding authoritative tables, we don't need to stop the expansion
+		sql:    "SELECT * FROM (SELECT t2.*, 12 AS foo FROM t3, t2) as results",
+		expSQL: "select results.c1, results.c2, results.foo from (select t2.c1 as c1, t2.c2 as c2, 12 as foo from t3, t2) as results",
 	}}
 	for _, tcase := range tcases {
 		t.Run(tcase.sql, func(t *testing.T) {
