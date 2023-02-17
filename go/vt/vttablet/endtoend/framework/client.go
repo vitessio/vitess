@@ -409,6 +409,6 @@ func (client *QueryClient) UpdateContext(ctx context.Context) {
 	client.ctx = ctx
 }
 
-func (client *QueryClient) GetSchema(tableType querypb.TableType, tableNames ...string) (map[string]string, error) {
+func (client *QueryClient) GetSchema(tableType querypb.SchemaTableType, tableNames ...string) (map[string]string, error) {
 	return client.server.GetSchema(client.ctx, client.target, tableType, tableNames)
 }
