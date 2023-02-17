@@ -191,7 +191,7 @@ func TestInitAndUpdate(t *testing.T) {
 	_ = utils.Exec(t, conn, "create table test_sc1 (id bigint primary key)")
 	expected = `[[VARCHAR("dual")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
 	if vtgateVersion >= 17 {
-		expected = `[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
+		expected = `[[VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")] [VARCHAR("test_sc")] [VARCHAR("test_sc1")]]`
 	}
 	utils.AssertMatchesWithTimeout(t, conn,
 		"SHOW VSCHEMA TABLES",
@@ -227,7 +227,7 @@ func TestDMLOnNewTable(t *testing.T) {
 	require.NoError(t, err)
 	expected := `[[VARCHAR("dual")] [VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	if vtgateVersion >= 17 {
-		expected = `[VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
+		expected = `[[VARCHAR("new_table_tracked")] [VARCHAR("t2")] [VARCHAR("t2_id4_idx")] [VARCHAR("t8")]]`
 	}
 	// wait for vttablet's schema reload interval to pass
 	utils.AssertMatchesWithTimeout(t, conn,
