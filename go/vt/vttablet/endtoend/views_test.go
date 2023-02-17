@@ -157,7 +157,7 @@ func TestDropViewDDL(t *testing.T) {
 func TestGetSchemaRPC(t *testing.T) {
 	client := framework.NewClient()
 
-	viewSchemaDef, err := client.GetSchema(querypb.TableType_VIEWS)
+	viewSchemaDef, err := client.GetSchema(querypb.SchemaTableType_VIEWS)
 	require.NoError(t, err)
 	require.Zero(t, len(viewSchemaDef))
 
@@ -171,7 +171,7 @@ func TestGetSchemaRPC(t *testing.T) {
 	_, err = client.Execute("create view vitess_view as select 1 from vitess_a", nil)
 	require.NoError(t, err)
 
-	viewSchemaDef, err = client.GetSchema(querypb.TableType_VIEWS)
+	viewSchemaDef, err = client.GetSchema(querypb.SchemaTableType_VIEWS)
 	require.NoError(t, err)
 	require.Equal(t, viewSchemaDef["vitess_view"], "select 1 from vitess_a")
 }
