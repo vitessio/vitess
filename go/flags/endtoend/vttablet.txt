@@ -281,6 +281,7 @@ Usage of vttablet:
       --stream_health_buffer_size uint                                   max streaming health entries to buffer per streaming health client (default 20)
       --table-acl-config string                                          path to table access checker config file; send SIGHUP to reload this file
       --table-acl-config-reload-interval duration                        Ticker to reload ACLs. Duration flag, format e.g.: 30s. Default: do not reload
+      --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class
       --table_gc_lifecycle string                                        States for a DROP TABLE garbage collection cycle. Default is 'hold,purge,evac,drop', use any subset ('drop' implcitly always included) (default "hold,purge,evac,drop")
       --tablet-path string                                               tablet alias
       --tablet_config string                                             YAML file config for tablet
@@ -381,4 +382,3 @@ Usage of vttablet:
       --xtrabackup_stripe_block_size uint                                Size in bytes of each block that gets sent to a given stripe before rotating to the next stripe (default 102400)
       --xtrabackup_stripes uint                                          If greater than 0, use data striping across this many destination files to parallelize data transfer and decompression
       --xtrabackup_user string                                           User that xtrabackup will use to connect to the database server. This user must have all necessary privileges. For details, please refer to xtrabackup documentation.
-      --table-refresh-interval int                                       interval in milliseconds to refresh tables in status page with refreshRequired class 
