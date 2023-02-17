@@ -85,6 +85,10 @@ var (
 	backupCompressBlocks = 2
 
 	titleCase = cases.Title(language.English).String
+
+	// backupStatsEmitInterval is the maximum frequency at which backup stats
+	// are emitted.
+	backupStatsEmitInterval = 10 * time.Second
 )
 
 func init() {
@@ -118,13 +122,18 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 	defer bs.Close()
 
-	// Scope bsStats to selected storage engine.
-	bsStats := params.Stats.Scope(
-		stats.Component(stats.BackupStorage),
-		stats.Implementation(
-			titleCase(backupstorage.BackupStorageImplementation),
+	// Scope bsStats to selected storage engine and throttle stat emission.
+	bsStats := backupstats.Throttle(
+		params.Stats.Scope(
+			stats.Component(stats.BackupStorage),
+			stats.Implementation(
+				titleCase(backupstorage.BackupStorageImplementation),
+			),
 		),
+		backupStatsEmitInterval,
 	)
+	defer bsStats.Flush()
+
 	bs = bs.WithParams(backupstorage.Params{
 		Logger: params.Logger,
 		Stats:  bsStats,
@@ -139,12 +148,20 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
-	// Scope stats to selected backup engine.
-	beParams := params.Copy()
-	beParams.Stats = params.Stats.Scope(
-		stats.Component(stats.BackupEngine),
-		stats.Implementation(titleCase(backupEngineImplementation)),
+
+	// Scope stats to selected backup engine and throttle stat emission.
+	beStats := backupstats.Throttle(
+		params.Stats.Scope(
+			stats.Component(stats.BackupEngine),
+			stats.Implementation(titleCase(backupEngineImplementation)),
+		),
+		backupStatsEmitInterval,
 	)
+	defer beStats.Flush()
+
+	beParams := params.Copy()
+	beParams.Stats = beStats
+
 	// Take the backup, and either AbortBackup or EndBackup.
 	usable, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger

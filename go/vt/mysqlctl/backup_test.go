@@ -46,17 +46,29 @@ func TestBackupExecutesBackupWithScopedParams(t *testing.T) {
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	require.Equal(t, 1, len(env.backupEngine.ExecuteBackupCalls))
+
+	// Get the backup params passed to the backup engine.
 	executeBackupParams := env.backupEngine.ExecuteBackupCalls[0].BackupParams
-	var executeBackupStats *backupstats.FakeStats
+
+	// Get the stats that were passed along with the backup params.
+	executeBackupParamsStats := unwrapStats(executeBackupParams.Stats)
+
+	// Look through the return value of stats.Scope(). Find the one that is
+	// equal to the stats that were passed to the backup engine.
+	var scopedStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
-		if sr == executeBackupParams.Stats {
-			executeBackupStats = sr.(*backupstats.FakeStats)
+		fs := unwrapStats(sr)
+		if fs == executeBackupParamsStats {
+			scopedStats = fs.(*backupstats.FakeStats)
 		}
 	}
-	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeComponent)
-	require.Equal(t, backupstats.BackupEngine.String(), executeBackupStats.ScopeV[backupstats.ScopeComponent])
-	require.Contains(t, executeBackupStats.ScopeV, backupstats.ScopeImplementation)
-	require.Equal(t, "Fake", executeBackupStats.ScopeV[backupstats.ScopeImplementation])
+
+	// Validate the scope of the stats.
+	require.NotNil(t, scopedStats, executeBackupParams.Stats)
+	require.Contains(t, scopedStats.ScopeV, backupstats.ScopeComponent)
+	require.Equal(t, backupstats.BackupEngine.String(), scopedStats.ScopeV[backupstats.ScopeComponent])
+	require.Contains(t, scopedStats.ScopeV, backupstats.ScopeImplementation)
+	require.Equal(t, "Fake", scopedStats.ScopeV[backupstats.ScopeImplementation])
 }
 
 // TestBackupNoStats tests that if BackupParams.Stats is nil, then Backup will
@@ -71,7 +83,8 @@ func TestBackupNoStats(t *testing.T) {
 
 	// It parameterizes the backup storage with nop stats.
 	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
-	require.Equal(t, backupstats.NoStats(), env.backupStorage.WithParamsCalls[0].Stats)
+	fs := unwrapStats(env.backupStorage.WithParamsCalls[0].Stats)
+	require.Equal(t, backupstats.NoStats(), fs)
 }
 
 // TestBackupParameterizesBackupStorageWithScopedStats tests that Backup passes
@@ -83,16 +96,29 @@ func TestBackupParameterizesBackupStorageWithScopedStats(t *testing.T) {
 	require.Nil(t, Backup(env.ctx, env.backupParams), env.logger.Events)
 
 	require.Equal(t, 1, len(env.backupStorage.WithParamsCalls))
-	var storageStats *backupstats.FakeStats
+
+	// Get the params passed in to backup storage WithParams().
+	backupStorageParams := env.backupStorage.WithParamsCalls[0]
+
+	// Get the stats attached to those params.
+	backupStorageParamsStats := unwrapStats(backupStorageParams.Stats)
+
+	// Look through the return value of stats.Scope(). Find the one that is
+	// equal to the stats that were passed to the backup storage WithParams().
+	var scopedStats *backupstats.FakeStats
 	for _, sr := range env.stats.ScopeReturns {
-		if sr == env.backupStorage.WithParamsCalls[0].Stats {
-			storageStats = sr.(*backupstats.FakeStats)
+		fs := unwrapStats(sr)
+		if fs == backupStorageParamsStats {
+			scopedStats = fs.(*backupstats.FakeStats)
 		}
 	}
-	require.Contains(t, storageStats.ScopeV, backupstats.ScopeComponent)
-	require.Equal(t, backupstats.BackupStorage.String(), storageStats.ScopeV[backupstats.ScopeComponent])
-	require.Contains(t, storageStats.ScopeV, backupstats.ScopeImplementation)
-	require.Equal(t, "Fake", storageStats.ScopeV[backupstats.ScopeImplementation])
+
+	// Validate the stats scope.
+	require.NotNil(t, scopedStats)
+	require.Contains(t, scopedStats.ScopeV, backupstats.ScopeComponent)
+	require.Equal(t, backupstats.BackupStorage.String(), scopedStats.ScopeV[backupstats.ScopeComponent])
+	require.Contains(t, scopedStats.ScopeV, backupstats.ScopeImplementation)
+	require.Equal(t, "Fake", scopedStats.ScopeV[backupstats.ScopeImplementation])
 }
 
 // TestBackupEmitsStats tests that Backup emits stats.
@@ -123,13 +149,14 @@ func TestBackupTriesToParameterizeBackupStorage(t *testing.T) {
 	require.Equal(t, env.logger, env.backupStorage.WithParamsCalls[0].Logger)
 	var scopedStats backupstats.Stats
 	for _, sr := range env.stats.ScopeReturns {
-		if sr != env.backupStorage.WithParamsCalls[0].Stats {
+		fs := unwrapStats(sr)
+		if fs != unwrapStats(env.backupStorage.WithParamsCalls[0].Stats) {
 			continue
 		}
 		if scopedStats != nil {
 			require.Fail(t, "backupstorage stats matches multiple scoped stats produced by parent stats")
 		}
-		scopedStats = sr
+		scopedStats = fs
 	}
 	require.NotNil(t, scopedStats)
 }
@@ -546,4 +573,15 @@ func (fbe *fakeBackupRestoreEnv) setStats(stats *backupstats.FakeStats) {
 	fbe.backupParams.Stats = nil
 	fbe.restoreParams.Stats = nil
 	fbe.stats = nil
+}
+
+// unwrapStats recursively unwraps a non-throttled Stats object from inside
+// ThrottledStats. That's useful in the context of this test suite so we can
+// validate interactions with FakeStats and NoStats.
+func unwrapStats(stats backupstats.Stats) backupstats.Stats {
+	ts, ok := stats.(*backupstats.ThrottledStats)
+	if ok {
+		return unwrapStats(ts.Stats())
+	}
+	return stats
 }
