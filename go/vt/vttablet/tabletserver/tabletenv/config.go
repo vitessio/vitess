@@ -178,6 +178,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableOnlineDDL, "queryserver_enable_online_ddl", true, "Enable online DDL.")
 	fs.BoolVar(&currentConfig.SanitizeLogMessages, "sanitize_log_messages", false, "Remove potentially sensitive information in tablet INFO, WARNING, and ERROR log messages such as query parameters.")
 	fs.BoolVar(&currentConfig.EnableSettingsPool, "queryserver-enable-settings-pool", false, "Enable pooling of connections with modified system settings")
+	fs.BoolVar(&currentConfig.EnableSystemHealthMonitor, "enable-system-health-monitor", false, "Enable collection of system health metrics")
 
 	fs.Int64Var(&currentConfig.RowStreamer.MaxInnoDBTrxHistLen, "vreplication_copy_phase_max_innodb_history_list_length", 1000000, "The maximum InnoDB transaction history that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
@@ -319,9 +320,10 @@ type TabletConfig struct {
 
 	TransactionLimitConfig `json:"-"`
 
-	EnforceStrictTransTables bool `json:"-"`
-	EnableOnlineDDL          bool `json:"-"`
-	EnableSettingsPool       bool `json:"-"`
+	EnforceStrictTransTables  bool `json:"-"`
+	EnableOnlineDDL           bool `json:"-"`
+	EnableSettingsPool        bool `json:"-"`
+	EnableSystemHealthMonitor bool `json:"-"`
 
 	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
 
@@ -566,9 +568,10 @@ var defaultConfig = TabletConfig{
 
 	TransactionLimitConfig: defaultTransactionLimitConfig(),
 
-	EnforceStrictTransTables: true,
-	EnableOnlineDDL:          true,
-	EnableTableGC:            true,
+	EnforceStrictTransTables:  true,
+	EnableOnlineDDL:           true,
+	EnableTableGC:             true,
+	EnableSystemHealthMonitor: false,
 
 	RowStreamer: RowStreamerConfig{
 		MaxInnoDBTrxHistLen: 1000000,

@@ -94,6 +94,7 @@ Usage of vttablet:
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
       --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
       --enable-lag-throttler                                             Synonym to -enable_lag_throttler
+      --enable-system-health-monitor                                     Enable collection of system health metrics
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
       --enable_consolidator                                              This option enables the query consolidator. (default true)
       --enable_consolidator_replicas                                     This option enables the query consolidator only on replicas.

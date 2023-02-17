@@ -221,7 +221,7 @@ func (hs *healthStreamer) unregister(ch chan *querypb.StreamHealthResponse) {
 	delete(hs.clients, ch)
 }
 
-func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, err error, serving bool) {
+func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimestamp time.Time, lag time.Duration, cpuUsage float64, err error, serving bool) {
 	hs.mu.Lock()
 	defer hs.mu.Unlock()
 
@@ -236,6 +236,7 @@ func (hs *healthStreamer) ChangeState(tabletType topodatapb.TabletType, terTimes
 	} else {
 		hs.state.RealtimeStats.HealthError = ""
 	}
+	hs.state.RealtimeStats.CpuUsage = cpuUsage
 	hs.state.RealtimeStats.ReplicationLagSeconds = uint32(lag.Seconds())
 	hs.state.Serving = serving
 

@@ -108,19 +108,20 @@ type stateManager struct {
 	// Open must be done in forward order.
 	// Close must be done in reverse order.
 	// All Close functions must be called before Open.
-	hs          *healthStreamer
-	se          schemaEngine
-	rt          replTracker
-	vstreamer   subComponent
-	tracker     subComponent
-	watcher     subComponent
-	qe          queryEngine
-	txThrottler txThrottler
-	te          txEngine
-	messager    subComponent
-	ddle        onlineDDLExecutor
-	throttler   lagThrottler
-	tableGC     tableGarbageCollector
+	hs           *healthStreamer
+	se           schemaEngine
+	rt           replTracker
+	vstreamer    subComponent
+	tracker      subComponent
+	watcher      subComponent
+	qe           queryEngine
+	txThrottler  txThrottler
+	te           txEngine
+	messager     subComponent
+	ddle         onlineDDLExecutor
+	throttler    lagThrottler
+	tableGC      tableGarbageCollector
+	systemHealth systemHealthMonitor
 
 	// hcticks starts on initialiazation and runs forever.
 	hcticks *timer.Timer
@@ -187,6 +188,12 @@ type (
 		Open() error
 		Close()
 	}
+
+	systemHealthMonitor interface {
+		Open() error
+		GetCPUUsage() float64
+		Close()
+	}
 )
 
 // Init performs the second phase of initialization.
@@ -199,6 +206,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 	sm.unhealthyThreshold = sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get())
 	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
+	sm.systemHealth = newSystemHealthMonitor(env.Config())
 }
 
 // SetServingType changes the state to the specified settings.
@@ -372,6 +380,7 @@ func (sm *stateManager) StopService() {
 	sm.SetServingType(sm.Target().TabletType, time.Time{}, StateNotConnected, "service stopped")
 	sm.hcticks.Stop()
 	sm.hs.Close()
+	sm.systemHealth.Close()
 }
 
 // StartRequest validates the current state and target and registers
@@ -452,6 +461,7 @@ func (sm *stateManager) servePrimary() error {
 	sm.te.AcceptReadWrite()
 	sm.messager.Open()
 	sm.throttler.Open()
+	sm.systemHealth.Open()
 	sm.tableGC.Open()
 	sm.ddle.Open()
 	sm.setState(topodatapb.TabletType_PRIMARY, StateServing)
@@ -492,6 +502,7 @@ func (sm *stateManager) serveNonPrimary(wantTabletType topodatapb.TabletType) er
 	sm.rt.MakeNonPrimary()
 	sm.watcher.Open()
 	sm.throttler.Open()
+	sm.systemHealth.Open()
 	sm.setState(wantTabletType, StateServing)
 	return nil
 }
@@ -531,23 +542,25 @@ func (sm *stateManager) unserveCommon() {
 	log.Infof("Finished execution of handleShutdownGracePeriod")
 	defer cancel()
 
-	log.Infof("Started online ddl executor close")
+	log.Info("Started system health monitor close")
+	sm.systemHealth.Close()
+	log.Info("Finished system health monitor close. Started online ddl executor close")
 	sm.ddle.Close()
-	log.Infof("Finished online ddl executor close. Started table garbage collector close")
+	log.Info("Finished online ddl executor close. Started table garbage collector close")
 	sm.tableGC.Close()
-	log.Infof("Finished table garbage collector close. Started lag throttler close")
+	log.Info("Finished table garbage collector close. Started lag throttler close")
 	sm.throttler.Close()
-	log.Infof("Finished lag throttler close. Started messager close")
+	log.Info("Finished lag throttler close. Started messager close")
 	sm.messager.Close()
-	log.Infof("Finished messager close. Started txEngine close")
+	log.Info("Finished messager close. Started txEngine close")
 	sm.te.Close()
-	log.Infof("Finished txEngine close. Killing all OLAP queries")
+	log.Info("Finished txEngine close. Killing all OLAP queries")
 	sm.olapql.TerminateAll()
 	log.Info("Finished Killing all OLAP queries. Started tracker close")
 	sm.tracker.Close()
-	log.Infof("Finished tracker close. Started wait for requests")
+	log.Info("Finished tracker close. Started wait for requests")
 	sm.requests.Wait()
-	log.Infof("Finished wait for requests. Finished execution of unserveCommon")
+	log.Info("Finished wait for requests. Finished execution of unserveCommon")
 }
 
 func (sm *stateManager) handleShutdownGracePeriod() (cancel func()) {
@@ -662,7 +675,7 @@ func (sm *stateManager) Broadcast() {
 	defer sm.mu.Unlock()
 
 	lag, err := sm.refreshReplHealthLocked()
-	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, err, sm.isServingLocked())
+	sm.hs.ChangeState(sm.target.TabletType, sm.terTimestamp, lag, sm.systemHealth.GetCPUUsage(), err, sm.isServingLocked())
 }
 
 func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {

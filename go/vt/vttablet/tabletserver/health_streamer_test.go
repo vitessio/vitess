@@ -92,7 +92,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	}
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
-	hs.ChangeState(topodatapb.TabletType_REPLICA, time.Time{}, 0, nil, false)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, time.Time{}, 0, 0.123, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -100,6 +100,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 		},
 		TabletAlias: alias,
 		RealtimeStats: &querypb.RealtimeStats{
+			CpuUsage:                      0.123,
 			FilteredReplicationLagSeconds: 1,
 			BinlogPlayersCount:            2,
 		},
@@ -108,7 +109,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 
 	// Test primary and timestamp.
 	now := time.Now()
-	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, nil, true)
+	hs.ChangeState(topodatapb.TabletType_PRIMARY, now, 0, 0, nil, true)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -125,7 +126,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test non-serving, and 0 timestamp for non-primary.
-	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, nil, false)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, 0, nil, false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
@@ -141,7 +142,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test Health error.
-	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 0, errors.New("repl err"), false)
+	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 0, 0, errors.New("repl err"), false)
 	shr = <-ch
 	want = &querypb.StreamHealthResponse{
 		Target: &querypb.Target{
