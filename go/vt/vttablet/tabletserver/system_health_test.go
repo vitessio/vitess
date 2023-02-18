@@ -71,5 +71,4 @@ func TestSystemHealthCollector(t *testing.T) {
 	// test close
 	monitor.Close()
 	assert.False(t, monitor.started)
-
 }

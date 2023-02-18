@@ -117,8 +117,10 @@ func (s *systemHealthCollector) stopCollection() {
 	if !s.started {
 		return
 	}
+
 	s.stop <- true
 	close(s.stop)
+
 	s.wg.Wait()
 	s.started = false
 }
