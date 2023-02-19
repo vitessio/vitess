@@ -85,7 +85,15 @@ func (s *systemHealthCollector) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	s.stopCollection()
+	if !s.started {
+		return
+	}
+
+	s.stop <- true
+	close(s.stop)
+
+	s.wg.Wait()
+	s.started = false
 }
 
 // GetCPUUsage returns the average cpu usage for the system
@@ -114,19 +122,6 @@ func (s *systemHealthCollector) startCollection() {
 			}
 		}
 	}
-}
-
-// stopCollection stops the collection of system health metrics.
-func (s *systemHealthCollector) stopCollection() {
-	if !s.started {
-		return
-	}
-
-	s.stop <- true
-	close(s.stop)
-
-	s.wg.Wait()
-	s.started = false
 }
 
 // collectCPUUsage collects the CPU usage percent of the system running vttablet.
