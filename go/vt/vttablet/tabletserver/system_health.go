@@ -41,7 +41,6 @@ type systemHealthCollector struct {
 	interval        time.Duration
 	mu              sync.Mutex
 	started         bool
-	startErr        chan error
 	stop            chan bool
 	wg              sync.WaitGroup
 }
@@ -68,12 +67,11 @@ func (s *systemHealthCollector) Open() error {
 		return nil
 	}
 
-	s.startErr = make(chan error, 1)
 	s.stop = make(chan bool, 1)
-
 	go s.startCollection()
 	s.started = true
-	return <-s.startErr
+
+	return s.collectCPUUsage()
 }
 
 // Close stops collection of system health metrics.
@@ -106,9 +104,6 @@ func (s *systemHealthCollector) GetCPUUsage() float64 {
 func (s *systemHealthCollector) startCollection() {
 	s.wg.Add(1)
 	defer s.wg.Done()
-
-	s.startErr <- s.collectCPUUsage()
-	close(s.startErr)
 
 	ticker := time.NewTicker(s.interval)
 	for {
