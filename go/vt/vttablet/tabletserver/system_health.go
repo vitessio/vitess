@@ -72,6 +72,7 @@ func (s *systemHealthCollector) Open() error {
 	s.stop = make(chan bool, 1)
 
 	go s.startCollection()
+	s.started = true
 	return <-s.startErr
 }
 
@@ -100,7 +101,6 @@ func (s *systemHealthCollector) startCollection() {
 
 	s.startErr <- s.collectCPUUsage()
 	close(s.startErr)
-	s.started = true
 
 	ticker := time.NewTicker(s.interval)
 	for {
