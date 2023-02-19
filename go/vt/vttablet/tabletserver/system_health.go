@@ -64,6 +64,10 @@ func (s *systemHealthCollector) Open() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	if s.started {
+		return nil
+	}
+
 	s.startErr = make(chan error, 1)
 	s.stop = make(chan bool, 1)
 
