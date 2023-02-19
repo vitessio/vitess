@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/shirou/gopsutil/cpu"
+	"github.com/shirou/gopsutil/v3/cpu"
 
 	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
