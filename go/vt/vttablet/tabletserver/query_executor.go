@@ -108,7 +108,7 @@ func (qre *QueryExecutor) shouldConsolidate() bool {
 	case querypb.ExecuteOptions_CONSOLIDATOR_ENABLED_REPLICAS:
 		return qre.tabletType != topodatapb.TabletType_PRIMARY
 	default:
-		cm := qre.tsv.qe.consolidatorMode.Get()
+		cm := qre.tsv.qe.consolidatorMode.Load().(string)
 		return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
 	}
 }
@@ -839,7 +839,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Result, error) {
-	maxrows := qre.tsv.qe.maxResultSize.Get()
+	maxrows := qre.tsv.qe.maxResultSize.Load()
 	qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 	result, err := qre.txFetch(conn, true)
 	if err != nil {
@@ -858,7 +858,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
 	}
-	warnThreshold := qre.tsv.qe.warnResultSize.Get()
+	warnThreshold := qre.tsv.qe.warnResultSize.Load()
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
@@ -1140,7 +1140,7 @@ func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
 			{
 				sqltypes.NewVarChar(qre.tsv.sm.target.Shard),
 				sqltypes.NewInt32(enabled),
-				sqltypes.NewFloat64(qre.tsv.lagThrottler.MetricsThreshold.Get()),
+				sqltypes.NewFloat64(qre.tsv.ThrottleMetricThreshold()),
 				sqltypes.NewVarChar(qre.tsv.lagThrottler.GetMetricsQuery()),
 			},
 		},
@@ -1161,7 +1161,7 @@ func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
 }
 
 func (qre *QueryExecutor) getSelectLimit() int64 {
-	return qre.tsv.qe.maxResultSize.Get()
+	return qre.tsv.qe.maxResultSize.Load()
 }
 
 func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -1174,7 +1174,7 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfiel
 	qre.tsv.statelessql.Add(qd)
 	defer qre.tsv.statelessql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -1187,7 +1187,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	qre.tsv.statefulql.Add(qd)
 	defer qre.tsv.statefulql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
@@ -1210,11 +1210,11 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction boo
 	if isTransaction {
 		qre.tsv.statefulql.Add(qd)
 		defer qre.tsv.statefulql.Remove(qd)
-		return conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
+		return conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
 	qre.tsv.olapql.Add(qd)
 	defer qre.tsv.olapql.Remove(qd)
-	return conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
+	return conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 }
 
 func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {

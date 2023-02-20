@@ -18,14 +18,13 @@ package stats
 
 import (
 	"strconv"
+	"sync/atomic"
 	"time"
-
-	"vitess.io/vitess/go/sync2"
 )
 
 // CounterDuration exports a time.Duration as counter.
 type CounterDuration struct {
-	i    sync2.AtomicDuration
+	i    atomic.Int64
 	help string
 }
 
@@ -39,23 +38,23 @@ func NewCounterDuration(name, help string) *CounterDuration {
 }
 
 // Help implements the Variable interface.
-func (cd CounterDuration) Help() string {
+func (cd *CounterDuration) Help() string {
 	return cd.help
 }
 
 // String is the implementation of expvar.var.
-func (cd CounterDuration) String() string {
-	return strconv.FormatInt(int64(cd.i.Get()), 10)
+func (cd *CounterDuration) String() string {
+	return strconv.FormatInt(cd.i.Load(), 10)
 }
 
 // Add adds the provided value to the CounterDuration.
 func (cd *CounterDuration) Add(delta time.Duration) {
-	cd.i.Add(delta)
+	cd.i.Add(delta.Nanoseconds())
 }
 
 // Get returns the value.
 func (cd *CounterDuration) Get() time.Duration {
-	return cd.i.Get()
+	return time.Duration(cd.i.Load())
 }
 
 // GaugeDuration exports a time.Duration as gauge.
@@ -78,7 +77,7 @@ func NewGaugeDuration(name, help string) *GaugeDuration {
 
 // Set sets the value.
 func (gd *GaugeDuration) Set(value time.Duration) {
-	gd.i.Set(value)
+	gd.i.Store(value.Nanoseconds())
 }
 
 // CounterDurationFunc allows to provide the value via a custom function.

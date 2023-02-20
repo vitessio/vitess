@@ -113,6 +113,7 @@ require (
 	github.com/kr/text v0.2.0
 	github.com/nsf/jsondiff v0.0.0-20210926074059-1e845ec5d249
 	golang.org/x/exp v0.0.0-20230131160201-f062dba9d201
+	golang.org/x/sync v0.1.0
 	modernc.org/sqlite v1.20.3
 )
 

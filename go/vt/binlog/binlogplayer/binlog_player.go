@@ -30,6 +30,7 @@ import (
 	"math"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -40,7 +41,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -86,10 +86,10 @@ type Stats struct {
 	heartbeatMutex sync.Mutex
 	heartbeat      int64
 
-	ReplicationLagSeconds sync2.AtomicInt64
+	ReplicationLagSeconds atomic.Int64
 	History               *history.History
 
-	State sync2.AtomicString
+	State atomic.Value
 
 	PhaseTimings   *stats.Timings
 	QueryTimings   *stats.Timings
@@ -152,7 +152,7 @@ func NewStats() *Stats {
 	bps.Timings = stats.NewTimings("", "", "")
 	bps.Rates = stats.NewRates("", bps.Timings, 15*60/5, 5*time.Second)
 	bps.History = history.New(3)
-	bps.ReplicationLagSeconds.Set(math.MaxInt64)
+	bps.ReplicationLagSeconds.Store(math.MaxInt64)
 	bps.PhaseTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryTimings = stats.NewTimings("", "", "Phase")
 	bps.QueryCount = stats.NewCountersWithSingleLabel("", "", "Phase", "")
@@ -503,7 +503,7 @@ func (blp *BinlogPlayer) writeRecoveryPosition(tx *binlogdatapb.BinlogTransactio
 	blp.position = position
 	blp.blplStats.SetLastPosition(blp.position)
 	if tx.EventToken.Timestamp != 0 {
-		blp.blplStats.ReplicationLagSeconds.Set(now - tx.EventToken.Timestamp)
+		blp.blplStats.ReplicationLagSeconds.Store(now - tx.EventToken.Timestamp)
 	}
 	return nil
 }
@@ -515,7 +515,7 @@ func (blp *BinlogPlayer) setVReplicationState(state, message string) error {
 			Message: message,
 		})
 	}
-	blp.blplStats.State.Set(state)
+	blp.blplStats.State.Store(state)
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(MessageTruncate(message)), blp.uid)
 	if _, err := blp.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
