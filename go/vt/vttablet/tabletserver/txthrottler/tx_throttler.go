@@ -274,8 +274,8 @@ func (t *TxThrottler) Throttle() (result bool) {
 	if t.state == nil {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}
-	requestsTotal.Add(1)
 	result = t.state.throttle()
+	requestsTotal.Add(1)
 	if result {
 		requestsThrottled.Add(1)
 	}
