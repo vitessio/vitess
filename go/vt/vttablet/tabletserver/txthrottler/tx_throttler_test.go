@@ -112,7 +112,11 @@ func TestEnabledThrottler(t *testing.T) {
 	})
 	assert.Nil(t, throttler.Open())
 	assert.Equal(t, int64(1), throttlerRunning.Get())
+
 	assert.False(t, throttler.Throttle())
+	assert.Equal(t, int64(1), requestsTotal.Get())
+	assert.Zero(t, requestsThrottled.Get())
+
 	throttler.state.StatsUpdate(tabletStats)
 	rdonlyTabletStats := &discovery.TabletHealth{
 		Target: &querypb.Target{
@@ -123,6 +127,7 @@ func TestEnabledThrottler(t *testing.T) {
 	throttler.state.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
 	assert.True(t, throttler.Throttle())
+	assert.Equal(t, int64(1), requestsThrottled.Get())
 	throttler.Close()
 	assert.Zero(t, throttlerRunning.Get())
 }
