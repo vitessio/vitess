@@ -1116,7 +1116,7 @@ func TestCreateTableDiff(t *testing.T) {
 		},
 		// expressions
 		{
-			// validates that CannonicalString prints 'signed' and not 'SIGNED', as MySQL's `SHOW CREATE TABLE` outputs lower case 'signed'
+			// validates that CanonicalString prints 'signed' and not 'SIGNED', as MySQL's `SHOW CREATE TABLE` outputs lower case 'signed'
 			name: "cast as",
 			from: `
 				CREATE TABLE t4 (
@@ -1131,6 +1131,21 @@ func TestCreateTableDiff(t *testing.T) {
 				)`,
 			diff:  "alter table t4 add key index_on_company_id ((cast(json_unquote(json_extract(properties, _utf8mb4 '$.company_id')) as signed)))",
 			cdiff: "ALTER TABLE `t4` ADD KEY `index_on_company_id` ((CAST(JSON_UNQUOTE(JSON_EXTRACT(`properties`, _utf8mb4 '$.company_id')) AS signed)))",
+		},
+		{
+			// validates that CanonicalString prints 'interval 30 minute' and not ' INTERVAL 30 MINUTE', as MySQL's `SHOW CREATE TABLE` outputs lower case 'interval 30 minute'
+			name: "interval expression",
+			from: `
+				CREATE TABLE t4 (
+					id int NOT NULL PRIMARY KEY
+				)`,
+			to: `
+				CREATE TABLE t4 (
+					id int NOT NULL PRIMARY KEY,
+					created_at datetime(6) NOT NULL DEFAULT ((now() + interval 30 minute))
+				)`,
+			diff:  "alter table t4 add column created_at datetime(6) not null default (now() + interval 30 minute)",
+			cdiff: "ALTER TABLE `t4` ADD COLUMN `created_at` datetime(6) NOT NULL DEFAULT (now() + INTERVAL 30 minute)",
 		},
 	}
 	standardHints := DiffHints{}
