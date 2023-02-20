@@ -115,7 +115,6 @@ func (orc *VTOrcProcess) Setup() (err error) {
 		"--instance-poll-time", "1s",
 		// Faster topo information refresh speeds up the tests. This doesn't add any significant load either
 		"--topo-information-refresh-duration", "3s",
-		"--orc_web_dir", path.Join(os.Getenv("VTROOT"), "web", "vtorc"),
 	)
 	if *isCoverage {
 		orc.proc.Args = append(orc.proc.Args, "--test.coverprofile="+getCoveragePath("orc.out"))
