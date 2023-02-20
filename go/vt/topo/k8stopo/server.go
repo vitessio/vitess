@@ -38,7 +38,6 @@ import (
 	"github.com/spf13/pflag"
 
 	"k8s.io/apimachinery/pkg/fields"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/tools/clientcmd"
@@ -82,9 +81,6 @@ func (f Factory) Create(cell, serverAddr, root string) (topo.Conn, error) {
 
 // Server is the implementation of topo.Server for Kubernetes.
 type Server struct {
-	// kubeClient is the entire kubernetes interface
-	kubeClient kubernetes.Interface
-
 	// vtKubeClient is the client for vitess api types
 	vtKubeClient vtkube.Interface
 
@@ -209,12 +205,6 @@ func NewServer(_, root string) (*Server, error) {
 		log.V(7).Info("Overriding Kubernetes config namespace with: ", namespace)
 	}
 
-	// create the kubernetes client
-	kubeClientset, err := kubernetes.NewForConfig(config)
-	if err != nil {
-		return nil, fmt.Errorf("error creating official Kubernetes client: %s", err)
-	}
-
 	vtKubeClientset, err := vtkube.NewForConfig(config)
 	if err != nil {
 		return nil, fmt.Errorf("error creating vitess Kubernetes client: %s", err)
@@ -223,7 +213,6 @@ func NewServer(_, root string) (*Server, error) {
 	// Create the server
 	s := &Server{
 		namespace:      namespace,
-		kubeClient:     kubeClientset,
 		vtKubeClient:   vtKubeClientset,
 		resourceClient: vtKubeClientset.TopoV1beta1().VitessTopoNodes(namespace),
 		root:           root,
