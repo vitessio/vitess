@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -105,6 +106,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		Shard:              tablet.Shard,
 		TabletAlias:        topoproto.TabletAliasString(tablet.Alias),
 		BackupTime:         time.Now(),
+		Stats:              backupstats.BackupStats(),
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)

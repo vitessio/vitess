@@ -48,6 +48,14 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (ty sqltypes.Type, err error) {
 	return
 }
 
+func (env *ExpressionEnv) collation() collations.TypedCollation {
+	return collations.TypedCollation{
+		Collation:    env.DefaultCollation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+}
+
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
 	return EnvWithBindVars(map[string]*querypb.BindVariable{}, collations.Unknown)

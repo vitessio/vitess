@@ -184,9 +184,13 @@ func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 		mycnf.mycnfMap[lval] = rval
 	}
 
-	serverID, err := mycnf.lookupInt("server-id")
+	serverIDStr, err := mycnf.lookupWithDefault("server-id", "")
 	if err != nil {
 		return nil, err
+	}
+	serverID, err := strconv.ParseUint(serverIDStr, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert server-id: %v", err)
 	}
 	mycnf.ServerID = uint32(serverID)
 

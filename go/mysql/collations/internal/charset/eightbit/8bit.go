@@ -77,3 +77,7 @@ func (e *Charset_8bit) EncodeRune(dst []byte, r rune) int {
 func (Charset_8bit) Length(src []byte) int {
 	return len(src)
 }
+
+func (Charset_8bit) MaxWidth() int {
+	return 1
+}

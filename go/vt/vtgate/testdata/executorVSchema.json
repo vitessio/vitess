@@ -1,0 +1,351 @@
+{
+	"sharded": true,
+	"vindexes": {
+		"hash_index": {
+			"type": "hash"
+		},
+		"music_user_map": {
+			"type": "lookup_hash_unique",
+			"owner": "music",
+			"params": {
+				"table": "music_user_map",
+				"from": "music_id",
+				"to": "user_id"
+			}
+		},
+		"name_user_map": {
+			"type": "lookup_hash",
+			"owner": "user",
+			"params": {
+				"table": "name_user_map",
+				"from": "name",
+				"to": "user_id"
+			}
+		},
+		"name_lastname_keyspace_id_map": {
+			"type": "lookup",
+			"owner": "user2",
+			"params": {
+				"table": "name_lastname_keyspace_id_map",
+				"from": "name,lastname",
+				"to": "keyspace_id"
+			}
+		},
+		"insert_ignore_idx": {
+			"type": "lookup_hash",
+			"owner": "insert_ignore_test",
+			"params": {
+				"table": "ins_lookup",
+				"from": "fromcol",
+				"to": "tocol"
+			}
+		},
+		"idx1": {
+			"type": "hash"
+		},
+		"idx_noauto": {
+			"type": "hash",
+			"owner": "noauto_table"
+		},
+		"keyspace_id": {
+			"type": "numeric"
+		},
+		"krcol_unique_vdx": {
+			"type": "keyrange_lookuper_unique"
+		},
+		"krcol_vdx": {
+			"type": "keyrange_lookuper"
+		},
+    	"t1_lkp_vdx": {
+      		"type": "consistent_lookup_unique",
+      		"params": {
+        		"table": "t1_lkp_idx",
+        		"from": "unq_col",
+        		"to": "keyspace_id"
+      		},
+      		"owner": "t1"
+    	},
+		"t2_wo_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.wo_lu_idx",
+        		"from": "wo_lu_col",
+        		"to": "keyspace_id",
+        		"write_only": "true"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_erl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.erl_lu_idx",
+        		"from": "erl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "exclusive"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_srl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.srl_lu_idx",
+        		"from": "srl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "shared"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_nrl_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.nrl_lu_idx",
+        		"from": "nrl_lu_col",
+        		"to": "keyspace_id",
+        		"read_lock": "none"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_nv_lu_vdx": {
+      		"type": "lookup_unique",
+      		"params": {
+        		"table": "TestUnsharded.nv_lu_idx",
+        		"from": "nv_lu_col",
+        		"to": "keyspace_id",
+        		"no_verify": "true"
+      		},
+      		"owner": "t2_lookup"
+    	},
+		"t2_lu_vdx": {
+      		"type": "lookup_hash_unique",
+      		"params": {
+        		"table": "TestUnsharded.lu_idx",
+        		"from": "lu_col",
+        		"to": "keyspace_id"
+      		},
+		"owner": "t2_lookup"
+    	},
+		"regional_vdx": {
+			"type": "region_experimental",
+			"params": {
+				"region_bytes": "1"
+			}
+    	},
+		"cfc": {
+			"type": "cfc"
+		}
+	},
+	"tables": {
+		"user": {
+			"column_vindexes": [
+				{
+					"column": "Id",
+					"name": "hash_index"
+				},
+				{
+					"column": "name",
+					"name": "name_user_map"
+				}
+			],
+			"auto_increment": {
+				"column": "id",
+				"sequence": "user_seq"
+			},
+			"columns": [
+				{
+					"name": "textcol",
+					"type": "VARCHAR"
+				}
+			]
+		},
+		"user2": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "hash_index"
+				},
+				{
+					"columns": ["name", "lastname"],
+					"name": "name_lastname_keyspace_id_map"
+				}
+			]
+		},
+		"user_extra": {
+			"column_vindexes": [
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				}
+			]
+		},
+		"sharded_user_msgs": {
+			"column_vindexes": [
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				}
+			]
+		},
+		"music": {
+			"column_vindexes": [
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				},
+				{
+					"column": "id",
+					"name": "music_user_map"
+				}
+			],
+			"auto_increment": {
+				"column": "id",
+				"sequence": "user_seq"
+			}
+		},
+		"music_extra": {
+			"column_vindexes": [
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				},
+				{
+					"column": "music_id",
+					"name": "music_user_map"
+				}
+			]
+		},
+		"music_extra_reversed": {
+			"column_vindexes": [
+				{
+					"column": "music_id",
+					"name": "music_user_map"
+				},
+				{
+					"column": "user_id",
+					"name": "hash_index"
+				}
+			]
+		},
+		"insert_ignore_test": {
+			"column_vindexes": [
+				{
+					"column": "pv",
+					"name": "music_user_map"
+				},
+				{
+					"column": "owned",
+					"name": "insert_ignore_idx"
+				},
+				{
+					"column": "verify",
+					"name": "hash_index"
+				}
+			]
+		},
+		"noauto_table": {
+			"column_vindexes": [
+				{
+					"column": "id",
+					"name": "idx_noauto"
+				}
+			]
+		},
+		"keyrange_table": {
+			"column_vindexes": [
+				{
+					"column": "krcol_unique",
+					"name": "krcol_unique_vdx"
+				},
+				{
+					"column": "krcol",
+					"name": "krcol_vdx"
+				}
+			]
+		},
+		"ksid_table": {
+			"column_vindexes": [
+				{
+					"column": "keyspace_id",
+					"name": "keyspace_id"
+				}
+			]
+		},
+		"t1": {
+      		"column_vindexes": [
+				{
+				  	"column": "id",
+				  	"name": "hash_index"
+				},
+				{
+				  	"column": "unq_col",
+				  	"name": "t1_lkp_vdx"
+				}
+            ]
+    	},
+		"t1_lkp_idx": {
+			"column_vindexes": [
+				{
+					"column": "unq_col",
+				  	"name": "hash_index"
+				}
+			]
+		},
+		"t2_lookup": {
+      		"column_vindexes": [
+				{
+				  	"column": "id",
+				  	"name": "hash_index"
+				},
+				{
+					"column": "wo_lu_col",
+					"name": "t2_wo_lu_vdx"
+				},
+				{
+					"column": "erl_lu_col",
+					"name": "t2_erl_lu_vdx"
+				},
+				{
+					"column": "srl_lu_col",
+					"name": "t2_srl_lu_vdx"
+				},
+				{
+					"column": "nrl_lu_col",
+					"name": "t2_nrl_lu_vdx"
+				},
+				{
+					"column": "nv_lu_col",
+					"name": "t2_nv_lu_vdx"
+				},
+				{
+				  	"column": "lu_col",
+				  	"name": "t2_lu_vdx"
+				}
+            ]
+    	},
+		"user_region": {
+			"column_vindexes": [
+				{
+					"columns": ["cola","colb"],
+					"name": "regional_vdx"
+				}
+			]
+    	},
+		"tbl_cfc": {
+			"column_vindexes": [
+                {
+                    "column": "c1",
+                    "name": "cfc"
+                }
+			],
+			"columns": [
+				{
+					"name": "c2",
+					"type": "VARCHAR"
+				}
+			]
+    	},
+		"zip_detail": {
+			"type": "reference",
+			"source": "TestUnsharded.zip_detail"
+		}
+	}
+}

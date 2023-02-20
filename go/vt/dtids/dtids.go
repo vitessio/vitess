@@ -46,7 +46,7 @@ func ShardSession(dtid string) (*vtgatepb.Session_ShardSession, error) {
 		Shard:      splits[1],
 		TabletType: topodatapb.TabletType_PRIMARY,
 	}
-	txid, err := strconv.ParseInt(splits[2], 10, 0)
+	txid, err := strconv.ParseInt(splits[2], 10, 64)
 	if err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction id in dtid: %s", dtid)
 	}
@@ -62,7 +62,7 @@ func TransactionID(dtid string) (int64, error) {
 	if len(splits) != 3 {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid parts in dtid: %s", dtid)
 	}
-	txid, err := strconv.ParseInt(splits[2], 10, 0)
+	txid, err := strconv.ParseInt(splits[2], 10, 64)
 	if err != nil {
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid transaction id in dtid: %s", dtid)
 	}
