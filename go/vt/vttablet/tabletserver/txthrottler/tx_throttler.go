@@ -28,6 +28,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
@@ -37,6 +38,12 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	throttlerdatapb "vitess.io/vitess/go/vt/proto/throttlerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+)
+
+var (
+	throttlerRunning  = stats.NewGauge("TransactionThrottlerRunning", "transaction throttler running")
+	requestsTotal     = stats.NewCounter("TransactionThrottlerRequests", "transaction throttler requests")
+	requestsThrottled = stats.NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled")
 )
 
 // TxThrottler throttles transactions based on replication lag.
@@ -234,6 +241,7 @@ func (t *TxThrottler) Open() error {
 		return nil
 	}
 	log.Info("TxThrottler: opening")
+	throttlerRunning.Set(1)
 	var err error
 	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard, t.target.Cell)
 	return err
@@ -251,6 +259,7 @@ func (t *TxThrottler) Close() {
 	}
 	t.state.deallocateResources()
 	t.state = nil
+	throttlerRunning.Set(0)
 	log.Info("TxThrottler: closed")
 }
 
@@ -265,7 +274,12 @@ func (t *TxThrottler) Throttle() (result bool) {
 	if t.state == nil {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}
-	return t.state.throttle()
+	requestsTotal.Add(1)
+	result = t.state.throttle()
+	if result {
+		requestsThrottled.Add(1)
+	}
+	return result
 }
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
