@@ -305,7 +305,7 @@ func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Resul
 }
 
 func (qre *QueryExecutor) execCreateViewDDL(conn *StatefulConnection, stmt *sqlparser.CreateView) (*sqltypes.Result, error) {
-	bindVars := qre.generateBindVarsForViewDDLInsert(stmt)
+	bindVars := generateBindVarsForViewDDLInsert(stmt)
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
 	if err != nil {
 		return nil, err
@@ -334,7 +334,7 @@ func (qre *QueryExecutor) execAlterViewDDL(conn *StatefulConnection, stmt *sqlpa
 		CheckOption: stmt.CheckOption,
 		Comments:    stmt.Comments,
 	}
-	bindVars := qre.generateBindVarsForViewDDLInsert(createViewDDL)
+	bindVars := generateBindVarsForViewDDLInsert(createViewDDL)
 	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
 	if err != nil {
 		return nil, err
@@ -1227,10 +1227,61 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
 }
 
-func (qre *QueryExecutor) generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
+func generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
 	bindVars := make(map[string]*querypb.BindVariable)
 	bindVars["table_name"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
 	bindVars["view_definition"] = sqltypes.StringBindVariable(sqlparser.String(createView.Select))
 	bindVars["create_statement"] = sqltypes.StringBindVariable(sqlparser.String(createView))
 	return bindVars
+}
+
+func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
+	switch tableType {
+	case querypb.SchemaTableType_VIEWS:
+		return qre.getViewDefinitions(tableNames)
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
+}
+
+func (qre *QueryExecutor) getViewDefinitions(viewNames []string) (map[string]string, error) {
+	query := mysql.FetchViews
+	var bindVars map[string]*querypb.BindVariable
+	if len(viewNames) > 0 {
+		query = mysql.FetchUpdatedViews
+		bindVars = map[string]*querypb.BindVariable{
+			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
+		}
+	}
+	res, err := qre.execQuery(query, bindVars)
+	if err != nil {
+		return nil, err
+	}
+
+	schemaDef := make(map[string]string)
+	for _, row := range res.Rows {
+		schemaDef[row[0].ToString()] = row[1].ToString()
+	}
+	return schemaDef, nil
+}
+
+func (qre *QueryExecutor) execQuery(query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+	sql := query
+	if len(bindVars) > 0 {
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		sql, _, err = qre.generateFinalSQL(sqlparser.NewParsedQuery(stmt), bindVars)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	conn, err := qre.getConn()
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Recycle()
+
+	return qre.execDBConn(conn, sql, true)
 }
