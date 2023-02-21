@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtaclcheck"
@@ -61,8 +60,6 @@ func run() error {
 		ACLFile:        aclFile,
 		StaticAuthFile: staticAuthFile,
 	}
-
-	log.V(100).Infof("acl_file %s\nstatic_auth_file %s\n", aclFile, staticAuthFile)
 
 	if err := vtaclcheck.Init(opts); err != nil {
 		return err
