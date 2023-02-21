@@ -41,9 +41,9 @@ import (
 )
 
 var (
-	throttlerRunning  = stats.NewGauge("TransactionThrottlerRunning", "transaction throttler running")
-	requestsTotal     = stats.NewCounter("TransactionThrottlerRequests", "transaction throttler requests")
-	requestsThrottled = stats.NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled")
+	throttlerRunning  = stats.NewGauge("TxThrottlerRunning", "transaction throttler running state")
+	requestsTotal     = stats.NewCounter("TxThrottlerRequests", "transaction throttler requests")
+	requestsThrottled = stats.NewCounter("TxThrottlerThrottled", "transaction throttler requests throttled")
 )
 
 // TxThrottler throttles transactions based on replication lag.
