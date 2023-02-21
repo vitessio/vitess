@@ -364,7 +364,8 @@ func testVStreamStopOnReshardFlag(t *testing.T, stopOnReshard bool, baseTabletID
 		tickCount++
 		switch tickCount {
 		case 1:
-			reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-", "-40,40-", baseTabletID+400, nil, nil, nil, defaultCellName)
+			reshard(t, "sharded", "customer", "vstreamStopOnReshard", "-80,80-",
+				"-40,40-", baseTabletID+400, nil, nil, nil, defaultCellName, 1)
 		case 60:
 			done = true
 		}

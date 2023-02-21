@@ -65,3 +65,7 @@ func (Charset_utf32) CharLen(src []byte) int {
 	}
 	return cnt / 4
 }
+
+func (Charset_utf32) MaxWidth() int {
+	return 4
+}

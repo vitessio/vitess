@@ -74,7 +74,7 @@ func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalP
 	if canMergeSubqueryPlans(ctx, iroute, oroute) {
 		// n.extracted is an expression that lives in oroute.Select.
 		// Instead of looking for it in the AST, we have a copy in the subquery tree that we can update
-		n.Extracted.NeedsRewrite = true
+		n.Extracted.Merged = true
 		replaceSubQuery(ctx, oroute.Select)
 		return mergeSystemTableInformation(oroute, iroute)
 	}

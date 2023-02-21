@@ -136,8 +136,6 @@ func (card cardinalityCheck) expr(expr Expr) error {
 		return card.unary(expr.Inner)
 	case *BitwiseNotExpr:
 		return card.unary(expr.Inner)
-	case *builtinWeightString:
-		return card.unary(expr.String)
 	case *ArithmeticExpr:
 		return card.binary(expr.Left, expr.Right)
 	case *LogicalExpr:

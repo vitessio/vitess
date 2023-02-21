@@ -416,6 +416,11 @@ func (bs *AZBlobBackupStorage) Close() error {
 	return nil
 }
 
+func (bs *AZBlobBackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new AZBlobBackupStorage that uses params.
+	return bs
+}
+
 // objName joins path parts into an object name.
 // Unlike path.Join, it doesn't collapse ".." or strip trailing slashes.
 // It also adds the value of the -azblob_backup_storage_root flag if set.
