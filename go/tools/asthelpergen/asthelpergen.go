@@ -190,7 +190,9 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}
 
-	common.CheckErrors(loaded, common.GeneratedInSqlparser)
+	if err := common.CheckErrors(loaded, common.GeneratedInSqlparser); err != nil {
+		return nil, err
+	}
 
 	scopes := make(map[string]*types.Scope)
 	for _, pkg := range loaded {

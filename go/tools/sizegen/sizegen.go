@@ -567,8 +567,8 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 		return nil, err
 	}
 
-	if common.PkgFailed(loaded) {
-		return nil, fmt.Errorf("failed to load packages")
+	if err := common.CheckErrors(loaded, func(filename string) bool { return filename == "cached_size.go" }); err != nil {
+		return nil, err
 	}
 
 	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes)

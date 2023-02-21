@@ -17,36 +17,29 @@ limitations under the License.
 package common
 
 import (
-	"log"
+	"fmt"
 	"path"
 	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
 
-// PkgFailed returns true if any of the packages contain errors
-func PkgFailed(loaded []*packages.Package) bool {
-	failed := false
-	for _, pkg := range loaded {
-		for _, e := range pkg.Errors {
-			log.Println(e.Error())
-			failed = true
-		}
-	}
-	return failed
-}
-
-func CheckErrors(loaded []*packages.Package, canSkipErrorOn func(fileName string) bool) {
+func CheckErrors(loaded []*packages.Package, skip func(fileName string) bool) error {
+	var errors []string
 	for _, l := range loaded {
 		for _, e := range l.Errors {
 			idx := strings.Index(e.Pos, ":")
 			filePath := e.Pos[:idx]
 			_, fileName := path.Split(filePath)
-			if !canSkipErrorOn(fileName) {
-				log.Fatalf("error loading package %s", e.Error())
+			if !skip(fileName) {
+				errors = append(errors, e.Error())
 			}
 		}
 	}
+	if len(errors) > 0 {
+		return fmt.Errorf("found %d error(s) when loading Go packages:\n\t%s", len(errors), strings.Join(errors, "\n\t"))
+	}
+	return nil
 }
 
 func GeneratedInSqlparser(filename string) bool {

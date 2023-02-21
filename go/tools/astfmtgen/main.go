@@ -50,7 +50,10 @@ func main() {
 	if err != nil {
 		log.Fatal("error loading package")
 	}
-	common.CheckErrors(pkgs, common.GeneratedInSqlparser)
+
+	if err := common.CheckErrors(pkgs, common.GeneratedInSqlparser); err != nil {
+		log.Fatal(err)
+	}
 
 	for _, pkg := range pkgs {
 		if pkg.Name == "sqlparser" {
