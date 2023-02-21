@@ -21,6 +21,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/http"
 	"os"
 	"os/signal"
@@ -2003,7 +2004,7 @@ func (tsv *TabletServer) SetThrottleMetricThreshold(val float64) {
 
 // ThrottleMetricThreshold returns the throttler metric threshold
 func (tsv *TabletServer) ThrottleMetricThreshold() float64 {
-	return time.Duration(tsv.lagThrottler.MetricsThreshold.Load()).Seconds()
+	return math.Float64frombits(tsv.lagThrottler.MetricsThreshold.Load())
 }
 
 // SetPassthroughDMLs changes the setting to pass through all DMLs
