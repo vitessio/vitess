@@ -380,7 +380,7 @@ func TestViewsTracking(t *testing.T) {
 			}
 
 			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
-			require.EqualValues(t, count+1, sbc.GetSchemaCount.Get())
+			require.EqualValues(t, count+1, sbc.GetSchemaCount.Load())
 
 			_, keyspacePresent := tracker.tracked[target.Keyspace]
 			require.Equal(t, true, keyspacePresent)

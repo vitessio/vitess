@@ -24,9 +24,9 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -88,19 +88,18 @@ type (
 
 	// ResourcePool allows you to use a pool of resources.
 	ResourcePool struct {
-		// stats. Atomic fields must remain at the top in order to prevent panics on certain architectures.
-		available         sync2.AtomicInt64
-		active            sync2.AtomicInt64
-		inUse             sync2.AtomicInt64
-		waitCount         sync2.AtomicInt64
-		waitTime          sync2.AtomicDuration
-		idleClosed        sync2.AtomicInt64
-		maxLifetimeClosed sync2.AtomicInt64
-		exhausted         sync2.AtomicInt64
+		available         atomic.Int64
+		active            atomic.Int64
+		inUse             atomic.Int64
+		waitCount         atomic.Int64
+		waitTime          atomic.Int64
+		idleClosed        atomic.Int64
+		maxLifetimeClosed atomic.Int64
+		exhausted         atomic.Int64
 
-		capacity    sync2.AtomicInt64
-		idleTimeout sync2.AtomicDuration
-		maxLifetime sync2.AtomicDuration
+		capacity    atomic.Int64
+		idleTimeout atomic.Int64
+		maxLifetime atomic.Int64
 
 		resources chan resourceWrapper
 		factory   Factory
@@ -108,10 +107,10 @@ type (
 		logWait   func(time.Time)
 
 		settingResources  chan resourceWrapper
-		getCount          sync2.AtomicInt64
-		getSettingCount   sync2.AtomicInt64
-		diffSettingCount  sync2.AtomicInt64
-		resetSettingCount sync2.AtomicInt64
+		getCount          atomic.Int64
+		getSettingCount   atomic.Int64
+		diffSettingCount  atomic.Int64
+		resetSettingCount atomic.Int64
 
 		reopenMutex sync.Mutex
 		refresh     *poolRefresh
@@ -166,12 +165,13 @@ func NewResourcePool(factory Factory, capacity, maxCap int, idleTimeout time.Dur
 		resources:        make(chan resourceWrapper, maxCap),
 		settingResources: make(chan resourceWrapper, maxCap),
 		factory:          factory,
-		available:        sync2.NewAtomicInt64(int64(capacity)),
-		capacity:         sync2.NewAtomicInt64(int64(capacity)),
-		idleTimeout:      sync2.NewAtomicDuration(idleTimeout),
-		maxLifetime:      sync2.NewAtomicDuration(maxLifetime),
 		logWait:          logWait,
 	}
+	rp.available.Store(int64(capacity))
+	rp.capacity.Store(int64(capacity))
+	rp.idleTimeout.Store(idleTimeout.Nanoseconds())
+	rp.maxLifetime.Store(maxLifetime.Nanoseconds())
+
 	for i := 0; i < capacity; i++ {
 		rp.resources <- resourceWrapper{}
 	}
@@ -244,7 +244,7 @@ func (rp *ResourcePool) returnResource(wrapper *resourceWrapper, origPool bool, 
 func (rp *ResourcePool) reopen() {
 	rp.reopenMutex.Lock() // Avoid race, since we can refresh asynchronously
 	defer rp.reopenMutex.Unlock()
-	capacity := int(rp.capacity.Get())
+	capacity := int(rp.capacity.Load())
 	log.Infof("Draining and reopening resource pool with capacity %d by request", capacity)
 	rp.Close()
 	_ = rp.SetCapacity(capacity)
@@ -462,7 +462,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 	// Atomically swap new capacity with old
 	var oldcap int
 	for {
-		oldcap = int(rp.capacity.Get())
+		oldcap = int(rp.capacity.Load())
 		if oldcap == 0 && capacity > 0 {
 			// Closed this before, re-open the channel
 			rp.resources = make(chan resourceWrapper, cap(rp.resources))
@@ -509,7 +509,7 @@ func (rp *ResourcePool) SetCapacity(capacity int) error {
 
 func (rp *ResourcePool) recordWait(start time.Time) {
 	rp.waitCount.Add(1)
-	rp.waitTime.Add(time.Since(start))
+	rp.waitTime.Add(time.Since(start).Nanoseconds())
 	if rp.logWait != nil {
 		rp.logWait(start)
 	}
@@ -522,7 +522,7 @@ func (rp *ResourcePool) SetIdleTimeout(idleTimeout time.Duration) {
 		panic("SetIdleTimeout called when timer not initialized")
 	}
 
-	rp.idleTimeout.Set(idleTimeout)
+	rp.idleTimeout.Store(idleTimeout.Nanoseconds())
 	rp.idleTimer.SetInterval(idleTimeout / 10)
 }
 
@@ -545,23 +545,23 @@ func (rp *ResourcePool) StatsJSON() string {
 
 // Capacity returns the capacity.
 func (rp *ResourcePool) Capacity() int64 {
-	return rp.capacity.Get()
+	return rp.capacity.Load()
 }
 
 // Available returns the number of currently unused and available resources.
 func (rp *ResourcePool) Available() int64 {
-	return rp.available.Get()
+	return rp.available.Load()
 }
 
 // Active returns the number of active (i.e. non-nil) resources either in the
 // pool or claimed for use
 func (rp *ResourcePool) Active() int64 {
-	return rp.active.Get()
+	return rp.active.Load()
 }
 
 // InUse returns the number of claimed resources from the pool
 func (rp *ResourcePool) InUse() int64 {
-	return rp.inUse.Get()
+	return rp.inUse.Load()
 }
 
 // MaxCap returns the max capacity.
@@ -571,59 +571,59 @@ func (rp *ResourcePool) MaxCap() int64 {
 
 // WaitCount returns the total number of waits.
 func (rp *ResourcePool) WaitCount() int64 {
-	return rp.waitCount.Get()
+	return rp.waitCount.Load()
 }
 
 // WaitTime returns the total wait time.
 func (rp *ResourcePool) WaitTime() time.Duration {
-	return rp.waitTime.Get()
+	return time.Duration(rp.waitTime.Load())
 }
 
 // IdleTimeout returns the resource idle timeout.
 func (rp *ResourcePool) IdleTimeout() time.Duration {
-	return rp.idleTimeout.Get()
+	return time.Duration(rp.idleTimeout.Load())
 }
 
 // IdleClosed returns the count of resources closed due to idle timeout.
 func (rp *ResourcePool) IdleClosed() int64 {
-	return rp.idleClosed.Get()
+	return rp.idleClosed.Load()
 }
 
 // extendedLifetimeTimeout returns random duration within range [maxLifetime, 2*maxLifetime)
 func (rp *ResourcePool) extendedMaxLifetime() time.Duration {
-	maxLifetime := rp.maxLifetime.Get()
+	maxLifetime := rp.maxLifetime.Load()
 	if maxLifetime == 0 {
 		return 0
 	}
-	return maxLifetime + time.Duration(rand.Int63n(maxLifetime.Nanoseconds()))
+	return time.Duration(maxLifetime + rand.Int63n(maxLifetime))
 }
 
 // MaxLifetimeClosed returns the count of resources closed due to refresh timeout.
 func (rp *ResourcePool) MaxLifetimeClosed() int64 {
-	return rp.maxLifetimeClosed.Get()
+	return rp.maxLifetimeClosed.Load()
 }
 
 // Exhausted returns the number of times Available dropped below 1
 func (rp *ResourcePool) Exhausted() int64 {
-	return rp.exhausted.Get()
+	return rp.exhausted.Load()
 }
 
 // GetCount returns the number of times get was called
 func (rp *ResourcePool) GetCount() int64 {
-	return rp.getCount.Get()
+	return rp.getCount.Load()
 }
 
 // GetSettingCount returns the number of times getWithSettings was called
 func (rp *ResourcePool) GetSettingCount() int64 {
-	return rp.getSettingCount.Get()
+	return rp.getSettingCount.Load()
 }
 
 // DiffSettingCount returns the number of times different setting were applied on the resource.
 func (rp *ResourcePool) DiffSettingCount() int64 {
-	return rp.diffSettingCount.Get()
+	return rp.diffSettingCount.Load()
 }
 
 // ResetSettingCount returns the number of times setting were reset on the resource.
 func (rp *ResourcePool) ResetSettingCount() int64 {
-	return rp.resetSettingCount.Get()
+	return rp.resetSettingCount.Load()
 }
