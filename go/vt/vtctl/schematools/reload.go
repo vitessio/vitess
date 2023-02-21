@@ -68,11 +68,11 @@ func ReloadShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManage
 			defer wg.Done()
 
 			if concurrency != nil {
-				if concurrency.Acquire(ctx, 1) != nil {
+				if err := concurrency.Acquire(ctx, 1); err != nil {
 					// We timed out waiting for the semaphore. This is best-effort, so just log it and move on.
 					logger.Warningf(
-						"Failed to reload schema on replica tablet %v in %v/%v (use vtctl ReloadSchema to try again): timed out waiting for concurrency",
-						topoproto.TabletAliasString(tablet.Alias), keyspace, shard,
+						"Failed to reload schema on replica tablet %v in %v/%v (use vtctl ReloadSchema to try again): timed out waiting for concurrency: %v",
+						topoproto.TabletAliasString(tablet.Alias), keyspace, shard, err,
 					)
 					return
 				}
