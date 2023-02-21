@@ -134,7 +134,7 @@ type Throttler struct {
 	mysqlInventory *mysql.Inventory
 
 	metricsQuery     atomic.Value
-	MetricsThreshold atomic.Int64
+	MetricsThreshold atomic.Uint64
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -205,7 +205,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	if throttleMetricQuery != "" {
 		throttler.metricsQuery.Store(throttleMetricQuery) // override
 	}
-	throttler.MetricsThreshold.Store(throttleThreshold.Nanoseconds()) //default
+	throttler.StoreMetricsThreshold(throttleThreshold.Seconds()) //default
 	if throttleMetricThreshold != math.MaxFloat64 {
 		throttler.StoreMetricsThreshold(throttleMetricThreshold) // override
 	}
@@ -225,7 +225,7 @@ func (throttler *Throttler) CheckIsReady() error {
 }
 
 func (throttler *Throttler) StoreMetricsThreshold(threshold float64) {
-	throttler.MetricsThreshold.Store(time.Duration(throttleMetricThreshold * float64(time.Second)).Nanoseconds())
+	throttler.MetricsThreshold.Store(math.Float64bits(threshold))
 }
 
 // initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
@@ -341,7 +341,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	} else {
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
-	throttler.MetricsThreshold.Store(time.Duration(throttlerConfig.Threshold * float64(time.Second)).Nanoseconds())
+	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	throttlerCheckAsCheckSelf = throttlerConfig.CheckAsCheckSelf
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
@@ -758,7 +758,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() {
-			throttler.mysqlClusterThresholds.Set(clusterName, time.Duration(clusterSettings.ThrottleThreshold.Load()).Seconds(), cache.DefaultExpiration)
+			throttler.mysqlClusterThresholds.Set(clusterName, math.Float64frombits(clusterSettings.ThrottleThreshold.Load()), cache.DefaultExpiration)
 			clusterProbes := &mysql.ClusterProbes{
 				ClusterName:      clusterName,
 				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,
