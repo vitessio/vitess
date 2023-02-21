@@ -1270,7 +1270,7 @@ func TestErrorCodes(t *testing.T) {
 			text:     "resource exhausted",
 		},
 		{
-			err:      vterrors.Wrap(vterrors.Errorf(vtrpcpb.Code_ABORTED, "Row count exceeded 10000"), "wrapped"),
+			err:      vterrors.Errorf(vtrpcpb.Code_ABORTED, "Row count exceeded 10000"),
 			code:     ERQueryInterrupted,
 			sqlState: SSQueryInterrupted,
 			text:     "aborted",
