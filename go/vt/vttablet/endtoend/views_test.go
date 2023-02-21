@@ -30,6 +30,9 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
+var qSelAllRows = "select table_schema, table_name, view_definition, create_statement from _vt.views"
+var qDelAllRows = "delete from _vt.views"
+
 // Test will validate create view ddls.
 func TestCreateViewDDL(t *testing.T) {
 	client := framework.NewClient()
@@ -39,16 +42,16 @@ func TestCreateViewDDL(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	defer client.Execute("delete from _vt.views", nil)
+	defer client.Execute(qDelAllRows, nil)
 
 	_, err := client.Execute("create view vitess_view as select * from vitess_a", nil)
 	require.NoError(t, err)
 
 	// validate the row in _vt.views.
-	qr, err := client.Execute("select table_name, view_definition, create_statement from _vt.views", nil)
+	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vitess_view") TEXT("select * from vitess_a") TEXT("create view vitess_view as select * from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select * from vitess_a") TEXT("create view vitess_view as select * from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 
 	// view already exists. This should fail.
@@ -60,10 +63,10 @@ func TestCreateViewDDL(t *testing.T) {
 	require.NoError(t, err)
 
 	// validate the row in _vt.views.
-	qr, err = client.Execute("select table_name, view_definition, create_statement from _vt.views", nil)
+	qr, err = client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 }
 
@@ -76,7 +79,7 @@ func TestAlterViewDDL(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	defer client.Execute("delete from _vt.views", nil)
+	defer client.Execute(qDelAllRows, nil)
 
 	// view does not exist, should FAIL
 	_, err := client.Execute("alter view vitess_view as select * from vitess_a", nil)
@@ -91,10 +94,10 @@ func TestAlterViewDDL(t *testing.T) {
 	require.NoError(t, err)
 
 	// validate the row in _vt.views.
-	qr, err := client.Execute("select table_name, view_definition, create_statement from _vt.views", nil)
+	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 }
 
@@ -107,7 +110,7 @@ func TestDropViewDDL(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	defer client.Execute("delete from _vt.views", nil)
+	defer client.Execute(qDelAllRows, nil)
 
 	// view does not exist, should FAIL
 	_, err := client.Execute("drop view vitess_view", nil)
@@ -132,7 +135,7 @@ func TestDropViewDDL(t *testing.T) {
 	require.ErrorContains(t, err, "Unknown view 'vitess_view1,vitess_view3'")
 
 	// validate ZERO rows in _vt.views.
-	qr, err := client.Execute("select * from _vt.views", nil)
+	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Zero(t, qr.Rows)
 
@@ -145,7 +148,30 @@ func TestDropViewDDL(t *testing.T) {
 	require.NoError(t, err)
 
 	// validate ZERO rows in _vt.views.
-	qr, err = client.Execute("select * from _vt.views", nil)
+	qr, err = client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Zero(t, qr.Rows)
+}
+
+// TestGetSchemaRPC will validate GetSchema rpc..
+func TestGetSchemaRPC(t *testing.T) {
+	client := framework.NewClient()
+
+	viewSchemaDef, err := client.GetSchema(querypb.SchemaTableType_VIEWS)
+	require.NoError(t, err)
+	require.Zero(t, len(viewSchemaDef))
+
+	client.UpdateContext(callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	defer client.Execute(qDelAllRows, nil)
+
+	_, err = client.Execute("create view vitess_view as select 1 from vitess_a", nil)
+	require.NoError(t, err)
+
+	viewSchemaDef, err = client.GetSchema(querypb.SchemaTableType_VIEWS)
+	require.NoError(t, err)
+	require.Equal(t, viewSchemaDef["vitess_view"], "select 1 from vitess_a")
 }

@@ -117,6 +117,9 @@ type QueryService interface {
 
 	Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 
+	// GetSchema returns the table definition for the specified tables.
+	GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error)
+
 	// Close must be called for releasing resources.
 	Close(ctx context.Context) error
 }
