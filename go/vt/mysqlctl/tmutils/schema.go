@@ -119,7 +119,7 @@ func NewTableFilter(tables, excludeTables []string, includeViews bool) (*TableFi
 					return nil, fmt.Errorf("cannot compile regexp %v for excludeTable: %v", table, err)
 				}
 
-				f.excludeTableREs = append(f.tableREs, re)
+				f.excludeTableREs = append(f.excludeTableREs, re)
 			} else {
 				f.excludeTableNames = append(f.excludeTableNames, table)
 			}
