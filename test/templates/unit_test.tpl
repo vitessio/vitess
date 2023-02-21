@@ -11,6 +11,7 @@ env:
 
 jobs:
   test:
+    name: {{.Name}}
     runs-on: ubuntu-22.04
 
     steps:
