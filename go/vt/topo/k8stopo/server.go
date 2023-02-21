@@ -183,7 +183,6 @@ func NewServer(_, root string) (*Server, error) {
 		// respect the context flag
 		if configContext != "" {
 			configOverrides.CurrentContext = configContext
-			log.V(7).Info("Overriding Kubernetes config context with: ", configOverrides.CurrentContext)
 		}
 
 		configLoader := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -206,7 +205,6 @@ func NewServer(_, root string) (*Server, error) {
 	// respect the namespace flag
 	if configNamespace != "" {
 		namespace = configNamespace
-		log.V(7).Info("Overriding Kubernetes config namespace with: ", namespace)
 	}
 
 	// create the kubernetes client
