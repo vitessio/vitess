@@ -82,7 +82,7 @@ func TestAlterViewDDL(t *testing.T) {
 
 	// view does not exist, should FAIL
 	_, err := client.Execute("alter view vitess_view as select * from vitess_a", nil)
-	require.ErrorContains(t, err, "'vttest.vitess_view' doesn't exist")
+	require.ErrorContains(t, err, "Table 'vitess_view' does not exist")
 
 	// create a view.
 	_, err = client.Execute("create view vitess_view as select * from vitess_a", nil)
@@ -113,7 +113,7 @@ func TestDropViewDDL(t *testing.T) {
 
 	// view does not exist, should FAIL
 	_, err := client.Execute("drop view vitess_view", nil)
-	require.ErrorContains(t, err, "Unknown view 'vitess_view'")
+	require.ErrorContains(t, err, "Unknown table 'vttest.vitess_view'")
 
 	// view does not exist, using if exists clause, should PASS
 	_, err = client.Execute("drop view if exists vitess_view", nil)
@@ -131,7 +131,7 @@ func TestDropViewDDL(t *testing.T) {
 
 	// drop three views, only vitess_view2 exists. This should FAIL but drops the existing view.
 	_, err = client.Execute("drop view vitess_view1, vitess_view2, vitess_view3", nil)
-	require.ErrorContains(t, err, "Unknown view 'vitess_view1,vitess_view3'")
+	require.ErrorContains(t, err, "Unknown table 'vttest.vitess_view1,vttest.vitess_view3'")
 
 	// validate ZERO rows in _vt.views.
 	qr, err := client.Execute(qSelAllRows, nil)
