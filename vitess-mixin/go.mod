@@ -14,6 +14,7 @@ require (
 	// See https://github.com/prometheus/prometheus/issues/5590#issuecomment-546368944
 	github.com/prometheus/prometheus v1.8.2-0.20191017095924-6f92ce560538
 	github.com/stretchr/testify v1.7.1
+	golang.org/x/net v0.7.0 // indirect
 	vitess.io/vitess v0.15.2
 )
 
