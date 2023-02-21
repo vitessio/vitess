@@ -28,10 +28,10 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/tools/common"
-
 	"golang.org/x/tools/go/ast/astutil"
 	"golang.org/x/tools/go/packages"
+
+	"vitess.io/vitess/go/tools/common"
 )
 
 func main() {
@@ -47,9 +47,11 @@ func main() {
 			packages.NeedTypesInfo,
 	}
 	pkgs, err := packages.Load(config, packageName)
-	if err != nil || common.PkgFailed(pkgs) {
-		log.Fatal("error loading packaged")
+	if err != nil {
+		log.Fatal("error loading package")
 	}
+	common.CheckErrors(pkgs, common.GeneratedInSqlparser)
+
 	for _, pkg := range pkgs {
 		if pkg.Name == "sqlparser" {
 			rewriter := &Rewriter{pkg: pkg}

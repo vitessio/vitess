@@ -18,6 +18,8 @@ package common
 
 import (
 	"log"
+	"path"
+	"strings"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -32,4 +34,28 @@ func PkgFailed(loaded []*packages.Package) bool {
 		}
 	}
 	return failed
+}
+
+func CheckErrors(loaded []*packages.Package, canSkipErrorOn func(fileName string) bool) {
+	for _, l := range loaded {
+		for _, e := range l.Errors {
+			idx := strings.Index(e.Pos, ":")
+			filePath := e.Pos[:idx]
+			_, fileName := path.Split(filePath)
+			if !canSkipErrorOn(fileName) {
+				log.Fatalf("error loading package %s", e.Error())
+			}
+		}
+	}
+}
+
+func GeneratedInSqlparser(filename string) bool {
+	switch filename {
+	case "ast_format_fast.go": // astfmtgen
+		return true
+	case "ast_equals.go", "ast_clone.go", "ast_rewrite.go", "ast_visit.go", "ast_copy_on_rewrite.go": // asthelpergen
+		return true
+	default:
+		return false
+	}
 }

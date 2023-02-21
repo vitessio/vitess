@@ -25,6 +25,7 @@ import (
 	"path"
 	"strings"
 
+	"vitess.io/vitess/go/tools/common"
 	"vitess.io/vitess/go/tools/goimports"
 
 	"github.com/dave/jennifer/jen"
@@ -92,6 +93,8 @@ func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, g
 }
 
 func findImplementations(scope *types.Scope, iff *types.Interface, impl func(types.Type) error) error {
+	const OnlyReferences = false
+
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
 		if _, ok := obj.(*types.TypeName); !ok {
@@ -99,16 +102,22 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 		}
 		baseType := obj.Type()
 		if types.Implements(baseType, iff) {
-			err := impl(baseType)
-			if err != nil {
+			if OnlyReferences {
+				switch tt := baseType.Underlying().(type) {
+				case *types.Interface:
+					// This is OK; interfaces are references
+				default:
+					panic(fmt.Errorf("interface %s implemented by %s (%s as %T) without ptr", iff.String(), baseType, tt.String(), tt))
+				}
+			}
+			if err := impl(baseType); err != nil {
 				return err
 			}
 			continue
 		}
 		pointerT := types.NewPointer(baseType)
 		if types.Implements(pointerT, iff) {
-			err := impl(pointerT)
-			if err != nil {
+			if err := impl(pointerT); err != nil {
 				return err
 			}
 			continue
@@ -116,30 +125,9 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 	}
 	return nil
 }
+
 func (gen *astHelperGen) findImplementations(iff *types.Interface, impl func(types.Type) error) error {
-	for _, name := range gen._scope.Names() {
-		obj := gen._scope.Lookup(name)
-		if _, ok := obj.(*types.TypeName); !ok {
-			continue
-		}
-		baseType := obj.Type()
-		if types.Implements(baseType, iff) {
-			err := impl(baseType)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-		pointerT := types.NewPointer(baseType)
-		if types.Implements(pointerT, iff) {
-			err := impl(pointerT)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-	}
-	return nil
+	return findImplementations(gen._scope, iff, impl)
 }
 
 // GenerateCode is the main loop where we build up the code per file.
@@ -183,13 +171,6 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	return errors
 }
 
-var acceptableBuildErrorsOn = map[string]any{
-	"ast_equals.go":  nil,
-	"ast_clone.go":   nil,
-	"ast_rewrite.go": nil,
-	"ast_visit.go":   nil,
-}
-
 type Options struct {
 	Packages      []string
 	RootInterface string
@@ -209,10 +190,7 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}
 
-	checkErrors(loaded, func(fileName string) bool {
-		_, ok := acceptableBuildErrorsOn[fileName]
-		return ok
-	})
+	common.CheckErrors(loaded, common.GeneratedInSqlparser)
 
 	scopes := make(map[string]*types.Scope)
 	for _, pkg := range loaded {
@@ -330,18 +308,5 @@ func printableTypeName(t types.Type) string {
 		return t.String()
 	default:
 		panic(fmt.Sprintf("unknown type %T %v", t, t))
-	}
-}
-
-func checkErrors(loaded []*packages.Package, canSkipErrorOn func(fileName string) bool) {
-	for _, l := range loaded {
-		for _, e := range l.Errors {
-			idx := strings.Index(e.Pos, ":")
-			filePath := e.Pos[:idx]
-			_, fileName := path.Split(filePath)
-			if !canSkipErrorOn(fileName) {
-				log.Fatalf("error loading package %s", e.Error())
-			}
-		}
 	}
 }
