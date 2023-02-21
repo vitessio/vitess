@@ -152,6 +152,77 @@ func TestDropViewDDL(t *testing.T) {
 	require.Zero(t, qr.Rows)
 }
 
+// TestViewDDLWithInfrSchema will validate information schema queries with views.
+func TestViewDDLWithInfrSchema(t *testing.T) {
+	client := framework.NewClient()
+
+	client.UpdateContext(callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	defer client.Execute("drop view vitess_view", nil)
+
+	_, err := client.Execute("create view vitess_view as select * from vitess_a", nil)
+	require.NoError(t, err)
+
+	// show create view.
+	qr, err := client.Execute("show create table vitess_view", nil)
+	require.NoError(t, err)
+	require.Equal(t,
+		"[[VARCHAR(\"vitess_view\") VARCHAR(\"CREATE ALGORITHM=UNDEFINED DEFINER=`vt_dba`@`localhost` SQL SECURITY DEFINER VIEW `vitess_view` AS select `vitess_a`.`eid` AS `eid`,`vitess_a`.`id` AS `id`,`vitess_a`.`name` AS `name`,`vitess_a`.`foo` AS `foo` from `vitess_a`\") VARCHAR(\"utf8mb4\") VARCHAR(\"utf8mb4_general_ci\")]]",
+		fmt.Sprintf("%v", qr.Rows))
+
+	// show create view.
+	qr, err = client.Execute("describe vitess_view", nil)
+	require.NoError(t, err)
+	require.Equal(t,
+		"[[VARCHAR(\"eid\") BLOB(\"bigint\") VARCHAR(\"NO\") BINARY(\"\") BLOB(\"0\") VARCHAR(\"\")] [VARCHAR(\"id\") BLOB(\"int\") VARCHAR(\"NO\") BINARY(\"\") BLOB(\"1\") VARCHAR(\"\")] [VARCHAR(\"name\") BLOB(\"varchar(128)\") VARCHAR(\"YES\") BINARY(\"\") NULL VARCHAR(\"\")] [VARCHAR(\"foo\") BLOB(\"varbinary(128)\") VARCHAR(\"YES\") BINARY(\"\") NULL VARCHAR(\"\")]]",
+		fmt.Sprintf("%v", qr.Rows))
+
+	// information schema.
+	qr, err = client.Execute("select table_type from information_schema.tables where table_schema = database() and table_name = 'vitess_view'", nil)
+	require.NoError(t, err)
+	require.Equal(t,
+		"[[BINARY(\"VIEW\")]]",
+		fmt.Sprintf("%v", qr.Rows))
+}
+
+// TestViewAndTableUnique will validate that views and tables should have unique names.
+func TestViewAndTableUnique(t *testing.T) {
+	client := framework.NewClient()
+
+	client.UpdateContext(callerid.NewContext(
+		context.Background(),
+		&vtrpcpb.CallerID{},
+		&querypb.VTGateCallerID{Username: "dev"}))
+
+	defer func() {
+		_, _ = client.Execute("drop if exists view vitess_view", nil)
+		_, _ = client.Execute("drop if exists table vitess_view", nil)
+	}()
+
+	// create a view.
+	_, err := client.Execute("create view vitess_view as select * from vitess_a", nil)
+	require.NoError(t, err)
+
+	// should error on create table as view already exists with same name.
+	_, err = client.Execute("create table vitess_view(id bigint primary key)", nil)
+	require.ErrorContains(t, err, "Table 'vitess_view' already exists")
+
+	// drop the view
+	_, err = client.Execute("drop view vitess_view", nil)
+	require.NoError(t, err)
+
+	// create the table first.
+	_, err = client.Execute("create table vitess_view(id bigint primary key)", nil)
+	require.NoError(t, err)
+
+	// create view should fail as table already exists with same name.
+	_, err = client.Execute("create view vitess_view as select * from vitess_a", nil)
+	require.ErrorContains(t, err, "Table 'vitess_view' already exists")
+}
+
 // TestGetSchemaRPC will validate GetSchema rpc..
 func TestGetSchemaRPC(t *testing.T) {
 	client := framework.NewClient()
