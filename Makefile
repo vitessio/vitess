@@ -159,19 +159,16 @@ install-testing: build
 vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 	make -C go/vt/vtctl/vtctldclient
 
-parser:
-	make -C go/vt/sqlparser
+sqlparser:
+	go generate ./go/vt/sqlparser/...
+
+parser: sqlparser
+visitor: sqlparser
+asthelpergen: sqlparser
+codegen: sqlparser sizegen
 
 demo:
 	go install ./examples/demo/demo.go
-
-codegen: asthelpergen sizegen parser
-
-visitor: asthelpergen
-	echo "make visitor has been replaced by make asthelpergen"
-
-asthelpergen:
-	go generate ./go/vt/sqlparser/...
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
