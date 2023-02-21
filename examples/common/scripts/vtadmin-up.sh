@@ -35,7 +35,7 @@ vtadmin-api is running!
 "
 
 # Wait for vtadmin to successfully discover the cluster
-expected_cluster_result="{result\":{\"clusters\":[{\"id\":\"${cluster_name}\",\"name\":\"${cluster_name}\"}]},\"ok\":true}"
+expected_cluster_result="{\"result\":{\"clusters\":[{\"id\":\"${cluster_name}\",\"name\":\"${cluster_name}\"}]},\"ok\":true}"
 for _ in {0..300}; do
   result=$(curl -s "http://localhost:${vtadmin_api_port}/api/clusters")
   if [[ ${result} == "${expected_cluster_result}" ]]; then
