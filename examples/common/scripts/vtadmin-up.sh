@@ -37,7 +37,7 @@ vtadmin-api is running!
 # Wait for vtadmin to successfully discover the cluster
 expected_cluster_result="{result\":{\"clusters\":[{\"id\":\"${cluster_name}\",\"name\":\"${cluster_name}\"}]},\"ok\":true}"
 for _ in {0..300}; do
-  result=$(curl -s "http://${hostname}:${vtadmin_api_port}/api/clusters")
+  result=$(curl -s "http://localhost:${vtadmin_api_port}/api/clusters")
   if [[ ${result} == "${expected_cluster_result}" ]]; then
     break
   fi
@@ -45,7 +45,7 @@ for _ in {0..300}; do
 done
 
 # Check one last time
-[[ $(curl -s "http://${hostname}:${vtadmin_api_port}/api/clusters") == "${expected_cluster_result}" ]] || fail "vtadmin failed to discover the running example Vitess cluster."
+[[ $(curl -s "http://localhost:${vtadmin_api_port}/api/clusters") == "${expected_cluster_result}" ]] || fail "vtadmin failed to discover the running example Vitess cluster."
 
 # As a TODO, it'd be nice to make the assumption that vtadmin-web is already
 # installed and built (since we assume that `make` has already been run for
