@@ -78,7 +78,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 
 	case evalNumeric:
-		return evalToText(e, env.DefaultCollation, false)
+		return evalToVarchar(e, env.DefaultCollation, false)
 
 	case *evalBytes:
 		coll := collations.Local().LookupByID(e.col.Collation)
@@ -113,14 +113,14 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 	case nil:
 		return nil, nil
 	case *evalBytes:
-		if sqltypes.IsBinary(e.sqlType()) {
+		if sqltypes.IsBinary(e.SQLType()) {
 			return newEvalInt64(int64(len(e.bytes))), nil
 		}
 		coll := collations.Local().LookupByID(e.col.Collation)
 		count := collations.Length(coll, e.bytes)
 		return newEvalInt64(int64(count)), nil
 	default:
-		return newEvalInt64(int64(len(e.toRawBytes()))), nil
+		return newEvalInt64(int64(len(e.ToRawBytes()))), nil
 	}
 }
 
@@ -137,7 +137,7 @@ func (call *builtinLength) eval(env *ExpressionEnv) (eval, error) {
 	if arg == nil {
 		return nil, nil
 	}
-	return newEvalInt64(int64(len(arg.toRawBytes()))), nil
+	return newEvalInt64(int64(len(arg.ToRawBytes()))), nil
 }
 
 func (call *builtinLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
@@ -153,7 +153,7 @@ func (call *builtinBitLength) eval(env *ExpressionEnv) (eval, error) {
 	if arg == nil {
 		return nil, nil
 	}
-	return newEvalInt64(int64(len(arg.toRawBytes())) * 8), nil
+	return newEvalInt64(int64(len(arg.ToRawBytes())) * 8), nil
 }
 
 func (call *builtinBitLength) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
@@ -200,7 +200,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 
 	text, ok := arg1.(*evalBytes)
 	if !ok {
-		text, err = evalToText(arg1, env.DefaultCollation, true)
+		text, err = evalToVarchar(arg1, env.DefaultCollation, true)
 		if err != nil {
 			return nil, err
 		}
@@ -239,6 +239,10 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 func (*builtinCollation) typeof(_ *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.VarChar, 0
+}
+
+func (c *builtinWeightString) callable() []Expr {
+	return []Expr{c.String}
 }
 
 func (c *builtinWeightString) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

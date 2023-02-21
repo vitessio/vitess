@@ -343,7 +343,7 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 	var res []*sqlparser.ExtractedSubquery
 	for _, extractedSubquery := range st.SubqueryRef {
-		if extractedSubquery.NeedsRewrite {
+		if extractedSubquery.Merged {
 			res = append(res, extractedSubquery)
 		}
 	}

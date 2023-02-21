@@ -22,9 +22,9 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -229,8 +229,8 @@ func (tsv *TabletServer) AddStatusHeader() {
 // AddStatusPart registers the status part for the status page.
 func (tsv *TabletServer) AddStatusPart() {
 	// Save the threshold values for reporting.
-	degradedThreshold.Set(tsv.config.Healthcheck.DegradedThresholdSeconds.Get())
-	unhealthyThreshold.Set(tsv.config.Healthcheck.UnhealthyThresholdSeconds.Get())
+	degradedThreshold.Store(tsv.config.Healthcheck.DegradedThresholdSeconds.Get().Nanoseconds())
+	unhealthyThreshold.Store(tsv.config.Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
 
 	tsv.exporter.AddStatusPart("Health", queryserviceStatusTemplate, func() any {
 		status := queryserviceStatus{
@@ -266,8 +266,8 @@ func (tsv *TabletServer) AddStatusPart() {
 	})
 }
 
-var degradedThreshold sync2.AtomicDuration
-var unhealthyThreshold sync2.AtomicDuration
+var degradedThreshold atomic.Int64
+var unhealthyThreshold atomic.Int64
 
 type historyRecord struct {
 	Time       time.Time
@@ -279,7 +279,7 @@ type historyRecord struct {
 
 func (r *historyRecord) Class() string {
 	if r.serving {
-		if r.lag > degradedThreshold.Get() {
+		if r.lag > time.Duration(degradedThreshold.Load()) {
 			return unhappyClass
 		}
 		return healthyClass
@@ -289,12 +289,12 @@ func (r *historyRecord) Class() string {
 
 func (r *historyRecord) Status() string {
 	if r.serving {
-		if r.lag > degradedThreshold.Get() {
+		if r.lag > time.Duration(degradedThreshold.Load()) {
 			return fmt.Sprintf("replication delayed: %v", r.lag)
 		}
 		return "healthy"
 	}
-	if r.lag > unhealthyThreshold.Get() {
+	if r.lag > time.Duration(unhealthyThreshold.Load()) {
 		return fmt.Sprintf("not serving: replication delay %v", r.lag)
 	}
 	if r.err != nil {

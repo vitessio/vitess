@@ -23,6 +23,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 )
 
 type (
@@ -85,7 +86,7 @@ func newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {
 	return &evalDecimal{dec: dec, length: prec}
 }
 
-func newEvalBool(b bool) eval {
+func newEvalBool(b bool) *evalInt64 {
 	if b {
 		return evalBoolTrue
 	}
@@ -110,20 +111,31 @@ func evalToNumeric(e eval) evalNumeric {
 			return &evalUint64{u: binary.BigEndian.Uint64(number[:]), hexLiteral: true}
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeTrue:
+			return newEvalBool(true)
+		case json.TypeFalse:
+			return newEvalBool(false)
+		case json.TypeNumber, json.TypeString:
+			return &evalFloat{f: parseStringToFloat(e.Raw())}
+		default:
+			return &evalFloat{f: 0}
+		}
 	default:
 		panic("unsupported")
 	}
 }
 
-func (e *evalInt64) hash() (HashCode, error) {
+func (e *evalInt64) Hash() (HashCode, error) {
 	return HashCode(e.i), nil
 }
 
-func (e *evalInt64) sqlType() sqltypes.Type {
+func (e *evalInt64) SQLType() sqltypes.Type {
 	return sqltypes.Int64
 }
 
-func (e *evalInt64) toRawBytes() []byte {
+func (e *evalInt64) ToRawBytes() []byte {
 	return strconv.AppendInt(nil, e.i, 10)
 }
 
@@ -150,15 +162,15 @@ func (e *evalInt64) toUint64() *evalUint64 {
 	return newEvalUint64(uint64(e.i))
 }
 
-func (e *evalUint64) hash() (HashCode, error) {
+func (e *evalUint64) Hash() (HashCode, error) {
 	return HashCode(e.u), nil
 }
 
-func (e *evalUint64) sqlType() sqltypes.Type {
+func (e *evalUint64) SQLType() sqltypes.Type {
 	return sqltypes.Uint64
 }
 
-func (e *evalUint64) toRawBytes() []byte {
+func (e *evalUint64) ToRawBytes() []byte {
 	return strconv.AppendUint(nil, e.u, 10)
 }
 
@@ -188,15 +200,15 @@ func (e *evalUint64) toUint64() *evalUint64 {
 	return e
 }
 
-func (e *evalFloat) hash() (HashCode, error) {
+func (e *evalFloat) Hash() (HashCode, error) {
 	return HashCode(math.Float64bits(e.f)), nil
 }
 
-func (e *evalFloat) sqlType() sqltypes.Type {
+func (e *evalFloat) SQLType() sqltypes.Type {
 	return sqltypes.Float64
 }
 
-func (e *evalFloat) toRawBytes() []byte {
+func (e *evalFloat) ToRawBytes() []byte {
 	return FormatFloat(sqltypes.Float64, e.f)
 }
 
@@ -260,16 +272,16 @@ func (e *evalFloat) toUint64() *evalUint64 {
 	return newEvalUint64(i)
 }
 
-func (e *evalDecimal) hash() (HashCode, error) {
+func (e *evalDecimal) Hash() (HashCode, error) {
 	u, _ := e.dec.Uint64()
 	return HashCode(u), nil
 }
 
-func (e *evalDecimal) sqlType() sqltypes.Type {
+func (e *evalDecimal) SQLType() sqltypes.Type {
 	return sqltypes.Decimal
 }
 
-func (e *evalDecimal) toRawBytes() []byte {
+func (e *evalDecimal) ToRawBytes() []byte {
 	return e.dec.FormatMySQL(e.length)
 }
 

@@ -226,11 +226,11 @@ func (vttablet *VttabletProcess) GetConsolidations() (map[string]int, error) {
 			continue
 		}
 		countS := splits[0]
-		countI64, err := strconv.ParseInt(countS, 10, 32)
+		countI, err := strconv.Atoi(countS)
 		if err != nil {
 			return nil, fmt.Errorf("failed to parse consolidations count: %v", err)
 		}
-		result[strings.TrimSpace(splits[1])] = int(countI64)
+		result[strings.TrimSpace(splits[1])] = countI
 	}
 	if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
 		return nil, fmt.Errorf("failed to read consolidations: %v", err)

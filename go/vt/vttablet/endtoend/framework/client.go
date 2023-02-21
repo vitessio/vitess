@@ -408,3 +408,7 @@ func (client *QueryClient) StreamHealth(sendFunc func(*querypb.StreamHealthRespo
 func (client *QueryClient) UpdateContext(ctx context.Context) {
 	client.ctx = ctx
 }
+
+func (client *QueryClient) GetSchema(tableType querypb.SchemaTableType, tableNames ...string) (map[string]string, error) {
+	return client.server.GetSchema(client.ctx, client.target, tableType, tableNames)
+}

@@ -108,4 +108,7 @@ service Query {
 
   // VStreamResults streams results along with the gtid of the snapshot.
   rpc VStreamResults(binlogdata.VStreamResultsRequest) returns (stream binlogdata.VStreamResultsResponse) {};
+
+  // GetSchema returns the schema information.
+  rpc GetSchema(query.GetSchemaRequest) returns (query.GetSchemaResponse) {};
 }

@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -287,7 +288,7 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}, ExcludeTables: []string{"/" + schema.GCTableNameExpression + "/"}}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err
@@ -430,7 +431,7 @@ func (vr *vreplicator) setState(state, message string) error {
 			Message: message,
 		})
 	}
-	vr.stats.State.Set(state)
+	vr.stats.State.Store(state)
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
@@ -749,7 +750,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	if idqr == nil || len(idqr.Rows) != 1 {
 		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
 	}
-	connID, err := idqr.Rows[0][0].ToUint64()
+	connID, err := idqr.Rows[0][0].ToInt64()
 	if err != nil || connID == 0 {
 		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
 	}
