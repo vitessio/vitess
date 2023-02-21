@@ -293,6 +293,14 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 }
 
 func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	_, isDropView := qre.plan.FullStmt.(*sqlparser.DropView)
+	_, err := execWithDDLView(qre.ctx, conn, sqlparser.String(qre.plan.FullStmt))
+	if err != nil && !isDropView {
+		// We ignore the error from MySQL in case of drop view statements,
+		// because we need to go on and delete the views listed in the _vt database.
+		// For Alter and Create statements, if MySQL fails, we don't need to do anything.
+		return nil, err
+	}
 	switch stmt := qre.plan.FullStmt.(type) {
 	case *sqlparser.CreateView:
 		return qre.execCreateViewDDL(conn, stmt)

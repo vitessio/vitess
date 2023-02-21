@@ -31,7 +31,6 @@ import (
 )
 
 var qSelAllRows = "select table_schema, table_name, create_statement from _vt.views"
-var qDelAllRows = "delete from _vt.views"
 
 // Test will validate create view ddls.
 func TestCreateViewDDL(t *testing.T) {
@@ -42,7 +41,7 @@ func TestCreateViewDDL(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	defer client.Execute(qDelAllRows, nil)
+	defer client.Execute("drop view vitess_view", nil)
 
 	_, err := client.Execute("create view vitess_view as select * from vitess_a", nil)
 	require.NoError(t, err)
@@ -56,7 +55,7 @@ func TestCreateViewDDL(t *testing.T) {
 
 	// view already exists. This should fail.
 	_, err = client.Execute("create view vitess_view as select * from vitess_a", nil)
-	require.ErrorContains(t, err, "View 'vitess_view' already exists")
+	require.ErrorContains(t, err, "'vitess_view' already exists")
 
 	// view already exists, but create or replace syntax should allow it to replace the view.
 	_, err = client.Execute("create or replace view vitess_view as select id, foo from vitess_a", nil)
@@ -79,11 +78,11 @@ func TestAlterViewDDL(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	defer client.Execute(qDelAllRows, nil)
+	defer client.Execute("drop view vitess_view", nil)
 
 	// view does not exist, should FAIL
 	_, err := client.Execute("alter view vitess_view as select * from vitess_a", nil)
-	require.ErrorContains(t, err, "View 'vitess_view' does not exist")
+	require.ErrorContains(t, err, "'vttest.vitess_view' doesn't exist")
 
 	// create a view.
 	_, err = client.Execute("create view vitess_view as select * from vitess_a", nil)
@@ -110,7 +109,7 @@ func TestDropViewDDL(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	defer client.Execute(qDelAllRows, nil)
+	defer client.Execute("drop view vitess_view", nil)
 
 	// view does not exist, should FAIL
 	_, err := client.Execute("drop view vitess_view", nil)
@@ -166,7 +165,7 @@ func TestGetSchemaRPC(t *testing.T) {
 		&vtrpcpb.CallerID{},
 		&querypb.VTGateCallerID{Username: "dev"}))
 
-	defer client.Execute(qDelAllRows, nil)
+	defer client.Execute("drop view vitess_view", nil)
 
 	_, err = client.Execute("create view vitess_view as select 1 from vitess_a", nil)
 	require.NoError(t, err)
