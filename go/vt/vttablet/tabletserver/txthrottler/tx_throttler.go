@@ -103,12 +103,20 @@ func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *Tx
 	} else {
 		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
 	}
+	stats.NewGaugeFunc("TxThrottlerMaxRate", "transaction throttler max rate", txThrottler.maxRate)
 	return txThrottler
 }
 
 // InitDBConfig initializes the target parameters for the throttler.
 func (t *TxThrottler) InitDBConfig(target *querypb.Target) {
 	t.target = proto.Clone(target).(*querypb.Target)
+}
+
+func (t *TxThrottler) maxRate() int64 {
+	if t.state == nil {
+		return 0
+	}
+	return t.state.maxRate()
 }
 
 func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
@@ -343,6 +351,13 @@ func (ts *txThrottlerState) throttle() bool {
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
 	return ts.throttler.Throttle(0 /* threadId */) > 0
+}
+
+func (ts *txThrottlerState) maxRate() int64 {
+	if ts.throttler == nil {
+		return 0
+	}
+	return ts.throttler.MaxRate()
 }
 
 func (ts *txThrottlerState) deallocateResources() {
