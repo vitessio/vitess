@@ -123,8 +123,8 @@ func TestReservedOnMultiReplica(t *testing.T) {
 	destinations := []key.Destination{key.DestinationShard("0")}
 	for i := 0; i < 10; i++ {
 		executeOnShards(t, res, keyspace, sc, session, destinations)
-		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Get()+sbc0_2.ReserveCount.Get(), "sbc0 reserve count")
-		assert.EqualValues(t, 0, sbc0_1.BeginCount.Get()+sbc0_2.BeginCount.Get(), "sbc0 begin count")
+		assert.EqualValues(t, 1, sbc0_1.ReserveCount.Load()+sbc0_2.ReserveCount.Load(), "sbc0 reserve count")
+		assert.EqualValues(t, 0, sbc0_1.BeginCount.Load()+sbc0_2.BeginCount.Load(), "sbc0 begin count")
 	}
 }
 
@@ -273,14 +273,14 @@ func TestReservedBeginTableDriven(t *testing.T) {
 					destinations = append(destinations, key.DestinationShard(shard))
 				}
 				executeOnShards(t, res, keyspace, sc, session, destinations)
-				assert.EqualValues(t, action.sbc0Reserve, sbc0.ReserveCount.Get(), "sbc0 reserve count")
-				assert.EqualValues(t, action.sbc0Begin, sbc0.BeginCount.Get(), "sbc0 begin count")
-				assert.EqualValues(t, action.sbc1Reserve, sbc1.ReserveCount.Get(), "sbc1 reserve count")
-				assert.EqualValues(t, action.sbc1Begin, sbc1.BeginCount.Get(), "sbc1 begin count")
-				sbc0.BeginCount.Set(0)
-				sbc0.ReserveCount.Set(0)
-				sbc1.BeginCount.Set(0)
-				sbc1.ReserveCount.Set(0)
+				assert.EqualValues(t, action.sbc0Reserve, sbc0.ReserveCount.Load(), "sbc0 reserve count")
+				assert.EqualValues(t, action.sbc0Begin, sbc0.BeginCount.Load(), "sbc0 begin count")
+				assert.EqualValues(t, action.sbc1Reserve, sbc1.ReserveCount.Load(), "sbc1 reserve count")
+				assert.EqualValues(t, action.sbc1Begin, sbc1.BeginCount.Load(), "sbc1 begin count")
+				sbc0.BeginCount.Store(0)
+				sbc0.ReserveCount.Store(0)
+				sbc1.BeginCount.Store(0)
+				sbc1.ReserveCount.Store(0)
 			}
 		})
 	}
@@ -363,9 +363,9 @@ func TestReservedConnFail(t *testing.T) {
 	sbc0Rep := hc.AddTestTablet("aa", "0", 2, keyspace, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 
 	sbc0.Queries = nil
-	sbc0.ExecCount.Set(0)
+	sbc0.ExecCount.Store(0)
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
-	assert.EqualValues(t, 1, sbc0.ExecCount.Get(), "first attempt should be made on original tablet")
+	assert.EqualValues(t, 1, sbc0.ExecCount.Load(), "first attempt should be made on original tablet")
 	assert.EqualValues(t, 0, len(sbc0.Queries), "no query should be executed on it")
 	assert.Equal(t, 1, len(sbc0Rep.Queries), "this attempt on new healthy tablet should pass")
 	require.Equal(t, 1, len(session.ShardSessions))
@@ -390,12 +390,12 @@ func TestReservedConnFail(t *testing.T) {
 	sbc0Rep.Tablet().Type = topodatapb.TabletType_SPARE
 	sbc0Th.Serving = true
 	sbc0.NotServing = false
-	sbc0.ExecCount.Set(0)
+	sbc0.ExecCount.Store(0)
 
 	sbc0Rep.Queries = nil
-	sbc0Rep.ExecCount.Set(0)
+	sbc0Rep.ExecCount.Store(0)
 	_ = executeOnShardsReturnsErr(t, res, keyspace, sc, session, destinations)
-	assert.EqualValues(t, 1, sbc0Rep.ExecCount.Get(), "first attempt should be made on the changed tablet type")
+	assert.EqualValues(t, 1, sbc0Rep.ExecCount.Load(), "first attempt should be made on the changed tablet type")
 	assert.EqualValues(t, 0, len(sbc0Rep.Queries), "no query should be executed on it")
 	assert.Equal(t, 1, len(sbc0.Queries), "this attempt should pass as it is on new healthy tablet and matches the target")
 	require.Equal(t, 1, len(session.ShardSessions))

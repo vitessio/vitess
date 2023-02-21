@@ -30,8 +30,8 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/z-division/go-zookeeper/zk"
+	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -94,7 +94,7 @@ type ZkConn struct {
 	addr string
 
 	// sem protects concurrent calls to Zookeeper.
-	sem *sync2.Semaphore
+	sem *semaphore.Weighted
 
 	// mu protects the following fields.
 	mu   sync.Mutex
@@ -107,7 +107,7 @@ type ZkConn struct {
 func Connect(addr string) *ZkConn {
 	return &ZkConn{
 		addr: addr,
-		sem:  sync2.NewSemaphore(maxConcurrency, 0),
+		sem:  semaphore.NewWeighted(int64(maxConcurrency)),
 	}
 }
 
@@ -241,8 +241,11 @@ func (c *ZkConn) Close() error {
 func (c *ZkConn) withRetry(ctx context.Context, action func(conn *zk.Conn) error) (err error) {
 
 	// Handle concurrent access to a Zookeeper server here.
-	c.sem.Acquire()
-	defer c.sem.Release()
+	err = c.sem.Acquire(ctx, 1)
+	if err != nil {
+		return err
+	}
+	defer c.sem.Release(1)
 
 	for i := 0; i < maxAttempts; i++ {
 		if i > 0 {

@@ -20,6 +20,7 @@ import (
 	"context"
 	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -30,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -329,9 +329,9 @@ func TestStateManagerTransitionFailRetry(t *testing.T) {
 	// Steal the lock and wait long enough for the retry
 	// to fail, and then release it. The retry will have
 	// to keep retrying.
-	sm.transitioning.Acquire()
+	sm.transitioning.Acquire(context.Background(), 1)
 	time.Sleep(30 * time.Millisecond)
-	sm.transitioning.Release()
+	sm.transitioning.Release(1)
 
 	for {
 		sm.mu.Lock()
@@ -380,7 +380,7 @@ func (te *delayedTxEngine) Close() {
 
 type killableConn struct {
 	id     int64
-	killed sync2.AtomicBool
+	killed atomic.Bool
 }
 
 func (k *killableConn) Current() string {
@@ -392,7 +392,7 @@ func (k *killableConn) ID() int64 {
 }
 
 func (k *killableConn) Kill(message string, elapsed time.Duration) error {
-	k.killed.Set(true)
+	k.killed.Store(true)
 	return nil
 }
 
@@ -415,15 +415,15 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	// Transition to replica with no shutdown grace period should kill kconn2 but not kconn1.
 	err := sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.False(t, kconn1.killed.Get())
-	assert.True(t, kconn2.killed.Get())
+	assert.False(t, kconn1.killed.Load())
+	assert.True(t, kconn2.killed.Load())
 
 	// Transition without grace period. No conns should be killed.
-	kconn2.killed.Set(false)
+	kconn2.killed.Store(false)
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.False(t, kconn1.killed.Get())
-	assert.False(t, kconn2.killed.Get())
+	assert.False(t, kconn1.killed.Load())
+	assert.False(t, kconn2.killed.Load())
 
 	// Transition to primary with a short shutdown grace period should kill both conns.
 	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
@@ -431,19 +431,19 @@ func TestStateManagerShutdownGracePeriod(t *testing.T) {
 	sm.shutdownGracePeriod = 10 * time.Millisecond
 	err = sm.SetServingType(topodatapb.TabletType_REPLICA, testNow, StateServing, "")
 	require.NoError(t, err)
-	assert.True(t, kconn1.killed.Get())
-	assert.True(t, kconn2.killed.Get())
+	assert.True(t, kconn1.killed.Load())
+	assert.True(t, kconn2.killed.Load())
 
 	// Primary non-serving should also kill the conn.
 	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateServing, "")
 	require.NoError(t, err)
 	sm.shutdownGracePeriod = 10 * time.Millisecond
-	kconn1.killed.Set(false)
-	kconn2.killed.Set(false)
+	kconn1.killed.Store(false)
+	kconn2.killed.Store(false)
 	err = sm.SetServingType(topodatapb.TabletType_PRIMARY, testNow, StateNotServing, "")
 	require.NoError(t, err)
-	assert.True(t, kconn1.killed.Get())
-	assert.True(t, kconn2.killed.Get())
+	assert.True(t, kconn1.killed.Load())
+	assert.True(t, kconn2.killed.Load())
 }
 
 func TestStateManagerCheckMySQL(t *testing.T) {
@@ -458,7 +458,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 
 	sm.te = &delayedTxEngine{}
 	sm.qe.(*testQueryEngine).failMySQL = true
-	order.Set(0)
+	order.Store(0)
 	sm.checkMySQL()
 	// We know checkMySQL will take atleast 50 milliseconds since txEngine.Close has a sleep in the test code
 	time.Sleep(10 * time.Millisecond)
@@ -471,7 +471,7 @@ func TestStateManagerCheckMySQL(t *testing.T) {
 
 	// Wait for closeAll to get under way.
 	for {
-		if order.Get() >= 1 {
+		if order.Load() >= 1 {
 			break
 		}
 		time.Sleep(10 * time.Millisecond)
@@ -698,7 +698,7 @@ func verifySubcomponent(t *testing.T, order int64, component any, state testStat
 }
 
 func newTestStateManager(t *testing.T) *stateManager {
-	order.Set(0)
+	order.Store(0)
 	config := tabletenv.NewDefaultConfig()
 	env := tabletenv.NewEnv(config, "StateManagerTest")
 	sm := &stateManager{
@@ -726,14 +726,14 @@ func newTestStateManager(t *testing.T) *stateManager {
 }
 
 func (sm *stateManager) isTransitioning() bool {
-	if sm.transitioning.TryAcquire() {
-		sm.transitioning.Release()
+	if sm.transitioning.TryAcquire(1) {
+		sm.transitioning.Release(1)
 		return false
 	}
 	return true
 }
 
-var order sync2.AtomicInt64
+var order atomic.Int64
 
 type testState int
 

@@ -18,9 +18,8 @@ package throttler
 
 import (
 	"fmt"
+	"sync/atomic"
 	"time"
-
-	"vitess.io/vitess/go/sync2"
 
 	"golang.org/x/time/rate"
 )
@@ -39,7 +38,7 @@ type threadThrottler struct {
 
 	// maxRate holds the last rate set by setMaxRate. It will be set
 	// in the limiter object in the next call to throttle().
-	maxRate           sync2.AtomicInt64
+	maxRate           atomic.Int64
 	limiter           *rate.Limiter
 	actualRateHistory *aggregatedIntervalHistory
 }
@@ -74,7 +73,7 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 	// Pass the limit set by the last call to setMaxRate. Limiter.SetLimitAt
 	// is idempotent, so we can call it with the same value more than once without
 	// issues.
-	t.limiter.SetLimitAt(now, rate.Limit(t.maxRate.Get()))
+	t.limiter.SetLimitAt(now, rate.Limit(t.maxRate.Load()))
 
 	// Initialize or advance the current second interval when necessary.
 	nowSecond := now.Truncate(time.Second)
@@ -101,7 +100,7 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 	reservation := t.limiter.ReserveN(now, 1)
 	if !reservation.OK() {
 		panic(fmt.Sprintf("BUG: limiter was unable to reserve an event. "+
-			"threadThrottler: %v, reservation:%v", *t, *reservation))
+			"threadThrottler: %+v, reservation:%v", t, *reservation))
 	}
 	waitDuration := reservation.DelayFrom(now)
 	if waitDuration <= 0 {
@@ -115,11 +114,11 @@ func (t *threadThrottler) throttle(now time.Time) time.Duration {
 // setMaxRate sets the maximum rate for the next time throttle() is called.
 // setMaxRate() can be called concurrently with other methods of this object.
 func (t *threadThrottler) setMaxRate(newRate int64) {
-	t.maxRate.Set(newRate)
+	t.maxRate.Store(newRate)
 }
 
 // maxRate returns the rate set by the last call to setMaxRate().
 // If setMaxRate() was not called, this method returns 0.
 func (t *threadThrottler) getMaxRate() int64 {
-	return t.maxRate.Get()
+	return t.maxRate.Load()
 }

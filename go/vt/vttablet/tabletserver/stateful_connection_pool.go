@@ -18,10 +18,10 @@ package tabletserver
 
 import (
 	"context"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/pools"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -43,7 +43,7 @@ const (
 type StatefulConnectionPool struct {
 	env tabletenv.Env
 
-	state sync2.AtomicInt64
+	state atomic.Int64
 
 	// conns is the 'regular' pool. By default, connections
 	// are pulled from here for starting transactions.
@@ -55,32 +55,33 @@ type StatefulConnectionPool struct {
 	// connection time.
 	foundRowsPool *connpool.Pool
 	active        *pools.Numbered
-	lastID        sync2.AtomicInt64
+	lastID        atomic.Int64
 }
 
 // NewStatefulConnPool creates an ActivePool
 func NewStatefulConnPool(env tabletenv.Env) *StatefulConnectionPool {
 	config := env.Config()
 
-	return &StatefulConnectionPool{
+	scp := &StatefulConnectionPool{
 		env:           env,
 		conns:         connpool.NewPool(env, "TransactionPool", config.TxPool),
 		foundRowsPool: connpool.NewPool(env, "FoundRowsPool", config.TxPool),
 		active:        pools.NewNumbered(),
-		lastID:        sync2.NewAtomicInt64(time.Now().UnixNano()),
 	}
+	scp.lastID.Store(time.Now().UnixNano())
+	return scp
 }
 
 // Open makes the TxPool operational. This also starts the transaction killer
 // that will kill long-running transactions.
 func (sf *StatefulConnectionPool) Open(appParams, dbaParams, appDebugParams dbconfigs.Connector) {
-	log.Infof("Starting transaction id: %d", sf.lastID)
+	log.Infof("Starting transaction id: %d", sf.lastID.Load())
 	sf.conns.Open(appParams, dbaParams, appDebugParams)
 	foundRowsParam, _ := appParams.MysqlParams()
 	foundRowsParam.EnableClientFoundRows()
 	appParams = dbconfigs.New(foundRowsParam)
 	sf.foundRowsPool.Open(appParams, dbaParams, appDebugParams)
-	sf.state.Set(scpOpen)
+	sf.state.Store(scpOpen)
 }
 
 // Close closes the TxPool. A closed pool can be reopened.
@@ -98,13 +99,13 @@ func (sf *StatefulConnectionPool) Close() {
 	}
 	sf.conns.Close()
 	sf.foundRowsPool.Close()
-	sf.state.Set(scpClosed)
+	sf.state.Store(scpClosed)
 }
 
 // ShutdownNonTx enters the state where all non-transactional connections are killed.
 // InUse connections will be killed as they are returned.
 func (sf *StatefulConnectionPool) ShutdownNonTx() {
-	sf.state.Set(scpKillingNonTx)
+	sf.state.Store(scpKillingNonTx)
 	conns := mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc any) bool {
 		return !sc.(*StatefulConnection).IsInTransaction()
 	}))
@@ -117,7 +118,7 @@ func (sf *StatefulConnectionPool) ShutdownNonTx() {
 // It returns all connections that are not in use. They must be rolled back
 // by the caller (TxPool). InUse connections will be killed as they are returned.
 func (sf *StatefulConnectionPool) ShutdownAll() []*StatefulConnection {
-	sf.state.Set(scpKillingAll)
+	sf.state.Store(scpKillingAll)
 	return mapToTxConn(sf.active.GetByFilter("kill non-tx", func(sc any) bool {
 		return true
 	}))
@@ -127,9 +128,9 @@ func (sf *StatefulConnectionPool) ShutdownAll() []*StatefulConnection {
 // as large as the input value. This will ensure that there are
 // no dtid collisions with future transactions.
 func (sf *StatefulConnectionPool) AdjustLastID(id int64) {
-	if current := sf.lastID.Get(); current < id {
+	if current := sf.lastID.Load(); current < id {
 		log.Infof("Adjusting transaction id to: %d", id)
-		sf.lastID.Set(id)
+		sf.lastID.Store(id)
 	}
 }
 
@@ -219,7 +220,7 @@ func (sf *StatefulConnectionPool) unregister(id tx.ConnID, reason string) {
 
 // markAsNotInUse marks the connection as not in use at the moment
 func (sf *StatefulConnectionPool) markAsNotInUse(sc *StatefulConnection, updateTime bool) {
-	switch sf.state.Get() {
+	switch sf.state.Load() {
 	case scpKillingNonTx:
 		if !sc.IsInTransaction() {
 			sc.Releasef("kill non-tx")

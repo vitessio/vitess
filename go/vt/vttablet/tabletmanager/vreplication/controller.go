@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -28,7 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -65,7 +65,7 @@ type controller struct {
 	done   chan struct{}
 
 	// The following fields are updated after start. So, they need synchronization.
-	sourceTablet sync2.AtomicString
+	sourceTablet atomic.Value
 
 	lastWorkflowError *vterrors.LastError
 }
@@ -85,6 +85,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 		done:            make(chan struct{}),
 		source:          &binlogdatapb.BinlogSource{},
 	}
+	ct.sourceTablet.Store("")
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
 	// id
@@ -97,7 +98,7 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
-	blpStats.State.Set(state)
+	blpStats.State.Store(state)
 	// Nothing to do if replication is stopped or is known to have an unrecoverable error.
 	if state == binlogplayer.BlpStopped || state == binlogplayer.BlpError {
 		ct.cancel = func() {}
@@ -179,7 +180,7 @@ func (ct *controller) run(ctx context.Context) {
 
 func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
-		ct.sourceTablet.Set("")
+		ct.sourceTablet.Store("")
 		if x := recover(); x != nil {
 			log.Errorf("stream %v: caught panic: %v\n%s", ct.id, x, tb.Stack(4))
 			err = fmt.Errorf("panic: %v", x)
@@ -221,7 +222,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
 		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
-		ct.sourceTablet.Set(tablet.Alias.String())
+		ct.sourceTablet.Store(tablet.Alias.String())
 	}
 	switch {
 	case len(ct.source.Tables) > 0:
