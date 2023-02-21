@@ -10,6 +10,7 @@ require (
 	github.com/google/go-jsonnet v0.16.0
 	github.com/jsonnet-bundler/jsonnet-bundler v0.4.0
 	github.com/krishicks/yaml-patch v0.0.10
+	github.com/prometheus/client_golang v1.14.0 // indirect
 	// Believe it or not, this is actually version 2.13.1
 	// See https://github.com/prometheus/prometheus/issues/5590#issuecomment-546368944
 	github.com/prometheus/prometheus v1.8.2-0.20191017095924-6f92ce560538
