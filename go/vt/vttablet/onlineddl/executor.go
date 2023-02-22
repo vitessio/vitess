@@ -3545,12 +3545,8 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 					)
 				}
 				lastError := e.vreplicationLastError[uuid]
-				hasErr, isTerminal, message := s.hasError()
-				if hasErr {
-					lastError.Record(errors.New(message))
-				} else {
-					lastError.Record(nil)
-				}
+				isTerminal, vreplError := s.hasError()
+				lastError.Record(vreplError)
 				if isTerminal || !lastError.ShouldRetry() {
 					cancellable = append(cancellable, newCancellableMigration(uuid, s.message))
 				}
@@ -3863,7 +3859,7 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 			if err != nil {
 				return vterrors.Wrapf(err, "in gcArtifacts() for %s", artifactTable)
 			}
-			log.Infof("Executor.gcArtifacts: renamed away artifact %s into %s", artifactTable, toTableName)
+			log.Infof("Executor.gcArtifacts: renamed away artifact %s to %s", artifactTable, toTableName)
 		}
 
 		// Remove logs:
