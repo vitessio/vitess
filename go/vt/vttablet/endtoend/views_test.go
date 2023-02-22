@@ -198,8 +198,8 @@ func TestViewAndTableUnique(t *testing.T) {
 		&querypb.VTGateCallerID{Username: "dev"}))
 
 	defer func() {
-		_, _ = client.Execute("drop if exists view vitess_view", nil)
-		_, _ = client.Execute("drop if exists table vitess_view", nil)
+		_, _ = client.Execute("drop view if exists vitess_view", nil)
+		_, _ = client.Execute("drop table if exists vitess_view", nil)
 	}()
 
 	// create a view.
