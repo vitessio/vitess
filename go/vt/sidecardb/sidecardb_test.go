@@ -18,16 +18,26 @@ package sidecardb
 
 import (
 	"context"
+	"expvar"
+	"fmt"
+	"sort"
+	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/stats"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 )
 
-// Tests all non-error code paths in sidecardb
-func TestAllSidecarDB(t *testing.T) {
+// TestInitErrors validates that the schema init error stats are being correctly set
+func TestInitErrors(t *testing.T) {
+	ctx := context.Background()
+
 	db := fakesqldb.New(t)
 	defer db.Close()
 	AddSchemaInitQueries(db, false)
@@ -40,7 +50,119 @@ func TestAllSidecarDB(t *testing.T) {
 	db.AddQuery("select @@session.sql_mode as sql_mode", sqlMode)
 	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 
+	ddlErrorCount.Set(0)
+	ddlCount.Set(0)
+
+	cp := db.ConnParams()
+	conn, err := cp.Connect(ctx)
+	require.NoError(t, err)
+
+	type schemaError struct {
+		tableName  string
+		errorValue string
+	}
+
+	// simulate two errors during table creation to validate error stats
+	schemaErrors := []schemaError{
+		{"vreplication_log", "vreplication_log error"},
+		{"copy_state", "copy_state error"},
+	}
+
+	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if _, err := conn.ExecuteFetch(UseSidecarDatabaseQuery, maxRows, true); err != nil {
+				return nil, err
+			}
+		}
+
+		// simulate errors for the table creation DDLs applied for tables specified in schemaErrors
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		createTable, ok := stmt.(*sqlparser.CreateTable)
+		if ok {
+			for _, e := range schemaErrors {
+				if strings.EqualFold(e.tableName, createTable.Table.Name.String()) {
+					return nil, fmt.Errorf(e.errorValue)
+				}
+			}
+		}
+		return conn.ExecuteFetch(query, maxRows, true)
+	}
+
+	require.Equal(t, int64(0), GetDDLCount())
+	err = Init(ctx, exec)
+	require.NoError(t, err)
+	require.Equal(t, int64(len(sidecarTables)-len(schemaErrors)), GetDDLCount())
+	require.Equal(t, int64(len(schemaErrors)), GetDDLErrorCount())
+
+	var want []string
+	for _, e := range schemaErrors {
+		want = append(want, e.errorValue)
+	}
+	// sort expected and reported errors for easy comparison
+	sort.Strings(want)
+	got := GetDDLErrorHistory()
+	sort.Slice(got, func(i, j int) bool {
+		return got[i].tableName < got[j].tableName
+	})
+	var gotErrors string
+	stats.Register(func(name string, v expvar.Var) {
+		if name == StatsKeyErrors {
+			gotErrors = v.String()
+		}
+	})
+
+	// for DDL errors, validate both the internal data structure and the stats endpoint
+	for i := range want {
+		if !strings.Contains(got[i].err.Error(), want[i]) {
+			require.FailNowf(t, "incorrect schema error", "got %s, want %s", got[i], want[i])
+		}
+		if !strings.Contains(gotErrors, want[i]) {
+			require.FailNowf(t, "schema error not published", "got %s, want %s", gotErrors, want[i])
+		}
+	}
+}
+
+// test the logic that confirms that the user defined schema's table name and qualifier are valid
+func TestValidateSchema(t *testing.T) {
+	type testCase struct {
+		testName  string
+		name      string
+		schema    string
+		mustError bool
+	}
+	testCases := []testCase{
+		{"valid", "t1", "create table if not exists _vt.t1(i int)", false},
+		{"no if not exists", "t1", "create table _vt.t1(i int)", true},
+		{"invalid table name", "t2", "create table if not exists _vt.t1(i int)", true},
+		{"invalid table name", "t1", "create table if not exists _vt.t2(i int)", true},
+		{"invalid qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
+		{"invalid qualifier", "t1", "create table if not exists t1(i int)", true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.testName, func(t *testing.T) {
+			_, err := validateSchemaDefinition(tc.name, tc.schema)
+			if tc.mustError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+// Tests various non-error code paths in sidecardb
+func TestMiscSidecarDB(t *testing.T) {
 	ctx := context.Background()
+
+	db := fakesqldb.New(t)
+	defer db.Close()
+	AddSchemaInitQueries(db, false)
+	db.AddQuery("use dbname", &sqltypes.Result{})
+	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
+
 	cp := db.ConnParams()
 	conn, err := cp.Connect(ctx)
 	require.NoError(t, err)
@@ -54,6 +176,8 @@ func TestAllSidecarDB(t *testing.T) {
 	}
 
 	// tests init on empty db
+	ddlErrorCount.Set(0)
+	ddlCount.Set(0)
 	require.Equal(t, int64(0), GetDDLCount())
 	err = Init(ctx, exec)
 	require.NoError(t, err)
@@ -84,32 +208,4 @@ func TestAllSidecarDB(t *testing.T) {
 	require.False(t, MatchesInitQuery("abc"))
 	require.True(t, MatchesInitQuery(SelectCurrentDatabaseQuery))
 	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS `_vt`.vreplication"))
-}
-
-// test the logic that confirms that the user defined schema's table name and qualifier are valid
-func TestValidateSchema(t *testing.T) {
-	type testCase struct {
-		testName  string
-		name      string
-		schema    string
-		mustError bool
-	}
-	testCases := []testCase{
-		{"valid", "t1", "create table if not exists _vt.t1(i int)", false},
-		{"no if not exists", "t1", "create table _vt.t1(i int)", true},
-		{"invalid table name", "t2", "create table if not exists _vt.t1(i int)", true},
-		{"invalid table name", "t1", "create table if not exists _vt.t2(i int)", true},
-		{"invalid qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
-		{"invalid qualifier", "t1", "create table if not exists t1(i int)", true},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.testName, func(t *testing.T) {
-			_, err := validateSchemaDefinition(tc.name, tc.schema)
-			if tc.mustError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
 }
