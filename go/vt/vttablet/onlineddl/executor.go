@@ -2428,33 +2428,8 @@ func (e *Executor) executeRevert(ctx context.Context, onlineDDL *schema.OnlineDD
 	if err := e.validateMigrationRevertible(ctx, revertMigration, onlineDDL.UUID); err != nil {
 		return err
 	}
+
 	revertedActionStr := row["ddl_action"].ToString()
-	if onlineDDL.Table == "" {
-		// table name should be populated by reviewQueuedMigrations
-		// but this was a newly added functionality. To be backwards compatible,
-		// we double check here, and populate table name and ddl_action.
-
-		// TODO: remove in v14
-		mimickedActionStr := ""
-
-		switch revertedActionStr {
-		case sqlparser.CreateStr:
-			mimickedActionStr = sqlparser.DropStr
-		case sqlparser.DropStr:
-			mimickedActionStr = sqlparser.CreateStr
-		case sqlparser.AlterStr:
-			mimickedActionStr = sqlparser.AlterStr
-		default:
-			return fmt.Errorf("cannot run migration %s reverting %s: unexpected action %s", onlineDDL.UUID, revertMigration.UUID, revertedActionStr)
-		}
-		if err := e.updateDDLAction(ctx, onlineDDL.UUID, mimickedActionStr); err != nil {
-			return err
-		}
-		if err := e.updateMySQLTable(ctx, onlineDDL.UUID, revertMigration.Table); err != nil {
-			return err
-		}
-	}
-
 	switch revertedActionStr {
 	case sqlparser.CreateStr:
 		{
@@ -3822,13 +3797,6 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
-		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
-		// see https://github.com/vitessio/vitess/issues/8499
-		// Running this query retroactively sets completed_timestamp
-		// This 'if' clause can be removed in version v13
-		return err
-	}
 	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
