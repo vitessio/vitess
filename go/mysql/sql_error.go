@@ -87,9 +87,6 @@ func NewSQLErrorFromError(err error) error {
 		return nil
 	}
 
-	// in case this error is wrapped by vterrors, extract the inner most error
-	err = vterrors.UnwrapAll(err)
-
 	if serr, ok := err.(*SQLError); ok {
 		return serr
 	}
