@@ -47,6 +47,28 @@ done
 # Check one last time
 [[ $(curl -s "http://localhost:${vtadmin_api_port}/api/clusters") == "${expected_cluster_result}" ]] || fail "vtadmin failed to discover the running example Vitess cluster."
 
+# Download nvm and node
+output() {
+  echo -e "$@"
+}
+
+export NVM_DIR="$HOME/.nvm"
+
+output "\nInstalling nvm...\n"
+
+if [ -d "$NVM_DIR" ]; then
+  output "\033[1;32mnvm is already installed!\033[0m"
+else
+  curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+  output "\033[1;32mnvm is installed!\033[0m"
+fi
+
+source "$NVM_DIR/nvm.sh"
+
+output "\nInstalling Node.js...\n"
+nvm install 16
+nvm use 16
+
 # As a TODO, it'd be nice to make the assumption that vtadmin-web is already
 # installed and built (since we assume that `make` has already been run for
 # other Vitess components.)
