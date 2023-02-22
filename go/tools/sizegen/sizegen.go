@@ -517,7 +517,7 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			if err := codegen.SaveJenFile(file, fullPath); err != nil {
+			if err := codegen.SaveJenFile(fullPath, file); err != nil {
 				log.Fatal(err)
 			}
 		}
