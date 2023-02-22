@@ -315,14 +315,14 @@ func TestViewsTracking(t *testing.T) {
 	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
 
 	schemaDefResult := []map[string]string{{
-		"prior": "select 1 from tbl",  // create view prior as select 1 from tbl"
-		"t1":    "select 1 from tbl1", // create view t1 as select 1 from tbl1",
-		"t2":    "select 1 from tbl2", // create view t2 as select 1 from tbl2",
+		"prior": "create view prior as select 1 from tbl",
+		"t1":    "create view t1 as select 1 from tbl1",
+		"t2":    "create view t2 as select 1 from tbl2",
 	}, {
-		"t2": "select 1,2 from tbl2", // create view t2 as select 1,2 from tbl2",
-		"t3": "select 1 from tbl3",   // create view t3 as select 1 from tbl3",
+		"t2": "create view t2 as select 1,2 from tbl2",
+		"t3": "create view t3 as select 1 from tbl3",
 	}, {
-		"t4": "select 1 from tbl4", // create view t4 as select 1 from tbl4"
+		"t4": "create view t4 as select 1 from tbl4",
 	}}
 
 	testcases := []struct {

@@ -401,12 +401,12 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return
 	}
-	sel, ok := stmt.(sqlparser.SelectStatement)
+	cv, ok := stmt.(*sqlparser.CreateView)
 	if !ok {
-		log.Warningf("ignoring view '%s', view definition is not a select query: %T", tbl, stmt)
+		log.Warningf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt)
 		return
 	}
-	m[tbl] = sel
+	m[tbl] = cv.Select
 }
 
 func (vm *viewMap) get(ks, tbl string) sqlparser.SelectStatement {
