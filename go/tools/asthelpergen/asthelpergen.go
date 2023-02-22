@@ -25,11 +25,10 @@ import (
 	"path"
 	"strings"
 
-	"vitess.io/vitess/go/tools/common"
-	"vitess.io/vitess/go/tools/goimports"
-
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
+
+	"vitess.io/vitess/go/tools/codegen"
 )
 
 const licenseFileHeader = `Copyright 2023 The Vitess Authors.
@@ -157,7 +156,7 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 			continue
 		}
 
-		genFile, err := goimports.FormatJenFile(file)
+		genFile, err := codegen.FormatJenFile(file)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
@@ -190,7 +189,7 @@ func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}
 
-	if err := common.CheckErrors(loaded, common.GeneratedInSqlparser); err != nil {
+	if err := codegen.CheckErrors(loaded, codegen.GeneratedInSqlparser); err != nil {
 		return nil, err
 	}
 
