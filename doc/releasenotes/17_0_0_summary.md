@@ -9,7 +9,12 @@
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
+<<<<<<< HEAD
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+||||||| parent of 2005613e85 (Remove deprecated fields from TabletHealth json marshalling)
+=======
+- **[Deprecations and Deletions](#deprecations-and-deletions)**
+>>>>>>> 2005613e85 (Remove deprecated fields from TabletHealth json marshalling)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -169,3 +174,4 @@ Some notes to help understand these metrics:
 ## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
 * The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
+* The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
