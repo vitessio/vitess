@@ -88,6 +88,7 @@ package vterrors
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 
@@ -242,6 +243,26 @@ func Wrapf(err error, format string, args ...any) error {
 		msg:   fmt.Sprintf(format, args...),
 		stack: callers(),
 	}
+}
+
+// Unwrap attempts to return the Cause of the given error, if it is indeed the result of a vterrors.Wrapf()
+// The function indicates whether the error was indeed wrapped. If the error was not wrapped, the function
+// returns the original error.
+func Unwrap(err error) (wasWrapped bool, unwrapped error) {
+	var w *wrapping
+	if errors.As(err, &w) {
+		return true, w.Cause()
+	}
+	return false, err
+}
+
+// UnwrapAll attempts to recursively unwrap the given error, and returns the most underlying cause
+func UnwrapAll(err error) error {
+	wasWrapped := true
+	for wasWrapped {
+		wasWrapped, err = Unwrap(err)
+	}
+	return err
 }
 
 type wrapping struct {
