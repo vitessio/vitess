@@ -85,7 +85,7 @@ type ddlError struct {
 const maxDDLErrorHistoryLength = 100
 
 // failOnSchemaInitError decides whether we fail the schema init process when we encounter an error while
-// applying a table schema upgrade ddl or continue with the next table.
+// applying a table schema upgrade DDL or continue with the next table.
 // If true, tablets will not launch. The cluster will not come up until the issue is resolved.
 // If false, the init process will continue trying to upgrade other tables. So some functionality might be broken
 // due to an incorrect schema, but the cluster should come up and serve queries.
@@ -95,18 +95,25 @@ const maxDDLErrorHistoryLength = 100
 // related stats endpoints are monitored we should be able to diagnose/get alerted in a timely fashion.
 const failOnSchemaInitError = false
 
+const StatsKeyPrefix = "SidecarDBDDL"
+const StatsKeyQueryCount = StatsKeyPrefix + "QueryCount"
+const StatsKeyErrorCount = StatsKeyPrefix + "ErrorCount"
+const StatsKeyErrors = StatsKeyPrefix + "Errors"
+
 func init() {
 	initSchemaFiles()
-	ddlCount = stats.NewCounter("SidecarDBDDLQueryCount", "Number of queries executed")
-	ddlErrorCount = stats.NewCounter("SidecarDBDDLErrorCount", "Number of errors during sidecar schema upgrade")
+	ddlCount = stats.NewCounter(StatsKeyQueryCount, "Number of queries executed")
+	ddlErrorCount = stats.NewCounter(StatsKeyErrorCount, "Number of errors during sidecar schema upgrade")
 	ddlErrorHistory = history.New(maxDDLErrorHistoryLength)
-	stats.Publish("SidecarDBDDLErrors", stats.StringMapFunc(func() map[string]string {
+	stats.Publish(StatsKeyErrors, stats.StringMapFunc(func() map[string]string {
 		mu.Lock()
 		defer mu.Unlock()
 		result := make(map[string]string, len(ddlErrorHistory.Records()))
 		for _, e := range ddlErrorHistory.Records() {
-			d := e.(*ddlError)
-			result[d.tableName] = d.err.Error()
+			d, ok := e.(*ddlError)
+			if ok {
+				result[d.tableName] = d.err.Error()
+			}
 		}
 		return result
 	}))
@@ -198,12 +205,12 @@ type schemaInit struct {
 // Exec is a callback that has to be passed to Init() to execute the specified query in the database.
 type Exec func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error)
 
-// GetDDLCount returns the count of sidecardb ddls that have been run as part of this vttablet's init process.
+// GetDDLCount returns the count of sidecardb DDLs that have been run as part of this vttablet's init process.
 func GetDDLCount() int64 {
 	return ddlCount.Get()
 }
 
-// GetDDLErrorCount returns the count of sidecardb ddls that have been errored out as part of this vttablet's init process.
+// GetDDLErrorCount returns the count of sidecardb DDLs that have been errored out as part of this vttablet's init process.
 func GetDDLErrorCount() int64 {
 	return ddlErrorCount.Get()
 }
@@ -212,7 +219,10 @@ func GetDDLErrorCount() int64 {
 func GetDDLErrorHistory() []*ddlError {
 	var errors []*ddlError
 	for _, e := range ddlErrorHistory.Records() {
-		errors = append(errors, e.(*ddlError))
+		ddle, ok := e.(*ddlError)
+		if ok {
+			errors = append(errors, ddle)
+		}
 	}
 	return errors
 }
@@ -370,7 +380,7 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		if ddl == "" {
 			log.Infof("No changes needed for table %s", tableName)
 		} else {
-			log.Infof("Applying ddl for table %s:\n%s", tableName, ddl)
+			log.Infof("Applying DDL for table %s:\n%s", tableName, ddl)
 		}
 	}
 
@@ -407,14 +417,14 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 		_, err := si.exec(ctx, ddl, 1, true)
 		if err != nil {
 			ddlErr := vterrors.Wrapf(err,
-				"Error running ddl %s for table %s during sidecar database initialization", ddl, table)
+				"Error running DDL %s for table %s during sidecar database initialization", ddl, table)
 			recordDDLError(table.name, ddlErr)
 			if failOnSchemaInitError {
 				return ddlErr
 			}
 			return nil
 		}
-		log.Infof("Applied ddl %s for table %s during sidecar database initialization", ddl, table)
+		log.Infof("Applied DDL %s for table %s during sidecar database initialization", ddl, table)
 		ddlCount.Add(1)
 		return nil
 	}
