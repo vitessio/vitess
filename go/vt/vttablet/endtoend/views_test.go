@@ -51,7 +51,7 @@ func TestCreateViewDDL(t *testing.T) {
 	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select * from vitess_a") TEXT("create view vitess_view as select * from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("create view vitess_view as select * from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 
 	// view already exists. This should fail.
@@ -66,7 +66,7 @@ func TestCreateViewDDL(t *testing.T) {
 	qr, err = client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 }
 
@@ -97,7 +97,7 @@ func TestAlterViewDDL(t *testing.T) {
 	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 }
 
