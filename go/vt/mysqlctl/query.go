@@ -17,11 +17,10 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -94,7 +93,6 @@ func (mysqld *Mysqld) FetchSuperQuery(ctx context.Context, query string) (*sqlty
 		return nil, connErr
 	}
 	defer conn.Recycle()
-	log.V(6).Infof("fetch %v", query)
 	qr, err := mysqld.executeFetchContext(ctx, conn, query, 10000, true)
 	if err != nil {
 		return nil, err

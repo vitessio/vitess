@@ -749,6 +749,11 @@ func (f *FakeQueryService) Release(ctx context.Context, target *querypb.Target, 
 	panic("implement me")
 }
 
+// GetSchema implements the QueryService interface
+func (f *FakeQueryService) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
+	panic("implement me")
+}
+
 // CreateFakeServer returns the fake server for the tests
 func CreateFakeServer(t testing.TB) *FakeQueryService {
 	return &FakeQueryService{

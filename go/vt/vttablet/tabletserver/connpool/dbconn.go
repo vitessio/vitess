@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/pools"
@@ -30,7 +31,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -52,7 +52,7 @@ type DBConn struct {
 	pool         *Pool
 	dbaPool      *dbconnpool.ConnectionPool
 	stats        *tabletenv.Stats
-	current      sync2.AtomicString
+	current      atomic.Value
 	timeCreated  time.Time
 	setting      string
 	resetSetting string
@@ -73,14 +73,16 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 		cp.env.CheckMySQL()
 		return nil, err
 	}
-	return &DBConn{
+	db := &DBConn{
 		conn:        c,
 		info:        appParams,
 		pool:        cp,
 		dbaPool:     cp.dbaPool,
 		timeCreated: time.Now(),
 		stats:       cp.env.Stats(),
-	}, nil
+	}
+	db.current.Store("")
+	return db, nil
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
@@ -97,6 +99,7 @@ func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *d
 		timeCreated: time.Now(),
 		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
 	}
+	dbconn.current.Store("")
 	if setting == nil {
 		return dbconn, nil
 	}
@@ -157,8 +160,8 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 }
 
 func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	dbc.current.Set(query)
-	defer dbc.current.Set("")
+	dbc.current.Store(query)
+	defer dbc.current.Store("")
 
 	// Check if the context is already past its deadline before
 	// trying to execute the query.
@@ -262,8 +265,8 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
 
-	dbc.current.Set(query)
-	defer dbc.current.Set("")
+	dbc.current.Store(query)
+	defer dbc.current.Store("")
 
 	done, wg := dbc.setDeadline(ctx)
 	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
@@ -442,7 +445,7 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 
 // Current returns the currently executing query.
 func (dbc *DBConn) Current() string {
-	return dbc.current.Get()
+	return dbc.current.Load().(string)
 }
 
 // ID returns the connection id.

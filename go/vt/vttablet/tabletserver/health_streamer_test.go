@@ -21,13 +21,12 @@ import (
 	"errors"
 	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/protobuf/proto"
-
-	"vitess.io/vitess/go/sync2"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -374,14 +373,14 @@ func TestReloadView(t *testing.T) {
 	// setting first test case result.
 	db.AddQuery(mysql.SelectAllViews, tcases[0].res)
 
-	var tcCount sync2.AtomicInt32
+	var tcCount atomic.Int32
 	ch := make(chan struct{})
 
 	go func() {
 		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
 			if response.RealtimeStats.ViewSchemaChanged != nil {
 				sort.Strings(response.RealtimeStats.ViewSchemaChanged)
-				assert.Equal(t, tcases[tcCount.Get()].exp, response.RealtimeStats.ViewSchemaChanged)
+				assert.Equal(t, tcases[tcCount.Load()].exp, response.RealtimeStats.ViewSchemaChanged)
 				tcCount.Add(1)
 				ch <- struct{}{}
 			}
@@ -392,10 +391,10 @@ func TestReloadView(t *testing.T) {
 	for {
 		select {
 		case <-ch:
-			if tcCount.Get() == int32(len(tcases)) {
+			if tcCount.Load() == int32(len(tcases)) {
 				return
 			}
-			db.AddQuery(mysql.SelectAllViews, tcases[tcCount.Get()].res)
+			db.AddQuery(mysql.SelectAllViews, tcases[tcCount.Load()].res)
 		case <-time.After(1000 * time.Second):
 			t.Fatalf("timed out")
 		}

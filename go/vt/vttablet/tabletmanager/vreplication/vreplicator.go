@@ -431,7 +431,7 @@ func (vr *vreplicator) setState(state, message string) error {
 			Message: message,
 		})
 	}
-	vr.stats.State.Set(state)
+	vr.stats.State.Store(state)
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)

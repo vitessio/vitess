@@ -24,6 +24,7 @@ import (
 	"net"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -32,7 +33,6 @@ import (
 	"golang.org/x/net/nettest"
 	"google.golang.org/grpc"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tmrpctest"
@@ -320,8 +320,7 @@ func TestCachedConnClient(t *testing.T) {
 	client := NewCachedConnClient(poolSize)
 	defer client.Close()
 
-	dialAttempts := sync2.NewAtomicInt64(0)
-	dialErrors := sync2.NewAtomicInt64(0)
+	var dialAttempts, dialErrors atomic.Int64
 
 	longestDials := make(chan time.Duration, numGoroutines)
 
@@ -375,7 +374,7 @@ func TestCachedConnClient(t *testing.T) {
 		}
 	}
 
-	attempts, errors := dialAttempts.Get(), dialErrors.Get()
+	attempts, errors := dialAttempts.Load(), dialErrors.Load()
 	assert.Less(t, float64(errors)/float64(attempts), 0.001, fmt.Sprintf("fewer than 0.1%% of dial attempts should fail (attempts = %d, errors = %d, max running procs = %d)", attempts, errors, procs))
 	assert.Less(t, errors, int64(1), "at least one dial attempt failed (attempts = %d, errors = %d)", attempts, errors)
 	assert.Less(t, longestDial.Milliseconds(), int64(50))
