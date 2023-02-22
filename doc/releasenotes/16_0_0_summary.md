@@ -3,12 +3,6 @@
 ### Table of Contents
 
 - **[Major Changes](#major-changes)**
-  - **[VReplication](#vreplication)**
-    - [VStream Copy Resume](#vstream-copy-resume)
-    - [VDiff2 GA](#vdiff2-ga)
-  - **[Tablet throttler](#tablet-throttler)**
-  - **[Incremental backup and point in time recovery](#inc-backup)**
-  - **[Replication manager removal and VTOrc becomes mandatory](#repl-manager-removal)**
   - **[Breaking Changes](#breaking-changes)**
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
     - [Default MySQL version on Docker](#default-mysql-version)
@@ -24,6 +18,12 @@
     - [Removed flag](#removed-flag)
     - [`lock-timeout` and `remote_operation_timeout` Changes](#lock-timeout-introduction)
     - [Normalized labels in the Prometheus Exporter](#normalized-lables)
+  - **[VReplication](#vreplication)**
+    - [VStream Copy Resume](#vstream-copy-resume)
+    - [VDiff2 GA](#vdiff2-ga)
+  - **[Tablet throttler](#tablet-throttler)**
+  - **[Incremental backup and point in time recovery](#inc-backup)**
+  - **[Replication manager removal and VTOrc becomes mandatory](#repl-manager-removal)**
   - **[New command line flags and behavior](#new-flag)**
     - [VTGate: Support query timeout --query-timeout](#vtgate-query-timeout)
     - [VTTablet: VReplication parallel insert workers --vreplication-parallel-insert-workers](#vrepl-parallel-workers)
@@ -50,40 +50,6 @@
   - **[VTTablet sidecar schema maintenance refactor](#vttablet-sidecar-schema)**
 
 ## <a id="major-changes"/>Major Changes
-
-### <a id="vreplication"/>VReplication
-
-#### <a id="vstream-copy-resume"/>VStream Copy Resume
-
-In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
-
-#### <a id="vdiff2-ga"/>VDiff2 GA
-
-We are marking [VDiff v2](https://vitess.io/docs/16.0/reference/vreplication/vdiff2/) as Generally Available or production-ready in v16. We now recommend that you use v2 rather than v1 going forward. V1 will be deprecated and eventually removed in future releases.
-If you wish to use v1 for any reason, you will now need to specify the `--v1` flag.
-
-### <a id="tablet-throttler"/>Tablet throttler
-
-The tablet throttler can now be configured dynamically. Configuration is now found in the topo service, and applies to all tablets in all shards and cells of a given keyspace. For backwards compatibility `v16` still supports `vttablet`-based command line flags for throttler ocnfiguration.
-
-It is possible to enable/disable, to change throttling threshold as well as the throttler query.
-
-See https://github.com/vitessio/vitess/pull/11604
-
-### <a id="inc-backup"/>Incremental backup and point in time recovery
-
-In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced native incremental backup and point in time recovery:
-
-- It is possible to take an incremental backup, starting with last known (full or incremental) backup, and up to either a specified (GTID) position, or current ("auto") position.
-- The backup is done by copying binary logs. The binary logs are rotated as needed.
-- It is then possible to restore a backup up to a given point in time (GTID position). This involves finding a restore path consisting of a full backup and zero or more incremental backups, applied up to the given point in time.
-- A server restored to a point in time remains in `DRAINED` tablet type, and does not join the replication stream (thus, "frozen" in time).
-- It is possible to take incremental backups from different tablets. It is OK to have overlaps in incremental backup contents. The restore process chooses a valid path, and is valid as long as there are no gaps in the backed up binary log content.
-
-### <a id="repl-manager-removal"/>Replication manager removal and VTOrc becomes mandatory
-VTOrc is now a **required** component of Vitess starting from v16. If the users want VTOrc to manage replication, then they must run VTOrc.
-Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
-The flag `disable-replication-manager` is deprecated and will be removed in a later release.
 
 ### <a id="breaking-changes"/>Breaking Changes
 
@@ -189,6 +155,40 @@ After the upgrade, they should then alter their configuration to also specify `l
 #### <a id="normalized-lables"/>Normalized labels in the Prometheus Exporter
 
 The Prometheus metrics exporter now properly normalizes _all_ label names into their `snake_case` form, as it is idiomatic for Prometheus metrics. Previously, Vitess instances were emitting inconsistent labels for their metrics, with some of them being `CamelCase` and others being `snake_case`.
+
+### <a id="vreplication"/>VReplication
+
+#### <a id="vstream-copy-resume"/>VStream Copy Resume
+
+In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
+
+#### <a id="vdiff2-ga"/>VDiff2 GA
+
+We are marking [VDiff v2](https://vitess.io/docs/16.0/reference/vreplication/vdiff2/) as Generally Available or production-ready in v16. We now recommend that you use v2 rather than v1 going forward. V1 will be deprecated and eventually removed in future releases.
+If you wish to use v1 for any reason, you will now need to specify the `--v1` flag.
+
+### <a id="tablet-throttler"/>Tablet throttler
+
+The tablet throttler can now be configured dynamically. Configuration is now found in the topo service, and applies to all tablets in all shards and cells of a given keyspace. For backwards compatibility `v16` still supports `vttablet`-based command line flags for throttler ocnfiguration.
+
+It is possible to enable/disable, to change throttling threshold as well as the throttler query.
+
+See https://github.com/vitessio/vitess/pull/11604
+
+### <a id="inc-backup"/>Incremental backup and point in time recovery
+
+In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced native incremental backup and point in time recovery:
+
+- It is possible to take an incremental backup, starting with last known (full or incremental) backup, and up to either a specified (GTID) position, or current ("auto") position.
+- The backup is done by copying binary logs. The binary logs are rotated as needed.
+- It is then possible to restore a backup up to a given point in time (GTID position). This involves finding a restore path consisting of a full backup and zero or more incremental backups, applied up to the given point in time.
+- A server restored to a point in time remains in `DRAINED` tablet type, and does not join the replication stream (thus, "frozen" in time).
+- It is possible to take incremental backups from different tablets. It is OK to have overlaps in incremental backup contents. The restore process chooses a valid path, and is valid as long as there are no gaps in the backed up binary log content.
+
+### <a id="repl-manager-removal"/>Replication manager removal and VTOrc becomes mandatory
+VTOrc is now a **required** component of Vitess starting from v16. If the users want VTOrc to manage replication, then they must run VTOrc.
+Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
+The flag `disable-replication-manager` is deprecated and will be removed in a later release.
 
 ### <a id="new-flag"/>New command line flags and behavior
 
