@@ -382,12 +382,11 @@ This will allow users to start a transaction with these characteristics.
 
 #### <a id="support-views"/>Support For Views
 
-Views are now supported in sharded keyspaces. They are available in readable mode only for now. 
-Any query using a view will get re-written as a derived table during query planning.
+Views sharded support is released as an experimental feature in `v16.0.0`.
 Views are not enabled by default in your Vitess cluster, but they can be turned on using the `--enable-views` flag on VTGate, and `--queryserver-enable-views` flag on VTTablet.
 
 To read more on how views are implemented you can read the [Views Support RFC](https://github.com/vitessio/vitess/issues/11559).
-And if you want to learn more on how to use views, you can read the [Views Documentation](https://vitess.io/docs/16.0/reference/compatibility/mysql-compatibility/#views).
+And if you want to learn more on how to use views and its current limitations, you can read the [Views Documentation](https://vitess.io/docs/16.0/reference/compatibility/mysql-compatibility/#views).
 
 
 ### <a id="vtorc"/>VTOrc
