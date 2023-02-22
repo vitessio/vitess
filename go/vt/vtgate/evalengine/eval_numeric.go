@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
@@ -273,8 +274,9 @@ func (e *evalFloat) toUint64() *evalUint64 {
 }
 
 func (e *evalDecimal) Hash() (HashCode, error) {
-	u, _ := e.dec.Uint64()
-	return HashCode(u), nil
+	var hasher vthash.Hasher
+	e.dec.Hash(&hasher)
+	return hasher.Sum64(), nil
 }
 
 func (e *evalDecimal) SQLType() sqltypes.Type {

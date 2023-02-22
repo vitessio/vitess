@@ -176,7 +176,7 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 		case v.IsUnsigned():
 			uval, err := v.ToUint64()
 			return newEvalFloat(float64(uval)), err
-		case v.IsFloat() || v.Type() == sqltypes.Decimal:
+		case v.IsFloat() || v.IsDecimal():
 			fval, err := v.ToFloat64()
 			return newEvalFloat(fval), err
 		case v.IsText() || v.IsBinary():
@@ -185,10 +185,10 @@ func valueToEvalCast(v sqltypes.Value, typ sqltypes.Type) (eval, error) {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a float: %v", v)
 		}
 
-	case typ == sqltypes.Decimal:
+	case sqltypes.IsDecimal(typ):
 		var dec decimal.Decimal
 		switch {
-		case v.IsIntegral() || v.Type() == sqltypes.Decimal:
+		case v.IsIntegral() || v.IsDecimal():
 			var err error
 			dec, err = decimal.NewFromMySQL(v.Raw())
 			if err != nil {

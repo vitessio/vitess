@@ -24,6 +24,8 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/vt/vthash"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
@@ -50,6 +52,37 @@ func TestHashCodesRandom(t *testing.T) {
 		if cmp == 0 {
 			equal++
 			require.Equalf(t, hash1, hash2, "values %s and %s are considered equal but produce different hash codes: %d & %d (%v)", v1.String(), v2.String(), hash1, hash2, typ)
+		}
+	}
+	t.Logf("tested %d values, with %d equalities found\n", tested, equal)
+}
+
+// The following test tries to produce lots of different values and compares them both using hash code and compare,
+// to make sure that these two methods agree on what values are equal
+func TestHashCodesRandom128(t *testing.T) {
+	tested := 0
+	equal := 0
+	collation := collations.Local().LookupByName("utf8mb4_general_ci").ID()
+	endTime := time.Now().Add(1 * time.Second)
+	for time.Now().Before(endTime) {
+		tested++
+		v1, v2 := randomValues()
+		cmp, err := NullsafeCompare(v1, v2, collation)
+		require.NoErrorf(t, err, "%s compared with %s", v1.String(), v2.String())
+		typ, err := CoerceTo(v1.Type(), v2.Type())
+		require.NoError(t, err)
+
+		var hasher1 vthash.Hasher
+		err = NullsafeHashcode128(&hasher1, v1, collation, typ)
+		require.NoError(t, err)
+		var hasher2 vthash.Hasher
+		err = NullsafeHashcode128(&hasher2, v2, collation, typ)
+		require.NoError(t, err)
+		if cmp == 0 {
+			equal++
+			hash1 := hasher1.Sum128()
+			hash2 := hasher2.Sum128()
+			require.Equalf(t, hash1, hash2, "values %s and %s are considered equal but produce different hash codes: %x & %x (%v)", v1.String(), v2.String(), hash1, hash2, typ)
 		}
 	}
 	t.Logf("tested %d values, with %d equalities found\n", tested, equal)
