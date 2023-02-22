@@ -382,22 +382,13 @@ This will allow users to start a transaction with these characteristics.
 
 #### <a id="support-views"/>Support For Views
 
-Vitess now supports views in sharded keyspace. Views are not created on the underlying database but are logically stored
-in vschema.
+Views are now supported in sharded keyspaces. They are available in readable mode only for now. 
 Any query using a view will get re-written as a derived table during query planning.
-VSchema Example
+Views are not enabled by default in your Vitess cluster, but they can be turned on using the `--enable-views` flag on VTGate, and `--queryserver-enable-views` flag on VTTablet.
 
-```json
-{
-  "sharded": true,
-  "vindexes": {},
-  "tables": {},
-  "views": {
-    "view1": "select * from t1",
-    "view2": "select * from t2",
-  }
-}
-```
+To read more on how views are implemented you can read its RFC: https://github.com/vitessio/vitess/issues/11559.
+And if you want to learn more on how to use views, you can read its documentation: TODO @harshit.
+
 
 ### <a id="vtorc"/>VTOrc
 
