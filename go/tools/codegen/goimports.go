@@ -14,9 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package goimports
+package codegen
 
 import (
+	"log"
 	"os"
 	"os/exec"
 
@@ -36,11 +37,26 @@ func FormatJenFile(file *jen.File) ([]byte, error) {
 		return nil, err
 	}
 
-	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", tempFile.Name())
-	cmd.Stderr = os.Stderr
-	err = cmd.Run()
+	err = GoImports(tempFile.Name())
 	if err != nil {
 		return nil, err
 	}
 	return os.ReadFile(tempFile.Name())
+}
+
+func GoImports(fullPath string) error {
+	cmd := exec.Command("goimports", "-local", "vitess.io/vitess", "-w", fullPath)
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func SaveJenFile(fullPath string, file *jen.File) error {
+	if err := file.Save(fullPath); err != nil {
+		return err
+	}
+	if err := GoImports(fullPath); err != nil {
+		return err
+	}
+	log.Printf("saved '%s'", fullPath)
+	return nil
 }

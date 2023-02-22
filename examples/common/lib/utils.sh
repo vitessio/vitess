@@ -52,18 +52,19 @@ function wait_for_healthy_shard_primary() {
 	fi
 	keyspace=${1}
 	shard=${2}
-	healthy_indicator="PRIMARY: Serving"
+	unhealthy_indicator='"primary_alias": null'
 	wait_secs=180
 
 	for _ in $(seq 1 ${wait_secs}); do
-		if curl -s "http://$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | grep -i 'primary' | awk '{print $5}')/debug/status_details" | grep -qi "${healthy_indicator}"; then
+                if ! vtctldclient --server=localhost:15999 GetShard "${keyspace}/${shard}" | grep -qi "${unhealthy_indicator}"; then
 			break
 		fi
 		sleep 1
 	done;
 
-        curl -s "http://$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | grep -i 'primary' | awk '{print $5}')/debug/status_details" | grep -qi "${healthy_indicator}" \
-		|| fail "Timed out after ${wait_secs} seconds waiting for a primary tablet to be elected and become healthy in ${keyspace}/${shard}"
+        if vtctldclient --server=localhost:15999 GetShard "${keyspace}/${shard}" | grep -qi "${unhealthy_indicator}"; then
+		fail "Timed out after ${wait_secs} seconds waiting for a primary tablet to be elected and become healthy in ${keyspace}/${shard}"
+	fi
 }
 
 # Wait for a specified number of the keyspace/shard's tablets to show up
