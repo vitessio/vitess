@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -166,7 +168,7 @@ func waitForSourcePort(ctx context.Context, t *testing.T, tablet cluster.Vttable
 
 func getSidecarDBDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
 	vars := tablet.GetVars()
-	key := "SidecarDBDDLQueryCount"
+	key := sidecardb.StatsKeyQueryCount
 	val, ok := vars[key]
 	if !ok {
 		return 0, fmt.Errorf("%s not found in debug/vars", key)

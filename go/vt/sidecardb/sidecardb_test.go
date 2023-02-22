@@ -62,28 +62,35 @@ func TestInitErrors(t *testing.T) {
 		errorValue string
 	}
 
-	// simulate two errors
+	// simulate two errors during table creation to validate error stats
 	schemaErrors := []schemaError{
 		{"vreplication_log", "vreplication_log error"},
 		{"copy_state", "copy_state error"},
 	}
+
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
 			if _, err := conn.ExecuteFetch(UseSidecarDatabaseQuery, maxRows, true); err != nil {
 				return nil, err
 			}
 		}
-		// return errors for the table creation ddls applied for tables specified in schemaError
-		showCreateTableQueryPrefix := "show create table"
-		if !strings.Contains(strings.ToLower(query), showCreateTableQueryPrefix) {
+
+		// simulate errors for the table creation DDLs applied for tables specified in schemaErrors
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		createTable, ok := stmt.(*sqlparser.CreateTable)
+		if ok {
 			for _, e := range schemaErrors {
-				if strings.Contains(query, e.tableName) {
+				if strings.EqualFold(e.tableName, createTable.Table.Name.String()) {
 					return nil, fmt.Errorf(e.errorValue)
 				}
 			}
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
+
 	require.Equal(t, int64(0), GetDDLCount())
 	err = Init(ctx, exec)
 	require.NoError(t, err)
@@ -102,12 +109,12 @@ func TestInitErrors(t *testing.T) {
 	})
 	var gotErrors string
 	stats.Register(func(name string, v expvar.Var) {
-		if name == "SidecarDBDDLErrors" {
+		if name == StatsKeyErrors {
 			gotErrors = v.String()
 		}
 	})
 
-	// for ddl errors, validate both the internal data structure and the stats endpoint
+	// for DDL errors, validate both the internal data structure and the stats endpoint
 	for i := range want {
 		if !strings.Contains(got[i].err.Error(), want[i]) {
 			require.FailNowf(t, "incorrect schema error", "got %s, want %s", got[i], want[i])
@@ -188,6 +195,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	defer db.Close()
 	AddSchemaInitQueries(db, false)
 	db.AddQuery("use dbname", &sqltypes.Result{})
+	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 
 	cp := db.ConnParams()
 	conn, err := cp.Connect(ctx)
