@@ -575,7 +575,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 					// Collect lastpk. Needed for logging at the end.
 					lastpk = result.args.lastpk
 				case vcopierCopyTaskFail:
-					return fmt.Errorf("task error: %s", result.err)
+					return vterrors.Wrapf(result.err, "task error")
 				}
 			} else {
 				return io.EOF
@@ -617,7 +617,7 @@ func (vc *vcopier) copyTable(ctx context.Context, tableName string, copyState ma
 	if len(terrs) > 0 {
 		terr := vterrors.Aggregate(terrs)
 		log.Warningf("task error in workflow %s: %v", vc.vr.WorkflowName, terr)
-		return fmt.Errorf("task error: %v", terr)
+		return vterrors.Wrapf(terr, "task error")
 	}
 
 	// Get the last committed pk into a loggable form.
@@ -1053,25 +1053,25 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
 				// Rollback to make sure we're in a clean state.
 				if err := vbc.vdbClient.Rollback(); err != nil {
-					return fmt.Errorf("failed to rollback: %s", err.Error())
+					return vterrors.Wrapf(err, "failed to rollback")
 				}
 				// Begin transaction.
 				if err := vbc.vdbClient.Begin(); err != nil {
-					return fmt.Errorf("failed to start transaction: %s", err.Error())
+					return vterrors.Wrapf(err, "failed to start transaction")
 				}
 				return nil
 			}
 		case vcopierCopyTaskInsertRows:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
 				if _, err := vbc.insertRows(ctx, args.rows); err != nil {
-					return fmt.Errorf("failed inserting rows: %s", err.Error())
+					return vterrors.Wrapf(err, "failed inserting rows")
 				}
 				return nil
 			}
 		case vcopierCopyTaskInsertCopyState:
 			advanceFn = func(ctx context.Context, args *vcopierCopyTaskArgs) error {
 				if err := vbc.insertCopyState(ctx, args.lastpk); err != nil {
-					return fmt.Errorf("error updating _vt.copy_state: %s", err.Error())
+					return vterrors.Wrapf(err, "error updating _vt.copy_state")
 				}
 				return nil
 			}
@@ -1079,7 +1079,7 @@ func (vbc *vcopierCopyWorker) execute(ctx context.Context, task *vcopierCopyTask
 			advanceFn = func(context.Context, *vcopierCopyTaskArgs) error {
 				// Commit.
 				if err := vbc.vdbClient.Commit(); err != nil {
-					return fmt.Errorf("error commiting transaction: %s", err.Error())
+					return vterrors.Wrapf(err, "error commiting transaction")
 				}
 				return nil
 			}
