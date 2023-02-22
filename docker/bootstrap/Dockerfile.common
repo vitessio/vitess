@@ -1,4 +1,4 @@
-FROM --platform=linux/amd64 golang:1.19.6-buster
+FROM --platform=linux/amd64 golang:1.20.1-buster
 
 # Install Vitess build dependencies
 RUN apt-get update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
