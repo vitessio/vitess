@@ -386,8 +386,8 @@ Views are now supported in sharded keyspaces. They are available in readable mod
 Any query using a view will get re-written as a derived table during query planning.
 Views are not enabled by default in your Vitess cluster, but they can be turned on using the `--enable-views` flag on VTGate, and `--queryserver-enable-views` flag on VTTablet.
 
-To read more on how views are implemented you can read its RFC: https://github.com/vitessio/vitess/issues/11559.
-And if you want to learn more on how to use views, you can read its documentation: TODO @harshit.
+To read more on how views are implemented you can read the [Views Support RFC](https://github.com/vitessio/vitess/issues/11559).
+And if you want to learn more on how to use views, you can read the [Views Documentation](https://vitess.io/docs/16.0/reference/compatibility/mysql-compatibility/#views).
 
 
 ### <a id="vtorc"/>VTOrc
