@@ -162,9 +162,6 @@ vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 sqlparser:
 	go generate ./go/vt/sqlparser/...
 
-parser: sqlparser
-visitor: sqlparser
-asthelpergen: sqlparser
 codegen: sqlparser sizegen
 
 demo:

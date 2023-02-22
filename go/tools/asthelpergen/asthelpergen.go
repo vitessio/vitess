@@ -92,7 +92,7 @@ func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, g
 }
 
 func findImplementations(scope *types.Scope, iff *types.Interface, impl func(types.Type) error) error {
-	const OnlyReferences = false
+	const onlyReferences = false
 
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
@@ -101,7 +101,7 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 		}
 		baseType := obj.Type()
 		if types.Implements(baseType, iff) {
-			if OnlyReferences {
+			if onlyReferences {
 				switch tt := baseType.Underlying().(type) {
 				case *types.Interface:
 					// This is OK; interfaces are references
