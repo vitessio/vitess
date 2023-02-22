@@ -7,16 +7,16 @@
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
     - [Default MySQL version on Docker](#default-mysql-version)
     - [Running Vitess on the Operator](#running-vitess-on-the-operator)
+    - [`lock-timeout` and `remote_operation_timeout` Changes](#lock-timeout-introduction)
+    - [Orchestrator Integration Deletion](#orc-integration-removal)
     - [vtctld UI Removal](#vtcltd-ui-removal)
     - [vtctld Flag Deprecation & Deletions](#vtctld-flag-deprecations)
-    - [Orchestrator Integration Deletion](#orc-integration-removal)
     - [mysqlctl Flags](#mysqlctl-flags)
     - [Query Serving Errors](#qs-errors)
     - [Logstats Table and Keyspace removed](#logstats-table-keyspace)
     - [Removed Stats](#removed-stats)
     - [Deprecated Stats](#deprecated-stats)
     - [Removed flag](#removed-flag)
-    - [`lock-timeout` and `remote_operation_timeout` Changes](#lock-timeout-introduction)
     - [Normalized labels in the Prometheus Exporter](#normalized-lables)
   - **[VReplication](#vreplication)**
     - [VStream Copy Resume](#vstream-copy-resume)
@@ -75,6 +75,20 @@ However, if you are running MySQL 8.0 on the vitess-operator, with for instance 
 5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
 6. Apply this file.
 
+#### <a id="lock-timeout-introduction"/>`lock-timeout` and `remote_operation_timeout` Changes
+
+Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced.
+For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
+The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
+
+During upgrades, if the users want to preserve the same behaviour as previous releases, then they should provide the `remote_operation_timeout` flag explicitly before upgrading.
+After the upgrade, they should then alter their configuration to also specify `lock-timeout` explicitly.
+
+#### <a id="orc-integration-removal"/>Orchestrator Integration Deletion
+
+Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
+Consider using `VTOrc` instead of `Orchestrator`.
+
 #### <a id="vtcltd-ui-removal"/>vtctld web UI Removal
 In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
 
@@ -92,11 +106,6 @@ The following deprecated flags have also been removed:
 - `--workflow_manager_init`
 - `--workflow_manager_use_election`
 - `--workflow_manager_disable`
-
-#### <a id="orc-integration-removal"/>Orchestrator Integration Deletion
-
-Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
-Consider using `VTOrc` instead of `Orchestrator`.
 
 #### <a id="mysqlctl-flags"/>mysqlctl Flags
 
@@ -142,15 +151,6 @@ The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16. The same
 
 The following flag is removed in v16:
 - `enable_semi_sync`
-
-#### <a id="lock-timeout-introduction"/>`lock-timeout` and `remote_operation_timeout` Changes
-
-Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced.
-For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
-The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
-
-During upgrades, if the users want to preserve the same behaviour as previous releases, then they should provide the `remote_operation_timeout` flag explicitly before upgrading.
-After the upgrade, they should then alter their configuration to also specify `lock-timeout` explicitly.
 
 #### <a id="normalized-lables"/>Normalized labels in the Prometheus Exporter
 
