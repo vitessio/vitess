@@ -30,7 +30,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var qSelAllRows = "select table_schema, table_name, view_definition, create_statement from _vt.views"
+var qSelAllRows = "select table_schema, table_name, create_statement from _vt.views"
 var qDelAllRows = "delete from _vt.views"
 
 // Test will validate create view ddls.
@@ -173,5 +173,5 @@ func TestGetSchemaRPC(t *testing.T) {
 
 	viewSchemaDef, err = client.GetSchema(querypb.SchemaTableType_VIEWS)
 	require.NoError(t, err)
-	require.Equal(t, viewSchemaDef["vitess_view"], "select 1 from vitess_a")
+	require.Equal(t, "create view vitess_view as select 1 from vitess_a", viewSchemaDef["vitess_view"])
 }
