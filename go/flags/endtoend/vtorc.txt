@@ -51,6 +51,7 @@ Usage of vtorc:
       --stats_drop_variables string                  Variables to be dropped from the list of exported variables.
       --stats_emit_period duration                   Interval between emitting stats to all registered backends (default 1m0s)
       --stderrthreshold severity                     logs at or above this threshold go to stderr (default 1)
+      --table-refresh-interval int                   interval in milliseconds to refresh tables in status page with refreshRequired class
       --tablet_manager_grpc_ca string                the server ca to use to validate servers when connecting
       --tablet_manager_grpc_cert string              the cert to use to connect
       --tablet_manager_grpc_concurrency int          concurrency to use to talk to a vttablet server for performance-sensitive RPCs (like ExecuteFetchAs{Dba,AllPrivs,App}) (default 8)
