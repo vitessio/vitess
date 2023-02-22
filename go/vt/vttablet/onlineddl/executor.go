@@ -507,10 +507,10 @@ func (e *Executor) readMySQLVariables(ctx context.Context) (variables *mysqlVari
 
 	if e.env.Config().DB.Port != 0 {
 		variables.port = e.env.Config().DB.Port
-	} else if port, err := row.ToInt64("port"); err != nil {
+	} else if port, err := row.ToInt("port"); err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.port %v: %v", tm, err)
 	} else {
-		variables.port = int(port)
+		variables.port = port
 	}
 	if variables.readOnly, err = row.ToBool("read_only"); err != nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNKNOWN, "could not parse @@global.read_only %v: %v", tm, err)
@@ -781,7 +781,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	}
 
 	if !isVreplicationTestSuite {
-		// A bit early on, we generate names for stowaway and temporary tables
+		// A bit early on, we generate a name for the sentry table
 		// We do this here because right now we're in a safe place where nothing happened yet. If there's an error now, bail out
 		// and no harm done.
 		// Later on, when traffic is blocked and tables renamed, that's a more dangerous place to be in; we want as little logic
@@ -3517,30 +3517,6 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		postponeCompletion := row.AsBool("postpone_completion", false)
 		elapsedSeconds := row.AsInt64("elapsed_seconds", 0)
 
-		if stowawayTable := row.AsString("stowaway_table", ""); stowawayTable != "" {
-			// whoa
-			// stowawayTable is an original table stowed away while cutting over a vrepl migration, see call to cutOverVReplMigration() down below in this function.
-			// In a normal operation, the table should not exist outside the scope of cutOverVReplMigration
-			// If it exists, that means a tablet crashed while running a cut-over, and left the database in a bad state, where the migrated table does not exist.
-			// thankfully, we have tracked this situation and just realized what happened. Now, first thing to do is to restore the original table.
-			log.Infof("found stowaway table %s journal in migration %s for table %s", stowawayTable, uuid, onlineDDL.Table)
-			attemptMade, err := e.renameTableIfApplicable(ctx, stowawayTable, onlineDDL.Table)
-			if err != nil {
-				// unable to restore table; we bail out, and we will try again next round.
-				return countRunnning, cancellable, err
-			}
-			// success
-			if attemptMade {
-				log.Infof("stowaway table %s restored back into %s", stowawayTable, onlineDDL.Table)
-			} else {
-				log.Infof("stowaway table %s did not exist and there was no need to restore it", stowawayTable)
-			}
-			// OK good, table restored. We can remove the record.
-			if err := e.updateMigrationStowawayTable(ctx, uuid, ""); err != nil {
-				return countRunnning, cancellable, err
-			}
-		}
-
 		uuidsFoundRunning[uuid] = true
 
 		_ = e.updateMigrationUserThrottleRatio(ctx, uuid, currentUserThrottleRatio)
@@ -4352,18 +4328,6 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 		}
 	}
 	return nil
-}
-
-func (e *Executor) updateMigrationStowawayTable(ctx context.Context, uuid string, tableName string) error {
-	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStowawayTable,
-		sqltypes.StringBindVariable(tableName),
-		sqltypes.StringBindVariable(uuid),
-	)
-	if err != nil {
-		return err
-	}
-	_, err = e.execQuery(ctx, query)
-	return err
 }
 
 func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {

@@ -20,7 +20,8 @@ import (
 	"context"
 	"sync"
 
-	"vitess.io/vitess/go/sync2"
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -36,7 +37,7 @@ import (
 // and the periodic schema reload makes them self-healing anyway.
 // So we do this on a best-effort basis, and log warnings for any tablets
 // that fail to reload within the context deadline.
-func ReloadShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, keyspace, shard, replicationPos string, concurrency *sync2.Semaphore, includePrimary bool) (isPartial bool, ok bool) {
+func ReloadShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManagerClient, logger logutil.Logger, keyspace, shard, replicationPos string, concurrency *semaphore.Weighted, includePrimary bool) (isPartial bool, ok bool) {
 	tablets, err := ts.GetTabletMapForShard(ctx, keyspace, shard)
 	switch {
 	case topo.IsErrType(err, topo.PartialResult):
@@ -67,8 +68,15 @@ func ReloadShard(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManage
 			defer wg.Done()
 
 			if concurrency != nil {
-				concurrency.Acquire()
-				defer concurrency.Release()
+				if err := concurrency.Acquire(ctx, 1); err != nil {
+					// We timed out waiting for the semaphore. This is best-effort, so just log it and move on.
+					logger.Warningf(
+						"Failed to reload schema on replica tablet %v in %v/%v (use vtctl ReloadSchema to try again): timed out waiting for concurrency: %v",
+						topoproto.TabletAliasString(tablet.Alias), keyspace, shard, err,
+					)
+					return
+				}
+				defer concurrency.Release(1)
 			}
 
 			pos := replicationPos

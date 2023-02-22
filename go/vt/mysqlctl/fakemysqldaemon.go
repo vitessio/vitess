@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package fakemysqldaemon
+package mysqlctl
 
 import (
 	"context"
@@ -22,14 +22,13 @@ import (
 	"reflect"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -59,7 +58,7 @@ type FakeMysqlDaemon struct {
 
 	// MysqlPort will be returned by GetMysqlPort(). Set to -1 to
 	// return an error.
-	MysqlPort sync2.AtomicInt32
+	MysqlPort atomic.Int32
 
 	// Replicating is updated when calling StartReplication / StopReplication
 	// (it is not used at all when calling ReplicationStatus, it is the
@@ -160,7 +159,7 @@ type FakeMysqlDaemon struct {
 	FetchSuperQueryMap map[string]*sqltypes.Result
 
 	// BinlogPlayerEnabled is used by {Enable,Disable}BinlogPlayer
-	BinlogPlayerEnabled sync2.AtomicBool
+	BinlogPlayerEnabled atomic.Bool
 
 	// SemiSyncPrimaryEnabled represents the state of rpl_semi_sync_master_enabled.
 	SemiSyncPrimaryEnabled bool
@@ -189,7 +188,7 @@ func NewFakeMysqlDaemon(db *fakesqldb.DB) *FakeMysqlDaemon {
 }
 
 // Start is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *mysqlctl.Mycnf, mysqldArgs ...string) error {
+func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *Mycnf, mysqldArgs ...string) error {
 	if fmd.Running {
 		return fmt.Errorf("fake mysql daemon already running")
 	}
@@ -207,7 +206,7 @@ func (fmd *FakeMysqlDaemon) Start(ctx context.Context, cnf *mysqlctl.Mycnf, mysq
 }
 
 // Shutdown is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *mysqlctl.Mycnf, waitForMysqld bool) error {
+func (fmd *FakeMysqlDaemon) Shutdown(ctx context.Context, cnf *Mycnf, waitForMysqld bool) error {
 	if !fmd.Running {
 		return fmt.Errorf("fake mysql daemon not running")
 	}
@@ -230,26 +229,26 @@ func (fmd *FakeMysqlDaemon) RunMysqlUpgrade() error {
 }
 
 // ReinitConfig is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context, cnf *mysqlctl.Mycnf) error {
+func (fmd *FakeMysqlDaemon) ReinitConfig(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 
 // RefreshConfig is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *mysqlctl.Mycnf) error {
+func (fmd *FakeMysqlDaemon) RefreshConfig(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 
 // Wait is part of the MysqlDaemon interface.
-func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *mysqlctl.Mycnf) error {
+func (fmd *FakeMysqlDaemon) Wait(ctx context.Context, cnf *Mycnf) error {
 	return nil
 }
 
 // GetMysqlPort is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) GetMysqlPort() (int32, error) {
-	if fmd.MysqlPort.Get() == -1 {
+	if fmd.MysqlPort.Load() == -1 {
 		return 0, fmt.Errorf("FakeMysqlDaemon.GetMysqlPort returns an error")
 	}
-	return fmd.MysqlPort.Get(), nil
+	return fmd.MysqlPort.Load(), nil
 }
 
 // GetServerID is part of the MysqlDaemon interface
@@ -537,13 +536,13 @@ func (fmd *FakeMysqlDaemon) FetchSuperQuery(ctx context.Context, query string) (
 
 // EnableBinlogPlayback is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) EnableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Set(true)
+	fmd.BinlogPlayerEnabled.Store(true)
 	return nil
 }
 
 // DisableBinlogPlayback disable playback of binlog events
 func (fmd *FakeMysqlDaemon) DisableBinlogPlayback() error {
-	fmd.BinlogPlayerEnabled.Set(false)
+	fmd.BinlogPlayerEnabled.Store(false)
 	return nil
 }
 

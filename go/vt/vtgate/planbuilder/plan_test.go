@@ -336,6 +336,15 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 	testFile(t, "onecase.json", "", vschema, false)
 }
 
+func TestOneWith57Version(t *testing.T) {
+	// first we move everything to use 5.7 logic
+	servenv.SetMySQLServerVersionForTest("5.7")
+	defer servenv.SetMySQLServerVersionForTest("")
+	vschema := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
+
+	testFile(t, "onecase.json", "", vschema, false)
+}
+
 func TestRubyOnRailsQueries(t *testing.T) {
 	vschemaWrapper := &vschemaWrapper{
 		v:             loadSchema(t, "vschemas/rails_schema.json", true),

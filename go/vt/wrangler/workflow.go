@@ -233,12 +233,12 @@ func (vrw *VReplicationWorkflow) Create(ctx context.Context) error {
 // WorkflowError has per stream errors if present in a workflow
 type WorkflowError struct {
 	Tablet      string
-	ID          int64
+	ID          int32
 	Description string
 }
 
 // NewWorkflowError returns a new WorkflowError object
-func NewWorkflowError(tablet string, id int64, description string) *WorkflowError {
+func NewWorkflowError(tablet string, id int32, description string) *WorkflowError {
 	wfErr := &WorkflowError{
 		Tablet:      tablet,
 		ID:          id,
@@ -735,7 +735,7 @@ func (wr *Wrangler) deleteWorkflowVDiffData(ctx context.Context, tablet *topodat
 // the MySQL instance.
 func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 	if wr.sem != nil {
-		if !wr.sem.TryAcquire() {
+		if !wr.sem.TryAcquire(1) {
 			log.Warningf("Deferring work to optimize the copy_state table on %q due to hitting the maximum concurrent background job limit.",
 				tablet.Alias.String())
 			return
@@ -744,7 +744,7 @@ func (wr *Wrangler) optimizeCopyStateTable(tablet *topodatapb.Tablet) {
 	go func() {
 		defer func() {
 			if wr.sem != nil {
-				wr.sem.Release()
+				wr.sem.Release(1)
 			}
 		}()
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Minute)

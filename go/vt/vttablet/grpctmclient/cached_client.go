@@ -24,11 +24,11 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
@@ -77,7 +77,7 @@ type cachedConnDialer struct {
 	conns        map[string]*cachedConn
 	evict        []*cachedConn
 	evictSorted  bool
-	connWaitSema *sync2.Semaphore
+	connWaitSema *semaphore.Weighted
 	capacity     int
 }
 
@@ -99,7 +99,7 @@ func NewCachedConnClient(capacity int) *Client {
 	dialer := &cachedConnDialer{
 		conns:        make(map[string]*cachedConn, capacity),
 		evict:        make([]*cachedConn, 0, capacity),
-		connWaitSema: sync2.NewSemaphore(capacity, 0),
+		connWaitSema: semaphore.NewWeighted(int64(capacity)),
 		capacity:     capacity,
 	}
 	return &Client{dialer}
@@ -129,7 +129,7 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 		return client, closer, err
 	}
 
-	if dialer.connWaitSema.TryAcquire() {
+	if dialer.connWaitSema.TryAcquire(1) {
 		defer func() {
 			dialerStats.DialTimings.Add("sema_fast", time.Since(start))
 		}()
@@ -140,7 +140,7 @@ func (dialer *cachedConnDialer) dial(ctx context.Context, tablet *topodatapb.Tab
 		// are able to use the cache, allowing another goroutine to dial a new
 		// conn instead.
 		if client, closer, found, err := dialer.tryFromCache(addr, &dialer.m); found {
-			dialer.connWaitSema.Release()
+			dialer.connWaitSema.Release(1)
 			return client, closer, err
 		}
 		return dialer.newdial(ctx, addr)
@@ -239,13 +239,13 @@ func (dialer *cachedConnDialer) pollOnce(ctx context.Context, addr string) (clie
 func (dialer *cachedConnDialer) newdial(ctx context.Context, addr string) (tabletmanagerservicepb.TabletManagerClient, io.Closer, error) {
 	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
-		dialer.connWaitSema.Release()
+		dialer.connWaitSema.Release(1)
 		return nil, nil, err
 	}
 
 	cc, err := grpcclient.DialContext(ctx, addr, grpcclient.FailFast(false), opt)
 	if err != nil {
-		dialer.connWaitSema.Release()
+		dialer.connWaitSema.Release(1)
 		return nil, nil, err
 	}
 
@@ -258,7 +258,7 @@ func (dialer *cachedConnDialer) newdial(ctx context.Context, addr string) (table
 		// close this connection and reuse the existing one. by doing this, we can keep
 		// the actual Dial out of the global lock and significantly increase throughput
 		cc.Close()
-		dialer.connWaitSema.Release()
+		dialer.connWaitSema.Release(1)
 		return dialer.redialLocked(conn)
 	}
 
@@ -328,7 +328,7 @@ func (dialer *cachedConnDialer) Close() {
 	for _, conn := range dialer.evict {
 		conn.cc.Close()
 		delete(dialer.conns, conn.addr)
-		dialer.connWaitSema.Release()
+		dialer.connWaitSema.Release(1)
 	}
 	dialer.evict = make([]*cachedConn, 0, dialer.capacity)
 }

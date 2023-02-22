@@ -309,7 +309,7 @@ func decimalTimesAny(v1 *evalDecimal, v2 evalNumeric) (eval, error) {
 	v2d := v2.toDecimal(0, 0)
 	return &evalDecimal{
 		dec:    v1.dec.Mul(v2d.dec),
-		length: maxprec(v1.length, v2d.length),
+		length: v1.length + v2d.length,
 	}, nil
 }
 

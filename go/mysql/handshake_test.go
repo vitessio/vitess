@@ -71,7 +71,7 @@ func TestClearTextClientAuth(t *testing.T) {
 	}
 
 	// Change server side to allow clear text without auth.
-	l.AllowClearTextWithoutTLS.Set(true)
+	l.AllowClearTextWithoutTLS.Store(true)
 	conn, err := Connect(ctx, params)
 	require.NoError(t, err, "unexpected connection error: %v", err)
 

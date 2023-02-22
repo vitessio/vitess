@@ -2791,7 +2791,7 @@
       "Original": "select 42 from dual where false",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "None",
         "Keyspace": {
           "Name": "main",
           "Sharded": false

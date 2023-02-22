@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2022 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,5 +14,23 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package sync2 provides extra functionality along the same lines as sync.
-package sync2
+package backupstats
+
+// ComponentType is used to scope Stats.
+// E.g. stats.Scope(Component(BackupEngine)).
+type ComponentType int
+
+const (
+	BackupEngine ComponentType = iota
+	BackupStorage
+)
+
+func (c ComponentType) String() string {
+	switch c {
+	case BackupEngine:
+		return "BackupEngine"
+	case BackupStorage:
+		return "BackupStorage"
+	}
+	return "Other"
+}
