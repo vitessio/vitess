@@ -878,7 +878,6 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 
 	var hasher vthash.Hasher
 
-	hasher.Reset()
 	c.Hash(&hasher, left, 0)
 	h1 := hasher.Sum64()
 
