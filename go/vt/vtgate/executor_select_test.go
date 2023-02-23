@@ -65,8 +65,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 	sbclookup.Queries = nil
 
 	// Txn
@@ -76,8 +76,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 	sbclookup.Queries = nil
 
 	// Reserve
@@ -87,8 +87,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 	sbclookup.Queries = nil
 
 	// Reserve and Txn
@@ -99,8 +99,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 }
 
 func TestSelectDBA(t *testing.T) {
@@ -1178,7 +1178,7 @@ func TestSelectEqual(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
 		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
@@ -1193,7 +1193,7 @@ func TestSelectEqual(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
 		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {

@@ -526,6 +526,7 @@ func getDebugVar(t *testing.T, port int, varPath []string) (string, error) {
 	var val []byte
 	var err error
 	url := fmt.Sprintf("http://localhost:%d/debug/vars", port)
+	log.Infof("url: %s, varPath: %s", url, strings.Join(varPath, ":"))
 	body := getHTTPBody(url)
 	val, _, _, err = jsonparser.Get([]byte(body), varPath...)
 	require.NoError(t, err)

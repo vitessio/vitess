@@ -22,6 +22,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -42,7 +43,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -75,7 +75,7 @@ func registerHealthStreamerFlags(fs *pflag.FlagSet) {
 type healthStreamer struct {
 	stats              *tabletenv.Stats
 	degradedThreshold  time.Duration
-	unhealthyThreshold sync2.AtomicDuration
+	unhealthyThreshold atomic.Int64
 
 	mu      sync.Mutex
 	ctx     context.Context
@@ -105,11 +105,10 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		})
 	}
-	return &healthStreamer{
-		stats:              env.Stats(),
-		degradedThreshold:  env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
-		unhealthyThreshold: sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()),
-		clients:            make(map[chan *querypb.StreamHealthResponse]struct{}),
+	hs := &healthStreamer{
+		stats:             env.Stats(),
+		degradedThreshold: env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
+		clients:           make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
 			Target:      &querypb.Target{},
@@ -125,6 +124,8 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
 		views:                  map[string]string{},
 	}
+	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
+	return hs
 }
 
 func (hs *healthStreamer) InitDBConfig(target *querypb.Target, cp dbconfigs.Connector) {
@@ -288,7 +289,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	sbm := time.Duration(hs.state.RealtimeStats.ReplicationLagSeconds) * time.Second
 	class := healthyClass
 	switch {
-	case sbm > hs.unhealthyThreshold.Get():
+	case sbm > time.Duration(hs.unhealthyThreshold.Load()):
 		class = unhealthyClass
 	case sbm > hs.degradedThreshold:
 		class = unhappyClass
@@ -310,7 +311,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 }
 
 func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
-	hs.unhealthyThreshold.Set(v)
+	hs.unhealthyThreshold.Store(v.Nanoseconds())
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 	for ch := range hs.clients {
 		select {

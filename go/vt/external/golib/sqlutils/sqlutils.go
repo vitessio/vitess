@@ -108,12 +108,17 @@ func (this *RowMap) GetStringD(key string, def string) string {
 }
 
 func (this *RowMap) GetInt64(key string) int64 {
-	res, _ := strconv.ParseInt(this.GetString(key), 10, 0)
+	res, _ := strconv.ParseInt(this.GetString(key), 10, 64)
 	return res
 }
 
+func (this *RowMap) GetInt32(key string) int32 {
+	res, _ := strconv.ParseInt(this.GetString(key), 10, 32)
+	return int32(res)
+}
+
 func (this *RowMap) GetNullInt64(key string) sql.NullInt64 {
-	i, err := strconv.ParseInt(this.GetString(key), 10, 0)
+	i, err := strconv.ParseInt(this.GetString(key), 10, 64)
 	if err == nil {
 		return sql.NullInt64{Int64: i, Valid: true}
 	} else {
@@ -140,7 +145,7 @@ func (this *RowMap) GetUint(key string) uint {
 }
 
 func (this *RowMap) GetUintD(key string, def uint) uint {
-	res, err := strconv.Atoi(this.GetString(key))
+	res, err := strconv.ParseUint(this.GetString(key), 10, 0)
 	if err != nil {
 		return def
 	}
@@ -148,16 +153,21 @@ func (this *RowMap) GetUintD(key string, def uint) uint {
 }
 
 func (this *RowMap) GetUint64(key string) uint64 {
-	res, _ := strconv.ParseUint(this.GetString(key), 10, 0)
+	res, _ := strconv.ParseUint(this.GetString(key), 10, 64)
 	return res
 }
 
 func (this *RowMap) GetUint64D(key string, def uint64) uint64 {
-	res, err := strconv.ParseUint(this.GetString(key), 10, 0)
+	res, err := strconv.ParseUint(this.GetString(key), 10, 64)
 	if err != nil {
 		return def
 	}
-	return uint64(res)
+	return res
+}
+
+func (this *RowMap) GetUint32(key string) uint32 {
+	res, _ := strconv.ParseUint(this.GetString(key), 10, 32)
+	return uint32(res)
 }
 
 func (this *RowMap) GetBool(key string) bool {

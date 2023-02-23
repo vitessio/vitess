@@ -18,6 +18,7 @@ package semantics
 
 import (
 	"strconv"
+	"strings"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -298,7 +299,7 @@ func rewriteJoinUsing(
 				usingCols = map[string]TableSet{}
 			}
 			for _, col := range tbl.getColumns() {
-				_, found := usingCols[col.Name]
+				_, found := usingCols[strings.ToLower(col.Name)]
 				if found {
 					tblName, err := tbl.Name()
 					if err != nil {

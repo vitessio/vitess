@@ -21,10 +21,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/sync2"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -226,9 +225,7 @@ func TestVStreamChunks(t *testing.T) {
 
 	rowEncountered := false
 	doneCounting := false
-	var rowCount, ddlCount sync2.AtomicInt32
-	rowCount.Set(0)
-	ddlCount.Set(0)
+	var rowCount, ddlCount atomic.Int32
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -265,13 +262,13 @@ func TestVStreamChunks(t *testing.T) {
 			t.Errorf("Unexpected event: %v", events[0])
 			return fmt.Errorf("unexpected event: %v", events[0])
 		}
-		if rowCount.Get() == int32(100) && ddlCount.Get() == int32(100) {
+		if rowCount.Load() == int32(100) && ddlCount.Load() == int32(100) {
 			cancel()
 		}
 		return nil
 	})
-	assert.Equal(t, int32(100), rowCount.Get())
-	assert.Equal(t, int32(100), ddlCount.Get())
+	assert.Equal(t, int32(100), rowCount.Load())
+	assert.Equal(t, int32(100), ddlCount.Load())
 }
 
 func TestVStreamMulti(t *testing.T) {
@@ -358,8 +355,7 @@ func TestVStreamRetry(t *testing.T) {
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "bb"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cc"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "final error"))
-	var count sync2.AtomicInt32
-	count.Set(0)
+	var count atomic.Int32
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -376,7 +372,7 @@ func TestVStreamRetry(t *testing.T) {
 		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
 	}
 	time.Sleep(100 * time.Millisecond) // wait for goroutine within VStream to finish
-	assert.Equal(t, int32(2), count.Get())
+	assert.Equal(t, int32(2), count.Load())
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {

@@ -58,7 +58,6 @@ CREATE TABLE IF NOT EXISTS schema_migrations
     `reverted_uuid`                   varchar(64)      NOT NULL DEFAULT '',
     `is_view`                         tinyint unsigned NOT NULL DEFAULT '0',
     `ready_to_complete`               tinyint unsigned NOT NULL DEFAULT '0',
-    `stowaway_table`                  tinytext         NOT NULL,
     `vitess_liveness_indicator`       bigint           NOT NULL DEFAULT '0',
     `user_throttle_ratio`             float            NOT NULL DEFAULT '0',
     `special_plan`                    text             NOT NULL,

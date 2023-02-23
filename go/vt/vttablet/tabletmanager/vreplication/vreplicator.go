@@ -87,8 +87,8 @@ const (
 		select pca.id from %s.post_copy_action as pca inner join %s.vreplication as vr on (pca.vrepl_id = vr.id)
 		where pca.table_name=%%a
 	) for update`
-	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from %s.post_copy_action where
-	action->>'$.type'=%%a and vrepl_id=%a and table_name=%%a`
+	sqlGetPostCopyActionTaskByType = `select json_unquote(json_extract(action, '$.task')) as task from %s.post_copy_action where
+	json_unquote(json_extract(action, '$.type'))=%%a and vrepl_id=%a and table_name=%%a`
 	sqlDeletePostCopyAction = `delete from %s.post_copy_action where vrepl_id=%%a and
 	table_name=%%a and id=%%a`
 )
@@ -431,7 +431,7 @@ func (vr *vreplicator) setState(state, message string) error {
 			Message: message,
 		})
 	}
-	vr.stats.State.Set(state)
+	vr.stats.State.Store(state)
 	query := fmt.Sprintf("update %s.vreplication set state='%v', message=%v where id=%v", sidecardb.GetIdentifier(),
 		state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
@@ -751,7 +751,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	if idqr == nil || len(idqr.Rows) != 1 {
 		return fmt.Errorf("unexpected number of rows returned (%d) from connection_id() query", len(idqr.Rows))
 	}
-	connID, err := idqr.Rows[0][0].ToUint64()
+	connID, err := idqr.Rows[0][0].ToInt64()
 	if err != nil || connID == 0 {
 		return fmt.Errorf("unexpected result (%d) from connection_id() query, error: %v", connID, err)
 	}

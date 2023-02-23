@@ -29,7 +29,6 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl"
 )
@@ -41,7 +40,8 @@ func TestEngineOpen(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 	require.False(t, vre.IsOpen())
@@ -74,14 +74,15 @@ func TestEngineOpen(t *testing.T) {
 func TestEngineOpenRetry(t *testing.T) {
 	defer func() { globalStats = &vrStats{} }()
 
-	defer func(saved time.Duration) { openRetryInterval.Set(saved) }(openRetryInterval.Get())
-	openRetryInterval.Set(10 * time.Millisecond)
+	defer func(saved int64) { openRetryInterval.Store(saved) }(openRetryInterval.Load())
+	openRetryInterval.Store((10 * time.Millisecond).Nanoseconds())
 
 	defer deleteTablet(addTablet(100))
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
@@ -132,7 +133,7 @@ func TestEngineOpenRetry(t *testing.T) {
 	// Close should cause the retry to exit.
 	vre.Close()
 	elapsed := time.Since(start)
-	assert.Greater(t, int64(openRetryInterval.Get()), int64(elapsed))
+	assert.Greater(t, openRetryInterval.Load(), elapsed.Nanoseconds())
 }
 
 func TestEngineExec(t *testing.T) {
@@ -142,7 +143,8 @@ func TestEngineExec(t *testing.T) {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	// Test Insert
 
@@ -154,6 +156,7 @@ func TestEngineExec(t *testing.T) {
 
 	dbClient.ExpectRequest("use _vt", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("insert into _vt.vreplication values(null)", &sqltypes.Result{InsertID: 1}, nil)
+	dbClient.ExpectRequest("select @@session.auto_increment_increment", &sqltypes.Result{}, nil)
 	dbClient.ExpectRequest("select * from _vt.vreplication where id = 1", sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|state|source|tablet_types",
@@ -306,7 +309,8 @@ func TestEngineBadInsert(t *testing.T) {
 
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
@@ -334,7 +338,8 @@ func TestEngineSelect(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
@@ -367,7 +372,9 @@ func TestWaitForPos(t *testing.T) {
 	waitRetryTime = 10 * time.Millisecond
 
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
@@ -395,7 +402,9 @@ func TestWaitForPos(t *testing.T) {
 
 func TestWaitForPosError(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
@@ -431,7 +440,9 @@ func TestWaitForPosError(t *testing.T) {
 
 func TestWaitForPosCancel(t *testing.T) {
 	dbClient := binlogplayer.NewMockDBClient(t)
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
@@ -474,7 +485,9 @@ func TestGetDBClient(t *testing.T) {
 	dbClientFactoryDba := func() binlogplayer.DBClient { return dbClientDba }
 	dbClientFactoryFiltered := func() binlogplayer.DBClient { return dbClientFiltered }
 
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
+
 	vre := NewTestEngine(env.TopoServ, env.Cells[0], mysqld, dbClientFactoryFiltered, dbClientFactoryDba, dbClientDba.DBName(), nil)
 
 	shouldBeDbaClient := vre.getDBClient(true /*runAsAdmin*/)

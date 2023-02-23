@@ -221,7 +221,7 @@ func (cached *InExpr) CachedSize(alloc bool) int64 {
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
-	// field Hashed map[uintptr]int
+	// field Hashed map[uint64]int
 	if cached.Hashed != nil {
 		size += int64(48)
 		hmap := reflect.ValueOf(cached.Hashed)

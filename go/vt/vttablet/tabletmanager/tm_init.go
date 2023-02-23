@@ -44,13 +44,13 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/dbconnpool"
@@ -166,7 +166,7 @@ type TabletManager struct {
 	// This semaphore can be held for long periods of time (hours),
 	// like in the case of a restore. This semaphore must be obtained
 	// first before other mutexes.
-	actionSema *sync2.Semaphore
+	actionSema *semaphore.Weighted
 
 	// mutex protects all the following fields (that start with '_'),
 	// only hold the mutex to update the fields, nothing else.
@@ -344,7 +344,7 @@ func (tm *TabletManager) Start(tablet *topodatapb.Tablet, healthCheckInterval ti
 	tm.DBConfigs.DBName = topoproto.TabletDbName(tablet)
 	tm.tabletAlias = tablet.Alias
 	tm.tmState = newTMState(tm, tablet)
-	tm.actionSema = sync2.NewSemaphore(1, 0)
+	tm.actionSema = semaphore.NewWeighted(1)
 
 	tm.baseTabletType = tablet.Type
 

@@ -25,10 +25,11 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -177,7 +178,7 @@ type messageManager struct {
 	batchSize    int
 	pollerTicks  *timer.Timer
 	purgeTicks   *timer.Timer
-	postponeSema *sync2.Semaphore
+	postponeSema *semaphore.Weighted
 
 	mu     sync.Mutex
 	isOpen bool
@@ -239,7 +240,7 @@ type messageManager struct {
 // newMessageManager creates a new message manager.
 // Calls into tsv have to be made asynchronously. Otherwise,
 // it can lead to deadlocks.
-func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, postponeSema *sync2.Semaphore) *messageManager {
+func newMessageManager(tsv TabletService, vs VStreamer, table *schema.Table, postponeSema *semaphore.Weighted) *messageManager {
 	mm := &messageManager{
 		tsv:  tsv,
 		vs:   vs,
@@ -573,11 +574,16 @@ func (mm *messageManager) runSend() {
 
 		// Send the message asynchronously.
 		mm.wg.Add(1)
-		go mm.send(receiver, &sqltypes.Result{Rows: rows}) // calls the offsetting mm.wg.Done()
+		go func() {
+			err := mm.send(context.Background(), receiver, &sqltypes.Result{Rows: rows}) // calls the offsetting mm.wg.Done()
+			if err != nil {
+				log.Errorf("messageManager - send failed: %v", err)
+			}
+		}()
 	}
 }
 
-func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result) {
+func (mm *messageManager) send(ctx context.Context, receiver *receiverWithStatus, qr *sqltypes.Result) error {
 	defer func() {
 		mm.tsv.LogError()
 		mm.wg.Done()
@@ -616,22 +622,23 @@ func (mm *messageManager) send(receiver *receiverWithStatus, qr *sqltypes.Result
 		// big", we'll end up spamming non-stop.
 		log.Errorf("Error sending messages: %v: %v", qr, err)
 	}
-	mm.postpone(mm.tsv, mm.ackWaitTime, ids)
+	return mm.postpone(ctx, mm.tsv, mm.ackWaitTime, ids)
 }
 
-func (mm *messageManager) postpone(tsv TabletService, ackWaitTime time.Duration, ids []string) {
+func (mm *messageManager) postpone(ctx context.Context, tsv TabletService, ackWaitTime time.Duration, ids []string) error {
 	// Use the semaphore to limit parallelism.
-	if !mm.postponeSema.Acquire() {
-		// Unreachable.
-		return
+	if err := mm.postponeSema.Acquire(ctx, 1); err != nil {
+		// Only happens if context is cancelled.
+		return err
 	}
-	defer mm.postponeSema.Release()
+	defer mm.postponeSema.Release(1)
 	ctx, cancel := context.WithTimeout(tabletenv.LocalContext(), ackWaitTime)
 	defer cancel()
 	if _, err := tsv.PostponeMessages(ctx, nil, mm, ids); err != nil {
 		// This can happen during spikes. Record the incident for monitoring.
 		MessageStats.Add([]string{mm.name.String(), "PostponeFailed"}, 1)
 	}
+	return nil
 }
 
 func (mm *messageManager) startVStream() {

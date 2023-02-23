@@ -100,13 +100,8 @@ const (
 		WHERE
 			migration_uuid=%%a
 	`
-	sqlUpdateMigrationStowawayTable = `UPDATE %s.schema_migrations
-			SET stowaway_table=%%a
-		WHERE
-			migration_uuid=%%a
-	`
-	sqlUpdateMigrationUserThrottleRatio = `UPDATE %s.schema_migrations
-			SET user_throttle_ratio=%%a
+	sqlUpdateMigrationUserThrottleRatio = `UPDATE _vt.schema_migrations
+			SET user_throttle_ratio=%a
 		WHERE
 			migration_uuid=%%a
 	`
@@ -278,7 +273,6 @@ const (
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
 			postpone_completion,
-			stowaway_table,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM %s.schema_migrations
 		WHERE
@@ -382,7 +376,6 @@ const (
 			is_view,
 			ready_to_complete,
 			reverted_uuid,
-			stowaway_table,
 			rows_copied,
 			vitess_liveness_indicator,
 			user_throttle_ratio,

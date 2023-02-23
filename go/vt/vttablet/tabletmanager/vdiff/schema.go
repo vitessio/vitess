@@ -43,7 +43,7 @@ const (
 							where vd.id = vdt.vdiff_id and vd.id = %d and vd.state != 'completed'`
 	sqlGetVReplicationEntry = "select * from %s.vreplication %s"
 	sqlGetVDiffsToRun       = "select * from %s.vdiff where state in ('started','pending')" // what VDiffs have not been stopped or completed
-	sqlGetVDiffsToRetry     = "select * from %s.vdiff where state = 'error' and options->>'$.core_options.auto_retry' = 'true'"
+	sqlGetVDiffsToRetry     = "select * from %s.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'"
 	sqlGetVDiffID           = "select id as id from %s.vdiff where vdiff_uuid = %s"
 	sqlGetAllVDiffs         = "select * from %s.vdiff order by id desc"
 	sqlGetAllTableRows      = "select table_name as table_name, table_rows as table_rows from INFORMATION_SCHEMA.TABLES where table_schema = %s and table_name in (%s)"

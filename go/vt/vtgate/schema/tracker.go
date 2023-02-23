@@ -136,8 +136,7 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return nil
 	}
 
-	fvRes, err := conn.Execute(t.ctx, target, fmt.Sprintf(mysql.FetchViews, "_vt"),
-		nil, 0, 0, nil)
+	fvRes, err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_VIEWS, nil)
 	if err != nil {
 		return err
 	}
@@ -149,7 +148,7 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 	// clearing out the previous view definition removes any dropped views.
 	t.clearKeyspaceViews(target.Keyspace)
 	t.updateViews(target.Keyspace, fvRes)
-	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(fvRes.Rows))
+	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(fvRes))
 
 	return nil
 }
@@ -304,22 +303,11 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 
 func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
 	viewsUpdated := th.Stats.ViewSchemaChanged
-	views, err := sqltypes.BuildBindVariable(viewsUpdated)
-	if err != nil {
-		log.Errorf("failed to read updated views from TabletHealth: %v", err)
-		return false
-	}
-	bv := map[string]*querypb.BindVariable{"viewNames": views}
-	res, err := th.Conn.Execute(t.ctx, th.Target, fmt.Sprintf(mysql.FetchUpdatedViews, "_vt"),
-		bv, 0, 0, nil)
+	res, err := th.Conn.GetSchema(t.ctx, th.Target, querypb.SchemaTableType_VIEWS, viewsUpdated)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the views that got errored out.
 		log.Warningf("error fetching new views definition for %v", viewsUpdated, err)
-		code := vterrors.Code(err)
-		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
-			log.Warning(aclErrorMessageLog)
-		}
 		return false
 	}
 
@@ -336,10 +324,8 @@ func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
 
 }
 
-func (t *Tracker) updateViews(keyspace string, res *sqltypes.Result) {
-	for _, row := range res.Rows {
-		viewName := row[0].ToString()
-		viewDef := row[1].ToString()
+func (t *Tracker) updateViews(keyspace string, res map[string]string) {
+	for viewName, viewDef := range res {
 		t.views.set(keyspace, viewName, viewDef)
 	}
 }
@@ -418,12 +404,12 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return
 	}
-	sel, ok := stmt.(sqlparser.SelectStatement)
+	cv, ok := stmt.(*sqlparser.CreateView)
 	if !ok {
-		log.Warningf("ignoring view '%s', view definition is not a select query: %T", tbl, stmt)
+		log.Warningf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt)
 		return
 	}
-	m[tbl] = sel
+	m[tbl] = cv.Select
 }
 
 func (vm *viewMap) get(ks, tbl string) sqlparser.SelectStatement {

@@ -28,6 +28,7 @@ import (
 	"sync"
 	"sync/atomic"
 
+	"vitess.io/vitess/go/history"
 	"vitess.io/vitess/go/mysql"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -79,9 +80,54 @@ func (t *sidecarTable) String() string {
 	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), t.name, t.module)
 }
 
-// validateSchemaDefinition ensures that the provided schema
-// definition is in an expected form and returns the
-// canonical SQL statement.
+var sidecarTables []*sidecarTable
+var ddlCount *stats.Counter
+var ddlErrorCount *stats.Counter
+var ddlErrorHistory *history.History
+var mu sync.Mutex
+
+type ddlError struct {
+	tableName string
+	err       error
+}
+
+const maxDDLErrorHistoryLength = 100
+
+// failOnSchemaInitError decides whether we fail the schema init process when we encounter an error while
+// applying a table schema upgrade DDL or continue with the next table.
+// If true, tablets will not launch. The cluster will not come up until the issue is resolved.
+// If false, the init process will continue trying to upgrade other tables. So some functionality might be broken
+// due to an incorrect schema, but the cluster should come up and serve queries.
+// This is an operational trade-off: if we always fail it could cause a major incident since the entire cluster will be down.
+// If we are more permissive, it could cause hard-to-detect errors, because a module
+// doesn't load or behaves incorrectly due to an incomplete upgrade. Errors however will be reported and if the
+// related stats endpoints are monitored we should be able to diagnose/get alerted in a timely fashion.
+const failOnSchemaInitError = false
+
+const StatsKeyPrefix = "SidecarDBDDL"
+const StatsKeyQueryCount = StatsKeyPrefix + "QueryCount"
+const StatsKeyErrorCount = StatsKeyPrefix + "ErrorCount"
+const StatsKeyErrors = StatsKeyPrefix + "Errors"
+
+func init() {
+	initSchemaFiles()
+	ddlCount = stats.NewCounter(StatsKeyQueryCount, "Number of queries executed")
+	ddlErrorCount = stats.NewCounter(StatsKeyErrorCount, "Number of errors during sidecar schema upgrade")
+	ddlErrorHistory = history.New(maxDDLErrorHistoryLength)
+	stats.Publish(StatsKeyErrors, stats.StringMapFunc(func() map[string]string {
+		mu.Lock()
+		defer mu.Unlock()
+		result := make(map[string]string, len(ddlErrorHistory.Records()))
+		for _, e := range ddlErrorHistory.Records() {
+			d, ok := e.(*ddlError)
+			if ok {
+				result[d.tableName] = d.err.Error()
+			}
+		}
+		return result
+	}))
+}
+
 func validateSchemaDefinition(name, schema string) (string, error) {
 	stmt, err := sqlparser.ParseStrictDDL(schema)
 
@@ -96,14 +142,14 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 	// The database qualifier should be set via the flag.
 	qualifier := createTable.Table.Qualifier.String()
 	if qualifier != "" {
-		return "", fmt.Errorf("database qualifier of %s specified for the %s table when there should not be one", qualifier, name)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "database qualifier of %s specified for the %s table when there should not be one", qualifier, name)
 	}
 	createTable.Table.Qualifier = sqlparser.NewIdentifierCS(GetName())
 	if !strings.EqualFold(tableName, name) {
-		return "", fmt.Errorf("table name of %s does not match the table name specified within the file: %s", name, tableName)
+		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "table name of %s does not match the table name specified within the file: %s", name, tableName)
 	}
 	if !createTable.IfNotExists {
-		return "", fmt.Errorf("%s file did not include the required IF NOT EXISTS clause in the CREATE TABLE statement for the %s table", name, tableName)
+		return "", vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "%s file did not include the required IF NOT EXISTS clause in the CREATE TABLE statement for the %s table", name, tableName)
 	}
 	normalizedSchema := sqlparser.CanonicalString(createTable)
 	return normalizedSchema, nil
@@ -131,7 +177,7 @@ func loadSchemaDefinitions() {
 			case 2:
 				module = dirparts[1]
 			default:
-				return fmt.Errorf("unexpected path value of %s specified for sidecar schema table; expected structure is <module>[/<submodule>]/<tablename>.sql", dir)
+				return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected path value of %s specified for sidecar schema table; expected structure is <module>[/<submodule>]/<tablename>.sql", dir)
 			}
 
 			name := strings.Split(fname, ".")[0]
@@ -197,6 +243,40 @@ func GetCreateQuery() string {
 // have been run as part of this vttablet's init process.
 func GetDDLCount() int64 {
 	return ddlCount.Get()
+}
+
+// GetDDLErrorCount returns the count of sidecardb DDLs that have been errored out as part of this vttablet's init process.
+func GetDDLErrorCount() int64 {
+	return ddlErrorCount.Get()
+}
+
+// GetDDLErrorHistory returns the errors encountered as part of this vttablet's init process..
+func GetDDLErrorHistory() []*ddlError {
+	var errors []*ddlError
+	for _, e := range ddlErrorHistory.Records() {
+		ddle, ok := e.(*ddlError)
+		if ok {
+			errors = append(errors, ddle)
+		}
+	}
+	return errors
+}
+
+// GetDDLErrorCount returns the count of sidecardb DDLs that have been errored out as part of this vttablet's init process.
+func GetDDLErrorCount() int64 {
+	return ddlErrorCount.Get()
+}
+
+// GetDDLErrorHistory returns the errors encountered as part of this vttablet's init process..
+func GetDDLErrorHistory() []*ddlError {
+	var errors []*ddlError
+	for _, e := range ddlErrorHistory.Records() {
+		ddle, ok := e.(*ddlError)
+		if ok {
+			errors = append(errors, ddle)
+		}
+	}
+	return errors
 }
 
 // Init creates or upgrades the sidecar database based on
@@ -287,7 +367,7 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 		return true, nil
 	default:
 		log.Errorf("found too many rows for sidecarDB %s: %d", GetName(), len(rs.Rows))
-		return false, fmt.Errorf("found too many rows for sidecarDB %s: %d", GetName(), len(rs.Rows))
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "found too many rows for sidecarDB %s: %d", GetName(), len(rs.Rows))
 	}
 }
 
@@ -350,7 +430,7 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 		if ddl == "" {
 			log.Infof("No changes needed for table %s", tableName)
 		} else {
-			log.Infof("Applying ddl for table %s:\n%s", tableName, ddl)
+			log.Infof("Applying DDL for table %s:\n%s", tableName, ddl)
 		}
 	}
 
@@ -389,15 +469,29 @@ func (si *schemaInit) ensureSchema(table *sidecarTable) error {
 		}
 		_, err := si.exec(ctx, ddl, 1, true)
 		if err != nil {
-			log.Errorf("Error running ddl %s for table %s during sidecar database initialization %s: %+v", ddl, table, err)
-			return err
+			ddlErr := vterrors.Wrapf(err,
+				"Error running DDL %s for table %s during sidecar database initialization", ddl, table)
+			recordDDLError(table.name, ddlErr)
+			if failOnSchemaInitError {
+				return ddlErr
+			}
+			return nil
 		}
-		log.Infof("Applied ddl %s for table %s during sidecar database initialization %s", ddl, table)
+		log.Infof("Applied DDL %s for table %s during sidecar database initialization", ddl, table)
 		ddlCount.Add(1)
 		return nil
 	}
 	log.Infof("Table schema was already up to date for the %s table in the %s sidecar database", table.name, GetName())
 	return nil
+}
+
+func recordDDLError(tableName string, err error) {
+	log.Error(err)
+	ddlErrorCount.Add(1)
+	ddlErrorHistory.Add(&ddlError{
+		tableName: tableName,
+		err:       err,
+	})
 }
 
 // region unit-test-only
