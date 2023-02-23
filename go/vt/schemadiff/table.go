@@ -775,15 +775,34 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		}
 	}
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
+
+	newAlterTableEntityDiff := func(alterTable *sqlparser.AlterTable) *AlterTableEntityDiff {
+		d := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+
+		var algorithmValue sqlparser.AlgorithmValue
+
+		switch hints.AlterTableAlgorithmStrategy {
+		case AlterTableAlgorithmStrategyCopy:
+			algorithmValue = sqlparser.AlgorithmValue("COPY")
+		case AlterTableAlgorithmStrategyInplace:
+			algorithmValue = sqlparser.AlgorithmValue("INPLACE")
+		case AlterTableAlgorithmStrategyInstant:
+			algorithmValue = sqlparser.AlgorithmValue("INSTANT")
+		}
+		if algorithmValue != "" {
+			alterTable.AlterOptions = append(alterTable.AlterOptions, algorithmValue)
+		}
+		return d
+	}
 	if tableSpecHasChanged {
-		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		parentAlterTableEntityDiff = newAlterTableEntityDiff(alterTable)
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
 			Table:        c.CreateTable.Table,
 			AlterOptions: []sqlparser.AlterOption{superfluousFulltextKey},
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		// if we got superfluous fulltext keys, that means the table spec has changed, ie
 		// parentAlterTableEntityDiff is not nil
 		parentAlterTableEntityDiff.addSubsequentDiff(diff)
@@ -793,7 +812,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			Table:         c.CreateTable.Table,
 			PartitionSpec: partitionSpec,
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		if parentAlterTableEntityDiff == nil {
 			parentAlterTableEntityDiff = diff
 		} else {
@@ -1990,6 +2009,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					c.TableSpec.Options = append(c.TableSpec.Options, option)
 				}()
 			}
+		case sqlparser.AlgorithmValue:
+			// silently ignore. This has an operational effect on the MySQL engine, but has no semantical effect.
 		default:
 			return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}
 		}
