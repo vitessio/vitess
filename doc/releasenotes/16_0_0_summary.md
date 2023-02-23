@@ -6,7 +6,7 @@
   - **[Breaking Changes](#breaking-changes)**
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
     - [Default MySQL version on Docker](#default-mysql-version)
-    - [Running Vitess on the Operator](#running-vitess-on-the-operator)
+    - [⚠️ Upgrading to this release with vitess-operator](#upgrading-to-this-release-with-vitess-operator)
     - [Flag Deletions and Deprecations](#flag-deletions-and-deprecations)
       - [VTCtld](#vtctld-flag-deletions-deprecations)
       - [MySQLCtl](#mysqlctl-flag-deletions-deprecations)
@@ -63,9 +63,9 @@ The users can set the `mysql_server_version` flag to advertise the correct versi
 
 The default major MySQL version used by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the patch version of MySQL80 has been upgraded from `8.0.23` to `8.0.30`.
 
-#### <a id="running-vitess-on-the-operator"/> Running Vitess on the Operator
+#### <a id="upgrading-to-this-release-with-vitess-operator"/>⚠️Upgrading to this release with vitess-operator
 
-If you are using the vitess-operator and want to remain on MySQL 5.7, we invite you to use the `vitess/lite:v16.0.0-mysql57` Docker Image.
+If you are using the vitess-operator and want to remain on MySQL 5.7, **you are required** to use the `vitess/lite:v16.0.0-mysql57` Docker Image, otherwise the `vitess/lite:v16.0.0` image will be on MySQL 80.
 
 However, if you are running MySQL 8.0 on the vitess-operator, with for instance `vitess/lite:v15.0.2-mysql80`, considering that we are bumping the patch version of MySQL 80 from `8.0.23` to `8.0.30`, you will have to manually upgrade:
 
