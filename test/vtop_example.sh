@@ -74,10 +74,10 @@ function checkPodStatusWithTimeout() {
 # changeImageAndApply changes the vitess images in the yaml configuration
 # to the ones produced down below before applying them
 function changeImageAndApply() {
-#  file=$1
-#  sed 's/vitess\/lite:.*/vitess\/lite:pr/g' "$file" | sed 's/vitess\/vtadmin:.*/vitess\/vtadmin:pr/g' > temp.yaml
-  kubectl apply -f $1
-#  rm temp.yaml
+  file=$1
+  sed 's/vitess\/lite:.*/vitess\/lite:pr/g' "$file" | sed 's/vitess\/vtadmin:.*/vitess\/vtadmin:pr/g' > temp.yaml
+  kubectl apply -f temp.yaml
+  rm temp.yaml
 }
 
 function waitForKeyspaceToBeServing() {
@@ -484,20 +484,20 @@ EOF
 
 
 # Build the docker image for vitess/lite using the local code
-#docker build -f docker/lite/Dockerfile -t vitess/lite:pr .
-## Build the docker image for vitess/vtadmin using the local code
-#docker build -f docker/base/Dockerfile -t vitess/base:pr .
-#docker build -f docker/k8s/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/k8s:pr .
-#docker build -f docker/k8s/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
+docker build -f docker/lite/Dockerfile -t vitess/lite:pr .
+# Build the docker image for vitess/vtadmin using the local code
+docker build -f docker/base/Dockerfile -t vitess/base:pr .
+docker build -f docker/k8s/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/k8s:pr .
+docker build -f docker/k8s/vtadmin/Dockerfile --build-arg VT_BASE_VER=pr -t vitess/vtadmin:pr .
 
 # Print the docker images available
-#docker image ls
+docker image ls
 
 echo "Creating Kind cluster"
-kind create cluster --wait 30s --image kindest/node:v1.24.7 --name kind
+kind create cluster --wait 30s --name kind
 echo "Loading docker images into Kind cluster"
-kind load docker-image vitess/lite:latest --name kind
-kind load docker-image vitess/vtadmin:latest --name kind
+kind load docker-image vitess/lite:pr --name kind
+kind load docker-image vitess/vtadmin:pr --name kind
 
 cd "./examples/operator"
 killall kubectl
