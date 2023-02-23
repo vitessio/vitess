@@ -410,5 +410,13 @@ func (client *QueryClient) UpdateContext(ctx context.Context) {
 }
 
 func (client *QueryClient) GetSchema(tableType querypb.SchemaTableType, tableNames ...string) (map[string]string, error) {
-	return client.server.GetSchema(client.ctx, client.target, tableType, tableNames)
+	schemaDef := map[string]string{}
+	err := client.server.GetSchema(client.ctx, client.target, tableType, tableNames, func(schemaRes *querypb.GetSchemaResponse) error {
+		schemaDef = schemaRes.TableDefinition
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return schemaDef, nil
 }
