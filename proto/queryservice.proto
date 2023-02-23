@@ -110,5 +110,5 @@ service Query {
   rpc VStreamResults(binlogdata.VStreamResultsRequest) returns (stream binlogdata.VStreamResultsResponse) {};
 
   // GetSchema returns the schema information.
-  rpc GetSchema(query.GetSchemaRequest) returns (query.GetSchemaResponse) {};
+  rpc GetSchema(query.GetSchemaRequest) returns (stream query.GetSchemaResponse) {};
 }

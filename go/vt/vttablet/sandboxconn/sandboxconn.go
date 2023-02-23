@@ -585,14 +585,14 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 }
 
 // GetSchema implements the QueryService interface
-func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
+func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	sbc.GetSchemaCount.Add(1)
-	var resp map[string]string
-	if len(sbc.getSchemaResult) > 0 {
-		resp = sbc.getSchemaResult[0]
-		sbc.getSchemaResult = sbc.getSchemaResult[1:]
+	if len(sbc.getSchemaResult) == 0 {
+		return nil
 	}
-	return resp, nil
+	resp := sbc.getSchemaResult[0]
+	sbc.getSchemaResult = sbc.getSchemaResult[1:]
+	return callback(&querypb.GetSchemaResponse{TableDefinition: resp})
 }
 
 // Close does not change ExecCount
