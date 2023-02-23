@@ -44,6 +44,9 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	h := vthash.New()
 	switch e := e.(type) {
 	case *evalBytes:
+		if collations.Local().LookupByID(collation) == nil {
+			return 0, UnsupportedCollationHashError
+		}
 		e.col.Collation = collation
 		e.Hash(&h)
 	case hashable:

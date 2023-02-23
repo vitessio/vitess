@@ -110,11 +110,8 @@ func (e *evalBytes) Hash(h *vthash.Hasher) {
 		h.Write16(hashPrefixBytes)
 		_, _ = h.Write(e.bytes)
 	default:
-		col := collations.Local().LookupByID(e.col.Collation)
-		if col == nil {
-			panic("unsupported collation in evalBytes")
-		}
 		h.Write16(hashPrefixBytes)
+		col := collations.Local().LookupByID(e.col.Collation)
 		col.Hash(h, e.bytes, 0)
 	}
 }
