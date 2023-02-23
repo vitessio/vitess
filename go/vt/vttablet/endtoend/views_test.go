@@ -30,7 +30,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-var qSelAllRows = "select table_schema, table_name, view_definition, create_statement from _vt.views"
+var qSelAllRows = "select table_schema, table_name, create_statement from _vt.views"
 var qDelAllRows = "delete from _vt.views"
 
 // Test will validate create view ddls.
@@ -51,7 +51,7 @@ func TestCreateViewDDL(t *testing.T) {
 	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select * from vitess_a") TEXT("create view vitess_view as select * from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("create view vitess_view as select * from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 
 	// view already exists. This should fail.
@@ -66,7 +66,7 @@ func TestCreateViewDDL(t *testing.T) {
 	qr, err = client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("create or replace view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 }
 
@@ -97,7 +97,7 @@ func TestAlterViewDDL(t *testing.T) {
 	qr, err := client.Execute(qSelAllRows, nil)
 	require.NoError(t, err)
 	require.Equal(t,
-		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("select id, foo from vitess_a") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
+		`[[VARCHAR("vttest") VARCHAR("vitess_view") TEXT("create view vitess_view as select id, foo from vitess_a")]]`,
 		fmt.Sprintf("%v", qr.Rows))
 }
 
@@ -173,5 +173,5 @@ func TestGetSchemaRPC(t *testing.T) {
 
 	viewSchemaDef, err = client.GetSchema(querypb.SchemaTableType_VIEWS)
 	require.NoError(t, err)
-	require.Equal(t, viewSchemaDef["vitess_view"], "select 1 from vitess_a")
+	require.Equal(t, "create view vitess_view as select 1 from vitess_a", viewSchemaDef["vitess_view"])
 }
