@@ -141,11 +141,17 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 	// This is needed clear out any stale view definitions.
 	t.clearKeyspaceViews(target.Keyspace)
 
-	return conn.GetSchema(t.ctx, target, querypb.SchemaTableType_VIEWS, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+	var numViews int
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_VIEWS, nil, func(schemaRes *querypb.GetSchemaResponse) error {
 		t.updateViews(target.Keyspace, schemaRes.TableDefinition)
-		log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(schemaRes.TableDefinition))
+		numViews += len(schemaRes.TableDefinition)
 		return nil
 	})
+	if err != nil {
+		return err
+	}
+	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews)
+	return nil
 }
 
 // Start starts the schema tracking.

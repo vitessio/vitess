@@ -1251,7 +1251,7 @@ func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(s
 			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
 		}
 	}
-	return qre.execQuery(query, bindVars, func(result *sqltypes.Result) error {
+	return qre.generateFinalQueryAndStreamExecute(query, bindVars, func(result *sqltypes.Result) error {
 		schemaDef := make(map[string]string)
 		for _, row := range result.Rows {
 			schemaDef[row[0].ToString()] = row[1].ToString()
@@ -1260,7 +1260,7 @@ func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(s
 	})
 }
 
-func (qre *QueryExecutor) execQuery(query string, bindVars map[string]*querypb.BindVariable, callback func(result *sqltypes.Result) error) error {
+func (qre *QueryExecutor) generateFinalQueryAndStreamExecute(query string, bindVars map[string]*querypb.BindVariable, callback func(result *sqltypes.Result) error) error {
 	sql := query
 	if len(bindVars) > 0 {
 		stmt, err := sqlparser.Parse(query)
