@@ -49,13 +49,30 @@ const (
 	createSidecarDBQuery = "create database if not exists %s"
 	sidecarDBExistsQuery = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = '%s'"
 	showCreateTableQuery = "show create table %s.%s"
+
+	maxDDLErrorHistoryLength = 100
+
+	// failOnSchemaInitError decides whether we fail the schema init process when we encounter an error while
+	// applying a table schema upgrade DDL or continue with the next table.
+	// If true, tablets will not launch. The cluster will not come up until the issue is resolved.
+	// If false, the init process will continue trying to upgrade other tables. So some functionality might be broken
+	// due to an incorrect schema, but the cluster should come up and serve queries.
+	// This is an operational trade-off: if we always fail it could cause a major incident since the entire cluster will be down.
+	// If we are more permissive, it could cause hard-to-detect errors, because a module
+	// doesn't load or behaves incorrectly due to an incomplete upgrade. Errors however will be reported and if the
+	// related stats endpoints are monitored we should be able to diagnose/get alerted in a timely fashion.
+	failOnSchemaInitError = false
+
+	StatsKeyPrefix     = "SidecarDBDDL"
+	StatsKeyQueryCount = StatsKeyPrefix + "QueryCount"
+	StatsKeyErrorCount = StatsKeyPrefix + "ErrorCount"
+	StatsKeyErrors     = StatsKeyPrefix + "Errors"
 )
 
 var (
 	// This should be accessed via GetName()
 	sidecarDBName atomic.Value
 	sidecarTables []*sidecarTable
-	ddlCount      = stats.NewCounter("SidecarDbDDLQueryCount", "Number of create/alter queries executed")
 
 	// All tables needed in the sidecar database have
 	// their schema in the schema subdirectory.
@@ -63,11 +80,12 @@ var (
 	schemaLocation embed.FS
 	// Load the schema definitions one time.
 	once sync.Once
-)
 
-func init() {
-	sidecarDBName.Store(DefaultName)
-}
+	ddlCount        *stats.Counter
+	ddlErrorCount   *stats.Counter
+	ddlErrorHistory *history.History
+	mu              sync.Mutex
+)
 
 type sidecarTable struct {
 	module string // which module uses this table
@@ -76,41 +94,13 @@ type sidecarTable struct {
 	schema string // create table dml
 }
 
-func (t *sidecarTable) String() string {
-	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), t.name, t.module)
-}
-
-var sidecarTables []*sidecarTable
-var ddlCount *stats.Counter
-var ddlErrorCount *stats.Counter
-var ddlErrorHistory *history.History
-var mu sync.Mutex
-
 type ddlError struct {
 	tableName string
 	err       error
 }
 
-const maxDDLErrorHistoryLength = 100
-
-// failOnSchemaInitError decides whether we fail the schema init process when we encounter an error while
-// applying a table schema upgrade DDL or continue with the next table.
-// If true, tablets will not launch. The cluster will not come up until the issue is resolved.
-// If false, the init process will continue trying to upgrade other tables. So some functionality might be broken
-// due to an incorrect schema, but the cluster should come up and serve queries.
-// This is an operational trade-off: if we always fail it could cause a major incident since the entire cluster will be down.
-// If we are more permissive, it could cause hard-to-detect errors, because a module
-// doesn't load or behaves incorrectly due to an incomplete upgrade. Errors however will be reported and if the
-// related stats endpoints are monitored we should be able to diagnose/get alerted in a timely fashion.
-const failOnSchemaInitError = false
-
-const StatsKeyPrefix = "SidecarDBDDL"
-const StatsKeyQueryCount = StatsKeyPrefix + "QueryCount"
-const StatsKeyErrorCount = StatsKeyPrefix + "ErrorCount"
-const StatsKeyErrors = StatsKeyPrefix + "Errors"
-
 func init() {
-	initSchemaFiles()
+	sidecarDBName.Store(DefaultName)
 	ddlCount = stats.NewCounter(StatsKeyQueryCount, "Number of queries executed")
 	ddlErrorCount = stats.NewCounter(StatsKeyErrorCount, "Number of errors during sidecar schema upgrade")
 	ddlErrorHistory = history.New(maxDDLErrorHistoryLength)
@@ -243,23 +233,6 @@ func GetCreateQuery() string {
 // have been run as part of this vttablet's init process.
 func GetDDLCount() int64 {
 	return ddlCount.Get()
-}
-
-// GetDDLErrorCount returns the count of sidecardb DDLs that have been errored out as part of this vttablet's init process.
-func GetDDLErrorCount() int64 {
-	return ddlErrorCount.Get()
-}
-
-// GetDDLErrorHistory returns the errors encountered as part of this vttablet's init process..
-func GetDDLErrorHistory() []*ddlError {
-	var errors []*ddlError
-	for _, e := range ddlErrorHistory.Records() {
-		ddle, ok := e.(*ddlError)
-		if ok {
-			errors = append(errors, ddle)
-		}
-	}
-	return errors
 }
 
 // GetDDLErrorCount returns the count of sidecardb DDLs that have been errored out as part of this vttablet's init process.
@@ -492,6 +465,10 @@ func recordDDLError(tableName string, err error) {
 		tableName: tableName,
 		err:       err,
 	})
+}
+
+func (t *sidecarTable) String() string {
+	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), t.name, t.module)
 }
 
 // region unit-test-only

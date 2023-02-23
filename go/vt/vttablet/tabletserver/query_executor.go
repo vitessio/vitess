@@ -1244,10 +1244,10 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 }
 
 func (qre *QueryExecutor) getViewDefinitions(viewNames []string) (map[string]string, error) {
-	query := mysql.FetchViews
+	query := fmt.Sprintf(mysql.FetchViews, sidecardb.GetIdentifier())
 	var bindVars map[string]*querypb.BindVariable
 	if len(viewNames) > 0 {
-		query = mysql.FetchUpdatedViews
+		query = fmt.Sprintf(mysql.FetchUpdatedViews, sidecardb.GetIdentifier())
 		bindVars = map[string]*querypb.BindVariable{
 			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
 		}

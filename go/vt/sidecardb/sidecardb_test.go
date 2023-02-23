@@ -40,6 +40,7 @@ func TestInitErrors(t *testing.T) {
 
 	db := fakesqldb.New(t)
 	defer db.Close()
+	AddSchemaInitQueries(db, false)
 
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
@@ -61,7 +62,7 @@ func TestInitErrors(t *testing.T) {
 
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(UseSidecarDatabaseQuery, maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetIdentifier()), maxRows, true); err != nil {
 				return nil, err
 			}
 		}

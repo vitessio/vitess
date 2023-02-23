@@ -100,8 +100,8 @@ const (
 		WHERE
 			migration_uuid=%%a
 	`
-	sqlUpdateMigrationUserThrottleRatio = `UPDATE _vt.schema_migrations
-			SET user_throttle_ratio=%a
+	sqlUpdateMigrationUserThrottleRatio = `UPDATE %s.schema_migrations
+			SET user_throttle_ratio=%%a
 		WHERE
 			migration_uuid=%%a
 	`
