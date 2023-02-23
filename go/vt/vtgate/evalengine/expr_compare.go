@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
@@ -296,12 +297,11 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var foundNull, found bool
+	var hasher = vthash.New()
 	if i.Hashed != nil {
-		hash, err := left.Hash()
-		if err != nil {
-			return nil, err
-		}
-		if idx, ok := i.Hashed[hash]; ok {
+		hasher.Reset()
+		left.Hash(&hasher)
+		if idx, ok := i.Hashed[hasher.Sum64()]; ok {
 			var numeric int
 			numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
 			if err != nil {

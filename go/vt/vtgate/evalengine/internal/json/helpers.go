@@ -17,12 +17,15 @@ limitations under the License.
 package json
 
 import (
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
-func (v *Value) Hash() (uint64, error) {
-	return hack.RuntimeMemhash(v.ToRawBytes(), 0x3333), nil
+const hashPrefixJSON = 0xCCBB
+
+func (v *Value) Hash(h *vthash.Hasher) {
+	h.Write16(hashPrefixJSON)
+	_, _ = h.Write(v.ToRawBytes())
 }
 
 func (v *Value) ToRawBytes() []byte {
