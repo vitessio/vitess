@@ -59,6 +59,10 @@ const (
 type eval interface {
 	ToRawBytes() []byte
 	SQLType() sqltypes.Type
+}
+
+type hashable interface {
+	eval
 	Hash(h *vthash.Hasher)
 }
 

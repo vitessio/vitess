@@ -18,15 +18,10 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vthash"
 )
 
 type evalTuple struct {
 	t []eval
-}
-
-func (e *evalTuple) Hash(h *vthash.Hasher) {
-	panic("should never attempt to hash a TUPLE")
 }
 
 var _ eval = (*evalTuple)(nil)

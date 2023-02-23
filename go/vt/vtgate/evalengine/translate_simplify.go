@@ -125,24 +125,23 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 	}
 
 	if optimize {
-		inexpr.Hashed = make(map[HashCode]int)
+		inexpr.Hashed = make(map[vthash.Hash]int)
 		hasher := vthash.New()
 		for i, expr := range tuple {
 			lit := expr.(*Literal)
-			lit.inner.Hash(&hasher)
+			inner, ok := lit.inner.(hashable)
+			if !ok {
+				inexpr.Hashed = nil
+				break
+			}
 
-			hash := hasher.Sum64()
+			inner.Hash(&hasher)
+			hash := hasher.Sum128()
 			hasher.Reset()
 
-			if collidx, collision := inexpr.Hashed[hash]; collision {
-				cmp, _, err := evalCompareAll(lit.inner, tuple[collidx].(*Literal).inner, true)
-				if cmp != 0 || err != nil {
-					inexpr.Hashed = nil
-					break
-				}
-				continue
+			if _, found := inexpr.Hashed[hash]; !found {
+				inexpr.Hashed[hash] = i
 			}
-			inexpr.Hashed[hash] = i
 		}
 	}
 	return nil

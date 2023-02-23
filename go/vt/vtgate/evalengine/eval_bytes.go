@@ -37,6 +37,7 @@ type evalBytes struct {
 }
 
 var _ eval = (*evalBytes)(nil)
+var _ hashable = (*evalBytes)(nil)
 
 func newEvalRaw(typ sqltypes.Type, raw []byte, col collations.TypedCollation) *evalBytes {
 	return &evalBytes{tt: int16(typ), col: col, bytes: raw}

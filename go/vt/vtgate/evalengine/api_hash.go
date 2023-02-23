@@ -40,11 +40,17 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	if e == nil {
 		return HashCode(math.MaxUint64), nil
 	}
-	if e, ok := e.(*evalBytes); ok {
-		e.col.Collation = collation
-	}
+
 	h := vthash.New()
-	e.Hash(&h)
+	switch e := e.(type) {
+	case *evalBytes:
+		e.col.Collation = collation
+		e.Hash(&h)
+	case hashable:
+		e.Hash(&h)
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot hash %s object", coerceType)
+	}
 	return h.Sum64(), nil
 }
 

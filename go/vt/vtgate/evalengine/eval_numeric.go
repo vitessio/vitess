@@ -30,6 +30,7 @@ import (
 type (
 	evalNumeric interface {
 		eval
+		hashable
 		toFloat() (*evalFloat, bool)
 		toDecimal(m, d int32) *evalDecimal
 		toInt64() *evalInt64

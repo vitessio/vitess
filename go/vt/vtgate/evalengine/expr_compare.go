@@ -45,7 +45,7 @@ type (
 	InExpr struct {
 		BinaryExpr
 		Negate bool
-		Hashed map[HashCode]int
+		Hashed map[vthash.Hash]int
 	}
 
 	ComparisonOp interface {
@@ -299,15 +299,20 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	var foundNull, found bool
 	var hasher = vthash.New()
 	if i.Hashed != nil {
-		hasher.Reset()
-		left.Hash(&hasher)
-		if idx, ok := i.Hashed[hasher.Sum64()]; ok {
-			var numeric int
-			numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
-			if err != nil {
-				return nil, err
+		if left, ok := left.(hashable); ok {
+			left.Hash(&hasher)
+
+			hash := hasher.Sum128()
+			hasher.Reset()
+
+			if idx, ok := i.Hashed[hash]; ok {
+				var numeric int
+				numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
+				if err != nil {
+					return nil, err
+				}
+				found = numeric == 0
 			}
-			found = numeric == 0
 		}
 	} else {
 		for _, rtuple := range rtuple.t {

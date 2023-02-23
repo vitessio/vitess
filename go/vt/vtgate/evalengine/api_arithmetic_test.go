@@ -1102,8 +1102,8 @@ func TestCompareNumeric(t *testing.T) {
 						hash2 := vthash.New()
 
 						// hash codes can only be compared if they are coerced to the same type first
-						aVal.Hash(&hash1)
-						bVal.Hash(&hash2)
+						aVal.(hashable).Hash(&hash1)
+						bVal.(hashable).Hash(&hash2)
 						assert.Equal(t, hash1.Sum128(), hash2.Sum128(), "hash code does not match")
 					}
 				}
