@@ -138,7 +138,7 @@ const (
 	emptyHint                                = ""
 	readyToCompleteHint                      = "ready_to_complete"
 	databasePoolSize                         = 3
-	vreplicationCutOverThreshold             = 5 * time.Second
+	vreplicationCutOverThreshold             = 10 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
 )
 
