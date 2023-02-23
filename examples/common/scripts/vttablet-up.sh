@@ -25,13 +25,13 @@ port=$[15000 + $uid]
 grpc_port=$[16000 + $uid]
 printf -v alias '%s-%010d' $cell $uid
 printf -v tablet_dir 'vt_%010d' $uid
-tablet_hostname=''
+tablet_hostname='127.0.0.1'
 printf -v tablet_logfile 'vttablet_%010d_querylog.txt' $uid
 
 tablet_type=replica
-if [[ "${uid: -1}" -gt 1 ]]; then
- tablet_type=rdonly
-fi
+# if [[ "${uid: -1}" -gt 1 ]]; then
+# tablet_type=rdonly
+# fi
 
 echo "Starting vttablet for $alias..."
 
@@ -49,8 +49,9 @@ vttablet \
  --enable_replication_reporter \
  --backup_storage_implementation file \
  --file_backup_storage_root $VTDATAROOT/backups \
- --restore_from_backup \
  --port $port \
+ --db_port $mysql_port \
+ --db_host "127.0.0.1" \
  --grpc_port $grpc_port \
  --service_map 'grpc-queryservice,grpc-tabletmanager,grpc-updatestream' \
  --pid_file $VTDATAROOT/$tablet_dir/vttablet.pid \

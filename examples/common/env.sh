@@ -16,7 +16,8 @@
 
 source "$(dirname "${BASH_SOURCE[0]:-$0}")/lib/utils.sh"
 
-hostname=$(hostname -f)
+#hostname=$(hostname -f)
+hostname="127.0.0.1"
 vtctld_web_port=15000
 export VTDATAROOT="${VTDATAROOT:-${PWD}/vtdataroot}"
 

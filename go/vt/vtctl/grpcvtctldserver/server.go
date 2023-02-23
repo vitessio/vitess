@@ -534,10 +534,10 @@ func (s *VtctldServer) ChangeTabletType(ctx context.Context, req *vtctldatapb.Ch
 
 	span.Annotate("before_tablet_type", topoproto.TabletTypeLString(tablet.Type))
 
-	if !topo.IsTrivialTypeChange(tablet.Type, req.DbType) {
-		err = fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", req.TabletAlias, tablet.Type, req.DbType)
-		return nil, err
-	}
+	//	if !topo.IsTrivialTypeChange(tablet.Type, req.DbType) {
+	//		err = fmt.Errorf("tablet %v type change %v -> %v is not an allowed transition for ChangeTabletType", req.TabletAlias, tablet.Type, req.DbType)
+	//		return nil, err
+	//	}
 
 	if req.DryRun {
 		afterTablet := proto.Clone(tablet.Tablet).(*topodatapb.Tablet)
