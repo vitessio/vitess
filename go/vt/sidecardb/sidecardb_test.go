@@ -20,6 +20,8 @@ import (
 	"context"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sqlparser"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -110,6 +112,40 @@ func TestValidateSchema(t *testing.T) {
 			} else {
 				require.NoError(t, err)
 			}
+		})
+	}
+}
+
+// TestAlterTableAlgorithm confirms that we use ALGORITHM=COPY during alter tables
+func TestAlterTableAlgorithm(t *testing.T) {
+	type testCase struct {
+		testName      string
+		tableName     string
+		currentSchema string
+		desiredSchema string
+	}
+	testCases := []testCase{
+		{"add column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t1(i int, i1 int)"},
+		{"modify column", "t1", "create table if not exists _vt.t1(i int)", "create table if not exists _vt.t(i float)"},
+	}
+	si := &schemaInit{}
+	copyAlgo := sqlparser.AlgorithmValue("COPY")
+	for _, tc := range testCases {
+		t.Run(tc.testName, func(t *testing.T) {
+			diff, err := si.findTableSchemaDiff(tc.tableName, tc.currentSchema, tc.desiredSchema)
+			require.NoError(t, err)
+			stmt, err := sqlparser.Parse(diff)
+			require.NoError(t, err)
+			alterTable, ok := stmt.(*sqlparser.AlterTable)
+			require.True(t, ok)
+			require.NotNil(t, alterTable)
+			var alterAlgo sqlparser.AlterOption
+			for i, opt := range alterTable.AlterOptions {
+				if _, ok := opt.(sqlparser.AlgorithmValue); ok {
+					alterAlgo = alterTable.AlterOptions[i]
+				}
+			}
+			require.Equal(t, copyAlgo, alterAlgo)
 		})
 	}
 }
