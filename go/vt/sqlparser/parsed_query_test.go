@@ -203,3 +203,38 @@ func TestParseAndBind(t *testing.T) {
 		})
 	}
 }
+
+func TestParseAndBindWithQualifier(t *testing.T) {
+	testcases := []struct {
+		in        string
+		qualifier string
+		binds     []*querypb.BindVariable
+		out       string
+	}{
+		{
+			in:        "drop table `%s`",
+			qualifier: "tbl",
+			out:       "drop table `tbl`",
+		},
+		{
+			in:        "delete from `%s`.tbl where id=%a",
+			qualifier: "tbl",
+			binds:     []*querypb.BindVariable{sqltypes.Int64BindVariable(17)},
+			out:       "delete from `tbl`.tbl where id=17",
+		},
+		{
+			in:        "delete from `%s`.tbl where id=%a and name=%a",
+			qualifier: "tbl",
+			binds:     []*querypb.BindVariable{sqltypes.Int64BindVariable(17), sqltypes.StringBindVariable("foo")},
+			out:       "delete from `tbl`.tbl where id=17 and name='foo'",
+		},
+	}
+
+	for _, tc := range testcases {
+		t.Run(tc.in, func(t *testing.T) {
+			query, err := ParseAndBindWithQualifier(tc.in, tc.qualifier, tc.binds...)
+			assert.NoError(t, err)
+			assert.Equal(t, tc.out, query)
+		})
+	}
+}
