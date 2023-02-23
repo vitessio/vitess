@@ -103,7 +103,7 @@ The following flags were removed in v16:
 - `--backup_storage_hook`, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
 - `--init_populate_metadata`, since we have deleted the `local_metadata` and `shard_metadata` sidecar database tables.
 
-The flag `--disable-replication-manager` is deprecated and will be removed in a later release.
+The flag `--disable-replication-manager` is deprecated and will be removed in a future release.
 
 ##### <a id="vtbackup-flag-deletions-deprecations"/>VTBackup
 
@@ -126,7 +126,7 @@ After the upgrade, they should then alter their configuration to also specify `l
 #### <a id="orc-integration-removal"/>Orchestrator Integration Deletion
 
 Orchestrator integration in `vttablet` was deprecated in the previous release and is deleted in this release.
-Consider using `VTOrc` instead of `Orchestrator`.
+`VTOrc` should be deployed instead. You can read more on [how VTOrc is designed](https://vitess.io/docs/16.0/reference/vtorc/) and on [how to run VTOrc in production](https://vitess.io/docs/16.0/user-guides/configuration-basic/vtorc/).
 
 #### <a id="vtcltd-ui-removal"/>vtctld web UI Removal
 In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
@@ -173,9 +173,9 @@ The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16. The same
 The Prometheus metrics exporter now properly normalizes _all_ label names into their `snake_case` form, as it is idiomatic for Prometheus metrics. Previously, Vitess instances were emitting inconsistent labels for their metrics, with some of them being `CamelCase` and others being `snake_case`.
 
 ### <a id="repl-manager-removal"/>Replication manager removal and VTOrc becomes mandatory
-VTOrc is now a **required** component of Vitess starting from v16. If the users want VTOrc to manage replication, then they must run VTOrc.
+VTOrc is now a **required** component of Vitess starting from v16. If the users want Vitess to manage replication, then they must run VTOrc.
 Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
-The flag `disable-replication-manager` is deprecated and will be removed in a later release.
+The flag `disable-replication-manager` is deprecated and will be removed in a future release.
 
 ### <a id="vreplication"/>VReplication
 
