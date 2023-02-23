@@ -117,7 +117,7 @@ The flag `--lock-shard-timeout` has been deprecated. Please use the newly introd
 #### <a id="lock-timeout-introduction"/>`lock-timeout` and `remote_operation_timeout` Changes
 
 Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced.
-For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout` as well.
+For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout`.
 The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
 
 During upgrades, if the users want to preserve the same behaviour as previous releases, then they should provide the `remote_operation_timeout` flag explicitly before upgrading.
@@ -185,7 +185,7 @@ In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the 
 
 #### <a id="vdiff2-ga"/>VDiff2 GA
 
-We are marking [VDiff v2](https://vitess.io/docs/16.0/reference/vreplication/vdiff2/) as Generally Available or production-ready in v16. We now recommend that you use v2 rather than v1 going forward. V1 will be deprecated and eventually removed in future releases.
+We are marking [VDiff v2](https://vitess.io/docs/16.0/reference/vreplication/vdiff2/) as production-ready in v16. We now recommend that you use v2 rather than v1 going forward. V1 will be deprecated and eventually removed in future releases.
 If you wish to use v1 for any reason, you will now need to specify the `--v1` flag.
 
 ### <a id="tablet-throttler"/>Tablet throttler
