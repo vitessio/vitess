@@ -134,20 +134,23 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return nil
 	}
 
-	fvRes, err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_VIEWS, nil)
-	if err != nil {
-		return err
-	}
-
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// We must clear out any previous view definition before loading it here as this is called
-	// whenever a shard's primary tablet starts and sends the initial signal. Without
-	// clearing out the previous view definition removes any dropped views.
+	// whenever a shard's primary tablet starts and sends the initial signal.
+	// This is needed clear out any stale view definitions.
 	t.clearKeyspaceViews(target.Keyspace)
-	t.updateViews(target.Keyspace, fvRes)
-	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(fvRes))
 
+	var numViews int
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_VIEWS, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+		t.updateViews(target.Keyspace, schemaRes.TableDefinition)
+		numViews += len(schemaRes.TableDefinition)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews)
 	return nil
 }
 
@@ -299,26 +302,27 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 }
 
 func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
-	viewsUpdated := th.Stats.ViewSchemaChanged
-	res, err := th.Conn.GetSchema(t.ctx, th.Target, querypb.SchemaTableType_VIEWS, viewsUpdated)
-	if err != nil {
-		t.tracked[th.Target.Keyspace].setLoaded(false)
-		// TODO: optimize for the views that got errored out.
-		log.Warningf("error fetching new views definition for %v", viewsUpdated, err)
-		return false
-	}
-
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	viewsUpdated := th.Stats.ViewSchemaChanged
 
 	// first we empty all prior schema. deleted tables will not show up in the result,
 	// so this is the only chance to delete
 	for _, view := range viewsUpdated {
 		t.views.delete(th.Target.Keyspace, view)
 	}
-	t.updateViews(th.Target.Keyspace, res)
+	err := th.Conn.GetSchema(t.ctx, th.Target, querypb.SchemaTableType_VIEWS, viewsUpdated, func(schemaRes *querypb.GetSchemaResponse) error {
+		t.updateViews(th.Target.Keyspace, schemaRes.TableDefinition)
+		return nil
+	})
+	if err != nil {
+		t.tracked[th.Target.Keyspace].setLoaded(false)
+		// TODO: optimize for the views that got errored out.
+		log.Warningf("error fetching new views definition for %v", viewsUpdated, err)
+		return false
+	}
 	return true
-
 }
 
 func (t *Tracker) updateViews(keyspace string, res map[string]string) {

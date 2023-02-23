@@ -1396,7 +1396,7 @@ func txToReserveState(state queryservice.TransactionState) queryservice.Reserved
 }
 
 // GetSchema returns table definitions for the specified tables.
-func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (schemaDef map[string]string, err error) {
+func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) (err error) {
 	err = tsv.execRequest(
 		ctx, tsv.QueryTimeout.Get(),
 		"GetSchema", "", nil,
@@ -1409,8 +1409,7 @@ func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, 
 				logStats: logStats,
 				tsv:      tsv,
 			}
-			schemaDef, err = qre.GetSchemaDefinitions(tableType, tableNames)
-			return err
+			return qre.GetSchemaDefinitions(tableType, tableNames, callback)
 		},
 	)
 	return

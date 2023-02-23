@@ -324,13 +324,12 @@ func (ws *wrappedService) Release(ctx context.Context, target *querypb.Target, t
 	})
 }
 
-func (ws *wrappedService) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (schemaDef map[string]string, err error) {
+func (ws *wrappedService) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) (err error) {
 	err = ws.wrapper(ctx, target, ws.impl, "GetSchema", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
-		var innerErr error
-		schemaDef, innerErr = conn.GetSchema(ctx, target, tableType, tableNames)
+		innerErr := conn.GetSchema(ctx, target, tableType, tableNames, callback)
 		return canRetry(ctx, innerErr), innerErr
 	})
-	return schemaDef, err
+	return err
 }
 
 func (ws *wrappedService) Close(ctx context.Context) error {
