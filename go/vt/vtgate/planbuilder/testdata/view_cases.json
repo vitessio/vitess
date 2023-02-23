@@ -19,23 +19,9 @@
     }
   },
   {
-    "comment": "create view",
+    "comment": "create view with different keyspaces",
     "query": "create view user.view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
-    "plan": {
-      "QueryType": "DDL",
-      "Original": "create view user.view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
-      "Instructions": {
-        "OperatorType": "DDL",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "Query": "create view view_a as select id from unsharded union select id from unsharded_auto union select id from unsharded_auto union select `name` from unsharded"
-      },
-      "TablesUsed": [
-        "user.view_a"
-      ]
-    }
+    "plan": "VT12001: unsupported: Select query does not belong to the same keyspace as the view statement"
   },
   {
     "comment": "create view with authoritative columns",
