@@ -25,6 +25,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type evalBytes struct {
@@ -107,7 +108,9 @@ func (e *evalBytes) Hash() (HashCode, error) {
 	if col == nil {
 		return 0, UnsupportedCollationHashError
 	}
-	return col.Hash(e.bytes, 0), nil
+	hasher := vthash.New()
+	col.Hash(&hasher, e.bytes, 0)
+	return hasher.Sum64(), nil
 }
 
 func (e *evalBytes) isBinary() bool {
