@@ -274,7 +274,7 @@ func (e *evalFloat) toUint64() *evalUint64 {
 }
 
 func (e *evalDecimal) Hash() (HashCode, error) {
-	var hasher vthash.Hasher
+	hasher := vthash.New()
 	e.dec.Hash(&hasher)
 	return hasher.Sum64(), nil
 }

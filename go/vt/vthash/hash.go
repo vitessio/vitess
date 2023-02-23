@@ -22,3 +22,9 @@ import (
 
 type Hasher = metro.Metro128
 type Hash = [16]byte
+
+func New() Hasher {
+	h := Hasher{}
+	h.Reset()
+	return h
+}

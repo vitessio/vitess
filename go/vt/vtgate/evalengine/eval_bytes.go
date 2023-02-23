@@ -108,7 +108,7 @@ func (e *evalBytes) Hash() (HashCode, error) {
 	if col == nil {
 		return 0, UnsupportedCollationHashError
 	}
-	hasher := vthash.Hasher{}
+	hasher := vthash.New()
 	col.Hash(&hasher, e.bytes, 0)
 	return hasher.Sum64(), nil
 }

@@ -72,10 +72,10 @@ func TestHashCodesRandom128(t *testing.T) {
 		typ, err := CoerceTo(v1.Type(), v2.Type())
 		require.NoError(t, err)
 
-		var hasher1 vthash.Hasher
+		hasher1 := vthash.New()
 		err = NullsafeHashcode128(&hasher1, v1, collation, typ)
 		require.NoError(t, err)
-		var hasher2 vthash.Hasher
+		hasher2 := vthash.New()
 		err = NullsafeHashcode128(&hasher2, v2, collation, typ)
 		require.NoError(t, err)
 		if cmp == 0 {

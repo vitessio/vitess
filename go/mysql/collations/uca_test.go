@@ -876,8 +876,7 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 		c.t.Errorf("ConsistentCollation(%s): expected WeightString %q / %v == %q / %v to be %v", c.Name(), left, w1, right, w2, equal)
 	}
 
-	var hasher vthash.Hasher
-
+	hasher := vthash.New()
 	c.Hash(&hasher, left, 0)
 	h1 := hasher.Sum64()
 
