@@ -102,8 +102,8 @@ func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *Tx
 		}
 	} else {
 		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
+		stats.NewGaugeFunc("TxThrottlerMaxRate", "transaction throttler max rate", txThrottler.maxRate)
 	}
-	stats.NewGaugeFunc("TxThrottlerMaxRate", "transaction throttler max rate", txThrottler.maxRate)
 	return txThrottler
 }
 
