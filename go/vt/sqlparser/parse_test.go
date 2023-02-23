@@ -2574,6 +2574,9 @@ var (
 		}, {
 			input:  "GRANT PROXY ON UserName TO Role1, Role2 WITH GRANT OPTION",
 			output: "grant proxy on `UserName`@`%` to `Role1`@`%`, `Role2`@`%` with grant option",
+		},  {
+			input:  "GRANT REPLICATION_SLAVE_ADMIN, GROUP_REPLICATION_ADMIN, BINLOG_ADMIN ON *.* TO 'u1'@'localhost'",
+			output: "grant replication_slave_admin, group_replication_admin, binlog_admin on *.* to `u1`@`localhost`",
 		}, {
 			input:  "REVOKE ALL ON * FROM UserName",
 			output: "revoke all on * from `UserName`@`%`",
