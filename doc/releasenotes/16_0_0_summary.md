@@ -56,12 +56,13 @@
 
 #### <a id="advertised-mysql-version"/>VTGate Advertised MySQL Version
 
-VTGate now advertises MySQL version 8.0.30. This is a breaking change for clients that rely on the VTGate advertised MySQL version and still use MySQL 5.7.
+Since [Pull Request #11989](https://github.com/vitessio/vitess/pull/11989), VTGate advertises MySQL version 8.0.30. This is a breaking change for clients that rely on the VTGate advertised MySQL version and still use MySQL 5.7.
 The users can set the `mysql_server_version` flag to advertise the correct version.
 
 #### <a id="default-mysql-version"/>Default MySQL version on Docker
 
 The default major MySQL version used by our `vitess/lite:latest` image is going from `5.7` to `8.0`. Additionally, the patch version of MySQL80 has been upgraded from `8.0.23` to `8.0.30`.
+This change was brought by [Pull Request #12252](https://github.com/vitessio/vitess/pull/12252).
 
 #### <a id="upgrading-to-this-release-with-vitess-operator"/>⚠️Upgrading to this release with vitess-operator
 
@@ -116,7 +117,7 @@ The flag `--lock-shard-timeout` has been deprecated. Please use the newly introd
 
 #### <a id="lock-timeout-introduction"/>`lock-timeout` and `remote_operation_timeout` Changes
 
-Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced.
+Before the changes made in [Pull Request #11881](https://github.com/vitessio/vitess/pull/11881), the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced.
 For backward compatibility, if `lock-timeout` is unspecified and `remote_operation_timeout` flag is provided, then its value will also be used for `lock-timeout`.
 The default value for `remote_operation_timeout` has also changed from 30 seconds to 15 seconds. The default for the new flag `lock-timeout` is 45 seconds.
 
@@ -129,13 +130,13 @@ Orchestrator integration in `vttablet` was deprecated in the previous release an
 `VTOrc` should be deployed instead. You can read more on [how VTOrc is designed](https://vitess.io/docs/16.0/reference/vtorc/) and on [how to run VTOrc in production](https://vitess.io/docs/16.0/user-guides/configuration-basic/vtorc/).
 
 #### <a id="vtcltd-ui-removal"/>vtctld web UI Removal
-In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
+In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change, which was done in [Pull Request #11851](https://github.com/vitessio/vitess/pull/11851)
 
 However, the vtctld HTTP API will remain at `{$vtctld_web_port}/api`.
 
 #### <a id="qs-errors"/>Query Serving Errors
 
-In this release, we are introducing a new way to report errors from Vitess through the query interface.
+In [Pull Request #10738](https://github.com/vitessio/vitess/pull/10738) we are introducing a new way to report errors from Vitess through the query interface.
 Errors will now have an error code for each error, which will make it easy to search for more information on the issue.
 For instance, the following error:
 
@@ -158,19 +159,20 @@ If your application is searching for specific errors, you might need to update y
 #### <a id="logstats-table-keyspace"/>Logstats Table and Keyspace removed
 
 Information about which tables are used is now reported by the field TablesUsed added in v15, that is a string array, listing all tables and which keyspace they are in.
-The Table/Keyspace fields were deprecated in v15 and are now removed in the v16 release of Vitess.
+The Table/Keyspace fields were deprecated in v15 and are now removed in the v16 release, more information can be found on [Pull Request #12083](https://github.com/vitessio/vitess/pull/12083).
 
 #### <a id="removed-stats"/>Removed Stats
 
-The stat `QueryRowCounts` is removed in v16. `QueryRowsAffected` and `QueryRowsReturned` can be used instead to gather the same information.
+The stat `QueryRowCounts` is removed in v16 as part of [Pull Request #12083](https://github.com/vitessio/vitess/pull/12083). `QueryRowsAffected` and `QueryRowsReturned` can be used instead to gather the same information.
 
 #### <a id="deprecated-stats"/>Deprecated Stats
 
-The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16. The same information can be inferred from the stats `QueriesProcessedByTable` and `QueriesRoutedByTable` respectively. These stats will be removed in the next release.
+The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16 as part of [Pull Request #12083](https://github.com/vitessio/vitess/pull/12083). The same information can be inferred from the stats `QueriesProcessedByTable` and `QueriesRoutedByTable` respectively. These stats will be removed in the next release.
 
 #### <a id="normalized-lables"/>Normalized labels in the Prometheus Exporter
 
 The Prometheus metrics exporter now properly normalizes _all_ label names into their `snake_case` form, as it is idiomatic for Prometheus metrics. Previously, Vitess instances were emitting inconsistent labels for their metrics, with some of them being `CamelCase` and others being `snake_case`.
+More information about this change can be found on [Pull Request #12057](https://github.com/vitessio/vitess/pull/12057).
 
 ### <a id="repl-manager-removal"/>Replication manager removal and VTOrc becomes mandatory
 VTOrc is now a **required** component of Vitess starting from v16. If the users want Vitess to manage replication, then they must run VTOrc.
@@ -181,7 +183,7 @@ The flag `disable-replication-manager` is deprecated and will be removed in a fu
 
 #### <a id="vstream-copy-resume"/>VStream Copy Resume
 
-In [PR #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/design-docs/vreplication/vstream/vscopy/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
+In [Pull Request #11103](https://github.com/vitessio/vitess/pull/11103) we introduced the ability to resume a `VTGate` [`VStream` copy operation](https://vitess.io/docs/16.0/reference/vreplication/vstream/). This is useful when a [`VStream` copy operation](https://vitess.io/docs/16.0/reference/vreplication/vstream/) is interrupted due to e.g. a network failure or a server restart. The `VStream` copy operation can be resumed by specifying each table's last seen primary key value in the `VStream` request. Please see the [`VStream` docs](https://vitess.io/docs/16.0/reference/vreplication/vstream/) for more details.
 
 #### <a id="vdiff2-ga"/>VDiff2 GA
 
@@ -194,11 +196,11 @@ The tablet throttler can now be configured dynamically. Configuration is now fou
 
 It is possible to enable/disable, to change throttling threshold as well as the throttler query.
 
-See https://github.com/vitessio/vitess/pull/11604
+More information on [Pull Request #11604](https://github.com/vitessio/vitess/pull/11604).
 
 ### <a id="inc-backup"/>Incremental backup and point in time recovery
 
-In [PR #11097](https://github.com/vitessio/vitess/pull/11097) we introduced native incremental backup and point in time recovery:
+In [Pull Request #11097](https://github.com/vitessio/vitess/pull/11097) we introduced native incremental backup and point in time recovery:
 
 - It is possible to take an incremental backup, starting with last known (full or incremental) backup, and up to either a specified (GTID) position, or current ("auto") position.
 - The backup is done by copying binary logs. The binary logs are rotated as needed.
@@ -353,7 +355,7 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 #### <a id="transaction-isolation-level"/>Transaction Isolation Level
 
-Support added for `set [session] transaction isolation level <transaction_characteristic>`
+In [Pull Request #11704](https://github.com/vitessio/vitess/pull/11704) we are adding support for `set [session] transaction isolation level <transaction_characteristic>`
 
 ```sql
 transaction_characteristic: {
@@ -374,7 +376,7 @@ This will be applied to any shard where the session will open a transaction.
 
 #### <a id="transaction-access-mode"/>Transaction Access Mode
 
-Support added for `start transaction` with transaction characteristic.
+In [Pull Request #11704](https://github.com/vitessio/vitess/pull/11704) we are adding support for `start transaction` with transaction characteristic.
 
 ```sql
 START TRANSACTION
@@ -402,8 +404,8 @@ And if you want to learn more on how to use views and its current limitations, y
 #### <a id="perf-improvement"/>Performance Improvement
 
 Creating a database with vttestserver was taking ~45 seconds. This can be problematic in test environments where testcases do a lot of `create` and `drop` database.
-In an effort to minimize the database creation time, we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
-For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/15.0/reference/programs/vtgate/). Reducing this value might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes
+In an effort to minimize the database creation time, in [Pull Request #11918](https://github.com/vitessio/vitess/pull/11918) we have changed the value of `tablet_refresh_interval` to 10s while instantiating vtcombo during vttestserver initialization. We have also made this configurable so that it can be reduced further if desired.
+For any production cluster the default value of this flag is still [1 minute](https://vitess.io/docs/16.0/reference/programs/vtgate/). Reducing this value might put more stress on Topo Server (since we now read from Topo server more often) but for testing purposes
 this shouldn't be a concern.
 
 ## <a id="minor-changes"/>Minor changes
