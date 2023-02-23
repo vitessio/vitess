@@ -117,17 +117,25 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
+	var majorVersion int
+	majorVersion, err = GetMajorVersion("vttablet")
+	if err != nil {
+		return err
+	}
+
 	if vttablet.EnableSemiSync {
-		var majorVersion int
-		majorVersion, err = GetMajorVersion("vttablet")
-		if err != nil {
-			return err
-		}
 		// enable_semi_sync is removed in v16 and shouldn't be set on any release v16+
 		if majorVersion <= 15 {
 			vttablet.proc.Args = append(vttablet.proc.Args, "--enable_semi_sync")
 		}
 	}
+
+	// enable_semi_sync is removed in v16 and shouldn't be set on any release v16+
+	if majorVersion >= 16 {
+		disableReplicationFlag := "--disable-replication-manager"
+		vttablet.proc.Args = append(vttablet.proc.Args, disableReplicationFlag)
+	}
+
 	if vttablet.DbFlavor != "" {
 		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
 	}
