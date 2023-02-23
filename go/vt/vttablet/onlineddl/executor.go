@@ -793,6 +793,26 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		if err := e.updateArtifacts(ctx, onlineDDL.UUID, sentryTableName); err != nil {
 			return err
 		}
+
+		dropSentryTableQuery := sqlparser.BuildParsedQuery(sqlDropTableIfExists, sentryTableName)
+		defer func() {
+			// cut-over attempts may fail. We create a new, unique sentry table for every
+			// cut-over attempt. We could just leave them hanging around, and let gcArtifacts()
+			// and the table GC mechanism to take care of them. But then again, if we happen
+			// to have many cut-over attempts, that just proliferates and overloads the schema,
+			// and also bloats the `artifacts` column.
+			// The thing is, the sentry table is empty, and we really don't need it once the cut-over
+			// step is done (whether successful or failed). So, it's a cheap operation to drop the
+			// table right away, which we do, and then also reduce the `artifact` column length by
+			// removing the entry
+			_, err := e.execQuery(ctx, dropSentryTableQuery.Query)
+			if err == nil {
+				e.clearSingleArtifact(ctx, onlineDDL.UUID, sentryTableName)
+			}
+			// This was a best effort optimization. Possibly the error is not nil. Which means we
+			// still have a record of the sentry table, and gcArtifacts() will still be able to take
+			// care of it in the futre.
+		}()
 		parsed := sqlparser.BuildParsedQuery(sqlCreateSentryTable, sentryTableName)
 		if _, err := e.execQuery(ctx, parsed.Query); err != nil {
 			return err
@@ -3407,11 +3427,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		// other and to the time now, otherwise that means we're lagging and it's not a good time
 		// to cut-over
 		durationDiff := func(t1, t2 time.Time) time.Duration {
-			diff := t1.Sub(t2)
-			if diff < 0 {
-				diff = -diff
-			}
-			return diff
+			return t1.Sub(t2).Abs()
 		}
 		timeNow := time.Now()
 		timeUpdated := time.Unix(s.timeUpdated, 0)
@@ -3965,6 +3981,18 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 	bindArtifacts := strings.Join(artifacts, ",")
 	query, err := sqlparser.ParseAndBind(sqlUpdateArtifacts,
 		sqltypes.StringBindVariable(bindArtifacts),
+		sqltypes.StringBindVariable(uuid),
+	)
+	if err != nil {
+		return err
+	}
+	_, err = e.execQuery(ctx, query)
+	return err
+}
+
+func (e *Executor) clearSingleArtifact(ctx context.Context, uuid string, artifact string) error {
+	query, err := sqlparser.ParseAndBind(sqlClearSingleArtifact,
+		sqltypes.StringBindVariable(artifact),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
