@@ -7,16 +7,19 @@
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
     - [Default MySQL version on Docker](#default-mysql-version)
     - [Running Vitess on the Operator](#running-vitess-on-the-operator)
+    - [Flag Deletions and Deprecations](#flag-deletions-and-deprecations)
+      - [VTCtld](#vtctld-flag-deletions-deprecations)
+      - [MySQLCtl](#mysqlctl-flag-deletions-deprecations)
+      - [VTTablet](#vttablet-flag-deletions-deprecations)
+      - [VTBackup](#vtbackup-flag-deletions-deprecations)
+      - [VTOrc](#vtorc-flag-deletions-deprecations)
     - [`lock-timeout` and `remote_operation_timeout` Changes](#lock-timeout-introduction)
     - [Orchestrator Integration Deletion](#orc-integration-removal)
     - [vtctld UI Removal](#vtcltd-ui-removal)
-    - [vtctld Flag Deprecation & Deletions](#vtctld-flag-deprecations)
-    - [mysqlctl Flags](#mysqlctl-flags)
     - [Query Serving Errors](#qs-errors)
     - [Logstats Table and Keyspace removed](#logstats-table-keyspace)
     - [Removed Stats](#removed-stats)
     - [Deprecated Stats](#deprecated-stats)
-    - [Removed flag](#removed-flag)
     - [Normalized labels in the Prometheus Exporter](#normalized-lables)
   - **[Replication manager removal and VTOrc becomes mandatory](#repl-manager-removal)**
   - **[VReplication](#vreplication)**
@@ -40,8 +43,6 @@
     - [Transaction Isolation Level](#transaction-isolation-level)
     - [Transaction Access Mode](#transaction-access-mode)
     - [Support for views](#support-views)
-  - **[VTOrc](#vtorc)**
-    - [Flag Deprecations](#flag-deprecations)
   - **[VTTestServer](#vttestserver)**
     - [Performance Improvement](#perf-improvement)
 - **[Minor Changes](#minor-changes)**
@@ -75,6 +76,44 @@ However, if you are running MySQL 8.0 on the vitess-operator, with for instance 
 5. Remove `innodb_fast_shutdown=0` from your extra cnf in your YAML file.
 6. Apply this file.
 
+#### <a id="flag-deletions-and-deprecations"\>Flag Deletions and Deprecations
+
+##### <a id="vtctld-flag-deletions-deprecations"/>VTCtld
+With the removal of the vtctld UI, the following vtctld flags have been deprecated:
+- `--vtctld_show_topology_crud`: This was a flag that controlled the display of CRUD topology actions in the vtctld UI. The UI is removed, so this flag is no longer necessary.
+
+The following deprecated flags have also been removed:
+- `--enable_realtime_stats`
+- `--enable_vtctld_ui`
+- `--web_dir`
+- `--web_dir2`
+- `--workflow_manager_init`
+- `--workflow_manager_use_election`
+- `--workflow_manager_disable`
+
+##### <a id="mysqlctl-flag-deletions-deprecations"/>MySQLCtld
+
+The [`mysqlctl` command-line client](https://vitess.io/docs/16.0/reference/programs/mysqlctl/) had some leftover (ignored) server flags after the [v15 pflag work](https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md). Those unused flags have now been removed. If you are using any of the following flags with `mysqlctl` in your scripts or other tooling, they will need to be removed prior to upgrading to v16:
+`--port --grpc_auth_static_client_creds --grpc_compression --grpc_initial_conn_window_size --grpc_initial_window_size --grpc_keepalive_time --grpc_keepalive_timeout`
+
+##### <a id="vttablet-flag-deletions-deprecations"/>VTTablet
+
+The following flags were removed in v16:
+- `--enable_semi_sync`
+- `--backup_storage_hook`, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
+- `--init_populate_metadata`, since we have deleted the `local_metadata` and `shard_metadata` sidecar database tables.
+
+The flag `--disable-replication-manager` is deprecated and will be removed in a later release.
+
+##### <a id="vtbackup-flag-deletions-deprecations"/>VTBackup
+
+The VTBackup flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
+
+
+##### <a id="vtorc-flag-deletions-deprecations"/>VTOrc
+
+The flag `--lock-shard-timeout` has been deprecated. Please use the newly introduced `--lock-timeout` flag instead. More detail [here](#lock-timeout-introduction).
+
 #### <a id="lock-timeout-introduction"/>`lock-timeout` and `remote_operation_timeout` Changes
 
 Earlier, the shard and keyspace locks used to be capped by the `remote_operation_timeout`. This is no longer the case and instead a new flag called `lock-timeout` is introduced.
@@ -93,24 +132,6 @@ Consider using `VTOrc` instead of `Orchestrator`.
 In v13, the vtctld UI was deprecated. As of this release, the `web/vtctld2` directory is deleted and the UI will no longer be included in any Vitess images going forward. All build scripts and the Makefile have been updated to reflect this change.
 
 However, the vtctld HTTP API will remain at `{$vtctld_web_port}/api`.
-
-#### <a id="vtctld-flag-deprecations"/>vtctld Flag Deprecation & Deletions
-With the removal of the vtctld UI, the following vtctld flags have been deprecated:
-- `--vtctld_show_topology_crud`: This was a flag that controlled the display of CRUD topology actions in the vtctld UI. The UI is removed, so this flag is no longer necessary.
-
-The following deprecated flags have also been removed:
-- `--enable_realtime_stats`
-- `--enable_vtctld_ui`
-- `--web_dir`
-- `--web_dir2`
-- `--workflow_manager_init`
-- `--workflow_manager_use_election`
-- `--workflow_manager_disable`
-
-#### <a id="mysqlctl-flags"/>mysqlctl Flags
-
-The [`mysqlctl` command-line client](https://vitess.io/docs/16.0/reference/programs/mysqlctl/) had some leftover (ignored) server flags after the [v15 pflag work](https://github.com/vitessio/enhancements/blob/main/veps/vep-4.md). Those unused flags have now been removed. If you are using any of the following flags with `mysqlctl` in your scripts or other tooling, they will need to be removed prior to upgrading to v16:
-`--port --grpc_auth_static_client_creds --grpc_compression --grpc_initial_conn_window_size --grpc_initial_window_size --grpc_keepalive_time --grpc_keepalive_timeout`
 
 #### <a id="qs-errors"/>Query Serving Errors
 
@@ -146,11 +167,6 @@ The stat `QueryRowCounts` is removed in v16. `QueryRowsAffected` and `QueryRowsR
 #### <a id="deprecated-stats"/>Deprecated Stats
 
 The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16. The same information can be inferred from the stats `QueriesProcessedByTable` and `QueriesRoutedByTable` respectively. These stats will be removed in the next release.
-
-#### <a id="removed-flag"/>Removed flag
-
-The following flag is removed in v16:
-- `enable_semi_sync`
 
 #### <a id="normalized-lables"/>Normalized labels in the Prometheus Exporter
 
@@ -329,16 +345,9 @@ is now fixed. The full issue can be found [here](https://github.com/vitessio/vit
 
 - `vtctlclient OnlineDDL ... [complete|retry|cancel|cancel-all]` returns empty result on success instead of number of shard affected.
 
-- VTTablet flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
-
-- vtbackup flag `--backup_storage_hook` has been removed, use one of the builtin compression algorithms or `--external-compressor` and `--external-decompressor` instead.
-
-- The VTTablet flag `--init_populate_metadata` has been deprecated, since we have deleted the `local_metadata` and `shard_metadata` sidecar database tables.
-
 - The dead legacy Workflow Manager related code was removed in [#12085](https://github.com/vitessio/vitess/pull/12085). This included the following `vtctl` client commands: `WorkflowAction`, `WorkflowCreate`, `WorkflowWait`, `WorkflowStart`, `WorkflowStop`, `WorkflowTree`, `WorkflowDelete`.
 
 - VTAdmin's `VTExplain` endpoint has been deprecated. Users can use the new `vexplain` query format instead. The endpoint will be deleted in a future release.
-
 
 ### <a id="mysql-compatibility"/>MySQL Compatibility
 
@@ -387,13 +396,6 @@ Views are not enabled by default in your Vitess cluster, but they can be turned 
 
 To read more on how views are implemented you can read the [Views Support RFC](https://github.com/vitessio/vitess/issues/11559).
 And if you want to learn more on how to use views and its current limitations, you can read the [Views Documentation](https://vitess.io/docs/16.0/reference/compatibility/mysql-compatibility/#views).
-
-
-### <a id="vtorc"/>VTOrc
-
-#### <a id="flag-deprecations"/>Flag Deprecations
-
-The flag `lock-shard-timeout` has been deprecated. Please use the newly introduced `lock-timeout` instead. More detail [here](#lock-timeout-introduction).
 
 ### <a id="vttestserver"/>VTTestServer
 
