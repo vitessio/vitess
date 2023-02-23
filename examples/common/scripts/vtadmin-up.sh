@@ -48,10 +48,6 @@ done
 [[ $(curl -s "http://localhost:${vtadmin_api_port}/api/clusters") == "${expected_cluster_result}" ]] || fail "vtadmin failed to discover the running example Vitess cluster."
 
 # Download nvm and node
-output() {
-  echo -e "$@"
-}
-
 if [[ -z ${NVM_DIR} ]]; then
     export NVM_DIR="$HOME/.nvm"
 fi
