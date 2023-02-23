@@ -95,7 +95,7 @@ const (
 )
 
 const (
-	AlterTableAlgorithmStrategyEmpty int = iota
+	AlterTableAlgorithmStrategyNone int = iota
 	AlterTableAlgorithmStrategyInstant
 	AlterTableAlgorithmStrategyInplace
 	AlterTableAlgorithmStrategyCopy
