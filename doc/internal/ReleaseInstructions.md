@@ -162,6 +162,7 @@ That includes:
   > - As soon as we go into code freeze, if we are doing an RC, create the release branch.
   > - If we are doing a GA release, do not merge any new Pull Requests.
   > - The guide on how to do a code freeze is available in the [How To Code Freeze](#how-to-code-freeze) section.
+  > - It is not advised to merge a PR during code freeze, but if it is deemed necessary by the release lead, then follow the steps in [How To Merge During Code Freeze](#how-to-merge-during-code-freeze) section.
 - **Create the Vitess release.**
   > - A guide on how to create a Vitess release is available in the [How to prepare the release of Vitess](#how-to-prepare-the-release-of-vitess) section.
   > - This step will create a Release Pull Request, it must be reviewed and merged before the release day. The release commit will be used to tag the release.
@@ -366,6 +367,24 @@ Finally, let's run the code freeze script:
 ```
 
 The script will prompt the command that will allow you to push the code freeze change. Once pushed, open a PR that will be merged on `release-15.0`.
+
+### How To Merge During Code Freeze
+
+> **Warning:** It is not advised to merge a PR during code-freeze. If it is deemed absolutely necessary, then the following steps can be followed.
+ 
+The PR that needs to be merged will be failing on the `Code Freeze` CI. To merge this PR, we'll have to mark this CI action as not required.
+You will need administrator privileges on the vitess repository to be able to make this change.
+
+1. Go to the GitHub repository and click on `Settings`.
+2. Under the `Code and automation` section, select `Branches`.
+3. Find the branch that you want to merge the PR against and then select `Edit`.
+4. Scroll down to find the list of required checks.
+5. Within this list find `Code Freeze` and click on the cross next to it to remove it from this list.
+6. Save your changes on the bottom of the page.
+7. Refresh the page of the PR, and you should be able to merge it.
+8. After merging the PR, you need to do 2 more things - 
+   1. Add `Code Freeze` back as a required check.
+   2. Check if the release PR has any merge conflicts. If it does, fix them and push.
 
 ### Java Packages: Deploy & Release
 
