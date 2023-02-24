@@ -188,4 +188,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
         set -x
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_backups
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_backups

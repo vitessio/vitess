@@ -362,6 +362,11 @@ func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
+
+	// This test is no longer valid post v16
+	if clusterInstance.VtTabletMajorVersion >= 16 {
+		t.Skip("Skipping TestReparentDoesntHangIfPrimaryFails in CI environment for v16")
+	}
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
 	// Change the schema of the _vt.reparent_journal table, so that
@@ -369,7 +374,6 @@ func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
 	_, err := tablets[0].VttabletProcess.QueryTabletWithDB(
 		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
 	require.NoError(t, err)
-
 	// Perform a planned reparent operation, the primary will fail the
 	// insert.  The replicas should then abort right away.
 	out, err := utils.Prs(t, clusterInstance, tablets[1])
