@@ -3742,7 +3742,7 @@ func TestSelectAggregationData(t *testing.T) {
 	}{
 		{
 			sql:         `select count(distinct col) from user`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "2", "3"),
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|weight_string(col)", "int64|varbinary"), "1|NULL", "2|NULL", "2|NULL", "3|NULL"),
 			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    `[name:"count(distinct col)" type:INT64]`,
 			expRow:      `[[INT64(3)]]`,
@@ -3756,14 +3756,14 @@ func TestSelectAggregationData(t *testing.T) {
 		},
 		{
 			sql:         `select col, count(*) from user group by col`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|3"),
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|3|NULL"),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(1) INT64(24)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|2", "2|1", "3|4"),
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|2|NULL", "2|1|NULL", "3|4|NULL"),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
 			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(1) INT64(16)] [INT64(2) INT64(8)]]`,
