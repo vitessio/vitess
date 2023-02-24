@@ -121,7 +121,7 @@ func (sa *ScalarAggregate) TryExecute(vcursor VCursor, bindVars map[string]*quer
 	}
 
 	out.Rows = [][]sqltypes.Value{resultRow}
-	return out, nil
+	return out.Truncate(sa.TruncateColumnCount), nil
 }
 
 // TryStreamExecute implements the Primitive interface
