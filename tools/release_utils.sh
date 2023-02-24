@@ -84,6 +84,7 @@ function updateVitessExamples () {
   compose_example_sub_files=$(find -E $ROOT/examples/compose/**/* -regex ".*.(go|yml)")
   vtop_example_files=$(find -E $ROOT/examples/operator -name "*.yaml")
   sed -i.bak -E "s/vitess\/lite:(.*)/vitess\/lite:v$1/g" $compose_example_files $compose_example_sub_files $vtop_example_files
+  sed -i.bak -E "s/vitess\/vtadmin:(.*)/vitess\/vtadmin:v$1/g" $compose_example_files $compose_example_sub_files $vtop_example_files
   sed -i.bak -E "s/vitess\/lite:\${VITESS_TAG:-latest}/vitess\/lite:v$1/g" $compose_example_sub_files $vtop_example_files
   sed -i.bak -E "s/vitess\/lite:(.*)-mysql80/vitess\/lite:v$1-mysql80/g" $(find -E $ROOT/examples/operator -name "*.md")
   if [ "$2" != "" ]; then

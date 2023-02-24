@@ -30,6 +30,7 @@ import (
 type (
 	evalNumeric interface {
 		eval
+		hashable
 		toFloat() (*evalFloat, bool)
 		toDecimal(m, d int32) *evalDecimal
 		toInt64() *evalInt64
@@ -128,8 +129,13 @@ func evalToNumeric(e eval) evalNumeric {
 	}
 }
 
-func (e *evalInt64) Hash() (HashCode, error) {
-	return HashCode(e.i), nil
+func (e *evalInt64) Hash(h *vthash.Hasher) {
+	if e.i < 0 {
+		h.Write16(hashPrefixIntegralNegative)
+	} else {
+		h.Write16(hashPrefixIntegralPositive)
+	}
+	h.Write64(uint64(e.i))
 }
 
 func (e *evalInt64) SQLType() sqltypes.Type {
@@ -163,8 +169,9 @@ func (e *evalInt64) toUint64() *evalUint64 {
 	return newEvalUint64(uint64(e.i))
 }
 
-func (e *evalUint64) Hash() (HashCode, error) {
-	return HashCode(e.u), nil
+func (e *evalUint64) Hash(h *vthash.Hasher) {
+	h.Write16(hashPrefixIntegralPositive)
+	h.Write64(e.u)
 }
 
 func (e *evalUint64) SQLType() sqltypes.Type {
@@ -201,8 +208,9 @@ func (e *evalUint64) toUint64() *evalUint64 {
 	return e
 }
 
-func (e *evalFloat) Hash() (HashCode, error) {
-	return HashCode(math.Float64bits(e.f)), nil
+func (e *evalFloat) Hash(h *vthash.Hasher) {
+	h.Write16(hashPrefixFloat)
+	h.Write64(math.Float64bits(e.f))
 }
 
 func (e *evalFloat) SQLType() sqltypes.Type {
@@ -273,10 +281,9 @@ func (e *evalFloat) toUint64() *evalUint64 {
 	return newEvalUint64(i)
 }
 
-func (e *evalDecimal) Hash() (HashCode, error) {
-	hasher := vthash.New()
-	e.dec.Hash(&hasher)
-	return hasher.Sum64(), nil
+func (e *evalDecimal) Hash(h *vthash.Hasher) {
+	h.Write16(hashPrefixDecimal)
+	e.dec.Hash(h)
 }
 
 func (e *evalDecimal) SQLType() sqltypes.Type {
