@@ -662,9 +662,9 @@ func (itc *internalTabletConn) Release(ctx context.Context, target *querypb.Targ
 }
 
 // GetSchema is part of the QueryService interface.
-func (itc *internalTabletConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
-	response, err := itc.tablet.qsc.QueryService().GetSchema(ctx, target, tableType, tableNames)
-	return response, tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
+func (itc *internalTabletConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	err := itc.tablet.qsc.QueryService().GetSchema(ctx, target, tableType, tableNames, callback)
+	return tabletconn.ErrorFromGRPC(vterrors.ToGRPC(err))
 }
 
 // Close is part of queryservice.QueryService

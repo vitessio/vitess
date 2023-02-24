@@ -1218,15 +1218,15 @@ func generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[stri
 	return bindVars
 }
 
-func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType, tableNames []string) (map[string]string, error) {
+func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	switch tableType {
 	case querypb.SchemaTableType_VIEWS:
-		return qre.getViewDefinitions(tableNames)
+		return qre.getViewDefinitions(tableNames, callback)
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
 }
 
-func (qre *QueryExecutor) getViewDefinitions(viewNames []string) (map[string]string, error) {
+func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
 	query := mysql.FetchViews
 	var bindVars map[string]*querypb.BindVariable
 	if len(viewNames) > 0 {
@@ -1235,36 +1235,33 @@ func (qre *QueryExecutor) getViewDefinitions(viewNames []string) (map[string]str
 			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
 		}
 	}
-	res, err := qre.execQuery(query, bindVars)
-	if err != nil {
-		return nil, err
-	}
-
-	schemaDef := make(map[string]string)
-	for _, row := range res.Rows {
-		schemaDef[row[0].ToString()] = row[1].ToString()
-	}
-	return schemaDef, nil
+	return qre.generateFinalQueryAndStreamExecute(query, bindVars, func(result *sqltypes.Result) error {
+		schemaDef := make(map[string]string)
+		for _, row := range result.Rows {
+			schemaDef[row[0].ToString()] = row[1].ToString()
+		}
+		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
+	})
 }
 
-func (qre *QueryExecutor) execQuery(query string, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
+func (qre *QueryExecutor) generateFinalQueryAndStreamExecute(query string, bindVars map[string]*querypb.BindVariable, callback func(result *sqltypes.Result) error) error {
 	sql := query
 	if len(bindVars) > 0 {
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
-			return nil, err
+			return err
 		}
 		sql, _, err = qre.generateFinalSQL(sqlparser.NewParsedQuery(stmt), bindVars)
 		if err != nil {
-			return nil, err
+			return err
 		}
 	}
 
-	conn, err := qre.getConn()
+	conn, err := qre.getStreamConn()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer conn.Recycle()
 
-	return qre.execDBConn(conn, sql, true)
+	return qre.execStreamSQL(conn, false /* isTransaction */, sql, callback)
 }
