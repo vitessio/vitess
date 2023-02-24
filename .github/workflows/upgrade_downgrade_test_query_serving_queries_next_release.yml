@@ -184,7 +184,7 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
     # Swap the binaries in the bin. Use vtgate version n+1 and keep vttablet at version n
     - name: Use next release's VTGate
@@ -204,7 +204,7 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
 
     # Swap the binaries again. This time, vtgate will be at version n, and vttablet will be at version n+1
     - name: Use current version VTGate, and other version VTTablet
@@ -226,4 +226,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_query_serving_queries
