@@ -40,11 +40,32 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 	if e == nil {
 		return HashCode(math.MaxUint64), nil
 	}
-	if e, ok := e.(*evalBytes); ok {
+
+	h := vthash.New()
+	switch e := e.(type) {
+	case *evalBytes:
+		if collations.Local().LookupByID(collation) == nil {
+			return 0, UnsupportedCollationHashError
+		}
 		e.col.Collation = collation
+		e.Hash(&h)
+	case hashable:
+		e.Hash(&h)
+	default:
+		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot hash %s object", coerceType)
 	}
-	return e.Hash()
+	return h.Sum64(), nil
 }
+
+const (
+	hashPrefixNil              = 0x0000
+	hashPrefixFloat            = 0xAAAA
+	hashPrefixIntegralNegative = 0xBBB1
+	hashPrefixIntegralPositive = 0xBBB0
+	hashPrefixBytes            = 0xCCCC
+	hashPrefixDate             = 0xCCC0
+	hashPrefixDecimal          = 0xDDDD
+)
 
 // NullsafeHashcode128 returns a 128-bit hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
@@ -53,7 +74,7 @@ func NullsafeHashcode(v sqltypes.Value, collation collations.ID, coerceType sqlt
 func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collations.ID, coerceTo sqltypes.Type) error {
 	switch {
 	case v.IsNull(), sqltypes.IsNull(coerceTo):
-		hash.Write16(0)
+		hash.Write16(hashPrefixNil)
 	case sqltypes.IsFloat(coerceTo):
 		var f float64
 		var err error
@@ -77,7 +98,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		if err != nil {
 			return err
 		}
-		hash.Write16(0xAAAA)
+		hash.Write16(hashPrefixFloat)
 		hash.Write64(math.Float64bits(f))
 
 	case sqltypes.IsSigned(coerceTo):
@@ -98,9 +119,9 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			return err
 		}
 		if i < 0 {
-			hash.Write16(0xBBB1)
+			hash.Write16(hashPrefixIntegralNegative)
 		} else {
-			hash.Write16(0xBBB0)
+			hash.Write16(hashPrefixIntegralPositive)
 		}
 		hash.Write64(uint64(i))
 
@@ -121,12 +142,12 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		if err != nil {
 			return err
 		}
-		hash.Write16(0xBBB0)
+		hash.Write16(hashPrefixIntegralPositive)
 		hash.Write64(u)
 
 	case sqltypes.IsBinary(coerceTo):
 		coll := collations.Local().LookupByID(collations.CollationBinaryID)
-		hash.Write16(0xCCCC)
+		hash.Write16(hashPrefixBytes)
 		coll.Hash(hash, v.Raw(), 0)
 
 	case sqltypes.IsText(coerceTo):
@@ -134,7 +155,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		if coll == nil {
 			panic("cannot hash unsupported collation")
 		}
-		hash.Write16(0xCCCC)
+		hash.Write16(hashPrefixBytes)
 		coll.Hash(hash, v.Raw(), 0)
 
 	case sqltypes.IsDecimal(coerceTo):
@@ -158,7 +179,7 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "coercion should not try to coerce this value to a decimal: %v", v)
 		}
-		hash.Write16(0xDDDD)
+		hash.Write16(hashPrefixDecimal)
 		dec.Hash(hash)
 
 	default:

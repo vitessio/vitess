@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 func (expr *Literal) constant() bool {
@@ -124,23 +125,23 @@ func (inexpr *InExpr) simplify(env *ExpressionEnv) error {
 	}
 
 	if optimize {
-		inexpr.Hashed = make(map[HashCode]int)
+		inexpr.Hashed = make(map[vthash.Hash]int)
+		hasher := vthash.New()
 		for i, expr := range tuple {
 			lit := expr.(*Literal)
-			hash, err := lit.inner.Hash()
-			if err != nil {
+			inner, ok := lit.inner.(hashable)
+			if !ok {
 				inexpr.Hashed = nil
 				break
 			}
-			if collidx, collision := inexpr.Hashed[hash]; collision {
-				cmp, _, err := evalCompareAll(lit.inner, tuple[collidx].(*Literal).inner, true)
-				if cmp != 0 || err != nil {
-					inexpr.Hashed = nil
-					break
-				}
-				continue
+
+			inner.Hash(&hasher)
+			hash := hasher.Sum128()
+			hasher.Reset()
+
+			if _, found := inexpr.Hashed[hash]; !found {
+				inexpr.Hashed[hash] = i
 			}
-			inexpr.Hashed[hash] = i
 		}
 	}
 	return nil
