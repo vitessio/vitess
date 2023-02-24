@@ -23,12 +23,12 @@ import (
 	"os/signal"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/servenv"
@@ -70,7 +70,7 @@ type VTGR struct {
 	tmc    tmclient.TabletManagerClient
 	ctx    context.Context
 
-	stopped sync2.AtomicBool
+	stopped atomic.Bool
 }
 
 func newVTGR(ctx context.Context, ts controller.GRTopo, tmc tmclient.TabletManagerClient) *VTGR {
@@ -168,7 +168,7 @@ func (vtgr *VTGR) ScanAndRepair() {
 				func() {
 					ctx, cancel := context.WithTimeout(vtgr.ctx, scanAndRepairTimeout)
 					defer cancel()
-					if !vtgr.stopped.Get() {
+					if !vtgr.stopped.Load() {
 						log.Infof("Start scan and repair %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
 						shard.ScanAndRepairShard(ctx)
 						log.Infof("Finished scan and repair %v/%v", shard.KeyspaceShard.Keyspace, shard.KeyspaceShard.Shard)
@@ -186,7 +186,7 @@ func (vtgr *VTGR) Diagnose(ctx context.Context, shard *controller.GRShard) (cont
 
 // Repair exposes the endpoint to repair a particular shard
 func (vtgr *VTGR) Repair(ctx context.Context, shard *controller.GRShard, diagnose controller.DiagnoseType) (controller.RepairResultCode, error) {
-	if vtgr.stopped.Get() {
+	if vtgr.stopped.Load() {
 		return controller.Fail, errors.New("VTGR is stopped")
 	}
 	return shard.Repair(ctx, diagnose)
@@ -224,7 +224,7 @@ func (vtgr *VTGR) handleSignal(action func(int)) {
 		log.Infof("Handling SIGHUP")
 		// Set stopped to true so that following repair call won't do anything
 		// For the ongoing repairs, checkShardLocked will abort if needed
-		vtgr.stopped.Set(true)
+		vtgr.stopped.Store(true)
 		for _, shard := range vtgr.Shards {
 			shard.UnlockShard()
 		}

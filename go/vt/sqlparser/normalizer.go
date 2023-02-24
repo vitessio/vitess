@@ -18,7 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
-	"strconv"
+	"math/big"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -357,12 +357,12 @@ func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 			v, err = sqltypes.NewValue(sqltypes.HexVal, vbytes)
 		case BitVal:
 			// Convert bit value to hex number in parameterized query format
-			var ui uint64
-			ui, err = strconv.ParseUint(string(node.Bytes()), 2, 64)
-			if err != nil {
+			var i big.Int
+			_, ok := i.SetString(string(node.Bytes()), 2)
+			if !ok {
 				return nil
 			}
-			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%x", ui)))
+			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%s", i.Text(16))))
 		case DateVal:
 			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())
 		case TimeVal:

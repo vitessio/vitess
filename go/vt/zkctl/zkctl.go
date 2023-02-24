@@ -234,7 +234,6 @@ func (zkd *Zkd) Teardown() error {
 	}
 	var removalErr error
 	for _, dir := range zkd.config.DirectoryList() {
-		log.V(6).Infof("remove data dir %v", dir)
 		if err := os.RemoveAll(dir); err != nil {
 			log.Errorf("failed removing %v: %v", dir, err.Error())
 			removalErr = err

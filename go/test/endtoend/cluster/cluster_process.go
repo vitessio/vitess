@@ -1085,11 +1085,10 @@ func getPort() int {
 	if len(portBytes) == 0 || time.Now().After(fileInfo.ModTime().Add(portFileTimeout)) {
 		port = getVtStartPort()
 	} else {
-		parsedPort, err := strconv.ParseInt(string(portBytes), 10, 64)
+		port, err = strconv.Atoi(string(portBytes))
 		if err != nil {
 			panic(err)
 		}
-		port = int(parsedPort)
 	}
 
 	portFile.Truncate(0)

@@ -30,7 +30,7 @@ type LiveQuery struct {
 	ContextHTML       string
 	Start             time.Time
 	Duration          int64
-	ConnID            int
+	ConnID            int64
 	State             string
 	ShowTerminateLink bool
 }
@@ -49,7 +49,7 @@ func LiveQueryz() []LiveQuery {
 }
 
 // StreamTerminate terminates the specified streaming query.
-func StreamTerminate(connID int) error {
+func StreamTerminate(connID int64) error {
 	response, err := http.Get(fmt.Sprintf("%s/livequeryz/terminate?format=json&connID=%d", ServerAddress, connID))
 	if err != nil {
 		return err

@@ -21,8 +21,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
-func (v *Value) Hash() (uintptr, error) {
-	return uintptr(hack.RuntimeMemhash(v.ToRawBytes(), 0x3333)), nil
+func (v *Value) Hash() (uint64, error) {
+	return hack.RuntimeMemhash(v.ToRawBytes(), 0x3333), nil
 }
 
 func (v *Value) ToRawBytes() []byte {

@@ -22,7 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
@@ -385,7 +386,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
 		// execute the schema change via replication. This is best-effort, meaning
 		// we still return overall success if the timeout expires.
-		concurrency := sync2.NewSemaphore(10, 0)
+		concurrency := semaphore.NewWeighted(10)
 		reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
 		defer cancel()
 		for _, result := range uniqueShards {

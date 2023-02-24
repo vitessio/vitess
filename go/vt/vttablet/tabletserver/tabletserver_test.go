@@ -224,7 +224,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 
-	tsv.te.txPool.scp.lastID.Set(1)
+	tsv.te.txPool.scp.lastID.Store(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -260,7 +260,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Get(), "tsv.te.txPool.lastID.Get()")
+	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 }
@@ -1833,7 +1833,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.MaxResultSize(); val != newSize {
 		t.Errorf("MaxResultSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.maxResultSize.Get()); val != newSize {
+	if val := int(tsv.qe.maxResultSize.Load()); val != newSize {
 		t.Errorf("tsv.qe.maxResultSize.Get: %d, want %d", val, newSize)
 	}
 
@@ -1841,7 +1841,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.WarnResultSize(); val != newSize {
 		t.Errorf("WarnResultSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.warnResultSize.Get()); val != newSize {
+	if val := int(tsv.qe.warnResultSize.Load()); val != newSize {
 		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
 	}
 }
