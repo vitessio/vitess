@@ -46,7 +46,25 @@ FROM (
 	UNION ALL
 
 	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM _vt.schemacopy c
+	FROM _vt.schemacopy
+	WHERE table_schema = database()
+) _inner
+GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+HAVING COUNT(*) = 1
+`
+
+	// DetectSchemaChangeOnlyBaseTable query detects if there is any schema change from previous copy excluding view tables.
+	DetectSchemaChangeOnlyBaseTable = `
+SELECT DISTINCT table_name
+FROM (
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM information_schema.columns
+	WHERE table_schema = database() and table_name in (select table_name from information_schema.tables where table_schema = database() and table_type = 'BASE TABLE')
+
+	UNION ALL
+
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM _vt.schemacopy
 	WHERE table_schema = database()
 ) _inner
 GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
