@@ -192,11 +192,12 @@ If you wish to use v1 for any reason, you will now need to specify the `--v1` fl
 
 ### <a id="tablet-throttler"/>Tablet throttler
 
-The tablet throttler can now be configured dynamically. Configuration is now found in the topo service, and applies to all tablets in all shards and cells of a given keyspace. For backwards compatibility `v16` still supports `vttablet`-based command line flags for throttler ocnfiguration.
+The tablet throttler can now be configured dynamically. Configuration is now found in the topo service, and applies to all tablets in all shards and cells of a given keyspace.
+It is possible to enable or disable throttling, and to change the throttling threshold as well as the throttler query.
 
-It is possible to enable/disable, to change throttling threshold as well as the throttler query.
+Please note that this feature is considered experimental in this release. For backwards compatibility `v16` still supports `vttablet`-based command line flags for throttler configuration.
 
-More information on [Pull Request #11604](https://github.com/vitessio/vitess/pull/11604).
+More information can be found on [Pull Request #11604](https://github.com/vitessio/vitess/pull/11604).
 
 ### <a id="inc-backup"/>Incremental backup and point in time recovery
 
