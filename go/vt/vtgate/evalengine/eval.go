@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type typeFlag uint32
@@ -58,7 +59,11 @@ const (
 type eval interface {
 	ToRawBytes() []byte
 	SQLType() sqltypes.Type
-	Hash() (HashCode, error)
+}
+
+type hashable interface {
+	eval
+	Hash(h *vthash.Hasher)
 }
 
 func evalToSQLValue(e eval) sqltypes.Value {
