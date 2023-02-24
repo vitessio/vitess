@@ -337,7 +337,7 @@ func RevokeCertAndRegenerateCRL(root, parent, name string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	crlList, err := x509.ParseCRL(data)
+	crlList, err := x509.ParseCRL(data) //nolint:staticcheck
 	if err != nil {
 		log.Fatal(err)
 	}

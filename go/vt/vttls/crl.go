@@ -54,7 +54,7 @@ func verifyPeerCertificateAgainstCRL(crl string) (verifyPeerCertificateFunc, err
 				cert := chain[i]
 				issuerCert := chain[i+1]
 				for _, crl := range crlSet {
-					if issuerCert.CheckCRLSignature(crl) == nil {
+					if issuerCert.CheckCRLSignature(crl) == nil { //nolint:staticcheck
 						if certIsRevoked(cert, crl) {
 							return fmt.Errorf("Certificate revoked: CommonName=%v", cert.Subject.CommonName)
 						}
@@ -83,7 +83,7 @@ func loadCRLSet(crl string) ([]*pkix.CertificateList, error) {
 			continue
 		}
 
-		parsedCRL, err := x509.ParseCRL(block.Bytes)
+		parsedCRL, err := x509.ParseCRL(block.Bytes) //nolint:staticcheck
 		if err != nil {
 			return nil, err
 		}
