@@ -1,9 +1,65 @@
 [
   {
     "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
-    "plan": {
-
+    "query": "select count(distinct foo) from user where id in (1,2,3)",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(distinct foo) from user where id in (1,2,3)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_distinct_count(0) AS count(distinct foo)",
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select foo, weight_string(foo) from `user` where id in ::__vals group by foo, weight_string(foo) order by foo asc",
+            "ResultColumns": 1,
+            "Table": "`user`",
+            "Values": [
+              "(INT64(1), INT64(2), INT64(3))"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(distinct foo) from user where id in (1,2,3)",
+      "Instructions": {
+        "OperatorType": "Aggregate",
+        "Variant": "Scalar",
+        "Aggregates": "count_distinct(0|1) AS count(distinct foo)",
+        "ResultColumns": 1,
+        "Inputs": [
+          {
+            "OperatorType": "Route",
+            "Variant": "IN",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "FieldQuery": "select foo, weight_string(foo) from `user` where 1 != 1 group by foo, weight_string(foo)",
+            "OrderBy": "(0|1) ASC",
+            "Query": "select foo, weight_string(foo) from `user` where id in ::__vals group by foo, weight_string(foo) order by foo asc",
+            "Table": "`user`",
+            "Values": [
+              "(INT64(1), INT64(2), INT64(3))"
+            ],
+            "Vindex": "user_index"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "user.user"
+      ]
     }
   }
 ]
