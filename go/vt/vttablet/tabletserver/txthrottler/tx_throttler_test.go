@@ -40,14 +40,15 @@ import (
 func TestDisabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = false
-	throttler := NewTxThrottler(config, nil)
+	env := tabletenv.NewEnv(config, t.Name())
+	throttler := NewTxThrottler(env, nil)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
 	assert.Nil(t, throttler.Open())
 	assert.False(t, throttler.Throttle())
-	assert.Zero(t, throttlerRunning.Get())
+	assert.Zero(t, throttler.throttlerRunning.Get())
 	throttler.Close()
 }
 
@@ -103,19 +104,20 @@ func TestEnabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = true
 	config.TxThrottlerHealthCheckCells = []string{"cell1", "cell2"}
+	env := tabletenv.NewEnv(config, t.Name())
 
-	throttler, err := tryCreateTxThrottler(config, ts)
+	throttler, err := tryCreateTxThrottler(env, ts)
 	assert.Nil(t, err)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
 	})
 	assert.Nil(t, throttler.Open())
-	assert.Equal(t, int64(1), throttlerRunning.Get())
+	assert.NotZero(t, throttler.throttlerRunning.Get())
 
 	assert.False(t, throttler.Throttle())
-	assert.Equal(t, int64(1), requestsTotal.Get())
-	assert.Zero(t, requestsThrottled.Get())
+	assert.Equal(t, int64(1), throttler.requestsTotal.Get())
+	assert.Zero(t, throttler.requestsThrottled.Get())
 
 	throttler.state.StatsUpdate(tabletStats)
 	rdonlyTabletStats := &discovery.TabletHealth{
@@ -127,7 +129,8 @@ func TestEnabledThrottler(t *testing.T) {
 	throttler.state.StatsUpdate(rdonlyTabletStats)
 	// The second throttle call should reject.
 	assert.True(t, throttler.Throttle())
-	assert.Equal(t, int64(1), requestsThrottled.Get())
+	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
+	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 	throttler.Close()
-	assert.Zero(t, throttlerRunning.Get())
+	assert.Zero(t, throttler.throttlerRunning.Get())
 }

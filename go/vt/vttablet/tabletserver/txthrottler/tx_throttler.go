@@ -40,12 +40,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	throttlerRunning  = stats.NewGauge("TxThrottlerRunning", "transaction throttler running state")
-	requestsTotal     = stats.NewCounter("TxThrottlerRequests", "transaction throttler requests")
-	requestsThrottled = stats.NewCounter("TxThrottlerThrottled", "transaction throttler requests throttled")
-)
-
 // TxThrottler throttles transactions based on replication lag.
 // It's a thin wrapper around the throttler found in vitess/go/vt/throttler.
 // It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
@@ -74,6 +68,8 @@ var (
 // be executing a method. The only exception is the 'Throttle' method where multiple goroutines are
 // allowed to execute it concurrently.
 type TxThrottler struct {
+	env tabletenv.Env
+
 	// config stores the transaction throttler's configuration.
 	// It is populated in NewTxThrottler and is not modified
 	// since.
@@ -84,6 +80,10 @@ type TxThrottler struct {
 	state *txThrottlerState
 
 	target *querypb.Target
+
+	throttlerRunning  *stats.Gauge
+	requestsTotal     *stats.Counter
+	requestsThrottled *stats.Counter
 }
 
 // NewTxThrottler tries to construct a TxThrottler from the
@@ -91,18 +91,17 @@ type TxThrottler struct {
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(config, topoServer)
+func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler(env, topoServer)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
-		txThrottler, err = newTxThrottler(&txThrottlerConfig{enabled: false})
+		txThrottler, err = newTxThrottler(env, &txThrottlerConfig{enabled: false})
 		if err != nil {
 			panic("BUG: Can't create a disabled transaction throttler")
 		}
 	} else {
 		log.Infof("Initialized transaction throttler with config: %+v", txThrottler.config)
-		stats.NewGaugeFunc("TxThrottlerMaxRate", "transaction throttler max rate", txThrottler.maxRate)
 	}
 	return txThrottler
 }
@@ -112,29 +111,22 @@ func (t *TxThrottler) InitDBConfig(target *querypb.Target) {
 	t.target = proto.Clone(target).(*querypb.Target)
 }
 
-func (t *TxThrottler) maxRate() int64 {
-	if t.state == nil {
-		return 0
-	}
-	return t.state.maxRate()
-}
-
-func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
-	if !config.EnableTxThrottler {
-		return newTxThrottler(&txThrottlerConfig{enabled: false})
+func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrottler, error) {
+	if !env.Config().EnableTxThrottler {
+		return newTxThrottler(env, &txThrottlerConfig{enabled: false})
 	}
 
 	var throttlerConfig throttlerdatapb.Configuration
-	if err := prototext.Unmarshal([]byte(config.TxThrottlerConfig), &throttlerConfig); err != nil {
+	if err := prototext.Unmarshal([]byte(env.Config().TxThrottlerConfig), &throttlerConfig); err != nil {
 		return nil, err
 	}
 
 	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 	// is immutable.
-	healthCheckCells := make([]string, len(config.TxThrottlerHealthCheckCells))
-	copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
+	healthCheckCells := make([]string, len(env.Config().TxThrottlerHealthCheckCells))
+	copy(healthCheckCells, env.Config().TxThrottlerHealthCheckCells)
 
-	return newTxThrottler(&txThrottlerConfig{
+	return newTxThrottler(env, &txThrottlerConfig{
 		enabled:          true,
 		topoServer:       topoServer,
 		throttlerConfig:  &throttlerConfig,
@@ -224,7 +216,7 @@ func resetTxThrottlerFactories() {
 // go/vt/throttler.GlobalManager.
 const TxThrottlerName = "TransactionThrottler"
 
-func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
+func newTxThrottler(env tabletenv.Env, config *txThrottlerConfig) (*TxThrottler, error) {
 	if config.enabled {
 		// Verify config.
 		err := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}.Verify()
@@ -236,7 +228,10 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 		}
 	}
 	return &TxThrottler{
-		config: config,
+		config:            config,
+		throttlerRunning:  env.Exporter().NewGauge("TxThrottlerRunning", "transaction throttler running state"),
+		requestsTotal:     env.Exporter().NewCounter("TxThrottlerRequests", "transaction throttler requests"),
+		requestsThrottled: env.Exporter().NewCounter("TxThrottlerThrottled", "transaction throttler requests throttled"),
 	}, nil
 }
 
@@ -249,7 +244,7 @@ func (t *TxThrottler) Open() error {
 		return nil
 	}
 	log.Info("TxThrottler: opening")
-	throttlerRunning.Set(1)
+	t.throttlerRunning.Set(1)
 	var err error
 	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard, t.target.Cell)
 	return err
@@ -267,7 +262,7 @@ func (t *TxThrottler) Close() {
 	}
 	t.state.deallocateResources()
 	t.state = nil
-	throttlerRunning.Set(0)
+	t.throttlerRunning.Set(0)
 	log.Info("TxThrottler: closed")
 }
 
@@ -283,9 +278,9 @@ func (t *TxThrottler) Throttle() (result bool) {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}
 	result = t.state.throttle()
-	requestsTotal.Add(1)
+	t.requestsTotal.Add(1)
 	if result {
-		requestsThrottled.Add(1)
+		t.requestsThrottled.Add(1)
 	}
 	return result
 }
@@ -351,13 +346,6 @@ func (ts *txThrottlerState) throttle() bool {
 	ts.throttleMu.Lock()
 	defer ts.throttleMu.Unlock()
 	return ts.throttler.Throttle(0 /* threadId */) > 0
-}
-
-func (ts *txThrottlerState) maxRate() int64 {
-	if ts.throttler == nil {
-		return 0
-	}
-	return ts.throttler.MaxRate()
 }
 
 func (ts *txThrottlerState) deallocateResources() {
