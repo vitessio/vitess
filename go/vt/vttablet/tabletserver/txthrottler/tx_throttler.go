@@ -114,10 +114,22 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 		return nil, err
 	}
 
-	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
-	// is immutable.
-	healthCheckCells := make([]string, len(config.TxThrottlerHealthCheckCells))
-	copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
+	var err error
+	var healthCheckCells []string
+	if len(config.TxThrottlerHealthCheckCells) > 0 {
+		// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
+		// is immutable.
+		healthCheckCells := make([]string, len(config.TxThrottlerHealthCheckCells))
+		copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
+	} else {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+
+		healthCheckCells, err = topoServer.GetKnownCells(ctx)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return newTxThrottler(&txThrottlerConfig{
 		enabled:          true,
