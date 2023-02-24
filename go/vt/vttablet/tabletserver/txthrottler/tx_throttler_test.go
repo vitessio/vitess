@@ -59,7 +59,7 @@ func TestEnabledThrottler(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	defer resetTxThrottlerFactories()
-	ts := memorytopo.NewServer("cell1", "cell2", "cell3")
+	ts := memorytopo.NewServer("cell1", "cell2")
 
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
 	hcCall1 := mockHealthCheck.EXPECT().Subscribe()
