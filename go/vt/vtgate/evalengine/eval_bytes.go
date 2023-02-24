@@ -37,6 +37,7 @@ type evalBytes struct {
 }
 
 var _ eval = (*evalBytes)(nil)
+var _ hashable = (*evalBytes)(nil)
 
 func newEvalRaw(typ sqltypes.Type, raw []byte, col collations.TypedCollation) *evalBytes {
 	return &evalBytes{tt: int16(typ), col: col, bytes: raw}
@@ -96,21 +97,23 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 	return newEvalText(bytes, typedcol), nil
 }
 
-func (e *evalBytes) Hash() (HashCode, error) {
-	if sqltypes.IsDate(e.SQLType()) {
+func (e *evalBytes) Hash(h *vthash.Hasher) {
+	switch tt := e.SQLType(); {
+	case sqltypes.IsDate(tt):
 		t, err := e.parseDate()
 		if err != nil {
-			return 0, err
+			panic("parseDate() in evalBytes should never fail")
 		}
-		return HashCode(t.UnixNano()), nil
+		h.Write16(hashPrefixDate)
+		h.Write64(uint64(t.UnixNano()))
+	case tt == sqltypes.VarBinary:
+		h.Write16(hashPrefixBytes)
+		_, _ = h.Write(e.bytes)
+	default:
+		h.Write16(hashPrefixBytes)
+		col := collations.Local().LookupByID(e.col.Collation)
+		col.Hash(h, e.bytes, 0)
 	}
-	col := collations.Local().LookupByID(e.col.Collation)
-	if col == nil {
-		return 0, UnsupportedCollationHashError
-	}
-	hasher := vthash.New()
-	col.Hash(&hasher, e.bytes, 0)
-	return hasher.Sum64(), nil
 }
 
 func (e *evalBytes) isBinary() bool {
