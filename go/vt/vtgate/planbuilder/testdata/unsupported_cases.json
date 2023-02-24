@@ -388,7 +388,7 @@
   {
     "comment": "create view with top level subquery in select",
     "query": "create view user.view_a as select a, (select col from user) from unsharded",
-    "plan": "VT12001: unsupported: Complex select queries are not supported in create or alter view statements"
+    "plan": "VT12001: unsupported: Select query does not belong to the same keyspace as the view statement"
   },
   {
     "comment": "create view with sql_calc_found_rows with limit",
