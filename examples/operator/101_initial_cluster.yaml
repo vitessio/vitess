@@ -87,15 +87,12 @@ spec:
           databaseInitScriptSecret:
             name: example-cluster-config
             key: init_db.sql
-          replication:
-            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
             replicas: 2
             vttablet:
               extraFlags:
-                disable_active_reparents: "true"
                 db_charset: utf8mb4
               resources:
                 limits:

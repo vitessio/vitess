@@ -252,7 +252,7 @@ function verifyVtadminSetup() {
 function verifyVTOrcSetup() {
   # Set the primary tablet to readOnly using the vtctld and wait for VTOrc to repair
   primaryTablet=$(getPrimaryTablet)
-  vtctldclient SetReadOnly "$primaryTablet"
+  vtctldclient SetWritable "$primaryTablet" false
 
   # Now that we have set the primary tablet to read only, we know that this will
   # only succeed if VTOrc is able to fix it
