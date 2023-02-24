@@ -68,8 +68,6 @@ import (
 // be executing a method. The only exception is the 'Throttle' method where multiple goroutines are
 // allowed to execute it concurrently.
 type TxThrottler struct {
-	env tabletenv.Env
-
 	// config stores the transaction throttler's configuration.
 	// It is populated in NewTxThrottler and is not modified
 	// since.
