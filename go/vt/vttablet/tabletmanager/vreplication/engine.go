@@ -24,13 +24,13 @@ import (
 	"sort"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -234,12 +234,16 @@ func (vre *Engine) openLocked(ctx context.Context) error {
 	return nil
 }
 
-var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
+var openRetryInterval atomic.Int64
+
+func init() {
+	openRetryInterval.Store((1 * time.Second).Nanoseconds())
+}
 
 func (vre *Engine) retry(ctx context.Context, err error) {
 	log.Errorf("Error starting vreplication engine: %v, will keep retrying.", err)
 	for {
-		timer := time.NewTimer(openRetryInterval.Get())
+		timer := time.NewTimer(time.Duration(openRetryInterval.Load()))
 		select {
 		case <-ctx.Done():
 			timer.Stop()

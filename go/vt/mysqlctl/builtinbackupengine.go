@@ -33,10 +33,10 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -498,7 +498,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	params.Logger.Infof("found %v files to backup", len(fes))
 
 	// Backup with the provided concurrency.
-	sema := sync2.NewSemaphore(params.Concurrency, 0)
+	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	wg := sync.WaitGroup{}
 	for i := range fes {
 		wg.Add(1)
@@ -507,8 +507,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 			// Wait until we are ready to go, skip if we already
 			// encountered an error.
-			sema.Acquire()
-			defer sema.Release()
+			sema.Acquire(ctx, 1)
+			defer sema.Release(1)
 			if bh.HasErrors() {
 				return
 			}
@@ -867,7 +867,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
-	sema := sync2.NewSemaphore(params.Concurrency, 0)
+	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for i := range fes {
@@ -877,8 +877,8 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 
 			// Wait until we are ready to go, skip if we already
 			// encountered an error.
-			sema.Acquire()
-			defer sema.Release()
+			sema.Acquire(ctx, 1)
+			defer sema.Release(1)
 			if rec.HasErrors() {
 				return
 			}

@@ -96,7 +96,7 @@ func init() {
 func registerBackupFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
 	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
-	fs.IntVar(&backupCompressBlocks, "backup_storage_number_blocks", backupCompressBlocks, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
+	fs.IntVar(&backupCompressBlocks, "backup_storage_number_blocks", backupCompressBlocks, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
 }
 
 // Backup is the main entry point for a backup:

@@ -298,6 +298,15 @@ func (v Value) ToInt32() (int32, error) {
 	return int32(i), err
 }
 
+// ToInt returns the value as MySQL would return it as a int.
+func (v Value) ToInt() (int, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	return strconv.Atoi(v.RawStr())
+}
+
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
 	if !IsNumber(v.typ) {
@@ -470,6 +479,11 @@ func (v Value) IsBinary() bool {
 func (v Value) IsDateTime() bool {
 	dt := int(querypb.Type_DATETIME)
 	return int(v.typ)&dt == dt
+}
+
+// IsDecimal returns true if Value is a decimal.
+func (v Value) IsDecimal() bool {
+	return IsDecimal(v.typ)
 }
 
 // IsComparable returns true if the Value is null safe comparable without collation information.

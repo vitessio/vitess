@@ -2,13 +2,13 @@ package vtgr
 
 import (
 	"context"
+	"sync/atomic"
 	"syscall"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgr/config"
 	"vitess.io/vitess/go/vt/vtgr/controller"
@@ -41,15 +41,15 @@ func TestSighupHandle(t *testing.T) {
 	vtgr.Shards = shards
 	shard := vtgr.Shards[0]
 	shard.LockShard(ctx, "test")
-	res := sync2.NewAtomicInt32(0)
+	var res atomic.Bool
 	vtgr.handleSignal(func(i int) {
-		res.Set(1)
+		res.Store(true)
 	})
 	assert.NotNil(t, shard.GetUnlock())
-	assert.False(t, vtgr.stopped.Get())
+	assert.False(t, vtgr.stopped.Load())
 	syscall.Kill(syscall.Getpid(), syscall.SIGHUP)
 	time.Sleep(100 * time.Millisecond)
-	assert.Equal(t, int32(1), res.Get())
+	assert.True(t, res.Load())
 	assert.Nil(t, shard.GetUnlock())
-	assert.True(t, vtgr.stopped.Get())
+	assert.True(t, vtgr.stopped.Load())
 }

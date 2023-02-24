@@ -34,11 +34,11 @@ func HasString(elem string, arr []string) bool {
 
 // NewTLSConfig returns an initialized TLS configuration suitable for client
 // authentication. If caFile is non-empty, it will be loaded.
-func NewTLSConfig(caFile string, verifyCert bool) (*tls.Config, error) {
+func NewTLSConfig(caFile string, verifyCert bool, minVersion uint16) (*tls.Config, error) {
 	var c tls.Config
 
 	// Set to TLS 1.2 as a minimum.  This is overridden for mysql communication
-	c.MinVersion = tls.VersionTLS12
+	c.MinVersion = minVersion
 
 	if verifyCert {
 		log.Info("verifyCert requested, client certificates will be verified")

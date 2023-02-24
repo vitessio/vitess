@@ -23,12 +23,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// This file provides a few utility variables and methods, mostly for tests.
-// The assumptions made about the types of fields and data returned
-// by MySQl are validated in schema_test.go. This way all tests
-// can use these variables and methods to simulate a MySQL server
-// (using fakesqldb/ package for instance) and still be guaranteed correct
-// data.
+// This file contains the mysql queries used by different parts of the code.
 
 const (
 	// BaseShowPrimary is the base query for fetching primary key info.
@@ -51,7 +46,25 @@ FROM (
 	UNION ALL
 
 	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM _vt.schemacopy c
+	FROM _vt.schemacopy
+	WHERE table_schema = database()
+) _inner
+GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+HAVING COUNT(*) = 1
+`
+
+	// DetectSchemaChangeOnlyBaseTable query detects if there is any schema change from previous copy excluding view tables.
+	DetectSchemaChangeOnlyBaseTable = `
+SELECT DISTINCT table_name
+FROM (
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM information_schema.columns
+	WHERE table_schema = database() and table_name in (select table_name from information_schema.tables where table_schema = database() and table_type = 'BASE TABLE')
+
+	UNION ALL
+
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM _vt.schemacopy
 	WHERE table_schema = database()
 ) _inner
 GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
@@ -90,17 +103,15 @@ order by table_name, ordinal_position`
 	InsertIntoViewsTable = `insert into _vt.views (
     table_schema,
 	table_name,
-	view_definition,
-	create_statement) values (database(), :table_name, :view_definition, :create_statement)`
+	create_statement) values (database(), :table_name, :create_statement)`
 
 	ReplaceIntoViewsTable = `replace into _vt.views (
 	table_schema,
 	table_name,
-	view_definition,
-	create_statement) values (database(), :table_name, :view_definition, :create_statement)`
+	create_statement) values (database(), :table_name, :create_statement)`
 
 	UpdateViewsTable = `update _vt.views 
-	set view_definition = :view_definition, create_statement = :create_statement 
+	set create_statement = :create_statement 
 	where table_schema = database() and table_name = :table_name`
 
 	DeleteFromViewsTable = `delete from _vt.views where table_schema = database() and table_name in ::table_name`
@@ -110,10 +121,10 @@ order by table_name, ordinal_position`
 	SelectAllViews = `select table_name, updated_at from _vt.views where table_schema = database()`
 
 	// FetchUpdatedViews queries fetches information about updated views
-	FetchUpdatedViews = `select table_name, view_definition, create_statement from _vt.views where table_schema = database() and table_name in ::viewnames`
+	FetchUpdatedViews = `select table_name, create_statement from _vt.views where table_schema = database() and table_name in ::viewnames`
 
 	// FetchViews queries fetches all views
-	FetchViews = `select table_name, view_definition, create_statement from _vt.views where table_schema = database()`
+	FetchViews = `select table_name, create_statement from _vt.views where table_schema = database()`
 )
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.

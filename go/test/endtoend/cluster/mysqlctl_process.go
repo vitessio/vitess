@@ -239,7 +239,7 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
 	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
 	updatedInitFile, err := getInitDBFile()
-	if err != nil {
+	if err == nil {
 		initFile = updatedInitFile
 	}
 	mysqlctl := &MysqlctlProcess{

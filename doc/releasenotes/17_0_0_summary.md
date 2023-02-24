@@ -17,6 +17,10 @@
 
 ### <a id="breaking-changes"/>Breaking Changes
 
+#### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
+
+When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used. 
+
 #### <a id="deprecated-stats"/>Deprecated Stats
 
 These stats are deprecated in v17.

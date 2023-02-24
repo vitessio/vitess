@@ -19,12 +19,12 @@ package binlog
 import (
 	"fmt"
 	"sync"
+	"sync/atomic"
 
 	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -124,7 +124,7 @@ type UpdateStreamImpl struct {
 
 	// actionLock protects the following variables
 	actionLock     sync.Mutex
-	state          sync2.AtomicInt64
+	state          atomic.Int64
 	stateWaitGroup sync.WaitGroup
 	streams        StreamList
 }
@@ -199,7 +199,7 @@ func (updateStream *UpdateStreamImpl) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) 
 func (updateStream *UpdateStreamImpl) RegisterService() {
 	// publish the stats
 	stats.Publish("UpdateStreamState", stats.StringFunc(func() string {
-		return usStateNames[updateStream.state.Get()]
+		return usStateNames[updateStream.state.Load()]
 	}))
 
 	// and register all the RPC protocols
@@ -223,7 +223,7 @@ func (updateStream *UpdateStreamImpl) Enable() {
 		return
 	}
 
-	updateStream.state.Set(usEnabled)
+	updateStream.state.Store(usEnabled)
 	updateStream.streams.Init()
 	log.Infof("Enabling update stream, dbname: %s", updateStream.cp.DBName())
 }
@@ -237,7 +237,7 @@ func (updateStream *UpdateStreamImpl) Disable() {
 		return
 	}
 
-	updateStream.state.Set(usDisabled)
+	updateStream.state.Store(usDisabled)
 	updateStream.streams.Stop()
 	updateStream.stateWaitGroup.Wait()
 	log.Infof("Update Stream Disabled")
@@ -245,7 +245,7 @@ func (updateStream *UpdateStreamImpl) Disable() {
 
 // IsEnabled returns true if UpdateStreamImpl is enabled
 func (updateStream *UpdateStreamImpl) IsEnabled() bool {
-	return updateStream.state.Get() == usEnabled
+	return updateStream.state.Load() == usEnabled
 }
 
 // StreamKeyRange is part of the UpdateStream interface

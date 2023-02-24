@@ -177,7 +177,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 		t.Errorf("want %s, got %v", want, err)
 	}
 	// Ensure that we tried only once.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
 
@@ -194,10 +194,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	want = fmt.Sprintf("target: %v.0.replica: INVALID_ARGUMENT error\ntarget: %v.1.replica: INVALID_ARGUMENT error", name, name)
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc0.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
 
@@ -215,10 +215,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	// We should only surface the higher priority error code
 	verifyScatterConnError(t, err, want, vtrpcpb.Code_INVALID_ARGUMENT)
 	// Ensure that we tried only once.
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc0.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
 
@@ -229,7 +229,7 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	sbc = hc.AddTestTablet("aa", "0", 1, name, "0", topodatapb.TabletType_REPLICA, true, 1, nil)
 	_, _ = f(sc, []string{"0", "0"})
 	// Ensure that we executed only once.
-	if execCount := sbc.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
 
@@ -243,10 +243,10 @@ func testScatterConnGeneric(t *testing.T, name string, f func(sc *ScatterConn, s
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if execCount := sbc0.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc0.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
 		t.Errorf("want 1, got %v", execCount)
 	}
 	if qr.RowsAffected != 0 {
