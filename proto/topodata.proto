@@ -417,6 +417,12 @@ message SrvKeyspace {
 
   // ThrottlerConfig has the configuration for the tablet server's lag throttler, and applies to the entire keyspace, across all shards and tablets
   ThrottlerConfig throttler_config = 6;
+
+  // SidecarDBName is the name of the Vitess sidecar database
+  // used for various system metadata that is stored in each
+  // tablet's mysqld instance. This is copied from the global
+  // keyspace object.
+  string sidecar_db_name = 7;
 }
 
 // CellInfo contains information about a cell. CellInfo objects are
