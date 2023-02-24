@@ -40,8 +40,7 @@ import (
 func TestDisabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
 	config.EnableTxThrottler = false
-	env := tabletenv.NewEnv(config, t.Name())
-	throttler := NewTxThrottler(env, nil)
+	throttler := NewTxThrottler(config, nil)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
@@ -113,7 +112,7 @@ func TestEnabledThrottler(t *testing.T) {
 		Shard:    "shard",
 	})
 	assert.Nil(t, throttler.Open())
-	assert.NotZero(t, throttler.throttlerRunning.Get())
+	assert.Equal(t, int64(1), throttler.throttlerRunning.Get())
 
 	assert.False(t, throttler.Throttle())
 	assert.Equal(t, int64(1), throttler.requestsTotal.Get())

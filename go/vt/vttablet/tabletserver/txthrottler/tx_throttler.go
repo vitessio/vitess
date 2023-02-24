@@ -79,17 +79,23 @@ type TxThrottler struct {
 
 	target *querypb.Target
 
+	// stats
 	throttlerRunning  *stats.Gauge
 	requestsTotal     *stats.Counter
 	requestsThrottled *stats.Counter
 }
+
+// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
+// go/vt/throttler.GlobalManager.
+const TxThrottlerName = "TransactionThrottler"
 
 // NewTxThrottler tries to construct a TxThrottler from the
 // relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) *TxThrottler {
+func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *TxThrottler {
+	env := tabletenv.NewEnv(config, TxThrottlerName)
 	txThrottler, err := tryCreateTxThrottler(env, topoServer)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
@@ -210,10 +216,6 @@ func resetTxThrottlerFactories() {
 	}
 }
 
-// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
-// go/vt/throttler.GlobalManager.
-const TxThrottlerName = "TransactionThrottler"
-
 func newTxThrottler(env tabletenv.Env, config *txThrottlerConfig) (*TxThrottler, error) {
 	if config.enabled {
 		// Verify config.
@@ -227,9 +229,9 @@ func newTxThrottler(env tabletenv.Env, config *txThrottlerConfig) (*TxThrottler,
 	}
 	return &TxThrottler{
 		config:            config,
-		throttlerRunning:  env.Exporter().NewGauge("TxThrottlerRunning", "transaction throttler running state"),
-		requestsTotal:     env.Exporter().NewCounter("TxThrottlerRequests", "transaction throttler requests"),
-		requestsThrottled: env.Exporter().NewCounter("TxThrottlerThrottled", "transaction throttler requests throttled"),
+		throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
+		requestsTotal:     env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
+		requestsThrottled: env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
 	}, nil
 }
 
