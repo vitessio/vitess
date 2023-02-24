@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"github.com/golang/mock/gomock"
+	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo"
@@ -58,7 +59,7 @@ func TestEnabledThrottler(t *testing.T) {
 	defer mockCtrl.Finish()
 
 	defer resetTxThrottlerFactories()
-	ts := memorytopo.NewServer("cell1", "cell2")
+	ts := memorytopo.NewServer("cell1", "cell2", "cell3")
 
 	mockHealthCheck := NewMockHealthCheck(mockCtrl)
 	hcCall1 := mockHealthCheck.EXPECT().Subscribe()
@@ -143,4 +144,31 @@ func TestEnabledThrottler(t *testing.T) {
 		t.Errorf("want: true, got: %v", result)
 	}
 	throttler.Close()
+}
+
+func TestTryCreateTxThrottler(t *testing.T) {
+	allCells := []string{"cell1", "cell2", "cell3"}
+	ts := memorytopo.NewServer(allCells...)
+
+	// Check specified cells are used for healthchecks
+	{
+		config := tabletenv.NewDefaultConfig()
+		config.EnableTxThrottler = true
+		config.TxThrottlerHealthCheckCells = []string{"cell1"}
+
+		txThrottler, err := tryCreateTxThrottler(config, ts)
+		assert.Nil(t, err)
+		assert.Equal(t, config.TxThrottlerHealthCheckCells, txThrottler.config.healthCheckCells)
+	}
+	// Check tx throttler uses all known cells for healthchecks
+	// when TxThrottlerHealthCheckCells is empty/undef
+	{
+		config := tabletenv.NewDefaultConfig()
+		config.EnableTxThrottler = true
+		config.TxThrottlerHealthCheckCells = []string{} // empty
+
+		txThrottler, err := tryCreateTxThrottler(config, ts)
+		assert.Nil(t, err)
+		assert.Equal(t, allCells, txThrottler.config.healthCheckCells)
+	}
 }
