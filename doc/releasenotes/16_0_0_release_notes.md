@@ -452,7 +452,7 @@ This is an internal refactor and should not change the behavior of Vitess as see
 
 Developers will see a difference though: v16 changes the way we maintain vttablet's sidecar database schema (also referred to as the `_vt`
 database). Instead of using the `WithDDL` package, introduced in [PR #6348](https://github.com/vitessio/vitess/pull/6348), we use a
-declarative approach. Users will now have to update the desired schema in the `go/vt/sidecardb/schema` directory.
+declarative approach. Developers will now have to update the desired schema in the `go/vt/sidecardb/schema` directory.
 
 The desired schema is specified, one per table. A new module `sidecardb`, compares this to the existing schema and
 performs the required `create` or `alter` to reach it. This is done whenever a primary vttablet starts up.
