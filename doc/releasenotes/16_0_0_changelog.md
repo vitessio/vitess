@@ -28,7 +28,8 @@
  * Examples: Add lib functions to wait for shard states [#12239](https://github.com/vitessio/vitess/pull/12239)
  * Examples: Correct VTAdmin Discovery File Path And Add Check [#12415](https://github.com/vitessio/vitess/pull/12415)
  * examples: Fix Vtop example and release script [#12440](https://github.com/vitessio/vitess/pull/12440)
- * Fix vtctldclient command in vtop test script and the fix operator example [#12458](https://github.com/vitessio/vitess/pull/12458) 
+ * Fix vtctldclient command in vtop test script and the fix operator example [#12458](https://github.com/vitessio/vitess/pull/12458)
+ * Open vtadmin-api port in docker-local example to enable vtadmin access [#12467](https://github.com/vitessio/vitess/pull/12467) 
 #### General
  * [main] Stats Flags: include stats flags in the correct binaries (#11450) [#11453](https://github.com/vitessio/vitess/pull/11453)
  * Test flags: Update logic for parsing test flags to run unit tests within GoLand and to parse test flags in vtgate to allow running unit tests [#11551](https://github.com/vitessio/vitess/pull/11551)
@@ -96,7 +97,8 @@
  * Fix aggregation on outer joins [#12298](https://github.com/vitessio/vitess/pull/12298)
  * [release-16.0] fix: added null safe operator precendence rule (#12297) [#12307](https://github.com/vitessio/vitess/pull/12307)
  * Fix for USING when column names not lower cased [#12379](https://github.com/vitessio/vitess/pull/12379)
- * [release-16.0] Fix bug in vtexplain around JOINs (#12376) [#12384](https://github.com/vitessio/vitess/pull/12384) 
+ * [release-16.0] Fix bug in vtexplain around JOINs (#12376) [#12384](https://github.com/vitessio/vitess/pull/12384)
+ * Fix scalar aggregation engine primitive for column truncation [#12468](https://github.com/vitessio/vitess/pull/12468) 
 #### VReplication
  * VReplication:  escape identifiers when renaming source tables [#11670](https://github.com/vitessio/vitess/pull/11670)
  * VReplication: Prevent Orphaned VDiff2 Jobs [#11768](https://github.com/vitessio/vitess/pull/11768)
@@ -348,7 +350,8 @@
  * Remove Deprecated flags, code and stats. [#12083](https://github.com/vitessio/vitess/pull/12083)
  * Fix release notes on release-16.0 [#12276](https://github.com/vitessio/vitess/pull/12276)
  * Fix summary and release notes [#12283](https://github.com/vitessio/vitess/pull/12283)
- * Reorder summary in order of importance [#12433](https://github.com/vitessio/vitess/pull/12433) 
+ * Reorder summary in order of importance [#12433](https://github.com/vitessio/vitess/pull/12433)
+ * release notes: mark dynamic throttler configuration as experimental [#12475](https://github.com/vitessio/vitess/pull/12475) 
 #### Governance
  * Correct minor inaccuracies in governing docs [#11933](https://github.com/vitessio/vitess/pull/11933) 
 #### Online DDL
