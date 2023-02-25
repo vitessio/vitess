@@ -600,7 +600,8 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 					if strings.HasPrefix(args[0], "List") {
 						break
 					} else {
-						continue
+						http.Error(w, "403 Forbidden", http.StatusForbidden)
+						return nil
 					}
 				}
 				http.Error(w, "403 Forbidden", http.StatusForbidden)
