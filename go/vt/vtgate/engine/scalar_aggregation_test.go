@@ -167,7 +167,7 @@ func TestScalarAggregateExecuteTruncate(t *testing.T) {
 		PreProcess:          true,
 	}
 
-	qr, err := oa.TryExecute(context.Background(), &noopVCursor{}, nil, true)
+	qr, err := oa.TryExecute(&noopVCursor{}, nil, true)
 	assert.NoError(err)
 	assert.Equal("[[UINT64(4)]]", fmt.Sprintf("%v", qr.Rows))
 }
