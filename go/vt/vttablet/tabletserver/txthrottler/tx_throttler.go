@@ -17,7 +17,6 @@ limitations under the License.
 package txthrottler
 
 import (
-	"fmt"
 	"strings"
 	"sync"
 	"time"
@@ -114,7 +113,6 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 		return nil, err
 	}
 
-	var err error
 	var healthCheckCells []string
 	if len(config.TxThrottlerHealthCheckCells) > 0 {
 		// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
@@ -125,6 +123,7 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
 
+		var err error
 		healthCheckCells, err = topoServer.GetKnownCells(ctx)
 		if err != nil {
 			return nil, err
@@ -227,9 +226,6 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 		err := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}.Verify()
 		if err != nil {
 			return nil, err
-		}
-		if len(config.healthCheckCells) == 0 {
-			return nil, fmt.Errorf("empty healthCheckCells given. %+v", config)
 		}
 	}
 	return &TxThrottler{
