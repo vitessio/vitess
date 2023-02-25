@@ -33,5 +33,4 @@ vtctld \
  --port $vtctld_web_port \
  --grpc_port $grpc_port \
  --pid_file $VTDATAROOT/tmp/vtctld.pid \
- --security_policy "read-only" \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
