@@ -21,7 +21,7 @@ import (
 	"net/http"
 )
 
-var errReadOnly = errors.New("not allowed: read-only security_policy enforced")
+var ErrReadOnly = errors.New("not allowed: read-only security_policy enforced")
 
 // readOnlyPolicy allows DEBUGGING and MONITORING roles for everyone,
 // while denying any other roles (e.g. ADMIN) for everyone.
@@ -33,7 +33,7 @@ func (readOnlyPolicy) CheckAccessActor(actor, role string) error {
 	case DEBUGGING, MONITORING:
 		return nil
 	default:
-		return errReadOnly
+		return ErrReadOnly
 	}
 }
 
@@ -43,10 +43,10 @@ func (readOnlyPolicy) CheckAccessHTTP(req *http.Request, role string) error {
 	case DEBUGGING, MONITORING:
 		return nil
 	default:
-		return errReadOnly
+		return ErrReadOnly
 	}
 }
 
 func init() {
-	RegisterPolicy("read-only", readOnlyPolicy{})
+	RegisterPolicy(READONLY, readOnlyPolicy{})
 }

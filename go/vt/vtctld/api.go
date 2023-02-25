@@ -589,18 +589,26 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 
 	// Vtctl Command
 	handleAPI("vtctl/", func(w http.ResponseWriter, r *http.Request) error {
-		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
-			http.Error(w, "403 Forbidden", http.StatusForbidden)
-			return nil
-		}
 		var args []string
+		if err := unmarshalRequest(r, &args); err != nil {
+			return fmt.Errorf("can't unmarshal request: %v", err)
+		}
+		roles := []string{acl.READONLY, acl.ADMIN}
+		for _, role := range roles {
+			if err := acl.CheckAccessHTTP(r, role); err != nil {
+				if errors.Is(err, acl.ErrReadOnly) && strings.HasPrefix(args[0], "List") {
+					break
+				} else {
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return nil
+				}
+			}
+		}
+
 		resp := struct {
 			Error  string
 			Output string
 		}{}
-		if err := unmarshalRequest(r, &args); err != nil {
-			return fmt.Errorf("can't unmarshal request: %v", err)
-		}
 
 		logstream := logutil.NewMemoryLogger()
 
