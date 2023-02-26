@@ -593,17 +593,16 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		if err := unmarshalRequest(r, &args); err != nil {
 			return fmt.Errorf("can't unmarshal request: %v", err)
 		}
-		roles := []string{acl.READONLY, acl.ADMIN}
-		for _, role := range roles {
-			if err := acl.CheckAccessHTTP(r, role); err != nil {
-				if errors.Is(err, acl.ErrReadOnly) {
-					if strings.HasPrefix(args[0], "List") {
-						break
-					} else {
-						http.Error(w, "403 Forbidden", http.StatusForbidden)
-						return nil
-					}
+		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
+			switch err {
+			case acl.ErrReadOnly:
+				if strings.HasPrefix(args[0], "List") {
+					break
+				} else {
+					http.Error(w, "403 Forbidden", http.StatusForbidden)
+					return nil
 				}
+			default:
 				http.Error(w, "403 Forbidden", http.StatusForbidden)
 				return nil
 			}
