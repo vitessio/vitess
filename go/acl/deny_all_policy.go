@@ -37,5 +37,5 @@ func (denyAllPolicy) CheckAccessHTTP(req *http.Request, role string) error {
 }
 
 func init() {
-	RegisterPolicy(DENYALL, denyAllPolicy{})
+	RegisterPolicy("deny-all", denyAllPolicy{})
 }

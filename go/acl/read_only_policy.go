@@ -48,5 +48,5 @@ func (readOnlyPolicy) CheckAccessHTTP(req *http.Request, role string) error {
 }
 
 func init() {
-	RegisterPolicy(READONLY, readOnlyPolicy{})
+	RegisterPolicy("read-only", readOnlyPolicy{})
 }

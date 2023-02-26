@@ -52,8 +52,6 @@ const (
 	ADMIN      = "admin"
 	DEBUGGING  = "debugging"
 	MONITORING = "monitoring"
-	READONLY   = "read-only"
-	DENYALL    = "deny-all"
 )
 
 var (
