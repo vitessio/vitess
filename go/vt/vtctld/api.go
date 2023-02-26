@@ -596,7 +596,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 		if err := acl.CheckAccessHTTP(r, acl.ADMIN); err != nil {
 			switch err {
 			case acl.ErrReadOnly:
-				if strings.HasPrefix(args[0], "List") {
+				if strings.HasPrefix(args[0], "List") || strings.HasPrefix(args[0], "Get") {
 					break
 				} else {
 					http.Error(w, "403 Forbidden", http.StatusForbidden)
