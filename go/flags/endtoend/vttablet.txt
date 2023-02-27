@@ -94,12 +94,14 @@ Usage of vttablet:
       --enable-consolidator                                              Synonym to -enable_consolidator (default true)
       --enable-consolidator-replicas                                     Synonym to -enable_consolidator_replicas
       --enable-lag-throttler                                             Synonym to -enable_lag_throttler
+      --enable-per-workload-table-metrics                                Synonym to -enable_per_workload_table_metrics
       --enable-tx-throttler                                              Synonym to -enable_tx_throttler
       --enable_consolidator                                              This option enables the query consolidator. (default true)
       --enable_consolidator_replicas                                     This option enables the query consolidator only on replicas.
       --enable_hot_row_protection                                        If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.
       --enable_hot_row_protection_dry_run                                If true, hot row protection is not enforced but logs if transactions would have been queued.
       --enable_lag_throttler                                             If true, vttablet will run a throttler service, and will implicitly enable heartbeats
+      --enable_per_workload_table_metrics                                If true, query counts and query error metrics include a label that identifies the workload
       --enable_replication_reporter                                      Use polling to track replication lag.
       --enable_transaction_limit                                         If true, limit on number of transactions open at the same time will be enforced for all users. User trying to open a new transaction after exhausting their limit will receive an error immediately, regardless of whether there are available slots or not.
       --enable_transaction_limit_dry_run                                 If true, limit on number of transactions open at the same time will be tracked for all users, but not enforced.
@@ -373,6 +375,8 @@ Usage of vttablet:
       --vttablet_skip_buildinfo_tags string                              comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'. (default "/.*/")
       --wait_for_backup_interval duration                                (init restore parameter) if this is greater than 0, instead of starting up empty when no backups are found, keep checking at this interval for a backup to appear
       --watch_replication_stream                                         When enabled, vttablet will stream the MySQL replication stream from the local server, and use it to update schema when it sees a DDL.
+      --workload-label string                                            Synonym to -workload_label (default "WORKLOAD")
+      --workload_label string                                            The label looked for in query comments to identify the workload. Used in conjunction with enable-per-workload-table-metrics (default "WORKLOAD")
       --xbstream_restore_flags string                                    Flags to pass to xbstream command during restore. These should be space separated and will be added to the end of the command. These need to match the ones used for backup e.g. --compress / --decompress, --encrypt / --decrypt
       --xtrabackup_backup_flags string                                   Flags to pass to backup command. These should be space separated and will be added to the end of the command
       --xtrabackup_prepare_flags string                                  Flags to pass to prepare command. These should be space separated and will be added to the end of the command
