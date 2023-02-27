@@ -1,0 +1,149 @@
+[
+  {
+    "comment": "Flush statement",
+    "query": "flush local tables user, unsharded_a, user_extra with read lock",
+    "plan": {
+      "QueryType": "FLUSH",
+      "Original": "flush local tables user, unsharded_a, user_extra with read lock",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush local tables unsharded_a with read lock"
+          },
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush local tables `user`, user_extra with read lock"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "Flush statement with flush options",
+    "query": "flush no_write_to_binlog hosts, logs",
+    "plan": "keyspace not specified"
+  },
+  {
+    "comment": "Flush statement with routing rules",
+    "query": "flush local tables route1, route2",
+    "plan": {
+      "QueryType": "FLUSH",
+      "Original": "flush local tables route1, route2",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush local tables unsharded"
+          },
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush local tables `user`"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "Incorrect tables in flush",
+    "query": "flush tables user.a with read lock",
+    "plan": "table a not found"
+  },
+  {
+    "comment": "Unknown tables in unsharded keyspaces are allowed",
+    "query": "flush tables main.a with read lock",
+    "plan": {
+      "QueryType": "FLUSH",
+      "Original": "flush tables main.a with read lock",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AllShards()",
+        "Query": "flush tables a with read lock"
+      },
+      "TablesUsed": [
+        "main.a"
+      ]
+    }
+  },
+  {
+    "comment": "Flush statement with 3 keyspaces",
+    "query": "flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock",
+    "plan": {
+      "QueryType": "FLUSH",
+      "Original": "flush local tables user, unsharded_a, user_extra, unsharded_tab with read lock",
+      "Instructions": {
+        "OperatorType": "Concatenate",
+        "Inputs": [
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main",
+              "Sharded": false
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush local tables unsharded_a with read lock"
+          },
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "main_2",
+              "Sharded": false
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush local tables unsharded_tab with read lock"
+          },
+          {
+            "OperatorType": "Send",
+            "Keyspace": {
+              "Name": "user",
+              "Sharded": true
+            },
+            "TargetDestination": "AllShards()",
+            "Query": "flush local tables `user`, user_extra with read lock"
+          }
+        ]
+      },
+      "TablesUsed": [
+        "main.unsharded_a",
+        "main_2.unsharded_tab",
+        "user.user",
+        "user.user_extra"
+      ]
+    }
+  }
+]
