@@ -253,8 +253,8 @@ func TestWarnResultSize(t *testing.T) {
 
 func TestQueryTimeout(t *testing.T) {
 	vstart := framework.DebugVars()
-	defer framework.Server.QueryTimeout.Set(framework.Server.QueryTimeout.Get())
-	framework.Server.QueryTimeout.Set(100 * time.Millisecond)
+	defer framework.Server.QueryTimeout.Store(framework.Server.QueryTimeout.Load())
+	framework.Server.QueryTimeout.Store(100 * time.Millisecond.Nanoseconds())
 
 	client := framework.NewClient()
 	err := client.Begin(false)

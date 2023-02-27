@@ -23,8 +23,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/sync/semaphore"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -338,7 +338,7 @@ func TestReloadShard(t *testing.T) {
 				results: tt.results,
 			}
 
-			isPartial, ok := ReloadShard(ctx, ts, tmc, logutil.NewMemoryLogger(), tt.req.Keyspace, tt.req.Shard, tt.req.Position, sync2.NewSemaphore(1, 0), tt.req.IncludePrimary)
+			isPartial, ok := ReloadShard(ctx, ts, tmc, logutil.NewMemoryLogger(), tt.req.Keyspace, tt.req.Shard, tt.req.Position, semaphore.NewWeighted(1), tt.req.IncludePrimary)
 			assert.Equal(t, tt.expected.IsPartial, isPartial, "incorrect value for isPartial")
 			assert.Equal(t, tt.expected.Ok, ok, "incorrect value for ok")
 

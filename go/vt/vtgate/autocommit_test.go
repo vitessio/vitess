@@ -389,7 +389,7 @@ func TestAutocommitTransactionStarted(t *testing.T) {
 	testCommitCount(t, "sbc1", sbc1, 0)
 
 	sbc1.Queries = nil
-	sbc1.CommitCount.Set(0)
+	sbc1.CommitCount.Store(0)
 
 	// multi shard query - savepoint needed
 	sql = "update `user` set a = 2 where id in (1, 4)"

@@ -17,13 +17,11 @@ limitations under the License.
 package k8stopo
 
 import (
+	"context"
 	"path/filepath"
 	"sort"
 	"strings"
 
-	"context"
-
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	vtv1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 )
@@ -33,9 +31,6 @@ import (
 // a slice of results sorted alphabetically to emulate the behavior of etcd, zk, consul, etc
 func (s *Server) ListDir(ctx context.Context, dirPath string, full bool) ([]topo.DirEntry, error) {
 	dirPath = filepath.Join(s.root, dirPath)
-
-	log.V(7).Infof("Listing dir at: '%s', full: %v", dirPath, full)
-
 	dirMap := map[string]topo.DirEntry{}
 
 	if children, err := s.memberIndexer.ByIndex("by_parent", dirPath); err == nil {

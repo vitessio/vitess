@@ -523,8 +523,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -536,10 +536,10 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
 	}
-	sbc.RollbackCount.Set(0)
+	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 
 	// Start a transaction, send one statement.
@@ -563,8 +563,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -576,10 +576,10 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
 	}
-	sbc.RollbackCount.Set(0)
+	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 
 	// Start a transaction, send one statement.
@@ -603,8 +603,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -616,8 +616,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }

@@ -18692,7 +18692,7 @@ yydefault:
 		yyDollar = yyS[yypt-2 : yypt+1]
 //line sql.y:6650
 		{
-			yyVAL.str = " separator " + encodeSQLString(yyDollar[2].str)
+			yyVAL.str = encodeSQLString(yyDollar[2].str)
 		}
 	case 1324:
 		yyDollar = yyS[yypt-1 : yypt+1]

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,22 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package common
+package sqlparser
 
-import (
-	"log"
+// Generate all the AST helpers using the tooling in `go/tools`
 
-	"golang.org/x/tools/go/packages"
-)
-
-// PkgFailed returns true if any of the packages contain errors
-func PkgFailed(loaded []*packages.Package) bool {
-	failed := false
-	for _, pkg := range loaded {
-		for _, e := range pkg.Errors {
-			log.Println(e.Error())
-			failed = true
-		}
-	}
-	return failed
-}
+//go:generate go run ./goyacc -fo sql.go sql.y
+//go:generate go run ../../tools/asthelpergen/main  --in . --iface vitess.io/vitess/go/vt/sqlparser.SQLNode --clone_exclude "*ColName" --equals_custom "*ColName"
+//go:generate go run ../../tools/astfmtgen vitess.io/vitess/go/vt/sqlparser/...

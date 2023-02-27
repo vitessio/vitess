@@ -168,6 +168,13 @@ func TestNormalize(t *testing.T) {
 			"foo": sqltypes.HexNumBindVariable([]byte("0x3")),
 		},
 	}, {
+		// Large bin values work fine
+		in:      "select * from t where foo = b'11101010100101010010101010101010101010101000100100100100100101001101010101010101000001'",
+		outstmt: "select * from t where foo = :foo",
+		outbv: map[string]*querypb.BindVariable{
+			"foo": sqltypes.HexNumBindVariable([]byte("0x3aa54aaaaaa24925355541")),
+		},
+	}, {
 		// Bin value does not convert for DMLs
 		in:      "update a set v1 = b'11'",
 		outstmt: "update a set v1 = :v1",

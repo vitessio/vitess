@@ -38,7 +38,7 @@ var eventInfoTransformations = map[*regexp.Regexp]string{
 
 type BinlogEvent struct {
 	Coordinates  BinlogCoordinates
-	NextEventPos int64
+	NextEventPos uint32
 	EventType    string
 	Info         string
 }

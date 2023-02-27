@@ -603,7 +603,7 @@ func TestExecutorSetAndSelect(t *testing.T) {
 	session := NewAutocommitSession(&vtgatepb.Session{TargetString: KsTestUnsharded, EnableSystemSettings: true})
 	for _, tcase := range testcases {
 		t.Run(fmt.Sprintf("%s-%s", tcase.sysVar, tcase.val), func(t *testing.T) {
-			sbc.ExecCount.Set(0) // reset the value
+			sbc.ExecCount.Store(0) // reset the value
 
 			if tcase.val != "" {
 				// check query result for `select <new_setting> from dual where @@transaction_isolation != <new_setting>

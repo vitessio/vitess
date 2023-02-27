@@ -155,12 +155,12 @@ type QueryEngine struct {
 	txSerializer *txserializer.TxSerializer
 
 	// Vars
-	maxResultSize    sync2.AtomicInt64
-	warnResultSize   sync2.AtomicInt64
-	streamBufferSize sync2.AtomicInt64
+	maxResultSize    atomic.Int64
+	warnResultSize   atomic.Int64
+	streamBufferSize atomic.Int64
 	// tableaclExemptCount count the number of accesses allowed
 	// based on membership in the superuser ACL
-	tableaclExemptCount  sync2.AtomicInt64
+	tableaclExemptCount  atomic.Int64
 	strictTableACL       bool
 	enableTableACLDryRun bool
 	// TODO(sougou) There are two acl packages. Need to rename.
@@ -168,7 +168,7 @@ type QueryEngine struct {
 
 	strictTransTables bool
 
-	consolidatorMode sync2.AtomicString
+	consolidatorMode atomic.Value
 
 	// stats
 	queryCounts, queryTimes, queryErrorCounts, queryRowsAffected, queryRowsReturned *stats.CountersWithMultiLabels
@@ -198,7 +198,7 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 
 	qe.conns = connpool.NewPool(env, "ConnPool", config.OltpReadPool)
 	qe.streamConns = connpool.NewPool(env, "StreamConnPool", config.OlapReadPool)
-	qe.consolidatorMode.Set(config.Consolidator)
+	qe.consolidatorMode.Store(config.Consolidator)
 	qe.consolidator = sync2.NewConsolidator()
 	if config.ConsolidatorStreamTotalSize > 0 && config.ConsolidatorStreamQuerySize > 0 {
 		log.Infof("Stream consolidator is enabled with query size set to %d and total size set to %d.",
@@ -227,18 +227,18 @@ func NewQueryEngine(env tabletenv.Env, se *schema.Engine) *QueryEngine {
 		}
 	}
 
-	qe.maxResultSize = sync2.NewAtomicInt64(int64(config.Oltp.MaxRows))
-	qe.warnResultSize = sync2.NewAtomicInt64(int64(config.Oltp.WarnRows))
-	qe.streamBufferSize = sync2.NewAtomicInt64(int64(config.StreamBufferSize))
+	qe.maxResultSize.Store(int64(config.Oltp.MaxRows))
+	qe.warnResultSize.Store(int64(config.Oltp.WarnRows))
+	qe.streamBufferSize.Store(int64(config.StreamBufferSize))
 
 	planbuilder.PassthroughDMLs = config.PassthroughDML
 
 	qe.accessCheckerLogger = logutil.NewThrottledLogger("accessChecker", 1*time.Second)
 
-	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Get)
-	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Get)
-	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Get)
-	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Get)
+	env.Exporter().NewGaugeFunc("MaxResultSize", "Query engine max result size", qe.maxResultSize.Load)
+	env.Exporter().NewGaugeFunc("WarnResultSize", "Query engine warn result size", qe.warnResultSize.Load)
+	env.Exporter().NewGaugeFunc("StreamBufferSize", "Query engine stream buffer size", qe.streamBufferSize.Load)
+	env.Exporter().NewCounterFunc("TableACLExemptCount", "Query engine table ACL exempt count", qe.tableaclExemptCount.Load)
 
 	env.Exporter().NewGaugeFunc("QueryCacheLength", "Query engine query cache length", func() int64 {
 		return int64(qe.plans.Len())

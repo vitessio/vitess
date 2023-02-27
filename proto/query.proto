@@ -973,3 +973,24 @@ message TransactionMetadata {
   int64 time_created = 3;
   repeated Target participants = 4;
 }
+
+
+// SchemaTableType represents the type of table requested.
+enum SchemaTableType {
+  VIEWS = 0;
+  TABLES = 1;
+  ALL = 2;
+}
+
+// GetSchemaRequest is the payload to GetSchema
+message GetSchemaRequest {
+  Target target = 1;
+  SchemaTableType table_type = 2;
+  repeated string table_names = 3;
+}
+
+// GetSchemaResponse is the returned value from GetSchema
+message GetSchemaResponse {
+  // this is for the schema definition for the requested tables.
+  map<string, string> table_definition = 2;
+}

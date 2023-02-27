@@ -24,7 +24,6 @@ import (
 	"github.com/patrickmn/go-cache"
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
@@ -135,7 +134,7 @@ type Throttler struct {
 	mysqlInventory *mysql.Inventory
 
 	metricsQuery     atomic.Value
-	MetricsThreshold sync2.AtomicFloat64
+	MetricsThreshold atomic.Uint64
 
 	mysqlClusterThresholds *cache.Cache
 	aggregatedMetrics      *cache.Cache
@@ -206,9 +205,9 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	if throttleMetricQuery != "" {
 		throttler.metricsQuery.Store(throttleMetricQuery) // override
 	}
-	throttler.MetricsThreshold = sync2.NewAtomicFloat64(throttleThreshold.Seconds()) //default
+	throttler.StoreMetricsThreshold(throttleThreshold.Seconds()) //default
 	if throttleMetricThreshold != math.MaxFloat64 {
-		throttler.MetricsThreshold.Set(throttleMetricThreshold) // override
+		throttler.StoreMetricsThreshold(throttleMetricThreshold) // override
 	}
 
 	throttler.initConfig()
@@ -223,6 +222,10 @@ func (throttler *Throttler) CheckIsReady() error {
 		return nil
 	}
 	return ErrThrottlerNotReady
+}
+
+func (throttler *Throttler) StoreMetricsThreshold(threshold float64) {
+	throttler.MetricsThreshold.Store(math.Float64bits(threshold))
 }
 
 // initThrottleTabletTypes reads the user supplied throttle_tablet_types and sets these
@@ -338,7 +341,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 	} else {
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
-	throttler.MetricsThreshold.Set(throttlerConfig.Threshold)
+	throttler.StoreMetricsThreshold(throttlerConfig.Threshold)
 	throttlerCheckAsCheckSelf = throttlerConfig.CheckAsCheckSelf
 	if throttlerConfig.Enabled {
 		go throttler.Enable(ctx)
@@ -724,7 +727,7 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 
 	// distribute the query/threshold from the throttler down to the cluster settings and from there to the probes
 	metricsQuery := throttler.GetMetricsQuery()
-	metricsThreshold := throttler.MetricsThreshold.Get()
+	metricsThreshold := throttler.MetricsThreshold.Load()
 	addInstanceKey := func(tabletHost string, tabletPort int, key *mysql.InstanceKey, clusterName string, clusterSettings *config.MySQLClusterConfigurationSettings, probes *mysql.Probes) {
 		for _, ignore := range clusterSettings.IgnoreHosts {
 			if strings.Contains(key.StringCode(), ignore) {
@@ -751,11 +754,11 @@ func (throttler *Throttler) refreshMySQLInventory(ctx context.Context) error {
 		clusterName := clusterName
 		clusterSettings := clusterSettings
 		clusterSettings.MetricQuery = metricsQuery
-		clusterSettings.ThrottleThreshold.Set(metricsThreshold)
+		clusterSettings.ThrottleThreshold.Store(metricsThreshold)
 		// config may dynamically change, but internal structure (config.Settings().Stores.MySQL.Clusters in our case)
 		// is immutable and can only be _replaced_. Hence, it's safe to read in a goroutine:
 		go func() {
-			throttler.mysqlClusterThresholds.Set(clusterName, clusterSettings.ThrottleThreshold.Get(), cache.DefaultExpiration)
+			throttler.mysqlClusterThresholds.Set(clusterName, math.Float64frombits(clusterSettings.ThrottleThreshold.Load()), cache.DefaultExpiration)
 			clusterProbes := &mysql.ClusterProbes{
 				ClusterName:      clusterName,
 				IgnoreHostsCount: clusterSettings.IgnoreHostsCount,

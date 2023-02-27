@@ -38,20 +38,12 @@ import (
 // lock is used at the beginning of an RPC call, to acquire the
 // action semaphore. It returns ctx.Err() if the context expires.
 func (tm *TabletManager) lock(ctx context.Context) error {
-	if tm.actionSema.AcquireContext(ctx) {
-		return nil
-	}
-	return ctx.Err()
-}
-
-// tryLock will return immediately, true on success and false on failure.
-func (tm *TabletManager) tryLock() bool {
-	return tm.actionSema.TryAcquire()
+	return tm.actionSema.Acquire(ctx, 1)
 }
 
 // unlock is the symmetrical action to lock.
 func (tm *TabletManager) unlock() {
-	tm.actionSema.Release()
+	tm.actionSema.Release(1)
 }
 
 // HandleRPCPanic is part of the RPCTM interface.

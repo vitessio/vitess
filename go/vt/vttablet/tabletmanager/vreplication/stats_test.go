@@ -79,7 +79,7 @@ func TestStatusHtml(t *testing.T) {
 
 	blpStats := binlogplayer.NewStats()
 	blpStats.SetLastPosition(pos)
-	blpStats.ReplicationLagSeconds.Set(2)
+	blpStats.ReplicationLagSeconds.Store(2)
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message2"})
 
@@ -107,8 +107,8 @@ func TestStatusHtml(t *testing.T) {
 			done:     make(chan struct{}),
 		},
 	}
-	testStats.controllers[1].sourceTablet.Set("src1")
-	testStats.controllers[2].sourceTablet.Set("src2")
+	testStats.controllers[1].sourceTablet.Store("src1")
+	testStats.controllers[2].sourceTablet.Store("src2")
 	close(testStats.controllers[2].done)
 
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
@@ -135,7 +135,7 @@ func TestVReplicationStats(t *testing.T) {
 			done:     make(chan struct{}),
 		},
 	}
-	testStats.controllers[1].sourceTablet.Set("src1")
+	testStats.controllers[1].sourceTablet.Store("src1")
 
 	sleepTime := 1 * time.Millisecond
 	record := func(phase string) {

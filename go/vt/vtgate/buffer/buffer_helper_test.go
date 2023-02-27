@@ -121,7 +121,7 @@ func waitForState(b *Buffer, want bufferState) error {
 func waitForPoolSlots(b *Buffer, want int) error {
 	start := time.Now()
 	for {
-		got := b.bufferSizeSema.Size()
+		got := b.bufferSize
 		if got == want {
 			return nil
 		}

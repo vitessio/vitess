@@ -31,7 +31,8 @@ import (
 	"fmt"
 	"sync"
 
-	"vitess.io/vitess/go/sync2"
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -87,7 +88,8 @@ type Buffer struct {
 
 	// bufferSizeSema limits how many requests can be buffered
 	// ("-buffer_size") and is shared by all shardBuffer instances.
-	bufferSizeSema *sync2.Semaphore
+	bufferSizeSema *semaphore.Weighted
+	bufferSize     int
 
 	// mu guards all fields in this group.
 	// In particular, it is used to serialize the following Go routines:
@@ -108,7 +110,8 @@ type Buffer struct {
 func New(cfg *Config) *Buffer {
 	return &Buffer{
 		config:         cfg,
-		bufferSizeSema: sync2.NewSemaphore(cfg.Size, 0),
+		bufferSizeSema: semaphore.NewWeighted(int64(cfg.Size)),
+		bufferSize:     cfg.Size,
 		buffers:        make(map[string]*shardBuffer),
 	}
 }

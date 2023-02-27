@@ -37,7 +37,7 @@ const TopoTemplate = `
     padding: 0.2rem;
   }
 </style>
-<table>
+<table class="refreshRequired">
   <tr>
     <th colspan="4">SrvKeyspace Names Cache</th>
   </tr>
@@ -57,7 +57,7 @@ const TopoTemplate = `
   {{end}}
 </table>
 <br>
-<table>
+<table class="refreshRequired">
   <tr>
     <th colspan="5">SrvKeyspace Cache</th>
   </tr>

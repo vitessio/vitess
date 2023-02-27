@@ -22,6 +22,7 @@ import (
 	"io"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -41,7 +42,6 @@ import (
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/history"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -74,7 +74,7 @@ func registerHealthStreamerFlags(fs *pflag.FlagSet) {
 type healthStreamer struct {
 	stats              *tabletenv.Stats
 	degradedThreshold  time.Duration
-	unhealthyThreshold sync2.AtomicDuration
+	unhealthyThreshold atomic.Int64
 
 	mu      sync.Mutex
 	ctx     context.Context
@@ -89,7 +89,8 @@ type healthStreamer struct {
 	conns                  *connpool.Pool
 	signalWhenSchemaChange bool
 
-	views map[string]string
+	viewsEnabled bool
+	views        map[string]string
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
@@ -104,11 +105,10 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 			IdleTimeoutSeconds: env.Config().OltpReadPool.IdleTimeoutSeconds,
 		})
 	}
-	return &healthStreamer{
-		stats:              env.Stats(),
-		degradedThreshold:  env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
-		unhealthyThreshold: sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get()),
-		clients:            make(map[chan *querypb.StreamHealthResponse]struct{}),
+	hs := &healthStreamer{
+		stats:             env.Stats(),
+		degradedThreshold: env.Config().Healthcheck.DegradedThresholdSeconds.Get(),
+		clients:           make(map[chan *querypb.StreamHealthResponse]struct{}),
 
 		state: &querypb.StreamHealthResponse{
 			Target:      &querypb.Target{},
@@ -122,8 +122,11 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		ticks:                  newTimer,
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
+		viewsEnabled:           env.Config().EnableViews,
 		views:                  map[string]string{},
 	}
+	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
+	return hs
 }
 
 func (hs *healthStreamer) InitDBConfig(target *querypb.Target, cp dbconfigs.Connector) {
@@ -287,7 +290,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 	sbm := time.Duration(hs.state.RealtimeStats.ReplicationLagSeconds) * time.Second
 	class := healthyClass
 	switch {
-	case sbm > hs.unhealthyThreshold.Get():
+	case sbm > time.Duration(hs.unhealthyThreshold.Load()):
 		class = unhealthyClass
 	case sbm > hs.degradedThreshold:
 		class = unhappyClass
@@ -309,7 +312,7 @@ func (hs *healthStreamer) AppendDetails(details []*kv) []*kv {
 }
 
 func (hs *healthStreamer) SetUnhealthyThreshold(v time.Duration) {
-	hs.unhealthyThreshold.Set(v)
+	hs.unhealthyThreshold.Store(v.Nanoseconds())
 	shr := proto.Clone(hs.state).(*querypb.StreamHealthResponse)
 	for ch := range hs.clients {
 		select {
@@ -338,7 +341,7 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	tables, err := getChangedTableNames(ctx, conn)
+	tables, err := hs.getChangedTableNames(ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -363,7 +366,7 @@ func (hs *healthStreamer) reload() error {
 	return nil
 }
 
-func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
+func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
 	var tables []string
 	var tableNames []string
 
@@ -380,7 +383,13 @@ func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string,
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	err := conn.Stream(ctx, mysql.DetectSchemaChange, callback, alloc, bufferSize, 0)
+
+	schemaChangeQuery := mysql.DetectSchemaChange
+	// If views are enabled, then views are tracked/handled separately and schema change does not need to track them.
+	if hs.viewsEnabled {
+		schemaChangeQuery = mysql.DetectSchemaChangeOnlyBaseTable
+	}
+	err := conn.Stream(ctx, schemaChangeQuery, callback, alloc, bufferSize, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -419,6 +428,9 @@ func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string,
 }
 
 func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
+	if !hs.viewsEnabled {
+		return nil, nil
+	}
 	var changedViews []string
 	views := map[string]string{}
 

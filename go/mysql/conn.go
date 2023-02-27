@@ -26,6 +26,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -34,7 +35,6 @@ import (
 
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -161,7 +161,7 @@ type Conn struct {
 	Capabilities uint32
 
 	// closed is set to true when Close() is called on the connection.
-	closed sync2.AtomicBool
+	closed atomic.Bool
 
 	// ConnectionID is set:
 	// - at Connect() time for clients, with the value returned by
@@ -236,7 +236,6 @@ var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, co
 func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:           conn,
-		closed:         sync2.NewAtomicBool(false),
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
 	}
 }
@@ -250,7 +249,6 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	c := &Conn{
 		conn:        conn,
 		listener:    listener,
-		closed:      sync2.NewAtomicBool(false),
 		PrepareData: make(map[uint32]*PrepareData),
 	}
 
@@ -717,7 +715,7 @@ func (c *Conn) Close() {
 // Close() method.  Note if the other side closes the connection, but
 // Close() wasn't called, this will return false.
 func (c *Conn) IsClosed() bool {
-	return c.closed.Get()
+	return c.closed.Load()
 }
 
 //
@@ -1294,7 +1292,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
-	if c.listener.isShutdown() {
+	if c.listener.shutdown.Load() {
 		if !c.writeErrorAndLog(ERServerShutdown, SSNetError, "Server shutdown in progress") {
 			return false
 		}
