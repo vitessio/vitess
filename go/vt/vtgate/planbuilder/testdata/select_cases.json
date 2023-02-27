@@ -7870,5 +7870,43 @@
         "main.dual"
       ]
     }
+  },
+  {
+    "comment": "query with a derived table and dual table in unsharded keyspace",
+    "query": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
+        "Table": "unsharded_a, dual"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
+        "Table": "dual, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.dual",
+        "main.unsharded_a"
+      ]
+    }
   }
 ]
