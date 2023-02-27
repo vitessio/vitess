@@ -90,7 +90,8 @@ type healthStreamer struct {
 	conns                  *connpool.Pool
 	signalWhenSchemaChange bool
 
-	views map[string]string
+	viewsEnabled bool
+	views        map[string]string
 }
 
 func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *healthStreamer {
@@ -122,6 +123,7 @@ func newHealthStreamer(env tabletenv.Env, alias *topodatapb.TabletAlias) *health
 		ticks:                  newTimer,
 		conns:                  pool,
 		signalWhenSchemaChange: env.Config().SignalWhenSchemaChange,
+		viewsEnabled:           env.Config().EnableViews,
 		views:                  map[string]string{},
 	}
 	hs.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
@@ -340,7 +342,7 @@ func (hs *healthStreamer) reload() error {
 	}
 	defer conn.Recycle()
 
-	tables, err := getChangedTableNames(ctx, conn)
+	tables, err := hs.getChangedTableNames(ctx, conn)
 	if err != nil {
 		return err
 	}
@@ -365,7 +367,7 @@ func (hs *healthStreamer) reload() error {
 	return nil
 }
 
-func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
+func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
 	var tables []string
 	var tableNames []string
 
@@ -382,8 +384,13 @@ func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string,
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	err := conn.Stream(ctx, fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
-		callback, alloc, bufferSize, 0)
+
+	schemaChangeQuery := fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier())
+	// If views are enabled, then views are tracked/handled separately and schema change does not need to track them.
+	if hs.viewsEnabled {
+		schemaChangeQuery = fmt.Sprintf(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier())
+	}
+	err := conn.Stream(ctx, schemaChangeQuery, callback, alloc, bufferSize, 0)
 	if err != nil {
 		return nil, err
 	}
@@ -422,6 +429,9 @@ func getChangedTableNames(ctx context.Context, conn *connpool.DBConn) ([]string,
 }
 
 func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpool.DBConn) ([]string, error) {
+	if !hs.viewsEnabled {
+		return nil, nil
+	}
 	var changedViews []string
 	views := map[string]string{}
 
