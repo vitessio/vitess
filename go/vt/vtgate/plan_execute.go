@@ -55,7 +55,7 @@ func (e *Executor) newExecute(
 	}
 
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, err := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	vcursor, err := newVCursorImpl(safeSession, query, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 	if err != nil {
 		return err
 	}

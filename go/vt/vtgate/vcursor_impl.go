@@ -23,6 +23,8 @@ import (
 	"strings"
 	"sync/atomic"
 
+	"vitess.io/vitess/go/vt/sysvars"
+
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -117,6 +119,7 @@ type vcursorImpl struct {
 // on behalf of the original query.
 func newVCursorImpl(
 	safeSession *SafeSession,
+	sql string,
 	marginComments sqlparser.MarginComments,
 	executor *Executor,
 	logStats *logstats.LogStats,
@@ -127,7 +130,14 @@ func newVCursorImpl(
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
 ) (*vcursorImpl, error) {
-	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
+	// use the suggestedTabletType if safeSession.TargetString is not specified
+	suggestedTabletType, err := suggestTabletType(safeSession.GetReadWriteSplittingPolicy(), safeSession.InTransaction(),
+		safeSession.GetOrCreateOptions().HasCreatedTempTables, safeSession.HasAdvisoryLock(), sql)
+	if err != nil {
+		return nil, err
+	}
+
+	keyspace, tabletType, destination, err := parseDestinationTarget(suggestedTabletType, safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -746,6 +756,18 @@ func (vc *vcursorImpl) TabletType() topodatapb.TabletType {
 	return vc.tabletType
 }
 
+// SetTabletTypeFromHint specifies the tablet type to use for the query.
+func (vc *vcursorImpl) SetTabletTypeFromHint(tabletType topodatapb.TabletType) error {
+	if tabletType == topodatapb.TabletType_PRIMARY || tabletType == topodatapb.TabletType_REPLICA || tabletType == topodatapb.TabletType_RDONLY {
+		if vc.safeSession.InTransaction() && tabletType != topodatapb.TabletType_PRIMARY {
+			return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.LockOrActiveTransaction, "can't execute the given command because you have an active transaction")
+		}
+		vc.tabletType = tabletType
+		return nil
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unsupported tablet type: %v", tabletType)
+}
+
 func commentedShardQueries(shardQueries []*querypb.BoundQuery, marginComments sqlparser.MarginComments) []*querypb.BoundQuery {
 	if marginComments.Leading == "" && marginComments.Trailing == "" {
 		return shardQueries
@@ -867,6 +889,16 @@ func (vc *vcursorImpl) GetDDLStrategy() string {
 	return vc.safeSession.GetDDLStrategy()
 }
 
+// SetReadWriteSplittingPolicy implements the SessionActions interface
+func (vc *vcursorImpl) SetReadWriteSplittingPolicy(strategy string) {
+	vc.safeSession.SetReadWriteSplittingPolicy(strategy)
+}
+
+// GetReadWriteSplittingPolicy implements the SessionActions interface
+func (vc *vcursorImpl) GetReadWriteSplittingPolicy() string {
+	return vc.safeSession.GetReadWriteSplittingPolicy()
+}
+
 // GetSessionUUID implements the SessionActions interface
 func (vc *vcursorImpl) GetSessionUUID() string {
 	return vc.safeSession.GetSessionUUID()
@@ -979,8 +1011,8 @@ func (vc *vcursorImpl) ForeignKeyMode() string {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
+func parseDestinationTarget(suggestedTabletType topodatapb.TabletType, targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, suggestedTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
 		for k := range vschema.Keyspaces {
@@ -1086,6 +1118,12 @@ func (vc *vcursorImpl) GetSrvVschema() *vschemapb.SrvVSchema {
 }
 
 func (vc *vcursorImpl) SetExec(ctx context.Context, name string, value string) error {
+	switch name {
+	case sysvars.DDLStrategy.Name:
+		return SetDefaultDDLStrategy(value)
+	case sysvars.ReadWriteSplittingPolicy.Name:
+		return SetDefaultReadWriteSplittingPolicy(value)
+	}
 	return vc.executor.setVitessMetadata(ctx, name, value)
 }
 

@@ -145,6 +145,14 @@ func (t *noopVCursor) GetDDLStrategy() string {
 	panic("implement me")
 }
 
+func (t *noopVCursor) SetReadWriteSplittingPolicy(strategy string) {
+	panic("implement me")
+}
+
+func (t *noopVCursor) GetReadWriteSplittingPolicy() string {
+	panic("implement me")
+}
+
 func (t *noopVCursor) GetSessionUUID() string {
 	panic("implement me")
 }

@@ -383,10 +383,11 @@ func (vh *vtgateHandler) session(c *mysql.Conn) *vtgatepb.Session {
 
 				// The collation field of ExecuteOption is set right before an execution.
 			},
-			Autocommit:           true,
-			DDLStrategy:          defaultDDLStrategy,
-			SessionUUID:          u.String(),
-			EnableSystemSettings: sysVarSetEnabled,
+			Autocommit:               true,
+			DDLStrategy:              defaultDDLStrategy,
+			SessionUUID:              u.String(),
+			EnableSystemSettings:     sysVarSetEnabled,
+			ReadWriteSplittingPolicy: defaultReadWriteSplittingPolicy,
 		}
 		if c.Capabilities&mysql.CapabilityClientFoundRows != 0 {
 			session.Options.ClientFoundRows = true

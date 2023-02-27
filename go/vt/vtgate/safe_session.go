@@ -691,6 +691,20 @@ func (session *SafeSession) GetDDLStrategy() string {
 	return session.DDLStrategy
 }
 
+// SetReadWriteSplittingPolicy set the DDLStrategy setting.
+func (session *SafeSession) SetReadWriteSplittingPolicy(strategy string) {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	session.ReadWriteSplittingPolicy = strategy
+}
+
+// GetReadWriteSplittingPolicy returns the DDLStrategy value.
+func (session *SafeSession) GetReadWriteSplittingPolicy() string {
+	session.mu.Lock()
+	defer session.mu.Unlock()
+	return session.ReadWriteSplittingPolicy
+}
+
 // GetSessionUUID returns the SessionUUID value.
 func (session *SafeSession) GetSessionUUID() string {
 	session.mu.Lock()

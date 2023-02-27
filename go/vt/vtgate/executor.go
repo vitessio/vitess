@@ -444,6 +444,8 @@ func (e *Executor) addNeededBindVars(bindVarNeeds *sqlparser.BindVarNeeds, bindV
 			bindVars[key] = sqltypes.StringBindVariable(v)
 		case sysvars.DDLStrategy.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.DDLStrategy)
+		case sysvars.ReadWriteSplittingPolicy.Name:
+			bindVars[key] = sqltypes.StringBindVariable(session.ReadWriteSplittingPolicy)
 		case sysvars.SessionUUID.Name:
 			bindVars[key] = sqltypes.StringBindVariable(session.SessionUUID)
 		case sysvars.SessionEnableSystemSettings.Name:
@@ -984,6 +986,13 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 	consolidator := sqlparser.Consolidator(stmt)
 	vcursor.SetConsolidator(consolidator)
+	tabletTypeFromHint := sqlparser.GetNodeType(statement)
+	if tabletTypeFromHint == topodatapb.TabletType_PRIMARY || tabletTypeFromHint == topodatapb.TabletType_REPLICA || tabletTypeFromHint == topodatapb.TabletType_RDONLY {
+		err := vcursor.SetTabletTypeFromHint(tabletTypeFromHint)
+		if err != nil {
+			return nil, nil, err
+		}
+	}
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {
@@ -1254,7 +1263,7 @@ func (e *Executor) prepare(ctx context.Context, safeSession *SafeSession, sql st
 func (e *Executor) handlePrepare(ctx context.Context, safeSession *SafeSession, sql string, bindVars map[string]*querypb.BindVariable, logStats *logstats.LogStats) ([]*querypb.Field, error) {
 	// V3 mode.
 	query, comments := sqlparser.SplitMarginComments(sql)
-	vcursor, _ := newVCursorImpl(safeSession, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
+	vcursor, _ := newVCursorImpl(safeSession, query, comments, e, logStats, e.vm, e.VSchema(), e.resolver.resolver, e.serv, e.warnShardedOnly, e.pv)
 	plan, _, err := e.getPlan(ctx, vcursor, query, comments, bindVars, safeSession, logStats)
 	execStart := time.Now()
 	logStats.PlanTime = execStart.Sub(logStats.StartTime)

@@ -18,6 +18,7 @@ package vtgate
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -620,4 +621,101 @@ func TestMultiInternalSavepointVtGate(t *testing.T) {
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint y", 2)
 	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1), (:vtg2)", 2)
 	testQueryLog(t, logChan, "Execute", "INSERT", "insert into sp_tbl(user_id) values (:vtg1)", 1)
+}
+
+func TestSetDefaultDDLStrategy(t *testing.T) {
+	type args struct {
+		strategy string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "valid strategy",
+			args: args{
+				strategy: "online",
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "valid strategy",
+			args: args{
+				strategy: "direct",
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "valid strategy",
+			args: args{
+				strategy: "vitess",
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "invalid strategy",
+			args: args{
+				strategy: "foobar",
+			},
+			wantErr: assert.Error,
+		},
+		{
+			name: "invalid strategy",
+			args: args{
+				strategy: "",
+			},
+			wantErr: assert.Error,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.wantErr(t, SetDefaultDDLStrategy(tt.args.strategy), fmt.Sprintf("SetDefaultDDLStrategy(%v)", tt.args.strategy))
+		})
+	}
+}
+
+func TestSetDefaultReadWriteSplittingPolicy(t *testing.T) {
+	type args struct {
+		strategy string
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr assert.ErrorAssertionFunc
+	}{
+		{
+			name: "valid strategy",
+			args: args{
+				strategy: "random",
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "valid strategy",
+			args: args{
+				strategy: "disable",
+			},
+			wantErr: assert.NoError,
+		},
+		{
+			name: "invalid strategy",
+			args: args{
+				strategy: "foobar",
+			},
+			wantErr: assert.Error,
+		},
+		{
+			name: "invalid strategy",
+			args: args{
+				strategy: "",
+			},
+			wantErr: assert.Error,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.wantErr(t, SetDefaultReadWriteSplittingPolicy(tt.args.strategy), fmt.Sprintf("SetDefaultReadWriteSplittingPolicy(%v)", tt.args.strategy))
+		})
+	}
 }

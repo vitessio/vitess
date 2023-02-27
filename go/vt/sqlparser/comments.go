@@ -21,6 +21,8 @@ import (
 	"strings"
 	"unicode"
 
+	tabletpb "vitess.io/vitess/go/vt/proto/topodata"
+
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -48,6 +50,8 @@ const (
 	DirectiveVExplainRunDMLQueries = "EXECUTE_DML_QUERIES"
 	// DirectiveConsolidator enables the query consolidator.
 	DirectiveConsolidator = "CONSOLIDATOR"
+	// DirectiveRole specifies the node type for the query. possible values are: PRIMARY/REPLICA/RDONLY
+	DirectiveRole = "ROLE"
 )
 
 func isNonSpace(r rune) bool {
@@ -395,4 +399,30 @@ func Consolidator(stmt Statement) querypb.ExecuteOptions_Consolidator {
 		return querypb.ExecuteOptions_Consolidator(i32v)
 	}
 	return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
+}
+
+func GetNodeType(stmt Statement) tabletpb.TabletType {
+	var comments *ParsedComments
+	switch stmt := stmt.(type) {
+	case *Select:
+		comments = stmt.Comments
+	case *Insert:
+		comments = stmt.Comments
+	case *Update:
+		comments = stmt.Comments
+	case *Delete:
+		comments = stmt.Comments
+	}
+	if comments == nil {
+		return tabletpb.TabletType_UNKNOWN
+	}
+	directives := comments.Directives()
+	strv, isSet := directives.GetString(DirectiveRole, "PRIMARY")
+	if !isSet {
+		return tabletpb.TabletType_UNKNOWN
+	}
+	if i32v, ok := tabletpb.TabletType_value[strv]; ok {
+		return tabletpb.TabletType(i32v)
+	}
+	return tabletpb.TabletType_UNKNOWN
 }
