@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 func insertInitialDataIntoExternalCluster(t *testing.T, conn *mysql.Conn) {
@@ -57,7 +58,8 @@ func TestMigrate(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
+	require.NoError(t, err)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -76,12 +78,12 @@ func TestMigrate(t *testing.T) {
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
-	extVtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "rating", "0"), 1)
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, "rating", "0")
+	require.NoError(t, err)
 	verifyClusterHealth(t, extVc)
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
 	insertInitialDataIntoExternalCluster(t, extVtgateConn)
 
-	var err error
 	var output, expected string
 	ksWorkflow := "product.e1"
 
