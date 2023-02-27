@@ -16,6 +16,8 @@ limitations under the License.
 
 package sysvars
 
+import "sync"
+
 // This information lives here, because it's needed from the vtgate planbuilder, the vtgate engine,
 // and the AST rewriter, that happens to live in sqlparser.
 
@@ -37,7 +39,17 @@ type SystemVariable struct {
 	Name string
 
 	SupportSetVar bool
+
+	Case StorageCase
 }
+
+type StorageCase int
+
+const (
+	SCSame StorageCase = iota
+	SCUpper
+	SCLower
+)
 
 // System Settings
 var (
@@ -58,6 +70,7 @@ var (
 	TransactionReadOnly         = SystemVariable{Name: "transaction_read_only", IsBoolean: true, Default: off}
 	TxReadOnly                  = SystemVariable{Name: "tx_read_only", IsBoolean: true, Default: off}
 	Workload                    = SystemVariable{Name: "workload", IdentifierAsString: true}
+	QueryTimeout                = SystemVariable{Name: "query_timeout"}
 
 	// Online DDL
 	DDLStrategy    = SystemVariable{Name: "ddl_strategy", IdentifierAsString: true}
@@ -86,6 +99,7 @@ var (
 		ReadAfterWriteGTID,
 		ReadAfterWriteTimeOut,
 		SessionTrackGTIDs,
+		QueryTimeout,
 	}
 
 	ReadOnly = []SystemVariable{
@@ -183,8 +197,6 @@ var (
 		{Name: "optimizer_trace_features"},
 		{Name: "optimizer_trace_limit"},
 		{Name: "optimizer_trace_max_mem_size"},
-		{Name: "transaction_isolation"},
-		{Name: "tx_isolation"},
 		{Name: "optimizer_trace_offset"},
 		{Name: "parser_max_mem_size"},
 		{Name: "profiling", IsBoolean: true},
@@ -205,7 +217,9 @@ var (
 		{Name: "sql_warnings", IsBoolean: true},
 		{Name: "time_zone"},
 		{Name: "tmp_table_size", SupportSetVar: true},
+		{Name: "transaction_isolation", Case: SCUpper},
 		{Name: "transaction_prealloc_size"},
+		{Name: "tx_isolation", Case: SCUpper},
 		{Name: "unique_checks", IsBoolean: true, SupportSetVar: true},
 		{Name: "updatable_views_with_limit", IsBoolean: true, SupportSetVar: true},
 	}
@@ -267,4 +281,18 @@ func GetInterestingVariables() []string {
 		}
 	}
 	return res
+}
+
+var vitessAwareVariableNames map[string]struct{}
+var vitessAwareInit sync.Once
+
+func IsVitessAware(sysv string) bool {
+	vitessAwareInit.Do(func() {
+		vitessAwareVariableNames = make(map[string]struct{}, len(VitessAware))
+		for _, v := range VitessAware {
+			vitessAwareVariableNames[v.Name] = struct{}{}
+		}
+	})
+	_, found := vitessAwareVariableNames[sysv]
+	return found
 }

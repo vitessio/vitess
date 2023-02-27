@@ -20,12 +20,12 @@ limitations under the License.
 package memorytopo
 
 import (
+	"context"
+	"errors"
 	"math/rand"
 	"strings"
 	"sync"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
@@ -37,6 +37,8 @@ const (
 	// Path components
 	electionsPath = "elections"
 )
+
+var ErrConnectionClosed = errors.New("connection closed")
 
 const (
 	// UnreachableServerAddr is a sentinel value for CellInfo.ServerAddr.
@@ -126,12 +128,16 @@ type Conn struct {
 	factory    *Factory
 	cell       string
 	serverAddr string
+	closed     bool
 }
 
 // dial returns immediately, unless the Conn points to the sentinel
 // UnreachableServerAddr, in which case it will block until the context expires
 // and return the context's error.
 func (c *Conn) dial(ctx context.Context) error {
+	if c.closed {
+		return ErrConnectionClosed
+	}
 	if c.serverAddr == UnreachableServerAddr {
 		<-ctx.Done()
 		return ctx.Err()
@@ -141,9 +147,14 @@ func (c *Conn) dial(ctx context.Context) error {
 }
 
 // Close is part of the topo.Conn interface.
-// It nils out factory, so any subsequent call will panic.
 func (c *Conn) Close() {
-	c.factory = nil
+	c.closed = true
+}
+
+type watch struct {
+	contents  chan *topo.WatchData
+	recursive chan *topo.WatchDataRecursive
+	lock      chan string
 }
 
 // node contains a directory or a file entry.
@@ -159,7 +170,7 @@ type node struct {
 	parent *node
 
 	// watches is a map of all watches for this node.
-	watches map[int]chan *topo.WatchData
+	watches map[int]watch
 
 	// lock is nil when the node is not locked.
 	// otherwise it has a channel that is closed by unlock.
@@ -175,11 +186,34 @@ func (n *node) isDirectory() bool {
 	return n.children != nil
 }
 
+func (n *node) recurseContents(callback func(n *node)) {
+	if n.isDirectory() {
+		for _, child := range n.children {
+			child.recurseContents(callback)
+		}
+	} else {
+		callback(n)
+	}
+}
+
+func (n *node) propagateRecursiveWatch(ev *topo.WatchDataRecursive) {
+	for parent := n.parent; parent != nil; parent = parent.parent {
+		for _, w := range parent.watches {
+			if w.recursive != nil {
+				w.recursive <- ev
+			}
+		}
+	}
+}
+
 // PropagateWatchError propagates the given error to all watches on this node
 // and recursively applies to all children
 func (n *node) PropagateWatchError(err error) {
 	for _, ch := range n.watches {
-		ch <- &topo.WatchData{
+		if ch.contents == nil {
+			continue
+		}
+		ch.contents <- &topo.WatchData{
 			Err: err,
 		}
 	}
@@ -230,7 +264,7 @@ func (f *Factory) newFile(name string, contents []byte, parent *node) *node {
 		version:  f.getNextVersion(),
 		contents: contents,
 		parent:   parent,
-		watches:  make(map[int]chan *topo.WatchData),
+		watches:  make(map[int]watch),
 	}
 }
 
@@ -240,6 +274,7 @@ func (f *Factory) newDirectory(name string, parent *node) *node {
 		version:  f.getNextVersion(),
 		children: make(map[string]*node),
 		parent:   parent,
+		watches:  make(map[int]watch),
 	}
 }
 

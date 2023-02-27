@@ -17,7 +17,6 @@ limitations under the License.
 package vreplication
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"strconv"
@@ -32,17 +31,7 @@ import (
 )
 
 const (
-	vreplicationLogTableName   = "_vt.vreplication_log"
-	createVReplicationLogTable = `CREATE TABLE IF NOT EXISTS _vt.vreplication_log (
-		id BIGINT(20) AUTO_INCREMENT,
-		vrepl_id INT NOT NULL,
-		type VARBINARY(256) NOT NULL,
-		state VARBINARY(100) NOT NULL,
-		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-		updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-		message text NOT NULL,
-		count BIGINT(20) NOT NULL DEFAULT 1,
-		PRIMARY KEY (id))`
+	vreplicationLogTableName = "_vt.vreplication_log"
 )
 
 const (
@@ -74,10 +63,10 @@ const (
 	LogError = "Error"
 )
 
-func getLastLog(dbClient *vdbClient, vreplID uint32) (id int64, typ, state, message string, err error) {
+func getLastLog(dbClient *vdbClient, vreplID int32) (id int64, typ, state, message string, err error) {
 	var qr *sqltypes.Result
 	query := fmt.Sprintf("select id, type, state, message from _vt.vreplication_log where vrepl_id = %d order by id desc limit 1", vreplID)
-	if qr, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if qr, err = dbClient.Execute(query); err != nil {
 		return 0, "", "", "", err
 	}
 	if len(qr.Rows) != 1 {
@@ -91,7 +80,7 @@ func getLastLog(dbClient *vdbClient, vreplID uint32) (id int64, typ, state, mess
 	return id, typ, state, message, nil
 }
 
-func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message string) error {
+func insertLog(dbClient *vdbClient, typ string, vreplID int32, state, message string) error {
 	// getLastLog returns the last log for a stream. During insertion, if the type/state/message match we do not insert
 	// a new log but increment the count. This prevents spamming of the log table in case the same message is logged continuously.
 	id, _, lastLogState, lastLogMessage, err := getLastLog(dbClient, vreplID)
@@ -111,14 +100,14 @@ func insertLog(dbClient *vdbClient, typ string, vreplID uint32, state, message s
 			strconv.Itoa(int(vreplID)), encodeString(typ), encodeString(state), encodeString(message))
 		query = buf.ParsedQuery().Query
 	}
-	if _, err = withDDL.Exec(context.Background(), query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
+	if _, err = dbClient.ExecuteFetch(query, 10000); err != nil {
 		return fmt.Errorf("could not insert into log table: %v: %v", query, err)
 	}
 	return nil
 }
 
 // insertLogWithParams is called when a stream is created. The attributes of the stream are stored as a json string
-func insertLogWithParams(dbClient *vdbClient, action string, vreplID uint32, params map[string]string) error {
+func insertLogWithParams(dbClient *vdbClient, action string, vreplID int32, params map[string]string) error {
 	var message string
 	if params != nil {
 		obj, _ := json.Marshal(params)
@@ -135,34 +124,72 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	sqlErr, isSQLErr := err.(*mysql.SQLError)
+	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 	if !isSQLErr {
+		return false
+	}
+	if sqlErr.Num == mysql.ERUnknownError {
 		return false
 	}
 	switch sqlErr.Num {
 	case
-		mysql.ERWarnDataOutOfRange,
-		mysql.ERDataTooLong,
-		mysql.ERWarnDataTruncated,
-		mysql.ERTruncatedWrongValue,
-		mysql.ERTruncatedWrongValueForField,
-		mysql.ERIllegalValueForType,
-		mysql.ErrWrongValueForType,
-		mysql.ErrCantCreateGeometryObject,
-		mysql.ErrGISDataWrongEndianess,
-		mysql.ErrNotImplementedForCartesianSRS,
-		mysql.ErrNotImplementedForProjectedSRS,
-		mysql.ErrNonPositiveRadius,
+		// in case-insensitive alphabetical order
+		mysql.ERAccessDeniedError,
+		mysql.ERBadFieldError,
 		mysql.ERBadNullError,
+		mysql.ERCantDropFieldOrKey,
+		mysql.ERDataOutOfRange,
+		mysql.ERDataTooLong,
+		mysql.ERDBAccessDenied,
 		mysql.ERDupEntry,
-		mysql.ERNoDefaultForField,
-		mysql.ERInvalidJSONText,
-		mysql.ERInvalidJSONTextInParams,
+		mysql.ERDupFieldName,
+		mysql.ERDupKeyName,
+		mysql.ERDupUnique,
+		mysql.ERFeatureDisabled,
+		mysql.ERFunctionNotDefined,
+		mysql.ERIllegalValueForType,
+		mysql.ERInvalidCastToJSON,
 		mysql.ERInvalidJSONBinaryData,
 		mysql.ERInvalidJSONCharset,
-		mysql.ERInvalidCastToJSON,
+		mysql.ERInvalidJSONText,
+		mysql.ERInvalidJSONTextInParams,
+		mysql.ERJSONDocumentTooDeep,
 		mysql.ERJSONValueTooBig,
-		mysql.ERJSONDocumentTooDeep:
+		mysql.ERNoDefault,
+		mysql.ERNoDefaultForField,
+		mysql.ERNonUniq,
+		mysql.ERNonUpdateableTable,
+		mysql.ERNoSuchTable,
+		mysql.ERNotAllowedCommand,
+		mysql.ERNotSupportedYet,
+		mysql.EROptionPreventsStatement,
+		mysql.ERParseError,
+		mysql.ERPrimaryCantHaveNull,
+		mysql.ErrCantCreateGeometryObject,
+		mysql.ErrGISDataWrongEndianess,
+		mysql.ErrNonPositiveRadius,
+		mysql.ErrNotImplementedForCartesianSRS,
+		mysql.ErrNotImplementedForProjectedSRS,
+		mysql.ErrWrongValueForType,
+		mysql.ERSPDoesNotExist,
+		mysql.ERSpecifiedAccessDenied,
+		mysql.ERSyntaxError,
+		mysql.ERTooBigRowSize,
+		mysql.ERTooBigSet,
+		mysql.ERTruncatedWrongValue,
+		mysql.ERTruncatedWrongValueForField,
+		mysql.ERUnknownCollation,
+		mysql.ERUnknownProcedure,
+		mysql.ERUnknownTable,
+		mysql.ERWarnDataOutOfRange,
+		mysql.ERWarnDataTruncated,
+		mysql.ERWrongFKDef,
+		mysql.ERWrongFieldSpec,
+		mysql.ERWrongParamCountToProcedure,
+		mysql.ERWrongParametersToProcedure,
+		mysql.ERWrongUsage,
+		mysql.ERWrongValue,
+		mysql.ERWrongValueCountOnRow:
 		log.Errorf("Got unrecoverable error: %v", sqlErr)
 		return true
 	}

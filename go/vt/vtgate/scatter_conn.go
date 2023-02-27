@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"flag"
 	"io"
 	"sync"
 	"time"
@@ -43,10 +42,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-)
-
-var (
-	messageStreamGracePeriod = flag.Duration("message_stream_grace_period", 30*time.Second, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 )
 
 // ScatterConn is used for executing queries across
@@ -143,6 +138,7 @@ const (
 // process a partially-successful operation.
 func (stc *ScatterConn) ExecuteMultiShard(
 	ctx context.Context,
+	primitive engine.Primitive,
 	rss []*srvtopo.ResolvedShard,
 	queries []*querypb.BoundQuery,
 	session *SafeSession,
@@ -252,6 +248,8 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
+			session.logging.log(primitive, rs.Target, rs.Gateway, queries[i].Sql, info.actionNeeded == begin || info.actionNeeded == reserveBegin, queries[i].BindVariables)
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
@@ -261,15 +259,15 @@ func (stc *ScatterConn) ExecuteMultiShard(
 			defer mu.Unlock()
 
 			// Don't append more rows if row count is exceeded.
-			if ignoreMaxMemoryRows || len(qr.Rows) <= *maxMemoryRows {
+			if ignoreMaxMemoryRows || len(qr.Rows) <= maxMemoryRows {
 				qr.AppendResult(innerqr)
 			}
 			return newInfo, nil
 		},
 	)
 
-	if !ignoreMaxMemoryRows && len(qr.Rows) > *maxMemoryRows {
-		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", *maxMemoryRows)}
+	if !ignoreMaxMemoryRows && len(qr.Rows) > maxMemoryRows {
+		return nil, []error{vterrors.NewErrorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, vterrors.NetPacketTooLarge, "in-memory row count exceeded allowed limit of %d", maxMemoryRows)}
 	}
 
 	return qr, allErrors.GetErrors()
@@ -332,7 +330,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 	} else {
 		if len(qr.Fields) == 0 {
 			// Unreachable: this can happen only if vttablet misbehaves.
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "received rows before fields")
+			return vterrors.VT13001("received rows before fields")
 		}
 		*fieldSent = true
 	}
@@ -347,6 +345,7 @@ func (stc *ScatterConn) processOneStreamingResult(mu *sync.Mutex, fieldSent *boo
 // by multiple go routines, through processOneStreamingResult.
 func (stc *ScatterConn) StreamExecuteMulti(
 	ctx context.Context,
+	primitive engine.Primitive,
 	query string,
 	rss []*srvtopo.ResolvedShard,
 	bindVars []map[string]*querypb.BindVariable,
@@ -447,6 +446,8 @@ func (stc *ScatterConn) StreamExecuteMulti(
 			default:
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unexpected actionNeeded on query execution: %v", info.actionNeeded)
 			}
+			session.logging.log(primitive, rs.Target, rs.Gateway, query, info.actionNeeded == begin || info.actionNeeded == reserveBegin, bindVars[i])
+
 			// We need to new shard info irrespective of the error.
 			newInfo := info.updateTransactionAndReservedID(transactionID, reservedID, alias)
 			if err != nil {
@@ -530,17 +531,17 @@ func (stc *ScatterConn) MessageStream(ctx context.Context, rss []*srvtopo.Resolv
 			default:
 			}
 			firstErrorTimeStamp := lastErrors.Record(rs.Target)
-			if time.Since(firstErrorTimeStamp) >= *messageStreamGracePeriod {
+			if time.Since(firstErrorTimeStamp) >= messageStreamGracePeriod {
 				// Cancel all streams and return an error.
 				cancel()
-				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", rs.Target, *messageStreamGracePeriod)
+				return vterrors.Errorf(vtrpcpb.Code_DEADLINE_EXCEEDED, "message stream from %v has repeatedly failed for longer than %v", rs.Target, messageStreamGracePeriod)
 			}
 
 			// It's not been too long since our last good send. Wait and retry.
 			select {
 			case <-ctx.Done():
 				return nil
-			case <-time.After(*messageStreamGracePeriod / 5):
+			case <-time.After(messageStreamGracePeriod / 5):
 			}
 		}
 	})
@@ -697,7 +698,7 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 	defer stc.endLockAction(startTime, allErrors, statsKey, &err)
 
 	if session == nil || session.Session == nil {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "session cannot be nil")
+		return nil, vterrors.VT13001("session cannot be nil")
 	}
 
 	opts = session.Session.Options
@@ -835,12 +836,12 @@ func lockInfo(target *querypb.Target, session *SafeSession, lockFuncType sqlpars
 		info.reservedID = session.LockSession.ReservedId
 		info.alias = session.LockSession.TabletAlias
 	}
-	// TODO: after release 14.0, uncomment this line.
-	// This commented for backward compatiblity as there is a specific check in vttablet for lock functions,
-	// to always be on reserved connection.
-	//if lockFuncType != sqlparser.GetLock {
-	//	return info, nil
-	//}
+	// Only GetLock needs to start a reserved connection.
+	// Once in reserved connection, it will be used for other calls as well.
+	// But, we don't want to start a reserved connection for other calls like IsFreeLock, IsUsedLock, etc.
+	if lockFuncType != sqlparser.GetLock {
+		return info, nil
+	}
 	if info.reservedID == 0 {
 		info.actionNeeded = reserve
 	}

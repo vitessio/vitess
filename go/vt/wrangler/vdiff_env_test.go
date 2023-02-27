@@ -17,25 +17,25 @@ limitations under the License.
 package wrangler
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"sync"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/logutil"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/queryservice/fakes"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 const (
@@ -80,7 +80,7 @@ func init() {
 // testVDiffEnv
 
 func newTestVDiffEnv(sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
-	flag.Set("tablet_protocol", "VDiffTest")
+	tabletconntest.SetProtocol("go.vt.wrangler.vdiff_env_test", "VDiffTest")
 	env := &testVDiffEnv{
 		workflow:   "vdiffTest",
 		tablets:    make(map[int]*testVDiffTablet),
@@ -135,10 +135,10 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 		// migrater buildMigrationTargets
 		env.tmc.setVRResults(
 			primary.tablet,
-			"select id, source, message, cell, tablet_types from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
+			"select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='vdiffTest' and db_name='vt_target'",
 			sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-				"id|source|message|cell|tablet_types",
-				"int64|varchar|varchar|varchar|varchar"),
+				"id|source|message|cell|tablet_types|workflow_type|workflow_sub_type|defer_secondary_keys",
+				"int64|varchar|varchar|varchar|varchar|int64|int64|int64"),
 				rows...,
 			),
 		)
@@ -178,6 +178,7 @@ func (env *testVDiffEnv) close() {
 		env.topoServ.DeleteTablet(context.Background(), t.tablet.Alias)
 	}
 	env.tablets = nil
+	env.topoServ.Close()
 }
 
 func (env *testVDiffEnv) addTablet(id int, keyspace, shard string, tabletType topodatapb.TabletType) *testVDiffTablet {
@@ -323,7 +324,7 @@ func (tmc *testVDiffTMClient) WaitForPosition(ctx context.Context, tablet *topod
 	return nil
 }
 
-func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+func (tmc *testVDiffTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

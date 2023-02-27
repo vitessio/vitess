@@ -2,7 +2,6 @@
 Copyright 2019 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
 
     http://www.apache.org/licenses/LICENSE-2.0
@@ -66,7 +65,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   identifierCI      IdentifierCI
   joinCondition *JoinCondition
   databaseOption DatabaseOption
-  columnType    ColumnType
+  columnType    *ColumnType
   columnCharset ColumnCharset
 }
 
@@ -79,7 +78,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   optVal        Expr
   constraintInfo ConstraintInfo
   alterOption      AlterOption
-  characteristic Characteristic
 
   ins           *Insert
   colName       *ColName
@@ -159,7 +157,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   partitionValueRange	*PartitionValueRange
   partitionEngine *PartitionEngine
   partSpecs     []*PartitionSpec
-  characteristics []Characteristic
   selectExpr    SelectExpr
   columns       Columns
   partitions    Partitions
@@ -178,7 +175,6 @@ func bindVariable(yylex yyLexer, bvar string) {
   colKeyOpt     ColumnKeyOption
   referenceAction ReferenceAction
   matchAction MatchAction
-  isolationLevel IsolationLevel
   insertAction InsertAction
   scope 	Scope
   lock 		Lock
@@ -188,9 +184,12 @@ func bindVariable(yylex yyLexer, bvar string) {
   matchExprOption MatchExprOption
   orderDirection  OrderDirection
   explainType 	  ExplainType
+  vexplainType 	  VExplainType
   intervalType	  IntervalTypes
   lockType LockType
   referenceDefinition *ReferenceDefinition
+  txAccessModes []TxAccessMode
+  txAccessMode TxAccessMode
 
   columnStorage ColumnStorage
   columnFormat ColumnFormat
@@ -225,6 +224,17 @@ func bindVariable(yylex yyLexer, bvar string) {
 // In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of '('.
 // This precedence should not be used anywhere else other than with function names that are non-reserved-keywords.
 %nonassoc <str> FUNCTION_CALL_NON_KEYWORD
+// STRING_TYPE_PREFIX_NON_KEYWORD is used to resolve shift-reduce conflicts occuring due to column_name symbol and
+// being able to use keywords like DATE and TIME as prefixes to strings to denote their type. The shift-reduce conflict occurrs because
+// after seeing one of these non-reserved keywords, if we see a STRING, then we can either shift to use the STRING typed rule in literal or
+// reduce the non-reserved keyword into column_name and eventually use a rule from simple_expr.
+// The way to fix this conflict is to give shifting higher precedence than reducing.
+// Adding no precedence also works, since shifting is the default, but it reports some conflicts
+// Precedence is also assined to shifting on STRING.
+// We also need to add a lower precedence to reducing the grammar symbol to non-reserved keywords.
+// In order to ensure lower precedence of reduction, this rule has to come before the precedence declaration of STRING.
+// This precedence should not be used anywhere else other than with non-reserved-keywords that are also used for type-casting a STRING.
+%nonassoc <str> STRING_TYPE_PREFIX_NON_KEYWORD
 
 %token LEX_ERROR
 %left <str> UNION
@@ -240,7 +250,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 %left <str> ON USING INPLACE COPY INSTANT ALGORITHM NONE SHARED EXCLUSIVE
 %left <str> SUBQUERY_AS_EXPR
 %left <str> '(' ',' ')'
-%token <str> ID AT_ID AT_AT_ID HEX STRING NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM VALUE_ARG LIST_ARG COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
+%nonassoc <str> STRING
+%token <str> ID AT_ID AT_AT_ID HEX NCHAR_STRING INTEGRAL FLOAT DECIMAL HEXNUM COMMENT COMMENT_KEYWORD BITNUM BIT_LITERAL COMPRESSION
+%token <str> VALUE_ARG LIST_ARG OFFSET_ARG
 %token <str> JSON_PRETTY JSON_STORAGE_SIZE JSON_STORAGE_FREE JSON_CONTAINS JSON_CONTAINS_PATH JSON_EXTRACT JSON_KEYS JSON_OVERLAPS JSON_SEARCH JSON_VALUE
 %token <str> EXTRACT
 %token <str> NULL TRUE FALSE OFF
@@ -291,7 +303,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 
 // DDL Tokens
 %token <str> CREATE ALTER DROP RENAME ANALYZE ADD FLUSH CHANGE MODIFY DEALLOCATE
-%token <str> REVERT
+%token <str> REVERT QUERIES
 %token <str> SCHEMA TABLE INDEX VIEW TO IGNORE IF PRIMARY COLUMN SPATIAL FULLTEXT KEY_BLOCK_SIZE CHECK INDEXES
 %token <str> ACTION CASCADE CONSTRAINT FOREIGN NO REFERENCES RESTRICT
 %token <str> SHOW DESCRIBE EXPLAIN DATE ESCAPE REPAIR OPTIMIZE TRUNCATE COALESCE EXCHANGE REBUILD PARTITIONING REMOVE PREPARE EXECUTE
@@ -301,14 +313,17 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> SEQUENCE MERGE TEMPORARY TEMPTABLE INVOKER SECURITY FIRST AFTER LAST
 
 // Migration tokens
-%token <str> VITESS_MIGRATION CANCEL RETRY COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+%token <str> VITESS_MIGRATION CANCEL RETRY LAUNCH COMPLETE CLEANUP THROTTLE UNTHROTTLE EXPIRE RATIO
+// Throttler tokens
+%token <str> VITESS_THROTTLER
 
 // Transaction Tokens
 %token <str> BEGIN START TRANSACTION COMMIT ROLLBACK SAVEPOINT RELEASE WORK
+%token <str> CONSISTENT SNAPSHOT
 
 // Type Tokens
 %token <str> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM
-%token <str> REAL DOUBLE FLOAT_TYPE DECIMAL_TYPE NUMERIC
+%token <str> REAL DOUBLE FLOAT_TYPE FLOAT4_TYPE FLOAT8_TYPE DECIMAL_TYPE NUMERIC
 %token <str> TIME TIMESTAMP DATETIME YEAR
 %token <str> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR
 %token <str> TEXT TINYTEXT MEDIUMTEXT LONGTEXT
@@ -367,7 +382,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> GTID_SUBSET GTID_SUBTRACT WAIT_FOR_EXECUTED_GTID_SET WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS
 
 // Explain tokens
-%token <str> FORMAT TREE VITESS TRADITIONAL
+%token <str> FORMAT TREE VITESS TRADITIONAL VTEXPLAIN VEXPLAIN PLAN
 
 // Lock type tokens
 %token <str> LOCAL LOW_PRIORITY
@@ -391,6 +406,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <selStmt> query_expression_parens query_expression query_expression_body select_statement query_primary select_stmt_with_into
 %type <statement> explain_statement explainable_statement
 %type <statement> prepare_statement
+%type <statement> vexplain_statement
 %type <statement> execute_statement deallocate_statement
 %type <statement> stream_statement vstream_statement insert_statement update_statement delete_statement set_statement set_transaction_statement
 %type <statement> create_statement alter_statement rename_statement drop_statement truncate_statement flush_statement do_statement
@@ -415,6 +431,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <strs> comment_opt comment_list
 %type <str> wild_opt check_option_opt cascade_or_local_opt restrict_or_cascade_opt
 %type <explainType> explain_format_opt
+%type <vexplainType> vexplain_type_opt
 %type <trimType> trim_type
 %type <frameUnitType> frame_units
 %type <argumentLessWindowExprType> argument_less_window_expr_type
@@ -479,6 +496,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <subquery> subquery
 %type <derivedTable> derived_table
 %type <colName> column_name after_opt
+%type <expr> column_name_or_offset
 %type <colNames> column_names column_names_opt_paren
 %type <whens> when_expression_list
 %type <when> when_expression
@@ -494,19 +512,16 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> header_opt export_options manifest_opt overwrite_opt format_opt optionally_opt regexp_symbol
 %type <str> fields_opts fields_opt_list fields_opt lines_opts lines_opt lines_opt_list
 %type <lock> locking_clause
-%type <columns> ins_column_list column_list column_list_opt index_list
+%type <columns> ins_column_list column_list column_list_opt column_list_empty index_list
 %type <variable> variable_expr set_variable user_defined_variable
 %type <variables> at_id_list execute_statement_list_opt
 %type <partitions> opt_partition_clause partition_list
 %type <updateExprs> on_dup_opt
 %type <updateExprs> update_list
-%type <setExprs> set_list
-%type <str> charset_or_character_set charset_or_character_set_or_names
+%type <setExprs> set_list transaction_chars
+%type <setExpr> set_expression transaction_char
+%type <str> charset_or_character_set charset_or_character_set_or_names isolation_level
 %type <updateExpr> update_expression
-%type <setExpr> set_expression
-%type <characteristic> transaction_char
-%type <characteristics> transaction_chars
-%type <isolationLevel> isolation_level
 %type <str> for_from from_or_on
 %type <str> default_opt
 %type <ignore> ignore_opt
@@ -531,7 +546,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
-%type <LengthScaleOption> float_length_opt decimal_length_opt
+%type <LengthScaleOption> double_length_opt float_length_opt decimal_length_opt
 %type <boolean> unsigned_opt zero_fill_opt without_valid_opt
 %type <strs> enum_values
 %type <columnDefinition> column_definition
@@ -576,6 +591,8 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <str> underscore_charsets
 %type <str> expire_opt
 %type <literal> ratio_opt
+%type <txAccessModes> tx_chacteristics_opt tx_chars
+%type <txAccessMode> tx_char
 %start any_command
 
 %%
@@ -624,6 +641,7 @@ command:
 | savepoint_statement
 | release_statement
 | explain_statement
+| vexplain_statement
 | other_statement
 | flush_statement
 | do_statement
@@ -996,56 +1014,98 @@ set_statement:
     $$ = NewSetStatement(Comments($2).Parsed(), $3)
   }
 
+set_list:
+  set_expression
+  {
+    $$ = SetExprs{$1}
+  }
+| set_list ',' set_expression
+  {
+    $$ = append($1, $3)
+  }
+
+set_expression:
+  set_variable '=' ON
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
+  }
+| set_variable '=' OFF
+  {
+    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
+  }
+| set_variable '=' expression
+  {
+    $$ = &SetExpr{Var: $1, Expr: $3}
+  }
+| charset_or_character_set_or_names charset_value collate_opt
+  {
+    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
+  }
+
+set_variable:
+  ID
+  {
+    $$ = NewSetVariable(string($1), SessionScope)
+  }
+| variable_expr
+  {
+    $$ = $1
+  }
+| set_session_or_global ID
+  {
+    $$ = NewSetVariable(string($2), $1)
+  }
+
 set_transaction_statement:
   SET comment_opt set_session_or_global TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Scope: $3, Characteristics: $5}
+    $$ = NewSetStatement(Comments($2).Parsed(), UpdateSetExprsScope($5, $3))
   }
 | SET comment_opt TRANSACTION transaction_chars
   {
-    $$ = &SetTransaction{Comments: Comments($2).Parsed(), Characteristics: $4, Scope: NoScope}
+    $$ = NewSetStatement(Comments($2).Parsed(), $4)
   }
 
 transaction_chars:
   transaction_char
   {
-    $$ = []Characteristic{$1}
+    $$ = SetExprs{$1}
   }
 | transaction_chars ',' transaction_char
   {
-    $$ = append($$, $3)
+    $$ = append($1, $3)
   }
 
 transaction_char:
   ISOLATION LEVEL isolation_level
   {
-    $$ = $3
+    $$ = &SetExpr{Var: NewSetVariable(TransactionIsolationStr, NextTxScope), Expr: NewStrLiteral($3)}
   }
 | READ WRITE
   {
-    $$ = ReadWrite
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("off")}
   }
 | READ ONLY
   {
-    $$ = ReadOnly
+    $$ = &SetExpr{Var: NewSetVariable(TransactionReadOnlyStr, NextTxScope), Expr: NewStrLiteral("on")}
   }
 
 isolation_level:
   REPEATABLE READ
   {
-    $$ = RepeatableRead
+    $$ = RepeatableReadStr
   }
 | READ COMMITTED
   {
-    $$ = ReadCommitted
+    $$ = ReadCommittedStr
   }
 | READ UNCOMMITTED
   {
-    $$ = ReadUncommitted
+    $$ = ReadUncommittedStr
   }
 | SERIALIZABLE
   {
-    $$ = Serializable
+    $$ = SerializableStr
   }
 
 set_session_or_global:
@@ -1401,7 +1461,7 @@ generated_always_opt:
 // was specific (as stated in the MySQL guide) and did not accept arbitrary order options. For example NOT NULL DEFAULT 1 and not DEFAULT 1 NOT NULL
 column_attribute_list_opt:
   {
-    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: colKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
+    $$ = &ColumnTypeOptions{Null: nil, Default: nil, OnUpdate: nil, Autoincrement: false, KeyOpt: ColKeyNone, Comment: nil, As: nil, Invisible: nil, Format: UnspecifiedFormat, EngineAttribute: nil, SecondaryEngineAttribute: nil }
   }
 | column_attribute_list_opt NULL
   {
@@ -1652,7 +1712,7 @@ text_literal
   {
    	$$ = &IntroducerExpr{CharacterSet: $1, Expr: NewHexLiteral($2)}
   }
-| underscore_charsets column_name %prec UNARY
+| underscore_charsets column_name_or_offset %prec UNARY
   {
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: $2}
   }
@@ -1660,6 +1720,18 @@ text_literal
   {
     bindVariable(yylex, $2[1:])
     $$ = &IntroducerExpr{CharacterSet: $1, Expr: NewArgument($2[1:])}
+  }
+| DATE STRING
+  {
+  $$ = NewDateLiteral($2)
+  }
+| TIME STRING
+  {
+  $$ = NewTimeLiteral($2)
+  }
+| TIMESTAMP STRING
+  {
+  $$ = NewTimestampLiteral($2)
   }
 
 underscore_charsets:
@@ -1878,19 +1950,19 @@ text_literal_or_arg:
 keys:
   PRIMARY KEY
   {
-    $$ = colKeyPrimary
+    $$ = ColKeyPrimary
   }
 | UNIQUE
   {
-    $$ = colKeyUnique
+    $$ = ColKeyUnique
   }
 | UNIQUE KEY
   {
-    $$ = colKeyUniqueKey
+    $$ = ColKeyUniqueKey
   }
 | KEY
   {
-    $$ = colKey
+    $$ = ColKey
   }
 
 column_type:
@@ -1918,69 +1990,81 @@ numeric_type:
 int_type:
   BIT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOL
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOLEAN
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | SMALLINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INTEGER
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BIGINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 decimal_type:
-REAL float_length_opt
+REAL double_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
-| DOUBLE float_length_opt
+| DOUBLE double_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT8_TYPE double_length_opt
+  {
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT_TYPE float_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
+    $$.Length = $2.Length
+    $$.Scale = $2.Scale
+  }
+| FLOAT4_TYPE float_length_opt
+  {
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | DECIMAL_TYPE decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | NUMERIC decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
@@ -1988,126 +2072,126 @@ REAL float_length_opt
 time_type:
   DATE
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TIMESTAMP length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | DATETIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | YEAR length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 
 char_type:
   CHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
 | CHAR length_opt BYTE
   {
     // CHAR BYTE is an alias for binary. See also:
     // https://dev.mysql.com/doc/refman/8.0/en/string-type-syntax.html
-    $$ = ColumnType{Type: "binary", Length: $2}
+    $$ = &ColumnType{Type: "binary", Length: $2}
   }
 | VARCHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
 | BINARY length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | VARBINARY length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | TINYTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | MEDIUMTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | LONGTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | BLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONGBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | JSON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | ENUM '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
 
 spatial_type:
   GEOMETRY
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | GEOMETRYCOLLECTION
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTILINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 enum_values:
@@ -2130,7 +2214,7 @@ length_opt:
     $$ = NewIntLiteral($2)
   }
 
-float_length_opt:
+double_length_opt:
   {
     $$ = LengthScaleOption{}
   }
@@ -2139,6 +2223,18 @@ float_length_opt:
     $$ = LengthScaleOption{
         Length: NewIntLiteral($2),
         Scale: NewIntLiteral($4),
+    }
+  }
+
+float_length_opt:
+double_length_opt
+  {
+    $$ = $1
+  }
+| '(' INTEGRAL ')'
+  {
+    $$ = LengthScaleOption{
+        Length: NewIntLiteral($2),
     }
   }
 
@@ -3175,6 +3271,27 @@ alter_statement:
       UUID: string($4),
     }
   }
+| ALTER comment_opt VITESS_MIGRATION STRING LAUNCH
+  {
+    $$ = &AlterMigration{
+      Type: LaunchMigrationType,
+      UUID: string($4),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION STRING LAUNCH VITESS_SHARDS STRING
+  {
+    $$ = &AlterMigration{
+      Type: LaunchMigrationType,
+      UUID: string($4),
+      Shards: string($7),
+    }
+  }
+| ALTER comment_opt VITESS_MIGRATION LAUNCH ALL
+  {
+    $$ = &AlterMigration{
+      Type: LaunchAllMigrationType,
+    }
+  }
 | ALTER comment_opt VITESS_MIGRATION STRING COMPLETE
   {
     $$ = &AlterMigration{
@@ -3253,7 +3370,7 @@ partitions_options_beginning:
         Expr: $4,
       }
     }
-| linear_opt KEY algorithm_opt '(' column_list ')'
+| linear_opt KEY algorithm_opt '(' column_list_empty ')'
     {
       $$ = &PartitionOption {
         IsLinear: $1,
@@ -3976,6 +4093,10 @@ show_statement:
   {
     $$ = &Show{&ShowBasic{Command: VitessReplicationStatus, Filter: $3}}
   }
+| SHOW VITESS_THROTTLER STATUS
+  {
+    $$ = &ShowThrottlerStatus{}
+  }
 | SHOW VSCHEMA TABLES
   {
     $$ = &Show{&ShowBasic{Command: VschemaTables}}
@@ -4175,10 +4296,44 @@ begin_statement:
   {
     $$ = &Begin{}
   }
-| START TRANSACTION
+| START TRANSACTION tx_chacteristics_opt
   {
-    $$ = &Begin{}
+    $$ = &Begin{TxAccessModes: $3}
   }
+
+tx_chacteristics_opt:
+  {
+    $$ = nil
+  }
+| tx_chars
+  {
+    $$ = $1
+  }
+
+tx_chars:
+  tx_char
+  {
+    $$ = []TxAccessMode{$1}
+  }
+| tx_chars ',' tx_char
+  {
+    $$ = append($1, $3)
+  }
+
+tx_char:
+  WITH CONSISTENT SNAPSHOT
+  {
+    $$ = WithConsistentSnapshot
+  }
+| READ WRITE
+  {
+    $$ = ReadWrite
+  }
+| READ ONLY
+  {
+    $$ = ReadOnly
+  }
+
 
 commit_statement:
   COMMIT
@@ -4234,6 +4389,10 @@ explain_format_opt:
   {
     $$ = VitessType
   }
+| FORMAT '=' VTEXPLAIN
+  {
+    $$ = VTExplainType
+  }
 | FORMAT '=' TRADITIONAL
   {
     $$ = TraditionalType
@@ -4241,6 +4400,23 @@ explain_format_opt:
 | ANALYZE
   {
     $$ = AnalyzeType
+  }
+
+vexplain_type_opt:
+  {
+    $$ = PlanVExplainType
+  }
+| PLAN
+  {
+    $$ = PlanVExplainType
+  }
+| ALL
+  {
+    $$ = AllVExplainType
+  }
+| QUERIES
+  {
+    $$ = QueriesVExplainType
   }
 
 explain_synonyms:
@@ -4289,13 +4465,19 @@ wild_opt:
   }
 
 explain_statement:
-  explain_synonyms table_name wild_opt
+  explain_synonyms comment_opt table_name wild_opt
   {
-    $$ = &ExplainTab{Table: $2, Wild: $3}
+    $$ = &ExplainTab{Table: $3, Wild: $4}
   }
-| explain_synonyms explain_format_opt explainable_statement
+| explain_synonyms comment_opt explain_format_opt explainable_statement
   {
-    $$ = &ExplainStmt{Type: $2, Statement: $3}
+    $$ = &ExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
+  }
+
+vexplain_statement:
+  VEXPLAIN comment_opt vexplain_type_opt explainable_statement
+  {
+    $$ = &VExplainStmt{Type: $3, Statement: $4, Comments: Comments($2).Parsed()}
   }
 
 other_statement:
@@ -4722,13 +4904,13 @@ table_factor:
   }
 
 derived_table:
-  openb query_expression closeb
+  query_expression_parens
   {
-    $$ = &DerivedTable{Lateral: false, Select: $2}
+    $$ = &DerivedTable{Lateral: false, Select: $1}
   }
-| LATERAL openb query_expression closeb
+| LATERAL query_expression_parens
   {
-    $$ = &DerivedTable{Lateral: true, Select: $3}
+    $$ = &DerivedTable{Lateral: true, Select: $2}
   }
 
 aliased_table_name:
@@ -4748,6 +4930,15 @@ column_list_opt:
 | '(' column_list ')'
   {
     $$ = $2
+  }
+
+column_list_empty:
+  {
+    $$ = nil
+  }
+| column_list
+  {
+    $$ = $1
   }
 
 column_list:
@@ -5191,7 +5382,7 @@ function_call_keyword
   {
   	$$ = $1
   }
-| column_name
+| column_name_or_offset
   {
   	$$ = $1
   }
@@ -5267,17 +5458,17 @@ function_call_keyword
 {
        $$ = &IntervalFuncExpr{Expr: $3, Exprs: $5}
 }
-| column_name JSON_EXTRACT_OP text_literal_or_arg
+| column_name_or_offset JSON_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONExtractOp, Right: $3}
   }
-| column_name JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
+| column_name_or_offset JSON_UNQUOTE_EXTRACT_OP text_literal_or_arg
   {
 	$$ = &BinaryExpr{Left: $1, Operator: JSONUnquoteExtractOp, Right: $3}
   }
 
 interval_value:
-  INTERVAL simple_expr sql_id
+  INTERVAL bit_expr sql_id
   {
      $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
   }
@@ -5986,6 +6177,14 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| LINESTRING openb expression_list closeb
+  {
+    $$ = &LineStringExpr{ PointParams:$3 }
+  }
+| POINT openb expression ',' expression closeb
+  {
+    $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
+  }
 | argument_less_window_expr_type openb closeb over_clause
   {
     $$ = &ArgumentLessWindowExpr{ Type: $1, OverClause : $4 }
@@ -6449,7 +6648,7 @@ separator_opt:
   }
 | SEPARATOR STRING
   {
-    $$ = " separator "+encodeSQLString($2)
+    $$ = encodeSQLString($2)
   }
 
 when_expression_list:
@@ -6493,6 +6692,16 @@ column_name:
 | table_id '.' reserved_table_id '.' reserved_sql_id
   {
     $$ = &ColName{Qualifier: TableName{Qualifier: $1, Name: $3}, Name: $5}
+  }
+
+column_name_or_offset:
+  column_name
+  {
+    $$ = $1
+  }
+| OFFSET_ARG
+  {
+    $$ = &Offset{V: convertStringToInt($1)}
   }
 
 num_val:
@@ -7050,48 +7259,6 @@ update_expression:
     $$ = &UpdateExpr{Name: $1, Expr: $3}
   }
 
-set_list:
-  set_expression
-  {
-    $$ = SetExprs{$1}
-  }
-| set_list ',' set_expression
-  {
-    $$ = append($1, $3)
-  }
-
-set_expression:
-  set_variable '=' ON
-  {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("on")}
-  }
-| set_variable '=' OFF
-  {
-    $$ = &SetExpr{Var: $1, Expr: NewStrLiteral("off")}
-  }
-| set_variable '=' expression
-  {
-    $$ = &SetExpr{Var: $1, Expr: $3}
-  }
-| charset_or_character_set_or_names charset_value collate_opt
-  {
-    $$ = &SetExpr{Var: NewSetVariable(string($1), SessionScope), Expr: $2}
-  }
-
-set_variable:
-  ID
-  {
-    $$ = NewSetVariable(string($1), SessionScope)
-  }
-| variable_expr
-  {
-    $$ = $1
-  }
-| set_session_or_global ID
-  {
-    $$ = NewSetVariable(string($2), $1)
-  }
-
 charset_or_character_set:
   CHARSET
 | CHARACTER SET
@@ -7432,12 +7599,13 @@ non_reserved_keyword:
 | COMPRESSED
 | COMPRESSION
 | CONNECTION
+| CONSISTENT
 | COPY
 | COUNT %prec FUNCTION_CALL_NON_KEYWORD
 | CSV
 | CURRENT
 | DATA
-| DATE
+| DATE %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | DATETIME
 | DEALLOCATE
 | DECIMAL_TYPE
@@ -7550,10 +7718,11 @@ non_reserved_keyword:
 | LANGUAGE
 | LAST
 | LAST_INSERT_ID
+| LAUNCH
 | LESS
 | LEVEL
 | LINES
-| LINESTRING
+| LINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | LIST
 | LOAD
 | LOCAL
@@ -7615,6 +7784,7 @@ non_reserved_keyword:
 | PATH
 | PERSIST
 | PERSIST_ONLY
+| PLAN
 | PRECEDING
 | PREPARE
 | PRIVILEGE_CHECKS_USER
@@ -7623,11 +7793,12 @@ non_reserved_keyword:
 | PS_CURRENT_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
-| POINT
+| POINT %prec FUNCTION_CALL_NON_KEYWORD
 | POLYGON
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
 | PROCESSLIST
+| QUERIES
 | QUERY
 | RANDOM
 | RATIO
@@ -7677,6 +7848,7 @@ non_reserved_keyword:
 | SKIP
 | SLOW
 | SMALLINT
+| SNAPSHOT
 | SQL
 | SRID
 | START
@@ -7704,11 +7876,12 @@ non_reserved_keyword:
 | THREAD_PRIORITY
 | THROTTLE
 | TIES
-| TIME
-| TIMESTAMP
+| TIME %prec STRING_TYPE_PREFIX_NON_KEYWORD
+| TIMESTAMP %prec STRING_TYPE_PREFIX_NON_KEYWORD
 | TINYBLOB
 | TINYINT
 | TINYTEXT
+| TRADITIONAL
 | TRANSACTION
 | TREE
 | TRIGGER
@@ -7734,6 +7907,7 @@ non_reserved_keyword:
 | VARIABLES
 | VARIANCE %prec FUNCTION_CALL_NON_KEYWORD
 | VCPU
+| VEXPLAIN
 | VGTID_EXECUTED
 | VIEW
 | VINDEX
@@ -7749,7 +7923,9 @@ non_reserved_keyword:
 | VITESS_TABLETS
 | VITESS_TARGET
 | VITESS_THROTTLED_APPS
+| VITESS_THROTTLER
 | VSCHEMA
+| VTEXPLAIN
 | WAIT_FOR_EXECUTED_GTID_SET %prec FUNCTION_CALL_NON_KEYWORD
 | WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS %prec FUNCTION_CALL_NON_KEYWORD
 | WARNINGS

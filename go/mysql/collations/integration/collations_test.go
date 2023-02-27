@@ -20,7 +20,6 @@ import (
 	"bufio"
 	"bytes"
 	"encoding/hex"
-	"flag"
 	"fmt"
 	"os"
 	"path"
@@ -28,6 +27,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 	"golang.org/x/text/encoding/unicode/utf32"
 
@@ -44,7 +44,7 @@ var collationEnv *collations.Environment
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 }
 
@@ -116,9 +116,7 @@ func parseWeightString(b []byte) []byte {
 
 func (u *uca900CollationTest) Test(t *testing.T, result *sqltypes.Result) {
 	coll := collationEnv.LookupByName(u.collation)
-	if coll == nil {
-		t.Fatalf("unknown collation %q", u.collation)
-	}
+	require.NotNil(t, coll, "unknown collation %q", u.collation)
 
 	var checked, errors int
 	for _, row := range result.Rows {
@@ -185,7 +183,7 @@ func processSQLTest(t *testing.T, testfile string, conn *mysql.Conn) {
 	}
 }
 
-var testOneCollation = flag.String("test-one-collation", "", "")
+var testOneCollation = pflag.String("test-one-collation", "", "")
 
 func TestCollationsOnMysqld(t *testing.T) {
 	conn := mysqlconn(t)
@@ -231,10 +229,8 @@ func TestCollationWithSpace(t *testing.T) {
 			for _, size := range []int{0, codepoints, codepoints + 1, codepoints + 2, 20, 32} {
 				localWeight := local.WeightString(nil, []byte(ExampleString), size)
 				remoteWeight := remote.WeightString(nil, []byte(ExampleString), size)
-				if !bytes.Equal(localWeight, remoteWeight) {
-					t.Fatalf("mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v",
-						size, []byte(ExampleString), remoteWeight, localWeight)
-				}
+				require.True(t, bytes.Equal(localWeight, remoteWeight), "mismatch at len=%d\ninput:    %#v\nexpected: %#v\nactual:   %#v", size, []byte(ExampleString), remoteWeight, localWeight)
+
 			}
 		})
 	}

@@ -83,9 +83,9 @@ func (emptyMatcher) Match(in []byte) bool {
 // fastMatcher is an implementation of WildcardPattern that uses a collation's Collate method
 // to perform wildcard matching.
 // It is returned:
-// 	- when the wildcard pattern has no wildcard characters at all
-// 	- when the wildcard pattern has a single '%' (patternMatchMany) and it is the very last
-//		character of the pattern (in this case, we set isPrefix to true to use prefix-match collation)
+//   - when the wildcard pattern has no wildcard characters at all
+//   - when the wildcard pattern has a single '%' (patternMatchMany) and it is the very last
+//     character of the pattern (in this case, we set isPrefix to true to use prefix-match collation)
 type fastMatcher struct {
 	collate  func(left, right []byte, isPrefix bool) int
 	pattern  []byte

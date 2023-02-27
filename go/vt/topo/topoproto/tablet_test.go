@@ -118,6 +118,10 @@ func TestIsTabletsInList(t *testing.T) {
 	}
 
 	for _, testcase := range testcases {
+		// We create an explicit copy of the range variable for each parallel runner
+		// to be sure that they each run as expected. You can see more information on
+		// this here: https://pkg.go.dev/testing#hdr-Subtests_and_Sub_benchmarks
+		testcase := testcase
 		t.Run(testcase.name, func(t *testing.T) {
 			t.Parallel()
 			out := IsTabletInList(testcase.tablet, testcase.allTablets)

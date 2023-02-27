@@ -4,6 +4,9 @@
 # For mac users
 .DS_Store
 
+# For direnv users
+.envrc
+
 # Produced by yacc
 *.output
 
@@ -68,11 +71,6 @@ _test/
 
 # release folder
 releases
-
-# Angular2 Bower Libs
-/web/vtctld2/.bowerrc~
-/web/vtctld2/bower.json~
-/web/vtctld2/public/bower_components/
 
 # Local examples
 /examples/local/vtdataroot

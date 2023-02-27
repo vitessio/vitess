@@ -229,11 +229,8 @@ func (ins *Insert) GetTableName() string {
 
 // TryExecute performs a non-streaming exec.
 func (ins *Insert) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if ins.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(ins.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, ins.QueryTimeout)
+	defer cancelFunc()
 
 	switch ins.Opcode {
 	case InsertUnsharded:
@@ -272,6 +269,12 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 			return nil
 		}
 
+		// should process only one chunk at a time.
+		// as parallel chunk insert will try to use the same transaction in the vttablet
+		// this will cause transaction in use error.
+		mu.Lock()
+		defer mu.Unlock()
+
 		var insertID int64
 		var qr *sqltypes.Result
 		var err error
@@ -284,8 +287,6 @@ func (ins *Insert) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVa
 			return err
 		}
 
-		mu.Lock()
-		defer mu.Unlock()
 		output.RowsAffected += qr.RowsAffected
 		// InsertID needs to be updated to the least insertID value in sqltypes.Result
 		if output.InsertID == 0 || output.InsertID > uint64(insertID) {
@@ -378,7 +379,7 @@ func (ins *Insert) executeInsertQueries(
 	if err != nil {
 		return nil, err
 	}
-	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, true /* rollbackOnError */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, ins, rss, queries, true /* rollbackOnError */, autocommit)
 	if errs != nil {
 		return nil, vterrors.Aggregate(errs)
 	}
@@ -465,11 +466,11 @@ func (ins *Insert) getInsertSelectQueries(
 		bvs := sqltypes.CopyBindVariables(bindVars) // we don't want to create one huge bindvars for all values
 		var mids sqlparser.Values
 		for _, indexValue := range indexesPerRss[i] {
-			index, _ := strconv.ParseInt(string(indexValue.Value), 0, 64)
+			index, _ := strconv.Atoi(string(indexValue.Value))
 			if keyspaceIDs[index] != nil {
 				row := sqlparser.ValTuple{}
 				for colOffset, value := range rows[index] {
-					bvName := insertVarOffset(int(index), colOffset)
+					bvName := insertVarOffset(index, colOffset)
 					bvs[bvName] = sqltypes.ValueBindVariable(value)
 					row = append(row, sqlparser.NewArgument(bvName))
 				}
@@ -557,7 +558,7 @@ func (ins *Insert) processGenerateFromValues(
 			return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
 		}
 		bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-		qr, err := vcursor.ExecuteStandalone(ctx, ins.Generate.Query, bindVars, rss[0])
+		qr, err := vcursor.ExecuteStandalone(ctx, ins, ins.Generate.Query, bindVars, rss[0])
 		if err != nil {
 			return 0, err
 		}
@@ -619,7 +620,7 @@ func (ins *Insert) processGenerateFromRows(
 		return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "auto sequence generation can happen through single shard only, it is getting routed to %d shards", len(rss))
 	}
 	bindVars := map[string]*querypb.BindVariable{"n": sqltypes.Int64BindVariable(count)}
-	qr, err := vcursor.ExecuteStandalone(ctx, ins.Generate.Query, bindVars, rss[0])
+	qr, err := vcursor.ExecuteStandalone(ctx, ins, ins.Generate.Query, bindVars, rss[0])
 	if err != nil {
 		return 0, err
 	}
@@ -1025,7 +1026,7 @@ func (ins *Insert) executeUnshardedTableQuery(ctx context.Context, vcursor VCurs
 	if err != nil {
 		return 0, nil, err
 	}
-	qr, err := execShard(ctx, vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
+	qr, err := execShard(ctx, ins, vcursor, query, bindVars, rss[0], true, true /* canAutocommit */)
 	if err != nil {
 		return 0, nil, err
 	}

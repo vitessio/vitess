@@ -57,15 +57,15 @@ func (f Frame) line() int {
 
 // Format formats the frame according to the fmt.Formatter interface.
 //
-//    %s    source file
-//    %d    source line
-//    %n    function name
-//    %v    equivalent to %s:%d
+//	%s    source file
+//	%d    source line
+//	%n    function name
+//	%v    equivalent to %s:%d
 //
 // Format accepts flags that alter the printing of some verbs, as follows:
 //
-//    %+s   path of source file relative to the compile time GOPATH
-//    %+v   equivalent to %+s:%d
+//	%+s   path of source file relative to the compile time GOPATH
+//	%+v   equivalent to %+s:%d
 func (f Frame) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 's':
@@ -99,15 +99,15 @@ type StackTrace []Frame
 
 // Format format the stacktrace according to the fmt.Formatter interface.
 //
-//    %s    source file
-//    %d    source line
-//    %n    function name
-//    %v    equivalent to %s:%d
+//	%s    source file
+//	%d    source line
+//	%n    function name
+//	%v    equivalent to %s:%d
 //
 // Format accepts flags that alter the printing of some verbs, as follows:
 //
-//    %+s   path of source file relative to the compile time GOPATH
-//    %+v   equivalent to %+s:%d
+//	%+s   path of source file relative to the compile time GOPATH
+//	%+v   equivalent to %+s:%d
 func (st StackTrace) Format(s fmt.State, verb rune) {
 	switch verb {
 	case 'v':

@@ -50,4 +50,5 @@ export enum Icons {
     question = 'question',
     runQuery = 'runQuery',
     search = 'search',
+    topology = 'topology',
 }

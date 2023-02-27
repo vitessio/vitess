@@ -17,10 +17,9 @@ limitations under the License.
 package zk2topo
 
 import (
+	"context"
 	"path"
 	"sort"
-
-	"context"
 
 	"github.com/z-division/go-zookeeper/zk"
 
@@ -131,10 +130,10 @@ func (mp *zkLeaderParticipation) WaitForLeadership() (context.Context, error) {
 
 // watchLeadership is the background go routine we run while we are the primary.
 // We will do two things:
-// - watch for changes to the proposal file. If anything happens there,
-//   it most likely means we lost the ZK session, so we want to stop
-//   being the primary.
-// - wait for mp.stop.
+//   - watch for changes to the proposal file. If anything happens there,
+//     it most likely means we lost the ZK session, so we want to stop
+//     being the primary.
+//   - wait for mp.stop.
 func (mp *zkLeaderParticipation) watchLeadership(ctx context.Context, conn *ZkConn, proposal string, cancel context.CancelFunc) {
 	// any interruption of this routine means we're not primary any more.
 	defer cancel()
@@ -197,4 +196,11 @@ func (mp *zkLeaderParticipation) GetCurrentLeaderID(ctx context.Context) (string
 
 		return string(data), nil
 	}
+}
+
+// WaitForNewLeader is part of the topo.LeaderParticipation interface
+func (mp *zkLeaderParticipation) WaitForNewLeader(context.Context) (<-chan string, error) {
+	// This isn't implemented yet, but likely can be implemented in the same way
+	// as how WatchRecursive could be implemented as well.
+	return nil, topo.NewError(topo.NoImplementation, "wait for leader not supported in ZK2 topo")
 }

@@ -122,7 +122,7 @@ func TestVSchemaTrackerInit(t *testing.T) {
 
 	qr := utils.Exec(t, conn, "SHOW VSCHEMA TABLES")
 	got := fmt.Sprintf("%v", qr.Rows)
-	want := `[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("test_table")] [VARCHAR("vt_user")]]`
+	want := `[[VARCHAR("main")] [VARCHAR("test_table")] [VARCHAR("vt_user")]]`
 	assert.Equal(t, want, got)
 }
 
@@ -158,7 +158,8 @@ func TestVSchemaTrackerKeyspaceReInit(t *testing.T) {
 func readVSchema(t *testing.T, vtgate *cluster.VtgateProcess, results *any) {
 	httpClient := &http.Client{Timeout: 5 * time.Second}
 	resp, err := httpClient.Get(vtgate.VSchemaURL)
-	require.Nil(t, err)
+	require.NoError(t, err)
+	defer resp.Body.Close()
 	assert.Equal(t, 200, resp.StatusCode)
 	json.NewDecoder(resp.Body).Decode(results)
 }

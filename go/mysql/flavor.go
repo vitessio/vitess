@@ -17,12 +17,11 @@ limitations under the License.
 package mysql
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"strconv"
 	"strings"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -49,8 +48,11 @@ const (
 	InstantAddDropVirtualColumnFlavorCapability
 	InstantAddDropColumnFlavorCapability
 	InstantChangeColumnDefaultFlavorCapability
+	InstantExpandEnumCapability
 	MySQLJSONFlavorCapability
 	MySQLUpgradeInServerFlavorCapability
+	DynamicRedoLogCapacityFlavorCapability // supported in MySQL 8.0.30 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-30.html
+	DisableRedoLogFlavorCapability         // supported in MySQL 8.0.21 and above: https://dev.mysql.com/doc/relnotes/mysql/8.0/en/news-8-0-21.html
 )
 
 const (
@@ -112,7 +114,7 @@ type flavor interface {
 
 	// sendBinlogDumpCommand sends the packet required to start
 	// dumping binlogs from the specified location.
-	sendBinlogDumpCommand(c *Conn, serverID uint32, startPos Position) error
+	sendBinlogDumpCommand(c *Conn, serverID uint32, binlogFilename string, startPos Position) error
 
 	// readBinlogEvent reads the next BinlogEvent from the connection.
 	readBinlogEvent(c *Conn) (BinlogEvent, error)
@@ -154,6 +156,7 @@ type flavor interface {
 	enableBinlogPlaybackCommand() string
 	disableBinlogPlaybackCommand() string
 
+	baseShowTables() string
 	baseShowTablesWithSizes() string
 
 	supportsCapability(serverVersion string, capability FlavorCapability) (bool, error)
@@ -357,8 +360,8 @@ func (c *Conn) StartSQLThreadCommand() string {
 // SendBinlogDumpCommand sends the flavor-specific version of
 // the COM_BINLOG_DUMP command to start dumping raw binlog
 // events over a server connection, starting at a given GTID.
-func (c *Conn) SendBinlogDumpCommand(serverID uint32, startPos Position) error {
-	return c.flavor.sendBinlogDumpCommand(c, serverID, startPos)
+func (c *Conn) SendBinlogDumpCommand(serverID uint32, binlogFilename string, startPos Position) error {
+	return c.flavor.sendBinlogDumpCommand(c, serverID, binlogFilename, startPos)
 }
 
 // ReadBinlogEvent reads the next BinlogEvent. This must be used
@@ -390,7 +393,7 @@ func (c *Conn) SetReplicationPositionCommands(pos Position) []string {
 // as the new replication source (without changing any GTID position).
 // It is guaranteed to be called with replication stopped.
 // It should not start or stop replication.
-func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int, connectRetry int) string {
+func (c *Conn) SetReplicationSourceCommand(params *ConnParams, host string, port int32, connectRetry int) string {
 	args := []string{
 		fmt.Sprintf("MASTER_HOST = '%s'", host),
 		fmt.Sprintf("MASTER_PORT = %d", port),
@@ -454,32 +457,32 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 		SQLState:     ReplicationStatusToState(fields["Slave_SQL_Running"]),
 		LastSQLError: fields["Last_SQL_Error"],
 	}
-	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 0)
-	status.SourcePort = int(parseInt)
-	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 0)
-	status.ConnectRetry = int(parseInt)
-	parseUint, err := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 0)
+	parseInt, _ := strconv.ParseInt(fields["Master_Port"], 10, 32)
+	status.SourcePort = int32(parseInt)
+	parseInt, _ = strconv.ParseInt(fields["Connect_Retry"], 10, 32)
+	status.ConnectRetry = int32(parseInt)
+	parseUint, err := strconv.ParseUint(fields["Seconds_Behind_Master"], 10, 32)
 	if err != nil {
-		// we could not parse the value into a valid uint -- most commonly because the value is NULL from the
+		// we could not parse the value into a valid uint32 -- most commonly because the value is NULL from the
 		// database -- so let's reflect that the underlying value was unknown on our last check
 		status.ReplicationLagUnknown = true
 	} else {
 		status.ReplicationLagUnknown = false
-		status.ReplicationLagSeconds = uint(parseUint)
+		status.ReplicationLagSeconds = uint32(parseUint)
 	}
-	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 0)
-	status.SourceServerID = uint(parseUint)
-	parseUint, _ = strconv.ParseUint(fields["SQL_Delay"], 10, 0)
-	status.SQLDelay = uint(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["Master_Server_Id"], 10, 32)
+	status.SourceServerID = uint32(parseUint)
+	parseUint, _ = strconv.ParseUint(fields["SQL_Delay"], 10, 32)
+	status.SQLDelay = uint32(parseUint)
 
 	executedPosStr := fields["Exec_Master_Log_Pos"]
 	file := fields["Relay_Master_Log_File"]
 	if file != "" && executedPosStr != "" {
-		filePos, err := strconv.Atoi(executedPosStr)
+		filePos, err := strconv.ParseUint(executedPosStr, 10, 32)
 		if err == nil {
 			status.FilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  filePos,
+				pos:  uint32(filePos),
 			}
 		}
 	}
@@ -487,11 +490,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	readPosStr := fields["Read_Master_Log_Pos"]
 	file = fields["Master_Log_File"]
 	if file != "" && readPosStr != "" {
-		fileRelayPos, err := strconv.Atoi(readPosStr)
+		fileRelayPos, err := strconv.ParseUint(readPosStr, 10, 32)
 		if err == nil {
 			status.RelayLogSourceBinlogEquivalentPosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  fileRelayPos,
+				pos:  uint32(fileRelayPos),
 			}
 		}
 	}
@@ -499,11 +502,11 @@ func parseReplicationStatus(fields map[string]string) ReplicationStatus {
 	relayPosStr := fields["Relay_Log_Pos"]
 	file = fields["Relay_Log_File"]
 	if file != "" && relayPosStr != "" {
-		relayFilePos, err := strconv.Atoi(relayPosStr)
+		relayFilePos, err := strconv.ParseUint(relayPosStr, 10, 32)
 		if err == nil {
 			status.RelayLogFilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  relayFilePos,
+				pos:  uint32(relayFilePos),
 			}
 		}
 	}
@@ -523,11 +526,11 @@ func parsePrimaryStatus(fields map[string]string) PrimaryStatus {
 	fileExecPosStr := fields["Position"]
 	file := fields["File"]
 	if file != "" && fileExecPosStr != "" {
-		filePos, err := strconv.Atoi(fileExecPosStr)
+		filePos, err := strconv.ParseUint(fileExecPosStr, 10, 32)
 		if err == nil {
 			status.FilePosition.GTIDSet = filePosGTID{
 				file: file,
-				pos:  filePos,
+				pos:  uint32(filePos),
 			}
 		}
 	}
@@ -570,8 +573,13 @@ func (c *Conn) DisableBinlogPlaybackCommand() string {
 	return c.flavor.disableBinlogPlaybackCommand()
 }
 
-// BaseShowTables returns a query that shows tables and their sizes
+// BaseShowTables returns a query that shows tables
 func (c *Conn) BaseShowTables() string {
+	return c.flavor.baseShowTables()
+}
+
+// BaseShowTablesWithSizes returns a query that shows tables and their sizes
+func (c *Conn) BaseShowTablesWithSizes() string {
 	return c.flavor.baseShowTablesWithSizes()
 }
 

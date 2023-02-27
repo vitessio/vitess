@@ -35,7 +35,6 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -116,8 +115,14 @@ type Handler interface {
 	// execute query.
 	ComStmtExecute(c *Conn, prepare *PrepareData, callback func(*sqltypes.Result) error) error
 
+	// ComRegisterReplica is called when a connection receives a ComRegisterReplica request
+	ComRegisterReplica(c *Conn, replicaHost string, replicaPort uint16, replicaUser string, replicaPassword string) error
+
+	// ComBinlogDump is called when a connection receives a ComBinlogDump request
+	ComBinlogDump(c *Conn, logFile string, binlogPos uint32) error
+
 	// ComBinlogDumpGTID is called when a connection receives a ComBinlogDumpGTID request
-	ComBinlogDumpGTID(c *Conn, gtidSet GTIDSet) error
+	ComBinlogDumpGTID(c *Conn, logFile string, logPos uint64, gtidSet GTIDSet) error
 
 	// WarningCount is called at the end of each query to obtain
 	// the value to be returned to the client in the EOF packet.
@@ -169,11 +174,11 @@ type Listener struct {
 	// AllowClearTextWithoutTLS needs to be set for the
 	// mysql_clear_password authentication method to be accepted
 	// by the server when TLS is not in use.
-	AllowClearTextWithoutTLS sync2.AtomicBool
+	AllowClearTextWithoutTLS atomic.Bool
 
 	// SlowConnectWarnThreshold if non-zero specifies an amount of time
 	// beyond which a warning is logged to identify the slow connection
-	SlowConnectWarnThreshold sync2.AtomicDuration
+	SlowConnectWarnThreshold atomic.Int64
 
 	// The following parameters are changed by the Accept routine.
 
@@ -188,8 +193,11 @@ type Listener struct {
 	// Reads are unbuffered if it's <=0.
 	connReadBufferSize int
 
+	// connBufferPooling configures if vtgate server pools connection buffers
+	connBufferPooling bool
+
 	// shutdown indicates that Shutdown method was called.
-	shutdown sync2.AtomicBool
+	shutdown atomic.Bool
 
 	// RequireSecureTransport configures the server to reject connections from insecure clients
 	RequireSecureTransport bool
@@ -203,7 +211,14 @@ type Listener struct {
 }
 
 // NewFromListener creates a new mysql listener from an existing net.Listener
-func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration) (*Listener, error) {
+func NewFromListener(
+	l net.Listener,
+	authServer AuthServer,
+	handler Handler,
+	connReadTimeout time.Duration,
+	connWriteTimeout time.Duration,
+	connBufferPooling bool,
+) (*Listener, error) {
 	cfg := ListenerConfig{
 		Listener:           l,
 		AuthServer:         authServer,
@@ -211,22 +226,31 @@ func NewFromListener(l net.Listener, authServer AuthServer, handler Handler, con
 		ConnReadTimeout:    connReadTimeout,
 		ConnWriteTimeout:   connWriteTimeout,
 		ConnReadBufferSize: connBufferSize,
+		ConnBufferPooling:  connBufferPooling,
 	}
 	return NewListenerWithConfig(cfg)
 }
 
 // NewListener creates a new Listener.
-func NewListener(protocol, address string, authServer AuthServer, handler Handler, connReadTimeout time.Duration, connWriteTimeout time.Duration, proxyProtocol bool) (*Listener, error) {
+func NewListener(
+	protocol, address string,
+	authServer AuthServer,
+	handler Handler,
+	connReadTimeout time.Duration,
+	connWriteTimeout time.Duration,
+	proxyProtocol bool,
+	connBufferPooling bool,
+) (*Listener, error) {
 	listener, err := net.Listen(protocol, address)
 	if err != nil {
 		return nil, err
 	}
 	if proxyProtocol {
 		proxyListener := &proxyproto.Listener{Listener: listener}
-		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout)
+		return NewFromListener(proxyListener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
 	}
 
-	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout)
+	return NewFromListener(listener, authServer, handler, connReadTimeout, connWriteTimeout, connBufferPooling)
 }
 
 // ListenerConfig should be used with NewListenerWithConfig to specify listener parameters.
@@ -240,6 +264,7 @@ type ListenerConfig struct {
 	ConnReadTimeout    time.Duration
 	ConnWriteTimeout   time.Duration
 	ConnReadBufferSize int
+	ConnBufferPooling  bool
 }
 
 // NewListenerWithConfig creates new listener using provided config. There are
@@ -265,6 +290,7 @@ func NewListenerWithConfig(cfg ListenerConfig) (*Listener, error) {
 		connReadTimeout:    cfg.ConnReadTimeout,
 		connWriteTimeout:   cfg.ConnWriteTimeout,
 		connReadBufferSize: cfg.ConnReadBufferSize,
+		connBufferPooling:  cfg.ConnBufferPooling,
 	}, nil
 }
 
@@ -324,6 +350,10 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 		// We call endWriterBuffering here in case there's a premature return after
 		// startWriterBuffering is called
 		c.endWriterBuffering()
+
+		if l.connBufferPooling {
+			c.returnReader()
+		}
 
 		conn.Close()
 	}()
@@ -423,7 +453,7 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 			return
 		}
 
-		if !l.AllowClearTextWithoutTLS.Get() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
+		if !l.AllowClearTextWithoutTLS.Load() && !c.TLSEnabled() && !negotiatedAuthMethod.AllowClearTextWithoutTLS() {
 			c.writeErrorPacket(CRServerHandshakeErr, SSUnknownSQLState, "Cannot use clear text authentication over non-SSL connections.")
 			return
 		}
@@ -483,8 +513,8 @@ func (l *Listener) handle(conn net.Conn, connectionID uint32, acceptTime time.Ti
 	timings.Record(connectTimingKey, acceptTime)
 
 	// Log a warning if it took too long to connect
-	connectTime := time.Since(acceptTime)
-	if threshold := l.SlowConnectWarnThreshold.Get(); threshold != 0 && connectTime > threshold {
+	connectTime := time.Since(acceptTime).Nanoseconds()
+	if threshold := l.SlowConnectWarnThreshold.Load(); threshold != 0 && connectTime > threshold {
 		connSlow.Add(1)
 		log.Warningf("Slow connection from %s: %v", c, connectTime)
 	}
@@ -512,10 +542,6 @@ func (l *Listener) Shutdown() {
 	if l.shutdown.CompareAndSwap(false, true) {
 		l.Close()
 	}
-}
-
-func (l *Listener) isShutdown() bool {
-	return l.shutdown.Get()
 }
 
 // writeHandshakeV10 writes the Initial Handshake Packet, server side.

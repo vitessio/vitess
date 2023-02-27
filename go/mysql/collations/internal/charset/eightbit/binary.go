@@ -54,3 +54,11 @@ func (c Charset_binary) DecodeRune(bytes []byte) (rune, int) {
 func (c Charset_binary) Convert(_, in []byte, _ types.Charset) ([]byte, error) {
 	return in, nil
 }
+
+func (Charset_binary) Length(src []byte) int {
+	return len(src)
+}
+
+func (Charset_binary) MaxWidth() int {
+	return 1
+}

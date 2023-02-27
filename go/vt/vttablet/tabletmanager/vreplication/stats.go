@@ -56,7 +56,7 @@ func AddStatusPart() {
 type vrStats struct {
 	mu          sync.Mutex
 	isOpen      bool
-	controllers map[int]*controller
+	controllers map[int32]*controller
 }
 
 func (st *vrStats) register() {
@@ -67,7 +67,10 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			result[ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.State.Get()
+			state := ct.blpStats.State.Load()
+			if state != nil {
+				result[ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = state.(string)
+			}
 		}
 		return result
 	}))
@@ -80,7 +83,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := make(map[string]int64, len(st.controllers))
 			for _, ct := range st.controllers {
-				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Get()
+				result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)] = ct.blpStats.ReplicationLagSeconds.Load()
 			}
 			return result
 		})
@@ -93,7 +96,7 @@ func (st *vrStats) register() {
 			defer st.mu.Unlock()
 			result := int64(0)
 			for _, ct := range st.controllers {
-				result += ct.blpStats.ReplicationLagSeconds.Get()
+				result += ct.blpStats.ReplicationLagSeconds.Load()
 			}
 			return result
 		})
@@ -142,7 +145,7 @@ func (st *vrStats) register() {
 		defer st.mu.Unlock()
 		result := make(map[string]string, len(st.controllers))
 		for _, ct := range st.controllers {
-			result[fmt.Sprintf("%v", ct.id)] = ct.sourceTablet.Get()
+			result[fmt.Sprintf("%v", ct.id)] = ct.sourceTablet.Load().(string)
 		}
 		return result
 	}))
@@ -355,6 +358,39 @@ func (st *vrStats) register() {
 			return result
 		})
 
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationTableCopyRowCounts",
+		"vreplication rows copied in copy phase per table per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "table"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for table, count := range ct.blpStats.TableCopyRowCounts.Counts() {
+					if table == "" {
+						continue
+					}
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = count
+				}
+			}
+			return result
+		})
+	stats.NewGaugesFuncWithMultiLabels(
+		"VReplicationTableCopyTimings",
+		"vreplication copy phase timings per table per stream",
+		[]string{"source_keyspace", "source_shard", "workflow", "counts", "table"},
+		func() map[string]int64 {
+			st.mu.Lock()
+			defer st.mu.Unlock()
+			result := make(map[string]int64, len(st.controllers))
+			for _, ct := range st.controllers {
+				for table, t := range ct.blpStats.TableCopyTimings.Histograms() {
+					result[ct.source.Keyspace+"."+ct.source.Shard+"."+ct.workflow+"."+fmt.Sprintf("%v", ct.id)+"."+table] = t.Total()
+				}
+			}
+			return result
+		})
 }
 
 func (st *vrStats) numControllers() int64 {
@@ -368,7 +404,7 @@ func (st *vrStats) maxReplicationLagSeconds() int64 {
 	defer st.mu.Unlock()
 	max := int64(0)
 	for _, ct := range st.controllers {
-		if cur := ct.blpStats.ReplicationLagSeconds.Get(); cur > max {
+		if cur := ct.blpStats.ReplicationLagSeconds.Load(); cur > max {
 			max = cur
 		}
 	}
@@ -391,18 +427,23 @@ func (st *vrStats) status() *EngineStatus {
 			StopPosition:          ct.stopPos,
 			LastPosition:          ct.blpStats.LastPosition().String(),
 			Heartbeat:             ct.blpStats.Heartbeat(),
-			ReplicationLagSeconds: ct.blpStats.ReplicationLagSeconds.Get(),
+			ReplicationLagSeconds: ct.blpStats.ReplicationLagSeconds.Load(),
 			Counts:                ct.blpStats.Timings.Counts(),
 			Rates:                 ct.blpStats.Rates.Get(),
-			State:                 ct.blpStats.State.Get(),
-			SourceTablet:          ct.sourceTablet.Get(),
+			SourceTablet:          ct.sourceTablet.Load().(string),
 			Messages:              ct.blpStats.MessageHistory(),
 			QueryCounts:           ct.blpStats.QueryCount.Counts(),
 			PhaseTimings:          ct.blpStats.PhaseTimings.Counts(),
 			CopyRowCount:          ct.blpStats.CopyRowCount.Get(),
 			CopyLoopCount:         ct.blpStats.CopyLoopCount.Get(),
 			NoopQueryCounts:       ct.blpStats.NoopQueryCount.Counts(),
+			TableCopyTimings:      ct.blpStats.TableCopyTimings.Counts(),
 		}
+		state := ct.blpStats.State.Load()
+		if state != nil {
+			status.Controllers[i].State = state.(string)
+		}
+
 		i++
 	}
 	sort.Slice(status.Controllers, func(i, j int) bool { return status.Controllers[i].Index < status.Controllers[j].Index })
@@ -417,7 +458,7 @@ type EngineStatus struct {
 
 // ControllerStatus contains a renderable status of a controller.
 type ControllerStatus struct {
-	Index                 uint32
+	Index                 int32
 	Source                string
 	SourceShard           string
 	StopPosition          string
@@ -434,6 +475,7 @@ type ControllerStatus struct {
 	CopyRowCount          int64
 	CopyLoopCount         int64
 	NoopQueryCounts       map[string]int64
+	TableCopyTimings      map[string]int64
 }
 
 var vreplicationTemplate = `

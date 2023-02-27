@@ -17,12 +17,11 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -30,15 +29,17 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 
 	// import the gRPC client implementation for tablet manager
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -66,7 +67,7 @@ type fakeTablet struct {
 	// We also create the RPCServer, so users can register more services
 	// before calling StartActionLoop().
 	Tablet          *topodatapb.Tablet
-	FakeMysqlDaemon *fakemysqldaemon.FakeMysqlDaemon
+	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 	RPCServer       *grpc.Server
 
 	// The following fields are created when we start the event loop for
@@ -133,8 +134,8 @@ func newFakeTablet(t *testing.T, wr *Wrangler, cell string, uid uint32, tabletTy
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
-	fakeMysqlDaemon.MysqlPort.Set(mysqlPort)
+	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
+	fakeMysqlDaemon.MysqlPort.Store(mysqlPort)
 
 	return &fakeTablet{
 		Tablet:          tablet,
@@ -239,6 +240,6 @@ func (ft *fakeTablet) Target() querypb.Target {
 
 func init() {
 	// enforce we will use the right protocol (gRPC) in all unit tests
-	*tmclient.TabletManagerProtocol = "grpc"
-	*tabletconn.TabletProtocol = "grpc"
+	tabletconntest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
+	tmclienttest.SetProtocol("go.vt.wrangler.fake_tablet_test", "grpc")
 }

@@ -21,7 +21,6 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -32,7 +31,7 @@ import (
 type notImplementedSchemaInfoConverter struct{}
 
 func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Comparing table schema name with a column name not yet supported")
+	return 0, vterrors.VT12001("comparing table schema name with a column name")
 }
 
 func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {
@@ -88,41 +87,60 @@ func isTableSchemaOrName(e sqlparser.Expr) (isTableSchema bool, isTableName bool
 	return isDbNameCol(col), isTableNameCol(col)
 }
 
+var schemaColumns = map[string]any{
+	"table_schema":            nil,
+	"constraint_schema":       nil,
+	"schema_name":             nil,
+	"routine_schema":          nil,
+	"specific_schema":         nil,
+	"event_schema":            nil,
+	"referenced_table_schema": nil,
+	"index_schema":            nil,
+	"trigger_schema":          nil,
+	"event_object_schema":     nil,
+}
+
 func isDbNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_schema") || col.Name.EqualString("constraint_schema") || col.Name.EqualString("schema_name") || col.Name.EqualString("routine_schema")
+	_, found := schemaColumns[col.Name.Lowered()]
+	return found
 }
 
 func isTableNameCol(col *sqlparser.ColName) bool {
-	return col.Name.EqualString("table_name")
+	return col.Name.EqualString("table_name") || col.Name.EqualString("referenced_table_name")
 }
 
-func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, evalengine.Expr, error) {
-	switch cmp := in.(type) {
-	case *sqlparser.ComparisonExpr:
-		if cmp.Operator == sqlparser.EqualOp {
-			isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
-			if col != nil && shouldRewrite(other) {
-				evalExpr, err := evalengine.Translate(other, &notImplementedSchemaInfoConverter{})
-				if err != nil {
-					if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
-						// This just means we can't rewrite this particular expression,
-						// not that we have to exit altogether
-						return false, "", nil, nil
-					}
-					return false, "", nil, err
-				}
-				var name string
-				if isSchemaName {
-					name = sqltypes.BvSchemaName
-				} else {
-					name = reservedVars.ReserveColName(col.(*sqlparser.ColName))
-				}
-				replaceOther(sqlparser.NewArgument(name))
-				return isSchemaName, name, evalExpr, nil
-			}
-		}
+func extractInfoSchemaRoutingPredicate(
+	in sqlparser.Expr,
+	reservedVars *sqlparser.ReservedVars,
+) (isSchemaName bool, name string, evalExpr evalengine.Expr, err error) {
+	cmp, ok := in.(*sqlparser.ComparisonExpr)
+	if !ok || cmp.Operator != sqlparser.EqualOp {
+		return
 	}
-	return false, "", nil, nil
+
+	isSchemaName, col, other, replaceOther := findOtherComparator(cmp)
+	if col == nil || !shouldRewrite(other) {
+		return
+	}
+
+	evalExpr, err = evalengine.Translate(other, &notImplementedSchemaInfoConverter{})
+	if err != nil {
+		if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
+			// This just means we can't rewrite this particular expression,
+			// not that we have to exit altogether
+			err = nil
+			return
+		}
+		return false, "", nil, err
+	}
+
+	if isSchemaName {
+		name = sqltypes.BvSchemaName
+	} else {
+		name = reservedVars.ReserveColName(col.(*sqlparser.ColName))
+	}
+	replaceOther(sqlparser.NewArgument(name))
+	return isSchemaName, name, evalExpr, nil
 }
 
 func shouldRewrite(e sqlparser.Expr) bool {

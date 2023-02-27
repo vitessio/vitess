@@ -87,6 +87,14 @@ func TestNewValue(t *testing.T) {
 		inVal:  "1",
 		outVal: TestValue(Uint64, "1"),
 	}, {
+		inType: Uint64,
+		inVal:  "01",
+		outVal: TestValue(Uint64, "01"),
+	}, {
+		inType: Int64,
+		inVal:  "01",
+		outVal: TestValue(Int64, "01"),
+	}, {
 		inType: Float32,
 		inVal:  "1.00",
 		outVal: TestValue(Float32, "1.00"),
@@ -491,6 +499,9 @@ func TestHexAndBitToBytes(t *testing.T) {
 	}, {
 		in:  MakeTrusted(BitNum, []byte("0b1001000110100")),
 		out: []byte{0x12, 0x34},
+	}, {
+		in:  MakeTrusted(BitNum, []byte("0b11101010100101010010101010101010101010101000100100100100100101001101010101010101000001")),
+		out: []byte{0x3a, 0xa5, 0x4a, 0xaa, 0xaa, 0xa2, 0x49, 0x25, 0x35, 0x55, 0x41},
 	}}
 
 	for _, tcase := range tcases {

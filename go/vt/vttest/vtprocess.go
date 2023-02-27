@@ -27,8 +27,6 @@ import (
 	"syscall"
 	"time"
 
-	"vitess.io/vitess/go/vt/env"
-
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/log"
@@ -210,11 +208,6 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if charset == "" {
 		charset = DefaultCharset
 	}
-	verStr, err := env.CheckPlannerVersionFlag(&args.PlannerVersion, &args.PlannerVersionDeprecated)
-	if err != nil {
-		return nil, err
-	}
-
 	protoTopo, _ := prototext.Marshal(args.Topology)
 	vt.ExtraArgs = append(vt.ExtraArgs, []string{
 		"--db_charset", charset,
@@ -229,11 +222,20 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 		"--enable_query_plan_field_caching=false",
 		"--dbddl_plugin", "vttest",
 		"--foreign_key_mode", args.ForeignKeyMode,
-		"--planner-version", verStr,
+		"--planner-version", args.PlannerVersion,
 		fmt.Sprintf("--enable_online_ddl=%t", args.EnableOnlineDDL),
 		fmt.Sprintf("--enable_direct_ddl=%t", args.EnableDirectDDL),
 		fmt.Sprintf("--enable_system_settings=%t", args.EnableSystemSettings),
 	}...)
+
+	// If topo tablet refresh interval is not defined then we will give it value of 10s. Please note
+	// that the default value is 1 minute, but we are keeping it low to make vttestserver perform faster.
+	// Less value might result in high pressure on topo but for testing purpose that should not be a concern.
+	if args.VtgateTabletRefreshInterval <= 0 {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", 10*time.Second))
+	} else {
+		vt.ExtraArgs = append(vt.ExtraArgs, fmt.Sprintf("--tablet_refresh_interval=%v", args.VtgateTabletRefreshInterval))
+	}
 
 	vt.ExtraArgs = append(vt.ExtraArgs, QueryServerArgs...)
 	vt.ExtraArgs = append(vt.ExtraArgs, environment.VtcomboArguments()...)
@@ -250,19 +252,13 @@ func VtcomboProcess(environment Environment, args *Config, mysql MySQLManager) (
 	if args.TabletHostName != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--tablet_hostname", args.TabletHostName}...)
 	}
-	if *servenv.GRPCAuth == "mtls" {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", *servenv.GRPCAuth, "--grpc_key", *servenv.GRPCKey, "--grpc_cert", *servenv.GRPCCert, "--grpc_ca", *servenv.GRPCCA, "--grpc_auth_mtls_allowed_substrings", *servenv.ClientCertSubstrings}...)
-	}
-	if args.InitWorkflowManager {
-		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--workflow_manager_init"}...)
+	if servenv.GRPCAuth() == "mtls" {
+		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--grpc_auth_mode", servenv.GRPCAuth(), "--grpc_key", servenv.GRPCKey(), "--grpc_cert", servenv.GRPCCert(), "--grpc_ca", servenv.GRPCCertificateAuthority(), "--grpc_auth_mtls_allowed_substrings", servenv.ClientCertSubstrings()}...)
 	}
 	if args.VSchemaDDLAuthorizedUsers != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{"--vschema_ddl_authorized_users", args.VSchemaDDLAuthorizedUsers}...)
 	}
-	if *servenv.MySQLServerVersion != "" {
-		vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", *servenv.MySQLServerVersion)
-	}
-
+	vt.ExtraArgs = append(vt.ExtraArgs, "--mysql_server_version", servenv.MySQLServerVersion())
 	if socket != "" {
 		vt.ExtraArgs = append(vt.ExtraArgs, []string{
 			"--db_socket", socket,

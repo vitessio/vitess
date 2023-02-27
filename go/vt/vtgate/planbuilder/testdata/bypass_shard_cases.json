@@ -1,0 +1,178 @@
+[
+  {
+    "comment": "select bypass",
+    "query": "select count(*), col from unsharded",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from unsharded",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select count(*), col from unsharded"
+      }
+    }
+  },
+  {
+    "comment": "update bypass",
+    "query": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+    "plan": {
+      "QueryType": "UPDATE",
+      "Original": "update user set val = 1 where id = 18446744073709551616 and id = 1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "update `user` set val = 1 where id = 18446744073709551616 and id = 1"
+      }
+    }
+  },
+  {
+    "comment": "delete bypass",
+    "query": "DELETE FROM USER WHERE ID = 42",
+    "plan": {
+      "QueryType": "DELETE",
+      "Original": "DELETE FROM USER WHERE ID = 42",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "delete from `USER` where ID = 42"
+      }
+    }
+  },
+  {
+    "comment": "insert bypass",
+    "query": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "INSERT INTO USER (ID, NAME) VALUES (42, 'ms X')",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "insert into `USER`(ID, `NAME`) values (42, 'ms X')"
+      }
+    }
+  },
+  {
+    "comment": "insert bypass with sequence: sequences ignored",
+    "query": "insert into user(nonid) values (2)",
+    "plan": {
+      "QueryType": "INSERT",
+      "Original": "insert into user(nonid) values (2)",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "insert into `user`(nonid) values (2)"
+      }
+    }
+  },
+  {
+    "comment": "bypass query for into outfile s3",
+    "query": "select count(*), col from unsharded into outfile S3 'x.txt'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select count(*), col from unsharded into outfile S3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select count(*), col from unsharded into outfile s3 'x.txt'"
+      }
+    }
+  },
+  {
+    "comment": "Select outfile",
+    "query": "select * from user into outfile S3 'x.txt'",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "select * from user into outfile S3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "select * from `user` into outfile s3 'x.txt'"
+      }
+    }
+  },
+  {
+    "query": "load data from s3 'x.txt' into table x",
+    "plan": {
+      "QueryType": "OTHER",
+      "Original": "load data from s3 'x.txt' into table x",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "load data from s3 'x.txt' into table x",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "query": "load data from s3 'x.txt'",
+    "plan": {
+      "QueryType": "OTHER",
+      "Original": "load data from s3 'x.txt'",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "IsDML": true,
+        "Query": "load data from s3 'x.txt'",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "create table",
+    "query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "create /* test */ table t1(id bigint, primary key(id)) /* comments */",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "Shard(-80)",
+        "Query": "create /* test */ table t1(id bigint, primary key(id)) /* comments */"
+      }
+    }
+  }
+]

@@ -4,7 +4,7 @@
     "region_vdx": {
       "type": "region_json",
       "params": {
-        "region_map": "/vt/src/vitess.io/vitess/examples/region_sharding/countries.json",
+        "region_map": "./countries.json",
         "region_bytes": "1"
       }
     }

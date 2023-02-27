@@ -19,6 +19,7 @@ package planbuilder
 import (
 	"strings"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -56,6 +57,11 @@ func analyzeSelect(sel *sqlparser.Select, tables map[string]*schema.Table) (plan
 		}
 		plan.NextCount = v
 		plan.FullQuery = nil
+	}
+
+	if hasLockFunc(sel) {
+		plan.PlanID = PlanSelectLockFunc
+		plan.NeedsReservedConn = true
 	}
 	return plan, nil
 }
@@ -156,7 +162,7 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 	if filter == nil {
 		return
 	}
-	_ = sqlparser.Rewrite(filter, func(cursor *sqlparser.Cursor) bool {
+	_ = sqlparser.SafeRewrite(filter, nil, func(cursor *sqlparser.Cursor) bool {
 		switch n := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			if n.Qualifier.IsEmpty() && strings.HasPrefix(n.Name.Lowered(), "tables_in_") {
@@ -164,13 +170,14 @@ func showTableRewrite(show *sqlparser.ShowBasic, dbName string) {
 			}
 		}
 		return true
-	}, nil)
+	})
 }
 
 func analyzeSet(set *sqlparser.Set) (plan *Plan) {
 	return &Plan{
-		PlanID:    PlanSet,
-		FullQuery: GenerateFullQuery(set),
+		PlanID:            PlanSet,
+		FullQuery:         GenerateFullQuery(set),
+		NeedsReservedConn: true,
 	}
 }
 
@@ -196,4 +203,50 @@ func lookupSingleTable(tableExpr sqlparser.TableExpr, tables map[string]*schema.
 		return nil
 	}
 	return tables[tableName.String()]
+}
+
+func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
+	switch stmt.(type) {
+	case *sqlparser.AlterView, *sqlparser.DropView, *sqlparser.CreateView:
+		if viewsEnabled {
+			return analyzeViewsDDL(stmt)
+		}
+	}
+	// DDLs and some other statements below don't get fully parsed.
+	// We have to use the original query at the time of execution.
+	// We are in the process of changing this
+	var fullQuery *sqlparser.ParsedQuery
+	// If the query is fully parsed, then use the ast and store the fullQuery
+	if stmt.IsFullyParsed() {
+		fullQuery = GenerateFullQuery(stmt)
+	}
+	return &Plan{PlanID: PlanDDL, FullQuery: fullQuery, FullStmt: stmt, NeedsReservedConn: stmt.IsTemporary()}, nil
+}
+
+func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
+	switch viewDDL := stmt.(type) {
+	case *sqlparser.CreateView:
+		query := mysql.InsertIntoViewsTable
+		if viewDDL.IsReplace {
+			query = mysql.ReplaceIntoViewsTable
+		}
+		insert, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
+	case *sqlparser.AlterView:
+		update, err := sqlparser.Parse(mysql.UpdateViewsTable)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
+	case *sqlparser.DropView:
+		del, err := sqlparser.Parse(mysql.DeleteFromViewsTable)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(del), FullStmt: viewDDL}, nil
+	}
+	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown view DDL type: %T", stmt)
 }

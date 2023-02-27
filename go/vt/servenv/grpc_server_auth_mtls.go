@@ -17,26 +17,28 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
+	"context"
 	"strings"
 
+	"github.com/spf13/pflag"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
-
-	"context"
-
-	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	// ClientCertSubstrings list of substrings of at least one of the client certificate names to use during authorization
-	ClientCertSubstrings = flag.String("grpc_auth_mtls_allowed_substrings", "", "List of substrings of at least one of the client certificate names (separated by colon).")
+	// clientCertSubstrings list of substrings of at least one of the client certificate names to use during authorization
+	clientCertSubstrings string
 	// MtlsAuthPlugin implements AuthPlugin interface
 	_ Authenticator = (*MtlsAuthPlugin)(nil)
 )
+
+func registerGRPCServerAuthMTLSFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&clientCertSubstrings, "grpc_auth_mtls_allowed_substrings", clientCertSubstrings, "List of substrings of at least one of the client certificate names (separated by colon).")
+}
 
 // MtlsAuthPlugin  implements static username/password authentication for grpc. It contains an array of username/passwords
 // that will be authorized to connect to the grpc server.
@@ -67,12 +69,19 @@ func (ma *MtlsAuthPlugin) Authenticate(ctx context.Context, fullMethod string) (
 
 func mtlsAuthPluginInitializer() (Authenticator, error) {
 	mtlsAuthPlugin := &MtlsAuthPlugin{
-		clientCertSubstrings: strings.Split(*ClientCertSubstrings, ":"),
+		clientCertSubstrings: strings.Split(clientCertSubstrings, ":"),
 	}
-	log.Infof("mtls auth plugin have initialized successfully with allowed client cert name substrings of %v", *ClientCertSubstrings)
+	log.Infof("mtls auth plugin have initialized successfully with allowed client cert name substrings of %v", clientCertSubstrings)
 	return mtlsAuthPlugin, nil
+}
+
+// ClientCertSubstrings returns the value of the
+// `--grpc_auth_mtls_allowed_substrings` flag.
+func ClientCertSubstrings() string {
+	return clientCertSubstrings
 }
 
 func init() {
 	RegisterAuthPlugin("mtls", mtlsAuthPluginInitializer)
+	grpcAuthServerFlagHooks = append(grpcAuthServerFlagHooks, registerGRPCServerAuthMTLSFlags)
 }

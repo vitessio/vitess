@@ -170,7 +170,7 @@ func (r *heartbeatReader) readHeartbeat() {
 // fetchMostRecentHeartbeat fetches the most recently recorded heartbeat from the heartbeat table,
 // returning a result with the timestamp of the heartbeat.
 func (r *heartbeatReader) fetchMostRecentHeartbeat(ctx context.Context) (*sqltypes.Result, error) {
-	conn, err := r.pool.Get(ctx)
+	conn, err := r.pool.Get(ctx, nil)
 	if err != nil {
 		return nil, err
 	}

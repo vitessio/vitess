@@ -17,10 +17,11 @@ limitations under the License.
 package vreplication
 
 import (
-	"flag"
+	"context"
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -28,9 +29,6 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/vterrors"
 
-	"context"
-
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/tb"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
@@ -41,14 +39,11 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var (
-	// deprecated flags (7.0)
-	_          = flag.Duration("vreplication_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
-	_          = flag.Duration("vreplication_healthcheck_retry_delay", 5*time.Second, "healthcheck retry delay")
-	_          = flag.Duration("vreplication_healthcheck_timeout", 1*time.Minute, "healthcheck retry delay")
-	retryDelay = flag.Duration("vreplication_retry_delay", 5*time.Second, "delay before retrying a failed workflow event in the replication phase")
-
-	maxTimeToRetryError = flag.Duration("vreplication_max_time_to_retry_on_error", 15*time.Minute, "stop automatically retrying when we've had consecutive failures with the same error for this long after the first occurrence")
+const (
+	// How many times to retry tablet selection before we
+	// give up and return an error message that the user
+	// can see and act upon if needed.
+	tabletPickerRetries = 5
 )
 
 // controller is created by Engine. Members are initialized upfront.
@@ -60,7 +55,7 @@ type controller struct {
 	mysqld          mysqlctl.MysqlDaemon
 	blpStats        *binlogplayer.Stats
 
-	id           uint32
+	id           int32
 	workflow     string
 	source       *binlogdatapb.BinlogSource
 	stopPos      string
@@ -70,9 +65,9 @@ type controller struct {
 	done   chan struct{}
 
 	// The following fields are updated after start. So, they need synchronization.
-	sourceTablet sync2.AtomicString
+	sourceTablet atomic.Value
 
-	lastWorkflowError *lastError
+	lastWorkflowError *vterrors.LastError
 }
 
 // newController creates a new controller. Unless a stream is explicitly 'Stopped',
@@ -83,26 +78,27 @@ func newController(ctx context.Context, params map[string]string, dbClientFactor
 	}
 
 	ct := &controller{
-		vre:               vre,
-		dbClientFactory:   dbClientFactory,
-		mysqld:            mysqld,
-		blpStats:          blpStats,
-		done:              make(chan struct{}),
-		source:            &binlogdatapb.BinlogSource{},
-		lastWorkflowError: newLastError("VReplication Controller", *maxTimeToRetryError),
+		vre:             vre,
+		dbClientFactory: dbClientFactory,
+		mysqld:          mysqld,
+		blpStats:        blpStats,
+		done:            make(chan struct{}),
+		source:          &binlogdatapb.BinlogSource{},
 	}
+	ct.sourceTablet.Store("")
 	log.Infof("creating controller with cell: %v, tabletTypes: %v, and params: %v", cell, tabletTypesStr, params)
 
 	// id
-	id, err := strconv.Atoi(params["id"])
+	id, err := strconv.ParseInt(params["id"], 10, 32)
 	if err != nil {
 		return nil, err
 	}
-	ct.id = uint32(id)
+	ct.id = int32(id)
 	ct.workflow = params["workflow"]
+	ct.lastWorkflowError = vterrors.NewLastError(fmt.Sprintf("VReplication controller %d for workflow %q", ct.id, ct.workflow), maxTimeToRetryError)
 
 	state := params["state"]
-	blpStats.State.Set(state)
+	blpStats.State.Store(state)
 	// Nothing to do if replication is stopped or is known to have an unrecoverable error.
 	if state == binlogplayer.BlpStopped || state == binlogplayer.BlpError {
 		ct.cancel = func() {}
@@ -170,8 +166,8 @@ func (ct *controller) run(ctx context.Context) {
 		}
 
 		ct.blpStats.ErrorCounts.Add([]string{"Stream Error"}, 1)
-		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, *retryDelay), err)
-		timer := time.NewTimer(*retryDelay)
+		binlogplayer.LogError(fmt.Sprintf("error in stream %v, retrying after %v", ct.id, retryDelay), err)
+		timer := time.NewTimer(retryDelay)
 		select {
 		case <-ctx.Done():
 			log.Warningf("context canceled: %s", err.Error())
@@ -184,7 +180,7 @@ func (ct *controller) run(ctx context.Context) {
 
 func (ct *controller) runBlp(ctx context.Context) (err error) {
 	defer func() {
-		ct.sourceTablet.Set("")
+		ct.sourceTablet.Store("")
 		if x := recover(); x != nil {
 			log.Errorf("stream %v: caught panic: %v\n%s", ct.id, x, tb.Stack(4))
 			err = fmt.Errorf("panic: %v", x)
@@ -207,17 +203,14 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 	if err := dbClient.Connect(); err != nil {
 		return vterrors.Wrap(err, "can't connect to database")
 	}
-	for _, query := range withDDLInitialQueries {
-		if _, err := withDDL.Exec(ctx, query, dbClient.ExecuteFetch, dbClient.ExecuteFetch); err != nil {
-			log.Errorf("cannot apply withDDL init query '%s': %v", query, err)
-		}
-	}
 	defer dbClient.Close()
 
 	var tablet *topodatapb.Tablet
 	if ct.source.GetExternalMysql() == "" {
 		log.Infof("trying to find a tablet eligible for vreplication. stream id: %v", ct.id)
-		tablet, err = ct.tabletPicker.PickForStreaming(ctx)
+		tpCtx, tpCancel := context.WithTimeout(ctx, discovery.GetTabletPickerRetryDelay()*tabletPickerRetries)
+		defer tpCancel()
+		tablet, err = ct.tabletPicker.PickForStreaming(tpCtx)
 		if err != nil {
 			select {
 			case <-ctx.Done():
@@ -229,7 +222,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		ct.setMessage(dbClient, fmt.Sprintf("Picked source tablet: %s", tablet.Alias.String()))
 		log.Infof("found a tablet eligible for vreplication. stream id: %v  tablet: %s", ct.id, tablet.Alias.String())
-		ct.sourceTablet.Set(tablet.Alias.String())
+		ct.sourceTablet.Store(tablet.Alias.String())
 	}
 	switch {
 	case len(ct.source.Tables) > 0:
@@ -278,11 +271,10 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 
 		vr := newVReplicator(ct.id, ct.source, vsClient, ct.blpStats, dbClient, ct.mysqld, ct.vre)
 		err = vr.Replicate(ctx)
-
-		ct.lastWorkflowError.record(err)
+		ct.lastWorkflowError.Record(err)
 		// If this is a mysql error that we know needs manual intervention OR
 		// we cannot identify this as non-recoverable, but it has persisted beyond the retry limit (maxTimeToRetryError)
-		if isUnrecoverableError(err) || !ct.lastWorkflowError.shouldRetry() {
+		if isUnrecoverableError(err) || !ct.lastWorkflowError.ShouldRetry() {
 			log.Errorf("vreplication stream %d going into error state due to %+v", ct.id, err)
 			if errSetState := vr.setState(binlogplayer.BlpError, err.Error()); errSetState != nil {
 				return err // yes, err and not errSetState.

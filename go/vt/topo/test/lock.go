@@ -171,6 +171,6 @@ func checkLockUnblocks(ctx context.Context, t *testing.T, conn topo.Conn) {
 	select {
 	case <-finished:
 	case <-timeout:
-		t.Fatalf("unlocking timed out")
+		t.Fatalf("Unlock(test_keyspace) timed out")
 	}
 }

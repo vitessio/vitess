@@ -222,3 +222,11 @@ func (Charset_latin1) DecodeRune(src []byte) (rune, int) {
 	}
 	return rune(tounicode_latin1[src[0]]), 1
 }
+
+func (Charset_latin1) Length(src []byte) int {
+	return len(src)
+}
+
+func (Charset_latin1) MaxWidth() int {
+	return 1
+}

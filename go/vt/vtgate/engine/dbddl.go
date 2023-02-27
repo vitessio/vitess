@@ -102,11 +102,8 @@ func (c *DBDDL) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 		log.Errorf("'%s' database ddl plugin is not registered. Falling back to default plugin", name)
 		plugin = databaseCreatorPlugins[defaultDBDDLPlugin]
 	}
-	if c.queryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(c.queryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, c.queryTimeout)
+	defer cancelFunc()
 
 	if c.create {
 		return c.createDatabase(ctx, vcursor, plugin)
@@ -142,7 +139,7 @@ func (c *DBDDL) createDatabase(ctx context.Context, vcursor VCursor, plugin DBDD
 	}
 
 	for {
-		_, errors := vcursor.ExecuteMultiShard(ctx, destinations, queries, false, true)
+		_, errors := vcursor.ExecuteMultiShard(ctx, c, destinations, queries, false, true)
 
 		noErr := true
 		for _, err := range errors {

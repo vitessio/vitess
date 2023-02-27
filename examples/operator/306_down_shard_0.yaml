@@ -11,7 +11,7 @@ spec:
     vtbackup: vitess/lite:latest
     vtorc: vitess/lite:latest
     mysqld:
-      mysql56Compatible: vitess/lite:latest
+      mysql80Compatible: vitess/lite:latest
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: zone1
@@ -68,15 +68,14 @@ spec:
     durabilityPolicy: none
     turndownPolicy: Immediate
     vitessOrchestrator:
-      configSecret:
-        name: example-cluster-config
-        key: orc_config.json
       resources:
         limits:
           memory: 128Mi
         requests:
           cpu: 100m
           memory: 128Mi
+      extraFlags:
+        recovery-period-block-duration: 5s
     partitionings:
     - equal:
         parts: 1
@@ -84,15 +83,12 @@ spec:
           databaseInitScriptSecret:
             name: example-cluster-config
             key: init_db.sql
-          replication:
-            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
             replicas: 2
             vttablet:
               extraFlags:
-                disable_active_reparents: "true"
                 db_charset: utf8mb4
               resources:
                 limits:
@@ -122,8 +118,6 @@ spec:
           databaseInitScriptSecret:
             name: example-cluster-config
             key: init_db.sql
-          replication:
-            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica

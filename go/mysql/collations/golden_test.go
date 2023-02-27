@@ -25,6 +25,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
@@ -52,10 +55,8 @@ func TestGoldenWeights(t *testing.T) {
 					}
 
 					result := coll.WeightString(nil, input, 0)
-					if !bytes.Equal(expected, result) {
-						t.Errorf("mismatch for collation=%s\noriginal: %s\ninput:    %#v\nexpected: %v\nactual:   %v",
-							coll.Name(), string(goldenCase.Text), input, expected, result)
-					}
+					assert.True(t, bytes.Equal(expected, result), "mismatch for collation=%s\noriginal: %s\ninput:    %#v\nexpected: %v\nactual:   %v", coll.Name(), string(goldenCase.Text), input, expected, result)
+
 				}
 			})
 		}
@@ -78,9 +79,8 @@ func TestCollationsForLanguage(t *testing.T) {
 	}
 
 	for lang := range testutil.KnownLanguages {
-		if len(langCounts[lang]) == 0 {
-			t.Errorf("no collations found for %q", lang)
-		}
+		assert.NotEqual(t, 0, len(langCounts[lang]), "no collations found for %q", lang)
+
 		t.Logf("%s: %v", lang, langCounts[lang])
 	}
 }
@@ -191,12 +191,9 @@ func TestAllCollationsByCharset(t *testing.T) {
 					// this doesn't work yet
 					continue
 				}
-				if cset.Default == nil {
-					t.Fatalf("charset %s has no default", csname)
-				}
-				if cset.Binary == nil {
-					t.Fatalf("charset %s has no binary", csname)
-				}
+				require.NotNil(t, cset.Default, "charset %s has no default", csname)
+				require.NotNil(t, cset.Binary, "charset %s has no binary", csname)
+
 			}
 
 			for charset, expected := range tc.defaults {

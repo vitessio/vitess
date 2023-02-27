@@ -56,12 +56,14 @@ type (
 		AddOrder(*Order)
 		SetOrderBy(OrderBy)
 		GetOrderBy() OrderBy
+		GetLimit() *Limit
 		SetLimit(*Limit)
 		SetLock(lock Lock)
 		SetInto(into *SelectInto)
 		SetWith(with *With)
 		MakeDistinct()
 		GetColumnCount() int
+		GetColumns() SelectExprs
 		Commented
 	}
 
@@ -367,28 +369,6 @@ type (
 		Exprs    SetExprs
 	}
 
-	// SetTransaction represents a SET TRANSACTION statement.
-	SetTransaction struct {
-		Comments        *ParsedComments
-		Scope           Scope
-		Characteristics []Characteristic
-	}
-
-	// Scope is an enum for scope of query
-	Scope int8
-
-	// Characteristic is a transaction related change
-	Characteristic interface {
-		SQLNode
-		iChar()
-	}
-
-	// IsolationLevel is an enum for isolation levels
-	IsolationLevel int8
-
-	// AccessMode is enum for the mode - ReadOnly or ReadWrite
-	AccessMode int8
-
 	// DropDatabase represents a DROP database statement.
 	DropDatabase struct {
 		Comments *ParsedComments
@@ -474,6 +454,11 @@ type (
 		Comments Comments
 	}
 
+	// ShowThrottlerStatus represents a SHOW VITESS_THROTTLED_APPS statement
+	ShowThrottlerStatus struct {
+		Comments Comments
+	}
+
 	// RevertMigration represents a REVERT VITESS_MIGRATION statement
 	RevertMigration struct {
 		UUID     string
@@ -489,6 +474,7 @@ type (
 		UUID   string
 		Expire string
 		Ratio  *Literal
+		Shards string
 	}
 
 	// AlterTable represents a ALTER TABLE statement.
@@ -576,8 +562,13 @@ type (
 		DBName IdentifierCS
 	}
 
+	// TxAccessMode is an enum for Transaction Access Mode
+	TxAccessMode int8
+
 	// Begin represents a Begin statement.
-	Begin struct{}
+	Begin struct {
+		TxAccessModes []TxAccessMode
+	}
 
 	// Commit represents a Commit statement.
 	Commit struct{}
@@ -633,6 +624,17 @@ type (
 	ExplainStmt struct {
 		Type      ExplainType
 		Statement Statement
+		Comments  *ParsedComments
+	}
+
+	// VExplainType is an enum for VExplainStmt.Type
+	VExplainType int8
+
+	// VExplainStmt represents an VtExplain statement
+	VExplainStmt struct {
+		Type      VExplainType
+		Statement Statement
+		Comments  *ParsedComments
 	}
 
 	// ExplainTab represents the Explain table
@@ -688,54 +690,55 @@ type (
 	}
 )
 
-func (*Union) iStatement()             {}
-func (*Select) iStatement()            {}
-func (*Stream) iStatement()            {}
-func (*VStream) iStatement()           {}
-func (*Insert) iStatement()            {}
-func (*Update) iStatement()            {}
-func (*Delete) iStatement()            {}
-func (*Set) iStatement()               {}
-func (*SetTransaction) iStatement()    {}
-func (*DropDatabase) iStatement()      {}
-func (*Flush) iStatement()             {}
-func (*Show) iStatement()              {}
-func (*Use) iStatement()               {}
-func (*Begin) iStatement()             {}
-func (*Commit) iStatement()            {}
-func (*Rollback) iStatement()          {}
-func (*SRollback) iStatement()         {}
-func (*Savepoint) iStatement()         {}
-func (*Release) iStatement()           {}
-func (*OtherRead) iStatement()         {}
-func (*OtherAdmin) iStatement()        {}
-func (*CommentOnly) iStatement()       {}
-func (*Select) iSelectStatement()      {}
-func (*Union) iSelectStatement()       {}
-func (*Load) iStatement()              {}
-func (*CreateDatabase) iStatement()    {}
-func (*AlterDatabase) iStatement()     {}
-func (*CreateTable) iStatement()       {}
-func (*CreateView) iStatement()        {}
-func (*AlterView) iStatement()         {}
-func (*LockTables) iStatement()        {}
-func (*UnlockTables) iStatement()      {}
-func (*AlterTable) iStatement()        {}
-func (*AlterVschema) iStatement()      {}
-func (*AlterMigration) iStatement()    {}
-func (*RevertMigration) iStatement()   {}
-func (*ShowMigrationLogs) iStatement() {}
-func (*ShowThrottledApps) iStatement() {}
-func (*DropTable) iStatement()         {}
-func (*DropView) iStatement()          {}
-func (*TruncateTable) iStatement()     {}
-func (*RenameTable) iStatement()       {}
-func (*CallProc) iStatement()          {}
-func (*ExplainStmt) iStatement()       {}
-func (*ExplainTab) iStatement()        {}
-func (*PrepareStmt) iStatement()       {}
-func (*ExecuteStmt) iStatement()       {}
-func (*DeallocateStmt) iStatement()    {}
+func (*Union) iStatement()               {}
+func (*Select) iStatement()              {}
+func (*Stream) iStatement()              {}
+func (*VStream) iStatement()             {}
+func (*Insert) iStatement()              {}
+func (*Update) iStatement()              {}
+func (*Delete) iStatement()              {}
+func (*Set) iStatement()                 {}
+func (*DropDatabase) iStatement()        {}
+func (*Flush) iStatement()               {}
+func (*Show) iStatement()                {}
+func (*Use) iStatement()                 {}
+func (*Begin) iStatement()               {}
+func (*Commit) iStatement()              {}
+func (*Rollback) iStatement()            {}
+func (*SRollback) iStatement()           {}
+func (*Savepoint) iStatement()           {}
+func (*Release) iStatement()             {}
+func (*OtherRead) iStatement()           {}
+func (*OtherAdmin) iStatement()          {}
+func (*CommentOnly) iStatement()         {}
+func (*Select) iSelectStatement()        {}
+func (*Union) iSelectStatement()         {}
+func (*Load) iStatement()                {}
+func (*CreateDatabase) iStatement()      {}
+func (*AlterDatabase) iStatement()       {}
+func (*CreateTable) iStatement()         {}
+func (*CreateView) iStatement()          {}
+func (*AlterView) iStatement()           {}
+func (*LockTables) iStatement()          {}
+func (*UnlockTables) iStatement()        {}
+func (*AlterTable) iStatement()          {}
+func (*AlterVschema) iStatement()        {}
+func (*AlterMigration) iStatement()      {}
+func (*RevertMigration) iStatement()     {}
+func (*ShowMigrationLogs) iStatement()   {}
+func (*ShowThrottledApps) iStatement()   {}
+func (*ShowThrottlerStatus) iStatement() {}
+func (*DropTable) iStatement()           {}
+func (*DropView) iStatement()            {}
+func (*TruncateTable) iStatement()       {}
+func (*RenameTable) iStatement()         {}
+func (*CallProc) iStatement()            {}
+func (*ExplainStmt) iStatement()         {}
+func (*VExplainStmt) iStatement()        {}
+func (*ExplainTab) iStatement()          {}
+func (*PrepareStmt) iStatement()         {}
+func (*ExecuteStmt) iStatement()         {}
+func (*DeallocateStmt) iStatement()      {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -1257,42 +1260,52 @@ func (node *AlterView) SetFromTables(tables TableNames) {
 	// irrelevant
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *RenameTable) SetComments(comments Comments) {
 	// irrelevant
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *TruncateTable) SetComments(comments Comments) {
 	// irrelevant
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *AlterTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
+func (node *ExplainStmt) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments implements Commented interface.
+func (node *VExplainStmt) SetComments(comments Comments) {
+	node.Comments = comments.Parsed()
+}
+
+// SetComments implements Commented interface.
 func (node *CreateTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *CreateView) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *DropTable) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *DropView) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// SetComments implements DDLStatement.
+// SetComments implements Commented interface.
 func (node *AlterView) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
@@ -1327,44 +1340,54 @@ func (node *VStream) SetComments(comments Comments) {
 	node.Comments = comments.Parsed()
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *RenameTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *TruncateTable) GetParsedComments() *ParsedComments {
 	// irrelevant
 	return nil
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *AlterTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
+func (node *ExplainStmt) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
+// GetParsedComments implements Commented interface.
+func (node *VExplainStmt) GetParsedComments() *ParsedComments {
+	return node.Comments
+}
+
+// GetParsedComments implements Commented interface.
 func (node *CreateTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *CreateView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *DropTable) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *DropView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
 
-// GetParsedComments implements DDLStatement.
+// GetParsedComments implements Commented interface.
 func (node *AlterView) GetParsedComments() *ParsedComments {
 	return node.Comments
 }
@@ -1739,8 +1762,7 @@ type TableSpec struct {
 // ColumnDefinition describes a column in a CREATE TABLE statement
 type ColumnDefinition struct {
 	Name IdentifierCI
-	// TODO: Should this not be a reference?
-	Type ColumnType
+	Type *ColumnType
 }
 
 // ColumnType represents a sql type in a CREATE TABLE statement
@@ -1924,7 +1946,7 @@ func (c Comments) Parsed() *ParsedComments {
 
 type ParsedComments struct {
 	comments    Comments
-	_directives CommentDirectives
+	_directives *CommentDirectives
 }
 
 // SelectExprs represents SELECT expressions.
@@ -2260,6 +2282,9 @@ type (
 		Qualifier TableName
 	}
 
+	// Scope is an enum for scope of query
+	Scope int8
+
 	Variable struct {
 		Scope Scope
 		Name  IdentifierCI
@@ -2445,11 +2470,11 @@ type (
 	// This is a struct that the parser will never produce - it's written and read by the gen4 planner
 	// CAUTION: you should only change argName and hasValuesArg through the setter methods
 	ExtractedSubquery struct {
-		Original     Expr // original expression that was replaced by this ExtractedSubquery
-		OpCode       int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
-		Subquery     *Subquery
-		OtherSide    Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
-		NeedsRewrite bool // tells whether we need to rewrite this subquery to Original or not
+		Original  Expr // original expression that was replaced by this ExtractedSubquery
+		OpCode    int  // this should really be engine.PulloutOpCode, but we cannot depend on engine :(
+		Subquery  *Subquery
+		OtherSide Expr // represents the side of the comparison, this field will be nil if Original is not a comparison
+		Merged    bool // tells whether we need to rewrite this subquery to Original or not
 
 		hasValuesArg string
 		argName      string
@@ -2506,7 +2531,7 @@ type (
 	}
 
 	// JSONTableExpr describes the components of JSON_TABLE()
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
+	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/json-table-functions.html#function_json-table
 	JSONTableExpr struct {
 		Expr    Expr
 		Alias   IdentifierCS
@@ -2532,7 +2557,7 @@ type (
 	// JtPathColDef is a type of column definition specifying the path in JSON structure to extract values
 	JtPathColDef struct {
 		Name            IdentifierCI
-		Type            ColumnType
+		Type            *ColumnType
 		JtColExists     bool
 		Path            Expr
 		EmptyOnResponse *JtOnResponse
@@ -2667,16 +2692,27 @@ type (
 	JSONValueMergeType int8
 
 	// JSONRemoveExpr represents the JSON_REMOVE()
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-remove
+	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-remove
 	JSONRemoveExpr struct {
 		JSONDoc  Expr
 		PathList Exprs
 	}
 
 	// JSONRemoveExpr represents the JSON_UNQUOTE()
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-unquote
+	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/json-modification-functions.html#function_json-unquote
 	JSONUnquoteExpr struct {
 		JSONValue Expr
+	}
+
+	//PointExpr represents POINT(x,y) expression
+	PointExpr struct {
+		XCordinate Expr
+		YCordinate Expr
+	}
+
+	//LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
+	LineStringExpr struct {
+		PointParams Exprs
 	}
 
 	AggrFunc interface {
@@ -2765,7 +2801,7 @@ type (
 	}
 
 	// RegexpInstrExpr represents REGEXP_INSTR()
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
+	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-instr
 	RegexpInstrExpr struct {
 		Expr         Expr
 		Pattern      Expr
@@ -2776,7 +2812,7 @@ type (
 	}
 
 	// RegexpLikeExpr represents REGEXP_LIKE()
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
+	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-like
 	RegexpLikeExpr struct {
 		Expr      Expr
 		Pattern   Expr
@@ -2784,7 +2820,7 @@ type (
 	}
 
 	// RegexpReplaceExpr represents REGEXP_REPLACE()
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
+	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-replace
 	RegexpReplaceExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2795,7 +2831,7 @@ type (
 	}
 
 	// RegexpSubstrExpr represents REGEXP_SUBSTR()
-	// For more information, visit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
+	// For more information, postVisit https://dev.mysql.com/doc/refman/8.0/en/regexp.html#function_regexp-substr
 	RegexpSubstrExpr struct {
 		Expr       Expr
 		Pattern    Expr
@@ -2855,7 +2891,7 @@ type (
 
 	// ExtractValueExpr stands for EXTRACTVALUE() XML function
 	// Extract a value from an XML string using XPath notation
-	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_extractvalue
+	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_extractvalue
 	ExtractValueExpr struct {
 		Fragment  Expr
 		XPathExpr Expr
@@ -2863,7 +2899,7 @@ type (
 
 	// UpdateXMLExpr stands for UpdateXML() XML function
 	// Return replaced XML fragment
-	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_updatexml
+	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/xml-functions.html#function_updatexml
 	UpdateXMLExpr struct {
 		Target    Expr
 		XPathExpr Expr
@@ -2888,7 +2924,7 @@ type (
 	// For FORMAT_BYTES, it means count
 	// For FORMAT_PICO_TIME, it means time_val
 	// For PS_THREAD_ID it means connection_id
-	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/performance-schema-functions.html
+	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/performance-schema-functions.html
 	PerformanceSchemaFuncExpr struct {
 		Type     PerformanceSchemaType
 		Argument Expr
@@ -2899,7 +2935,7 @@ type (
 
 	// GTIDFuncExpr stands for GTID Functions
 	// Set1 Acts as gtid_set for WAIT_FOR_EXECUTED_GTID_SET() and WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS()
-	// For more details, visit https://dev.mysql.com/doc/refman/8.0/en/gtid-functions.html
+	// For more details, postVisit https://dev.mysql.com/doc/refman/8.0/en/gtid-functions.html
 	GTIDFuncExpr struct {
 		Type    GTIDType
 		Set1    Expr
@@ -3005,6 +3041,8 @@ func (*VarPop) iExpr()                             {}
 func (*VarSamp) iExpr()                            {}
 func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
+func (*PointExpr) iExpr()                          {}
+func (*LineStringExpr) iExpr()                     {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3058,6 +3096,8 @@ func (*ExtractValueExpr) iCallable()                   {}
 func (*UpdateXMLExpr) iCallable()                      {}
 func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
+func (*PointExpr) iCallable()                          {}
+func (*LineStringExpr) iCallable()                     {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}
@@ -3213,6 +3253,3 @@ type IdentifierCI struct {
 type IdentifierCS struct {
 	v string
 }
-
-func (IsolationLevel) iChar() {}
-func (AccessMode) iChar()     {}

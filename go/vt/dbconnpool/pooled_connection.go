@@ -16,12 +16,40 @@ limitations under the License.
 
 package dbconnpool
 
-import "context"
+import (
+	"context"
+	"time"
+
+	"vitess.io/vitess/go/pools"
+)
 
 // PooledDBConnection re-exposes DBConnection to be used by ConnectionPool.
 type PooledDBConnection struct {
 	*DBConnection
-	pool *ConnectionPool
+	timeCreated time.Time
+	pool        *ConnectionPool
+}
+
+func (pc *PooledDBConnection) Expired(lifetimeTimeout time.Duration) bool {
+	return lifetimeTimeout > 0 && time.Until(pc.timeCreated.Add(lifetimeTimeout)) < 0
+}
+
+func (pc *PooledDBConnection) ApplySetting(context.Context, *pools.Setting) error {
+	//TODO implement me
+	panic("implement me")
+}
+
+func (pc *PooledDBConnection) IsSettingApplied() bool {
+	return false
+}
+
+func (pc *PooledDBConnection) IsSameSetting(string) bool {
+	return true
+}
+
+func (pc *PooledDBConnection) ResetSetting(context.Context) error {
+	//TODO implement me
+	panic("implement me")
 }
 
 // Recycle should be called to return the PooledDBConnection to the pool.

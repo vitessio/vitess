@@ -14,9 +14,16 @@ env:
 jobs:
   build:
     name: Run endtoend tests on Cluster (vtgate_schema_tracker)
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-22.04
 
     steps:
+    - name: Skip CI
+      run: |
+        if [[ "${{contains( github.event.pull_request.labels.*.name, 'Skip CI')}}" == "true" ]]; then
+          echo "skipping CI due to the 'Skip CI' label"
+          exit 1
+        fi
+
     - name: Check if workflow needs to be skipped
       id: skip-workflow
       run: |
@@ -25,11 +32,11 @@ jobs:
           skip='true'
         fi
         echo Skip ${skip}
-        echo "::set-output name=skip-workflow::${skip}"
+        echo "skip-workflow=${skip}" >> $GITHUB_OUTPUT
 
     - name: Check out code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -43,27 +50,30 @@ jobs:
             - 'test.go'
             - 'Makefile'
             - 'build.env'
-            - 'go.[sumod]'
+            - 'go.sum'
+            - 'go.mod'
             - 'proto/*.proto'
             - 'tools/**'
             - 'config/**'
             - 'bootstrap.sh'
-            - '.github/workflows/**'
+            - '.github/workflows/cluster_endtoend_vtgate_schema_tracker.yml'
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
-        go-version: 1.18.4
+        go-version: 1.19.4
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        echo '1024 65535' | sudo tee -a /proc/sys/net/ipv4/ip_local_port_range
+        # Limit local port range to not use ports that overlap with server side
+        # ports that we listen on.
+        sudo sysctl -w net.ipv4.ip_local_port_range="22768 65535"
         # Increase the asynchronous non-blocking I/O. More information at https://dev.mysql.com/doc/refman/5.7/en/innodb-parameters.html#sysvar_innodb_use_native_aio
         echo "fs.aio-max-nr = 1048576" | sudo tee -a /etc/sysctl.conf
         sudo sysctl -p /etc/sysctl.conf
@@ -71,8 +81,17 @@ jobs:
     - name: Get dependencies
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
+        
+        # Get key to latest MySQL repo
+        sudo apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 467B942D3A79BD29
+        # Setup MySQL 8.0
+        wget -c https://dev.mysql.com/get/mysql-apt-config_0.8.24-1_all.deb
+        echo mysql-apt-config mysql-apt-config/select-server select mysql-8.0 | sudo debconf-set-selections
+        sudo DEBIAN_FRONTEND="noninteractive" dpkg -i mysql-apt-config*
         sudo apt-get update
-        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata
+        # Install everything else we need, and configure
+        sudo apt-get install -y mysql-server mysql-client make unzip g++ etcd curl git wget eatmydata xz-utils libncurses5
+
         sudo service mysql stop
         sudo service etcd stop
         sudo ln -s /etc/apparmor.d/usr.sbin.mysqld /etc/apparmor.d/disable/
@@ -96,7 +115,7 @@ jobs:
 
     - name: Run cluster endtoend test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 30
+      timeout-minutes: 45
       run: |
         # We set the VTDATAROOT to the /tmp folder to reduce the file path of mysql.sock file
         # which musn't be more than 107 characters long.

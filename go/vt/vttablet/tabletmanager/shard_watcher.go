@@ -25,26 +25,25 @@ import (
 
 type shardWatcher struct {
 	watchChan   <-chan *topo.WatchShardData
-	watchCancel topo.CancelFunc
+	watchCancel context.CancelFunc
 }
 
 func (sw *shardWatcher) active() bool {
 	return sw.watchChan != nil
 }
 
-func (sw *shardWatcher) start(ctx context.Context, ts *topo.Server, keyspace, shard string) error {
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
-	defer cancel()
-
+func (sw *shardWatcher) start(ts *topo.Server, keyspace, shard string) error {
 	log.Infof("Starting shard watch of %v/%v", keyspace, shard)
 
-	event, c, watchCancel := ts.WatchShard(ctx, keyspace, shard)
-	if event.Err != nil {
-		return event.Err
+	ctx, cancel := context.WithCancel(context.Background())
+	_, c, err := ts.WatchShard(ctx, keyspace, shard)
+	if err != nil {
+		cancel()
+		return err
 	}
 
 	sw.watchChan = c
-	sw.watchCancel = watchCancel
+	sw.watchCancel = cancel
 	return nil
 }
 

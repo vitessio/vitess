@@ -17,13 +17,15 @@ limitations under the License.
 package integration
 
 import (
-	"flag"
+	"encoding/base64"
 	"fmt"
 	"math"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
@@ -32,13 +34,30 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-var collationEnv *collations.Environment
+var (
+	collationEnv *collations.Environment
+
+	debugPrintAll        bool
+	debugNormalize       = true
+	debugSimplify        = time.Now().UnixNano()&1 != 0
+	debugCheckTypes      = true
+	debugCheckCollations = true
+)
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&debugPrintAll, "print-all", debugPrintAll, "print all matching tests")
+	fs.BoolVar(&debugNormalize, "normalize", debugNormalize, "normalize comparisons against MySQL values")
+	fs.BoolVar(&debugSimplify, "simplify", debugSimplify, "simplify expressions before evaluating them")
+	fs.BoolVar(&debugCheckTypes, "check-types", debugCheckTypes, "check the TypeOf operator for all queries")
+	fs.BoolVar(&debugCheckCollations, "check-collations", debugCheckCollations, "check the returned collations for all queries")
+}
 
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
+	servenv.OnParse(registerFlags)
 }
 
 func perm(a []string, f func([]string)) {
@@ -83,55 +102,100 @@ func normalize(v sqltypes.Value, coll collations.ID) string {
 	return fmt.Sprintf("%v(%s)", typ, v.Raw())
 }
 
-var debugPrintAll = flag.Bool("print-all", false, "print all matching tests")
-var debugNormalize = flag.Bool("normalize", true, "normalize comparisons against MySQL values")
-var debugSimplify = flag.Bool("simplify", time.Now().UnixNano()&1 != 0, "simplify expressions before evaluating them")
-var debugCheckTypes = flag.Bool("check-types", true, "check the TypeOf operator for all queries")
-var debugCheckCollations = flag.Bool("check-collations", true, "check the returned collations for all queries")
-
 func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
+	t.Helper()
+	env := evalengine.EnvWithBindVars(nil, 255)
+	compareRemoteExprEnv(t, env, conn, expr)
+}
+
+func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
 	remoteQuery := "SELECT " + expr
-	if *debugCheckCollations {
+	if debugCheckCollations {
 		remoteQuery = fmt.Sprintf("SELECT %s, COLLATION(%s)", expr, expr)
 	}
+	if len(env.Fields) > 0 {
+		if _, err := conn.ExecuteFetch(`DROP TEMPORARY TABLE IF EXISTS vteval_test`, -1, false); err != nil {
+			t.Fatalf("failed to drop temporary table: %v", err)
+		}
 
-	local, localType, localErr := safeEvaluate(localQuery)
+		var schema strings.Builder
+		schema.WriteString(`CREATE TEMPORARY TABLE vteval_test(autopk int primary key auto_increment, `)
+		for i, field := range env.Fields {
+			if i > 0 {
+				schema.WriteString(", ")
+			}
+			_, _ = fmt.Fprintf(&schema, "%s %s", field.Name, field.ColumnType)
+		}
+		schema.WriteString(")")
+
+		if _, err := conn.ExecuteFetch(schema.String(), -1, false); err != nil {
+			t.Fatalf("failed to initialize temporary table: %v (sql=%s)", err, schema.String())
+		}
+
+		if len(env.Row) > 0 {
+			var rowsql strings.Builder
+			rowsql.WriteString(`INSERT INTO vteval_test(`)
+			for i, field := range env.Fields {
+				if i > 0 {
+					rowsql.WriteString(", ")
+				}
+				rowsql.WriteString(field.Name)
+			}
+
+			rowsql.WriteString(`) VALUES (`)
+			for i, row := range env.Row {
+				if i > 0 {
+					rowsql.WriteString(", ")
+				}
+				row.EncodeSQLStringBuilder(&rowsql)
+			}
+			rowsql.WriteString(")")
+
+			if _, err := conn.ExecuteFetch(rowsql.String(), -1, false); err != nil {
+				t.Fatalf("failed to insert data into temporary table: %v (sql=%s)", err, rowsql.String())
+			}
+		}
+
+		remoteQuery = remoteQuery + " FROM vteval_test"
+	}
+
+	local, localType, localErr := safeEvaluate(env, localQuery)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal string
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
 		v := local.Value()
-		if *debugCheckCollations {
+		if debugCheckCollations {
 			if v.IsNull() {
 				localCollation = collations.CollationBinaryID
 			} else {
 				localCollation = local.Collation()
 			}
 		}
-		if *debugNormalize {
+		if debugNormalize {
 			localVal = normalize(v, local.Collation())
 		} else {
 			localVal = v.String()
 		}
-		if *debugCheckTypes {
+		if debugCheckTypes {
 			tt := v.Type()
 			if tt != sqltypes.Null && tt != localType {
 				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
-					tt, localType, localVal, localQuery, *debugSimplify)
+					tt, localType, localVal, localQuery, debugSimplify)
 			}
 		}
 	}
 	if remoteErr == nil {
-		if *debugNormalize {
+		if debugNormalize {
 			remoteVal = normalize(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
 		} else {
 			remoteVal = remote.Rows[0][0].String()
 		}
-		if *debugCheckCollations {
+		if debugCheckCollations {
 			if remote.Rows[0][0].IsNull() {
 				// TODO: passthrough proper collations for nullable fields
 				remoteCollation = collations.CollationBinaryID
@@ -141,9 +205,9 @@ func compareRemoteExpr(t *testing.T, conn *mysql.Conn, expr string) {
 		}
 	}
 	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation); diff != "" {
-		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)", diff, localQuery, *debugSimplify)
-	} else if *debugPrintAll {
-		t.Logf("local=%s mysql=%s\nquery: %s", localVal, remoteVal, localQuery)
+		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", diff, localQuery, debugSimplify, env.Row)
+	} else if debugPrintAll {
+		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal, remoteVal, localQuery, env.Row)
 	}
 }
 
@@ -157,7 +221,6 @@ var comparisonElements = []string{"NULL", "-1", "0", "1",
 
 func TestAllComparisons(t *testing.T) {
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
-
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
@@ -420,6 +483,34 @@ func TestTypes(t *testing.T) {
 	}
 }
 
+func TestUnderscoreAndPercentage(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var queries = []string{
+		`'pokemon' LIKE 'poke%'`,
+		`'pokemon' LIKE 'poke\%'`,
+		`'poke%mon' LIKE 'poke\%mon'`,
+		`'pokemon' LIKE 'poke\%mon'`,
+		`'poke%mon' = 'poke%mon'`,
+		`'poke\%mon' = 'poke%mon'`,
+		`'poke%mon' = 'poke\%mon'`,
+		`'poke\%mon' = 'poke\%mon'`,
+		`'pokemon' LIKE 'poke_on'`,
+		`'pokemon' LIKE 'poke\_on'`,
+		`'poke_mon' LIKE 'poke\_mon'`,
+		`'pokemon' LIKE 'poke\_mon'`,
+		`'poke_mon' = 'poke_mon'`,
+		`'poke\_mon' = 'poke_mon'`,
+		`'poke_mon' = 'poke\_mon'`,
+		`'poke\_mon' = 'poke\_mon'`,
+	}
+
+	for _, query := range queries {
+		compareRemoteExpr(t, conn, query)
+	}
+}
+
 func TestFloatFormatting(t *testing.T) {
 	var floats = []string{
 		`18446744073709551615`,
@@ -560,34 +651,58 @@ func TestLargeDecimals(t *testing.T) {
 	}
 }
 
+var conversionInputs = []string{
+	"0", "1", "255",
+	"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
+	"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7",
+	`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
+	`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
+	"NULL", "true", "false",
+	"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
+	"18446744073709540000e0",
+	"-18446744073709540000e0",
+	"JSON_OBJECT()", "JSON_ARRAY()",
+}
+
 func TestConversionOperators(t *testing.T) {
-	var left = []string{
-		"0", "1", "255",
-		"0.0e0", "1.0e0", "1.5e0", "-1.5e0", "1.1e0", "-1.1e0", "-1.7e0",
-		"0.0", "0.000", "1.5", "-1.5", "1.1", "1.7", "-1.1", "-1.7",
-		`'foobar'`, `_utf8 'foobar'`, `''`, `_binary 'foobar'`,
-		`0x0`, `0x1`, `0xff`, `X'00'`, `X'01'`, `X'ff'`,
-		"NULL",
-		"0xFF666F6F626172FF", "0x666F6F626172FF", "0xFF666F6F626172",
-		"18446744073709540000e0",
-		"-18446744073709540000e0",
-	}
 	var right = []string{
 		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
 		"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
 		"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
 		"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
 		"DOUBLE", "REAL",
-		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER",
+		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
 	}
 	var conn = mysqlconn(t)
 	defer conn.Close()
 
-	for _, lhs := range left {
+	for _, lhs := range conversionInputs {
 		for _, rhs := range right {
 			compareRemoteExpr(t, conn, fmt.Sprintf("CAST(%s AS %s)", lhs, rhs))
 			compareRemoteExpr(t, conn, fmt.Sprintf("CONVERT(%s, %s)", lhs, rhs))
+			compareRemoteExpr(t, conn, fmt.Sprintf("CAST(CAST(%s AS JSON) AS %s)", lhs, rhs))
 		}
+	}
+}
+
+func TestBase64(t *testing.T) {
+	var inputs = []string{
+		`'bGlnaHQgdw=='`,
+		`'bGlnaHQgd28='`,
+		`'bGlnaHQgd29y'`,
+	}
+
+	inputs = append(inputs, conversionInputs...)
+	for _, input := range conversionInputs {
+		inputs = append(inputs, "'"+base64.StdEncoding.EncodeToString([]byte(input))+"'")
+	}
+
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	for _, lhs := range inputs {
+		compareRemoteExpr(t, conn, fmt.Sprintf("FROM_BASE64(%s)", lhs))
+		compareRemoteExpr(t, conn, fmt.Sprintf("TO_BASE64(%s)", lhs))
 	}
 }
 
@@ -641,16 +756,20 @@ func TestCaseExprWithPredicate(t *testing.T) {
 }
 
 // HACK: for CASE comparisons, the expression is supposed to decompose like this:
-//		CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
-//			=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
+//
+//	CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
+//		=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
+//
 // See: https://dev.mysql.com/doc/refman/5.7/en/flow-control-functions.html#operator_case
 // However, MySQL does not seem to be using the real `=` operator for some of these comparisons
 // namely, numerical comparisons are coerced into an unsigned form when they shouldn't.
 // Example:
-//		SELECT -1 = 18446744073709551615
-//			=> 0
-//		SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
-//			=> 1
+//
+//	SELECT -1 = 18446744073709551615
+//		=> 0
+//	SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
+//		=> 1
+//
 // This does not happen for other types, which all follow the behavior of the `=` operator,
 // so we're going to assume this is a bug for now.
 func comparisonSkip(a, b string) bool {
@@ -679,5 +798,28 @@ func TestCaseExprWithValue(t *testing.T) {
 			query := fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1)
 			compareRemoteExpr(t, conn, query)
 		}
+	}
+}
+
+func TestCeilandCeiling(t *testing.T) {
+	var conn = mysqlconn(t)
+	defer conn.Close()
+
+	var ceilInputs = []string{
+		"0",
+		"1",
+		"-1",
+		"'1.5'",
+		"NULL",
+		"'ABC'",
+		"1.5e0",
+		"-1.5e0",
+		"9223372036854775810.4",
+		"-9223372036854775810.4",
+	}
+
+	for _, num := range ceilInputs {
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEIL(%s)", num))
+		compareRemoteExpr(t, conn, fmt.Sprintf("CEILING(%s)", num))
 	}
 }

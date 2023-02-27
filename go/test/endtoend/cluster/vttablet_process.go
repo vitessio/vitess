@@ -21,6 +21,7 @@ import (
 	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -28,6 +29,7 @@ import (
 	"os/exec"
 	"path"
 	"reflect"
+	"strconv"
 	"strings"
 	"syscall"
 	"testing"
@@ -64,7 +66,6 @@ type VttabletProcess struct {
 	VerifyURL                   string
 	QueryzURL                   string
 	StatusDetailsURL            string
-	EnableSemiSync              bool
 	SupportsBackup              bool
 	ServingStatus               string
 	DbPassword                  string
@@ -72,6 +73,7 @@ type VttabletProcess struct {
 	VreplicationTabletType      string
 	DbFlavor                    string
 	Charset                     string
+	ConsolidationsURL           string
 
 	//Extra Args to be set before starting the vttablet process
 	ExtraArgs []string
@@ -117,9 +119,6 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	if vttablet.SupportsBackup {
 		vttablet.proc.Args = append(vttablet.proc.Args, "--restore_from_backup")
 	}
-	if vttablet.EnableSemiSync {
-		vttablet.proc.Args = append(vttablet.proc.Args, "--enable_semi_sync")
-	}
 	if vttablet.DbFlavor != "" {
 		vttablet.proc.Args = append(vttablet.proc.Args, fmt.Sprintf("--db_flavor=%s", vttablet.DbFlavor))
 	}
@@ -142,6 +141,7 @@ func (vttablet *VttabletProcess) Setup() (err error) {
 	go func() {
 		if vttablet.proc != nil {
 			vttablet.exit <- vttablet.proc.Wait()
+			close(vttablet.exit)
 		}
 	}()
 
@@ -202,6 +202,41 @@ func (vttablet *VttabletProcess) GetStatusDetails() string {
 
 	respByte, _ := io.ReadAll(resp.Body)
 	return string(respByte)
+}
+
+// GetConsolidations gets consolidations
+func (vttablet *VttabletProcess) GetConsolidations() (map[string]int, error) {
+	resp, err := http.Get(vttablet.ConsolidationsURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get consolidations: %v", err)
+	}
+	defer resp.Body.Close()
+
+	result := make(map[string]int)
+
+	scanner := bufio.NewScanner(resp.Body)
+	for scanner.Scan() {
+		line := scanner.Text()
+		splits := strings.SplitN(line, ":", 2)
+		if len(splits) != 2 {
+			return nil, fmt.Errorf("failed to split consolidations line: %v", err)
+		}
+		// Discard "Length: [N]" lines.
+		if splits[0] == "Length" {
+			continue
+		}
+		countS := splits[0]
+		countI, err := strconv.Atoi(countS)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse consolidations count: %v", err)
+		}
+		result[strings.TrimSpace(splits[1])] = countI
+	}
+	if err := scanner.Err(); err != nil && !errors.Is(err, io.EOF) {
+		return nil, fmt.Errorf("failed to read consolidations: %v", err)
+	}
+
+	return result, nil
 }
 
 // WaitForStatus waits till desired status of tablet is reached
@@ -361,12 +396,10 @@ func (vttablet *VttabletProcess) TearDownWithTimeout(timeout time.Duration) erro
 		return nil
 
 	case <-time.After(timeout):
-		proc := vttablet.proc
-		if proc != nil {
-			vttablet.proc.Process.Kill()
-			vttablet.proc = nil
-		}
-		return <-vttablet.exit
+		vttablet.proc.Process.Kill()
+		err := <-vttablet.exit
+		vttablet.proc = nil
+		return err
 	}
 }
 
@@ -556,7 +589,7 @@ func (vttablet *VttabletProcess) IsShutdown() bool {
 // VttabletProcessInstance returns a VttabletProcess handle for vttablet process
 // configured with the given Config.
 // The process must be manually started by calling setup()
-func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, enableSemiSync bool, charset string) *VttabletProcess {
+func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspace string, vtctldPort int, tabletType string, topoPort int, hostname, tmpDirectory string, extraArgs []string, charset string) *VttabletProcess {
 	vtctl := VtctlProcessInstance(topoPort, hostname)
 	vttablet := &VttabletProcess{
 		Name:                        "vttablet",
@@ -576,7 +609,6 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 		GrpcPort:                    grpcPort,
 		VtctldAddress:               fmt.Sprintf("http://%s:%d", hostname, vtctldPort),
 		ExtraArgs:                   extraArgs,
-		EnableSemiSync:              enableSemiSync,
 		SupportsBackup:              true,
 		ServingStatus:               "NOT_SERVING",
 		BackupStorageImplementation: "file",
@@ -592,6 +624,7 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 	vttablet.VerifyURL = fmt.Sprintf("http://%s:%d/debug/vars", hostname, port)
 	vttablet.QueryzURL = fmt.Sprintf("http://%s:%d/queryz", hostname, port)
 	vttablet.StatusDetailsURL = fmt.Sprintf("http://%s:%d/debug/status_details", hostname, port)
+	vttablet.ConsolidationsURL = fmt.Sprintf("http://%s:%d/debug/consolidations", hostname, port)
 
 	return vttablet
 }

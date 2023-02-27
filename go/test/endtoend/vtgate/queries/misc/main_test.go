@@ -17,6 +17,7 @@ limitations under the License.
 package misc
 
 import (
+	_ "embed"
 	"flag"
 	"fmt"
 	"os"
@@ -33,33 +34,17 @@ var (
 	vtParams        mysql.ConnParams
 	mysqlParams     mysql.ConnParams
 	keyspaceName    = "ks_misc"
+	uks             = "uks"
 	cell            = "test_misc"
-	schemaSQL       = `create table t1(
-	id1 bigint,
-	id2 bigint,
-	primary key(id1)
-) Engine=InnoDB;
-`
 
-	vschema = `
-{
-  "sharded": true,
-  "vindexes": {
-    "hash": {
-      "type": "hash"
-    }
-  },
-  "tables": {
-    "t1": {
-      "column_vindexes": [
-        {
-          "column": "id1",
-          "name": "hash"
-        }
-      ]
-    }
-  }
-}`
+	//go:embed uschema.sql
+	uschemaSQL string
+
+	//go:embed schema.sql
+	schemaSQL string
+
+	//go:embed vschema.json
+	vschema string
 )
 
 func TestMain(m *testing.M) {
@@ -76,6 +61,19 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-config-max-result-size", "1000000",
+			"--queryserver-config-query-timeout", "200",
+			"--queryserver-config-query-pool-timeout", "200")
+		// Start Unsharded keyspace
+		ukeyspace := &cluster.Keyspace{
+			Name:      uks,
+			SchemaSQL: uschemaSQL,
+		}
+		err = clusterInstance.StartUnshardedKeyspace(*ukeyspace, 0, false)
+		if err != nil {
+			return 1
+		}
+
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
@@ -87,17 +85,14 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true")
+		clusterInstance.VtGateExtraArgs = append(clusterInstance.VtGateExtraArgs, "--enable_system_settings=true", "--query-timeout=100")
 		// Start vtgate
 		err = clusterInstance.StartVtgate()
 		if err != nil {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(keyspaceName)
 
 		// create mysql instance and connection parameters
 		conn, closer, err := utils.NewMySQL(clusterInstance, keyspaceName, schemaSQL)

@@ -32,16 +32,15 @@ func TestXtrabackupStream(t *testing.T) {
 func TestXtrabackupStreamWithlz4Compression(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &backup.CompressionDetails{
-		BuiltinCompressor: "lz4",
+		CompressorEngineName: "lz4",
 	}
 
-	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, cDetails, []string{"TestReplicaBackup"})
+	backup.TestBackup(t, backup.XtraBackup, "xbstream", 8, cDetails, []string{"primaryReplicaSameBackupModifiedCompressionEngine"})
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.BuiltinCompressor = "pgzip"
-	*mysqlctl.BuiltinDecompressor = "auto"
-	*mysqlctl.ExternalCompressorCmd = ""
-	*mysqlctl.ExternalCompressorExt = ""
-	*mysqlctl.ExternalDecompressorCmd = ""
+	mysqlctl.CompressionEngineName = "pgzip"
+	mysqlctl.ExternalCompressorCmd = ""
+	mysqlctl.ExternalCompressorExt = ""
+	mysqlctl.ExternalDecompressorCmd = ""
 }

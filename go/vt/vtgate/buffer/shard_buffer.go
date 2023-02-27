@@ -307,7 +307,7 @@ func (sb *shardBuffer) logErrorIfStateNotLocked(state bufferState) {
 // give up their spot in the buffer. It also holds the "bufferCancel" function.
 // If buffering fails e.g. due to a full buffer, an error is returned.
 func (sb *shardBuffer) bufferRequestLocked(ctx context.Context) (*entry, error) {
-	if !sb.buf.bufferSizeSema.TryAcquire() {
+	if !sb.buf.bufferSizeSema.TryAcquire(1) {
 		// Buffer is full. Evict the oldest entry and buffer this request instead.
 		if len(sb.queue) == 0 {
 			// Overall buffer is full, but this shard's queue is empty. That means
@@ -384,7 +384,7 @@ func (sb *shardBuffer) waitForRequestFinish(e *entry, releaseSlot, async bool) {
 	// the buffer full eviction or the timeout thread does not block on us.
 	// This way, the request's slot can only be reused after the request finished.
 	if releaseSlot {
-		sb.buf.bufferSizeSema.Release()
+		sb.buf.bufferSizeSema.Release(1)
 	}
 }
 

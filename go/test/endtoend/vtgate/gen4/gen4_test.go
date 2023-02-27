@@ -430,9 +430,9 @@ func TestOuterJoin(t *testing.T) {
 }
 
 func TestUsingJoin(t *testing.T) {
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t1"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t2"))
-	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance, shardedKs, "t3"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t1"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t2"))
+	require.NoError(t, utils.WaitForAuthoritative(t, clusterInstance.VtgateProcess, shardedKs, "t3"))
 
 	mcmp, closer := start(t)
 	defer closer()
@@ -479,8 +479,8 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 	defer closer()
 
 	// insert some data.
-	utils.Exec(t, mcmp.VtConn, `insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
-	utils.Exec(t, mcmp.VtConn, `insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
+	mcmp.Exec(`insert into team (id, name) values (11, 'Acme'), (22, 'B'), (33, 'C')`)
+	mcmp.Exec(`insert into team_fact (id, team, fact) values (1, 11, 'A'), (2, 22, 'A'), (3, 33, 'A')`)
 
 	// Gen4 only supported query.
 	query := `select team.id
@@ -493,7 +493,34 @@ func TestFilterOnLeftOuterJoin(t *testing.T) {
 				  and team_fact.team >= 22
 				)`
 
-	// Ideally we should get `[[INT32(22)] [INT32(33)]]`
-	// Change the expectation when we support better conversion handling in numeric comparison.
-	utils.AssertContainsError(t, mcmp.VtConn, query, `unsupported: cannot compare INT32 and INT64`)
+	mcmp.AssertMatches(query, "[[INT32(22)] [INT32(33)]]")
+}
+
+func TestPercentageAndUnderscore(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	// insert some data.
+	mcmp.Exec(`insert into t2(id, tcol1, tcol2) values (1, 'A%B', 'A%B'),(2, 'C_D', 'E'),(3, 'AB', 'C1D'),(4, 'E', 'A%B'),(5, 'A%B', 'AB'),(6, 'C1D', 'E'),(7, 'C_D', 'A%B'),(8, 'E', 'C_D')`)
+
+	// Verify that %, _ and their escaped counter-parts work in Vitess in the like clause as well as equality clause
+	mcmp.Exec(`select * from t2 where tcol1 like "A%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "A\%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "C_D"`)
+	mcmp.Exec(`select * from t2 where tcol1 like "C\_D"`)
+
+	mcmp.Exec(`select * from t2 where tcol1 = "A%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "A\%B"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "C_D"`)
+	mcmp.Exec(`select * from t2 where tcol1 = "C\_D"`)
+
+	// Verify that %, _ and their escaped counter-parts work with filtering on VTGate level
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "A\%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "A%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "A\%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "A%B" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "C_D%" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) like "C\_D%" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C_DC_D" order by a.tcol1`)
+	mcmp.Exec(`select a.tcol1 from t2 a join t2 b where a.tcol1 = b.tcol2 group by a.tcol1 having repeat(a.tcol1,min(a.id)) = "C\_DC\_D" order by a.tcol1`)
 }

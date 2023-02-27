@@ -29,7 +29,7 @@ func TestMysql56SetReplicationSourceCommand(t *testing.T) {
 		Pass:  "password",
 	}
 	host := "localhost"
-	port := 123
+	port := int32(123)
 	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
@@ -41,9 +41,8 @@ func TestMysql56SetReplicationSourceCommand(t *testing.T) {
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
@@ -57,7 +56,7 @@ func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
 	}
 	params.EnableSSL()
 	host := "localhost"
-	port := 123
+	port := int32(123)
 	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
@@ -74,9 +73,8 @@ func TestMysql56SetReplicationSourceCommandSSL(t *testing.T) {
 
 	conn := &Conn{flavor: mysqlFlavor57{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mysqlFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMysqlRetrieveSourceServerId(t *testing.T) {

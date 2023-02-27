@@ -274,27 +274,6 @@ func (node *Set) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node *SetTransaction) formatFast(buf *TrackedBuffer) {
-	if node.Scope == NoScope {
-		buf.WriteString("set ")
-		node.Comments.formatFast(buf)
-		buf.WriteString("transaction ")
-	} else {
-		buf.WriteString("set ")
-		node.Comments.formatFast(buf)
-		buf.WriteString(node.Scope.ToString())
-		buf.WriteString(" transaction ")
-	}
-
-	for i, char := range node.Characteristics {
-		if i > 0 {
-			buf.WriteString(", ")
-		}
-		char.formatFast(buf)
-	}
-}
-
-// formatFast formats the node.
 func (node *DropDatabase) formatFast(buf *TrackedBuffer) {
 	exists := ""
 	if node.IfExists {
@@ -406,8 +385,14 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		alterType = "retry"
 	case CleanupMigrationType:
 		alterType = "cleanup"
+	case LaunchMigrationType:
+		alterType = "launch"
+	case LaunchAllMigrationType:
+		alterType = "launch all"
 	case CompleteMigrationType:
 		alterType = "complete"
+	case CompleteAllMigrationType:
+		alterType = "complete all"
 	case CancelMigrationType:
 		alterType = "cancel"
 	case CancelAllMigrationType:
@@ -432,6 +417,11 @@ func (node *AlterMigration) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(" ratio ")
 		node.Ratio.formatFast(buf)
 	}
+	if node.Shards != "" {
+		buf.WriteString(" vitess_shards '")
+		buf.WriteString(node.Shards)
+		buf.WriteByte('\'')
+	}
 }
 
 // formatFast formats the node.
@@ -453,6 +443,11 @@ func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node *ShowThrottledApps) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("show vitess_throttled_apps")
+}
+
+// formatFast formats the node.
+func (node *ShowThrottlerStatus) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_throttler status")
 }
 
 // formatFast formats the node.
@@ -759,8 +754,12 @@ func (node *PartitionOption) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteByte(' ')
-		node.ColList.formatFast(buf)
+		if len(node.ColList) == 0 {
+			buf.WriteString(" ()")
+		} else {
+			buf.WriteByte(' ')
+			node.ColList.formatFast(buf)
+		}
 	case RangeType, ListType:
 		buf.WriteByte(' ')
 		buf.WriteString(node.Type.ToString())
@@ -812,8 +811,12 @@ func (node *SubPartition) formatFast(buf *TrackedBuffer) {
 			buf.WriteString(" algorithm = ")
 			buf.WriteString(fmt.Sprintf("%d", node.KeyAlgorithm))
 		}
-		buf.WriteByte(' ')
-		node.ColList.formatFast(buf)
+		if len(node.ColList) == 0 {
+			buf.WriteString(" ()")
+		} else {
+			buf.WriteByte(' ')
+			node.ColList.formatFast(buf)
+		}
 	}
 
 	if node.SubPartitions != -1 {
@@ -876,7 +879,7 @@ func (ts *TableSpec) formatFast(buf *TrackedBuffer) {
 func (col *ColumnDefinition) formatFast(buf *TrackedBuffer) {
 	col.Name.formatFast(buf)
 	buf.WriteByte(' ')
-	(&col.Type).formatFast(buf)
+	col.Type.formatFast(buf)
 }
 
 // formatFast returns a canonical string representation of the type and all relevant options
@@ -1028,35 +1031,35 @@ func (ct *ColumnType) formatFast(buf *TrackedBuffer) {
 			buf.WriteByte(' ')
 			ct.Options.SecondaryEngineAttribute.formatFast(buf)
 		}
-		if ct.Options.KeyOpt == colKeyPrimary {
+		if ct.Options.KeyOpt == ColKeyPrimary {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[PRIMARY])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKeyUnique {
+		if ct.Options.KeyOpt == ColKeyUnique {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[UNIQUE])
 		}
-		if ct.Options.KeyOpt == colKeyUniqueKey {
+		if ct.Options.KeyOpt == ColKeyUniqueKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[UNIQUE])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKeySpatialKey {
+		if ct.Options.KeyOpt == ColKeySpatialKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[SPATIAL])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKeyFulltextKey {
+		if ct.Options.KeyOpt == ColKeyFulltextKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[FULLTEXT])
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
-		if ct.Options.KeyOpt == colKey {
+		if ct.Options.KeyOpt == ColKey {
 			buf.WriteByte(' ')
 			buf.WriteString(keywordStrings[KEY])
 		}
@@ -1277,7 +1280,21 @@ func (node *Commit) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *Begin) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("begin")
+	if node.TxAccessModes == nil {
+		buf.WriteString("begin")
+		return
+	}
+	buf.WriteString("start transaction")
+	for idx, accessMode := range node.TxAccessModes {
+		if idx == 0 {
+			buf.WriteByte(' ')
+			buf.WriteString(accessMode.ToString())
+			continue
+		}
+		buf.WriteString(", ")
+		buf.WriteString(accessMode.ToString())
+	}
+
 }
 
 // formatFast formats the node.
@@ -1314,7 +1331,17 @@ func (node *ExplainStmt) formatFast(buf *TrackedBuffer) {
 		format = "format = " + node.Type.ToString() + " "
 	}
 	buf.WriteString("explain ")
+	node.Comments.formatFast(buf)
 	buf.WriteString(format)
+	node.Statement.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *VExplainStmt) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("vexplain ")
+	node.Comments.formatFast(buf)
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte(' ')
 	node.Statement.formatFast(buf)
 }
 
@@ -1675,6 +1702,18 @@ func (node *Literal) formatFast(buf *TrackedBuffer) {
 		buf.WriteString("B'")
 		buf.WriteString(node.Val)
 		buf.WriteByte('\'')
+	case DateVal:
+		buf.WriteString("date'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
+	case TimeVal:
+		buf.WriteString("time'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
+	case TimestampVal:
+		buf.WriteString("timestamp'")
+		buf.WriteString(node.Val)
+		buf.WriteByte('\'')
 	default:
 		panic("unexpected")
 	}
@@ -1959,17 +1998,19 @@ func (node *GroupConcatExpr) formatFast(buf *TrackedBuffer) {
 		buf.WriteString(DistinctStr)
 		node.Exprs.formatFast(buf)
 		node.OrderBy.formatFast(buf)
-		buf.WriteString(node.Separator)
-		node.Limit.formatFast(buf)
-		buf.WriteByte(')')
 	} else {
 		buf.WriteString("group_concat(")
 		node.Exprs.formatFast(buf)
 		node.OrderBy.formatFast(buf)
-		buf.WriteString(node.Separator)
-		node.Limit.formatFast(buf)
-		buf.WriteByte(')')
 	}
+	if node.Separator != "" {
+		buf.WriteByte(' ')
+		buf.WriteString(keywordStrings[SEPARATOR])
+		buf.WriteByte(' ')
+		buf.WriteString(node.Separator)
+	}
+	node.Limit.formatFast(buf)
+	buf.WriteByte(')')
 }
 
 // formatFast formats the node.
@@ -2533,32 +2574,6 @@ func (node IdentifierCI) formatFast(buf *TrackedBuffer) {
 // formatFast formats the node.
 func (node IdentifierCS) formatFast(buf *TrackedBuffer) {
 	formatID(buf, node.v, NoAt)
-}
-
-// formatFast formats the node.
-func (node IsolationLevel) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("isolation level ")
-	switch node {
-	case ReadUncommitted:
-		buf.WriteString(ReadUncommittedStr)
-	case ReadCommitted:
-		buf.WriteString(ReadCommittedStr)
-	case RepeatableRead:
-		buf.WriteString(RepeatableReadStr)
-	case Serializable:
-		buf.WriteString(SerializableStr)
-	default:
-		buf.WriteString("Unknown Isolation level value")
-	}
-}
-
-// formatFast formats the node.
-func (node AccessMode) formatFast(buf *TrackedBuffer) {
-	if node == ReadOnly {
-		buf.WriteString(TxReadOnly)
-	} else {
-		buf.WriteString(TxReadWrite)
-	}
 }
 
 // formatFast formats the node.
@@ -3179,19 +3194,9 @@ func (node *JtOnResponse) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-// Using capital letter for this function as an indicator that it's not a normal function call ¯\_(ツ)_/¯
 func (node *Offset) formatFast(buf *TrackedBuffer) {
-	if node.Original == "" {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteByte(')')
-	} else {
-		buf.WriteString("OFFSET(")
-		buf.WriteString(fmt.Sprintf("%d", node.V))
-		buf.WriteString(", '")
-		buf.WriteString(node.Original)
-		buf.WriteString("')")
-	}
+	buf.WriteByte(':')
+	buf.WriteString(fmt.Sprintf("%d", node.V))
 }
 
 // formatFast formats the node.
@@ -3214,7 +3219,6 @@ func (node *JSONSchemaValidationReportFuncExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
-	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_array(")
 	if len(node.Params) > 0 {
 		var prefix string
@@ -3229,7 +3233,6 @@ func (node *JSONArrayExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node.
 func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
-	// buf.astPrintf(node,"%s(,"node.Name.Lowered())
 	buf.WriteString("json_object(")
 	if len(node.Params) > 0 {
 		for i, p := range node.Params {
@@ -3244,7 +3247,7 @@ func (node *JSONObjectExpr) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node JSONObjectParam) formatFast(buf *TrackedBuffer) {
+func (node *JSONObjectParam) formatFast(buf *TrackedBuffer) {
 	node.Key.formatFast(buf)
 	buf.WriteString(", ")
 	node.Value.formatFast(buf)
@@ -3594,11 +3597,37 @@ func (node *Variable) formatFast(buf *TrackedBuffer) {
 	case VariableScope:
 		buf.WriteString("@")
 	case SessionScope:
+		if node.Name.EqualString(TransactionIsolationStr) || node.Name.EqualString(TransactionReadOnlyStr) {
+			// @@ without session have `next transaction` scope for these system variables.
+			// so if they are in session scope it has to be printed explicitly.
+			buf.WriteString("@@")
+			buf.WriteString(node.Scope.ToString())
+			buf.WriteByte('.')
+			break
+		}
 		buf.WriteString("@@")
 	case GlobalScope, PersistSysScope, PersistOnlySysScope:
 		buf.WriteString("@@")
 		buf.WriteString(node.Scope.ToString())
 		buf.WriteByte('.')
+	case NextTxScope:
+		buf.WriteString("@@")
 	}
 	node.Name.formatFast(buf)
+}
+
+// formatFast formats the node.
+func (node *PointExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("point(")
+	buf.printExpr(node, node.XCordinate, true)
+	buf.WriteString(", ")
+	buf.printExpr(node, node.YCordinate, true)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *LineStringExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("linestring(")
+	node.PointParams.formatFast(buf)
+	buf.WriteByte(')')
 }

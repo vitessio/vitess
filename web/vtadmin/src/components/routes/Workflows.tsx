@@ -54,6 +54,8 @@ export const Workflows = () => {
             target: workflow.workflow?.target?.keyspace,
             targetShards: workflow.workflow?.target?.shards,
             timeUpdated: getTimeUpdated(workflow),
+            workflowType: workflow.workflow?.workflow_type,
+            workflowSubType: workflow.workflow?.workflow_sub_type,
         }));
         const filtered = filterNouns(filter, mapped);
         return orderBy(filtered, ['name', 'clusterName', 'source', 'target']);
@@ -70,6 +72,14 @@ export const Workflows = () => {
                 <tr key={idx}>
                     <DataCell>
                         <div className="font-bold">{href ? <Link to={href}>{row.name}</Link> : row.name}</div>
+                        {row.workflowType && (
+                            <div className="text-secondary text-success-200">
+                                {row.workflowType}
+                                {row.workflowSubType && row.workflowSubType !== 'None' && (
+                                    <span className="text-sm">{' (' + row.workflowSubType + ')'}</span>
+                                )}
+                            </div>
+                        )}
                         <div className="text-sm text-secondary">{row.clusterName}</div>
                     </DataCell>
                     <DataCell>

@@ -79,6 +79,9 @@ func testReplicationBase(t *testing.T, isClientCertPassed bool) {
 	} else {
 		require.Error(t, err)
 	}
+
+	err = clusterInstance.StartVTOrc(keyspace)
+	require.NoError(t, err)
 }
 
 func initializeCluster(t *testing.T) (int, error) {
@@ -95,13 +98,13 @@ func initializeCluster(t *testing.T) (int, error) {
 	certDirectory = path.Join(clusterInstance.TmpDirectory, "certs")
 	_ = encryption.CreateDirectory(certDirectory, 0700)
 
-	err := encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateCA")
+	err := encryption.ExecuteVttlstestCommand("CreateCA", "--root", certDirectory)
 	require.NoError(t, err)
 
-	err = encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateSignedCert", "--", "--common_name", "Mysql Server", "--serial", "01", "server")
+	err = encryption.ExecuteVttlstestCommand("CreateSignedCert", "--root", certDirectory, "--common-name", "Mysql Server", "--serial", "01", "server")
 	require.NoError(t, err)
 
-	err = encryption.ExecuteVttlstestCommand("--root", certDirectory, "CreateSignedCert", "--", "--common_name", "Mysql Client", "--serial", "02", "client")
+	err = encryption.ExecuteVttlstestCommand("CreateSignedCert", "--root", certDirectory, "--common-name", "Mysql Client", "--serial", "02", "client")
 	require.NoError(t, err)
 
 	extraMyCnf := path.Join(certDirectory, "secure.cnf")
@@ -159,7 +162,6 @@ func initializeCluster(t *testing.T) (int, error) {
 				clusterInstance.Hostname,
 				clusterInstance.TmpDirectory,
 				clusterInstance.VtTabletExtraArgs,
-				clusterInstance.EnableSemiSync,
 				clusterInstance.DefaultCharset)
 			tablet.Alias = tablet.VttabletProcess.TabletPath
 			shard.Vttablets = append(shard.Vttablets, tablet)

@@ -18,7 +18,6 @@ package main
 
 import (
 	"bytes"
-	"flag"
 	"fmt"
 	"go/types"
 	"log"
@@ -27,12 +26,12 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/tools/common"
-	"vitess.io/vitess/go/tools/goimports"
-
 	"github.com/dave/jennifer/jen"
+	"github.com/spf13/pflag"
 	"golang.org/x/tools/go/packages"
+
+	"vitess.io/vitess/go/hack"
+	"vitess.io/vitess/go/tools/codegen"
 )
 
 const licenseFileHeader = `Copyright 2021 The Vitess Authors.
@@ -133,6 +132,10 @@ func (sizegen *sizegen) generateType(pkg *types.Package, file *codeFile, named *
 	}
 	ts.generated = true
 
+	if named.Obj().Pkg() != pkg {
+		panic("trying to define external type in wrong package")
+	}
+
 	switch tt := named.Underlying().(type) {
 	case *types.Struct:
 		if impl, flag := sizegen.sizeImplForStruct(named.Obj(), tt); impl != nil {
@@ -145,7 +148,7 @@ func (sizegen *sizegen) generateType(pkg *types.Package, file *codeFile, named *
 	case *types.Interface:
 		findImplementations(pkg.Scope(), tt, func(tt types.Type) {
 			if _, isStruct := tt.Underlying().(*types.Struct); isStruct {
-				sizegen.generateType(pkg, file, tt.(*types.Named))
+				sizegen.generateKnownType(tt.(*types.Named))
 			}
 		})
 	default:
@@ -483,26 +486,24 @@ func (sizegen *sizegen) sizeStmtForType(fieldName *jen.Statement, field types.Ty
 	}
 }
 
-type typePaths []string
-
-func (t *typePaths) String() string {
-	return fmt.Sprintf("%v", *t)
-}
-
-func (t *typePaths) Set(path string) error {
-	*t = append(*t, path)
-	return nil
+var defaultGenTypes = []string{
+	"vitess.io/vitess/go/pools.Setting",
+	"vitess.io/vitess/go/vt/schema.DDLStrategySetting",
+	"vitess.io/vitess/go/vt/vtgate/engine.Plan",
+	"vitess.io/vitess/go/vt/vttablet/tabletserver.TabletPlan",
+	"vitess.io/vitess/go/sqltypes.Result",
 }
 
 func main() {
-	var patterns typePaths
-	var generate typePaths
-	var verify bool
+	var (
+		patterns, generate []string
+		verify             bool
+	)
 
-	flag.Var(&patterns, "in", "Go packages to load the generator")
-	flag.Var(&generate, "gen", "Typename of the Go struct to generate size info for")
-	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
-	flag.Parse()
+	pflag.StringSliceVar(&patterns, "in", []string{`./go/...`}, "Go packages to load the generator")
+	pflag.StringSliceVar(&generate, "gen", defaultGenTypes, "Typename of the Go struct to generate size info for")
+	pflag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
+	pflag.Parse()
 
 	result, err := GenerateSizeHelpers(patterns, generate)
 	if err != nil {
@@ -516,13 +517,8 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			content, err := goimports.FormatJenFile(file)
-			if err != nil {
-				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
-			}
-			err = os.WriteFile(fullPath, content, 0664)
-			if err != nil {
-				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
+			if err := codegen.SaveJenFile(fullPath, file); err != nil {
+				log.Fatal(err)
 			}
 		}
 	}
@@ -540,7 +536,7 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 			continue
 		}
 
-		genFile, err := goimports.FormatJenFile(file)
+		genFile, err := codegen.FormatJenFile(file)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
@@ -565,8 +561,8 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 		return nil, err
 	}
 
-	if common.PkgFailed(loaded) {
-		return nil, fmt.Errorf("failed to load packages")
+	if err := codegen.CheckErrors(loaded, func(filename string) bool { return filename == "cached_size.go" }); err != nil {
+		return nil, err
 	}
 
 	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes)

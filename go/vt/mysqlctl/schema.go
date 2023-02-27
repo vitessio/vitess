@@ -232,7 +232,7 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 	backtickDBName := sqlescape.EscapeID(dbName)
 	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlescape.EscapeID(tableName)))
 	if fetchErr != nil {
-		return "", fetchErr
+		return "", vterrors.Wrapf(fetchErr, "in Mysqld.normalizedSchema()")
 	}
 	if len(qr.Rows) == 0 {
 		return "", fmt.Errorf("empty create table statement for %v", tableName)
@@ -322,7 +322,7 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, vterrors.Wrapf(err, "in Mysqld.GetColumns()")
 	}
 
 	columns := make([]string, len(qr.Fields))
@@ -544,7 +544,9 @@ func (mysqld *Mysqld) ApplySchemaChange(ctx context.Context, dbName string, chan
 // are available it will attempt to choose the most efficient
 // one based on the column data types and the number of columns
 // in the index. See here for the data type storage sizes:
-//   https://dev.mysql.com/doc/refman/en/storage-requirements.html
+//
+//	https://dev.mysql.com/doc/refman/en/storage-requirements.html
+//
 // If this function is used on a table that DOES have a
 // defined PRIMARY KEY then it may return the columns for
 // that index if it is likely the most efficient one amongst
@@ -610,7 +612,7 @@ func (mysqld *Mysqld) GetPrimaryKeyEquivalentColumns(ctx context.Context, dbName
 	return cols, err
 }
 
-//tableDefinitions is a sortable collection of table definitions
+// tableDefinitions is a sortable collection of table definitions
 type tableDefinitions []*tabletmanagerdatapb.TableDefinition
 
 func (t tableDefinitions) Len() int {

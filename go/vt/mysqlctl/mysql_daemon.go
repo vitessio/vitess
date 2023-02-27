@@ -64,6 +64,9 @@ type MysqlDaemon interface {
 	ResetReplicationParameters(ctx context.Context) error
 	GetBinlogInformation(ctx context.Context) (binlogFormat string, logEnabled bool, logReplicaUpdate bool, binlogRowImage string, err error)
 	GetGTIDMode(ctx context.Context) (gtidMode string, err error)
+	FlushBinaryLogs(ctx context.Context) (err error)
+	GetBinaryLogs(ctx context.Context) (binaryLogs []string, err error)
+	GetPreviousGTIDs(ctx context.Context, binlog string) (previousGtids string, err error)
 
 	// reparenting related methods
 	ResetReplication(ctx context.Context) error
@@ -72,7 +75,7 @@ type MysqlDaemon interface {
 	SetReadOnly(on bool) error
 	SetSuperReadOnly(on bool) error
 	SetReplicationPosition(ctx context.Context, pos mysql.Position) error
-	SetReplicationSource(ctx context.Context, host string, port int, stopReplicationBefore bool, startReplicationAfter bool) error
+	SetReplicationSource(ctx context.Context, host string, port int32, stopReplicationBefore bool, startReplicationAfter bool) error
 	WaitForReparentJournal(ctx context.Context, timeCreatedNS int64) error
 
 	WaitSourcePos(context.Context, mysql.Position) error

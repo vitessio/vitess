@@ -268,7 +268,8 @@ func TestVersion(t *testing.T) {
 	defer engine.Close()
 
 	execStatements(t, []string{
-		"create table _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
+		"create database if not exists _vt",
+		"create table if not exists _vt.schema_version(id int, pos varbinary(10000), time_updated bigint(20), ddl varchar(10000), schemax blob, primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table _vt.schema_version",
@@ -447,7 +448,7 @@ func TestVStreamCopySimpleFlow(t *testing.T) {
 	testcases := []testcase{
 		{
 			input:  []string{},
-			output: [][]string{t1FieldEvent, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, t2FieldEvent, t2Events, {"begin", "lastpk", "commit"}},
+			output: [][]string{t1FieldEvent, {"gtid"}, t1Events, {"begin", "lastpk", "commit"}, t2FieldEvent, t2Events, {"begin", "lastpk", "commit"}, {"copy_completed"}},
 		},
 
 		{
@@ -1821,7 +1822,7 @@ func TestJournal(t *testing.T) {
 	}
 
 	execStatements(t, []string{
-		"create table _vt.resharding_journal(id int, db_name varchar(128), val blob, primary key(id))",
+		"create table if not exists _vt.resharding_journal(id int, db_name varchar(128), val blob, primary key(id))",
 	})
 	defer execStatements(t, []string{
 		"drop table _vt.resharding_journal",
@@ -2177,6 +2178,10 @@ func expectLog(ctx context.Context, t *testing.T, input any, ch <-chan []*binlog
 			case "ddl":
 				if evs[i].Type != binlogdatapb.VEventType_DDL {
 					t.Fatalf("%v (%d): event: %v, want ddl", input, i, evs[i])
+				}
+			case "copy_completed":
+				if evs[i].Type != binlogdatapb.VEventType_COPY_COMPLETED {
+					t.Fatalf("%v (%d): event: %v, want copy_completed", input, i, evs[i])
 				}
 			default:
 				evs[i].Timestamp = 0

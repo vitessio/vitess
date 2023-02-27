@@ -62,6 +62,7 @@ type materializer struct {
 	targetVSchema *vindexes.KeyspaceSchema
 	sourceShards  []*topo.ShardInfo
 	targetShards  []*topo.ShardInfo
+	isPartial     bool
 }
 
 const (
@@ -121,7 +122,7 @@ func shouldInclude(table string, excludes []string) bool {
 // MoveTables initiates moving table(s) over to another keyspace
 func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, targetKeyspace, tableSpecs,
 	cell, tabletTypes string, allTables bool, excludeTables string, autoStart, stopAfterCopy bool,
-	externalCluster string, dropForeignKeys bool, sourceTimeZone string) error {
+	externalCluster string, dropForeignKeys, deferSecondaryKeys bool, sourceTimeZone, onDDL string, sourceShards []string) error {
 	//FIXME validate tableSpecs, allTables, excludeTables
 	var tables []string
 	var externalTopo *topo.Server
@@ -226,6 +227,7 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		if err := topotools.SaveRoutingRules(ctx, wr.ts, rules); err != nil {
 			return err
 		}
+
 		if vschema != nil {
 			// We added to the vschema.
 			if err := wr.ts.SaveVSchema(ctx, targetKeyspace, vschema); err != nil {
@@ -245,13 +247,14 @@ func (wr *Wrangler) MoveTables(ctx context.Context, workflow, sourceKeyspace, ta
 		TabletTypes:           tabletTypes,
 		StopAfterCopy:         stopAfterCopy,
 		ExternalCluster:       externalCluster,
+		SourceShards:          sourceShards,
+		OnDdl:                 onDDL,
+		DeferSecondaryKeys:    deferSecondaryKeys,
 	}
-
 	if sourceTimeZone != "" {
 		ms.SourceTimeZone = sourceTimeZone
 		ms.TargetTimeZone = "UTC"
 	}
-
 	createDDLMode := createDDLAsCopy
 	if dropForeignKeys {
 		createDDLMode = createDDLAsCopyDropForeignKeys
@@ -846,7 +849,6 @@ func (wr *Wrangler) ExternalizeVindex(ctx context.Context, qualifiedVindexName s
 	return wr.ts.RebuildSrvVSchema(ctx, nil)
 }
 
-//
 func (wr *Wrangler) collectTargetStreams(ctx context.Context, mz *materializer) ([]string, error) {
 	var shardTablets []string
 	var mu sync.Mutex
@@ -892,6 +894,39 @@ func getMigrationID(targetKeyspace string, shardTablets []string) (int64, error)
 	return int64(hasher.Sum64() & math.MaxInt64), nil
 }
 
+// createDefaultShardRoutingRules creates a reverse routing rule for
+// each shard in a new partial keyspace migration workflow that does
+// not already have an existing routing rule in place.
+func (wr *Wrangler) createDefaultShardRoutingRules(ctx context.Context, ms *vtctldatapb.MaterializeSettings) error {
+	srr, err := topotools.GetShardRoutingRules(ctx, wr.ts)
+	if err != nil {
+		return err
+	}
+	allShards, err := wr.sourceTs.GetServingShards(ctx, ms.SourceKeyspace)
+	if err != nil {
+		return err
+	}
+	changed := false
+	for _, si := range allShards {
+		fromSource := fmt.Sprintf("%s.%s", ms.SourceKeyspace, si.ShardName())
+		fromTarget := fmt.Sprintf("%s.%s", ms.TargetKeyspace, si.ShardName())
+		if srr[fromSource] == "" && srr[fromTarget] == "" {
+			srr[fromTarget] = ms.SourceKeyspace
+			changed = true
+			wr.Logger().Infof("Added default shard routing rule from %q to %q", fromTarget, fromSource)
+		}
+	}
+	if changed {
+		if err := topotools.SaveShardRoutingRules(ctx, wr.ts, srr); err != nil {
+			return err
+		}
+		if err := wr.ts.RebuildSrvVSchema(ctx, nil); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldatapb.MaterializeSettings) (*materializer, error) {
 	if err := wr.validateNewWorkflow(ctx, ms.TargetKeyspace, ms.Workflow); err != nil {
 		return nil, err
@@ -899,6 +934,11 @@ func (wr *Wrangler) prepareMaterializerStreams(ctx context.Context, ms *vtctldat
 	mz, err := wr.buildMaterializer(ctx, ms)
 	if err != nil {
 		return nil, err
+	}
+	if mz.isPartial {
+		if err := wr.createDefaultShardRoutingRules(ctx, ms); err != nil {
+			return nil, err
+		}
 	}
 	if err := mz.deploySchema(ctx); err != nil {
 		return nil, err
@@ -942,14 +982,46 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 			}
 		}
 	}
-
+	isPartial := false
 	sourceShards, err := wr.sourceTs.GetServingShards(ctx, ms.SourceKeyspace)
 	if err != nil {
 		return nil, err
 	}
+	if len(ms.SourceShards) > 0 {
+		isPartial = true
+		var sourceShards2 []*topo.ShardInfo
+		for _, shard := range sourceShards {
+			for _, shard2 := range ms.SourceShards {
+				if shard.ShardName() == shard2 {
+					sourceShards2 = append(sourceShards2, shard)
+					break
+				}
+			}
+		}
+		sourceShards = sourceShards2
+	}
+	if len(sourceShards) == 0 {
+		return nil, fmt.Errorf("no source shards specified for workflow %s ", ms.Workflow)
+	}
+
 	targetShards, err := wr.ts.GetServingShards(ctx, ms.TargetKeyspace)
 	if err != nil {
 		return nil, err
+	}
+	if len(ms.SourceShards) > 0 {
+		var targetShards2 []*topo.ShardInfo
+		for _, shard := range targetShards {
+			for _, shard2 := range ms.SourceShards {
+				if shard.ShardName() == shard2 {
+					targetShards2 = append(targetShards2, shard)
+					break
+				}
+			}
+		}
+		targetShards = targetShards2
+	}
+	if len(targetShards) == 0 {
+		return nil, fmt.Errorf("no target shards specified for workflow %s ", ms.Workflow)
 	}
 
 	return &materializer{
@@ -958,6 +1030,7 @@ func (wr *Wrangler) buildMaterializer(ctx context.Context, ms *vtctldatapb.Mater
 		targetVSchema: targetVSchema,
 		sourceShards:  sourceShards,
 		targetShards:  targetShards,
+		isPartial:     isPartial,
 	}, nil
 }
 
@@ -1164,6 +1237,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 			ExternalCluster: mz.ms.ExternalCluster,
 			SourceTimeZone:  mz.ms.SourceTimeZone,
 			TargetTimeZone:  mz.ms.TargetTimeZone,
+			OnDdl:           binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[mz.ms.OnDdl]),
 		}
 		for _, ts := range mz.ms.TableSettings {
 			rule := &binlogdatapb.Rule{
@@ -1231,7 +1305,25 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 
 			bls.Filter.Rules = append(bls.Filter.Rules, rule)
 		}
-		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes)
+		workflowSubType := binlogdatapb.VReplicationWorkflowSubType_None
+		if mz.isPartial {
+			workflowSubType = binlogdatapb.VReplicationWorkflowSubType_Partial
+		}
+		var workflowType binlogdatapb.VReplicationWorkflowType
+		switch mz.ms.MaterializationIntent {
+		case vtctldatapb.MaterializationIntent_CUSTOM:
+			workflowType = binlogdatapb.VReplicationWorkflowType_Materialize
+		case vtctldatapb.MaterializationIntent_MOVETABLES:
+			workflowType = binlogdatapb.VReplicationWorkflowType_MoveTables
+		case vtctldatapb.MaterializationIntent_CREATELOOKUPINDEX:
+			workflowType = binlogdatapb.VReplicationWorkflowType_CreateLookupIndex
+		}
+
+		ig.AddRow(mz.ms.Workflow, bls, "", mz.ms.Cell, mz.ms.TabletTypes,
+			workflowType,
+			workflowSubType,
+			mz.ms.DeferSecondaryKeys,
+		)
 	}
 	return ig.String(), nil
 }
@@ -1331,7 +1423,10 @@ func (mz *materializer) checkTZConversion(ctx context.Context, tz string) error 
 		}
 		testDateTime := "2006-01-02 15:04:05"
 		query := fmt.Sprintf("select convert_tz(%s, %s, 'UTC')", encodeString(testDateTime), encodeString(tz))
-		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, []byte(query), 1)
+		qrproto, err := mz.wr.tmc.ExecuteFetchAsApp(ctx, targetPrimary.Tablet, false, &tabletmanagerdatapb.ExecuteFetchAsAppRequest{
+			Query:   []byte(query),
+			MaxRows: 1,
+		})
 		if err != nil {
 			return vterrors.Wrapf(err, "ExecuteFetchAsApp(%v, %s)", targetPrimary.Tablet, query)
 		}

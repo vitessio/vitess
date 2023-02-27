@@ -91,6 +91,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"backup_pitr": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/pitr", "-timeout", "30m"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "backup_pitr",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"backup": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtctlbackup", "-timeout", "30m"],
@@ -111,30 +120,12 @@
 		},
 		"backup_only": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "30m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/vtbackup", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
-			"Shard": "vtbackup_transform",
+			"Shard": "vtbackup",
 			"RetryMax": 1,
 			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform", "-timeout", "30m"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtbackup_transform",
-			"RetryMax": 1,
-			"Tags": ["upgrade_downgrade_backups"]
-		},
-		"backup_transform_mysqlctld": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/transform/mysqlctld"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "21", 
-			"RetryMax": 1,
-			"Tags": []
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
@@ -306,43 +297,16 @@
 		},
 		"onlineddl_revert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"onlineddl_revertible": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revertible"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_revertible",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"onlineddl_declarative": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_declarative",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"onlineddl_singleton": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/singleton"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_singleton",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
@@ -364,17 +328,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "10",
-			"RetryMax": 1,
-			"Tags": [
-				"site_test"
-			]
-		},
-		"pitrtls": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/recovery/pitrtls"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "26",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
@@ -463,6 +416,15 @@
 				"site_test"
 			]
 		},
+		"tabletmanager_replication_manager": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/replication_manager"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "18",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"tabletmanager_consul": {
 			"File": "unused.go",
 			"Args": [
@@ -482,6 +444,17 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "tabletmanager_throttler",
+			"RetryMax": 1,
+			"Tags": [
+				"site_test"
+			]
+		},
+		"tabletmanager_throttler_topo": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/tabletmanager/throttler_topo"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "tabletmanager_throttler_topo",
 			"RetryMax": 1,
 			"Tags": [
 				"site_test"
@@ -538,6 +511,15 @@
 			"Manual": false,
 			"Shard": "vtgate_general_heavy",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vtgate_queries_derived": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/derived"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_queries_aggregation": {
@@ -614,11 +596,29 @@
 		},
 		"vtgate_queries_insert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/insert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/dml"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_queries",
 			"RetryMax": 2,
+			"Tags": []
+		},
+		"vtgate_queries_vexplain": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/vexplain"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 2,
+			"Tags": []
+		},
+		"vtgate_queries_reference": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/queries/reference"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_queries",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vtgate_concurrentdml": {
@@ -702,15 +702,6 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"vtgate_mysql80_derived": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/mysql80/derived"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "mysql80",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"vtgate_sequence": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/sequence"],
@@ -777,6 +768,15 @@
 		"vtgate_transaction": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_transaction",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vtgate_transaction_restart": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/transaction/restart"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtgate_transaction",
@@ -873,6 +873,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_grpc_server_auth_static": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_auth_static"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"topo_zk2": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
@@ -909,6 +918,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"consolidator": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/consolidator"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"prefixfanout": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/prefixfanout"],
@@ -934,15 +952,6 @@
 			"Manual": false,
 			"Shard": "vtgate_vindex_heavy",
 			"RetryMax": 2,
-			"Tags": []
-		},
-		"web_test": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtctldweb"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "10",
-			"RetryMax": 1,
 			"Tags": []
 		},
 		"vttest_sample": {
@@ -978,7 +987,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_multicell",
-			"RetryMax": 2,
+			"RetryMax": 0,
 			"Tags": []
 		},
 		"vreplication_cellalias": {
@@ -987,6 +996,33 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_partialmovetables": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "PartialMoveTables"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 0,
+			"Tags": []
+		},
+		"vreplication_vschema_load": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVSchemaChangesUnderLoad"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_cellalias",
+			"RetryMax": 2,
+			"Tags": []
+		},
+		"sidecardb": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestSidecarDB"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "schemadiff_vrepl",
 			"RetryMax": 2,
 			"Tags": []
 		},
@@ -996,7 +1032,7 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vreplication_copy_throttling": {
@@ -1005,7 +1041,25 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_basic",
-			"RetryMax": 2,
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vreplication_copy_parallel": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVreplicationCopyParallel"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
+			"Tags": []
+		},
+		"vstream_flush_binlog": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestVStreamFlushBinlog"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vreplication_basic",
+			"RetryMax": 1,
 			"Tags": []
 		},
 		"vstream_failover": {
@@ -1053,9 +1107,9 @@
 			"RetryMax": 3,
 			"Tags": []
 		},
-		"vtorc_graceful_takeover": {
+		"vtorc_api": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/api"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
@@ -1077,33 +1131,6 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vtorc",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_primary_failure_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/primaryfailure"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_graceful_takeover_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/gracefultakeover"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
-			"RetryMax": 3,
-			"Tags": []
-		},
-		"vtorc_general_8.0": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/vtorc/general"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "vtorc_8.0",
 			"RetryMax": 3,
 			"Tags": []
 		},
@@ -1134,6 +1161,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+                "vreplication_mariadb_to_mysql": {
+                        "File": "unused.go",
+                        "Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMoveTablesMariaDBToMySQL", "-timeout", "10m"],
+                        "Command": [],
+                        "Manual": false,
+                        "Shard": "vreplication_across_db_versions",
+                        "RetryMax": 1,
+                        "Tags": []
+                },
 		"vreplication_migrate": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestMigrate"],
@@ -1169,6 +1205,15 @@
 			"Shard": "topo_connection_cache",
 			"RetryMax": 1,
 			"Tags": []
+		},
+		"prscomplex": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/reparent/prscomplex"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vttablet_prscomplex",
+			"RetryMax": 1,
+			"Tags": [""]
 		}
 	}
 }

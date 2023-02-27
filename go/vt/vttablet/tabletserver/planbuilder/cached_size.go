@@ -41,7 +41,7 @@ func (cached *Plan) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(112)
+		size += int64(128)
 	}
 	// field Table *vitess.io/vitess/go/vt/vttablet/tabletserver/schema.Table
 	size += cached.Table.CachedSize(true)

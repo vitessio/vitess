@@ -47,10 +47,6 @@ type ConnParams struct {
 	ServerName       string        `json:"server_name"`
 	ConnectTimeoutMs uint64        `json:"connect_timeout_ms"`
 
-	// The following is only set when the deprecated "dbname" flags are
-	// supplied and will be removed.
-	DeprecatedDBName string
-
 	// The following is only set to force the client to connect without
 	// using CapabilityClientDeprecateEOF
 	DisableClientDeprecateEOF bool

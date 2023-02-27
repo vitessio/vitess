@@ -18,7 +18,6 @@ package integration
 
 import (
 	"encoding/json"
-	"flag"
 	"fmt"
 	"math/rand"
 	"os"
@@ -26,6 +25,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -78,16 +79,24 @@ func (g *gencase) expr() string {
 	return fmt.Sprintf("%s %s %s", g.arg(false), op, rhs)
 }
 
-var fuzzMaxTime = flag.Duration("fuzz-duration", 30*time.Second, "maximum time to fuzz for")
-var fuzzMaxFailures = flag.Int("fuzz-total", 0, "maximum number of failures to fuzz for")
-var fuzzSeed = flag.Int64("fuzz-seed", time.Now().Unix(), "RNG seed when generating fuzz expressions")
-var extractError = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\w+)\) during query: (.*?)`)
+var (
+	fuzzMaxTime     = 30 * time.Second
+	fuzzMaxFailures = 0
+	fuzzSeed        = time.Now().Unix()
+	extractError    = regexp.MustCompile(`(.*?) \(errno (\d+)\) \(sqlstate (\w+)\) during query: (.*?)`)
+	knownErrors     = []*regexp.Regexp{
+		regexp.MustCompile(`value is out of range in '(.*?)'`),
+		regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
+		regexp.MustCompile(`You have an error in your SQL syntax; (.*?)`),
+		regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
+		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
+	}
+)
 
-var knownErrors = []*regexp.Regexp{
-	regexp.MustCompile(`value is out of range in '(.*?)'`),
-	regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
-	regexp.MustCompile(`You have an error in your SQL syntax; (.*?)`),
-	regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
+func init() {
+	pflag.DurationVar(&fuzzMaxTime, "fuzz-duration", fuzzMaxTime, "Maximum time to fuzz for")
+	pflag.IntVar(&fuzzMaxFailures, "fuzz-total", fuzzMaxFailures, "Maximum number of failures to fuzz for")
+	pflag.Int64Var(&fuzzSeed, "fuzz-seed", fuzzSeed, "RNG seed when generating fuzz expressions")
 }
 
 func errorsMatch(remote, local error) bool {
@@ -110,7 +119,7 @@ func errorsMatch(remote, local error) bool {
 	return false
 }
 
-func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
+func safeEvaluate(env *evalengine.ExpressionEnv, query string) (evalengine.EvalResult, sqltypes.Type, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, 0, err
@@ -123,7 +132,8 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
-		expr, err = evalengine.TranslateEx(astExpr, evalengine.LookupDefaultCollation(collations.CollationUtf8mb4ID), *debugSimplify)
+		lookup := &evalengine.LookupIntegrationTest{Collation: collations.CollationUtf8mb4ID}
+		expr, err = evalengine.TranslateEx(astExpr, lookup, debugSimplify)
 		return
 	}()
 
@@ -136,9 +146,8 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 					err = fmt.Errorf("PANIC: %v", r)
 				}
 			}()
-			env := evalengine.EnvWithBindVars(nil, 255)
 			eval, err = env.Evaluate(local)
-			if err == nil && *debugCheckTypes {
+			if err == nil && debugCheckTypes {
 				tt, err = env.TypeOf(local)
 			}
 			return
@@ -151,11 +160,11 @@ const syntaxErr = `You have an error in your SQL syntax; (errno 1064) (sqlstate 
 const localSyntaxErr = `You have an error in your SQL syntax;`
 
 func TestGenerateFuzzCases(t *testing.T) {
-	if *fuzzMaxFailures <= 0 {
+	if fuzzMaxFailures <= 0 {
 		t.Skipf("skipping fuzz test generation")
 	}
 	var gen = gencase{
-		rand:         rand.New(rand.NewSource(*fuzzSeed)),
+		rand:         rand.New(rand.NewSource(fuzzSeed)),
 		ratioTuple:   8,
 		ratioSubexpr: 8,
 		tupleLen:     4,
@@ -173,7 +182,8 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		eval, _, localErr := safeEvaluate(query)
+		env := evalengine.EnvWithBindVars(nil, 255)
+		eval, _, localErr := safeEvaluate(env, query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {
@@ -203,7 +213,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 
 	var failures []*mismatch
 	var start = time.Now()
-	for len(failures) < *fuzzMaxFailures {
+	for len(failures) < fuzzMaxFailures {
 		query := "SELECT " + gen.expr()
 		stmt, err := sqlparser.Parse(query)
 		if err != nil {
@@ -217,7 +227,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 			t.Errorf("mismatch: %v", fail.Error())
 		}
 
-		if time.Since(start) > *fuzzMaxTime {
+		if time.Since(start) > fuzzMaxTime {
 			break
 		}
 	}

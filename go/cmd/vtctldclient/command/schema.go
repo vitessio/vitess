@@ -19,7 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 	"time"
 
@@ -112,7 +112,7 @@ func commandApplySchema(cmd *cobra.Command, args []string) error {
 			return errors.New("Exactly one of --sql and --sql-file must be specified, not both.") // nolint
 		}
 
-		data, err := ioutil.ReadFile(applySchemaOptions.SQLFile)
+		data, err := os.ReadFile(applySchemaOptions.SQLFile)
 		if err != nil {
 			return err
 		}
@@ -293,7 +293,7 @@ func init() {
 	ApplySchema.Flags().DurationVar(&applySchemaOptions.WaitReplicasTimeout, "wait-replicas-timeout", wrangler.DefaultWaitReplicasTimeout, "Amount of time to wait for replicas to receive the schema change via replication.")
 	ApplySchema.Flags().BoolVar(&applySchemaOptions.SkipPreflight, "skip-preflight", false, "Skip pre-apply schema checks, and directly forward schema change query to shards.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.CallerID, "caller-id", "", "Effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used).")
-	ApplySchema.Flags().StringSliceVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
+	ApplySchema.Flags().StringArrayVar(&applySchemaOptions.SQL, "sql", nil, "Semicolon-delimited, repeatable SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 	ApplySchema.Flags().StringVar(&applySchemaOptions.SQLFile, "sql-file", "", "Path to a file containing semicolon-delimited SQL commands to apply. Exactly one of --sql|--sql-file is required.")
 
 	Root.AddCommand(ApplySchema)

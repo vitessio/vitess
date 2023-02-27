@@ -47,6 +47,13 @@ func (dr *switcherDryRun) deleteRoutingRules(ctx context.Context) error {
 	return nil
 }
 
+func (dr *switcherDryRun) deleteShardRoutingRules(ctx context.Context) error {
+	if dr.ts.isPartialMigration {
+		dr.drLog.Log("Shard routing rules for participating shards will be deleted")
+	}
+	return nil
+}
+
 func (dr *switcherDryRun) switchShardReads(ctx context.Context, cells []string, servedTypes []topodatapb.TabletType, direction workflow.TrafficSwitchDirection) error {
 	sourceShards := make([]string, 0)
 	targetShards := make([]string, 0)
@@ -124,7 +131,7 @@ func (dr *switcherDryRun) changeRouting(ctx context.Context) error {
 }
 
 func (dr *switcherDryRun) streamMigraterfinalize(ctx context.Context, ts *trafficSwitcher, workflows []string) error {
-	dr.drLog.Log("SwitchWrites completed, freeze and delete vreplication streams on:")
+	dr.drLog.Log("Switch writes completed, freeze and delete vreplication streams on:")
 	logs := make([]string, 0)
 	for _, t := range ts.Targets() {
 		logs = append(logs, fmt.Sprintf("\ttablet %d", t.GetPrimary().Alias.Uid))
@@ -182,7 +189,7 @@ func (dr *switcherDryRun) migrateStreams(ctx context.Context, sm *workflow.Strea
 }
 
 func (dr *switcherDryRun) waitForCatchup(ctx context.Context, filteredReplicationWaitTime time.Duration) error {
-	dr.drLog.Log(fmt.Sprintf("Wait for VReplication on stopped streams to catchup for upto %v", filteredReplicationWaitTime))
+	dr.drLog.Log(fmt.Sprintf("Wait for VReplication on stopped streams to catchup for up to %v", filteredReplicationWaitTime))
 	return nil
 }
 

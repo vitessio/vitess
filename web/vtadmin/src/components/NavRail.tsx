@@ -71,6 +71,9 @@ export const NavRail = () => {
                     <li>
                         <NavRailLink icon={Icons.runQuery} text="VTExplain" to="/vtexplain" />
                     </li>
+                    <li>
+                        <NavRailLink icon={Icons.topology} text="Topology" to="/topology" />
+                    </li>
                 </ul>
             </div>
         </div>

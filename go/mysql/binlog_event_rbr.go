@@ -38,19 +38,20 @@ var ZeroTimestamp = []byte("0000-00-00 00:00:00")
 // TableMap implements BinlogEvent.TableMap().
 //
 // Expected format (L = total length of event data):
-//  # bytes   field
-//  4/6       table id
-//  2         flags
-//  1         schema name length sl
-//  sl        schema name
-//  1         [00]
-//  1         table name length tl
-//  tl        table name
-//  1         [00]
-//  <var>     column count cc (var-len encoded)
-//  cc        column-def, one byte per column
-//  <var>     column-meta-def (var-len encoded string)
-//  n         NULL-bitmask, length: (cc + 7) / 8
+//
+//	# bytes   field
+//	4/6       table id
+//	2         flags
+//	1         schema name length sl
+//	sl        schema name
+//	1         [00]
+//	1         table name length tl
+//	tl        table name
+//	1         [00]
+//	<var>     column count cc (var-len encoded)
+//	cc        column-def, one byte per column
+//	<var>     column-meta-def (var-len encoded string)
+//	n         NULL-bitmask, length: (cc + 7) / 8
 func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	data := ev.Bytes()[f.HeaderLength:]
 
@@ -70,21 +71,25 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	result.Name = string(data[pos+1 : pos+1+l])
 	pos += 1 + l + 1
 
-	// FIXME(alainjobart) this is varlength encoded.
-	columnCount := int(data[pos])
-	pos++
+	columnCount, read, ok := readLenEncInt(data, pos)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected column count at position %v (data=%v)", pos, data)
+	}
+	pos = read
 
-	result.Types = data[pos : pos+columnCount]
-	pos += columnCount
+	result.Types = data[pos : pos+int(columnCount)]
+	pos += int(columnCount)
 
-	// FIXME(alainjobart) this is a var-len-string.
-	l = int(data[pos])
-	pos++
+	metaLen, read, ok := readLenEncInt(data, pos)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected metadata length at position %v (data=%v)", pos, data)
+	}
+	pos = read
 
 	// Allocate and parse / copy Metadata.
 	result.Metadata = make([]uint16, columnCount)
-	expectedEnd := pos + l
-	for c := 0; c < columnCount; c++ {
+	expectedEnd := pos + int(metaLen)
+	for c := uint64(0); c < columnCount; c++ {
 		var err error
 		result.Metadata[c], pos, err = metadataRead(data, pos, result.Types[c])
 		if err != nil {
@@ -96,7 +101,7 @@ func (ev binlogEvent) TableMap(f BinlogFormat) (*TableMap, error) {
 	}
 
 	// A bit array that says if each column can be NULL.
-	result.CanBeNull, _ = newBitmap(data, pos, columnCount)
+	result.CanBeNull, _ = newBitmap(data, pos, int(columnCount))
 
 	return result, nil
 }
@@ -709,6 +714,14 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 
 		// now see if we have a fraction
 		if scale == 0 {
+			// When the field is a DECIMAL using a scale of 0, e.g.
+			// DECIMAL(5,0), a binlogged value of 0 is almost treated
+			// like the NULL byte and we get a 0 byte length value.
+			// In this case let's return the correct value of 0.
+			if txt.Len() == 0 {
+				txt.WriteRune('0')
+			}
+
 			return sqltypes.MakeTrusted(querypb.Type_DECIMAL,
 				txt.Bytes()), l, nil
 		}
@@ -947,13 +960,15 @@ func CellValue(data []byte, pos int, typ byte, metadata uint16, field *querypb.F
 // Rows implements BinlogEvent.TableMap().
 //
 // Expected format (L = total length of event data):
-//  # bytes   field
-//  4/6       table id
-//  2         flags
-//  -- if version == 2
-//  2         extra data length edl
-//  edl       extra data
-//  -- endif
+//
+//	# bytes   field
+//	4/6       table id
+//	2         flags
+//	-- if version == 2
+//	2         extra data length edl
+//	edl       extra data
+//	-- endif
+//
 // <var>      number of columns (var-len encoded)
 // <var>      identify bitmap
 // <var>      data bitmap
@@ -986,22 +1001,24 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 		pos += int(extraDataLength)
 	}
 
-	// FIXME(alainjobart) this is var len encoded.
-	columnCount := int(data[pos])
-	pos++
+	columnCount, read, ok := readLenEncInt(data, pos)
+	if !ok {
+		return result, vterrors.Errorf(vtrpc.Code_INTERNAL, "expected column count at position %v (data=%v)", pos, data)
+	}
+	pos = read
 
 	numIdentifyColumns := 0
 	numDataColumns := 0
 
 	if hasIdentify {
 		// Bitmap of the columns used for identify.
-		result.IdentifyColumns, pos = newBitmap(data, pos, columnCount)
+		result.IdentifyColumns, pos = newBitmap(data, pos, int(columnCount))
 		numIdentifyColumns = result.IdentifyColumns.BitCount()
 	}
 
 	if hasData {
 		// Bitmap of columns that are present.
-		result.DataColumns, pos = newBitmap(data, pos, columnCount)
+		result.DataColumns, pos = newBitmap(data, pos, int(columnCount))
 		numDataColumns = result.DataColumns.BitCount()
 	}
 
@@ -1016,7 +1033,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			// Get the identify values.
 			startPos := pos
 			valueIndex := 0
-			for c := 0; c < columnCount; c++ {
+			for c := 0; c < int(columnCount); c++ {
 				if !result.IdentifyColumns.Bit(c) {
 					// This column is not represented.
 					continue
@@ -1046,7 +1063,7 @@ func (ev binlogEvent) Rows(f BinlogFormat, tm *TableMap) (Rows, error) {
 			// Get the values.
 			startPos := pos
 			valueIndex := 0
-			for c := 0; c < columnCount; c++ {
+			for c := 0; c < int(columnCount); c++ {
 				if !result.DataColumns.Bit(c) {
 					// This column is not represented.
 					continue

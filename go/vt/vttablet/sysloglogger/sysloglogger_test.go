@@ -141,9 +141,9 @@ func TestSyslog(t *testing.T) {
 // when redaction is enabled.
 func TestSyslogRedacted(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
-	*streamlog.RedactDebugUIQueries = true
+	streamlog.SetRedactDebugUIQueries(true)
 	defer func() {
-		*streamlog.RedactDebugUIQueries = false
+		streamlog.SetRedactDebugUIQueries(false)
 	}()
 	mock := newFakeWriter()
 	writer = mock

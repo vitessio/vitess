@@ -1159,6 +1159,20 @@ func (cached *UserDefinedVariable) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *VExplain) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Input vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Input.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
 func (cached *VStream) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -1206,6 +1220,44 @@ func (cached *VindexFunc) CachedSize(alloc bool) int64 {
 	if cc, ok := cached.Value.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
+	return size
+}
+func (cached *VindexLookup) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(112)
+	}
+	// field Vindex vitess.io/vitess/go/vt/vtgate/vindexes.LookupPlanable
+	if cc, ok := cached.Vindex.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Keyspace *vitess.io/vitess/go/vt/vtgate/vindexes.Keyspace
+	size += cached.Keyspace.CachedSize(true)
+	// field Arguments []string
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Arguments)) * int64(16))
+		for _, elem := range cached.Arguments {
+			size += hack.RuntimeAllocSize(int64(len(elem)))
+		}
+	}
+	// field Values []vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.Values)) * int64(16))
+		for _, elem := range cached.Values {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	// field Lookup vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.Lookup.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field SendTo *vitess.io/vitess/go/vt/vtgate/engine.Route
+	size += cached.SendTo.CachedSize(true)
 	return size
 }
 
@@ -1259,7 +1311,7 @@ func (cached *shardRoute) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(32)
+		size += int64(48)
 	}
 	// field query string
 	size += hack.RuntimeAllocSize(int64(len(cached.query)))
@@ -1279,6 +1331,10 @@ func (cached *shardRoute) CachedSize(alloc bool) int64 {
 			size += hack.RuntimeAllocSize(int64(len(k)))
 			size += v.CachedSize(true)
 		}
+	}
+	// field primitive vitess.io/vitess/go/vt/vtgate/engine.Primitive
+	if cc, ok := cached.primitive.(cachedObject); ok {
+		size += cc.CachedSize(true)
 	}
 	return size
 }

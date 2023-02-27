@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -139,6 +138,7 @@ func (vtgate *VtgateProcess) Setup() (err error) {
 	go func() {
 		if vtgate.proc != nil {
 			vtgate.exit <- vtgate.proc.Wait()
+			close(vtgate.exit)
 		}
 	}()
 
@@ -237,8 +237,9 @@ func (vtgate *VtgateProcess) TearDown() error {
 
 	case <-time.After(30 * time.Second):
 		vtgate.proc.Process.Kill()
+		err := <-vtgate.exit
 		vtgate.proc = nil
-		return <-vtgate.exit
+		return err
 	}
 }
 
@@ -309,7 +310,7 @@ func (vtgate *VtgateProcess) ReadVSchema() (*interface{}, error) {
 		return nil, err
 	}
 	defer resp.Body.Close()
-	res, err := ioutil.ReadAll(resp.Body)
+	res, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}

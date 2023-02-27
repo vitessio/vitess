@@ -55,6 +55,7 @@ oltpReadPool:
   size: 16                 # queryserver-config-pool-size
   timeoutSeconds: 0        # queryserver-config-query-pool-timeout
   idleTimeoutSeconds: 1800 # queryserver-config-idle-timeout
+  maxLifetimeSeconds: 0    # queryserver-config-pool-conn-max-lifetime
   prefillParallelism: 0    # queryserver-config-pool-prefill-parallelism
   maxWaiters: 50000        # queryserver-config-query-pool-waiter-cap
 

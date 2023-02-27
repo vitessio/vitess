@@ -21,32 +21,33 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"path"
 	"path/filepath"
 	"strings"
+	"time"
 	"unicode"
+
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
+
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 
 	// we need to import the grpcvtctlclient library so the gRPC
 	// vtctl client is registered and can be used.
 	_ "vitess.io/vitess/go/vt/vtctl/grpcvtctlclient"
-	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-
-	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/log"
-
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vttestpb "vitess.io/vitess/go/vt/proto/vttest"
 )
 
 // Config are the settings used to configure the self-contained Vitess cluster.
@@ -88,9 +89,6 @@ type Config struct {
 	// PlannerVersion is the planner version to use for the vtgate.
 	// Choose between V3, Gen4, Gen4Greedy and Gen4Fallback
 	PlannerVersion string
-
-	// PlannerVersionDeprecated is deprecated and should not be used
-	PlannerVersionDeprecated string
 
 	// ExtraMyCnf are the extra .CNF files to be added to the MySQL config
 	ExtraMyCnf []string
@@ -148,6 +146,8 @@ type Config struct {
 	ExternalTopoGlobalServerAddress string
 
 	ExternalTopoGlobalRoot string
+
+	VtgateTabletRefreshInterval time.Duration
 }
 
 // InitSchemas is a shortcut for tests that just want to setup a single
@@ -206,27 +206,40 @@ func (cfg *Config) DbName() string {
 	return ""
 }
 
+// TopoData is a struct representing a test topology.
+//
+// It implements pflag.Value and can be used as a destination command-line via
+// pflag.Var or pflag.VarP.
 type TopoData struct {
 	vtTestTopology *vttestpb.VTTestTopology
 	unmarshal      func(b []byte, m proto.Message) error
 }
 
+// String is part of the pflag.Value interface.
 func (td *TopoData) String() string {
 	return prototext.Format(td.vtTestTopology)
 }
 
+// Set is part of the pflag.Value interface.
 func (td *TopoData) Set(value string) error {
 	return td.unmarshal([]byte(value), td.vtTestTopology)
 }
 
-func TextTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+// Type is part of the pflag.Value interface.
+func (td *TopoData) Type() string { return "vttest.TopoData" }
+
+// TextTopoData returns a test TopoData that unmarshals using
+// prototext.Unmarshal.
+func TextTopoData(tpb *vttestpb.VTTestTopology) *TopoData {
 	return &TopoData{
 		vtTestTopology: tpb,
 		unmarshal:      prototext.Unmarshal,
 	}
 }
 
-func JSONTopoData(tpb *vttestpb.VTTestTopology) flag.Value {
+// JSONTopoData returns a test TopoData that unmarshals using
+// protojson.Unmarshal.
+func JSONTopoData(tpb *vttestpb.VTTestTopology) *TopoData {
 	return &TopoData{
 		vtTestTopology: tpb,
 		unmarshal:      protojson.Unmarshal,
@@ -486,8 +499,29 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	return nil
 }
 
+func (db *LocalCluster) createVTSchema() error {
+	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if err := db.Execute([]string{sidecardb.UseSidecarDatabaseQuery}, ""); err != nil {
+				return nil, err
+			}
+		}
+		return db.ExecuteFetch(query, "")
+	}
+
+	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
+		return err
+	}
+	return nil
+}
 func (db *LocalCluster) createDatabases() error {
 	log.Info("Creating databases in cluster...")
+
+	// The tablets created in vttest do not follow the same tablet init process, so we need to explicitly create
+	// the sidecar database tables
+	if err := db.createVTSchema(); err != nil {
+		return err
+	}
 
 	var sql []string
 	for _, kpb := range db.Topology.Keyspaces {
@@ -519,7 +553,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	for _, cmd := range sql {
 		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
-		_, err := conn.ExecuteFetch(cmd, 0, false)
+		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
 		}
@@ -527,6 +561,21 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
+}
+
+// ExecuteFetch runs a SQL statement on the MySQL instance backing
+// this local cluster and returns the result.
+func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Result, error) {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
+	rs, err := conn.ExecuteFetch(sql, -1, true)
+	return rs, err
 }
 
 // Query runs a  SQL query on the MySQL instance backing this local cluster and returns

@@ -22,17 +22,20 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
-	querypb "vitess.io/vitess/go/vt/proto/query"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/schematools"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+
+	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
 // TabletExecutor applies schema changes to all tablets.
@@ -274,7 +277,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 	}
 	providedUUID := ""
 
-	rl := timer.NewRateLimiter(*topo.RemoteOperationTimeout / 4)
+	rl := timer.NewRateLimiter(topo.RemoteOperationTimeout / 4)
 	defer rl.Stop()
 
 	syncOperationExecuted := false
@@ -299,7 +302,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
 		// execute the schema change via replication. This is best-effort, meaning
 		// we still return overall success if the timeout expires.
-		concurrency := sync2.NewSemaphore(10, 0)
+		concurrency := semaphore.NewWeighted(10)
 		reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
 		defer cancel()
 		for _, result := range uniqueShards {
@@ -390,7 +393,10 @@ func (exec *TabletExecutor) executeOneTablet(
 	var result *querypb.QueryResult
 	var err error
 	if viaQueryService {
-		result, err = exec.tmc.ExecuteQuery(ctx, tablet, []byte(sql), 10)
+		result, err = exec.tmc.ExecuteQuery(ctx, tablet, &tabletmanagerdatapb.ExecuteQueryRequest{
+			Query:   []byte(sql),
+			MaxRows: 10,
+		})
 	} else {
 		if exec.ddlStrategySetting != nil && exec.ddlStrategySetting.IsAllowZeroInDateFlag() {
 			// --allow-zero-in-date Applies to DDLs
@@ -406,7 +412,10 @@ func (exec *TabletExecutor) executeOneTablet(
 				sql = sqlparser.String(ddlStmt)
 			}
 		}
-		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, []byte(sql), 10, false, false /* do not ReloadSchema */)
+		result, err = exec.tmc.ExecuteFetchAsDba(ctx, tablet, false, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+			Query:   []byte(sql),
+			MaxRows: 10,
+		})
 	}
 	if err != nil {
 		errChan <- ShardWithError{Shard: tablet.Shard, Err: err.Error()}

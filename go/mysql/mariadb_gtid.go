@@ -237,7 +237,7 @@ func (gtidSet MariadbGTIDSet) Union(other GTIDSet) GTIDSet {
 	return newSet
 }
 
-//Last returns the last gtid
+// Last returns the last gtid
 func (gtidSet MariadbGTIDSet) Last() string {
 	// Sort domains so the string format is deterministic.
 	domains := make([]uint32, 0, len(gtidSet))

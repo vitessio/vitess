@@ -90,13 +90,12 @@ type Config struct {
 // For example, to create a schema cache that can backfill full payloads (including
 // size aggregation):
 //
-//		var c *cache.Cache[BackfillSchemaRequest, *vtadminpb.Schema]
-//		c := cache.New(func(ctx context.Context, req BackfillSchemaRequest) (*vtadminpb.Schema, error) {
-//			// Fetch schema based on fields in `req`.
-//			// If err is nil, the backfilled schema will be added to the cache.
-//			return cluster.fetchSchema(ctx, req)
-//		})
-//
+//	var c *cache.Cache[BackfillSchemaRequest, *vtadminpb.Schema]
+//	c := cache.New(func(ctx context.Context, req BackfillSchemaRequest) (*vtadminpb.Schema, error) {
+//		// Fetch schema based on fields in `req`.
+//		// If err is nil, the backfilled schema will be added to the cache.
+//		return cluster.fetchSchema(ctx, req)
+//	})
 type Cache[Key Keyer, Value any] struct {
 	cache *cache.Cache
 

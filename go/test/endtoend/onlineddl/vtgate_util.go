@@ -92,6 +92,17 @@ func CheckRetryMigration(t *testing.T, vtParams *mysql.ConnParams, shards []clus
 	}
 }
 
+// CheckRetryPartialMigration attempts to retry a migration where a subset of shards failed
+func CheckRetryPartialMigration(t *testing.T, vtParams *mysql.ConnParams, uuid string, expectAtLeastRowsAffected uint64) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a retry",
+		sqltypes.StringBindVariable(uuid),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	assert.GreaterOrEqual(t, expectAtLeastRowsAffected, r.RowsAffected)
+}
+
 // CheckCancelMigration attempts to cancel a migration, and expects success/failure by counting affected rows
 func CheckCancelMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, expectCancelPossible bool) {
 	query, err := sqlparser.ParseAndBind("alter vitess_migration %a cancel",
@@ -133,6 +144,22 @@ func CheckCompleteMigration(t *testing.T, vtParams *mysql.ConnParams, shards []c
 	}
 }
 
+// CheckLaunchMigration attempts to launch a migration, and expects success by counting affected rows
+func CheckLaunchMigration(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard, uuid string, launchShards string, expectLaunchPossible bool) {
+	query, err := sqlparser.ParseAndBind("alter vitess_migration %a launch vitess_shards %a",
+		sqltypes.StringBindVariable(uuid),
+		sqltypes.StringBindVariable(launchShards),
+	)
+	require.NoError(t, err)
+	r := VtgateExecQuery(t, vtParams, query, "")
+
+	if expectLaunchPossible {
+		assert.Equal(t, len(shards), int(r.RowsAffected))
+	} else {
+		assert.Equal(t, int(0), int(r.RowsAffected))
+	}
+}
+
 // CheckCompleteAllMigrations completes all pending migrations and expect number of affected rows
 // A negative value for expectCount indicates "don't care, no need to check"
 func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
@@ -149,6 +176,17 @@ func CheckCompleteAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expect
 func CheckCancelAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
 	cancelQuery := "alter vitess_migration cancel all"
 	r := VtgateExecQuery(t, vtParams, cancelQuery, "")
+
+	if expectCount >= 0 {
+		assert.Equal(t, expectCount, int(r.RowsAffected))
+	}
+}
+
+// CheckLaunchAllMigrations launches all queued posponed migrations and expect number of affected rows
+// A negative value for expectCount indicates "don't care, no need to check"
+func CheckLaunchAllMigrations(t *testing.T, vtParams *mysql.ConnParams, expectCount int) {
+	completeQuery := "alter vitess_migration launch all"
+	r := VtgateExecQuery(t, vtParams, completeQuery, "")
 
 	if expectCount >= 0 {
 		assert.Equal(t, expectCount, int(r.RowsAffected))
@@ -305,4 +343,41 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	}
 	t.Error("timeout waiting for last_throttled_timestamp to have nonempty value")
 	return
+}
+
+// ValidateSequentialMigrationIDs validates that schem_migrations.id column, which is an AUTO_INCREMENT, does
+// not have gaps
+func ValidateSequentialMigrationIDs(t *testing.T, vtParams *mysql.ConnParams, shards []cluster.Shard) {
+	r := VtgateExecQuery(t, vtParams, "show vitess_migrations", "")
+	shardMin := map[string]uint64{}
+	shardMax := map[string]uint64{}
+	shardCount := map[string]uint64{}
+
+	for _, row := range r.Named().Rows {
+		id := row.AsUint64("id", 0)
+		require.NotZero(t, id)
+
+		shard := row.AsString("shard", "")
+		require.NotEmpty(t, shard)
+
+		if _, ok := shardMin[shard]; !ok {
+			shardMin[shard] = id
+			shardMax[shard] = id
+		}
+		if id < shardMin[shard] {
+			shardMin[shard] = id
+		}
+		if id > shardMax[shard] {
+			shardMax[shard] = id
+		}
+		shardCount[shard]++
+	}
+	require.NotEmpty(t, shards)
+	assert.Equal(t, len(shards), len(shardMin))
+	assert.Equal(t, len(shards), len(shardMax))
+	assert.Equal(t, len(shards), len(shardCount))
+	for shard, count := range shardCount {
+		assert.NotZero(t, count)
+		assert.Equalf(t, count, shardMax[shard]-shardMin[shard]+1, "mismatch: shared=%v, count=%v, min=%v, max=%v", shard, count, shardMin[shard], shardMax[shard])
+	}
 }

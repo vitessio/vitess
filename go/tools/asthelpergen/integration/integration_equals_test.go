@@ -28,9 +28,9 @@ func TestEquals(t *testing.T) {
 		for idxB, objB := range createObjs() {
 			t.Run(fmt.Sprintf("%s == %s", name(objA), name(objB)), func(t *testing.T) {
 				if idxA == idxB {
-					require.True(t, EqualsAST(objA, objB))
+					require.True(t, Equals.AST(objA, objB))
 				} else {
-					require.False(t, EqualsAST(objA, objB))
+					require.False(t, Equals.AST(objA, objB))
 				}
 			})
 		}

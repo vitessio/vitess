@@ -18,6 +18,8 @@ package vtgate
 
 import (
 	"bytes"
+	"context"
+	_ "embed"
 	"fmt"
 	"strconv"
 	"strings"
@@ -25,17 +27,11 @@ import (
 
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/vt/topo"
-
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
 	"github.com/stretchr/testify/require"
 
 	"github.com/stretchr/testify/assert"
-
-	"context"
 
 	"vitess.io/vitess/go/cache"
 	"vitess.io/vitess/go/sqltypes"
@@ -50,313 +46,17 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
-var executorVSchema = `
-{
-	"sharded": true,
-	"vindexes": {
-		"hash_index": {
-			"type": "hash"
-		},
-		"music_user_map": {
-			"type": "lookup_hash_unique",
-			"owner": "music",
-			"params": {
-				"table": "music_user_map",
-				"from": "music_id",
-				"to": "user_id"
-			}
-		},
-		"name_user_map": {
-			"type": "lookup_hash",
-			"owner": "user",
-			"params": {
-				"table": "name_user_map",
-				"from": "name",
-				"to": "user_id"
-			}
-		},
-		"name_lastname_keyspace_id_map": {
-			"type": "lookup",
-			"owner": "user2",
-			"params": {
-				"table": "name_lastname_keyspace_id_map",
-				"from": "name,lastname",
-				"to": "keyspace_id"
-			}
-		},
-		"insert_ignore_idx": {
-			"type": "lookup_hash",
-			"owner": "insert_ignore_test",
-			"params": {
-				"table": "ins_lookup",
-				"from": "fromcol",
-				"to": "tocol"
-			}
-		},
-		"idx1": {
-			"type": "hash"
-		},
-		"idx_noauto": {
-			"type": "hash",
-			"owner": "noauto_table"
-		},
-		"keyspace_id": {
-			"type": "numeric"
-		},
-		"krcol_unique_vdx": {
-			"type": "keyrange_lookuper_unique"
-		},
-		"krcol_vdx": {
-			"type": "keyrange_lookuper"
-		},
-    	"t1_lkp_vdx": {
-      		"type": "consistent_lookup_unique",
-      		"params": {
-        		"table": "t1_lkp_idx",
-        		"from": "unq_col",
-        		"to": "keyspace_id"
-      		},
-      		"owner": "t1"
-    	},
-		"t2_wo_lu_vdx": {
-      		"type": "lookup_unique",
-      		"params": {
-        		"table": "TestUnsharded.wo_lu_idx",
-        		"from": "wo_lu_col",
-        		"to": "keyspace_id",
-				"write_only": "true"
-      		},
-      		"owner": "t2_wo_lookup"
-    	},
-		"t2_lu_vdx": {
-      		"type": "lookup_hash_unique",
-      		"params": {
-        		"table": "TestUnsharded.lu_idx",
-        		"from": "lu_col",
-        		"to": "keyspace_id"
-      		},
-      		"owner": "t2_wo_lookup"
-    	},
-		"regional_vdx": {
-			"type": "region_experimental",
-			"params": {
-				"region_bytes": "1"
-			}
-    	}
-	},
-	"tables": {
-		"user": {
-			"column_vindexes": [
-				{
-					"column": "Id",
-					"name": "hash_index"
-				},
-				{
-					"column": "name",
-					"name": "name_user_map"
-				}
-			],
-			"auto_increment": {
-				"column": "id",
-				"sequence": "user_seq"
-			},
-			"columns": [
-				{
-					"name": "textcol",
-					"type": "VARCHAR"
-				}
-			]
-		},
-		"user2": {
-			"column_vindexes": [
-				{
-					"column": "id",
-					"name": "hash_index"
-				},
-				{
-					"columns": ["name", "lastname"],
-					"name": "name_lastname_keyspace_id_map"
-				}
-			]
-		},
-		"user_extra": {
-			"column_vindexes": [
-				{
-					"column": "user_id",
-					"name": "hash_index"
-				}
-			]
-		},
-		"sharded_user_msgs": {
-			"column_vindexes": [
-				{
-					"column": "user_id",
-					"name": "hash_index"
-				}
-			]
-		},
-		"music": {
-			"column_vindexes": [
-				{
-					"column": "user_id",
-					"name": "hash_index"
-				},
-				{
-					"column": "id",
-					"name": "music_user_map"
-				}
-			],
-			"auto_increment": {
-				"column": "id",
-				"sequence": "user_seq"
-			}
-		},
-		"music_extra": {
-			"column_vindexes": [
-				{
-					"column": "user_id",
-					"name": "hash_index"
-				},
-				{
-					"column": "music_id",
-					"name": "music_user_map"
-				}
-			]
-		},
-		"music_extra_reversed": {
-			"column_vindexes": [
-				{
-					"column": "music_id",
-					"name": "music_user_map"
-				},
-				{
-					"column": "user_id",
-					"name": "hash_index"
-				}
-			]
-		},
-		"insert_ignore_test": {
-			"column_vindexes": [
-				{
-					"column": "pv",
-					"name": "music_user_map"
-				},
-				{
-					"column": "owned",
-					"name": "insert_ignore_idx"
-				},
-				{
-					"column": "verify",
-					"name": "hash_index"
-				}
-			]
-		},
-		"noauto_table": {
-			"column_vindexes": [
-				{
-					"column": "id",
-					"name": "idx_noauto"
-				}
-			]
-		},
-		"keyrange_table": {
-			"column_vindexes": [
-				{
-					"column": "krcol_unique",
-					"name": "krcol_unique_vdx"
-				},
-				{
-					"column": "krcol",
-					"name": "krcol_vdx"
-				}
-			]
-		},
-		"ksid_table": {
-			"column_vindexes": [
-				{
-					"column": "keyspace_id",
-					"name": "keyspace_id"
-				}
-			]
-		},
-		"t1": {
-      		"column_vindexes": [
-				{
-				  	"column": "id",
-				  	"name": "hash_index"
-				},
-				{
-				  	"column": "unq_col",
-				  	"name": "t1_lkp_vdx"
-				}
-            ]
-    	},
-		"t1_lkp_idx": {
-			"column_vindexes": [
-				{
-					"column": "unq_col",
-				  	"name": "hash_index"
-				}
-			]
-		},
-		"t2_wo_lookup": {
-      		"column_vindexes": [
-				{
-				  	"column": "id",
-				  	"name": "hash_index"
-				},
-				{
-				  	"column": "wo_lu_col",
-				  	"name": "t2_wo_lu_vdx"
-				},
-				{
-				  	"column": "lu_col",
-				  	"name": "t2_lu_vdx"
-				}
-            ]
-    	},
-		"user_region": {
-			"column_vindexes": [
-				{
-					"columns": ["cola","colb"],
-					"name": "regional_vdx"
-				}
-			]
-    	}
-	}
-}
-`
+//go:embed testdata/executorVSchema.json
+var executorVSchema string
+
+//go:embed testdata/unshardedVschema.json
+var unshardedVSchema string
 
 var badVSchema = `
 {
 	"sharded": false,
 	"tables": {
 		"sharded_table": {}
-	}
-}
-`
-
-var unshardedVSchema = `
-{
-	"sharded": false,
-	"tables": {
-		"user_seq": {
-			"type": "sequence"
-		},
-		"music_user_map": {},
-		"name_user_map": {},
-		"name_lastname_keyspace_id_map": {},
-		"user_msgs": {},
-		"ins_lookup": {},
-		"main1": {
-			"auto_increment": {
-				"column": "id",
-				"sequence": "user_seq"
-			}
-		},
-		"wo_lu_idx": {},
-		"lu_idx": {},
-		"simple": {}
 	}
 }
 `
@@ -446,25 +146,8 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	_ = hc.AddTestTablet(cell, "random", 1, "TestXBadVSchema", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 
 	createSandbox(KsTestUnsharded)
-	_ = topo.NewShardInfo(KsTestUnsharded, "0", &topodatapb.Shard{}, nil)
-	if err := serv.topoServer.CreateKeyspace(ctx, KsTestUnsharded, &topodatapb.Keyspace{}); err != nil {
-		log.Errorf("CreateKeyspace() failed: %v", err)
-	}
-	if err := serv.topoServer.CreateShard(ctx, KsTestUnsharded, "0"); err != nil {
-		log.Errorf("CreateShard(0) failed: %v", err)
-	}
 	sbclookup = hc.AddTestTablet(cell, "0", 1, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
-	tablet := topo.NewTablet(sbclookup.Tablet().Alias.Uid, cell, "0")
-	tablet.Type = topodatapb.TabletType_PRIMARY
-	tablet.Keyspace = KsTestUnsharded
-	tablet.Shard = "0"
-	serv.topoServer.UpdateShardFields(ctx, KsTestUnsharded, "0", func(si *topo.ShardInfo) error {
-		si.PrimaryAlias = tablet.Alias
-		return nil
-	})
-	if err := serv.topoServer.CreateTablet(ctx, tablet); err != nil {
-		log.Errorf("CreateShard(0) failed: %v", err)
-	}
+
 	// Ues the 'X' in the name to ensure it's not alphabetically first.
 	// Otherwise, it would become the default keyspace for the dual table.
 	bad := createSandbox("TestXBadSharding")
@@ -632,7 +315,7 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 
 func testCommitCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
 	t.Helper()
-	if got, want := sbc.CommitCount.Get(), int64(want); got != want {
+	if got, want := sbc.CommitCount.Load(), int64(want); got != want {
 		t.Errorf("%s.CommitCount: %d, want %d\n", sbcName, got, want)
 	}
 }

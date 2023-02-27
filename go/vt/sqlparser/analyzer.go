@@ -61,7 +61,7 @@ const (
 	StmtCommentOnly
 )
 
-//ASTToStatementType returns a StatementType from an AST stmt
+// ASTToStatementType returns a StatementType from an AST stmt
 func ASTToStatementType(stmt Statement) StatementType {
 	switch stmt.(type) {
 	case *Select, *Union:
@@ -72,7 +72,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUpdate
 	case *Delete:
 		return StmtDelete
-	case *Set, *SetTransaction:
+	case *Set:
 		return StmtSet
 	case *Show:
 		return StmtShow
@@ -86,7 +86,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 		return StmtUse
 	case *OtherRead, *OtherAdmin, *Load:
 		return StmtOther
-	case Explain:
+	case Explain, *VExplainStmt:
 		return StmtExplain
 	case *Begin:
 		return StmtBegin
@@ -119,7 +119,7 @@ func ASTToStatementType(stmt Statement) StatementType {
 	}
 }
 
-//CanNormalize takes Statement and returns if the statement can be normalized.
+// CanNormalize takes Statement and returns if the statement can be normalized.
 func CanNormalize(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Select, *Union, *Insert, *Update, *Delete, *Set, *CallProc, *Stream: // TODO: we could merge this logic into ASTrewriter
@@ -313,7 +313,7 @@ func IsDML(sql string) bool {
 	return false
 }
 
-//IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
+// IsDMLStatement returns true if the query is an INSERT, UPDATE or DELETE statement.
 func IsDMLStatement(stmt Statement) bool {
 	switch stmt.(type) {
 	case *Insert, *Update, *Delete:
@@ -321,52 +321,6 @@ func IsDMLStatement(stmt Statement) bool {
 	}
 
 	return false
-}
-
-// SplitAndExpression breaks up the Expr into AND-separated conditions
-// and appends them to filters. Outer parenthesis are removed. Precedence
-// should be taken into account if expressions are recombined.
-func SplitAndExpression(filters []Expr, node Expr) []Expr {
-	if node == nil {
-		return filters
-	}
-	switch node := node.(type) {
-	case *AndExpr:
-		filters = SplitAndExpression(filters, node.Left)
-		return SplitAndExpression(filters, node.Right)
-	}
-	return append(filters, node)
-}
-
-// AndExpressions ands together two or more expressions, minimising the expr when possible
-func AndExpressions(exprs ...Expr) Expr {
-	switch len(exprs) {
-	case 0:
-		return nil
-	case 1:
-		return exprs[0]
-	default:
-		result := (Expr)(nil)
-	outer:
-		// we'll loop and remove any duplicates
-		for i, expr := range exprs {
-			if expr == nil {
-				continue
-			}
-			if result == nil {
-				result = expr
-				continue outer
-			}
-
-			for j := 0; j < i; j++ {
-				if EqualsExpr(expr, exprs[j]) {
-					continue outer
-				}
-			}
-			result = &AndExpr{Left: result, Right: expr}
-		}
-		return result
-	}
 }
 
 // TableFromStatement returns the qualified table name for the query.
@@ -452,7 +406,7 @@ func IsSimpleTuple(node Expr) bool {
 	return false
 }
 
-//IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
+// IsLockingFunc returns true for all functions that are used to work with mysql advisory locks
 func IsLockingFunc(node Expr) bool {
 	switch node.(type) {
 	case *LockingFunc:

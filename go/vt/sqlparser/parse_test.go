@@ -44,9 +44,8 @@ var (
 		partialDDL           bool
 		ignoreNormalizerTest bool
 	}{{
-		input:      "create table x(location GEOMETRYCOLLECTION DEFAULT POINT(7.0, 3.0))",
-		output:     "create table x",
-		partialDDL: true,
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table t (id int primary key, dt datetime DEFAULT (CURRENT_TIMESTAMP))",
 		output: "create table t (\n\tid int primary key,\n\tdt datetime default current_timestamp()\n)",
@@ -73,7 +72,7 @@ var (
 		output: "select 1 from t1 where exists (select 1 from dual) = 1",
 	}, {
 		input:  "create table x(location GEOMETRY DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRY default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation GEOMETRY default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "select 1",
 		output: "select 1 from dual",
@@ -163,22 +162,31 @@ var (
 		output: "create table x (\n\tlocation POINT default (7.0)\n)",
 	}, {
 		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation LINESTRING default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation LINESTRING default (point(7.0, 3.0))\n)",
+	}, {
+		input:  "select linestring(pt1, pt2) from geom",
+		output: "select linestring(pt1, pt2) from geom",
 	}, {
 		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation POLYGON default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation POLYGON default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTIPOINT DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTIPOINT default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation MULTIPOINT default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTILINESTRING DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTILINESTRING default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation MULTILINESTRING default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location MULTIPOLYGON DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation MULTIPOLYGON default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation MULTIPOLYGON default (point(7.0, 3.0))\n)",
 	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
-		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (POINT(7.0, 3.0))\n)",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(7.0, 3.0))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(7.0, 3.0)))\n)",
 	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
@@ -209,6 +217,18 @@ var (
 	}, {
 		input:  "select 0x010, 0x0111, x'0111'",
 		output: "select 0x010, 0x0111, X'0111' from dual",
+	}, {
+		input:  "select date'2022-10-03'",
+		output: "select date'2022-10-03' from dual",
+	}, {
+		input:  "select date, time, timestamp from t",
+		output: "select `date`, `time`, `timestamp` from t",
+	}, {
+		input:  "select time'12:34:56'",
+		output: "select time'12:34:56' from dual",
+	}, {
+		input:  "select timestamp'2012-12-31 11:30:45'",
+		output: "select timestamp'2012-12-31 11:30:45' from dual",
 	}, {
 		input:  "select * from information_schema.columns",
 		output: "select * from information_schema.`columns`",
@@ -839,6 +859,12 @@ var (
 		input:  "select /* TIMESTAMPDIFF */ TIMESTAMPDIFF(MINUTE, '2008-01-02', '2008-01-04') from t",
 		output: "select /* TIMESTAMPDIFF */ timestampdiff(MINUTE, '2008-01-02', '2008-01-04') from t",
 	}, {
+		input:  "select DATE_ADD(MIN(FROM_UNIXTIME(1673444922)),interval -DAYOFWEEK(MIN(FROM_UNIXTIME(1673444922)))+1 DAY)",
+		output: "select DATE_ADD(min(FROM_UNIXTIME(1673444922)), interval (-DAYOFWEEK(min(FROM_UNIXTIME(1673444922))) + 1) DAY) from dual",
+	}, {
+		input:  "select '2020-01-01' + interval month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month))-1 month",
+		output: "select '2020-01-01' + interval (month(DATE_SUB(FROM_UNIXTIME(1234), interval 1 month)) - 1) month from dual",
+	}, {
 		input: "select /* dual */ 1 from dual",
 	}, {
 		input:  "select /* Dual */ 1 from Dual",
@@ -1094,23 +1120,35 @@ var (
 		input:  "set /* mixed list */ a = 3, names 'utf8', charset 'ascii', b = 4",
 		output: "set /* mixed list */ @@a = 3, names 'utf8', charset 'ascii', @@b = 4",
 	}, {
-		input: "set session transaction isolation level repeatable read",
+		input:  "set session transaction isolation level repeatable read",
+		output: "set @@session.transaction_isolation = 'repeatable-read'",
 	}, {
-		input: "set transaction isolation level repeatable read",
+		input:  "set transaction isolation level repeatable read",
+		output: "set @@transaction_isolation = 'repeatable-read'",
 	}, {
-		input: "set global transaction isolation level repeatable read",
+		input:  "set global transaction isolation level repeatable read",
+		output: "set @@global.transaction_isolation = 'repeatable-read'",
 	}, {
-		input: "set transaction isolation level repeatable read",
+		input:  "set transaction isolation level repeatable read",
+		output: "set @@transaction_isolation = 'repeatable-read'",
 	}, {
-		input: "set transaction isolation level read committed",
+		input:  "set transaction isolation level read committed",
+		output: "set @@transaction_isolation = 'read-committed'",
 	}, {
-		input: "set transaction isolation level read uncommitted",
+		input:  "set transaction isolation level read uncommitted",
+		output: "set @@transaction_isolation = 'read-uncommitted'",
 	}, {
-		input: "set transaction isolation level serializable",
+		input:  "set transaction isolation level serializable",
+		output: "set @@transaction_isolation = 'serializable'",
 	}, {
-		input: "set transaction read write",
+		input:  "set transaction read write",
+		output: "set @@transaction_read_only = 'off'",
 	}, {
-		input: "set transaction read only",
+		input:  "set transaction read only",
+		output: "set @@transaction_read_only = 'on'",
+	}, {
+		input:  "set session transaction read only, isolation level serializable",
+		output: "set @@session.transaction_read_only = 'on', @@session.transaction_isolation = 'serializable'",
 	}, {
 		input:  "set tx_read_only = 1",
 		output: "set @@tx_read_only = 1",
@@ -1119,10 +1157,14 @@ var (
 		output: "set @@tx_read_only = 0",
 	}, {
 		input:  "set transaction_read_only = 1",
-		output: "set @@transaction_read_only = 1",
+		output: "set @@session.transaction_read_only = 1",
 	}, {
 		input:  "set transaction_read_only = 0",
-		output: "set @@transaction_read_only = 0",
+		output: "set @@session.transaction_read_only = 0",
+	}, {
+		input: "set @@transaction_read_only = 1",
+	}, {
+		input: "set @@transaction_isolation = 'read-committed'",
 	}, {
 		input:  "set tx_isolation = 'repeatable read'",
 		output: "set @@tx_isolation = 'repeatable read'",
@@ -1426,6 +1468,18 @@ var (
 		input:  "create table a (\n\ta float not null default -2.1\n)",
 		output: "create table a (\n\ta float not null default -2.1\n)",
 	}, {
+		input:  "create table a (\n\ta float(24) not null default -1\n)",
+		output: "create table a (\n\ta float(24) not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float(24,10) not null default -1\n)",
+		output: "create table a (\n\ta float(24,10) not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float4 not null default -1\n)",
+		output: "create table a (\n\ta float4 not null default -1\n)",
+	}, {
+		input:  "create table a (\n\ta float8 not null default -1\n)",
+		output: "create table a (\n\ta float8 not null default -1\n)",
+	}, {
 		input:  "create table a (a int not null default 0, primary key(a))",
 		output: "create table a (\n\ta int not null default 0,\n\tprimary key (a)\n)",
 	}, {
@@ -1476,6 +1530,9 @@ var (
 	}, {
 		input:  "create table t (id int) partition by key (id) partitions 2",
 		output: "create table t (\n\tid int\n)\npartition by key (id) partitions 2",
+	}, {
+		input:  "create table t (id int, primary key(id)) partition by key () partitions 2",
+		output: "create table t (\n\tid int,\n\tprimary key (id)\n)\npartition by key () partitions 2",
 	}, {
 		input:  "create table t (id int) partition by key algorithm = 1 (id)",
 		output: "create table t (\n\tid int\n)\npartition by key algorithm = 1 (id)",
@@ -2002,7 +2059,17 @@ var (
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cleanup",
 	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40'",
+	}, {
+		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' launch vitess_shards '-40,40-80'",
+	}, {
+		input: "alter vitess_migration launch all",
+	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' complete",
+	}, {
+		input: "alter vitess_migration complete all",
 	}, {
 		input: "alter vitess_migration '9748c3b7_7fdb_11eb_ac2c_f875a4d24e90' cancel",
 	}, {
@@ -2027,6 +2094,10 @@ var (
 		input: "alter vitess_migration throttle all ratio 0.7",
 	}, {
 		input: "alter vitess_migration throttle all expire '1h' ratio 0.7",
+	}, {
+		input: "show vitess_throttled_apps",
+	}, {
+		input: "show vitess_throttler status",
 	}, {
 		input: "show warnings",
 	}, {
@@ -2060,6 +2131,9 @@ var (
 		input:  "describe select * from t",
 		output: "explain select * from t",
 	}, {
+		input:  "describe /*vt+ execute_dml_queries */ select * from t",
+		output: "explain /*vt+ execute_dml_queries */ select * from t",
+	}, {
 		input:  "desc select * from t",
 		output: "explain select * from t",
 	}, {
@@ -2076,16 +2150,30 @@ var (
 	}, {
 		input: "explain format = traditional select * from t",
 	}, {
+		input: "vexplain queries select * from t",
+	}, {
+		input: "vexplain all select * from t",
+	}, {
+		input: "vexplain plan select * from t",
+	}, {
+		input:  "vexplain select * from t",
+		output: "vexplain plan select * from t",
+	}, {
 		input: "explain analyze select * from t",
 	}, {
 		input: "explain format = tree select * from t",
 	}, {
 		input: "explain format = json select * from t",
 	}, {
+		input: "explain format = vtexplain select * from t",
+	}, {
 		input: "explain format = vitess select * from t",
 	}, {
 		input:  "describe format = vitess select * from t",
 		output: "explain format = vitess select * from t",
+	}, {
+		input:  "describe format = vtexplain select * from t",
+		output: "explain format = vtexplain select * from t",
 	}, {
 		input: "explain delete from t",
 	}, {
@@ -2265,6 +2353,14 @@ var (
 	}, {
 		input:  "start transaction",
 		output: "begin",
+	}, {
+		input: "start transaction with consistent snapshot",
+	}, {
+		input: "start transaction read write",
+	}, {
+		input: "start transaction read only",
+	}, {
+		input: "start transaction read only, with consistent snapshot",
 	}, {
 		input: "commit",
 	}, {
@@ -3212,13 +3308,25 @@ var (
 		output: "select wait_for_executed_gtid_set(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
 	}, {
 		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS('3E11FA47-71CA-11E1-9E33-C80AA9429562:23')",
-		output: "select wati_until_sql_thread_after_gtids('3E11FA47-71CA-11E1-9E33-C80AA9429562:23') from dual",
+		output: "select wait_until_sql_thread_after_gtids('3E11FA47-71CA-11E1-9E33-C80AA9429562:23') from dual",
 	}, {
 		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j)",
-		output: "select wati_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
+		output: "select wait_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), @j) from dual",
 	}, {
 		input:  "SELECT WAIT_UNTIL_SQL_THREAD_AFTER_GTIDS(TRIM('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i)",
-		output: "select wati_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i) from dual",
+		output: "select wait_until_sql_thread_after_gtids(trim('3E11FA47-71CA-11E1-9E33-C80AA9429562:21-57'), 10, @i) from dual",
+	}, {
+		// Offset as part of expressions
+		input: "select a, b from c where :1 + :2 = :302 and sum(:34) < :24",
+	}, {
+		input:  "select * from (((select 1))) as tbl",
+		output: "select * from (select 1 from dual) as tbl",
+	}, {
+		input:  `select * from t1 where col1 like 'ks\%' and col2 = 'ks\%' and col1 like 'ks%' and col2 = 'ks%'`,
+		output: `select * from t1 where col1 like 'ks\%' and col2 = 'ks\%' and col1 like 'ks%' and col2 = 'ks%'`,
+	}, {
+		input:  `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
+		output: `select * from t1 where col1 like 'ks\_' and col2 = 'ks\_' and col1 like 'ks_' and col2 = 'ks_'`,
 	}}
 )
 
@@ -5351,8 +5459,8 @@ var (
 		input:  "select x'777' from t",
 		output: "syntax error at position 14 near '777'",
 	}, {
-		input:  "select * from t where :1 = 2",
-		output: "syntax error at position 24 near ':'",
+		input:  "select * from t where :1f = 2",
+		output: "syntax error at position 26 near 'f'",
 	}, {
 		input:  "select * from t where :. = 2",
 		output: "syntax error at position 24 near ':'",
@@ -5584,9 +5692,9 @@ partition by range (id)
 
 	for _, testcase := range testcases {
 		t.Run(testcase.input+":"+testcase.mysqlVersion, func(t *testing.T) {
-			oldMySQLVersion := MySQLVersion
-			defer func() { MySQLVersion = oldMySQLVersion }()
-			MySQLVersion = testcase.mysqlVersion
+			oldMySQLVersion := mySQLParserVersion
+			defer func() { mySQLParserVersion = oldMySQLVersion }()
+			mySQLParserVersion = testcase.mysqlVersion
 			tree, err := Parse(testcase.input)
 			require.NoError(t, err, testcase.input)
 			out := String(tree)

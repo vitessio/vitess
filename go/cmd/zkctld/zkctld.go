@@ -20,36 +20,44 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/zkctl"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var (
-	zkCfg = flag.String("zk.cfg", "6@<hostname>:3801:3802:3803",
-		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
-	myID = flag.Uint("zk.myid", 0,
-		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
+	zkCfg = "6@<hostname>:3801:3802:3803"
+	myID  uint
 )
+
+func init() {
+	servenv.OnParse(registerFlags)
+}
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&zkCfg, "zk.cfg", zkCfg,
+		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
+	fs.UintVar(&myID, "zk.myid", myID,
+		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
+
+	acl.RegisterFlags(fs)
+}
 
 func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	_flag.Parse(pflag.NewFlagSet("zkctld", pflag.ExitOnError))
-
-	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
+	servenv.ParseFlags("zkctld")
+	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
 	if zkd.Inited() {

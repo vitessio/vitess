@@ -91,6 +91,7 @@ func TestTabletExternallyReparentedBasic(t *testing.T) {
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -170,6 +171,7 @@ func TestTabletExternallyReparentedToReplica(t *testing.T) {
 	// primary is still good to go.
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -242,12 +244,13 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted, so we need a MysqlDaemon
 	// that returns no primary, and the new port (as returned by mysql)
-	newPrimary.FakeMysqlDaemon.MysqlPort.Set(3303)
+	newPrimary.FakeMysqlDaemon.MysqlPort.Store(3303)
 	newPrimary.StartActionLoop(t, wr)
 	defer newPrimary.StopActionLoop(t)
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -258,6 +261,13 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 
 	// On the good replicas, we will respond to
 	// TabletActionReplicaWasRestarted and point to the new mysql port
+	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
+	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 
@@ -329,6 +339,7 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -339,6 +350,13 @@ func TestTabletExternallyReparentedContinueOnUnexpectedPrimary(t *testing.T) {
 
 	// On the good replica, we will respond to
 	// TabletActionReplicaWasRestarted and point to a bad host
+	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(oldPrimary.Tablet))
+	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 
@@ -406,6 +424,7 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 
 	oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs = append(oldPrimary.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
 	oldPrimary.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START Replica",
 	}
@@ -414,9 +433,15 @@ func TestTabletExternallyReparentedRerun(t *testing.T) {
 	oldPrimary.StartActionLoop(t, wr)
 	defer oldPrimary.StopActionLoop(t)
 
-	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet))
+	goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs = append(goodReplica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(newPrimary.Tablet), topoproto.MysqlAddr(oldPrimary.Tablet))
 	// On the good replica, we will respond to
 	// TabletActionReplicaWasRestarted.
+	goodReplica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
+	}
 	goodReplica.StartActionLoop(t, wr)
 	defer goodReplica.StopActionLoop(t)
 

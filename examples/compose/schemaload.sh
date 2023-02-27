@@ -26,23 +26,23 @@ sleep $sleeptime
 
 if [ ! -f schema_run ]; then
   while true; do
-    vtctlclient -server vtctld:$GRPC_PORT GetTablet $targettab && break
+    vtctlclient --server vtctld:$GRPC_PORT GetTablet $targettab && break
     sleep 1
   done
   if [ "$external_db" = "0" ]; then
     for schema_file in $schema_files; do
       echo "Applying Schema ${schema_file} to ${KEYSPACE}"
-      vtctlclient -server vtctld:$GRPC_PORT ApplySchema -sql-file /script/tables/${schema_file} $KEYSPACE || \
-      vtctlclient -server vtctld:$GRPC_PORT ApplySchema -sql "$(cat /script/tables/${schema_file})" $KEYSPACE || true
+      vtctlclient --server vtctld:$GRPC_PORT -- ApplySchema --sql-file /script/tables/${schema_file} $KEYSPACE || \
+      vtctlclient --server vtctld:$GRPC_PORT -- ApplySchema --sql "$(cat /script/tables/${schema_file})" $KEYSPACE || true
     done
   fi
   echo "Applying VSchema ${vschema_file} to ${KEYSPACE}"
   
-  vtctlclient -server vtctld:$GRPC_PORT ApplyVSchema -vschema_file /script/${vschema_file} $KEYSPACE || \
-  vtctlclient -server vtctld:$GRPC_PORT ApplyVSchema -vschema "$(cat /script/${vschema_file})" $KEYSPACE
+  vtctlclient --server vtctld:$GRPC_PORT -- ApplyVSchema --vschema_file /script/${vschema_file} $KEYSPACE || \
+  vtctlclient --server vtctld:$GRPC_PORT -- ApplyVSchema --vschema "$(cat /script/${vschema_file})" $KEYSPACE
   
   echo "List All Tablets"
-  vtctlclient -server vtctld:$GRPC_PORT ListAllTablets
+  vtctlclient --server vtctld:$GRPC_PORT ListAllTablets
     
   if [ -n "$load_file" ]; then
     # vtgate can take a REALLY long time to come up fully

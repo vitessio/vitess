@@ -90,7 +90,11 @@ message MaterializeSettings {
   // TargetTimeZone is not currently specifiable by the user, defaults to UTC for the forward workflows
   // and to the SourceTimeZone in reverse workflows
   string target_time_zone = 11;
-
+  repeated string source_shards = 12;
+  // OnDdl specifies the action to be taken when a DDL is encountered.
+  string on_ddl = 13;
+  // DeferSecondaryKeys specifies if secondary keys should be created in one shot after table copy finishes.
+  bool defer_secondary_keys = 14;
 }
 
 /* Data types for VtctldServer */
@@ -113,6 +117,8 @@ message Workflow {
   ReplicationLocation target = 3;
   int64 max_v_replication_lag = 4;
   map<string, ShardStream> shard_streams = 5;
+  string workflow_type = 6;
+  string workflow_sub_type = 7;
 
   message ReplicationLocation {
     string keyspace = 1;
@@ -202,6 +208,21 @@ message ApplyRoutingRulesRequest {
 message ApplyRoutingRulesResponse {
 }
 
+message ApplyShardRoutingRulesRequest {
+  vschema.ShardRoutingRules shard_routing_rules = 1;
+  // SkipRebuild, if set, will cause ApplyShardRoutingRules to skip rebuilding the
+  // SrvVSchema objects in each cell in RebuildCells.
+  bool skip_rebuild = 2;
+  // RebuildCells limits the SrvVSchema rebuild to the specified cells. If not
+  // provided the SrvVSchema will be rebuilt in every cell in the topology.
+  //
+  // Ignored if SkipRebuild is set.
+  repeated string rebuild_cells = 3;
+}
+
+message ApplyShardRoutingRulesResponse {
+}
+
 message ApplySchemaRequest {
   string keyspace = 1;
   // Allow large schema changes which incur a longer unavailability of the database.
@@ -253,6 +274,9 @@ message BackupRequest {
   // Concurrency specifies the number of compression/checksum jobs to run
   // simultaneously.
   uint64 concurrency = 3;
+  // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
+  // then the backup becomes incremental and applies as of given position.
+  string incremental_from_pos = 4;
 }
 
 message BackupResponse {
@@ -546,7 +570,15 @@ message GetCellsAliasesRequest {
 }
 
 message GetCellsAliasesResponse {
-  map<string,topodata.CellsAlias> aliases = 1;
+  map<string, topodata.CellsAlias> aliases = 1;
+}
+
+message GetFullStatusRequest {
+  topodata.TabletAlias tablet_alias = 1;
+}
+
+message GetFullStatusResponse {
+  replicationdata.FullStatus status = 1;
 }
 
 message GetKeyspacesRequest {
@@ -614,17 +646,24 @@ message GetShardResponse {
   Shard shard = 1;
 }
 
+message GetShardRoutingRulesRequest {
+}
+
+message GetShardRoutingRulesResponse {
+  vschema.ShardRoutingRules shard_routing_rules = 1;
+}
+
 message GetSrvKeyspaceNamesRequest {
   repeated string cells = 1;
 }
 
 message GetSrvKeyspaceNamesResponse {
-    // Names is a mapping of cell name to a list of SrvKeyspace names.
-    map<string, NameList> names = 1;
+  // Names is a mapping of cell name to a list of SrvKeyspace names.
+  map<string, NameList> names = 1;
 
-    message NameList {
-      repeated string names = 1;
-    }
+  message NameList {
+    repeated string names = 1;
+  }
 }
 
 message GetSrvKeyspacesRequest {
@@ -639,6 +678,27 @@ message GetSrvKeyspacesResponse {
   map<string, topodata.SrvKeyspace> srv_keyspaces = 1;
 }
 
+message UpdateThrottlerConfigRequest {
+  string keyspace = 1;
+  // Enable instructs to enable the throttler
+  bool enable = 2;
+  // Disable instructs to disable the throttler
+  bool disable = 3;
+  // Threshold for throttler (with no custom query, ie using default query, only positive values are considered)
+  double threshold = 4;
+  // CustomQuery replaces the default replication lag query
+  string custom_query = 5;
+  // CustomQuerySet indicates that the value of CustomQuery has changed
+  bool custom_query_set = 6;
+  // CheckAsCheckSelf instructs the throttler to respond to /check requests by checking the tablet's own health
+  bool check_as_check_self=7;
+  // CheckAsCheckShard instructs the throttler to respond to /check requests by checking the shard's health (this is the default behavior)
+  bool check_as_check_shard=8;
+}
+
+message UpdateThrottlerConfigResponse {
+}
+
 message GetSrvVSchemaRequest {
   string cell = 1;
 }
@@ -651,7 +711,7 @@ message GetSrvVSchemasRequest {
   repeated string cells = 2;
 }
 
-message GetSrvVSchemasResponse {  
+message GetSrvVSchemasResponse {
   // SrvVSchemas is a mapping of cell name to SrvVSchema
   map<string, vschema.SrvVSchema> srv_v_schemas = 1;
 }
@@ -691,6 +751,23 @@ message GetTabletsRequest {
 
 message GetTabletsResponse {
   repeated topodata.Tablet tablets = 1;
+}
+
+message GetTopologyPathRequest {
+  string path = 1;
+}
+
+message GetTopologyPathResponse {
+  TopologyCell cell = 1;
+}
+
+message TopologyCell {
+  string name = 1;
+  string path = 2;
+  // Data is the file contents of the cell located at path.
+  // It is only populated if the cell is a terminal node.
+  string data = 3;
+  repeated string children = 4;
 }
 
 message GetVSchemaRequest {
@@ -912,6 +989,12 @@ message RestoreFromBackupRequest {
   // BackupTime, if set, will use the backup taken most closely at or before
   // this time. If nil, the latest backup will be restored on the tablet.
   vttime.Time backup_time = 2;
+  // RestoreToPos indicates a position for a point-in-time recovery. The recovery
+  // is expected to utilize one full backup, followed by zero or more incremental backups,
+  // that reach the precise desired position
+  string restore_to_pos = 3;
+  // Dry run does not actually performs the restore, but validates the steps and availability of backups
+  bool dry_run = 4;
 }
 
 message RestoreFromBackupResponse {
@@ -1070,7 +1153,7 @@ message SleepTabletResponse {
 message SourceShardAddRequest {
   string keyspace = 1;
   string shard = 2;
-  uint32 uid = 3;
+  int32 uid = 3;
   string source_keyspace = 4;
   string source_shard = 5;
   // KeyRange identifies the key range to use for the SourceShard. This field is
@@ -1089,7 +1172,7 @@ message SourceShardAddResponse {
 message SourceShardDeleteRequest {
   string keyspace = 1;
   string shard = 2;
-  uint32 uid = 3;
+  int32 uid = 3;
 }
 
 message SourceShardDeleteResponse {
@@ -1193,6 +1276,15 @@ message ValidateVersionKeyspaceRequest {
 message ValidateVersionKeyspaceResponse {
   repeated string results = 1;
   map<string, ValidateShardResponse> results_by_shard = 2;
+}
+
+message ValidateVersionShardRequest {
+  string keyspace = 1;
+  string shard = 2;
+}
+
+message ValidateVersionShardResponse {
+  repeated string results = 1;
 }
 
 message ValidateVSchemaRequest {

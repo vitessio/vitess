@@ -29,12 +29,9 @@ func TestParseMariaGTID(t *testing.T) {
 	want := MariadbGTID{Domain: 12, Server: 345, Sequence: 6789}
 
 	got, err := parseMariadbGTID(input)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	if got.(MariadbGTID) != want {
-		t.Errorf("parseMariadbGTID(%v) = %v, want %v", input, got, want)
-	}
+	assert.NoError(t, err, "%v", err)
+	assert.Equal(t, want, got.(MariadbGTID), "parseMariadbGTID(%v) = %v, want %v", input, got, want)
+
 }
 
 func TestParseInvalidMariaGTID(t *testing.T) {
@@ -42,12 +39,9 @@ func TestParseInvalidMariaGTID(t *testing.T) {
 	want := "invalid MariaDB GTID"
 
 	_, err := parseMariadbGTID(input)
-	if err == nil {
-		t.Errorf("expected error for invalid input (%v)", input)
-	}
-	if !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("wrong error message, got '%v', want '%v'", err, want)
-	}
+	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
+
 }
 
 func TestParseMariaGTIDInvalidDomain(t *testing.T) {
@@ -55,12 +49,9 @@ func TestParseMariaGTIDInvalidDomain(t *testing.T) {
 	want := "invalid MariaDB GTID Domain ID"
 
 	_, err := parseMariadbGTID(input)
-	if err == nil {
-		t.Errorf("expected error for invalid input (%v)", input)
-	}
-	if !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("wrong error message, got '%v', want '%v'", err, want)
-	}
+	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
+
 }
 
 func TestParseMariaGTIDInvalidServer(t *testing.T) {
@@ -68,12 +59,9 @@ func TestParseMariaGTIDInvalidServer(t *testing.T) {
 	want := "invalid MariaDB GTID Server ID"
 
 	_, err := parseMariadbGTID(input)
-	if err == nil {
-		t.Errorf("expected error for invalid input (%v)", input)
-	}
-	if !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("wrong error message, got '%v', want '%v'", err, want)
-	}
+	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
+
 }
 
 func TestParseMariaGTIDInvalidSequence(t *testing.T) {
@@ -81,12 +69,9 @@ func TestParseMariaGTIDInvalidSequence(t *testing.T) {
 	want := "invalid MariaDB GTID Sequence number"
 
 	_, err := parseMariadbGTID(input)
-	if err == nil {
-		t.Errorf("expected error for invalid input (%v)", input)
-	}
-	if !strings.HasPrefix(err.Error(), want) {
-		t.Errorf("wrong error message, got '%v', want '%v'", err, want)
-	}
+	assert.Error(t, err, "expected error for invalid input (%v)", input)
+	assert.True(t, strings.HasPrefix(err.Error(), want), "wrong error message, got '%v', want '%v'", err, want)
+
 }
 
 func TestParseMariaGTIDSet(t *testing.T) {
@@ -97,12 +82,9 @@ func TestParseMariaGTIDSet(t *testing.T) {
 	}
 
 	got, err := parseMariadbGTIDSet(input)
-	if err != nil {
-		t.Errorf("%v", err)
-	}
-	if !got.Equal(want) {
-		t.Errorf("parseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
-	}
+	assert.NoError(t, err, "%v", err)
+	assert.True(t, got.Equal(want), "parseMariadbGTIDSet(%#v) = %#v, want %#v", input, got, want)
+
 }
 
 func TestParseInvalidMariaGTIDSet(t *testing.T) {
@@ -124,9 +106,8 @@ func TestMariaGTIDString(t *testing.T) {
 	want := "5-4727-1737373"
 
 	got := input.String()
-	if got != want {
-		t.Errorf("%#v.String() = '%v', want '%v'", input, got, want)
-	}
+	assert.Equal(t, want, got, "%#v.String() = '%v', want '%v'", input, got, want)
+
 }
 
 func TestMariaGTIDFlavor(t *testing.T) {
@@ -134,9 +115,8 @@ func TestMariaGTIDFlavor(t *testing.T) {
 	want := "MariaDB"
 
 	got := input.Flavor()
-	if got != want {
-		t.Errorf("%#v.Flavor() = '%v', want '%v'", input, got, want)
-	}
+	assert.Equal(t, want, got, "%#v.Flavor() = '%v', want '%v'", input, got, want)
+
 }
 
 func TestMariaGTIDSequenceDomain(t *testing.T) {
@@ -144,9 +124,8 @@ func TestMariaGTIDSequenceDomain(t *testing.T) {
 	want := any(uint32(12))
 
 	got := input.SequenceDomain()
-	if got != want {
-		t.Errorf("%#v.SequenceDomain() = %#v, want %#v", input, got, want)
-	}
+	assert.Equal(t, want, got, "%#v.SequenceDomain() = %#v, want %#v", input, got, want)
+
 }
 
 func TestMariaGTIDSourceServer(t *testing.T) {
@@ -154,9 +133,8 @@ func TestMariaGTIDSourceServer(t *testing.T) {
 	want := any(uint32(345))
 
 	got := input.SourceServer()
-	if got != want {
-		t.Errorf("%#v.SourceServer() = %#v, want %#v", input, got, want)
-	}
+	assert.Equal(t, want, got, "%#v.SourceServer() = %#v, want %#v", input, got, want)
+
 }
 
 func TestMariaGTIDSequenceNumber(t *testing.T) {
@@ -164,9 +142,8 @@ func TestMariaGTIDSequenceNumber(t *testing.T) {
 	want := any(uint64(6789))
 
 	got := input.SequenceNumber()
-	if got != want {
-		t.Errorf("%#v.SequenceNumber() = %#v, want %#v", input, got, want)
-	}
+	assert.Equal(t, want, got, "%#v.SequenceNumber() = %#v, want %#v", input, got, want)
+
 }
 
 func TestMariaGTIDGTIDSet(t *testing.T) {
@@ -174,9 +151,8 @@ func TestMariaGTIDGTIDSet(t *testing.T) {
 	want := MariadbGTIDSet{12: input}
 
 	got := input.GTIDSet()
-	if !got.Equal(want) {
-		t.Errorf("%#v.GTIDSet() = %#v, want %#v", input, got, want)
-	}
+	assert.True(t, got.Equal(want), "%#v.GTIDSet() = %#v, want %#v", input, got, want)
+
 }
 
 func TestMariaGTIDSetString(t *testing.T) {
@@ -188,9 +164,8 @@ func TestMariaGTIDSetString(t *testing.T) {
 	want := "1-1234-5678,3-4321-9876,5-4727-1737373"
 
 	got := input.String()
-	if got != want {
-		t.Errorf("%#v.String() = '%v', want '%v'", input, got, want)
-	}
+	assert.Equal(t, want, got, "%#v.String() = '%v', want '%v'", input, got, want)
+
 }
 
 func TestMariaGTIDSetContainsLess(t *testing.T) {
@@ -601,10 +576,8 @@ func TestMariaGTIDSetUnion(t *testing.T) {
 		4: MariadbGTID{Domain: 4, Server: 1, Sequence: 2},
 		5: MariadbGTID{Domain: 5, Server: 1, Sequence: 4},
 	}
+	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
 
-	if !got.Equal(want) {
-		t.Errorf("set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-	}
 }
 
 func TestMariaGTIDSetUnionNewDomain(t *testing.T) {
@@ -628,10 +601,7 @@ func TestMariaGTIDSetUnionNewDomain(t *testing.T) {
 		5: MariadbGTID{Domain: 5, Server: 1, Sequence: 4},
 		6: MariadbGTID{Domain: 6, Server: 1, Sequence: 7},
 	}
-
-	if !got.Equal(want) {
-		t.Errorf("set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
-	}
+	assert.True(t, got.Equal(want), "set1: %#v, set1.Union(%#v) = %#v, want %#v", set1, set2, got, want)
 
 	switch g := got.(type) {
 	case MariadbGTIDSet:

@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // sample event data
@@ -100,15 +101,10 @@ func TestMariadbStandaloneBinlogEventGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := MariadbGTID{Domain: 0, Server: 62344, Sequence: 9}
 	got, hasBegin, err := input.GTID(f)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if hasBegin {
-		t.Errorf("unexpected hasBegin")
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.GTID() = %#v, want %#v", input, got, want)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.False(t, hasBegin, "unexpected hasBegin")
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)
+
 }
 
 func TestMariadbBinlogEventGTID(t *testing.T) {
@@ -121,15 +117,10 @@ func TestMariadbBinlogEventGTID(t *testing.T) {
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbBeginGTIDEvent)}
 	want := MariadbGTID{Domain: 0, Server: 62344, Sequence: 10}
 	got, hasBegin, err := input.GTID(f)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !hasBegin {
-		t.Errorf("unexpected !hasBegin")
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.GTID() = %#v, want %#v", input, got, want)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.True(t, hasBegin, "unexpected !hasBegin")
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.GTID() = %#v, want %#v", input, got, want)
+
 }
 
 func TestMariadbBinlogEventFormat(t *testing.T) {
@@ -142,12 +133,9 @@ func TestMariadbBinlogEventFormat(t *testing.T) {
 		HeaderSizes:       mariadbFormatEvent[76 : len(mariadbFormatEvent)-5],
 	}
 	got, err := input.Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.Format() = %v, want %v", input, got, want)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
+
 }
 
 func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
@@ -160,27 +148,21 @@ func TestMariadbBinlogEventChecksumFormat(t *testing.T) {
 		HeaderSizes:       mariadbChecksumFormatEvent[76 : len(mariadbChecksumFormatEvent)-5],
 	}
 	got, err := input.Format()
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !reflect.DeepEqual(got, want) {
-		t.Errorf("%#v.Format() = %v, want %v", input, got, want)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.True(t, reflect.DeepEqual(got, want), "%#v.Format() = %v, want %v", input, got, want)
+
 }
 
 func TestMariadbBinlogEventStripChecksum(t *testing.T) {
 	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumFormatEvent)}).Format()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err, "unexpected error: %v", err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumQueryEvent)}
 	wantEvent := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbChecksumStrippedQueryEvent)}
 	wantChecksum := []byte{0xce, 0x49, 0x7a, 0x53}
 	gotEvent, gotChecksum, err := input.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err, "unexpected error: %v", err)
+
 	if !reflect.DeepEqual(gotEvent, wantEvent) || !reflect.DeepEqual(gotChecksum, wantChecksum) {
 		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, %v)", input, gotEvent, gotChecksum, wantEvent, wantChecksum)
 	}
@@ -188,16 +170,13 @@ func TestMariadbBinlogEventStripChecksum(t *testing.T) {
 
 func TestMariadbBinlogEventStripChecksumNone(t *testing.T) {
 	f, err := (mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbFormatEvent)}).Format()
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err, "unexpected error: %v", err)
 
 	input := mariadbBinlogEvent{binlogEvent: binlogEvent(mariadbStandaloneGTIDEvent)}
 	want := input
 	gotEvent, gotChecksum, err := input.StripChecksum(f)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, err, "unexpected error: %v", err)
+
 	if !reflect.DeepEqual(gotEvent, want) || gotChecksum != nil {
 		t.Errorf("%#v.StripChecksum() = (%v, %v), want (%v, nil)", input, gotEvent, gotChecksum, want)
 	}

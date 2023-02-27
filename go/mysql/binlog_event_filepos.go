@@ -73,20 +73,21 @@ func (ev *filePosBinlogEvent) StripChecksum(f BinlogFormat) (BinlogEvent, []byte
 
 // nextPosition returns the next file position of the binlog.
 // If no information is available, it returns 0.
-func (ev *filePosBinlogEvent) nextPosition(f BinlogFormat) int {
+func (ev *filePosBinlogEvent) nextPosition(f BinlogFormat) uint32 {
 	if f.HeaderLength <= 13 {
 		// Dead code. This is just a failsafe.
 		return 0
 	}
-	return int(binary.LittleEndian.Uint32(ev.Bytes()[13:17]))
+	return binary.LittleEndian.Uint32(ev.Bytes()[13:17])
 }
 
 // rotate implements BinlogEvent.Rotate().
 //
 // Expected format (L = total length of event data):
-//   # bytes  field
-//   8        position
-//   8:L      file
+//
+//	# bytes  field
+//	8        position
+//	8:L      file
 func (ev *filePosBinlogEvent) rotate(f BinlogFormat) (int, string) {
 	data := ev.Bytes()[f.HeaderLength:]
 	pos := binary.LittleEndian.Uint64(data[0:8])
@@ -184,6 +185,10 @@ func (ev filePosFakeEvent) IsPreviousGTIDs() bool {
 	return false
 }
 
+func (ev filePosFakeEvent) IsHeartbeat() bool {
+	return false
+}
+
 func (ev filePosFakeEvent) IsTableMap() bool {
 	return false
 }
@@ -264,7 +269,7 @@ type filePosGTIDEvent struct {
 	gtid filePosGTID
 }
 
-func newFilePosGTIDEvent(file string, pos int, timestamp uint32) filePosGTIDEvent {
+func newFilePosGTIDEvent(file string, pos uint32, timestamp uint32) filePosGTIDEvent {
 	return filePosGTIDEvent{
 		filePosFakeEvent: filePosFakeEvent{
 			timestamp: timestamp,

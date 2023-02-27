@@ -18,6 +18,7 @@ package collations
 
 import (
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var sortOrderIdentity [256]byte
@@ -36,10 +37,10 @@ type simpletables struct {
 	// take up a lot of binary space.
 	// Uncomment these fields and pass `-full8bit` to `makemysqldata` to generate
 	// these tables.
-	// tolower   *[256]byte
-	// toupper   *[256]byte
-	// ctype     *[256]byte
-	sort *[256]byte
+	tolower *[256]byte
+	toupper *[256]byte
+	ctype   *[256]byte
+	sort    *[256]byte
 }
 
 type Collation_8bit_bin struct {
@@ -88,21 +89,21 @@ func (c *Collation_8bit_bin) WeightString(dst, src []byte, numCodepoints int) []
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
 }
 
-func (c *Collation_8bit_bin) Hash(src []byte, numCodepoints int) HashCode {
-	hash := 0x8b8b0000 | uintptr(c.id)
+func (c *Collation_8bit_bin) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
+	hasher.Write64(0x8b8b0000 | uint64(c.id))
 	if numCodepoints == 0 {
-		return memhash(src, hash)
+		hasher.Write(src)
+		return
 	}
 
 	tocopy := minInt(len(src), numCodepoints)
-	hash = memhash(src[:tocopy], hash)
+	hasher.Write(src[:tocopy])
 
 	numCodepoints -= tocopy
 	for numCodepoints > 0 {
-		hash = memhash8(' ', hash)
+		hasher.Write8(' ')
 		numCodepoints--
 	}
-	return hash
 }
 
 func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
@@ -111,6 +112,24 @@ func (c *Collation_8bit_bin) WeightStringLen(numBytes int) int {
 
 func (c *Collation_8bit_bin) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_8bit_bin) ToLower(dst, src []byte) []byte {
+	lowerTable := c.simpletables.tolower
+
+	for _, c := range src {
+		dst = append(dst, lowerTable[c])
+	}
+	return dst
+}
+
+func (c *Collation_8bit_bin) ToUpper(dst, src []byte) []byte {
+	upperTable := c.simpletables.toupper
+
+	for _, c := range src {
+		dst = append(dst, upperTable[c])
+	}
+	return dst
 }
 
 type Collation_8bit_simple_ci struct {
@@ -178,7 +197,7 @@ func (c *Collation_8bit_simple_ci) WeightString(dst, src []byte, numCodepoints i
 	return weightStringPadingSimple(' ', dst, numCodepoints-copyCodepoints, padToMax)
 }
 
-func (c *Collation_8bit_simple_ci) Hash(src []byte, numCodepoints int) HashCode {
+func (c *Collation_8bit_simple_ci) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	sortOrder := c.sort
 
 	var tocopy = len(src)
@@ -186,20 +205,18 @@ func (c *Collation_8bit_simple_ci) Hash(src []byte, numCodepoints int) HashCode 
 		tocopy = minInt(tocopy, numCodepoints)
 	}
 
-	var hash = uintptr(c.id)
+	hasher.Write64(uint64(c.id))
 	for _, ch := range src[:tocopy] {
-		hash = memhash8(sortOrder[ch], hash)
+		hasher.Write8(sortOrder[ch])
 	}
 
 	if numCodepoints > 0 {
 		numCodepoints -= tocopy
 		for numCodepoints > 0 {
-			hash = memhash8(' ', hash)
+			hasher.Write8(' ')
 			numCodepoints--
 		}
 	}
-
-	return hash
 }
 
 func (c *Collation_8bit_simple_ci) WeightStringLen(numBytes int) int {
@@ -220,6 +237,24 @@ func weightStringPadingSimple(padChar byte, dst []byte, numCodepoints int, padTo
 			dst = append(dst, padChar)
 			numCodepoints--
 		}
+	}
+	return dst
+}
+
+func (c *Collation_8bit_simple_ci) ToLower(dst, src []byte) []byte {
+	lowerTable := c.simpletables.tolower
+
+	for _, c := range src {
+		dst = append(dst, lowerTable[c])
+	}
+	return dst
+}
+
+func (c *Collation_8bit_simple_ci) ToUpper(dst, src []byte) []byte {
+	upperTable := c.simpletables.toupper
+
+	for _, c := range src {
+		dst = append(dst, upperTable[c])
 	}
 	return dst
 }
@@ -269,11 +304,12 @@ func (c *Collation_binary) WeightString(dst, src []byte, numCodepoints int) []by
 	return dst
 }
 
-func (c *Collation_binary) Hash(src []byte, numCodepoints int) HashCode {
+func (c *Collation_binary) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	if numCodepoints > 0 {
 		src = src[:numCodepoints]
 	}
-	return memhash(src, 0xBBBBBBBB)
+	hasher.Write64(0xBBBBBBBB)
+	hasher.Write(src)
 }
 
 func (c *Collation_binary) WeightStringLen(numBytes int) int {
@@ -282,4 +318,14 @@ func (c *Collation_binary) WeightStringLen(numBytes int) int {
 
 func (c *Collation_binary) Wildcard(pat []byte, matchOne rune, matchMany rune, escape rune) WildcardPattern {
 	return newEightbitWildcardMatcher(&sortOrderIdentity, c.Collate, pat, matchOne, matchMany, escape)
+}
+
+func (c *Collation_binary) ToLower(dst, raw []byte) []byte {
+	dst = append(dst, raw...)
+	return dst
+}
+
+func (c *Collation_binary) ToUpper(dst, raw []byte) []byte {
+	dst = append(dst, raw...)
+	return dst
 }

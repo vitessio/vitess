@@ -207,9 +207,10 @@ func dnsLookup(host string) ([]net.IP, error) {
 }
 
 // DNSTracker is a closure that persists state for
-//  tracking changes in the DNS resolution of a target dns name
-//  returns true if the DNS name resolution has changed
-//  If there is a lookup problem, we pretend nothing has changed
+//
+//	tracking changes in the DNS resolution of a target dns name
+//	returns true if the DNS name resolution has changed
+//	If there is a lookup problem, we pretend nothing has changed
 func DNSTracker(host string) func() (bool, error) {
 	dnsName := host
 	var addrs []net.IP

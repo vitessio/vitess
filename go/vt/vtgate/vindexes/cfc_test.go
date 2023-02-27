@@ -623,3 +623,10 @@ func TestCFCHashFunction(t *testing.T) {
 		assert.Equal(t, c.outXXHash, len(xxhash64([]byte(c.src))))
 	}
 }
+
+// TestCFCCache tests for CFC vindex, cache size can be calculated.
+func TestCFCCache(t *testing.T) {
+	cfc := makeCFC(t, map[string]string{"hash": "md5", "offsets": "[3,5]"})
+	// should be able to return.
+	_ = cfc.CachedSize(true)
+}

@@ -66,11 +66,11 @@ func TestJoinCanMerge(t *testing.T) {
 	for left, vals := range testcases {
 		for right, val := range vals {
 			name := fmt.Sprintf("%s:%s", engine.Opcode(left).String(), engine.Opcode(right).String())
-			t.Run(name, func(t *testing.T) {
-				if left == int(engine.SubShard) || right == int(engine.SubShard) {
-					t.Skip("not used by v3")
-				}
+			if left == int(engine.SubShard) || right == int(engine.SubShard) {
+				continue // not used by v3
+			}
 
+			t.Run(name, func(t *testing.T) {
 				lRoute := &route{
 					// Setting condition will make SelectEqualUnique match itself.
 					condition: &sqlparser.ColName{},

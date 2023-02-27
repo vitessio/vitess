@@ -22,8 +22,8 @@ import (
 	"fmt"
 
 	"github.com/gorilla/mux"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 
@@ -70,7 +70,7 @@ func DeleteShards(ctx context.Context, r Request, api *API) *JSONResponse {
 	}
 
 	shardList := r.URL.Query()["keyspace_shard"]
-	shardList = sets.NewString(shardList...).List()
+	shardList = sets.List(sets.New[string](shardList...))
 	shards := make([]*vtctldatapb.Shard, len(shardList))
 	for i, kss := range shardList {
 		ks, shard, err := topoproto.ParseKeyspaceShard(kss)
@@ -159,5 +159,94 @@ func PlannedFailoverShard(ctx context.Context, r Request, api *API) *JSONRespons
 		ClusterId: vars["cluster_id"],
 		Options:   &options,
 	})
+	return NewJSONResponse(result, err)
+}
+
+// ReloadSchemaShard implements the http wrapper for
+// PUT /shard/{cluster_id}/{keyspace}/{shard}/reload_schema_shard
+//
+// Query params: none
+//
+// Body params:
+// - wait_position: string
+// - include_primary: bool
+// - concurrency: uint32
+func ReloadSchemaShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var params struct {
+		WaitPosition   string `json:"wait_position"`
+		IncludePrimary bool   `json:"include_primary"`
+		Concurrency    uint32 `json:"concurrency"`
+	}
+
+	if err := decoder.Decode(&params); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := r.Vars()
+
+	result, err := api.server.ReloadSchemaShard(ctx, &vtadminpb.ReloadSchemaShardRequest{
+		ClusterId:      vars["cluster_id"],
+		Keyspace:       vars["keyspace"],
+		Shard:          vars["shard"],
+		Concurrency:    params.Concurrency,
+		IncludePrimary: params.IncludePrimary,
+		WaitPosition:   params.WaitPosition,
+	})
+	return NewJSONResponse(result, err)
+}
+
+// ValidateShard implements the http wrapper for
+// PUT /shard/{cluster_id}/{keyspace}/{shard}/validate
+//
+// Query params: none
+//
+// Body params:
+// - ping_tablets: bool
+func ValidateShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	decoder := json.NewDecoder(r.Body)
+	defer r.Body.Close()
+
+	var params struct {
+		PingTablets bool `json:"ping_tablets"`
+	}
+
+	if err := decoder.Decode(&params); err != nil {
+		return NewJSONResponse(nil, &errors.BadRequest{
+			Err: err,
+		})
+	}
+
+	vars := r.Vars()
+
+	result, err := api.server.ValidateShard(ctx, &vtadminpb.ValidateShardRequest{
+		ClusterId:   vars["cluster_id"],
+		Keyspace:    vars["keyspace"],
+		Shard:       vars["shard"],
+		PingTablets: params.PingTablets,
+	})
+
+	return NewJSONResponse(result, err)
+}
+
+// ValidateVersionShard implements the http wrapper for
+// PUT /shard/{cluster_id}/{keyspace}/{shard}/validate_version
+//
+// Query params: none
+//
+// Body params: none
+func ValidateVersionShard(ctx context.Context, r Request, api *API) *JSONResponse {
+	vars := r.Vars()
+
+	result, err := api.server.ValidateVersionShard(ctx, &vtadminpb.ValidateVersionShardRequest{
+		ClusterId: vars["cluster_id"],
+		Keyspace:  vars["keyspace"],
+		Shard:     vars["shard"],
+	})
+
 	return NewJSONResponse(result, err)
 }

@@ -60,16 +60,27 @@
 
 # dml
 "update a set b = 1"
-"'update a set b = 1' not allowed for streaming"
+"UPDATE not allowed for streaming"
 
 # syntax error
 "syntax error"
 "syntax error at position 7 near 'syntax'"
 
-# named locks are unsafe with server-side connection pooling
+# named locks are unsafe with server-side connection pooling, plan is generated with NeedReservedConn set to true
 "select get_lock('foo', 10) from dual"
-"get_lock('foo', 10) not allowed without a reserved connections"
+{
+  "PlanID": "SelectStream",
+  "TableName": "dual",
+  "Permissions": [
+    {
+      "TableName": "dual",
+      "Role": 0
+    }
+  ],
+  "FullQuery": "select get_lock('foo', 10) from dual",
+  "NeedsReservedConn": true
+}
 
 # set statement unsafe with pooling
 "set @udv = 10"
-"set @udv = 10 not allowed without a reserved connections"
+"SET not allowed for streaming"

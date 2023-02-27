@@ -39,7 +39,7 @@ The rest of the code mostly a cut/paste with minor refactoring. Instead of the e
 
 ### Setup
 
-The user invokes `vtctlclient VDiff -- --v2` on an existing workflow by specifying the target keyspace and workflow and overriding any of the default options that are described in the documentation of the vdiff2 command on the vitessio website.
+The user invokes `vtctlclient VDiff` on an existing workflow by specifying the target keyspace and workflow and overriding any of the default options that are described in the documentation of the vdiff2 command on the vitessio website.
 
 ### Database Schema
 

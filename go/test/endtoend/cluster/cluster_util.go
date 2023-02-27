@@ -33,7 +33,6 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
-	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	tmc "vitess.io/vitess/go/vt/vttablet/grpctmclient"
 )
@@ -92,29 +91,24 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 	return pos, gtID
 }
 
-// GetReplicationStatus gets the replication status of given vttablet
-func GetReplicationStatus(t *testing.T, vttablet *Vttablet, hostname string) *replicationdatapb.Status {
-	ctx := context.Background()
-	vtablet := getTablet(vttablet.GrpcPort, hostname)
-	pos, err := tmClient.ReplicationStatus(ctx, vtablet)
-	require.NoError(t, err)
-	return pos
-}
-
 // VerifyRowsInTabletForTable verifies the total number of rows in a table.
 // This is used to check that replication has caught up with the changes on primary.
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
-	timeout := time.Now().Add(10 * time.Second)
+	timeout := time.Now().Add(1 * time.Minute)
+	lastNumRowsFound := 0
 	for time.Now().Before(timeout) {
 		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
 		// but eventually it will catch up and if not caught up in required time, testcase will fail
 		qr, _ := vttablet.VttabletProcess.QueryTablet("select * from "+tableName, ksName, true)
-		if qr != nil && len(qr.Rows) == expectedRows {
-			return
+		if qr != nil {
+			if len(qr.Rows) == expectedRows {
+				return
+			}
+			lastNumRowsFound = len(qr.Rows)
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	assert.Fail(t, "expected rows not found.")
+	require.Equalf(t, expectedRows, lastNumRowsFound, "unexpected number of rows in %s (%s.%s)", vttablet.Alias, ksName, tableName)
 }
 
 // VerifyRowsInTablet Verify total number of rows in a tablet
@@ -129,20 +123,6 @@ func PanicHandler(t *testing.T) {
 		return
 	}
 	require.Nilf(t, err, "panic occured in testcase %v", t.Name())
-}
-
-// VerifyLocalMetadata Verify Local Metadata of a tablet
-func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
-	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
-	require.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0][1]), fmt.Sprintf(`BLOB("%s")`, tablet.Alias))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1][1]), fmt.Sprintf(`BLOB("%s.%s")`, ksName, shardName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2][1]), fmt.Sprintf(`BLOB("%s")`, cell))
-	if tablet.Type == "replica" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("neutral")`)
-	} else if tablet.Type == "rdonly" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("must_not")`)
-	}
 }
 
 // ListBackups Lists back preset in shard
@@ -197,7 +177,7 @@ func filterResultForWarning(input string) string {
 	lines := strings.Split(input, "\n")
 	var result string
 	for _, line := range lines {
-		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff workflows") {
+		if strings.Contains(line, "WARNING: vtctl should only be used for VDiff v1 workflows. Please use VDiff v2 and consider using vtctldclient for all other commands.") {
 			continue
 		}
 		result = result + line + "\n"
@@ -272,8 +252,8 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 		UnixSocket: socketPath,
 		Pass:       password,
 	}
-
-	if keyspace != "" {
+	cp.DbName = keyspace
+	if keyspace != "" && keyspace != "_vt" {
 		cp.DbName = "vt_" + keyspace
 	}
 
@@ -367,4 +347,37 @@ func ExecuteOnTablet(t *testing.T, query string, vttablet Vttablet, ks string, e
 		require.Nil(t, err)
 	}
 	_, _ = vttablet.VttabletProcess.QueryTablet("commit", ks, true)
+}
+
+func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets int, expectedStatus []string) error {
+	// wait for both tablet to get into replica state in topo
+	waitUntil := time.Now().Add(10 * time.Second)
+	for time.Now().Before(waitUntil) {
+		result, err := vtctlClientProcess.ExecuteCommandWithOutput("ListAllTablets")
+		if err != nil {
+			return err
+		}
+
+		tabletsFromCMD := strings.Split(result, "\n")
+		tabletCountFromCMD := 0
+
+		for _, line := range tabletsFromCMD {
+			if len(line) > 0 {
+				for _, status := range expectedStatus {
+					if strings.Contains(line, status) {
+						tabletCountFromCMD = tabletCountFromCMD + 1
+						break
+					}
+				}
+			}
+		}
+
+		if tabletCountFromCMD >= expectedTablets {
+			return nil
+		}
+
+		time.Sleep(1 * time.Second)
+	}
+
+	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
 }

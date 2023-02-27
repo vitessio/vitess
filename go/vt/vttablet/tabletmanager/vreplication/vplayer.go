@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -24,8 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -72,13 +71,18 @@ type vplayer struct {
 
 // newVPlayer creates a new vplayer. Parameters:
 // vreplicator: the outer replicator. It's used for common functions like setState.
-//   Also used to access the engine for registering journal events.
+//
+//	Also used to access the engine for registering journal events.
+//
 // settings: current settings read from _vt.vreplication.
 // copyState: if set, contains the list of tables yet to be copied, or in the process
-//   of being copied. If copyState is non-nil, the plans generated make sure that
-//   replication is only applied to parts that have been copied so far.
+//
+//	of being copied. If copyState is non-nil, the plans generated make sure that
+//	replication is only applied to parts that have been copied so far.
+//
 // pausePos: if set, replication will stop at that position without updating the state to "Stopped".
-//   This is used by the fastForward function during copying.
+//
+//	This is used by the fastForward function during copying.
 func newVPlayer(vr *vreplicator, settings binlogplayer.VRSettings, copyState map[string]*sqltypes.Result, pausePos mysql.Position, phase string) *vplayer {
 	saveStop := true
 	if !pausePos.IsZero() {
@@ -144,7 +148,7 @@ func (vp *vplayer) fetchAndApply(ctx context.Context) (err error) {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	relay := newRelayLog(ctx, *relayLogMaxItems, *relayLogMaxSize)
+	relay := newRelayLog(ctx, relayLogMaxItems, relayLogMaxSize)
 
 	streamErr := make(chan error, 1)
 	go func() {
@@ -235,7 +239,7 @@ func (vp *vplayer) applyRowEvent(ctx context.Context, rowEvent *binlogdatapb.Row
 
 func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 	vp.numAccumulatedHeartbeats = 0
-	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), *vreplicationStoreCompressedGTID)
+	update := binlogplayer.GenerateUpdatePos(vp.vr.id, vp.pos, time.Now().Unix(), ts, vp.vr.stats.CopyRowCount.Get(), vreplicationStoreCompressedGTID)
 	if _, err := vp.vr.dbClient.Execute(update); err != nil {
 		return false, fmt.Errorf("error %v updating position", err)
 	}
@@ -255,7 +259,7 @@ func (vp *vplayer) updatePos(ts int64) (posReached bool, err error) {
 }
 
 func (vp *vplayer) mustUpdateHeartbeat() bool {
-	return vp.numAccumulatedHeartbeats >= *vreplicationHeartbeatUpdateInterval ||
+	return vp.numAccumulatedHeartbeats >= vreplicationHeartbeatUpdateInterval ||
 		vp.numAccumulatedHeartbeats >= vreplicationMinimumHeartbeatUpdateInterval
 }
 
@@ -271,30 +275,30 @@ func (vp *vplayer) recordHeartbeat() error {
 
 // applyEvents is the main thread that applies the events. It has the following use
 // cases to take into account:
-// * Normal transaction that has row mutations. In this case, the transaction
-//   is committed along with an update of the position.
-// * DDL event: the action depends on the OnDDL setting.
-// * OTHER event: the current position of the event is saved.
-// * JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
-//   of the engine, and terminate.
-// * HEARTBEAT: update ReplicationLagSeconds.
-// * Empty transaction: The event is remembered as an unsavedEvent. If no commits
-//   happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
-//   is committed (updatePos).
-// * An empty transaction: Empty transactions are necessary because the current
-//   position of that transaction may be the stop position. If so, we have to record it.
-//   If not significant, we should avoid saving these empty transactions individually
-//   because they can cause unnecessary churn and binlog bloat. We should
-//   also not go for too long without saving because we should not fall way behind
-//   on the current replication position. Additionally, WaitForPos or other external
-//   agents could be waiting on that specific position by watching the vreplication
-//   record.
-// * A group of transactions: Combine them into a single transaction.
-// * Partial transaction: Replay the events received so far and refetch from relay log
-//   for more.
-// * A combination of any of the above: The trickier case is the one where a group
-//   of transactions come in, with the last one being partial. In this case, all transactions
-//   up to the last one have to be committed, and the final one must be partially applied.
+//   - Normal transaction that has row mutations. In this case, the transaction
+//     is committed along with an update of the position.
+//   - DDL event: the action depends on the OnDDL setting.
+//   - OTHER event: the current position of the event is saved.
+//   - JOURNAL event: if the event is relevant to the current stream, invoke registerJournal
+//     of the engine, and terminate.
+//   - HEARTBEAT: update ReplicationLagSeconds.
+//   - Empty transaction: The event is remembered as an unsavedEvent. If no commits
+//     happen for idleTimeout since timeLastSaved, the current position of the unsavedEvent
+//     is committed (updatePos).
+//   - An empty transaction: Empty transactions are necessary because the current
+//     position of that transaction may be the stop position. If so, we have to record it.
+//     If not significant, we should avoid saving these empty transactions individually
+//     because they can cause unnecessary churn and binlog bloat. We should
+//     also not go for too long without saving because we should not fall way behind
+//     on the current replication position. Additionally, WaitForPos or other external
+//     agents could be waiting on that specific position by watching the vreplication
+//     record.
+//   - A group of transactions: Combine them into a single transaction.
+//   - Partial transaction: Replay the events received so far and refetch from relay log
+//     for more.
+//   - A combination of any of the above: The trickier case is the one where a group
+//     of transactions come in, with the last one being partial. In this case, all transactions
+//     up to the last one have to be committed, and the final one must be partially applied.
 //
 // Of the above events, the saveable ones are COMMIT, DDL, and OTHER. Eventhough
 // A GTID comes as a separate event, it's not saveable until a subsequent saveable
@@ -323,7 +327,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
-	defer vp.vr.stats.ReplicationLagSeconds.Set(math.MaxInt64)
+	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
@@ -344,7 +348,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// So, we should assume we're falling behind.
 		if len(items) == 0 {
 			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.ReplicationLagSeconds.Set(behind / 1e9)
+			vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 		}
 		// Empty transactions are saved at most once every idleTimeout.
@@ -400,7 +404,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 
 		if sbm >= 0 {
-			vp.vr.stats.ReplicationLagSeconds.Set(sbm)
+			vp.vr.stats.ReplicationLagSeconds.Store(sbm)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
 		}
 
@@ -614,7 +618,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// All were found. We must register journal.
 		}
 		log.Infof("Binlog event registering journal event %+v", event.Journal)
-		if err := vp.vr.vre.registerJournal(event.Journal, int(vp.vr.id)); err != nil {
+		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
 				return err
 			}

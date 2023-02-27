@@ -18,27 +18,29 @@ package schema
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
-	"context"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -82,6 +84,7 @@ type Engine struct {
 	tableFileSizeGauge      *stats.GaugesWithSingleLabel
 	tableAllocatedSizeGauge *stats.GaugesWithSingleLabel
 	innoDbReadRowsCounter   *stats.Counter
+	SchemaReloadTimings     *servenv.TimingsWrapper
 }
 
 // NewEngine creates a new Engine.
@@ -102,6 +105,7 @@ func NewEngine(env tabletenv.Env) *Engine {
 	se.tableFileSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableFileSize", "tracks table file size", "Table")
 	se.tableAllocatedSizeGauge = env.Exporter().NewGaugesWithSingleLabel("TableAllocatedSize", "tracks table allocated size", "Table")
 	se.innoDbReadRowsCounter = env.Exporter().NewCounter("InnodbRowsRead", "number of rows read by mysql")
+	se.SchemaReloadTimings = env.Exporter().NewTimings("SchemaReload", "time taken to reload the schema", "type")
 
 	env.Exporter().HandleFunc("/debug/schema", se.handleDebugSchema)
 	env.Exporter().HandleFunc("/schemaz", func(w http.ResponseWriter, r *http.Request) {
@@ -124,15 +128,56 @@ func (se *Engine) InitDBConfig(cp dbconfigs.Connector) {
 	se.cp = cp
 }
 
+// syncSidecarDB is called either the first time a primary starts, or on subsequent loads, to possibly upgrade to a
+// new Vitess version. This is the only entry point into the sidecardb module to get the _vt database to the desired
+// schema for the running Vitess version.
+// There is some extra logging in here which can be removed in a future version (>v16) once the new schema init
+// functionality is stable.
+func (se *Engine) syncSidecarDB(ctx context.Context, conn *dbconnpool.DBConnection) error {
+	log.Infof("In syncSidecarDB")
+	defer func(start time.Time) {
+		log.Infof("syncSidecarDB took %d ms", time.Since(start).Milliseconds())
+	}(time.Now())
+
+	var exec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			_, err := conn.ExecuteFetch(sidecardb.UseSidecarDatabaseQuery, maxRows, false)
+			if err != nil {
+				return nil, err
+			}
+		}
+		return conn.ExecuteFetch(query, maxRows, true)
+	}
+	if err := sidecardb.Init(ctx, exec); err != nil {
+		log.Errorf("Error in sidecardb.Init: %+v", err)
+		if se.env.Config().DB.HasGlobalSettings() {
+			log.Warning("Ignoring sidecardb.Init error for unmanaged tablets")
+			return nil
+		}
+		log.Errorf("syncSidecarDB error %+v", err)
+		return err
+	}
+	log.Infof("syncSidecarDB done")
+	return nil
+}
+
 // EnsureConnectionAndDB ensures that we can connect to mysql.
 // If tablet type is primary and there is no db, then the database is created.
 // This function can be called before opening the Engine.
 func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error {
 	ctx := tabletenv.LocalContext()
-	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AppWithDB())
+	// We use AllPrivs since syncSidecarDB() might need to upgrade the schema
+	conn, err := dbconnpool.NewDBConnection(ctx, se.env.Config().DB.AllPrivsWithDB())
 	if err == nil {
-		conn.Close()
 		se.dbCreationFailed = false
+		// upgrade _vt if required, for a tablet with an existing database
+		if tabletType == topodatapb.TabletType_PRIMARY {
+			if err := se.syncSidecarDB(ctx, conn); err != nil {
+				conn.Close()
+				return err
+			}
+		}
+		conn.Close()
 		return nil
 	}
 	if tabletType != topodatapb.TabletType_PRIMARY {
@@ -163,6 +208,10 @@ func (se *Engine) EnsureConnectionAndDB(tabletType topodatapb.TabletType) error 
 
 	log.Infof("db %v created", dbname)
 	se.dbCreationFailed = false
+	// creates sidecar schema, the first time the database is created
+	if err := se.syncSidecarDB(ctx, conn); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -194,7 +243,7 @@ func (se *Engine) Open() error {
 	}
 	se.notifiers = make(map[string]notifier)
 
-	if err := se.reload(ctx); err != nil {
+	if err := se.reload(ctx, true); err != nil {
 		return err
 	}
 	if !se.SkipMetaCheck {
@@ -285,6 +334,8 @@ func (se *Engine) EnableHistorian(enabled bool) error {
 
 // Reload reloads the schema info from the db.
 // Any tables that have changed since the last load are updated.
+// The includeStats argument controls whether table size statistics should be
+// emitted, as they can be expensive to calculate for a large number of tables
 func (se *Engine) Reload(ctx context.Context) error {
 	return se.ReloadAt(ctx, mysql.Position{})
 }
@@ -294,6 +345,16 @@ func (se *Engine) Reload(ctx context.Context) error {
 // It maintains the position at which the schema was reloaded and if the same position is provided
 // (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
 func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
+	return se.ReloadAtEx(ctx, pos, true)
+}
+
+// ReloadAtEx reloads the schema info from the db.
+// Any tables that have changed since the last load are updated.
+// It maintains the position at which the schema was reloaded and if the same position is provided
+// (say by multiple vstreams) it returns the cached schema. In case of a newer or empty pos it always reloads the schema
+// The includeStats argument controls whether table size statistics should be
+// emitted, as they can be expensive to calculate for a large number of tables
+func (se *Engine) ReloadAtEx(ctx context.Context, pos mysql.Position, includeStats bool) error {
 	se.mu.Lock()
 	defer se.mu.Unlock()
 	if !se.isOpen {
@@ -301,10 +362,10 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 		return nil
 	}
 	if !pos.IsZero() && se.reloadAtPos.AtLeast(pos) {
-		log.V(2).Infof("ReloadAt: found cached schema at %s", mysql.EncodePosition(pos))
+		log.V(2).Infof("ReloadAtEx: found cached schema at %s", mysql.EncodePosition(pos))
 		return nil
 	}
-	if err := se.reload(ctx); err != nil {
+	if err := se.reload(ctx, includeStats); err != nil {
 		return err
 	}
 	se.reloadAtPos = pos
@@ -312,12 +373,14 @@ func (se *Engine) ReloadAt(ctx context.Context, pos mysql.Position) error {
 }
 
 // reload reloads the schema. It can also be used to initialize it.
-func (se *Engine) reload(ctx context.Context) error {
+func (se *Engine) reload(ctx context.Context, includeStats bool) error {
+	start := time.Now()
 	defer func() {
 		se.env.LogError()
+		se.SchemaReloadTimings.Record("SchemaReload", start)
 	}()
 
-	conn, err := se.conns.Get(ctx)
+	conn, err := se.conns.Get(ctx, nil)
 	if err != nil {
 		return err
 	}
@@ -332,9 +395,16 @@ func (se *Engine) reload(ctx context.Context) error {
 	if se.SkipMetaCheck {
 		return nil
 	}
-	tableData, err := conn.Exec(ctx, conn.BaseShowTables(), maxTableCount, false)
+
+	var showTablesQuery string
+	if includeStats {
+		showTablesQuery = conn.BaseShowTablesWithSizes()
+	} else {
+		showTablesQuery = conn.BaseShowTables()
+	}
+	tableData, err := conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
 
 	err = se.updateInnoDBRowsRead(ctx, conn)
@@ -353,12 +423,15 @@ func (se *Engine) reload(ctx context.Context) error {
 		tableName := row[0].ToString()
 		curTables[tableName] = true
 		createTime, _ := evalengine.ToInt64(row[2])
-		fileSize, _ := evalengine.ToUint64(row[4])
-		allocatedSize, _ := evalengine.ToUint64(row[5])
+		var fileSize, allocatedSize uint64
 
-		// publish the size metrics
-		se.tableFileSizeGauge.Set(tableName, int64(fileSize))
-		se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
+		if includeStats {
+			fileSize, _ = evalengine.ToUint64(row[4])
+			allocatedSize, _ = evalengine.ToUint64(row[5])
+			// publish the size metrics
+			se.tableFileSizeGauge.Set(tableName, int64(fileSize))
+			se.tableAllocatedSizeGauge.Set(tableName, int64(allocatedSize))
+		}
 
 		// Table schemas are cached by tabletserver. For each table we cache `information_schema.tables.create_time` (`tbl.CreateTime`).
 		// We also record the last time the schema was loaded (`se.lastChange`). Both are in seconds. We reload a table only when:
@@ -372,19 +445,23 @@ func (se *Engine) reload(ctx context.Context) error {
 		//      #1 will not identify the renamed table as a changed one.
 		tbl, isInTablesMap := se.tables[tableName]
 		if isInTablesMap && createTime == tbl.CreateTime && createTime < se.lastChange {
-			tbl.FileSize = fileSize
-			tbl.AllocatedSize = allocatedSize
+			if includeStats {
+				tbl.FileSize = fileSize
+				tbl.AllocatedSize = allocatedSize
+			}
 			continue
 		}
 
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[3].ToString())
 		if err != nil {
-			rec.RecordError(err)
+			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
-		table.FileSize = fileSize
-		table.AllocatedSize = allocatedSize
+		if includeStats {
+			table.FileSize = fileSize
+			table.AllocatedSize = allocatedSize
+		}
 		table.CreateTime = createTime
 		changedTables[tableName] = table
 		if isInTablesMap {
@@ -575,8 +652,8 @@ func (se *Engine) GetTable(tableName sqlparser.IdentifierCS) *Table {
 	return se.tables[tableName.String()]
 }
 
-// GetSchema returns the current The Tables are a shared
-// data structure and must be treated as read-only.
+// GetSchema returns the current schema. The Tables are a
+// shared data structure and must be treated as read-only.
 func (se *Engine) GetSchema() map[string]*Table {
 	se.mu.Lock()
 	defer se.mu.Unlock()
@@ -589,7 +666,7 @@ func (se *Engine) GetSchema() map[string]*Table {
 
 // GetConnection returns a connection from the pool
 func (se *Engine) GetConnection(ctx context.Context) (*connpool.DBConn, error) {
-	return se.conns.Get(ctx)
+	return se.conns.Get(ctx, nil)
 }
 
 func (se *Engine) handleDebugSchema(response http.ResponseWriter, request *http.Request) {
@@ -627,8 +704,9 @@ func (se *Engine) handleHTTPSchema(response http.ResponseWriter) {
 // doesn't reload.  Use SetTableForTests to set table schema.
 func NewEngineForTests() *Engine {
 	se := &Engine{
-		isOpen: true,
-		tables: make(map[string]*Table),
+		isOpen:    true,
+		tables:    make(map[string]*Table),
+		historian: newHistorian(false, nil),
 	}
 	return se
 }

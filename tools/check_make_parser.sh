@@ -19,7 +19,7 @@ if ! cd go/vt/sqlparser/ ; then
 fi
 
 mv $CUR $TMP
-output=$(go run ./goyacc -fast-append -o $CUR sql.y)
+output=$(go run ./goyacc -fo $CUR sql.y)
 expectedOutput=$'\nconflicts: 3 shift/reduce'
 
 if [[ "$output" != "$expectedOutput" ]]; then

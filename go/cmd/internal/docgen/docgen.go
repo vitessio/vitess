@@ -18,6 +18,7 @@ limitations under the License.
 // a root cobra.Command for the vitessio/website repository.
 //
 // Example usage:
+//
 //	package main
 //
 //	import (

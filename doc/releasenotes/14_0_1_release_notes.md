@@ -1,4 +1,8 @@
 # Release of Vitess v14.0.1
+## Known Issues
+
+- [Corrupted results for non-full-group-by queries with JOINs](https://github.com/vitessio/vitess/issues/11625). This can be resolved by using full-group-by queries.
+
 ## Major Changes
 
 ### Upgrade to `go1.18.4`

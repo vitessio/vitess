@@ -17,9 +17,8 @@ limitations under the License.
 package topo
 
 import (
-	"time"
-
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -147,13 +146,29 @@ func (st *StatsConn) Delete(ctx context.Context, filePath string, version Versio
 
 // Lock is part of the Conn interface
 func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
+	return st.internalLock(ctx, dirPath, contents, true)
+}
+
+// TryLock is part of the topo.Conn interface. Its implementation is same as Lock
+func (st *StatsConn) TryLock(ctx context.Context, dirPath, contents string) (LockDescriptor, error) {
+	return st.internalLock(ctx, dirPath, contents, false)
+}
+
+// TryLock is part of the topo.Conn interface. Its implementation is same as Lock
+func (st *StatsConn) internalLock(ctx context.Context, dirPath, contents string, isBlocking bool) (LockDescriptor, error) {
 	statsKey := []string{"Lock", st.cell}
 	if st.readOnly {
 		return nil, vterrors.Errorf(vtrpc.Code_READ_ONLY, readOnlyErrorStrFormat, statsKey[0], dirPath)
 	}
 	startTime := time.Now()
 	defer topoStatsConnTimings.Record(statsKey, startTime)
-	res, err := st.conn.Lock(ctx, dirPath, contents)
+	var res LockDescriptor
+	var err error
+	if isBlocking {
+		res, err = st.conn.Lock(ctx, dirPath, contents)
+	} else {
+		res, err = st.conn.TryLock(ctx, dirPath, contents)
+	}
 	if err != nil {
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
@@ -162,25 +177,27 @@ func (st *StatsConn) Lock(ctx context.Context, dirPath, contents string) (LockDe
 }
 
 // Watch is part of the Conn interface
-func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, cancel CancelFunc) {
+func (st *StatsConn) Watch(ctx context.Context, filePath string) (current *WatchData, changes <-chan *WatchData, err error) {
 	startTime := time.Now()
 	statsKey := []string{"Watch", st.cell}
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	return st.conn.Watch(ctx, filePath)
 }
 
+func (st *StatsConn) WatchRecursive(ctx context.Context, path string) ([]*WatchDataRecursive, <-chan *WatchDataRecursive, error) {
+	startTime := time.Now()
+	statsKey := []string{"WatchRecursive", st.cell}
+	defer topoStatsConnTimings.Record(statsKey, startTime)
+	return st.conn.WatchRecursive(ctx, path)
+}
+
 // NewLeaderParticipation is part of the Conn interface
 func (st *StatsConn) NewLeaderParticipation(name, id string) (LeaderParticipation, error) {
 	startTime := time.Now()
-	// TODO(deepthi): delete after v13.0
-	deprecatedKey := []string{"NewMasterParticipation", st.cell}
-	defer topoStatsConnTimings.Record(deprecatedKey, startTime)
-
 	statsKey := []string{"NewLeaderParticipation", st.cell}
 	defer topoStatsConnTimings.Record(statsKey, startTime)
 	res, err := st.conn.NewLeaderParticipation(name, id)
 	if err != nil {
-		topoStatsConnErrors.Add(deprecatedKey, int64(1))
 		topoStatsConnErrors.Add(statsKey, int64(1))
 		return res, err
 	}

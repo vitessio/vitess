@@ -723,7 +723,7 @@ func TestSleepTablet(t *testing.T) {
 
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, resp)
-			dur := expectedDur(t, tt.req.Duration, *topo.RemoteOperationTimeout)
+			dur := expectedDur(t, tt.req.Duration, topo.RemoteOperationTimeout)
 			assert.LessOrEqual(t, dur, sleepDur, "sleep should have taken at least %v; took %v", dur, sleepDur)
 		})
 	}

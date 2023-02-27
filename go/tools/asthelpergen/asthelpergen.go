@@ -25,13 +25,13 @@ import (
 	"path"
 	"strings"
 
-	"vitess.io/vitess/go/tools/goimports"
-
 	"github.com/dave/jennifer/jen"
 	"golang.org/x/tools/go/packages"
+
+	"vitess.io/vitess/go/tools/codegen"
 )
 
-const licenseFileHeader = `Copyright 2021 The Vitess Authors.
+const licenseFileHeader = `Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -92,6 +92,8 @@ func newGenerator(mod *packages.Module, sizes types.Sizes, named *types.Named, g
 }
 
 func findImplementations(scope *types.Scope, iff *types.Interface, impl func(types.Type) error) error {
+	const onlyReferences = false
+
 	for _, name := range scope.Names() {
 		obj := scope.Lookup(name)
 		if _, ok := obj.(*types.TypeName); !ok {
@@ -99,16 +101,22 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 		}
 		baseType := obj.Type()
 		if types.Implements(baseType, iff) {
-			err := impl(baseType)
-			if err != nil {
+			if onlyReferences {
+				switch tt := baseType.Underlying().(type) {
+				case *types.Interface:
+					// This is OK; interfaces are references
+				default:
+					panic(fmt.Errorf("interface %s implemented by %s (%s as %T) without ptr", iff.String(), baseType, tt.String(), tt))
+				}
+			}
+			if err := impl(baseType); err != nil {
 				return err
 			}
 			continue
 		}
 		pointerT := types.NewPointer(baseType)
 		if types.Implements(pointerT, iff) {
-			err := impl(pointerT)
-			if err != nil {
+			if err := impl(pointerT); err != nil {
 				return err
 			}
 			continue
@@ -116,30 +124,9 @@ func findImplementations(scope *types.Scope, iff *types.Interface, impl func(typ
 	}
 	return nil
 }
+
 func (gen *astHelperGen) findImplementations(iff *types.Interface, impl func(types.Type) error) error {
-	for _, name := range gen._scope.Names() {
-		obj := gen._scope.Lookup(name)
-		if _, ok := obj.(*types.TypeName); !ok {
-			continue
-		}
-		baseType := obj.Type()
-		if types.Implements(baseType, iff) {
-			err := impl(baseType)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-		pointerT := types.NewPointer(baseType)
-		if types.Implements(pointerT, iff) {
-			err := impl(pointerT)
-			if err != nil {
-				return err
-			}
-			continue
-		}
-	}
-	return nil
+	return findImplementations(gen._scope, iff, impl)
 }
 
 // GenerateCode is the main loop where we build up the code per file.
@@ -159,19 +146,6 @@ func (gen *astHelperGen) GenerateCode() (map[string]*jen.File, error) {
 	return result, nil
 }
 
-// TypePaths are the packages
-type TypePaths []string
-
-func (t *TypePaths) String() string {
-	return fmt.Sprintf("%v", *t)
-}
-
-// Set adds the package path
-func (t *TypePaths) Set(path string) error {
-	*t = append(*t, path)
-	return nil
-}
-
 // VerifyFilesOnDisk compares the generated results from the codegen against the files that
 // currently exist on disk and returns any mismatches
 func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
@@ -182,7 +156,7 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 			continue
 		}
 
-		genFile, err := goimports.FormatJenFile(file)
+		genFile, err := codegen.FormatJenFile(file)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
@@ -196,46 +170,45 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 	return errors
 }
 
-var acceptableBuildErrorsOn = map[string]any{
-	"ast_equals.go":  nil,
-	"ast_clone.go":   nil,
-	"ast_rewrite.go": nil,
-	"ast_visit.go":   nil,
+type Options struct {
+	Packages      []string
+	RootInterface string
+
+	Clone  CloneOptions
+	Equals EqualsOptions
 }
 
 // GenerateASTHelpers loads the input code, constructs the necessary generators,
 // and generates the rewriter and clone methods for the AST
-func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType string) (map[string]*jen.File, error) {
+func GenerateASTHelpers(options *Options) (map[string]*jen.File, error) {
 	loaded, err := packages.Load(&packages.Config{
 		Mode: packages.NeedName | packages.NeedTypes | packages.NeedTypesSizes | packages.NeedTypesInfo | packages.NeedDeps | packages.NeedImports | packages.NeedModule,
-	}, packagePatterns...)
+	}, options.Packages...)
 
 	if err != nil {
-		log.Fatal("error loading package")
-		return nil, err
+		return nil, fmt.Errorf("failed to load packages: %w", err)
 	}
 
-	checkErrors(loaded, func(fileName string) bool {
-		_, ok := acceptableBuildErrorsOn[fileName]
-		return ok
-	})
+	if err := codegen.CheckErrors(loaded, codegen.GeneratedInSqlparser); err != nil {
+		return nil, err
+	}
 
 	scopes := make(map[string]*types.Scope)
 	for _, pkg := range loaded {
 		scopes[pkg.PkgPath] = pkg.Types.Scope()
 	}
 
-	pos := strings.LastIndexByte(rootIface, '.')
+	pos := strings.LastIndexByte(options.RootInterface, '.')
 	if pos < 0 {
-		return nil, fmt.Errorf("unexpected input type: %s", rootIface)
+		return nil, fmt.Errorf("unexpected input type: %s", options.RootInterface)
 	}
 
-	pkgname := rootIface[:pos]
-	typename := rootIface[pos+1:]
+	pkgname := options.RootInterface[:pos]
+	typename := options.RootInterface[pos+1:]
 
 	scope := scopes[pkgname]
 	if scope == nil {
-		return nil, fmt.Errorf("no scope found for type '%s'", rootIface)
+		return nil, fmt.Errorf("no scope found for type '%s'", options.RootInterface)
 	}
 
 	tt := scope.Lookup(typename)
@@ -246,10 +219,11 @@ func GenerateASTHelpers(packagePatterns []string, rootIface, exceptCloneType str
 	nt := tt.Type().(*types.Named)
 	pName := nt.Obj().Pkg().Name()
 	generator := newGenerator(loaded[0].Module, loaded[0].TypesSizes, nt,
-		newEqualsGen(pName),
-		newCloneGen(pName, exceptCloneType),
+		newEqualsGen(pName, &options.Equals),
+		newCloneGen(pName, &options.Clone),
 		newVisitGen(pName),
 		newRewriterGen(pName, types.TypeString(nt, noQualifier)),
+		newCOWGen(pName, nt),
 	)
 
 	it, err := generator.GenerateCode()
@@ -335,18 +309,5 @@ func printableTypeName(t types.Type) string {
 		return t.String()
 	default:
 		panic(fmt.Sprintf("unknown type %T %v", t, t))
-	}
-}
-
-func checkErrors(loaded []*packages.Package, canSkipErrorOn func(fileName string) bool) {
-	for _, l := range loaded {
-		for _, e := range l.Errors {
-			idx := strings.Index(e.Pos, ":")
-			filePath := e.Pos[:idx]
-			_, fileName := path.Split(filePath)
-			if !canSkipErrorOn(fileName) {
-				log.Fatalf("error loading package %s", e.Error())
-			}
-		}
 	}
 }

@@ -19,7 +19,6 @@ package planbuilder
 import (
 	"vitess.io/vitess/go/vt/key"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -31,11 +30,35 @@ func buildShowThrottledAppsPlan(query string, vschema plancontext.VSchema) (*pla
 		return nil, err
 	}
 	if ks == nil {
-		return nil, vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "No database selected: use keyspace<:shard><@type> or keyspace<[range]><@type> (<> are optional)")
+		return nil, vterrors.VT09005()
 	}
 
 	if tabletType != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "SHOW VITESS_THROTTLED_APPS works only on primary tablet")
+		return nil, vterrors.VT09007("SHOW")
+	}
+
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	return newPlanResult(&engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             query,
+	}), nil
+}
+
+func buildShowThrottlerStatusPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
+	dest, ks, tabletType, err := vschema.TargetDestination("")
+	if err != nil {
+		return nil, err
+	}
+	if ks == nil {
+		return nil, vterrors.VT09005()
+	}
+
+	if tabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09010()
 	}
 
 	if dest == nil {

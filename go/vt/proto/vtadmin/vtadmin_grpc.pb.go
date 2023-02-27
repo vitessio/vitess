@@ -54,6 +54,8 @@ type VTAdminClient interface {
 	GetCellsAliases(ctx context.Context, in *GetCellsAliasesRequest, opts ...grpc.CallOption) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(ctx context.Context, in *GetClustersRequest, opts ...grpc.CallOption) (*GetClustersResponse, error)
+	// GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+	GetFullStatus(ctx context.Context, in *GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetFullStatusResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error)
 	// GetKeyspace returns a keyspace by name in the specified cluster.
@@ -78,6 +80,8 @@ type VTAdminClient interface {
 	GetTablet(ctx context.Context, in *GetTabletRequest, opts ...grpc.CallOption) (*Tablet, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(ctx context.Context, in *GetTabletsRequest, opts ...grpc.CallOption) (*GetTabletsResponse, error)
+	// GetTopologyPath returns the cell located at the specified path in the topology server.
+	GetTopologyPath(ctx context.Context, in *GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error)
@@ -101,6 +105,8 @@ type VTAdminClient interface {
 	// shard primary's cell as promotion candidates unless NewPrimary is
 	// explicitly provided in the request.
 	PlannedFailoverShard(ctx context.Context, in *PlannedFailoverShardRequest, opts ...grpc.CallOption) (*PlannedFailoverShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	RebuildKeyspaceGraph(ctx context.Context, in *RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*RebuildKeyspaceGraphResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -110,6 +116,10 @@ type VTAdminClient interface {
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
 	ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error)
+	// ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+	ReloadSchemaShard(ctx context.Context, in *ReloadSchemaShardRequest, opts ...grpc.CallOption) (*ReloadSchemaShardResponse, error)
+	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+	RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(ctx context.Context, in *RunHealthCheckRequest, opts ...grpc.CallOption) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -132,6 +142,9 @@ type VTAdminClient interface {
 	// * "orchestrator" here refers to external orchestrator, not the newer,
 	// Vitess-aware orchestrator, VTOrc.
 	TabletExternallyPromoted(ctx context.Context, in *TabletExternallyPromotedRequest, opts ...grpc.CallOption) (*TabletExternallyPromotedResponse, error)
+	// Validate validates all nodes in a cluster that are reachable from the global replication graph,
+	// as well as all tablets in discoverable cells, are consistent
+	Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(ctx context.Context, in *ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error)
@@ -139,9 +152,13 @@ type VTAdminClient interface {
 	// for shard 0 matches the schema on all of the other tablets in the
 	// keyspace.
 	ValidateSchemaKeyspace(ctx context.Context, in *ValidateSchemaKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
+	// ValidateShard validates that that all nodes reachable from the specified shard are consistent.
+	ValidateShard(ctx context.Context, in *ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of
 	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(ctx context.Context, in *ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(ctx context.Context, in *VTExplainRequest, opts ...grpc.CallOption) (*VTExplainResponse, error)
@@ -254,6 +271,15 @@ func (c *vTAdminClient) GetClusters(ctx context.Context, in *GetClustersRequest,
 	return out, nil
 }
 
+func (c *vTAdminClient) GetFullStatus(ctx context.Context, in *GetFullStatusRequest, opts ...grpc.CallOption) (*vtctldata.GetFullStatusResponse, error) {
+	out := new(vtctldata.GetFullStatusResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetFullStatus", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetGates(ctx context.Context, in *GetGatesRequest, opts ...grpc.CallOption) (*GetGatesResponse, error) {
 	out := new(GetGatesResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetGates", in, out, opts...)
@@ -344,6 +370,15 @@ func (c *vTAdminClient) GetTablets(ctx context.Context, in *GetTabletsRequest, o
 	return out, nil
 }
 
+func (c *vTAdminClient) GetTopologyPath(ctx context.Context, in *GetTopologyPathRequest, opts ...grpc.CallOption) (*vtctldata.GetTopologyPathResponse, error) {
+	out := new(vtctldata.GetTopologyPathResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetTopologyPath", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) GetVSchema(ctx context.Context, in *GetVSchemaRequest, opts ...grpc.CallOption) (*VSchema, error) {
 	out := new(VSchema)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetVSchema", in, out, opts...)
@@ -407,6 +442,15 @@ func (c *vTAdminClient) PlannedFailoverShard(ctx context.Context, in *PlannedFai
 	return out, nil
 }
 
+func (c *vTAdminClient) RebuildKeyspaceGraph(ctx context.Context, in *RebuildKeyspaceGraphRequest, opts ...grpc.CallOption) (*RebuildKeyspaceGraphResponse, error) {
+	out := new(RebuildKeyspaceGraphResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RebuildKeyspaceGraph", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) RefreshState(ctx context.Context, in *RefreshStateRequest, opts ...grpc.CallOption) (*RefreshStateResponse, error) {
 	out := new(RefreshStateResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RefreshState", in, out, opts...)
@@ -428,6 +472,24 @@ func (c *vTAdminClient) RefreshTabletReplicationSource(ctx context.Context, in *
 func (c *vTAdminClient) ReloadSchemas(ctx context.Context, in *ReloadSchemasRequest, opts ...grpc.CallOption) (*ReloadSchemasResponse, error) {
 	out := new(ReloadSchemasResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReloadSchemas", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) ReloadSchemaShard(ctx context.Context, in *ReloadSchemaShardRequest, opts ...grpc.CallOption) (*ReloadSchemaShardResponse, error) {
+	out := new(ReloadSchemaShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ReloadSchemaShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) RemoveKeyspaceCell(ctx context.Context, in *RemoveKeyspaceCellRequest, opts ...grpc.CallOption) (*RemoveKeyspaceCellResponse, error) {
+	out := new(RemoveKeyspaceCellResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/RemoveKeyspaceCell", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -488,6 +550,15 @@ func (c *vTAdminClient) TabletExternallyPromoted(ctx context.Context, in *Tablet
 	return out, nil
 }
 
+func (c *vTAdminClient) Validate(ctx context.Context, in *ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error) {
+	out := new(vtctldata.ValidateResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/Validate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) ValidateKeyspace(ctx context.Context, in *ValidateKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateKeyspaceResponse, error) {
 	out := new(vtctldata.ValidateKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateKeyspace", in, out, opts...)
@@ -506,9 +577,27 @@ func (c *vTAdminClient) ValidateSchemaKeyspace(ctx context.Context, in *Validate
 	return out, nil
 }
 
+func (c *vTAdminClient) ValidateShard(ctx context.Context, in *ValidateShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateShardResponse, error) {
+	out := new(vtctldata.ValidateShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateShard", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vTAdminClient) ValidateVersionKeyspace(ctx context.Context, in *ValidateVersionKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
 	out := new(vtctldata.ValidateVersionKeyspaceResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateVersionKeyspace", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) ValidateVersionShard(ctx context.Context, in *ValidateVersionShardRequest, opts ...grpc.CallOption) (*vtctldata.ValidateVersionShardResponse, error) {
+	out := new(vtctldata.ValidateVersionShardResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/ValidateVersionShard", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -559,6 +648,8 @@ type VTAdminServer interface {
 	GetCellsAliases(context.Context, *GetCellsAliasesRequest) (*GetCellsAliasesResponse, error)
 	// GetClusters returns all configured clusters.
 	GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error)
+	// GetFullStatus returns the full status of MySQL including the replication information, semi-sync information, GTID information among others
+	GetFullStatus(context.Context, *GetFullStatusRequest) (*vtctldata.GetFullStatusResponse, error)
 	// GetGates returns all gates across all the specified clusters.
 	GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error)
 	// GetKeyspace returns a keyspace by name in the specified cluster.
@@ -583,6 +674,8 @@ type VTAdminServer interface {
 	GetTablet(context.Context, *GetTabletRequest) (*Tablet, error)
 	// GetTablets returns all tablets across all the specified clusters.
 	GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error)
+	// GetTopologyPath returns the cell located at the specified path in the topology server.
+	GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error)
 	// GetVSchema returns a VSchema for the specified keyspace in the specified
 	// cluster.
 	GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error)
@@ -606,6 +699,8 @@ type VTAdminServer interface {
 	// shard primary's cell as promotion candidates unless NewPrimary is
 	// explicitly provided in the request.
 	PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error)
+	// RebuildKeyspaceGraph rebuilds the serving data for a keyspace.
+	RebuildKeyspaceGraph(context.Context, *RebuildKeyspaceGraphRequest) (*RebuildKeyspaceGraphResponse, error)
 	// RefreshState reloads the tablet record on the specified tablet.
 	RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error)
 	// RefreshTabletReplicationSource performs a `CHANGE REPLICATION SOURCE TO`
@@ -615,6 +710,10 @@ type VTAdminServer interface {
 	// tablets in one or more clusters, depending on the request fields (see
 	// ReloadSchemasRequest for details).
 	ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error)
+	// ReloadSchemaShard reloads the schema on all tablets in a shard. This is done on a best-effort basis.
+	ReloadSchemaShard(context.Context, *ReloadSchemaShardRequest) (*ReloadSchemaShardResponse, error)
+	// RemoveKeyspaceCell removes the cell from the Cells list for all shards in the keyspace, and the SrvKeyspace for that keyspace in that cell.
+	RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error)
 	// RunHealthCheck runs a healthcheck on the tablet.
 	RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error)
 	// SetReadOnly sets the tablet to read-only mode.
@@ -637,6 +736,9 @@ type VTAdminServer interface {
 	// * "orchestrator" here refers to external orchestrator, not the newer,
 	// Vitess-aware orchestrator, VTOrc.
 	TabletExternallyPromoted(context.Context, *TabletExternallyPromotedRequest) (*TabletExternallyPromotedResponse, error)
+	// Validate validates all nodes in a cluster that are reachable from the global replication graph,
+	// as well as all tablets in discoverable cells, are consistent
+	Validate(context.Context, *ValidateRequest) (*vtctldata.ValidateResponse, error)
 	// ValidateKeyspace validates that all nodes reachable from the specified
 	// keyspace are consistent.
 	ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error)
@@ -644,9 +746,13 @@ type VTAdminServer interface {
 	// for shard 0 matches the schema on all of the other tablets in the
 	// keyspace.
 	ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error)
+	// ValidateShard validates that that all nodes reachable from the specified shard are consistent.
+	ValidateShard(context.Context, *ValidateShardRequest) (*vtctldata.ValidateShardResponse, error)
 	// ValidateVersionKeyspace validates that the version on the primary of
 	// shard 0 matches all of the other tablets in the keyspace.
 	ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error)
+	// ValidateVersionShard validates that the version on the primary matches all of the replicas.
+	ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error)
 	// VTExplain provides information on how Vitess plans to execute a
 	// particular query.
 	VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error)
@@ -690,6 +796,9 @@ func (UnimplementedVTAdminServer) GetCellsAliases(context.Context, *GetCellsAlia
 func (UnimplementedVTAdminServer) GetClusters(context.Context, *GetClustersRequest) (*GetClustersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetClusters not implemented")
 }
+func (UnimplementedVTAdminServer) GetFullStatus(context.Context, *GetFullStatusRequest) (*vtctldata.GetFullStatusResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetFullStatus not implemented")
+}
 func (UnimplementedVTAdminServer) GetGates(context.Context, *GetGatesRequest) (*GetGatesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetGates not implemented")
 }
@@ -720,6 +829,9 @@ func (UnimplementedVTAdminServer) GetTablet(context.Context, *GetTabletRequest) 
 func (UnimplementedVTAdminServer) GetTablets(context.Context, *GetTabletsRequest) (*GetTabletsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTablets not implemented")
 }
+func (UnimplementedVTAdminServer) GetTopologyPath(context.Context, *GetTopologyPathRequest) (*vtctldata.GetTopologyPathResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetTopologyPath not implemented")
+}
 func (UnimplementedVTAdminServer) GetVSchema(context.Context, *GetVSchemaRequest) (*VSchema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetVSchema not implemented")
 }
@@ -741,6 +853,9 @@ func (UnimplementedVTAdminServer) PingTablet(context.Context, *PingTabletRequest
 func (UnimplementedVTAdminServer) PlannedFailoverShard(context.Context, *PlannedFailoverShardRequest) (*PlannedFailoverShardResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method PlannedFailoverShard not implemented")
 }
+func (UnimplementedVTAdminServer) RebuildKeyspaceGraph(context.Context, *RebuildKeyspaceGraphRequest) (*RebuildKeyspaceGraphResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RebuildKeyspaceGraph not implemented")
+}
 func (UnimplementedVTAdminServer) RefreshState(context.Context, *RefreshStateRequest) (*RefreshStateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RefreshState not implemented")
 }
@@ -749,6 +864,12 @@ func (UnimplementedVTAdminServer) RefreshTabletReplicationSource(context.Context
 }
 func (UnimplementedVTAdminServer) ReloadSchemas(context.Context, *ReloadSchemasRequest) (*ReloadSchemasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemas not implemented")
+}
+func (UnimplementedVTAdminServer) ReloadSchemaShard(context.Context, *ReloadSchemaShardRequest) (*ReloadSchemaShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ReloadSchemaShard not implemented")
+}
+func (UnimplementedVTAdminServer) RemoveKeyspaceCell(context.Context, *RemoveKeyspaceCellRequest) (*RemoveKeyspaceCellResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RemoveKeyspaceCell not implemented")
 }
 func (UnimplementedVTAdminServer) RunHealthCheck(context.Context, *RunHealthCheckRequest) (*RunHealthCheckResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RunHealthCheck not implemented")
@@ -768,14 +889,23 @@ func (UnimplementedVTAdminServer) StopReplication(context.Context, *StopReplicat
 func (UnimplementedVTAdminServer) TabletExternallyPromoted(context.Context, *TabletExternallyPromotedRequest) (*TabletExternallyPromotedResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method TabletExternallyPromoted not implemented")
 }
+func (UnimplementedVTAdminServer) Validate(context.Context, *ValidateRequest) (*vtctldata.ValidateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method Validate not implemented")
+}
 func (UnimplementedVTAdminServer) ValidateKeyspace(context.Context, *ValidateKeyspaceRequest) (*vtctldata.ValidateKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateKeyspace not implemented")
 }
 func (UnimplementedVTAdminServer) ValidateSchemaKeyspace(context.Context, *ValidateSchemaKeyspaceRequest) (*vtctldata.ValidateSchemaKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateSchemaKeyspace not implemented")
 }
+func (UnimplementedVTAdminServer) ValidateShard(context.Context, *ValidateShardRequest) (*vtctldata.ValidateShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateShard not implemented")
+}
 func (UnimplementedVTAdminServer) ValidateVersionKeyspace(context.Context, *ValidateVersionKeyspaceRequest) (*vtctldata.ValidateVersionKeyspaceResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionKeyspace not implemented")
+}
+func (UnimplementedVTAdminServer) ValidateVersionShard(context.Context, *ValidateVersionShardRequest) (*vtctldata.ValidateVersionShardResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ValidateVersionShard not implemented")
 }
 func (UnimplementedVTAdminServer) VTExplain(context.Context, *VTExplainRequest) (*VTExplainResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method VTExplain not implemented")
@@ -991,6 +1121,24 @@ func _VTAdmin_GetClusters_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetFullStatus_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetFullStatusRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetFullStatus(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetFullStatus",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetFullStatus(ctx, req.(*GetFullStatusRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetGates_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetGatesRequest)
 	if err := dec(in); err != nil {
@@ -1171,6 +1319,24 @@ func _VTAdmin_GetTablets_Handler(srv interface{}, ctx context.Context, dec func(
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_GetTopologyPath_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTopologyPathRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetTopologyPath(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetTopologyPath",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetTopologyPath(ctx, req.(*GetTopologyPathRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_GetVSchema_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(GetVSchemaRequest)
 	if err := dec(in); err != nil {
@@ -1297,6 +1463,24 @@ func _VTAdmin_PlannedFailoverShard_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_RebuildKeyspaceGraph_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RebuildKeyspaceGraphRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RebuildKeyspaceGraph(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RebuildKeyspaceGraph",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RebuildKeyspaceGraph(ctx, req.(*RebuildKeyspaceGraphRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_RefreshState_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(RefreshStateRequest)
 	if err := dec(in); err != nil {
@@ -1347,6 +1531,42 @@ func _VTAdmin_ReloadSchemas_Handler(srv interface{}, ctx context.Context, dec fu
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).ReloadSchemas(ctx, req.(*ReloadSchemasRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_ReloadSchemaShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ReloadSchemaShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ReloadSchemaShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ReloadSchemaShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ReloadSchemaShard(ctx, req.(*ReloadSchemaShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_RemoveKeyspaceCell_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveKeyspaceCellRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).RemoveKeyspaceCell(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/RemoveKeyspaceCell",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).RemoveKeyspaceCell(ctx, req.(*RemoveKeyspaceCellRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1459,6 +1679,24 @@ func _VTAdmin_TabletExternallyPromoted_Handler(srv interface{}, ctx context.Cont
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).Validate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/Validate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).Validate(ctx, req.(*ValidateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_ValidateKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ValidateKeyspaceRequest)
 	if err := dec(in); err != nil {
@@ -1495,6 +1733,24 @@ func _VTAdmin_ValidateSchemaKeyspace_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _VTAdmin_ValidateShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ValidateShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ValidateShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ValidateShard(ctx, req.(*ValidateShardRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _VTAdmin_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(ValidateVersionKeyspaceRequest)
 	if err := dec(in); err != nil {
@@ -1509,6 +1765,24 @@ func _VTAdmin_ValidateVersionKeyspace_Handler(srv interface{}, ctx context.Conte
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).ValidateVersionKeyspace(ctx, req.(*ValidateVersionKeyspaceRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_ValidateVersionShard_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ValidateVersionShardRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).ValidateVersionShard(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/ValidateVersionShard",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).ValidateVersionShard(ctx, req.(*ValidateVersionShardRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1583,6 +1857,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetClusters_Handler,
 		},
 		{
+			MethodName: "GetFullStatus",
+			Handler:    _VTAdmin_GetFullStatus_Handler,
+		},
+		{
 			MethodName: "GetGates",
 			Handler:    _VTAdmin_GetGates_Handler,
 		},
@@ -1623,6 +1901,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_GetTablets_Handler,
 		},
 		{
+			MethodName: "GetTopologyPath",
+			Handler:    _VTAdmin_GetTopologyPath_Handler,
+		},
+		{
 			MethodName: "GetVSchema",
 			Handler:    _VTAdmin_GetVSchema_Handler,
 		},
@@ -1651,6 +1933,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_PlannedFailoverShard_Handler,
 		},
 		{
+			MethodName: "RebuildKeyspaceGraph",
+			Handler:    _VTAdmin_RebuildKeyspaceGraph_Handler,
+		},
+		{
 			MethodName: "RefreshState",
 			Handler:    _VTAdmin_RefreshState_Handler,
 		},
@@ -1661,6 +1947,14 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ReloadSchemas",
 			Handler:    _VTAdmin_ReloadSchemas_Handler,
+		},
+		{
+			MethodName: "ReloadSchemaShard",
+			Handler:    _VTAdmin_ReloadSchemaShard_Handler,
+		},
+		{
+			MethodName: "RemoveKeyspaceCell",
+			Handler:    _VTAdmin_RemoveKeyspaceCell_Handler,
 		},
 		{
 			MethodName: "RunHealthCheck",
@@ -1687,6 +1981,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_TabletExternallyPromoted_Handler,
 		},
 		{
+			MethodName: "Validate",
+			Handler:    _VTAdmin_Validate_Handler,
+		},
+		{
 			MethodName: "ValidateKeyspace",
 			Handler:    _VTAdmin_ValidateKeyspace_Handler,
 		},
@@ -1695,8 +1993,16 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _VTAdmin_ValidateSchemaKeyspace_Handler,
 		},
 		{
+			MethodName: "ValidateShard",
+			Handler:    _VTAdmin_ValidateShard_Handler,
+		},
+		{
 			MethodName: "ValidateVersionKeyspace",
 			Handler:    _VTAdmin_ValidateVersionKeyspace_Handler,
+		},
+		{
+			MethodName: "ValidateVersionShard",
+			Handler:    _VTAdmin_ValidateVersionShard_Handler,
 		},
 		{
 			MethodName: "VTExplain",

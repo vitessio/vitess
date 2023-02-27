@@ -19,7 +19,6 @@ package main
 import (
 	"bytes"
 	"encoding/json"
-	"flag"
 	"fmt"
 	"log"
 	"os"
@@ -30,6 +29,8 @@ import (
 	"strings"
 	"sync"
 	"text/template"
+
+	"github.com/spf13/pflag"
 )
 
 type (
@@ -116,7 +117,7 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 {{- range $component := $type.Components }} 
 #### {{ $component.Name }}
 {{- range $prInfo := $component.PrInfos }}
- * {{ $prInfo.Title }} #{{ $prInfo.Number }}
+ * {{ $prInfo.Title }} [#{{ $prInfo.Number }}](https://github.com/vitessio/vitess/pull/{{ $prInfo.Number }})
 {{- end }}
 {{- end }}
 {{- end }}
@@ -338,7 +339,6 @@ func loadAllPRs(prs, authorCommits []string) ([]prInfo, []string, error) {
 
 			for b := range prChan {
 				fmt.Print(".")
-
 				if b.isPR {
 					prInfo, err := loadPRInfo(b.key)
 					if err != nil {
@@ -488,28 +488,32 @@ func groupAndStringifyPullRequest(pr []prInfo) (string, error) {
 }
 
 func main() {
-	from := flag.String("from", "", "from sha/tag/branch")
-	to := flag.String("to", "HEAD", "to sha/tag/branch")
-	versionName := flag.String("version", "", "name of the version (has to be the following format: v11.0.0)")
-	summaryFile := flag.String("summary", "", "readme file on which there is a summary of the release")
-	flag.Parse()
+	var (
+		from, versionName, summaryFile string
+		to                             = "HEAD"
+	)
+	pflag.StringVarP(&from, "from", "f", "", "from sha/tag/branch")
+	pflag.StringVarP(&to, "to", "t", to, "to sha/tag/branch")
+	pflag.StringVarP(&versionName, "version", "v", "", "name of the version (has to be the following format: v11.0.0)")
+	pflag.StringVarP(&summaryFile, "summary", "s", "", "readme file on which there is a summary of the release")
+	pflag.Parse()
 
 	// The -version flag must be of a valid format.
-	rx := regexp.MustCompile(`v(\d+)\.(\d+)\.(\d+)`)
+	rx := regexp.MustCompile(`v([0-9]+)\.([0-9]+)\.([0-9]+)`)
 	// There should be 4 sub-matches, input: "v14.0.0", output: ["v14.0.0", "14", "0", "0"].
-	versionMatch := rx.FindStringSubmatch(*versionName)
+	versionMatch := rx.FindStringSubmatch(versionName)
 	if len(versionMatch) != 4 {
-		log.Fatal("The -version flag must be set using a valid format. Format: 'vX.X.X'.")
+		log.Fatal("The --version flag must be set using a valid format. Format: 'vX.X.X'.")
 	}
 
 	releaseNotes := releaseNote{
-		Version:           *versionName,
+		Version:           versionName,
 		VersionUnderscore: fmt.Sprintf("%s_%s_%s", versionMatch[1], versionMatch[2], versionMatch[3]), // v14.0.0 -> 14_0_0, this is used to format filenames.
 	}
 
 	// summary of the release
-	if *summaryFile != "" {
-		summary, err := releaseSummary(*summaryFile)
+	if summaryFile != "" {
+		summary, err := releaseSummary(summaryFile)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -517,7 +521,7 @@ func main() {
 	}
 
 	// known issues
-	knownIssues, err := loadKnownIssues(*versionName)
+	knownIssues, err := loadKnownIssues(versionName)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -528,7 +532,7 @@ func main() {
 	releaseNotes.KnownIssues = knownIssuesStr
 
 	// changelog with pull requests
-	prs, authorCommits, commits, err := loadMergedPRs(*from, *to)
+	prs, authorCommits, commits, err := loadMergedPRs(from, to)
 	if err != nil {
 		log.Fatal(err)
 	}

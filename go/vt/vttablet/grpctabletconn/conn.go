@@ -18,16 +18,17 @@ package grpctabletconn
 
 import (
 	"context"
-	"flag"
 	"io"
 	"sync"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
@@ -40,15 +41,32 @@ import (
 const protocolName = "grpc"
 
 var (
-	cert = flag.String("tablet_grpc_cert", "", "the cert to use to connect")
-	key  = flag.String("tablet_grpc_key", "", "the key to use to connect")
-	ca   = flag.String("tablet_grpc_ca", "", "the server ca to use to validate servers when connecting")
-	crl  = flag.String("tablet_grpc_crl", "", "the server crl to use to validate server certificates when connecting")
-	name = flag.String("tablet_grpc_server_name", "", "the server name to use to validate server certificate")
+	cert string
+	key  string
+	ca   string
+	crl  string
+	name string
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&cert, "tablet_grpc_cert", cert, "the cert to use to connect")
+	fs.StringVar(&key, "tablet_grpc_key", key, "the key to use to connect")
+	fs.StringVar(&ca, "tablet_grpc_ca", ca, "the server ca to use to validate servers when connecting")
+	fs.StringVar(&crl, "tablet_grpc_crl", crl, "the server crl to use to validate server certificates when connecting")
+	fs.StringVar(&name, "tablet_grpc_server_name", name, "the server name to use to validate server certificate")
+}
 
 func init() {
 	tabletconn.RegisterDialer(protocolName, DialTablet)
+	for _, cmd := range []string{
+		"vtbench",
+		"vtctl",
+		"vtctld",
+		"vtgate",
+		"vttablet",
+	} {
+		servenv.OnParseFor(cmd, registerFlags)
+	}
 }
 
 // gRPCQueryClient implements a gRPC implementation for QueryService
@@ -73,7 +91,7 @@ func DialTablet(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (querys
 	} else {
 		addr = tablet.Hostname
 	}
-	opt, err := grpcclient.SecureDialOption(*cert, *key, *ca, *crl, *name)
+	opt, err := grpcclient.SecureDialOption(cert, key, ca, crl, name)
 	if err != nil {
 		return nil, err
 	}
@@ -198,6 +216,7 @@ func (conn *gRPCQueryClient) Begin(ctx context.Context, target *querypb.Target, 
 	}
 	state.TransactionID = br.TransactionId
 	state.TabletAlias = br.TabletAlias
+	state.SessionStateChanges = br.SessionStateChanges
 	return state, nil
 }
 
@@ -445,6 +464,7 @@ func (conn *gRPCQueryClient) BeginExecute(ctx context.Context, target *querypb.T
 	}
 	state.TransactionID = reply.TransactionId
 	state.TabletAlias = conn.tablet.Alias
+	state.SessionStateChanges = reply.SessionStateChanges
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
@@ -496,9 +516,16 @@ func (conn *gRPCQueryClient) BeginStreamExecute(ctx context.Context, target *que
 		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
 			state.TabletAlias = ser.GetTabletAlias()
 		}
+		if state.SessionStateChanges == "" && ser.GetSessionStateChanges() != "" {
+			state.SessionStateChanges = ser.GetSessionStateChanges()
+		}
 
 		if err != nil {
 			return state, tabletconn.ErrorFromGRPC(err)
+		}
+
+		if ser.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(ser.Error)
 		}
 
 		// The last stream receive will not have a result, so callback will not be called for it.
@@ -779,6 +806,7 @@ func (conn *gRPCQueryClient) ReserveBeginExecute(ctx context.Context, target *qu
 	state.ReservedID = reply.ReservedId
 	state.TransactionID = reply.TransactionId
 	state.TabletAlias = conn.tablet.Alias
+	state.SessionStateChanges = reply.SessionStateChanges
 	if reply.Error != nil {
 		return state, nil, tabletconn.ErrorFromVTRPC(reply.Error)
 	}
@@ -835,9 +863,16 @@ func (conn *gRPCQueryClient) ReserveBeginStreamExecute(ctx context.Context, targ
 		if state.TabletAlias == nil && ser.GetTabletAlias() != nil {
 			state.TabletAlias = ser.GetTabletAlias()
 		}
+		if state.SessionStateChanges == "" && ser.GetSessionStateChanges() != "" {
+			state.SessionStateChanges = ser.GetSessionStateChanges()
+		}
 
 		if err != nil {
 			return state, tabletconn.ErrorFromGRPC(err)
+		}
+
+		if ser.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(ser.Error)
 		}
 
 		// The last stream receive will not have a result, so callback will not be called for it.
@@ -941,6 +976,10 @@ func (conn *gRPCQueryClient) ReserveStreamExecute(ctx context.Context, target *q
 			return state, tabletconn.ErrorFromGRPC(err)
 		}
 
+		if ser.Error != nil {
+			return state, tabletconn.ErrorFromVTRPC(ser.Error)
+		}
+
 		// The last stream receive will not have a result, so callback will not be called for it.
 		if ser.Result == nil {
 			return state, nil
@@ -977,6 +1016,48 @@ func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target
 		return tabletconn.ErrorFromGRPC(err)
 	}
 	return nil
+}
+
+// GetSchema implements the queryservice interface
+func (conn *gRPCQueryClient) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	stream, err := func() (queryservicepb.Query_GetSchemaClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		stream, err := conn.c.GetSchema(ctx, &querypb.GetSchemaRequest{
+			Target:     target,
+			TableType:  tableType,
+			TableNames: tableNames,
+		})
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		shr, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		if err := callback(shr); err != nil {
+			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
 }
 
 // Close closes underlying gRPC channel.

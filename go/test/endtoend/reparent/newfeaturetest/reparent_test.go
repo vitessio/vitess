@@ -25,30 +25,74 @@ import (
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 )
 
-func TestCrossCellDurability(t *testing.T) {
+// TestRecoverWithMultipleVttabletFailures tests that ERS succeeds with the default values
+// even when there are multiple vttablet failures. In this test we use the semi_sync policy
+// to allow multiple failures to happen and still be recoverable.
+// The test takes down the vttablets of the primary and a rdonly tablet and runs ERS with the
+// default values of remote_operation_timeout, lock-timeout flags and wait_replicas_timeout subflag.
+func TestRecoverWithMultipleVttabletFailures(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "cross_cell")
+	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
-
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
-	// When tablets[0] is the primary, the only tablet in a different cell is tablets[3].
-	// So the other two should have semi-sync turned off
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[0], "ON")
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[3], "ON")
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[1], "OFF")
-	utils.CheckSemiSyncSetupCorrectly(t, tablets[2], "OFF")
+	// make tablets[1] a rdonly tablet.
+	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ChangeTabletType", tablets[1].Alias, "rdonly")
+	require.NoError(t, err)
 
-	// Run forced reparent operation, this should proceed unimpeded.
-	out, err := utils.Prs(t, clusterInstance, tablets[3])
+	// Confirm that replication is still working as intended
+	utils.ConfirmReplication(t, tablets[0], tablets[1:])
+
+	// Make the rdonly and primary tablets and databases unavailable.
+	utils.StopTablet(t, tablets[1], true)
+	utils.StopTablet(t, tablets[0], true)
+
+	// We expect this to succeed since we only have 1 primary eligible tablet which is down
+	out, err := utils.Ers(clusterInstance, nil, "", "")
 	require.NoError(t, err, out)
 
-	utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2]})
+	newPrimary := utils.GetNewPrimary(t, clusterInstance)
+	utils.ConfirmReplication(t, newPrimary, []*cluster.Vttablet{tablets[2], tablets[3]})
+}
 
-	// All the tablets will have semi-sync setup since tablets[3] is in Cell2 and all
-	// others are in Cell1, so all of them are eligible to send semi-sync ACKs
-	for _, tablet := range tablets {
-		utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
-	}
+// TetsSingeReplicaERS tests that ERS works even when there is only 1 tablet left
+// as long the durability policy allows this failure. Moreover, this also tests that the
+// replica is one such that it was a primary itself before. This way its executed gtid set
+// will have atleast 2 tablets in it. We want to make sure this tablet is not marked as errant
+// and ERS succeeds.
+func TestSingleReplicaERS(t *testing.T) {
+	// Set up a cluster with none durability policy
+	defer cluster.PanicHandler(t)
+	clusterInstance := utils.SetupReparentCluster(t, "none")
+	defer utils.TeardownCluster(clusterInstance)
+	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
+	// Confirm that the replication is setup correctly in the beginning.
+	// tablets[0] is the primary tablet in the beginning.
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
+
+	// Delete and stop two tablets. We only want to have 2 tablets for this test.
+	utils.DeleteTablet(t, clusterInstance, tablets[2])
+	utils.DeleteTablet(t, clusterInstance, tablets[3])
+	utils.StopTablet(t, tablets[2], true)
+	utils.StopTablet(t, tablets[3], true)
+
+	// Reparent to the other replica
+	output, err := utils.Prs(t, clusterInstance, tablets[1])
+	require.NoError(t, err, "error in PlannedReparentShard output - %s", output)
+
+	// Check the replication is set up correctly before we failover
+	utils.ConfirmReplication(t, tablets[1], []*cluster.Vttablet{tablets[0]})
+
+	// Make the current primary vttablet unavailable.
+	utils.StopTablet(t, tablets[1], true)
+
+	// Run an ERS with only one replica reachable. Also, this replica is such that it was a primary before.
+	output, err = utils.Ers(clusterInstance, tablets[0], "", "")
+	require.NoError(t, err, "error in Emergency Reparent Shard output - %s", output)
+
+	// Check the tablet is indeed promoted
+	utils.CheckPrimaryTablet(t, clusterInstance, tablets[0])
+	// Also check the writes succeed after failover
+	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{})
 }

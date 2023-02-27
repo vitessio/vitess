@@ -19,9 +19,6 @@ package main
 
 import (
 	"bufio"
-	"flag"
-	"fmt"
-	"io"
 	"os"
 
 	"github.com/spf13/pflag"
@@ -29,10 +26,8 @@ import (
 	"vitess.io/vitess/go/exit"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/zkctl"
-
-	// Include deprecation warnings for soon-to-be-unsupported flag invocations.
-	_flag "vitess.io/vitess/go/internal/flag"
 )
 
 var usage = `
@@ -42,19 +37,21 @@ Commands:
 `
 
 var (
-	zkCfg = flag.String("zk.cfg", "6@<hostname>:3801:3802:3803",
-		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
-	myID = flag.Uint("zk.myid", 0,
-		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
-
 	// Reason for nolint : Used in line 54 (stdin = bufio.NewReader(os.Stdin)) in the init function
 	stdin *bufio.Reader //nolint
+	zkCfg = "6@<hostname>:3801:3802:3803"
+	myID  uint
 )
 
+func registerZkctlFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&zkCfg, "zk.cfg", zkCfg,
+		"zkid@server1:leaderPort1:electionPort1:clientPort1,...)")
+	fs.UintVar(&myID, "zk.myid", myID,
+		"which server do you want to be? only needed when running multiple instance on one box, otherwise myid is implied by hostname")
+
+}
 func init() {
-	_flag.SetUsage(flag.CommandLine, _flag.UsageOptions{
-		Epilogue: func(w io.Writer) { fmt.Fprint(w, usage) },
-	})
+	servenv.OnParse(registerZkctlFlags)
 	stdin = bufio.NewReader(os.Stdin)
 }
 
@@ -62,18 +59,15 @@ func main() {
 	defer exit.Recover()
 	defer logutil.Flush()
 
-	_flag.Parse(pflag.NewFlagSet("zkctl", pflag.ExitOnError))
-	args := _flag.Args()
+	fs := pflag.NewFlagSet("zkctl", pflag.ExitOnError)
+	log.RegisterFlags(fs)
+	logutil.RegisterFlags(fs)
+	args := servenv.ParseFlagsWithArgs("zkctl")
 
-	if len(args) == 0 {
-		flag.Usage()
-		exit.Return(1)
-	}
-
-	zkConfig := zkctl.MakeZkConfigFromString(*zkCfg, uint32(*myID))
+	zkConfig := zkctl.MakeZkConfigFromString(zkCfg, uint32(myID))
 	zkd := zkctl.NewZkd(zkConfig)
 
-	action := _flag.Arg(0)
+	action := args[0]
 	var err error
 	switch action {
 	case "init":
@@ -86,6 +80,7 @@ func main() {
 		err = zkd.Teardown()
 	default:
 		log.Errorf("invalid action: %v", action)
+		log.Errorf(usage)
 		exit.Return(1)
 	}
 	if err != nil {

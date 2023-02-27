@@ -3,7 +3,7 @@
 # This is a script that gets run as part of the Dockerfile build
 # to install dependencies for the vitess/mini image.
 #
-# Usage: install_mini_dependencies.sh
+# Usage: install_local_dependencies.sh
 
 set -euo pipefail
 
@@ -20,3 +20,6 @@ mkdir -p /var/run/etcd && chown -R vitess:vitess /var/run/etcd
 
 # Clean up files we won't need in the final image.
 rm -rf /var/lib/apt/lists/*
+
+# Install npm and node dependencies for vtadmin
+curl -fsSL https://deb.nodesource.com/setup_19.x |  bash - && apt-get install -y nodejs
