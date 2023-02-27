@@ -36,6 +36,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/client"
@@ -48,6 +49,7 @@ import (
 
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
+	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/servenv"
 )
@@ -171,6 +173,21 @@ func (bh *S3BackupHandle) AddFile(ctx context.Context, filename string, filesize
 		})
 		object := objName(bh.dir, bh.name, filename)
 
+		// Under the hood, (*Uploader).Upload breaks the input into chunks
+		// and sends them to S3 in parallel.
+		//
+		// "S3:Upload" measures the start-to-end time of the operation,
+		// rather than timing individual chunks.
+		//
+		// This metric encompasses:
+		// - HTTP calls to S3.
+		// - Marshal requests and unmarshal responses.
+		// - Retry attempts and any sleep in between retries.
+		uploadStats := bh.bs.params.Stats.Scope(stats.Operation("S3:Upload"))
+		startAt := time.Now()
+		defer func() {
+			uploadStats.TimedIncrement(time.Since(startAt))
+		}()
 		_, err := uploader.Upload(&s3manager.UploadInput{
 			Bucket:               &bucket,
 			Key:                  object,
@@ -207,6 +224,13 @@ func (bh *S3BackupHandle) AbortBackup(ctx context.Context) error {
 }
 
 // ReadFile is part of the backupstorage.BackupHandle interface.
+//
+// We don't add any backupstats instrumentation here because all of the time
+// spent here is captured elsewhere.
+//
+// ReadFile includes the time it takes to run (*request).Send in the AWS SDK,
+// which is captured in "Source:Open" in the builtin backup engine. Likewise,
+// the time it takes to read the response is in "Source:Read".
 func (bh *S3BackupHandle) ReadFile(ctx context.Context, filename string) (io.ReadCloser, error) {
 	if !bh.readOnly {
 		return nil, fmt.Errorf("ReadFile cannot be called on read-write backup")
@@ -272,6 +296,7 @@ type S3BackupStorage struct {
 	_client *s3.S3
 	mu      sync.Mutex
 	s3SSE   S3ServerSideEncryption
+	params  backupstorage.Params
 }
 
 // ListBackups is part of the backupstorage.BackupStorage interface.
@@ -411,8 +436,7 @@ func (bs *S3BackupStorage) Close() error {
 }
 
 func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
-	// TODO(maxeng): return a new S3BackupStorage that uses params.
-	return bs
+	return &S3BackupStorage{params: params}
 }
 
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)
@@ -485,7 +509,7 @@ func objName(parts ...string) *string {
 }
 
 func init() {
-	backupstorage.BackupStorageMap["s3"] = &S3BackupStorage{}
+	backupstorage.BackupStorageMap["s3"] = &S3BackupStorage{params: backupstorage.NoParams()}
 
 	logNameMap = logNameToLogLevel{
 		"LogOff":                     aws.LogOff,
