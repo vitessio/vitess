@@ -1,4 +1,4 @@
-CREATE TABLE messages_message_lookup (
+CREATE TABLE IF NOT EXISTS messages_message_lookup (
   id BIGINT NOT NULL AUTO_INCREMENT,
   page BIGINT UNSIGNED,
   message VARCHAR(1000),

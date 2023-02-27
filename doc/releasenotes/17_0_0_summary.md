@@ -5,13 +5,13 @@
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [Deprecated Stats](#deprecated-stats)
+    - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
 - **[Minor Changes](#minor-changes)**
-  - **[Bug fixes](#bug-fixes)**
-    - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
 
 ## <a id="major-changes"/> Major Changes
 
@@ -29,6 +29,31 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+
+#### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
+
+Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute Prepare operations generate stats under independent stats keys.
+
+Here is a (condensed) example of stats output:
+
+```
+{
+  "VtgateApi": {
+    "Histograms": {
+      "Execute.src.primary": {
+        "500000": 5
+      },
+      "Prepare.src.primary": {
+        "100000000": 0
+      }
+    }
+  },
+  "VtgateApiErrorCounts": {
+    "Execute.src.primary.INVALID_ARGUMENT": 3,
+    "Execute.src.primary.ALREADY_EXISTS": 1
+  }
+}
+```
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -170,29 +195,6 @@ Some notes to help understand these metrics:
 
 ## <a id="minor-changes"/>Minor changes
 
-### <a id="bug-fixes"/> Bug fixes
+### <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
-#### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
-
-Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute Prepare operations generate stats under independent stats keys.
-
-Here is a (condensed) example of stats output:
-
-```
-{
-  "VtgateApi": {
-    "Histograms": {
-      "Execute.src.primary": {
-        "500000": 5
-      },
-      "Prepare.src.primary": {
-        "100000000": 0
-      }
-    }
-  },
-  "VtgateApiErrorCounts": {
-    "Execute.src.primary.INVALID_ARGUMENT": 3,
-    "Execute.src.primary.ALREADY_EXISTS": 1
-  }
-}
-```
+* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
