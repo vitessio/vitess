@@ -17,20 +17,25 @@ limitations under the License.
 package mysqlctl
 
 import (
+	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
-	"context"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
+	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -45,6 +50,7 @@ const (
 	// the three bases for files to restore
 	backupInnodbDataHomeDir     = "InnoDBData"
 	backupInnodbLogGroupHomeDir = "InnoDBLog"
+	backupBinlogDir             = "BinLog"
 	backupData                  = "Data"
 
 	// backupManifestFileName is the MANIFEST file name within a backup.
@@ -69,35 +75,42 @@ var (
 	// but none of them are complete.
 	ErrNoCompleteBackup = errors.New("backup(s) found but none are complete")
 
-	// backupStorageHook contains the hook name to use to process
-	// backup files. If not set, we will not process the files. It is
-	// only used at backup time. Then it is put in the manifest,
-	// and when decoding a backup, it is read from the manifest,
-	// and used as the transform hook name again.
-	backupStorageHook = flag.String("backup_storage_hook", "", "if set, we send the contents of the backup files through this hook.")
-
 	// backupStorageCompress can be set to false to not use gzip
-	// on the backups. Usually would be set if a hook is used, and
-	// the hook compresses the data.
-	backupStorageCompress = flag.Bool("backup_storage_compress", true, "if set, the backup files will be compressed (default is true). Set to false for instance if a backup_storage_hook is specified and it compresses the data.")
+	// on the backups.
+	backupStorageCompress = true
 
 	// backupCompressBlockSize is the splitting size for each
 	// compressed block
-	backupCompressBlockSize = flag.Int("backup_storage_block_size", 250000, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
+	backupCompressBlockSize = 250000
 
 	// backupCompressBlocks is the number of blocks that are processed
 	// once before the writer blocks
-	backupCompressBlocks = flag.Int("backup_storage_number_blocks", 2, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, at once, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression")
+	backupCompressBlocks = 2
 
-	backupDuration  = stats.NewGauge("backup_duration_seconds", "How long it took to complete the last backup operation (in seconds)")
-	restoreDuration = stats.NewGauge("restore_duration_seconds", "How long it took to complete the last restore operation (in seconds)")
+	titleCase = cases.Title(language.English).String
 )
+
+func init() {
+	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtbackup", "vtctld"} {
+		servenv.OnParseFor(cmd, registerBackupFlags)
+	}
+}
+
+func registerBackupFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&backupStorageCompress, "backup_storage_compress", backupStorageCompress, "if set, the backup files will be compressed.")
+	fs.IntVar(&backupCompressBlockSize, "backup_storage_block_size", backupCompressBlockSize, "if backup_storage_compress is true, backup_storage_block_size sets the byte size for each block while compressing (default is 250000).")
+	fs.IntVar(&backupCompressBlocks, "backup_storage_number_blocks", backupCompressBlocks, "if backup_storage_compress is true, backup_storage_number_blocks sets the number of blocks that can be processed, in parallel, before the writer blocks, during compression (default is 2). It should be equal to the number of CPUs available for compression.")
+}
 
 // Backup is the main entry point for a backup:
 // - uses the BackupStorage service to store a new backup
 // - shuts down Mysqld during the backup
 // - remember if we were replicating, restore the exact same state
 func Backup(ctx context.Context, params BackupParams) error {
+	if params.Stats == nil {
+		params.Stats = stats.NoStats()
+	}
+
 	startTs := time.Now()
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
 	name := fmt.Sprintf("%v.%v", params.BackupTime.UTC().Format(BackupTimestampFormat), params.TabletAlias)
@@ -107,6 +120,19 @@ func Backup(ctx context.Context, params BackupParams) error {
 		return vterrors.Wrap(err, "unable to get backup storage")
 	}
 	defer bs.Close()
+
+	// Scope bsStats to selected storage engine.
+	bsStats := params.Stats.Scope(
+		stats.Component(stats.BackupStorage),
+		stats.Implementation(
+			titleCase(backupstorage.BackupStorageImplementation),
+		),
+	)
+	bs = bs.WithParams(backupstorage.Params{
+		Logger: params.Logger,
+		Stats:  bsStats,
+	})
+
 	bh, err := bs.StartBackup(ctx, backupDir, name)
 	if err != nil {
 		return vterrors.Wrap(err, "StartBackup failed")
@@ -116,9 +142,14 @@ func Backup(ctx context.Context, params BackupParams) error {
 	if err != nil {
 		return vterrors.Wrap(err, "failed to find backup engine")
 	}
-
+	// Scope stats to selected backup engine.
+	beParams := params.Copy()
+	beParams.Stats = params.Stats.Scope(
+		stats.Component(stats.BackupEngine),
+		stats.Implementation(titleCase(backupEngineImplementation)),
+	)
 	// Take the backup, and either AbortBackup or EndBackup.
-	usable, err := be.ExecuteBackup(ctx, params, bh)
+	usable, err := be.ExecuteBackup(ctx, beParams, bh)
 	logger := params.Logger
 	var finishErr error
 	if usable {
@@ -138,7 +169,8 @@ func Backup(ctx context.Context, params BackupParams) error {
 	}
 
 	// The backup worked, so just return the finish error, if any.
-	backupDuration.Set(int64(time.Since(startTs).Seconds()))
+	stats.DeprecatedBackupDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(stats.Operation("Backup")).TimedIncrement(time.Since(startTs))
 	return finishErr
 }
 
@@ -266,6 +298,10 @@ func ShouldRestore(ctx context.Context, params RestoreParams) (bool, error) {
 // appropriate backup on the BackupStorage, Restore logs an error
 // and returns ErrNoBackup. Any other error is returned.
 func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error) {
+	if params.Stats == nil {
+		params.Stats = stats.NoStats()
+	}
+
 	startTs := time.Now()
 	// find the right backup handle: most recent one, with a MANIFEST
 	params.Logger.Infof("Restore: looking for a suitable backup to restore")
@@ -275,6 +311,18 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	}
 	defer bs.Close()
 
+	// Scope bsStats to selected storage engine.
+	bsStats := params.Stats.Scope(
+		stats.Component(backupstats.BackupStorage),
+		stats.Implementation(
+			titleCase(backupstorage.BackupStorageImplementation),
+		),
+	)
+	bs = bs.WithParams(backupstorage.Params{
+		Logger: params.Logger,
+		Stats:  bsStats,
+	})
+
 	// Backups are stored in a directory structure that starts with
 	// <keyspace>/<shard>
 	backupDir := GetBackupDir(params.Keyspace, params.Shard)
@@ -282,8 +330,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "ListBackups failed")
 	}
-
-	metadataManager := &MetadataManager{}
 
 	if len(bhs) == 0 {
 		// There are no backups (not even broken/incomplete ones).
@@ -298,25 +344,34 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 			params.Logger.Errorf("error resetting replication: %v. Continuing", err)
 		}
 
-		if err := metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName); err != nil {
-			params.Logger.Errorf("error populating metadata tables: %v. Continuing", err)
-
-		}
 		// Always return ErrNoBackup
 		return nil, ErrNoBackup
 	}
 
-	bh, err := FindBackupToRestore(ctx, params, bhs)
+	restorePath, err := FindBackupToRestore(ctx, params, bhs)
 	if err != nil {
 		return nil, err
 	}
-
+	if restorePath.IsEmpty() {
+		// This condition should not happen; but we validate for sanity
+		return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "empty restore path")
+	}
+	bh := restorePath.FullBackupHandle()
 	re, err := GetRestoreEngine(ctx, bh)
 	if err != nil {
 		return nil, vterrors.Wrap(err, "Failed to find restore engine")
 	}
-
-	manifest, err := re.ExecuteRestore(ctx, params, bh)
+	params.Logger.Infof("Restore: %v", restorePath.String())
+	if params.DryRun {
+		return nil, nil
+	}
+	// Scope stats to selected backup engine.
+	reParams := params.Copy()
+	reParams.Stats = params.Stats.Scope(
+		stats.Component(backupstats.BackupEngine),
+		stats.Implementation(titleCase(backupEngineImplementation)),
+	)
+	manifest, err := re.ExecuteRestore(ctx, reParams, bh)
 	if err != nil {
 		return nil, err
 	}
@@ -342,7 +397,7 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	// This is safe, since we're restarting MySQL after the restore anyway
 	params.Logger.Infof("Restore: disabling super_read_only")
 	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
-		if strings.Contains(err.Error(), strconv.Itoa(mysql.ERUnknownSystemVariable)) {
+		if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
 			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
 		} else {
 			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
@@ -353,18 +408,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	params.Logger.Infof("Restore: running mysql_upgrade")
 	if err := params.Mysqld.RunMysqlUpgrade(); err != nil {
 		return nil, vterrors.Wrap(err, "mysql_upgrade failed")
-	}
-
-	// Add backupTime and restorePosition to LocalMetadata
-	params.LocalMetadata["RestoredBackupTime"] = manifest.BackupTime
-	params.LocalMetadata["RestorePosition"] = mysql.EncodePosition(manifest.Position)
-
-	// Populate local_metadata before starting without --skip-networking,
-	// so it's there before we start announcing ourselves.
-	params.Logger.Infof("Restore: populating local_metadata")
-	err = metadataManager.PopulateMetadataTables(params.Mysqld, params.LocalMetadata, params.DbName)
-	if err != nil {
-		return nil, err
 	}
 
 	// The MySQL manual recommends restarting mysqld after running mysql_upgrade,
@@ -379,10 +422,25 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 		return nil, err
 	}
 
+	if handles := restorePath.IncrementalBackupHandles(); len(handles) > 0 {
+		params.Logger.Infof("Restore: applying %v incremental backups", len(handles))
+		for _, bh := range handles {
+			manifest, err := re.ExecuteRestore(ctx, params, bh)
+			if err != nil {
+				return nil, err
+			}
+			params.Logger.Infof("Restore: applied incremental backup: %v", manifest.Position)
+		}
+		params.Logger.Infof("Restore: done applying incremental backups")
+	}
+
+	params.Logger.Infof("Restore: removing state file")
 	if err = removeStateFile(params.Cnf); err != nil {
 		return nil, err
 	}
 
-	restoreDuration.Set(int64(time.Since(startTs).Seconds()))
+	stats.DeprecatedRestoreDurationS.Set(int64(time.Since(startTs).Seconds()))
+	params.Stats.Scope(stats.Operation("Restore")).TimedIncrement(time.Since(startTs))
+	params.Logger.Infof("Restore: complete")
 	return manifest, nil
 }

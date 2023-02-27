@@ -389,10 +389,10 @@ func (si *ShardInfo) GetTabletControl(tabletType topodatapb.TabletType) *topodat
 // UpdateSourceDeniedTables will add or remove the listed tables
 // in the shard record's TabletControl structures. Note we don't
 // support a lot of the corner cases:
-// - only support one table list per shard. If we encounter a different
-//   table list that the provided one, we error out.
-// - we don't support DisableQueryService at the same time as DeniedTables,
-//   because it's not used in the same context (vertical vs horizontal sharding)
+//   - only support one table list per shard. If we encounter a different
+//     table list that the provided one, we error out.
+//   - we don't support DisableQueryService at the same time as DeniedTables,
+//     because it's not used in the same context (vertical vs horizontal sharding)
 //
 // This function should be called while holding the keyspace lock.
 func (si *ShardInfo) UpdateSourceDeniedTables(ctx context.Context, tabletType topodatapb.TabletType, cells []string, remove bool, tables []string) error {
@@ -656,11 +656,14 @@ type WatchShardData struct {
 // WatchShard will set a watch on the Shard object.
 // It has the same contract as conn.Watch, but it also unpacks the
 // contents into a Shard object
-func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*WatchShardData, <-chan *WatchShardData, CancelFunc) {
+func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*WatchShardData, <-chan *WatchShardData, error) {
 	shardPath := shardFilePath(keyspace, shard)
-	current, wdChannel, cancel := ts.globalCell.Watch(ctx, shardPath)
-	if current.Err != nil {
-		return &WatchShardData{Err: current.Err}, nil, nil
+	ctx, cancel := context.WithCancel(ctx)
+
+	current, wdChannel, err := ts.globalCell.Watch(ctx, shardPath)
+	if err != nil {
+		cancel()
+		return nil, nil, err
 	}
 	value := &topodatapb.Shard{}
 	if err := proto.Unmarshal(current.Contents, value); err != nil {
@@ -668,7 +671,7 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 		cancel()
 		for range wdChannel {
 		}
-		return &WatchShardData{Err: vterrors.Wrapf(err, "error unpacking initial Shard object")}, nil, nil
+		return nil, nil, vterrors.Wrapf(err, "error unpacking initial Shard object")
 	}
 
 	changes := make(chan *WatchShardData, 10)
@@ -678,6 +681,7 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 	// send an ErrInterrupted and then close the channel. We'll
 	// just propagate that back to our caller.
 	go func() {
+		defer cancel()
 		defer close(changes)
 
 		for wd := range wdChannel {
@@ -702,5 +706,5 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 		}
 	}()
 
-	return &WatchShardData{Value: value}, changes, cancel
+	return &WatchShardData{Value: value}, changes, nil
 }

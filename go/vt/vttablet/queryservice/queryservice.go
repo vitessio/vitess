@@ -117,13 +117,17 @@ type QueryService interface {
 
 	Release(ctx context.Context, target *querypb.Target, transactionID, reservedID int64) error
 
+	// GetSchema returns the table definition for the specified tables.
+	GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error
+
 	// Close must be called for releasing resources.
 	Close(ctx context.Context) error
 }
 
 type TransactionState struct {
-	TransactionID int64
-	TabletAlias   *topodatapb.TabletAlias
+	TransactionID       int64
+	TabletAlias         *topodatapb.TabletAlias
+	SessionStateChanges string
 }
 
 type ReservedState struct {
@@ -132,7 +136,8 @@ type ReservedState struct {
 }
 
 type ReservedTransactionState struct {
-	ReservedID    int64
-	TransactionID int64
-	TabletAlias   *topodatapb.TabletAlias
+	ReservedID          int64
+	TransactionID       int64
+	TabletAlias         *topodatapb.TabletAlias
+	SessionStateChanges string
 }

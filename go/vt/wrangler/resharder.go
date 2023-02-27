@@ -43,18 +43,20 @@ import (
 )
 
 type resharder struct {
-	wr              *Wrangler
-	keyspace        string
-	workflow        string
-	sourceShards    []*topo.ShardInfo
-	sourcePrimaries map[string]*topo.TabletInfo
-	targetShards    []*topo.ShardInfo
-	targetPrimaries map[string]*topo.TabletInfo
-	vschema         *vschemapb.Keyspace
-	refStreams      map[string]*refStream
-	cell            string //single cell or cellsAlias or comma-separated list of cells/cellsAliases
-	tabletTypes     string
-	stopAfterCopy   bool
+	wr                 *Wrangler
+	keyspace           string
+	workflow           string
+	sourceShards       []*topo.ShardInfo
+	sourcePrimaries    map[string]*topo.TabletInfo
+	targetShards       []*topo.ShardInfo
+	targetPrimaries    map[string]*topo.TabletInfo
+	vschema            *vschemapb.Keyspace
+	refStreams         map[string]*refStream
+	cell               string //single cell or cellsAlias or comma-separated list of cells/cellsAliases
+	tabletTypes        string
+	stopAfterCopy      bool
+	onDDL              string
+	deferSecondaryKeys bool
 }
 
 type refStream struct {
@@ -66,7 +68,7 @@ type refStream struct {
 
 // Reshard initiates a resharding workflow.
 func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sources, targets []string,
-	skipSchemaCopy bool, cell, tabletTypes string, autoStart, stopAfterCopy bool) error {
+	skipSchemaCopy bool, cell, tabletTypes, onDDL string, autoStart, stopAfterCopy, deferSecondaryKeys bool) error {
 	if err := wr.validateNewWorkflow(ctx, keyspace, workflow); err != nil {
 		return err
 	}
@@ -81,7 +83,9 @@ func (wr *Wrangler) Reshard(ctx context.Context, keyspace, workflow string, sour
 		return vterrors.Wrap(err, "buildResharder")
 	}
 
+	rs.onDDL = onDDL
 	rs.stopAfterCopy = stopAfterCopy
+	rs.deferSecondaryKeys = deferSecondaryKeys
 	if !skipSchemaCopy {
 		if err := rs.copySchema(ctx); err != nil {
 			return vterrors.Wrap(err, "copySchema")
@@ -327,12 +331,20 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				Shard:         source.ShardName(),
 				Filter:        filter,
 				StopAfterCopy: rs.stopAfterCopy,
+				OnDdl:         binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[rs.onDDL]),
 			}
-			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes)
+			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
+				binlogdatapb.VReplicationWorkflowType_Reshard,
+				binlogdatapb.VReplicationWorkflowSubType_None,
+				rs.deferSecondaryKeys)
 		}
 
 		for _, rstream := range rs.refStreams {
-			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes)
+			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
+				//todo: fix based on original stream
+				binlogdatapb.VReplicationWorkflowType_Reshard,
+				binlogdatapb.VReplicationWorkflowSubType_None,
+				rs.deferSecondaryKeys)
 		}
 		query := ig.String()
 		if _, err := rs.wr.tmc.VReplicationExec(ctx, targetPrimary.Tablet, query); err != nil {

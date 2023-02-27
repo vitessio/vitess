@@ -17,18 +17,16 @@ limitations under the License.
 package grpcclient
 
 import (
-	"encoding/json"
-	"flag"
-	"os"
-
 	"context"
+	"encoding/json"
+	"os"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 )
 
 var (
-	credsFile = flag.String("grpc_auth_static_client_creds", "", "when using grpc_static_auth in the server, this file provides the credentials to use to authenticate with server")
+	credsFile string // registered as --grpc_auth_static_client_creds in RegisterFlags
 	// StaticAuthClientCreds implements client interface to be able to WithPerRPCCredentials
 	_ credentials.PerRPCCredentials = (*StaticAuthClientCreds)(nil)
 )
@@ -56,10 +54,10 @@ func (c *StaticAuthClientCreds) RequireTransportSecurity() bool {
 
 // AppendStaticAuth optionally appends static auth credentials if provided.
 func AppendStaticAuth(opts []grpc.DialOption) ([]grpc.DialOption, error) {
-	if *credsFile == "" {
+	if credsFile == "" {
 		return opts, nil
 	}
-	data, err := os.ReadFile(*credsFile)
+	data, err := os.ReadFile(credsFile)
 	if err != nil {
 		return nil, err
 	}

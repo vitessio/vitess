@@ -27,7 +27,7 @@ import (
 
 func addStatusParts(vtg *vtgate.VTGate) {
 	// Override and reparse the template string so we can point tablet server urls to a local path.
-	*discovery.TabletURLTemplateString = "{{.NamedStatusURL}}"
+	discovery.TabletURLTemplateString = "{{.NamedStatusURL}}"
 	discovery.ParseTabletURLTemplateFromFlag()
 
 	servenv.AddStatusPart("Executor", vtgate.ExecutorTemplate, func() any {

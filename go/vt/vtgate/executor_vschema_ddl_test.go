@@ -96,7 +96,7 @@ func waitForVschemaTables(t *testing.T, ks string, tables []string, executor *Ex
 	return nil
 }
 
-//nolint
+// nolint
 func waitForColVindexes(t *testing.T, ks, table string, names []string, executor *Executor) *vschemapb.SrvVSchema {
 	t.Helper()
 
@@ -132,9 +132,9 @@ func waitForColVindexes(t *testing.T, ks, table string, names []string, executor
 }
 
 func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	session := NewSafeSession(&vtgatepb.Session{TargetString: "@primary", Autocommit: true})
@@ -160,9 +160,9 @@ func TestPlanExecutorAlterVSchemaKeyspace(t *testing.T) {
 }
 
 func TestPlanExecutorCreateVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	ks := "TestExecutor"
@@ -202,9 +202,9 @@ func TestPlanExecutorCreateVindexDDL(t *testing.T) {
 }
 
 func TestPlanExecutorDropVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	ks := "TestExecutor"
@@ -236,7 +236,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 		t.Errorf("want error %v got %v", wantErr, err)
 	}
 
-	//add one vindex that has never been used by the tables
+	// add one vindex that has never been used by the tables
 	stmt = "alter vschema create vindex test_vindex using hash"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -246,7 +246,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 		t.Errorf("updated vschema did not contain test_vindex")
 	}
 
-	//drop an existing vindex that has never been used by the tables
+	// drop an existing vindex that has never been used by the tables
 	stmt = "alter vschema drop vindex TestExecutor.test_vindex"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	require.NoError(t, err)
@@ -256,7 +256,7 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 		t.Fatalf("test_vindex should not exist after droping it")
 	}
 
-	//drop an existing vindex that is used by at least one table
+	// drop an existing vindex that is used by at least one table
 	stmt = "alter vschema drop vindex TestExecutor.keyspace_id"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
 	wantErr = "can not drop vindex cause keyspace_id still defined on table ksid_table"
@@ -271,9 +271,9 @@ func TestPlanExecutorDropVindexDDL(t *testing.T) {
 }
 
 func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, sbc1, sbc2, sbclookup := createExecutorEnv()
 	ks := KsTestUnsharded
@@ -318,9 +318,9 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	// No queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
 	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
+		sbc1.ExecCount.Load(),
+		sbc2.ExecCount.Load(),
+		sbclookup.ExecCount.Load(),
 	}
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
@@ -328,9 +328,9 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 }
 
 func TestExecutorAddSequenceDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
 	executor, _, _, _ := createExecutorEnv()
 	ks := KsTestUnsharded
@@ -388,11 +388,11 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 }
 
 func TestExecutorAddDropVindexDDL(t *testing.T) {
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	defer func() {
-		*vschemaacl.AuthorizedDDLUsers = ""
+		vschemaacl.AuthorizedDDLUsers = ""
 	}()
-	executor, sbc1, sbc2, sbclookup := createExecutorEnv() //nolint
+	executor, sbc1, sbc2, sbclookup := createExecutorEnv() // nolint
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
 	vschemaUpdates := make(chan *vschemapb.SrvVSchema, 4)
@@ -432,7 +432,7 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	_, _ = waitForVindex(t, ks, "test_hash", vschemaUpdates, executor)
 	_ = waitForColVindexes(t, ks, "test", []string{}, executor)
 	_, err = executor.Execute(context.Background(), "TestExecute", session, "show vschema vindexes on TestExecutor.test", nil)
-	require.EqualError(t, err, "table 'test' does not exist in keyspace 'TestExecutor'")
+	require.EqualError(t, err, "VT05005: table 'test' does not exist in keyspace 'TestExecutor'")
 
 	// add it again using the same syntax
 	stmt = "alter vschema on test add vindex test_hash (id) using hash "
@@ -601,11 +601,11 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 
 	stmt = "alter vschema on nonexistent drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", NewSafeSession(&vtgatepb.Session{TargetString: "InvalidKeyspace"}), stmt, nil)
-	require.EqualError(t, err, "Unknown database 'InvalidKeyspace' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'InvalidKeyspace' in vschema")
 
 	stmt = "alter vschema on nowhere.nohow drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
-	require.EqualError(t, err, "Unknown database 'nowhere' in vschema")
+	require.EqualError(t, err, "VT05003: unknown database 'nowhere' in vschema")
 
 	stmt = "alter vschema on test drop vindex test_lookup"
 	_, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil)
@@ -614,15 +614,15 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	// no queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
 	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
+		sbc1.ExecCount.Load(),
+		sbc2.ExecCount.Load(),
+		sbclookup.ExecCount.Load(),
 	}
 	utils.MustMatch(t, wantCount, gotCount)
 }
 
 func TestPlanExecutorVindexDDLACL(t *testing.T) {
-	//t.Skip("not yet planned")
+	// t.Skip("not yet planned")
 	executor, _, _, _ := createExecutorEnv()
 	ks := "TestExecutor"
 	session := NewSafeSession(&vtgatepb.Session{TargetString: ks})
@@ -639,7 +639,7 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	require.EqualError(t, err, `User 'blueUser' is not authorized to perform vschema operations`)
 
 	// test when all users are enabled
-	*vschemaacl.AuthorizedDDLUsers = "%"
+	vschemaacl.AuthorizedDDLUsers = "%"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
 	if err != nil {
@@ -652,7 +652,7 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// test when only one user is enabled
-	*vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
+	vschemaacl.AuthorizedDDLUsers = "orangeUser, blueUser, greenUser"
 	vschemaacl.Init()
 	_, err = executor.Execute(ctxRedUser, "TestExecute", session, stmt, nil)
 	require.EqualError(t, err, `User 'redUser' is not authorized to perform vschema operations`)
@@ -664,5 +664,5 @@ func TestPlanExecutorVindexDDLACL(t *testing.T) {
 	}
 
 	// restore the disallowed state
-	*vschemaacl.AuthorizedDDLUsers = ""
+	vschemaacl.AuthorizedDDLUsers = ""
 }

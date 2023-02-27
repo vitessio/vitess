@@ -60,7 +60,7 @@ type Send struct {
 // ShardName as key for setting shard name in bind variables map
 const ShardName = "__vt_shard"
 
-//NeedsTransaction implements the Primitive interface
+// NeedsTransaction implements the Primitive interface
 func (s *Send) NeedsTransaction() bool {
 	return s.IsDML
 }
@@ -86,6 +86,8 @@ func (s *Send) GetTableName() string {
 
 // TryExecute implements Primitive interface
 func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, 0)
+	defer cancelFunc()
 	rss, _, err := vcursor.ResolveDestinations(ctx, s.Keyspace.Name, nil, []key.Destination{s.TargetDestination})
 	if err != nil {
 		return nil, err
@@ -113,7 +115,7 @@ func (s *Send) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[str
 	}
 
 	rollbackOnError := s.IsDML // for non-dml queries, there's no need to do a rollback
-	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss))
+	result, errs := vcursor.ExecuteMultiShard(ctx, s, rss, queries, rollbackOnError, s.canAutoCommit(vcursor, rss))
 	err = vterrors.Aggregate(errs)
 	if err != nil {
 		return nil, err
@@ -160,7 +162,7 @@ func (s *Send) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars m
 		}
 		multiBindVars[i] = bv
 	}
-	errors := vcursor.StreamExecuteMulti(ctx, s.Query, rss, multiBindVars, s.IsDML, s.canAutoCommit(vcursor, rss), callback)
+	errors := vcursor.StreamExecuteMulti(ctx, s, s.Query, rss, multiBindVars, s.IsDML, s.canAutoCommit(vcursor, rss), callback)
 	return vterrors.Aggregate(errors)
 }
 

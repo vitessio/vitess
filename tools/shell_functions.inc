@@ -16,13 +16,14 @@
 
 # Library of functions which are used by bootstrap.sh or the Makefile.
 
-# goversion_min returns true if major.minor go version is at least some value.
+# goversion_min returns true if the installed go version is at least
+# the version passed as the first parameter
 function goversion_min() {
-  [[ "$(go version)" =~ go([0-9]+)\.([0-9]+)\.([0-9]+) ]]
+  [[ "$(go version)" =~ go([0-9]+)[\.]?([0-9]*)[\.]?([0-9]*) ]]
   gotmajor=${BASH_REMATCH[1]}
   gotminor=${BASH_REMATCH[2]}
   gotpatch=${BASH_REMATCH[3]}
-  [[ "$1" =~ ([0-9]+)\.([0-9]+)\.([0-9]+) ]]
+  [[ "$1" =~ ([0-9]+)[\.]?([0-9]*)[\.]?([0-9]*) ]]
   wantmajor=${BASH_REMATCH[1]}
   wantminor=${BASH_REMATCH[2]}
   wantpatch=${BASH_REMATCH[3]}
@@ -30,8 +31,8 @@ function goversion_min() {
   [[ $gotmajor -gt $wantmajor ]] && return 0
   [[ $gotminor -lt $wantminor ]] && return 1
   [[ $gotminor -gt $wantminor ]] && return 0
-  [[ $gotpatch -lt $wantpatch ]] && return 1
-  return 0
+  [[ $gotpatch -ge $wantpatch ]] && return 0
+  return 1
 }
 
 # prepend_path returns $2 prepended the colon separated path $1.

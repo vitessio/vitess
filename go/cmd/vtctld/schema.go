@@ -17,11 +17,12 @@ limitations under the License.
 package main
 
 import (
-	"flag"
+	"context"
 	"time"
 
-	"context"
+	"github.com/spf13/pflag"
 
+	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -32,31 +33,42 @@ import (
 )
 
 var (
-	schemaChangeDir             = flag.String("schema_change_dir", "", "directory contains schema changes for all keyspaces. Each keyspace has its own directory and schema changes are expected to live in '$KEYSPACE/input' dir. e.g. test_keyspace/input/*sql, each sql file represents a schema change")
-	schemaChangeController      = flag.String("schema_change_controller", "", "schema change controller is responsible for finding schema changes and responding to schema change events")
-	schemaChangeCheckInterval   = flag.Int("schema_change_check_interval", 60, "this value decides how often we check schema change dir, in seconds")
-	schemaChangeUser            = flag.String("schema_change_user", "", "The user who submits this schema change.")
-	schemaChangeReplicasTimeout = flag.Duration("schema_change_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "how long to wait for replicas to receive the schema change")
+	schemaChangeDir             string
+	schemaChangeController      string
+	schemaChangeUser            string
+	schemaChangeCheckInterval   = flagutil.NewDurationOrIntVar("schema_change_check_interval", time.Minute, time.Second)
+	schemaChangeReplicasTimeout = wrangler.DefaultWaitReplicasTimeout
 )
+
+func init() {
+	servenv.OnParse(func(fs *pflag.FlagSet) {
+		fs.StringVar(&schemaChangeDir, "schema_change_dir", schemaChangeDir, "Directory containing schema changes for all keyspaces. Each keyspace has its own directory, and schema changes are expected to live in '$KEYSPACE/input' dir. (e.g. 'test_keyspace/input/*sql'). Each sql file represents a schema change.")
+		fs.StringVar(&schemaChangeController, "schema_change_controller", schemaChangeController, "Schema change controller is responsible for finding schema changes and responding to schema change events.")
+		fs.StringVar(&schemaChangeUser, "schema_change_user", schemaChangeUser, "The user who schema changes are submitted on behalf of.")
+
+		fs.Var(schemaChangeCheckInterval, "schema_change_check_interval", "How often the schema change dir is checked for schema changes (deprecated: if passed as a bare integer, the duration will be in seconds).")
+		fs.DurationVar(&schemaChangeReplicasTimeout, "schema_change_replicas_timeout", schemaChangeReplicasTimeout, "How long to wait for replicas to receive a schema change.")
+	})
+}
 
 func initSchema() {
 	// Start schema manager service if needed.
-	if *schemaChangeDir != "" {
-		interval := 60
-		if *schemaChangeCheckInterval > 0 {
-			interval = *schemaChangeCheckInterval
+	if schemaChangeDir != "" {
+		interval := time.Minute
+		if schemaChangeCheckInterval.Value() > time.Duration(0) {
+			interval = schemaChangeCheckInterval.Value()
 		}
-		timer := timer.NewTimer(time.Duration(interval) * time.Second)
+		timer := timer.NewTimer(interval)
 		controllerFactory, err :=
-			schemamanager.GetControllerFactory(*schemaChangeController)
+			schemamanager.GetControllerFactory(schemaChangeController)
 		if err != nil {
 			log.Fatalf("unable to get a controller factory, error: %v", err)
 		}
 
 		timer.Start(func() {
 			controller, err := controllerFactory(map[string]string{
-				schemamanager.SchemaChangeDirName: *schemaChangeDir,
-				schemamanager.SchemaChangeUser:    *schemaChangeUser,
+				schemamanager.SchemaChangeDirName: schemaChangeDir,
+				schemamanager.SchemaChangeUser:    schemaChangeUser,
 			})
 			if err != nil {
 				log.Errorf("failed to get controller, error: %v", err)
@@ -67,7 +79,7 @@ func initSchema() {
 			_, err = schemamanager.Run(
 				ctx,
 				controller,
-				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), *schemaChangeReplicasTimeout),
+				schemamanager.NewTabletExecutor("vtctld/schema", wr.TopoServer(), wr.TabletManagerClient(), wr.Logger(), schemaChangeReplicasTimeout),
 			)
 			if err != nil {
 				log.Errorf("Schema change failed, error: %v", err)

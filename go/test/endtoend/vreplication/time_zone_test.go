@@ -31,10 +31,6 @@ import (
 
 // TestMoveTablesTZ tests the conversion of datetime based on the source timezone passed to the MoveTables workflow
 func TestMoveTablesTZ(t *testing.T) {
-	runVDiffsSideBySide = false
-	defer func() {
-		runVDiffsSideBySide = true
-	}()
 	allCellNames = "zone1"
 	defaultCellName := "zone1"
 	workflow := "tz"

@@ -56,7 +56,6 @@ var (
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
-
 	exitCode := func() int {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
@@ -85,7 +84,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = clusterInstance.VtctlclientProcess.ExecuteCommand("RebuildVSchemaGraph")
+		_, err = clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("RebuildVSchemaGraph")
 		if err != nil {
 			return 1
 		}
@@ -97,10 +96,8 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
+		vtParams = clusterInstance.GetVTParams(KeyspaceName)
+
 		return m.Run()
 	}()
 	os.Exit(exitCode)
@@ -113,7 +110,7 @@ func start(t *testing.T) (*mysql.Conn, func()) {
 
 	deleteAll := func() {
 		utils.Exec(t, conn, "use ks")
-		tables := []string{"t1", "t2", "vstream_test", "t3", "t4", "t6", "t7_xxhash", "t7_xxhash_idx", "t7_fk", "t8", "t9", "t9_id_to_keyspace_id_idx", "t1_id2_idx", "t2_id4_idx", "t3_id7_idx", "t4_id2_idx", "t5_null_vindex", "t6_id2_idx"}
+		tables := []string{"t1", "t2", "vstream_test", "t3", "t4", "t6", "t7_xxhash", "t7_xxhash_idx", "t7_fk", "t8", "t9", "t9_id_to_keyspace_id_idx", "t10", "t10_id_to_keyspace_id_idx", "t1_id2_idx", "t2_id4_idx", "t3_id7_idx", "t4_id2_idx", "t5_null_vindex", "t6_id2_idx"}
 		for _, table := range tables {
 			_, _ = utils.ExecAllowError(t, conn, "delete from "+table)
 		}

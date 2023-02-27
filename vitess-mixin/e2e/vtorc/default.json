@@ -1,0 +1,13 @@
+{
+  "Debug": true,
+  "EnableSyslog": false,
+  "MySQLTopologyUser": "orc_client_user",
+  "MySQLTopologyPassword": "orc_client_user_password",
+  "MySQLReplicaUser": "vt_repl",
+  "MySQLReplicaPassword": "",
+  "BackendDB": "sqlite",
+  "SQLite3DataFile": "/tmp/vtorc.sqlite3",
+  "RecoverMasterClusterFilters": ["*"],
+  "RecoveryPeriodBlockSeconds": 5,
+  "DelayMasterPromotionIfSQLThreadNotUpToDate": true
+}

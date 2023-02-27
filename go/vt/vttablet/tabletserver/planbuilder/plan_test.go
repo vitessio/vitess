@@ -41,13 +41,14 @@ import (
 // This is only for testing.
 func (p *Plan) MarshalJSON() ([]byte, error) {
 	mplan := struct {
-		PlanID      PlanType
-		TableName   sqlparser.IdentifierCS `json:",omitempty"`
-		Permissions []Permission           `json:",omitempty"`
-		FieldQuery  *sqlparser.ParsedQuery `json:",omitempty"`
-		FullQuery   *sqlparser.ParsedQuery `json:",omitempty"`
-		NextCount   string                 `json:",omitempty"`
-		WhereClause *sqlparser.ParsedQuery `json:",omitempty"`
+		PlanID            PlanType
+		TableName         sqlparser.IdentifierCS `json:",omitempty"`
+		Permissions       []Permission           `json:",omitempty"`
+		FieldQuery        *sqlparser.ParsedQuery `json:",omitempty"`
+		FullQuery         *sqlparser.ParsedQuery `json:",omitempty"`
+		NextCount         string                 `json:",omitempty"`
+		WhereClause       *sqlparser.ParsedQuery `json:",omitempty"`
+		NeedsReservedConn bool                   `json:",omitempty"`
 	}{
 		PlanID:      p.PlanID,
 		TableName:   p.TableName(),
@@ -58,12 +59,24 @@ func (p *Plan) MarshalJSON() ([]byte, error) {
 	if p.NextCount != nil {
 		mplan.NextCount = evalengine.FormatExpr(p.NextCount)
 	}
+	if p.NeedsReservedConn {
+		mplan.NeedsReservedConn = true
+	}
 	return json.Marshal(&mplan)
 }
 
 func TestPlan(t *testing.T) {
+	testPlan(t, "exec_cases.txt")
+}
+
+func TestDDLPlan(t *testing.T) {
+	testPlan(t, "ddl_cases.txt")
+}
+
+func testPlan(t *testing.T, fileName string) {
+	t.Helper()
 	testSchema := loadSchema("schema_test.json")
-	for tcase := range iterateExecFile("exec_cases.txt") {
+	for tcase := range iterateExecFile(fileName) {
 		t.Run(tcase.input, func(t *testing.T) {
 			if strings.Contains(tcase.options, "PassthroughDMLs") {
 				PassthroughDMLs = true
@@ -72,7 +85,7 @@ func TestPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, false, "dbName")
+				plan, err = Build(statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -98,36 +111,6 @@ func TestPlan(t *testing.T) {
 	}
 }
 
-func TestPlanPoolUnsafe(t *testing.T) {
-	testSchema := loadSchema("schema_test.json")
-	for tcase := range iterateExecFile("pool_unsafe_cases.txt") {
-		t.Run(tcase.input, func(t *testing.T) {
-			var plan *Plan
-			var err error
-			statement, err := sqlparser.Parse(tcase.input)
-			require.NoError(t, err)
-			// In Pooled Connection, plan building will fail.
-			plan, err = Build(statement, testSchema, false /* isReservedConn */, "dbName")
-			require.Error(t, err)
-			out := err.Error()
-			if out != tcase.output {
-				t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
-				if err != nil {
-					out = fmt.Sprintf("\"%s\"", out)
-				} else {
-					bout, _ := json.MarshalIndent(plan, "", "  ")
-					out = string(bout)
-				}
-				fmt.Printf("\"%s\"\n%s\n\n", tcase.input, out)
-			}
-			// In Reserved Connection, plan will be built.
-			plan, err = Build(statement, testSchema, true /* isReservedConn */, "dbName")
-			require.NoError(t, err)
-			require.NotEmpty(t, plan)
-		})
-	}
-}
-
 func TestPlanInReservedConn(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("exec_cases.txt") {
@@ -139,7 +122,7 @@ func TestPlanInReservedConn(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, true, "dbName")
+				plan, err = Build(statement, testSchema, "dbName", false)
 			}
 			PassthroughDMLs = false
 
@@ -190,7 +173,7 @@ func TestCustom(t *testing.T) {
 				if err != nil {
 					t.Fatalf("Got error: %v, parsing sql: %v", err.Error(), tcase.input)
 				}
-				plan, err := Build(statement, schem, false, "dbName")
+				plan, err := Build(statement, schem, "dbName", false)
 				var out string
 				if err != nil {
 					out = err.Error()
@@ -212,7 +195,7 @@ func TestCustom(t *testing.T) {
 func TestStreamPlan(t *testing.T) {
 	testSchema := loadSchema("schema_test.json")
 	for tcase := range iterateExecFile("stream_cases.txt") {
-		plan, err := BuildStreaming(tcase.input, testSchema, false)
+		plan, err := BuildStreaming(tcase.input, testSchema)
 		var out string
 		if err != nil {
 			out = err.Error()
@@ -226,7 +209,6 @@ func TestStreamPlan(t *testing.T) {
 		if out != tcase.output {
 			t.Errorf("Line:%v\ngot  = %s\nwant = %s", tcase.lineno, out, tcase.output)
 		}
-		//fmt.Printf("%s\n%s\n\n", tcase.input, out)
 	}
 }
 
@@ -273,7 +255,7 @@ func TestLockPlan(t *testing.T) {
 			var err error
 			statement, err := sqlparser.Parse(tcase.input)
 			if err == nil {
-				plan, err = Build(statement, testSchema, false, "dbName")
+				plan, err = Build(statement, testSchema, "dbName", false)
 			}
 
 			var out string
@@ -350,7 +332,7 @@ func iterateExecFile(name string) (testCaseIterator chan testCase) {
 			lineno++
 			input := string(binput)
 			if input == "" || input == "\n" || input[0] == '#' || strings.HasPrefix(input, "Length:") {
-				//fmt.Printf("%s\n", input)
+				// fmt.Printf("%s\n", input)
 				continue
 			}
 

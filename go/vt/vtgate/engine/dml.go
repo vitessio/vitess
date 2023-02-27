@@ -69,11 +69,11 @@ func NewDML() *DML {
 	return &DML{RoutingParameters: &RoutingParameters{}}
 }
 
-func (dml *DML) execUnsharded(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
-	return execShard(ctx, vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
+func (dml *DML) execUnsharded(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard) (*sqltypes.Result, error) {
+	return execShard(ctx, primitive, vcursor, dml.Query, bindVars, rss[0], true /* rollbackOnError */, true /* canAutocommit */)
 }
 
-func (dml *DML) execMultiDestination(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
+func (dml *DML) execMultiDestination(ctx context.Context, primitive Primitive, vcursor VCursor, bindVars map[string]*querypb.BindVariable, rss []*srvtopo.ResolvedShard, dmlSpecialFunc func(context.Context, VCursor, map[string]*querypb.BindVariable, []*srvtopo.ResolvedShard) error) (*sqltypes.Result, error) {
 	if len(rss) == 0 {
 		return &sqltypes.Result{}, nil
 	}
@@ -88,7 +88,7 @@ func (dml *DML) execMultiDestination(ctx context.Context, vcursor VCursor, bindV
 			BindVariables: bindVars,
 		}
 	}
-	return execMultiShard(ctx, vcursor, rss, queries, dml.MultiShardAutocommit)
+	return execMultiShard(ctx, primitive, vcursor, rss, queries, dml.MultiShardAutocommit)
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -137,9 +137,9 @@ func allowOnlyPrimary(rss ...*srvtopo.ResolvedShard) error {
 	return nil
 }
 
-func execMultiShard(ctx context.Context, vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {
+func execMultiShard(ctx context.Context, primitive Primitive, vcursor VCursor, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, multiShardAutoCommit bool) (*sqltypes.Result, error) {
 	autocommit := (len(rss) == 1 || multiShardAutoCommit) && vcursor.AutocommitApproval()
-	result, errs := vcursor.ExecuteMultiShard(ctx, rss, queries, true /* rollbackOnError */, autocommit)
+	result, errs := vcursor.ExecuteMultiShard(ctx, primitive, rss, queries, true /* rollbackOnError */, autocommit)
 	return result, vterrors.Aggregate(errs)
 }
 

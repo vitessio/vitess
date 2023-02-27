@@ -354,7 +354,7 @@ message VReplicationExecResponse {
 }
 
 message VReplicationWaitForPosRequest {
-  int64 id = 1;
+  int32 id = 1;
   string position = 2;
 }
 
@@ -474,6 +474,9 @@ message PromoteReplicaResponse {
 message BackupRequest {
   int64 concurrency = 1;
   bool allow_primary = 2;
+  // IncrementalFromPos indicates a position of a previous backup. When this value is non-empty
+  // then the backup becomes incremental and applies as of given position.
+  string incremental_from_pos = 3;
 }
 
 message BackupResponse {
@@ -482,6 +485,12 @@ message BackupResponse {
 
 message RestoreFromBackupRequest {
   vttime.Time backup_time = 1;
+  // RestoreToPos indicates a position for a point-in-time recovery. The recovery
+  // is expected to utilize one full backup, followed by zero or more incremental backups,
+  // that reach the precise desired position
+  string restore_to_pos = 2;
+  // Dry run does not actually performs the restore, but validates the steps and availability of backups
+  bool dry_run = 3;
 }
 
 message RestoreFromBackupResponse {
@@ -522,7 +531,7 @@ message VDiffPickerOptions {
 
 // options that only influence how vdiff differences are reported
 message VDiffReportOptions {
-  bool only_p_k_s = 1;
+  bool only_pks = 1;
   bool debug_query = 2;
   string format = 3;
 }

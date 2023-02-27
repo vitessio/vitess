@@ -19,6 +19,8 @@ package collations
 import (
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
 
@@ -33,9 +35,8 @@ func testWildcardMatches(t *testing.T, collName string, chOne, chMany, chEsc run
 		for _, tc := range cases {
 			pat := coll.Wildcard([]byte(tc.pat), chOne, chMany, chEsc)
 			match := pat.Match([]byte(tc.in))
-			if match != tc.match {
-				t.Errorf("%q LIKE %q = %v (expected %v)", tc.in, tc.pat, match, tc.match)
-			}
+			assert.Equal(t, tc.match, match, "%q LIKE %q = %v (expected %v)", tc.in, tc.pat, match, tc.match)
+
 		}
 	})
 }
@@ -343,9 +344,8 @@ func TestWildcardMatches(t *testing.T) {
 		for _, tc := range wildcardTestCases {
 			wildcard := newUnicodeWildcardMatcher(charset.Charset_utf8mb4{}, identity, nil, []byte(tc.pat), '?', '*', '\\')
 			match := wildcard.Match([]byte(tc.in))
-			if match != tc.match {
-				t.Errorf("wildcard(%q, %q) = %v (expected %v)", tc.in, tc.pat, match, tc.match)
-			}
+			assert.Equal(t, tc.match, match, "wildcard(%q, %q) = %v (expected %v)", tc.in, tc.pat, match, tc.match)
+
 		}
 	})
 
@@ -353,9 +353,8 @@ func TestWildcardMatches(t *testing.T) {
 		for _, tc := range wildcardTestCases {
 			wildcard := newEightbitWildcardMatcher(&sortOrderIdentity, nil, []byte(tc.pat), '?', '*', '\\')
 			match := wildcard.Match([]byte(tc.in))
-			if match != tc.match {
-				t.Errorf("wildcard(%q, %q) = %v (expected %v)", tc.in, tc.pat, match, tc.match)
-			}
+			assert.Equal(t, tc.match, match, "wildcard(%q, %q) = %v (expected %v)", tc.in, tc.pat, match, tc.match)
+
 		}
 	})
 

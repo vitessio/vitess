@@ -99,7 +99,7 @@ func (vf *VindexFunc) TryStreamExecute(ctx context.Context, vcursor VCursor, bin
 	if err != nil {
 		return err
 	}
-	if err := callback(&sqltypes.Result{Fields: r.Fields}); err != nil {
+	if err := callback(r.Metadata()); err != nil {
 		return err
 	}
 	return callback(&sqltypes.Result{Rows: r.Rows})
@@ -125,16 +125,21 @@ func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars m
 	result := &sqltypes.Result{
 		Fields: vf.Fields,
 	}
-	for _, value := range values {
+	destinations, err := vf.Vindex.Map(ctx, vcursor, values)
+	if err != nil {
+		return nil, err
+	}
+	if len(destinations) != len(values) {
+		// should never happen
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "Vindex.Map() length mismatch: input values count is %d, output destinations count is %d",
+			len(values), len(destinations))
+	}
+	for i, value := range values {
 		vkey, err := evalengine.Cast(value, sqltypes.VarBinary)
 		if err != nil {
 			return nil, err
 		}
-		destinations, err := vf.Vindex.Map(ctx, vcursor, []sqltypes.Value{value})
-		if err != nil {
-			return nil, err
-		}
-		switch d := destinations[0].(type) {
+		switch d := destinations[i].(type) {
 		case key.DestinationKeyRange:
 			if d.KeyRange != nil {
 				row, err := vf.buildRow(vkey, nil, d.KeyRange)

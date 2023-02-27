@@ -21,6 +21,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Sample event data for MySQL 5.6.
@@ -46,14 +47,10 @@ func TestMysql56IsGTID(t *testing.T) {
 
 func TestMysql56StripChecksum(t *testing.T) {
 	format, err := mysql56FormatEvent.Format()
-	if err != nil {
-		t.Fatalf("Format() error: %v", err)
-	}
+	require.NoError(t, err, "Format() error: %v", err)
 
 	stripped, gotChecksum, err := mysql56QueryEvent.StripChecksum(format)
-	if err != nil {
-		t.Fatalf("StripChecksum() error: %v", err)
-	}
+	require.NoError(t, err, "StripChecksum() error: %v", err)
 
 	// Check checksum.
 	if want := []byte{0x92, 0x12, 0x79, 0xc3}; !reflect.DeepEqual(gotChecksum, want) {
@@ -64,9 +61,8 @@ func TestMysql56StripChecksum(t *testing.T) {
 	// Query length is defined as "the rest of the bytes after offset X",
 	// so the query will be wrong if the checksum is not stripped.
 	gotQuery, err := stripped.Query(format)
-	if err != nil {
-		t.Fatalf("Query() error: %v", err)
-	}
+	require.NoError(t, err, "Query() error: %v", err)
+
 	if want := "insert into test_table (msg) values ('hello')"; string(gotQuery.SQL) != want {
 		t.Errorf("query = %#v, want %#v", string(gotQuery.SQL), want)
 	}
@@ -74,28 +70,18 @@ func TestMysql56StripChecksum(t *testing.T) {
 
 func TestMysql56GTID(t *testing.T) {
 	format, err := mysql56FormatEvent.Format()
-	if err != nil {
-		t.Fatalf("Format() error: %v", err)
-	}
+	require.NoError(t, err, "Format() error: %v", err)
+
 	input, _, err := mysql56GTIDEvent.StripChecksum(format)
-	if err != nil {
-		t.Fatalf("StripChecksum() error: %v", err)
-	}
-	if !input.IsGTID() {
-		t.Fatalf("IsGTID() = false, want true")
-	}
+	require.NoError(t, err, "StripChecksum() error: %v", err)
+	require.True(t, input.IsGTID(), "IsGTID() = false, want true")
 
 	want, _ := parseMysql56GTID("439192bd-f37c-11e4-bbeb-0242ac11035a:4")
 	got, hasBegin, err := input.GTID(format)
-	if err != nil {
-		t.Fatalf("GTID() error: %v", err)
-	}
-	if hasBegin {
-		t.Errorf("GTID() returned hasBegin")
-	}
-	if got != want {
-		t.Errorf("GTID() = %#v, want %#v", got, want)
-	}
+	require.NoError(t, err, "GTID() error: %v", err)
+	assert.False(t, hasBegin, "GTID() returned hasBegin")
+	assert.Equal(t, want, got, "GTID() = %#v, want %#v", got, want)
+
 }
 
 func TestMysql56ParseGTID(t *testing.T) {
@@ -106,12 +92,9 @@ func TestMysql56ParseGTID(t *testing.T) {
 	}
 
 	got, err := parseMysql56GTID(input)
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
-	if got != want {
-		t.Errorf("(&mysql56{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
-	}
+	require.NoError(t, err, "unexpected error: %v", err)
+	assert.Equal(t, want, got, "(&mysql56{}).ParseGTID(%#v) = %#v, want %#v", input, got, want)
+
 }
 
 func TestMysql56ParsePosition(t *testing.T) {
@@ -124,12 +107,9 @@ func TestMysql56ParsePosition(t *testing.T) {
 	want := Position{GTIDSet: set}
 
 	got, err := ParsePosition(Mysql56FlavorID, input)
-	if err != nil {
-		t.Errorf("unexpected error: %v", err)
-	}
-	if !got.Equal(want) {
-		t.Errorf("(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
-	}
+	assert.NoError(t, err, "unexpected error: %v", err)
+	assert.True(t, got.Equal(want), "(&mysql56{}).ParsePosition(%#v) = %#v, want %#v", input, got, want)
+
 }
 
 func TestMysql56SemiSyncAck(t *testing.T) {

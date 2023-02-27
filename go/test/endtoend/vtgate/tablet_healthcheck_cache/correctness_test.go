@@ -201,13 +201,13 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 		clusterInstance.Hostname,
 		clusterInstance.TmpDirectory,
 		clusterInstance.VtTabletExtraArgs,
-		clusterInstance.EnableSemiSync,
 		clusterInstance.DefaultCharset)
 
 	// wait for mysqld to be ready
 	err = proc.Wait()
 	require.Nil(t, err)
 
+	tablet.VttabletProcess.ServingStatus = ""
 	err = tablet.VttabletProcess.Setup()
 	require.Nil(t, err)
 

@@ -18,7 +18,7 @@ package sqlparser
 
 import (
 	"fmt"
-	"strconv"
+	"math/big"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -37,15 +37,16 @@ type BindVars map[string]struct{}
 // treated as distinct.
 func Normalize(stmt Statement, reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) error {
 	nz := newNormalizer(reserved, bindVars)
-	_ = Rewrite(stmt, nz.WalkStatement, nil)
+	_ = SafeRewrite(stmt, nz.walkStatementDown, nz.walkStatementUp)
 	return nz.err
 }
 
 type normalizer struct {
-	bindVars map[string]*querypb.BindVariable
-	reserved *ReservedVars
-	vals     map[string]string
-	err      error
+	bindVars  map[string]*querypb.BindVariable
+	reserved  *ReservedVars
+	vals      map[string]string
+	err       error
+	inDerived bool
 }
 
 func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVariable) *normalizer {
@@ -56,22 +57,39 @@ func newNormalizer(reserved *ReservedVars, bindVars map[string]*querypb.BindVari
 	}
 }
 
-// WalkStatement is the top level walk function.
+// walkStatementUp is one half of the top level walk function.
+func (nz *normalizer) walkStatementUp(cursor *Cursor) bool {
+	if nz.err != nil {
+		return false
+	}
+	node, isLiteral := cursor.Node().(*Literal)
+	if !isLiteral {
+		return true
+	}
+	nz.convertLiteral(node, cursor)
+	return nz.err == nil // only continue if we haven't found any errors
+}
+
+// walkStatementDown is the top level walk function.
 // If it encounters a Select, it switches to a mode
 // where variables are deduped.
-func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
-	switch node := cursor.Node().(type) {
+func (nz *normalizer) walkStatementDown(node, parent SQLNode) bool {
+	switch node := node.(type) {
 	// no need to normalize the statement types
-	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, *SetTransaction, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
+	case *Set, *Show, *Begin, *Commit, *Rollback, *Savepoint, DDLStatement, *SRollback, *Release, *OtherAdmin, *OtherRead:
 		return false
 	case *Select:
-		_ = Rewrite(node, nz.WalkSelect, nil)
+		_, isDerived := parent.(*DerivedTable)
+		var tmp bool
+		tmp, nz.inDerived = nz.inDerived, isDerived
+		_ = SafeRewrite(node, nz.walkDownSelect, nz.walkUpSelect)
 		// Don't continue
+		nz.inDerived = tmp
 		return false
-	case *Literal:
-		nz.convertLiteral(node, cursor)
 	case *ComparisonExpr:
 		nz.convertComparison(node)
+	case *UpdateExpr:
+		nz.convertUpdateExpr(node)
 	case *ColName, TableName:
 		// Common node types that never contain Literal or ListArgs but create a lot of object
 		// allocations.
@@ -82,11 +100,25 @@ func (nz *normalizer) WalkStatement(cursor *Cursor) bool {
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
-// WalkSelect normalizes the AST in Select mode.
-func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
-	switch node := cursor.Node().(type) {
-	case *Literal:
-		nz.convertLiteralDedup(node, cursor)
+// walkDownSelect normalizes the AST in Select mode.
+func (nz *normalizer) walkDownSelect(node, parent SQLNode) bool {
+	switch node := node.(type) {
+	case *Select:
+		_, isDerived := parent.(*DerivedTable)
+		if !isDerived {
+			return true
+		}
+		var tmp bool
+		tmp, nz.inDerived = nz.inDerived, isDerived
+		// initiating a new AST walk here means that we might change something while walking down on the tree,
+		// but since we are only changing literals, we can be safe that we are not changing the SELECT struct,
+		// only something much further down, and that should be safe
+		_ = SafeRewrite(node, nz.walkDownSelect, nz.walkUpSelect)
+		// Don't continue
+		nz.inDerived = tmp
+		return false
+	case SelectExprs:
+		return !nz.inDerived
 	case *ComparisonExpr:
 		nz.convertComparison(node)
 	case *FramePoint:
@@ -96,9 +128,6 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 		// Common node types that never contain Literals or ListArgs but create a lot of object
 		// allocations.
 		return false
-	case OrderBy, GroupBy:
-		// do not make a bind var for order by column_position
-		return false
 	case *ConvertType:
 		// we should not rewrite the type description
 		return false
@@ -106,7 +135,45 @@ func (nz *normalizer) WalkSelect(cursor *Cursor) bool {
 	return nz.err == nil // only continue if we haven't found any errors
 }
 
+// walkUpSelect normalizes the Literals in Select mode.
+func (nz *normalizer) walkUpSelect(cursor *Cursor) bool {
+	if nz.err != nil {
+		return false
+	}
+	node, isLiteral := cursor.Node().(*Literal)
+	if !isLiteral {
+		return true
+	}
+	parent := cursor.Parent()
+	switch parent.(type) {
+	case *Order, GroupBy:
+		return false
+	case *Limit:
+		nz.convertLiteral(node, cursor)
+	default:
+		nz.convertLiteralDedup(node, cursor)
+	}
+	return nz.err == nil // only continue if we haven't found any errors
+}
+
+func validateLiteral(node *Literal) (err error) {
+	switch node.Type {
+	case DateVal:
+		_, err = ParseDate(node.Val)
+	case TimeVal:
+		_, err = ParseTime(node.Val)
+	case TimestampVal:
+		_, err = ParseDateTime(node.Val)
+	}
+	return err
+}
+
 func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
+	err := validateLiteral(node)
+	if err != nil {
+		nz.err = err
+	}
+
 	// If value is too long, don't dedup.
 	// Such values are most likely not for vindexes.
 	// We save a lot of CPU because we avoid building
@@ -117,21 +184,13 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Make the bindvar
-	bval := nz.sqlToBindvar(node)
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
 
 	// Check if there's a bindvar for that value already.
-	var key string
-	if bval.Type == sqltypes.VarBinary || bval.Type == sqltypes.VarChar {
-		// Prefixing strings with "'" ensures that a string
-		// and number that have the same representation don't
-		// collide.
-		key = "'" + node.Val
-	} else {
-		key = node.Val
-	}
+	key := keyFor(bval, node)
 	bvname, ok := nz.vals[key]
 	if !ok {
 		// If there's no such bindvar, make a new one.
@@ -144,9 +203,26 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	cursor.Replace(NewArgument(bvname))
 }
 
+func keyFor(bval *querypb.BindVariable, lit *Literal) string {
+	if bval.Type != sqltypes.VarBinary && bval.Type != sqltypes.VarChar {
+		return lit.Val
+	}
+
+	// Prefixing strings with "'" ensures that a string
+	// and number that have the same representation don't
+	// collide.
+	return "'" + lit.Val
+
+}
+
 // convertLiteral converts an Literal without the dedup.
 func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
-	bval := nz.sqlToBindvar(node)
+	err := validateLiteral(node)
+	if err != nil {
+		nz.err = err
+	}
+
+	bval := SQLToBindvar(node)
 	if bval == nil {
 		return
 	}
@@ -163,20 +239,77 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 // and iterate on converting each individual value into separate
 // bind vars.
 func (nz *normalizer) convertComparison(node *ComparisonExpr) {
-	if node.Operator != InOp && node.Operator != NotInOp {
-		return
+	switch node.Operator {
+	case InOp, NotInOp:
+		nz.rewriteInComparisons(node)
+	default:
+		nz.rewriteOtherComparisons(node)
 	}
+}
+
+func (nz *normalizer) rewriteOtherComparisons(node *ComparisonExpr) {
+	newR := nz.parameterize(node.Left, node.Right)
+	if newR != nil {
+		node.Right = newR
+	}
+}
+
+func (nz *normalizer) parameterize(left, right Expr) Expr {
+	col, ok := left.(*ColName)
+	if !ok {
+		return nil
+	}
+	lit, ok := right.(*Literal)
+	if !ok {
+		return nil
+	}
+	err := validateLiteral(lit)
+	if err != nil {
+		nz.err = err
+		return nil
+	}
+
+	bval := SQLToBindvar(lit)
+	if bval == nil {
+		return nil
+	}
+	key := keyFor(bval, lit)
+	bvname := nz.decideBindVarName(key, lit, col, bval)
+	return Argument(bvname)
+}
+
+func (nz *normalizer) decideBindVarName(key string, lit *Literal, col *ColName, bval *querypb.BindVariable) string {
+	if len(lit.Val) <= 256 {
+		// first we check if we already have a bindvar for this value. if we do, we re-use that bindvar name
+		bvname, ok := nz.vals[key]
+		if ok {
+			return bvname
+		}
+	}
+
+	// If there's no such bindvar, or we have a big value, make a new one.
+	// Big values are most likely not for vindexes.
+	// We save a lot of CPU because we avoid building
+	bvname := nz.reserved.ReserveColName(col)
+	nz.vals[key] = bvname
+	nz.bindVars[bvname] = bval
+
+	return bvname
+}
+
+func (nz *normalizer) rewriteInComparisons(node *ComparisonExpr) {
 	tupleVals, ok := node.Right.(ValTuple)
 	if !ok {
 		return
 	}
+
 	// The RHS is a tuple of values.
 	// Make a list bindvar.
 	bvals := &querypb.BindVariable{
 		Type: querypb.Type_TUPLE,
 	}
 	for _, val := range tupleVals {
-		bval := nz.sqlToBindvar(val)
+		bval := SQLToBindvar(val)
 		if bval == nil {
 			return
 		}
@@ -191,7 +324,14 @@ func (nz *normalizer) convertComparison(node *ComparisonExpr) {
 	node.Right = ListArg(bvname)
 }
 
-func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
+func (nz *normalizer) convertUpdateExpr(node *UpdateExpr) {
+	newR := nz.parameterize(node.Name, node.Expr)
+	if newR != nil {
+		node.Expr = newR
+	}
+}
+
+func SQLToBindvar(node SQLNode) *querypb.BindVariable {
 	if node, ok := node.(*Literal); ok {
 		var v sqltypes.Value
 		var err error
@@ -217,12 +357,21 @@ func (nz *normalizer) sqlToBindvar(node SQLNode) *querypb.BindVariable {
 			v, err = sqltypes.NewValue(sqltypes.HexVal, vbytes)
 		case BitVal:
 			// Convert bit value to hex number in parameterized query format
-			var ui uint64
-			ui, err = strconv.ParseUint(string(node.Bytes()), 2, 64)
-			if err != nil {
+			var i big.Int
+			_, ok := i.SetString(string(node.Bytes()), 2)
+			if !ok {
 				return nil
 			}
-			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%x", ui)))
+			v, err = sqltypes.NewValue(sqltypes.HexNum, []byte(fmt.Sprintf("0x%s", i.Text(16))))
+		case DateVal:
+			v, err = sqltypes.NewValue(sqltypes.Date, node.Bytes())
+		case TimeVal:
+			v, err = sqltypes.NewValue(sqltypes.Time, node.Bytes())
+		case TimestampVal:
+			// This is actually a DATETIME MySQL type. The timestamp literal
+			// syntax is part of the SQL standard and MySQL DATETIME matches
+			// the type best.
+			v, err = sqltypes.NewValue(sqltypes.Datetime, node.Bytes())
 		default:
 			return nil
 		}

@@ -30,7 +30,7 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
 		Pass:  "password",
 	}
 	host := "localhost"
-	port := 123
+	port := int32(123)
 	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
@@ -42,9 +42,8 @@ func TestMariadbSetReplicationSourceCommand(t *testing.T) {
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
@@ -58,7 +57,7 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
 	}
 	params.EnableSSL()
 	host := "localhost"
-	port := 123
+	port := int32(123)
 	connectRetry := 1234
 	want := `CHANGE MASTER TO
   MASTER_HOST = 'localhost',
@@ -75,9 +74,8 @@ func TestMariadbSetReplicationSourceCommandSSL(t *testing.T) {
 
 	conn := &Conn{flavor: mariadbFlavor101{}}
 	got := conn.SetReplicationSourceCommand(params, host, port, connectRetry)
-	if got != want {
-		t.Errorf("mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
-	}
+	assert.Equal(t, want, got, "mariadbFlavor.SetReplicationSourceCommand(%#v, %#v, %#v, %#v) = %#v, want %#v", params, host, port, connectRetry, got, want)
+
 }
 
 func TestMariadbRetrieveSourceServerId(t *testing.T) {

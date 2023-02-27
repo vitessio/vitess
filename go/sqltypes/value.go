@@ -23,6 +23,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math/big"
 	"strconv"
 	"strings"
 
@@ -73,12 +74,12 @@ type (
 func NewValue(typ querypb.Type, val []byte) (v Value, err error) {
 	switch {
 	case IsSigned(typ):
-		if _, err := strconv.ParseInt(string(val), 0, 64); err != nil {
+		if _, err := strconv.ParseInt(string(val), 10, 64); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
 	case IsUnsigned(typ):
-		if _, err := strconv.ParseUint(string(val), 0, 64); err != nil {
+		if _, err := strconv.ParseUint(string(val), 10, 64); err != nil {
 			return NULL, err
 		}
 		return MakeTrusted(typ, val), nil
@@ -158,6 +159,14 @@ func NewFloat64(v float64) Value {
 // NewVarChar builds a VarChar Value.
 func NewVarChar(v string) Value {
 	return MakeTrusted(VarChar, []byte(v))
+}
+
+func NewJSON(v string) (Value, error) {
+	j := []byte(v)
+	if !json.Valid(j) {
+		return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid JSON value: %q", v)
+	}
+	return MakeTrusted(TypeJSON, j), nil
 }
 
 // NewVarBinary builds a VarBinary Value.
@@ -280,6 +289,24 @@ func (v Value) ToInt64() (int64, error) {
 	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
+func (v Value) ToInt32() (int32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseInt(v.RawStr(), 10, 32)
+	return int32(i), err
+}
+
+// ToInt returns the value as MySQL would return it as a int.
+func (v Value) ToInt() (int, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	return strconv.Atoi(v.RawStr())
+}
+
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
 	if !IsNumber(v.typ) {
@@ -289,6 +316,16 @@ func (v Value) ToFloat64() (float64, error) {
 	return strconv.ParseFloat(v.RawStr(), 64)
 }
 
+// ToUint16 returns the value as MySQL would return it as a uint16.
+func (v Value) ToUint16() (uint16, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseUint(v.RawStr(), 10, 16)
+	return uint16(i), err
+}
+
 // ToUint64 returns the value as MySQL would return it as a uint64.
 func (v Value) ToUint64() (uint64, error) {
 	if !v.IsIntegral() {
@@ -296,6 +333,15 @@ func (v Value) ToUint64() (uint64, error) {
 	}
 
 	return strconv.ParseUint(v.RawStr(), 10, 64)
+}
+
+func (v Value) ToUint32() (uint32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	u, err := strconv.ParseUint(v.RawStr(), 10, 32)
+	return uint32(u), err
 }
 
 // ToBool returns the value as a bool value
@@ -435,6 +481,11 @@ func (v Value) IsDateTime() bool {
 	return int(v.typ)&dt == dt
 }
 
+// IsDecimal returns true if Value is a decimal.
+func (v Value) IsDecimal() bool {
+	return IsDecimal(v.typ)
+}
+
 // IsComparable returns true if the Value is null safe comparable without collation information.
 func (v *Value) IsComparable() bool {
 	if v.typ == Null || IsNumber(v.typ) || IsBinary(v.typ) {
@@ -527,17 +578,12 @@ func (v *Value) decodeBitNum() ([]byte, error) {
 	if len(v.val) < 3 || v.val[0] != '0' || v.val[1] != 'b' {
 		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
-	bitBytes := v.val[2:]
-	ui, err := strconv.ParseUint(string(bitBytes), 2, 64)
-	if err != nil {
-		return nil, err
+	var i big.Int
+	_, ok := i.SetString(string(v.val), 0)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "invalid bit number: %v", v.val)
 	}
-	hexVal := fmt.Sprintf("%x", ui)
-	decodedHexBytes, err := hex.DecodeString(hexVal)
-	if err != nil {
-		return nil, err
-	}
-	return decodedHexBytes, nil
+	return i.Bytes(), nil
 }
 
 func encodeBytesSQL(val []byte, b BinWriter) {
@@ -548,7 +594,12 @@ func encodeBytesSQL(val []byte, b BinWriter) {
 
 func encodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
 	buf.WriteByte('\'')
-	for _, ch := range val {
+	for idx, ch := range val {
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
+			buf.WriteByte(ch)
+			continue
+		}
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
 			buf.WriteByte(ch)
 		} else {
@@ -561,7 +612,12 @@ func encodeBytesSQLBytes2(val []byte, buf *bytes2.Buffer) {
 
 func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 	buf.WriteByte('\'')
-	for _, ch := range val {
+	for idx, ch := range val {
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
+			buf.WriteByte(ch)
+			continue
+		}
 		if encodedChar := SQLEncodeMap[ch]; encodedChar == DontEscape {
 			buf.WriteByte(ch)
 		} else {
@@ -575,8 +631,13 @@ func encodeBytesSQLStringBuilder(val []byte, buf *strings.Builder) {
 // BufEncodeStringSQL encodes the string into a strings.Builder
 func BufEncodeStringSQL(buf *strings.Builder, val string) {
 	buf.WriteByte('\'')
-	for _, ch := range val {
+	for idx, ch := range val {
 		if ch > 255 {
+			buf.WriteRune(ch)
+			continue
+		}
+		// If \% or \_ is present, we want to keep them as is, and don't want to escape \ again
+		if ch == '\\' && idx+1 < len(val) && (val[idx+1] == '%' || val[idx+1] == '_') {
 			buf.WriteRune(ch)
 			continue
 		}
@@ -616,7 +677,13 @@ func encodeBytesASCII(val []byte, b BinWriter) {
 }
 
 // SQLEncodeMap specifies how to escape binary data with '\'.
-// Complies to http://dev.mysql.com/doc/refman/5.1/en/string-syntax.html
+// Complies to https://dev.mysql.com/doc/refman/5.7/en/string-literals.html
+// Handling escaping of % and _ is different than other characters.
+// When escaped in a like clause, they are supposed to be treated as literals
+// Everywhere else, they evaluate to strings '\%' and '\_' respectively.
+// In Vitess, the way we are choosing to handle this behaviour is to always
+// preserve the escaping of % and _ as is in all the places and handle it like MySQL
+// in our evaluation engine for Like.
 var SQLEncodeMap [256]byte
 
 // SQLDecodeMap is the reverse of SQLEncodeMap

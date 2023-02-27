@@ -1,3 +1,6 @@
+//go:build !codeanalysis
+// +build !codeanalysis
+
 /*
 Copyright 2019 The Vitess Authors.
 
@@ -35,7 +38,7 @@ import (
 )
 
 type zkServerAddr struct {
-	ServerId     uint32
+	ServerId     uint32 // nolint:revive
 	Hostname     string
 	LeaderPort   int
 	ElectionPort int
@@ -43,7 +46,7 @@ type zkServerAddr struct {
 }
 
 type ZkConfig struct {
-	ServerId   uint32
+	ServerId   uint32 // nolint:revive
 	ClientPort int
 	Servers    []zkServerAddr
 	Global     bool
@@ -94,7 +97,7 @@ func (cnf *ZkConfig) WriteMyid() error {
 }
 
 /*
-  Search for first existing file in cnfFiles and subsitute in the right values.
+Search for first existing file in cnfFiles and subsitute in the right values.
 */
 func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error) {
 	myTemplateSource := new(bytes.Buffer)
@@ -129,12 +132,12 @@ func MakeZooCfg(cnfFiles []string, cnf *ZkConfig, header string) (string, error)
 const GuessMyID = 0
 
 /*
-  Create a config for this instance.
+Create a config for this instance.
 
-  <server_id>@<hostname>:<leader_port>:<election_port>:<client_port>
+<server_id>@<hostname>:<leader_port>:<election_port>:<client_port>
 
-  If server_id > 1000, then we assume this is a global quorum.
-  server_id's must be 1-255, global id's are 1001-1255 mod 1000.
+If server_id > 1000, then we assume this is a global quorum.
+server_id's must be 1-255, global id's are 1001-1255 mod 1000.
 */
 func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 	zkConfig := NewZkConfig()
@@ -145,14 +148,14 @@ func MakeZkConfigFromString(cmdLine string, myID uint32) *ZkConfig {
 		}
 		zkID := zkiParts[0]
 		zkAddrParts := strings.Split(zkiParts[1], ":")
-		serverId, _ := strconv.ParseUint(zkID, 10, 0)
-		if serverId > 1000 {
-			serverId = serverId % 1000
+		serverID, _ := strconv.ParseUint(zkID, 10, 32)
+		if serverID > 1000 {
+			serverID = serverID % 1000
 			zkConfig.Global = true
 		}
 		myID = myID % 1000
 
-		zkServer := zkServerAddr{ServerId: uint32(serverId), ClientPort: 2181,
+		zkServer := zkServerAddr{ServerId: uint32(serverID), ClientPort: 2181,
 			LeaderPort: 2888, ElectionPort: 3888}
 		switch len(zkAddrParts) {
 		case 4:

@@ -19,21 +19,22 @@ limitations under the License.
 package tabletconntest
 
 import (
-	"flag"
+	"context"
 	"io"
 	"os"
 	"strings"
 	"testing"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/assert"
-
-	"context"
-
+	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/grpcclient"
+	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -583,6 +584,229 @@ func testStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *Fa
 	})
 }
 
+func testBeginStreamExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testBeginStreamExecute")
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+	i := 0
+	_, err := conn.BeginStreamExecute(ctx, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		switch i {
+		case 0:
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+		case 1:
+			if len(qr.Fields) == 0 {
+				qr.Fields = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult2) {
+				t.Errorf("Unexpected result2 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult2)
+			}
+		default:
+			t.Fatal("callback should not be called any more")
+		}
+		i++
+		if i >= 2 {
+			return io.EOF
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testReserveStreamExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testReserveStreamExecute")
+	ctx := context.Background()
+	ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+	i := 0
+	_, err := conn.ReserveStreamExecute(ctx, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+		switch i {
+		case 0:
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+		case 1:
+			if len(qr.Fields) == 0 {
+				qr.Fields = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult2) {
+				t.Errorf("Unexpected result2 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult2)
+			}
+		default:
+			t.Fatal("callback should not be called any more")
+		}
+		i++
+		if i >= 2 {
+			return io.EOF
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func testBeginStreamExecuteErrorInBegin(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testBeginExecuteErrorInBegin")
+	f.HasBeginError = true
+	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
+		f.ErrorWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		_, err := conn.BeginStreamExecute(ctx, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.ErrorWait:
+				return nil
+			default:
+			}
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+			// signal to the server that the first result has been received
+			close(f.ErrorWait)
+			return nil
+		})
+		return err
+	})
+	f.HasBeginError = false
+}
+
+func testBeginStreamExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testBeginStreamExecuteErrorInExecute")
+	f.HasError = true
+	testErrorHelper(t, f, "StreamExecute", func(ctx context.Context) error {
+		f.ErrorWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		state, err := conn.BeginStreamExecute(ctx, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.ErrorWait:
+				return nil
+			default:
+			}
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+			// signal to the server that the first result has been received
+			close(f.ErrorWait)
+			return nil
+		})
+		require.NotZero(t, state.TransactionID)
+		return err
+	})
+	f.HasError = false
+}
+
+func testReserveStreamExecuteErrorInReserve(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testReserveExecuteErrorInReserve")
+	f.HasReserveError = true
+	testErrorHelper(t, f, "ReserveStreamExecute", func(ctx context.Context) error {
+		f.ErrorWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		_, err := conn.ReserveStreamExecute(ctx, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.ErrorWait:
+				return nil
+			default:
+			}
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+			// signal to the server that the first result has been received
+			close(f.ErrorWait)
+			return nil
+		})
+		return err
+	})
+	f.HasReserveError = false
+}
+
+func testReserveStreamExecuteErrorInExecute(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testReserveStreamExecuteErrorInExecute")
+	f.HasError = true
+	testErrorHelper(t, f, "ReserveStreamExecute", func(ctx context.Context) error {
+		f.ErrorWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		state, err := conn.ReserveStreamExecute(ctx, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.ErrorWait:
+				return nil
+			default:
+			}
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+			// signal to the server that the first result has been received
+			close(f.ErrorWait)
+			return nil
+		})
+		require.NotZero(t, state.ReservedID)
+		return err
+	})
+	f.HasError = false
+}
+
+func testBeginStreamExecutePanics(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
+	t.Log("testStreamExecutePanics")
+	// early panic is before sending the Fields, that is returned
+	// by the StreamExecute call itself, or as the first error
+	// by ErrFunc
+	f.StreamExecutePanicsEarly = true
+	testPanicHelper(t, f, "StreamExecute.Early", func(ctx context.Context) error {
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		return conn.StreamExecute(ctx, TestTarget, StreamExecuteQuery, StreamExecuteBindVars, 0, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			return nil
+		})
+	})
+
+	// late panic is after sending Fields
+	f.StreamExecutePanicsEarly = false
+	testPanicHelper(t, f, "StreamExecute.Late", func(ctx context.Context) error {
+		f.PanicWait = make(chan struct{})
+		ctx = callerid.NewContext(ctx, TestCallerID, TestVTGateCallerID)
+		_, err := conn.BeginStreamExecute(ctx, TestTarget, nil, StreamExecuteQuery, StreamExecuteBindVars, 0, TestExecuteOptions, func(qr *sqltypes.Result) error {
+			// For some errors, the call can be retried.
+			select {
+			case <-f.PanicWait:
+				return nil
+			default:
+			}
+			if len(qr.Rows) == 0 {
+				qr.Rows = nil
+			}
+			if !qr.Equal(&StreamExecuteQueryResult1) {
+				t.Errorf("Unexpected result1 from StreamExecute: got %v wanted %v", qr, StreamExecuteQueryResult1)
+			}
+			// signal to the server that the first result has been received
+			close(f.PanicWait)
+			return nil
+		})
+		return err
+	})
+}
+
 func testMessageStream(t *testing.T, conn queryservice.QueryService, f *FakeQueryService) {
 	t.Log("testMessageStream")
 	ctx := context.Background()
@@ -715,8 +939,10 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecute,
 		testBeginExecute,
 		testStreamExecute,
+		testBeginStreamExecute,
 		testMessageStream,
 		testMessageAck,
+		testReserveStreamExecute,
 
 		// error test cases
 		testBeginError,
@@ -734,6 +960,10 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testBeginExecuteErrorInBegin,
 		testBeginExecuteErrorInExecute,
 		testStreamExecuteError,
+		testBeginStreamExecuteErrorInBegin,
+		testBeginStreamExecuteErrorInExecute,
+		testReserveStreamExecuteErrorInReserve,
+		testReserveStreamExecuteErrorInExecute,
 		testMessageStreamError,
 		testMessageAckError,
 
@@ -752,6 +982,7 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 		testExecutePanics,
 		testBeginExecutePanics,
 		testStreamExecutePanics,
+		testBeginStreamExecutePanics,
 		testMessageStreamPanics,
 		testMessageAckPanics,
 	}
@@ -770,11 +1001,18 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 	}
 
 	// make sure we use the right client
-	*tabletconn.TabletProtocol = protocol
+	SetProtocol(t.Name(), protocol)
 
 	// create a connection
 	if clientCreds != nil {
-		flag.Set("grpc_auth_static_client_creds", clientCreds.Name())
+		fs := pflag.NewFlagSet("", pflag.ContinueOnError)
+		grpcclient.RegisterFlags(fs)
+
+		err := fs.Parse([]string{
+			"--grpc_auth_static_client_creds",
+			clientCreds.Name(),
+		})
+		require.NoError(t, err, "failed to set `--grpc_auth_static_client_creds=%s`", clientCreds.Name())
 	}
 
 	conn, err := tabletconn.GetDialer()(tablet, grpcclient.FailFast(false))
@@ -789,4 +1027,32 @@ func TestSuite(t *testing.T, protocol string, tablet *topodatapb.Tablet, fake *F
 
 	// and we're done
 	conn.Close(context.Background())
+}
+
+const tabletProtocolFlagName = "tablet_protocol"
+
+// SetProtocol is a helper function to set the tabletconn --tablet_protocol flag
+// value for tests.
+//
+// Note that because this variable is bound to a flag, the effects of this
+// function are global, not scoped to the calling test-case. Therefore it should
+// not be used in conjunction with t.Parallel.
+func SetProtocol(name string, protocol string) {
+	var tmp []string
+	tmp, os.Args = os.Args[:], []string{name}
+	defer func() { os.Args = tmp }()
+
+	servenv.OnParseFor(name, func(fs *pflag.FlagSet) {
+		if fs.Lookup(tabletProtocolFlagName) != nil {
+			return
+		}
+
+		tabletconn.RegisterFlags(fs)
+	})
+	servenv.ParseFlags(name)
+
+	if err := pflag.Set(tabletProtocolFlagName, protocol); err != nil {
+		msg := "failed to set flag %q to %q: %v"
+		log.Errorf(msg, tabletProtocolFlagName, protocol, err)
+	}
 }

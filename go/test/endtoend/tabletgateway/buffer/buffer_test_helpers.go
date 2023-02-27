@@ -67,7 +67,7 @@ const (
 	updateRowID       = 2
 )
 
-//threadParams is set of params passed into read and write threads
+// threadParams is set of params passed into read and write threads
 type threadParams struct {
 	quit                       bool
 	rpcs                       int        // Number of queries successfully executed.
@@ -227,7 +227,8 @@ func (bt *BufferingTest) createCluster() (*cluster.LocalProcessCluster, int) {
 		SchemaSQL: sqlSchema,
 		VSchema:   bt.VSchema,
 	}
-	clusterInstance.VtTabletExtraArgs = []string{"--health_check_interval", "1s",
+	clusterInstance.VtTabletExtraArgs = []string{
+		"--health_check_interval", "1s",
 		"--queryserver-config-transaction-timeout", "20",
 	}
 	if err := clusterInstance.StartUnshardedKeyspace(*keyspace, 1, false); err != nil {
@@ -287,7 +288,7 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	// Healthcheck interval on tablet is set to 1s, so sleep for 2s
 	time.Sleep(2 * time.Second)
 	conn, err := mysql.Connect(context.Background(), &vtParams)
-	require.Nil(t, err)
+	require.NoError(t, err)
 	defer conn.Close()
 
 	// Insert two rows for the later threads (critical read, update).
@@ -349,11 +350,14 @@ func (bt *BufferingTest) Test(t *testing.T) {
 	//At least one thread should have been buffered.
 	//This may fail if a failover is too fast. Add retries then.
 	resp, err := http.Get(clusterInstance.VtgateProcess.VerifyURL)
-	require.Nil(t, err)
+	require.NoError(t, err)
+	defer resp.Body.Close()
+
 	require.Equal(t, 200, resp.StatusCode)
 
 	var metadata VTGateBufferingStats
-	respByte, _ := io.ReadAll(resp.Body)
+	respByte, err := io.ReadAll(resp.Body)
+	require.NoError(t, err)
 	err = json.Unmarshal(respByte, &metadata)
 	require.NoError(t, err)
 

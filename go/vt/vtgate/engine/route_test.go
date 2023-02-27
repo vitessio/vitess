@@ -53,7 +53,7 @@ var defaultSelectResult = sqltypes.MakeTestResult(
 func init() {
 	// We require MySQL 8.0 collations for the comparisons in the tests
 	mySQLVersion := "8.0.0"
-	servenv.MySQLServerVersion = &mySQLVersion
+	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 }
 
@@ -1447,7 +1447,7 @@ func TestExecFail(t *testing.T) {
 		}}
 		_, err = wrapStreamExecute(sel, vc, map[string]*querypb.BindVariable{}, false)
 		require.NoError(t, err, "unexpected ScatterErrorsAsWarnings error %v", err)
-		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: mysql.ERQueryInterrupted, Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
+		vc.ExpectWarnings(t, []*querypb.QueryWarning{{Code: uint32(mysql.ERQueryInterrupted), Message: "query timeout -20 (errno 1317) (sqlstate HY000)"}})
 	})
 }
 

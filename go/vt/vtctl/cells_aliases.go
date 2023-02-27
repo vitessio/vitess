@@ -18,9 +18,10 @@ package vtctl
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"strings"
+
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/wrangler"
 
@@ -64,8 +65,8 @@ func init() {
 	})
 }
 
-func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsString := subFlags.String("cells", "", "The list of cell names that are members of this alias.")
+func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	cells := subFlags.StringSlice("cells", nil, "The list of cell names that are members of this alias.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -73,21 +74,20 @@ func commandAddCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *
 		return fmt.Errorf("the <alias> argument is required for the AddCellsAlias command")
 	}
 
-	cells := strings.Split(*cellsString, ",")
-	for i, cell := range cells {
-		cells[i] = strings.TrimSpace(cell)
+	for i, cell := range *cells {
+		(*cells)[i] = strings.TrimSpace(cell)
 	}
 
 	alias := subFlags.Arg(0)
 	_, err := wr.VtctldServer().AddCellsAlias(ctx, &vtctldatapb.AddCellsAliasRequest{
 		Name:  alias,
-		Cells: cells,
+		Cells: *cells,
 	})
 	return err
 }
 
-func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
-	cellsString := subFlags.String("cells", "", "The list of cell names that are members of this alias.")
+func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	cells := subFlags.StringSlice("cells", nil, "The list of cell names that are members of this alias.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -95,22 +95,21 @@ func commandUpdateCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 		return fmt.Errorf("the <alias> argument is required for the UpdateCellsAlias command")
 	}
 
-	cells := strings.Split(*cellsString, ",")
-	for i, cell := range cells {
-		cells[i] = strings.TrimSpace(cell)
+	for i, cell := range *cells {
+		(*cells)[i] = strings.TrimSpace(cell)
 	}
 
 	alias := subFlags.Arg(0)
 	_, err := wr.VtctldServer().UpdateCellsAlias(ctx, &vtctldatapb.UpdateCellsAliasRequest{
 		Name: alias,
 		CellsAlias: &topodatapb.CellsAlias{
-			Cells: cells,
+			Cells: *cells,
 		},
 	})
 	return err
 }
 
-func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -125,7 +124,7 @@ func commandDeleteCellsAlias(ctx context.Context, wr *wrangler.Wrangler, subFlag
 	return err
 }
 
-func commandGetCellsAliases(ctx context.Context, wr *wrangler.Wrangler, subFlags *flag.FlagSet, args []string) error {
+func commandGetCellsAliases(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}

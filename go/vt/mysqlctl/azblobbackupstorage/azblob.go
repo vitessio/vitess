@@ -264,7 +264,7 @@ func (bh *AZBlobBackupHandle) ReadFile(ctx context.Context, filename string) (io
 	}
 	blobURL := containerURL.NewBlobURL(obj)
 
-	resp, err := blobURL.Download(ctx, 0, azblob.CountToEnd, azblob.BlobAccessConditions{}, false)
+	resp, err := blobURL.Download(ctx, 0, azblob.CountToEnd, azblob.BlobAccessConditions{}, false, azblob.ClientProvidedKeyOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -414,6 +414,11 @@ func (bs *AZBlobBackupStorage) RemoveBackup(ctx context.Context, dir, name strin
 func (bs *AZBlobBackupStorage) Close() error {
 	// This function is a No-op
 	return nil
+}
+
+func (bs *AZBlobBackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new AZBlobBackupStorage that uses params.
+	return bs
 }
 
 // objName joins path parts into an object name.

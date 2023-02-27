@@ -27,10 +27,8 @@ import (
 //
 // We also use it to allocate Zookeeper server IDs.
 
-//
 // Port definitions. Unit tests may run at the same time,
 // so they should not use the same ports.
-//
 var (
 	// vtPortStart is the starting port for all tests.
 	vtPortStart = getPortStart()
@@ -48,10 +46,8 @@ var (
 	GoVtTopoConsultopoPort = GoVtTopoZk2topoPort + 3
 )
 
-//
 // Zookeeper server ID definitions. Unit tests may run at the
 // same time, so they can't use the same Zookeeper server IDs.
-//
 var (
 	// GoVtTopoZk2topoZkID is used by the go/vt/topo/zk2topo package.
 	GoVtTopoZk2topoZkID = 1

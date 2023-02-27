@@ -17,10 +17,12 @@ limitations under the License.
 package planbuilder
 
 import (
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"fmt"
+
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -43,12 +45,12 @@ func (s *sqlCalcFoundRows) Wireup(logicalPlan, *jointab) error {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (s *sqlCalcFoundRows) WireupGen4(semTable *semantics.SemTable) error {
-	err := s.LimitQuery.WireupGen4(semTable)
+func (s *sqlCalcFoundRows) WireupGen4(ctx *plancontext.PlanningContext) error {
+	err := s.LimitQuery.WireupGen4(ctx)
 	if err != nil {
 		return err
 	}
-	return s.CountQuery.WireupGen4(semTable)
+	return s.CountQuery.WireupGen4(ctx)
 }
 
 // ContainsTables implements the logicalPlan interface
@@ -56,7 +58,7 @@ func (s *sqlCalcFoundRows) ContainsTables() semantics.TableSet {
 	return s.LimitQuery.ContainsTables()
 }
 
-//Primitive implements the logicalPlan interface
+// Primitive implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Primitive() engine.Primitive {
 	countPrim := s.CountQuery.Primitive()
 	rb, ok := countPrim.(*engine.Route)
@@ -105,7 +107,7 @@ func (s *sqlCalcFoundRows) SupplyWeightString(int, bool) (weightcolNumber int, e
 // Rewrite implements the logicalPlan interface
 func (s *sqlCalcFoundRows) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs))
+		return vterrors.VT13001(fmt.Sprintf("wrong number of inputs for SQL_CALC_FOUND_ROWS: %d", len(inputs)))
 	}
 	s.LimitQuery = inputs[0]
 	s.CountQuery = inputs[1]

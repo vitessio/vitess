@@ -1,0 +1,56 @@
+[
+  {
+    "comment": "Repair statement",
+    "query": "repair table t1,t2 quick",
+    "plan": {
+      "QueryType": "OTHER",
+      "Original": "repair table t1,t2 quick",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "repair table t1,t2 quick",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "Optimize statement",
+    "query": "optimize table t1",
+    "plan": {
+      "QueryType": "OTHER",
+      "Original": "optimize table t1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "optimize table t1",
+        "SingleShardOnly": true
+      }
+    }
+  },
+  {
+    "comment": "DO statement",
+    "query": "DO 1",
+    "plan": {
+      "QueryType": "OTHER",
+      "Original": "DO 1",
+      "Instructions": {
+        "OperatorType": "Send",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "TargetDestination": "AnyShard()",
+        "Query": "DO 1",
+        "SingleShardOnly": true
+      }
+    }
+  }
+]

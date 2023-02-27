@@ -21,12 +21,12 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"errors"
-	"flag"
 	"fmt"
 	"io"
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -35,15 +35,12 @@ import (
 
 	"vitess.io/vitess/go/bucketpool"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
-
-var mysqlServerFlushDelay = flag.Duration("mysql_server_flush_delay", 100*time.Millisecond, "Delay after which buffered response will be flushed to the client.")
 
 const (
 	// connBufferSize is how much we buffer for reading and
@@ -164,7 +161,7 @@ type Conn struct {
 	Capabilities uint32
 
 	// closed is set to true when Close() is called on the connection.
-	closed sync2.AtomicBool
+	closed atomic.Bool
 
 	// ConnectionID is set:
 	// - at Connect() time for clients, with the value returned by
@@ -232,12 +229,13 @@ var bufPool = bucketpool.New(connBufferSize, MaxPacketSize)
 // writersPool is used for pooling bufio.Writer objects.
 var writersPool = sync.Pool{New: func() any { return bufio.NewWriterSize(nil, connBufferSize) }}
 
+var readersPool = sync.Pool{New: func() any { return bufio.NewReaderSize(nil, connBufferSize) }}
+
 // newConn is an internal method to create a Conn. Used by client and server
 // side for common creation code.
 func newConn(conn net.Conn) *Conn {
 	return &Conn{
 		conn:           conn,
-		closed:         sync2.NewAtomicBool(false),
 		bufferedReader: bufio.NewReaderSize(conn, connBufferSize),
 	}
 }
@@ -251,12 +249,21 @@ func newServerConn(conn net.Conn, listener *Listener) *Conn {
 	c := &Conn{
 		conn:        conn,
 		listener:    listener,
-		closed:      sync2.NewAtomicBool(false),
 		PrepareData: make(map[uint32]*PrepareData),
 	}
+
 	if listener.connReadBufferSize > 0 {
-		c.bufferedReader = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		var buf *bufio.Reader
+		if listener.connBufferPooling {
+			buf = readersPool.Get().(*bufio.Reader)
+			buf.Reset(conn)
+		} else {
+			buf = bufio.NewReaderSize(conn, listener.connReadBufferSize)
+		}
+
+		c.bufferedReader = buf
 	}
+
 	return c
 }
 
@@ -289,6 +296,14 @@ func (c *Conn) endWriterBuffering() error {
 	return c.bufferedWriter.Flush()
 }
 
+func (c *Conn) returnReader() {
+	if c.bufferedReader == nil {
+		return
+	}
+	c.bufferedReader.Reset(nil)
+	readersPool.Put(c.bufferedReader)
+}
+
 // getWriter returns the current writer. It may be either
 // the original connection or a wrapper. The returned unget
 // function must be invoked after the writing is finished.
@@ -309,7 +324,7 @@ func (c *Conn) getWriter() (w io.Writer, unget func()) {
 // startFlushTimer must be called while holding lock on bufMu.
 func (c *Conn) startFlushTimer() {
 	c.stopFlushTimer()
-	c.flushTimer = time.AfterFunc(*mysqlServerFlushDelay, func() {
+	c.flushTimer = time.AfterFunc(mysqlServerFlushDelay, func() {
 		c.bufMu.Lock()
 		defer c.bufMu.Unlock()
 
@@ -700,7 +715,7 @@ func (c *Conn) Close() {
 // Close() method.  Note if the other side closes the connection, but
 // Close() wasn't called, this will return false.
 func (c *Conn) IsClosed() bool {
-	return c.closed.Get()
+	return c.closed.Load()
 }
 
 //
@@ -801,7 +816,11 @@ func getLenEncInt(i uint64) []byte {
 	return data
 }
 
-func (c *Conn) writeErrorAndLog(errorCode uint16, sqlState string, format string, args ...any) bool {
+func (c *Conn) WriteErrorAndLog(format string, args ...interface{}) bool {
+	return c.writeErrorAndLog(ERUnknownComError, SSNetError, format, args...)
+}
+
+func (c *Conn) writeErrorAndLog(errorCode ErrorCode, sqlState string, format string, args ...any) bool {
 	if err := c.writeErrorPacket(errorCode, sqlState, format, args...); err != nil {
 		log.Errorf("Error writing error to %s: %v", c, err)
 		return false
@@ -821,12 +840,12 @@ func (c *Conn) writeErrorPacketFromErrorAndLog(err error) bool {
 // writeErrorPacket writes an error packet.
 // Server -> Client.
 // This method returns a generic error, not a SQLError.
-func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string, args ...any) error {
+func (c *Conn) writeErrorPacket(errorCode ErrorCode, sqlState string, format string, args ...any) error {
 	errorMessage := fmt.Sprintf(format, args...)
 	length := 1 + 2 + 1 + 5 + len(errorMessage)
 	data, pos := c.startEphemeralPacketWithHeader(length)
 	pos = writeByte(data, pos, ErrPacket)
-	pos = writeUint16(data, pos, errorCode)
+	pos = writeUint16(data, pos, uint16(errorCode))
 	pos = writeByte(data, pos, '#')
 	if sqlState == "" {
 		sqlState = SSUnknownSQLState
@@ -844,7 +863,7 @@ func (c *Conn) writeErrorPacket(errorCode uint16, sqlState string, format string
 // See writeErrorPacket for other info.
 func (c *Conn) writeErrorPacketFromError(err error) error {
 	if se, ok := err.(*SQLError); ok {
-		return c.writeErrorPacket(uint16(se.Num), se.State, "%v", se.Message)
+		return c.writeErrorPacket(se.Num, se.State, "%v", se.Message)
 	}
 
 	return c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", err)
@@ -915,8 +934,12 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 		if !c.writeErrorAndLog(ERUnknownComError, SSNetError, "command handling not implemented yet: %v", data[0]) {
 			return false
 		}
+	case ComBinlogDump:
+		return c.handleComBinlogDump(handler, data)
 	case ComBinlogDumpGTID:
 		return c.handleComBinlogDumpGTID(handler, data)
+	case ComRegisterReplica:
+		return c.handleComRegisterReplica(handler, data)
 	default:
 		log.Errorf("Got unhandled packet (default) from %s, returning error: %v", c, data)
 		c.recycleReadPacket()
@@ -928,8 +951,27 @@ func (c *Conn) handleNextCommand(handler Handler) bool {
 	return true
 }
 
-func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
-	defer c.recycleReadPacket()
+func (c *Conn) handleComRegisterReplica(handler Handler, data []byte) (kontinue bool) {
+	c.recycleReadPacket()
+
+	replicaHost, replicaPort, replicaUser, replicaPassword, err := c.parseComRegisterReplica(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComRegisterReplica failed: %v", c.ID(), err)
+		return false
+	}
+	if err := handler.ComRegisterReplica(c, replicaHost, replicaPort, replicaUser, replicaPassword); err != nil {
+		c.writeErrorPacketFromError(err)
+		return false
+	}
+	if err := c.writeOKPacket(&PacketOK{}); err != nil {
+		c.writeErrorPacketFromError(err)
+	}
+	return true
+}
+
+func (c *Conn) handleComBinlogDump(handler Handler, data []byte) (kontinue bool) {
+	c.recycleReadPacket()
+	kontinue = true
 
 	c.startWriterBuffering()
 	defer func() {
@@ -939,14 +981,40 @@ func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue b
 		}
 	}()
 
-	_, _, position, err := c.parseComBinlogDumpGTID(data)
+	logfile, binlogPos, err := c.parseComBinlogDump(data)
 	if err != nil {
 		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
-		kontinue = false
+		return false
 	}
-	handler.ComBinlogDumpGTID(c, position.GTIDSet)
+	if err := handler.ComBinlogDump(c, logfile, binlogPos); err != nil {
+		log.Error(err.Error())
+		return false
+	}
+	return kontinue
+}
 
-	return true
+func (c *Conn) handleComBinlogDumpGTID(handler Handler, data []byte) (kontinue bool) {
+	c.recycleReadPacket()
+	kontinue = true
+
+	c.startWriterBuffering()
+	defer func() {
+		if err := c.endWriterBuffering(); err != nil {
+			log.Errorf("conn %v: flush() failed: %v", c.ID(), err)
+			kontinue = false
+		}
+	}()
+
+	logFile, logPos, position, err := c.parseComBinlogDumpGTID(data)
+	if err != nil {
+		log.Errorf("conn %v: parseComBinlogDumpGTID failed: %v", c.ID(), err)
+		return false
+	}
+	if err := handler.ComBinlogDumpGTID(c, logFile, logPos, position.GTIDSet); err != nil {
+		log.Error(err.Error())
+		return false
+	}
+	return kontinue
 }
 
 func (c *Conn) handleComResetConnection(handler Handler) {
@@ -1224,7 +1292,7 @@ func (c *Conn) handleComSetOption(data []byte) bool {
 func (c *Conn) handleComPing() bool {
 	c.recycleReadPacket()
 	// Return error if listener was shut down and OK otherwise
-	if c.listener.isShutdown() {
+	if c.listener.shutdown.Load() {
 		if !c.writeErrorAndLog(ERServerShutdown, SSNetError, "Server shutdown in progress") {
 			return false
 		}
@@ -1363,24 +1431,28 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 // Packet parsing methods, for generic packets.
 //
 
-// isEOFPacket determines whether or not a data packet is a "true" EOF. DO NOT blindly compare the
-// first byte of a packet to EOFPacket as you might do for other packet types, as 0xfe is overloaded
-// as a first byte.
+// isEOFPacket determines whether a data packet is an EOF. In case the client capabilities
+// do not have DEPRECATE_EOF set, DO NOT blindly compare the first byte of a packet to EOFPacket
+// as you might do for other packet types, as 0xfe is overloaded as a first byte.
+
+// In case that DEPRECATE_EOF is set, we have really an OK packet which is always maximum a single
+// packet and not multiple, but otherwise 0xfe definitely indicates it is an EOF.
 //
 // Per https://dev.mysql.com/doc/internals/en/packet-EOF_Packet.html, a packet starting with 0xfe
-// but having length >= 9 (on top of 4 byte header) is not a true EOF but a LengthEncodedInteger
-// (typically preceding a LengthEncodedString). Thus, all EOF checks must validate the payload size
-// before exiting.
-//
-// More specifically, an EOF packet can have 3 different lengths (1, 5, 7) depending on the client
-// flags that are set. 7 comes from server versions of 5.7.5 or greater where ClientDeprecateEOF is
-// set (i.e. uses an OK packet starting with 0xfe instead of 0x00 to signal EOF). Regardless, 8 is
-// an upper bound otherwise it would be ambiguous w.r.t. LengthEncodedIntegers.
+// but having length >= 9 (on top of 4 byte header)  without DEPRECATE_EOF set is not a true EOF but
+// a LengthEncodedInteger (typically preceding a LengthEncodedString). Thus, all EOF checks without
+// DEPRECATE_EOF must validate the payload size before exiting.
 //
 // More docs here:
 // https://dev.mysql.com/doc/dev/mysql-server/latest/page_protocol_basic_response_packets.html
-func isEOFPacket(data []byte) bool {
-	return data[0] == EOFPacket && len(data) < 9
+func (c *Conn) isEOFPacket(data []byte) bool {
+	if data[0] != EOFPacket {
+		return false
+	}
+	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+		return len(data) < 9
+	}
+	return len(data) < MaxPacketSize
 }
 
 // parseEOFPacket returns the warning count and a boolean to indicate if there
@@ -1461,30 +1533,44 @@ func (c *Conn) parseOKPacket(in []byte) (*PacketOK, error) {
 	if c.Capabilities&uint32(CapabilityClientSessionTrack) == CapabilityClientSessionTrack {
 		// session tracking
 		if statusFlags&ServerSessionStateChanged == ServerSessionStateChanged {
-			_, ok := data.readLenEncInt()
-			if !ok {
-				return fail("invalid OK packet session state change length: %v", data)
-			}
-			sscType, ok := data.readByte()
-			if !ok || sscType != SessionTrackGtids {
-				return fail("invalid OK packet session state change type: %v", sscType)
+			length, ok := data.readLenEncInt()
+			if !ok || length == 0 {
+				// In case we have no more data or a zero length string, there's no additional information so
+				// we can return the packet.
+				return packetOK, nil
 			}
 
-			// Move past the total length of the changed entity: 1 byte
-			_, ok = data.readByte()
-			if !ok {
-				return fail("invalid OK packet gtids length: %v", data)
+			// Alright, now we need to read each sub packet from the session state change.
+			for {
+				sscType, ok := data.readByte()
+				if !ok {
+					// We're done, there's no more session state parts in the packet.
+					break
+				}
+				sessionLen, ok := data.readLenEncInt()
+				if !ok {
+					return fail("invalid OK packet session state change length for type %v", sscType)
+				}
+
+				if sscType != SessionTrackGtids {
+					// Still need to increase the pointer here to indicate we're consuming
+					// but otherwise ignoring the rest of this packet
+					data.pos = data.pos + int(sessionLen)
+					continue
+				}
+
+				// read (and ignore for now) the GTIDS encoding specification code: 1 byte
+				_, ok = data.readByte()
+				if !ok {
+					return fail("invalid OK packet gtids type: %v", data)
+				}
+
+				gtids, ok := data.readLenEncString()
+				if !ok {
+					return fail("invalid OK packet gtids: %v", data)
+				}
+				packetOK.sessionStateData = gtids
 			}
-			// read (and ignore for now) the GTIDS encoding specification code: 1 byte
-			_, ok = data.readByte()
-			if !ok {
-				return fail("invalid OK packet gtids type: %v", data)
-			}
-			gtids, ok := data.readLenEncString()
-			if !ok {
-				return fail("invalid OK packet gtids: %v", data)
-			}
-			packetOK.sessionStateData = gtids
 		}
 	}
 
@@ -1520,7 +1606,7 @@ func ParseErrorPacket(data []byte) error {
 	// Human readable error message is the rest.
 	msg := string(data[pos:])
 
-	return NewSQLError(int(code), string(sqlState), "%v", msg)
+	return NewSQLError(ErrorCode(code), string(sqlState), "%v", msg)
 }
 
 // GetTLSClientCerts gets TLS certificates.

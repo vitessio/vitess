@@ -62,42 +62,58 @@ var (
 	`
 )
 
+var enableSettingsPool bool
+
 func TestMain(m *testing.M) {
 	defer cluster.PanicHandler(nil)
 	flag.Parse()
 
-	exitCode := func() int {
-		clusterInstance = cluster.NewCluster(cell, hostname)
-		defer clusterInstance.Teardown()
+	code := runAllTests(m)
+	if code != 0 {
+		os.Exit(code)
+	}
 
-		// Start topo server
-		if err := clusterInstance.StartTopo(); err != nil {
-			return 1
-		}
+	println("running with settings pool enabled")
+	// run again with settings pool enabled.
+	enableSettingsPool = true
+	code = runAllTests(m)
+	os.Exit(code)
+}
 
-		// Start keyspace
-		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
-			VSchema:   vSchema,
-		}
-		if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true); err != nil {
-			return 1
-		}
+func runAllTests(m *testing.M) int {
 
-		// Start vtgate
-		clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s", "--enable_system_settings=true"}
-		if err := clusterInstance.StartVtgate(); err != nil {
-			return 1
-		}
+	clusterInstance = cluster.NewCluster(cell, hostname)
+	defer clusterInstance.Teardown()
 
-		vtParams = mysql.ConnParams{
-			Host: clusterInstance.Hostname,
-			Port: clusterInstance.VtgateMySQLPort,
-		}
-		return m.Run()
-	}()
-	os.Exit(exitCode)
+	// Start topo server
+	if err := clusterInstance.StartTopo(); err != nil {
+		return 1
+	}
+
+	// Start keyspace
+	keyspace := &cluster.Keyspace{
+		Name:      keyspaceName,
+		SchemaSQL: sqlSchema,
+		VSchema:   vSchema,
+	}
+	if enableSettingsPool {
+		clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--queryserver-enable-settings-pool")
+	}
+	if err := clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 1, true); err != nil {
+		return 1
+	}
+
+	// Start vtgate
+	clusterInstance.VtGateExtraArgs = []string{"--lock_heartbeat_time", "2s"}
+	if err := clusterInstance.StartVtgate(); err != nil {
+		return 1
+	}
+
+	vtParams = mysql.ConnParams{
+		Host: clusterInstance.Hostname,
+		Port: clusterInstance.VtgateMySQLPort,
+	}
+	return m.Run()
 }
 
 func TestServingChange(t *testing.T) {

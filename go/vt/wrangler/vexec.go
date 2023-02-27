@@ -29,9 +29,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -220,6 +219,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
 					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
+					vx.wr.optimizeCopyStateTable(primary.Tablet)
 				}
 				mu.Lock()
 				results[primary] = qr
@@ -371,6 +371,10 @@ type ReplicationStatusResult struct {
 	SourceTimeZone string
 	// TargetTimeZone is set to the original SourceTimeZone, in reverse streams, if it was provided to the workflow
 	TargetTimeZone string
+	// OnDDL specifies the action to be taken when a DDL is encountered.
+	OnDDL string `json:"OnDDL,omitempty"`
+	// DeferSecondaryKeys specifies whether to defer the creation of secondary keys.
+	DeferSecondaryKeys bool `json:"DeferSecondaryKeys,omitempty"`
 }
 
 // ReplicationLocation represents a location that data is either replicating from, or replicating into.
@@ -401,7 +405,7 @@ type ReplicationStatus struct {
 	// Tablet is the tablet alias that the ReplicationStatus came from.
 	Tablet string
 	// ID represents the id column from the _vt.vreplication table.
-	ID int64
+	ID int32
 	// Bls represents the BinlogSource.
 	Bls *binlogdatapb.BinlogSource
 	// Pos represents the pos column from the _vt.vreplication table.
@@ -425,23 +429,31 @@ type ReplicationStatus struct {
 	// Message represents the message column from the _vt.vreplication table.
 	Message string
 	// Tags contain the tags specified for this stream
-	Tags string
+	Tags            string
+	WorkflowType    string
+	WorkflowSubType string
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
+	// RowsCopied shows the number of rows copied per stream, only valid when workflow state is "Copying"
+	RowsCopied int64
 	// sourceTimeZone represents the time zone of each stream, only set if not UTC
 	sourceTimeZone string
 	// targetTimeZone is set to the sourceTimeZone of the forward stream, if it was provided in the workflow
-	targetTimeZone string
+	targetTimeZone     string
+	deferSecondaryKeys bool
 }
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
+	var id int32
+	var timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
 	var state, dbName, pos, stopPos, message, tags, componentThrottled string
+	var workflowType, workflowSubType int32
+	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
-
-	id, err = row.ToInt64("id")
+	var rowsCopied int64
+	id, err = row.ToInt32("id")
 	if err != nil {
 		return nil, "", err
 	}
@@ -505,6 +517,14 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
+	workflowType, _ = row.ToInt32("workflow_type")
+	workflowSubType, _ = row.ToInt32("workflow_sub_type")
+	deferSecondaryKeys, _ = row.ToBool("defer_secondary_keys")
+	rowsCopied = row.AsInt64("rows_copied", 0)
+	if err != nil {
+		return nil, "", err
+	}
+
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
 		Tablet:               primary.AliasString(),
@@ -523,6 +543,10 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
 		targetTimeZone:       bls.TargetTimeZone,
+		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[workflowType],
+		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType],
+		deferSecondaryKeys:   deferSecondaryKeys,
+		RowsCopied:           rowsCopied,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -552,7 +576,11 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		time_throttled,
 		component_throttled,
 		message,
-		tags
+		tags,
+		workflow_type, 
+		workflow_sub_type,
+		defer_secondary_keys,
+		rows_copied
 	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
@@ -560,11 +588,11 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 
 	// We set a topo timeout since we contact topo for the shard record.
-	ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var sourceKeyspace string
-	sourceShards := sets.NewString()
-	targetShards := sets.NewString()
+	sourceShards := sets.New[string]()
+	targetShards := sets.New[string]()
 	for primary, result := range results {
 		var rsrStatus []*ReplicationStatus
 		nqr := sqltypes.Proto3ToResult(result).Named()
@@ -581,6 +609,24 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 			sourceKeyspace = sk
 			sourceShards.Insert(status.Bls.Shard)
 			rsrStatus = append(rsrStatus, status)
+
+			// Only show the OnDDL setting if it's not the default of 0/IGNORE.
+			if status.Bls.OnDdl != binlogdatapb.OnDDLAction_IGNORE {
+				rsr.OnDDL = binlogdatapb.OnDDLAction_name[int32(status.Bls.OnDdl)]
+				// Unset it in the proto so that we do not show the
+				// low-level enum int in the JSON marshalled output
+				// as e.g. `"on_ddl": 1` is not meaningful or helpful
+				// for the end user and we instead show the mapped
+				// string value using the top-level "OnDDL" json key.
+				// Note: this is done here only because golang does
+				// not currently support setting json tags in proto
+				// declarations so that I could request it always be
+				// ommitted from marshalled JSON output:
+				// https://github.com/golang/protobuf/issues/52
+				status.Bls.OnDdl = 0
+			}
+
+			rsr.DeferSecondaryKeys = status.deferSecondaryKeys
 
 			if status.Message == workflow2.Frozen {
 				rsr.Frozen = true
@@ -631,13 +677,12 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 	rsr.SourceLocation = ReplicationLocation{
 		Keyspace: sourceKeyspace,
-		Shards:   sourceShards.List(),
+		Shards:   sets.List(sourceShards),
 	}
 	rsr.TargetLocation = ReplicationLocation{
 		Keyspace: keyspace,
-		Shards:   targetShards.List(),
+		Shards:   sets.List(targetShards),
 	}
-
 	return &rsr, nil
 }
 
@@ -658,7 +703,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 	if err != nil {
 		return nil, err
 	}
-	workflowsSet := sets.NewString()
+	workflowsSet := sets.New[string]()
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			continue
@@ -671,7 +716,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 			}
 		}
 	}
-	workflows := workflowsSet.List()
+	workflows := sets.List(workflowsSet)
 	return workflows, nil
 }
 
@@ -717,9 +762,10 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)
 }
 
-func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
+func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int32) ([]copyState, error) {
 	var cs []copyState
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
+	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
+		id, id)
 	qr, err := wr.VReplicationExec(ctx, tablet.Alias, query)
 	if err != nil {
 		return nil, err

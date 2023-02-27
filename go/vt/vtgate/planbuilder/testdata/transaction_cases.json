@@ -1,0 +1,58 @@
+[
+  {
+    "comment": "Begin",
+    "query": "begin",
+    "plan": {
+      "QueryType": "BEGIN",
+      "Original": "begin"
+    }
+  },
+  {
+    "comment": "Start Transaction",
+    "query": "start transaction",
+    "plan": {
+      "QueryType": "BEGIN",
+      "Original": "start transaction"
+    }
+  },
+  {
+    "comment": "Commit",
+    "query": "commit",
+    "plan": {
+      "QueryType": "COMMIT",
+      "Original": "commit"
+    }
+  },
+  {
+    "comment": "Rollback",
+    "query": "rollback",
+    "plan": {
+      "QueryType": "ROLLBACK",
+      "Original": "rollback"
+    }
+  },
+  {
+    "comment": "Savepoint",
+    "query": "savepoint a",
+    "plan": {
+      "QueryType": "SAVEPOINT",
+      "Original": "savepoint a"
+    }
+  },
+  {
+    "comment": "Savepoint rollback",
+    "query": "rollback work to savepoint a",
+    "plan": {
+      "QueryType": "SAVEPOINT_ROLLBACK",
+      "Original": "rollback work to savepoint a"
+    }
+  },
+  {
+    "comment": "Savepoint release",
+    "query": "release savepoint a",
+    "plan": {
+      "QueryType": "RELEASE",
+      "Original": "release savepoint a"
+    }
+  }
+]

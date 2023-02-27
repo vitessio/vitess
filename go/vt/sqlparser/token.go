@@ -432,6 +432,12 @@ func (tkn *Tokenizer) scanBindVar() (int, string) {
 	token := VALUE_ARG
 
 	tkn.skip(1)
+	// If : is followed by a digit, then it is an offset value arg. Example - :1, :10
+	if isDigit(tkn.cur()) {
+		tkn.scanMantissa(10)
+		return OFFSET_ARG, tkn.buf[start+1 : tkn.Pos]
+	}
+	// If : is followed by another : it is a list arg. Example ::v1, ::list
 	if tkn.cur() == ':' {
 		token = LIST_ARG
 		tkn.skip(1)
@@ -439,6 +445,7 @@ func (tkn *Tokenizer) scanBindVar() (int, string) {
 	if !isLetter(tkn.cur()) {
 		return LEX_ERROR, tkn.buf[start:tkn.Pos]
 	}
+	// If : is followed by a letter, it is a bindvariable. Example :v1, :v2
 	for {
 		ch := tkn.cur()
 		if !isLetter(ch) && !isDigit(ch) && ch != '.' {
@@ -590,7 +597,11 @@ func (tkn *Tokenizer) scanStringSlow(buffer *strings.Builder, delim uint16, typ 
 				// String terminates mid escape character.
 				return LEX_ERROR, buffer.String()
 			}
-			if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
+			// Preserve escaping of % and _
+			if tkn.cur() == '%' || tkn.cur() == '_' {
+				buffer.WriteByte('\\')
+				ch = tkn.cur()
+			} else if decodedChar := sqltypes.SQLDecodeMap[byte(tkn.cur())]; decodedChar == sqltypes.DontEscape {
 				ch = tkn.cur()
 			} else {
 				ch = uint16(decodedChar)
@@ -663,7 +674,7 @@ func (tkn *Tokenizer) scanMySQLSpecificComment() (int, string) {
 
 	commentVersion, sql := ExtractMysqlComment(tkn.buf[start:tkn.Pos])
 
-	if MySQLVersion >= commentVersion {
+	if mySQLParserVersion >= commentVersion {
 		// Only add the special comment to the tokenizer if the version of MySQL is higher or equal to the comment version
 		tkn.specialComment = NewStringTokenizer(sql)
 	}

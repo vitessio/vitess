@@ -17,25 +17,22 @@ limitations under the License.
 package flagutil
 
 import (
-	"flag"
 	"strings"
 
 	"github.com/spf13/pflag"
-	"k8s.io/apimachinery/pkg/util/sets"
+
+	"vitess.io/vitess/go/sets"
 )
 
-var (
-	_ flag.Value  = (*StringSetFlag)(nil)
-	_ pflag.Value = (*StringSetFlag)(nil)
-)
+var _ pflag.Value = (*StringSetFlag)(nil)
 
 // StringSetFlag can be used to collect multiple instances of a flag into a set
 // of values.
 //
 // For example, defining the following:
 //
-//		var x flagutil.StringSetFlag
-//		flag.Var(&x, "foo", "")
+//	var x flagutil.StringSetFlag
+//	flag.Var(&x, "foo", "")
 //
 // And then specifying "-foo x -foo y -foo x", will result in a set of {x, y}.
 //
@@ -43,14 +40,14 @@ var (
 // provides an implementation of pflag.Value, so it is usable in libraries like
 // cobra.
 type StringSetFlag struct {
-	set sets.String
+	set sets.Set[string]
 }
 
 // ToSet returns the underlying string set, or an empty set if the underlying
 // set is nil.
-func (set *StringSetFlag) ToSet() sets.String {
+func (set *StringSetFlag) ToSet() sets.Set[string] {
 	if set.set == nil {
-		set.set = sets.NewString()
+		set.set = sets.New[string]()
 	}
 
 	return set.set
@@ -59,7 +56,7 @@ func (set *StringSetFlag) ToSet() sets.String {
 // Set is part of the pflag.Value and flag.Value interfaces.
 func (set *StringSetFlag) Set(s string) error {
 	if set.set == nil {
-		set.set = sets.NewString(s)
+		set.set = sets.New[string]()
 		return nil
 	}
 
@@ -73,7 +70,7 @@ func (set *StringSetFlag) String() string {
 		return ""
 	}
 
-	return strings.Join(set.set.List(), ", ")
+	return strings.Join(sets.List(set.set), ", ")
 }
 
 // Type is part of the pflag.Value interface.

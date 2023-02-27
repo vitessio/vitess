@@ -1,0 +1,69 @@
+{
+  "sharded": true,
+  "vindexes": {
+    "hash": {
+      "type": "hash"
+    },
+    "t1_id2_vdx": {
+      "type": "consistent_lookup_unique",
+      "params": {
+        "table": "t1_id2_idx",
+        "from": "id2",
+        "to": "keyspace_id"
+      },
+      "owner": "t1"
+    },
+    "t2_id4_idx": {
+      "type": "lookup_hash",
+      "params": {
+        "table": "t2_id4_idx",
+        "from": "id4",
+        "to": "id3",
+        "autocommit": "true"
+      },
+      "owner": "t2"
+    }
+  },
+  "tables": {
+    "t1": {
+      "column_vindexes": [
+        {
+          "column": "id1",
+          "name": "hash"
+        },
+        {
+          "column": "id2",
+          "name": "t1_id2_vdx"
+        }
+      ]
+    },
+    "t1_id2_idx": {
+      "column_vindexes": [
+        {
+          "column": "id2",
+          "name": "hash"
+        }
+      ]
+    },
+    "t2": {
+      "column_vindexes": [
+        {
+          "column": "id3",
+          "name": "hash"
+        },
+        {
+          "column": "id4",
+          "name": "t2_id4_idx"
+        }
+      ]
+    },
+    "t2_id4_idx": {
+      "column_vindexes": [
+        {
+          "column": "id4",
+          "name": "hash"
+        }
+      ]
+    }
+  }
+}

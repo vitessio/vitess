@@ -17,9 +17,8 @@ limitations under the License.
 package tabletmanager
 
 import (
-	"time"
-
 	"context"
+	"time"
 
 	"vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/logutil"
@@ -68,13 +67,13 @@ type RPCTM interface {
 
 	UnlockTables(ctx context.Context) error
 
-	ExecuteQuery(ctx context.Context, query []byte, dbName string, maxrows int) (*querypb.QueryResult, error)
+	ExecuteQuery(ctx context.Context, req *tabletmanagerdatapb.ExecuteQueryRequest) (*querypb.QueryResult, error)
 
-	ExecuteFetchAsDba(ctx context.Context, query []byte, dbName string, maxrows int, disableBinlogs bool, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsDba(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsDbaRequest) (*querypb.QueryResult, error)
 
-	ExecuteFetchAsAllPrivs(ctx context.Context, query []byte, dbName string, maxrows int, reloadSchema bool) (*querypb.QueryResult, error)
+	ExecuteFetchAsAllPrivs(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAllPrivsRequest) (*querypb.QueryResult, error)
 
-	ExecuteFetchAsApp(ctx context.Context, query []byte, maxrows int) (*querypb.QueryResult, error)
+	ExecuteFetchAsApp(ctx context.Context, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error)
 
 	// Replication related methods
 	PrimaryStatus(ctx context.Context) (*replicationdatapb.PrimaryStatus, error)
@@ -102,7 +101,7 @@ type RPCTM interface {
 
 	// VReplication API
 	VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error)
-	VReplicationWaitForPos(ctx context.Context, id int, pos string) error
+	VReplicationWaitForPos(ctx context.Context, id int32, pos string) error
 
 	// VDiff API
 	VDiff(ctx context.Context, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error)
@@ -135,9 +134,9 @@ type RPCTM interface {
 
 	// Backup / restore related methods
 
-	Backup(ctx context.Context, concurrency int, logger logutil.Logger, allowPrimary bool) error
+	Backup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.BackupRequest) error
 
-	RestoreFromBackup(ctx context.Context, logger logutil.Logger, backupTime time.Time) error
+	RestoreFromBackup(ctx context.Context, logger logutil.Logger, request *tabletmanagerdatapb.RestoreFromBackupRequest) error
 
 	// HandleRPCPanic is to be called in a defer statement in each
 	// RPC input point.

@@ -22,9 +22,11 @@ import (
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
+
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
 
 var fuzzInitter sync.Once
@@ -40,7 +42,7 @@ func FuzzTabletManagerExecuteFetchAsDba(data []byte) int {
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	db.AddQueryPattern(".*", &sqltypes.Result{})
-	daemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
+	daemon := mysqlctl.NewFakeMysqlDaemon(db)
 
 	dbName := "dbname"
 	tm := &tabletmanager.TabletManager{
@@ -48,6 +50,10 @@ func FuzzTabletManagerExecuteFetchAsDba(data []byte) int {
 		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, dbName),
 		QueryServiceControl: tabletservermock.NewController(),
 	}
-	_, _ = tm.ExecuteFetchAsDba(ctx, data, dbName, 10, false, false)
+	_, _ = tm.ExecuteFetchAsDba(ctx, &tabletmanagerdatapb.ExecuteFetchAsDbaRequest{
+		Query:   data,
+		DbName:  dbName,
+		MaxRows: 10,
+	})
 	return 1
 }

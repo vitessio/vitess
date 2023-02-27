@@ -38,6 +38,8 @@ import { Vtctlds } from './routes/Vtctlds';
 import { SnackbarContainer } from './Snackbar';
 import { isReadOnlyMode } from '../util/env';
 import { CreateKeyspace } from './routes/createKeyspace/CreateKeyspace';
+import { Topology } from './routes/topology/Topology';
+import { ClusterTopology } from './routes/topology/ClusterTopology';
 
 export const App = () => {
     return (
@@ -113,6 +115,14 @@ export const App = () => {
 
                         <Route path="/workflow/:clusterID/:keyspace/:name">
                             <Workflow />
+                        </Route>
+
+                        <Route path="/topology/:clusterID">
+                            <ClusterTopology />
+                        </Route>
+
+                        <Route path="/topology">
+                            <Topology />
                         </Route>
 
                         <Route path="/settings">

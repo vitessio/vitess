@@ -36,7 +36,7 @@ import (
 
 var _ Primitive = (*Lock)(nil)
 
-//Lock primitive will execute sql containing lock functions
+// Lock primitive will execute sql containing lock functions
 type Lock struct {
 	// Keyspace specifies the keyspace to send the query to.
 	Keyspace *vindexes.Keyspace
@@ -174,7 +174,7 @@ func (l *Lock) GetFields(ctx context.Context, vcursor VCursor, bindVars map[stri
 		Sql:           l.FieldQuery,
 		BindVariables: bindVars,
 	}}
-	qr, errs := vcursor.ExecuteMultiShard(ctx, rss, boundQuery, false, true)
+	qr, errs := vcursor.ExecuteMultiShard(ctx, l, rss, boundQuery, false, true)
 	if len(errs) > 0 {
 		return nil, vterrors.Aggregate(errs)
 	}

@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	"context"
 
@@ -560,6 +561,13 @@ func TestPermissions(t *testing.T) {
 	replica.FakeMysqlDaemon.FetchSuperQueryMap = map[string]*sqltypes.Result{
 		"SELECT * FROM mysql.user ORDER BY host, user":   &user,
 		"SELECT * FROM mysql.db ORDER BY host, db, user": primary.FakeMysqlDaemon.FetchSuperQueryMap["SELECT * FROM mysql.db ORDER BY host, db, user"],
+	}
+	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
+	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 	}
 	replica.StartActionLoop(t, wr)
 	defer replica.StopActionLoop(t)

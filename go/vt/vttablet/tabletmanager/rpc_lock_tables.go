@@ -17,22 +17,30 @@ limitations under the License.
 package tabletmanager
 
 import (
+	"context"
 	"errors"
-	"flag"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	"vitess.io/vitess/go/sqlescape"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
-
-	"context"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-var (
-	lockTablesTimeout = flag.Duration("lock_tables_timeout", 1*time.Minute, "How long to keep the table locked before timing out")
-)
+var lockTablesTimeout = 1 * time.Minute
+
+func registerLockTablesFlags(fs *pflag.FlagSet) {
+	fs.DurationVar(&lockTablesTimeout, "lock_tables_timeout", lockTablesTimeout, "How long to keep the table locked before timing out")
+}
+
+func init() {
+	servenv.OnParseFor("vtcombo", registerLockTablesFlags)
+	servenv.OnParseFor("vttablet", registerLockTablesFlags)
+}
 
 // LockTables will lock all tables with read locks, effectively pausing replication while the lock is held (idempotent)
 func (tm *TabletManager) LockTables(ctx context.Context) error {
@@ -71,7 +79,7 @@ func (tm *TabletManager) LockTables(ctx context.Context) error {
 	log.Infof("[%v] Tables locked", conn.ConnectionID)
 
 	tm._lockTablesConnection = conn
-	tm._lockTablesTimer = time.AfterFunc(*lockTablesTimeout, func() {
+	tm._lockTablesTimer = time.AfterFunc(lockTablesTimeout, func() {
 		// Here we'll sleep until the timeout time has elapsed.
 		// If the table locks have not been released yet, we'll release them here
 		tm.mutex.Lock()

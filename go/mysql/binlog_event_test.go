@@ -20,6 +20,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 )
 
@@ -35,9 +37,8 @@ func TestQueryString(t *testing.T) {
 	}
 	want := `{Database: "test_database", Charset:`
 	got := input.String()
-	if !strings.HasPrefix(got, want) {
-		t.Errorf("%#v.String() = %#v, want %#v", input, got, want)
-	}
+	assert.True(t, strings.HasPrefix(got, want), "%#v.String() = %#v, want %#v", input, got, want)
+
 }
 
 func TestQueryStringNilCharset(t *testing.T) {

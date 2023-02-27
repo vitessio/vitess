@@ -479,7 +479,7 @@ func applyDefaultDockerPatches(
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtctld(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtgate(opts))
 	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVreplication(dbInfo, opts))
-	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVtorc(dbInfo, opts))
+	dockerComposeFile = applyInMemoryPatch(dockerComposeFile, generateVTOrc(dbInfo, opts))
 	return dockerComposeFile
 }
 
@@ -669,8 +669,6 @@ func generateVtctld(opts vtOptions) string {
     command: ["sh", "-c", " /vt/bin/vtctld \
         %[3]s \
         -cell %[4]s \
-        -workflow_manager_init \
-        -workflow_manager_use_election \
         -service_map 'grpc-vtctl' \
         -backup_storage_implementation file \
         -file_backup_storage_root /vt/vtdataroot/backups \
@@ -702,16 +700,16 @@ func generateVtgate(opts vtOptions) string {
       - "15306:%[3]d"
     command: ["sh", "-c", "/script/run-forever.sh /vt/bin/vtgate \
         %[4]s \
-        -logtostderr=true \
-        -port %[1]d \
-        -grpc_port %[2]d \
-        -mysql_server_port %[3]d \
-        -mysql_auth_server_impl none \
-        -cell %[5]s \
-        -cells_to_watch %[5]s \
-        -tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
-        -service_map 'grpc-vtgateservice' \
-        -normalize_queries=true \
+        --logtostderr=true \
+        --port %[1]d \
+        --grpc_port %[2]d \
+        --mysql_server_port %[3]d \
+        --mysql_auth_server_impl none \
+        --cell %[5]s \
+        --cells_to_watch %[5]s \
+        --tablet_types_to_wait PRIMARY,REPLICA,RDONLY \
+        --service_map 'grpc-vtgateservice' \
+        --normalize_queries=true \
         "]
     volumes:
       - .:/script
@@ -720,7 +718,7 @@ func generateVtgate(opts vtOptions) string {
 `, opts.webPort, opts.gRpcPort, opts.mySqlPort, opts.topologyFlags, opts.cell)
 }
 
-func generateVtorc(dbInfo externalDbInfo, opts vtOptions) string {
+func generateVTOrc(dbInfo externalDbInfo, opts vtOptions) string {
 	externalDb := "0"
 	if dbInfo.dbName != "" {
 		externalDb = "1"

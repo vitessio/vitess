@@ -24,10 +24,11 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
@@ -37,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	p "vitess.io/vitess/go/vt/vttablet/tabletserver/planbuilder"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/rules"
@@ -59,6 +61,7 @@ type QueryExecutor struct {
 	logStats       *tabletenv.LogStats
 	tsv            *TabletServer
 	tabletType     topodatapb.TabletType
+	setting        *pools.Setting
 }
 
 const (
@@ -66,11 +69,19 @@ const (
 	maxQueryBufferDuration = 10 * time.Second
 )
 
-var streamResultPool = sync.Pool{New: func() any {
-	return &sqltypes.Result{
-		Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+var (
+	streamResultPool = sync.Pool{New: func() any {
+		return &sqltypes.Result{
+			Rows: make([][]sqltypes.Value, 0, streamRowsSize),
+		}
+	}}
+	sequenceFields = []*querypb.Field{
+		{
+			Name: "nextval",
+			Type: sqltypes.Int64,
+		},
 	}
-}}
+)
 
 func returnStreamResult(result *sqltypes.Result) error {
 	// only return large results slices to the pool
@@ -87,16 +98,19 @@ func allocStreamResult() *sqltypes.Result {
 	return streamResultPool.Get().(*sqltypes.Result)
 }
 
-var sequenceFields = []*querypb.Field{
-	{
-		Name: "nextval",
-		Type: sqltypes.Int64,
-	},
-}
-
 func (qre *QueryExecutor) shouldConsolidate() bool {
-	cm := qre.tsv.qe.consolidatorMode.Get()
-	return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
+	co := qre.options.GetConsolidator()
+	switch co {
+	case querypb.ExecuteOptions_CONSOLIDATOR_DISABLED:
+		return false
+	case querypb.ExecuteOptions_CONSOLIDATOR_ENABLED:
+		return true
+	case querypb.ExecuteOptions_CONSOLIDATOR_ENABLED_REPLICAS:
+		return qre.tabletType != topodatapb.TabletType_PRIMARY
+	default:
+		cm := qre.tsv.qe.consolidatorMode.Load().(string)
+		return cm == tabletenv.Enable || (cm == tabletenv.NotOnPrimary && qre.tabletType != topodatapb.TabletType_PRIMARY)
+	}
 }
 
 // Execute performs a non-streaming query execution.
@@ -126,7 +140,7 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		qre.tsv.Stats().ResultHistogram.Add(int64(len(reply.Rows)))
 	}(time.Now())
 
-	if err := qre.checkPermissions(); err != nil {
+	if err = qre.checkPermissions(); err != nil {
 		return nil, err
 	}
 
@@ -135,12 +149,18 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 	}
 
 	if qre.connID != 0 {
+		var conn *StatefulConnection
 		// Need upfront connection for DMLs and transactions
-		conn, err := qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
+		conn, err = qre.tsv.te.txPool.GetAndLock(qre.connID, "for query")
 		if err != nil {
 			return nil, err
 		}
 		defer conn.Unlock()
+		if qre.setting != nil {
+			if err = conn.ApplySetting(qre.ctx, qre.setting); err != nil {
+				return nil, vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+		}
 		return qre.txConnExec(conn)
 	}
 
@@ -159,12 +179,17 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 			return nil, err
 		}
 		return qr, nil
-	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush:
-		return qre.execOther()
-	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
+	case p.PlanOtherRead, p.PlanOtherAdmin, p.PlanFlush, p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execOther()
 	case p.PlanInsert, p.PlanUpdate, p.PlanDelete, p.PlanInsertMessage, p.PlanDDL, p.PlanLoad:
 		return qre.execAutocommit(qre.txConnExec)
+	case p.PlanViewDDL:
+		switch qre.plan.FullStmt.(type) {
+		case *sqlparser.DropView:
+			return qre.execAutocommit(qre.execDropViewDDL)
+		default:
+			return qre.execAsTransaction(qre.execViewDDL)
+		}
 	case p.PlanUpdateLimit, p.PlanDeleteLimit:
 		return qre.execAsTransaction(qre.txConnExec)
 	case p.PlanCallProc:
@@ -177,6 +202,14 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 		return qre.execShowMigrationLogs()
 	case p.PlanShowThrottledApps:
 		return qre.execShowThrottledApps()
+	case p.PlanShowThrottlerStatus:
+		return qre.execShowThrottlerStatus()
+	case p.PlanSet:
+		if qre.setting == nil {
+			return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "[BUG] %s not allowed without setting connection", qre.query)
+		}
+		// The execution is not required as this setting will be applied when any other query type is executed.
+		return &sqltypes.Result{}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
@@ -184,10 +217,12 @@ func (qre *QueryExecutor) Execute() (reply *sqltypes.Result, err error) {
 func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (reply *sqltypes.Result, err error) {
 	if qre.options == nil {
 		qre.options = &querypb.ExecuteOptions{}
+	} else {
+		qre.options = proto.Clone(qre.options).(*querypb.ExecuteOptions)
 	}
 	qre.options.TransactionIsolation = querypb.ExecuteOptions_AUTOCOMMIT
 
-	conn, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
+	conn, _, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
 
 	if err != nil {
 		return nil, err
@@ -198,7 +233,7 @@ func (qre *QueryExecutor) execAutocommit(f func(conn *StatefulConnection) (*sqlt
 }
 
 func (qre *QueryExecutor) execAsTransaction(f func(conn *StatefulConnection) (*sqltypes.Result, error)) (*sqltypes.Result, error) {
-	conn, beginSQL, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil)
+	conn, beginSQL, _, err := qre.tsv.te.txPool.Begin(qre.ctx, qre.options, false, 0, nil, qre.setting)
 	if err != nil {
 		return nil, err
 	}
@@ -238,7 +273,7 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 		return qre.execStatefulConn(conn, qre.query, true)
 	case p.PlanSavepoint, p.PlanRelease, p.PlanSRollback:
 		return qre.execStatefulConn(conn, qre.query, true)
-	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow:
+	case p.PlanSelect, p.PlanSelectImpossible, p.PlanShow, p.PlanSelectLockFunc:
 		maxrows := qre.getSelectLimit()
 		qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
@@ -262,6 +297,113 @@ func (qre *QueryExecutor) txConnExec(conn *StatefulConnection) (*sqltypes.Result
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] %s unexpected plan type", qre.plan.PlanID.String())
 }
 
+func (qre *QueryExecutor) execViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	var err error
+	switch stmt := qre.plan.FullStmt.(type) {
+	case *sqlparser.CreateView:
+		_, err = qre.execCreateViewDDL(conn, stmt)
+	case *sqlparser.AlterView:
+		_, err = qre.execAlterViewDDL(conn, stmt)
+	default:
+		err = vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected view DDL type: %T", qre.plan.FullStmt)
+	}
+	if err != nil {
+		return nil, err
+	}
+	// We need to use a different connection for executing the DDL on MySQL
+	// because the previous DMLs are running in a transaction and we don't want to autocommit
+	// those changes.
+	ddlConn, err := qre.getConn()
+	if err != nil {
+		return nil, err
+	}
+	defer ddlConn.Recycle()
+	// If MySQL fails, then we will Rollback the changes.
+	return ddlConn.Exec(qre.ctx, sqlparser.String(qre.plan.FullStmt), 1000, true)
+}
+
+func (qre *QueryExecutor) execCreateViewDDL(conn *StatefulConnection, stmt *sqlparser.CreateView) (*sqltypes.Result, error) {
+	bindVars := generateBindVarsForViewDDLInsert(stmt)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
+	if err != nil {
+		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		// If it is a MySQL error and its code is of duplicate entry,
+		// then we would return duplicate create view error.
+		if isSQLErr && sqlErr.Number() == mysql.ERDupEntry {
+			return nil, vterrors.Errorf(vtrpcpb.Code_ALREADY_EXISTS, "Table '%s' already exists", stmt.ViewName.Name.String())
+		}
+		return nil, err
+	}
+	return qr, nil
+}
+
+func (qre *QueryExecutor) execAlterViewDDL(conn *StatefulConnection, stmt *sqlparser.AlterView) (*sqltypes.Result, error) {
+	createViewDDL := &sqlparser.CreateView{
+		ViewName:    stmt.ViewName,
+		Algorithm:   stmt.Algorithm,
+		Definer:     stmt.Definer,
+		Security:    stmt.Security,
+		Columns:     stmt.Columns,
+		Select:      stmt.Select,
+		CheckOption: stmt.CheckOption,
+		Comments:    stmt.Comments,
+	}
+	bindVars := generateBindVarsForViewDDLInsert(createViewDDL)
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	qr, err := execWithDDLView(qre.ctx, conn, sql)
+	if err != nil {
+		return nil, err
+	}
+	if qr.RowsAffected == 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_NOT_FOUND, "Table '%s' does not exist", stmt.ViewName.Name.String())
+	}
+	return qr, nil
+}
+
+func (qre *QueryExecutor) execDropViewDDL(conn *StatefulConnection) (*sqltypes.Result, error) {
+	viewsMap := make(map[string]int)
+	stmt := qre.plan.FullStmt.(*sqlparser.DropView)
+	var viewNames []string
+	for pos, view := range stmt.FromTables {
+		viewName := view.Name.String()
+		if _, exists := viewsMap[viewName]; exists {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Not unique view: '%s'", viewName)
+		}
+		viewNames = append(viewNames, viewName)
+		viewsMap[viewName] = pos
+	}
+	viewNamesBV, err := sqltypes.BuildBindVariable(viewNames)
+	if err != nil {
+		return nil, err
+	}
+	bindVars := map[string]*querypb.BindVariable{
+		"table_name": viewNamesBV,
+	}
+
+	sql, _, err := qre.generateFinalSQL(qre.plan.FullQuery, bindVars)
+	if err != nil {
+		return nil, err
+	}
+	_, err = execWithDDLView(qre.ctx, conn, sql)
+	if err != nil {
+		return nil, err
+	}
+
+	// Drop the view on MySQL too.
+	return conn.Exec(qre.ctx, sqlparser.String(qre.plan.FullStmt), 1000, true)
+}
+
+func execWithDDLView(ctx context.Context, conn *StatefulConnection, sql string) (*sqltypes.Result, error) {
+	return conn.Exec(ctx, sql, 10000, true)
+}
+
 // Stream performs a streaming query execution.
 func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 	qre.logStats.PlanType = qre.plan.PlanID.String()
@@ -275,13 +417,20 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 		return err
 	}
 
+	switch qre.plan.PlanID {
+	case p.PlanSelectStream:
+		if qre.bindVars[sqltypes.BvReplaceSchemaName] != nil {
+			qre.bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(qre.tsv.config.DB.DBName)
+		}
+	}
+
 	sql, sqlWithoutComments, err := qre.generateFinalSQL(qre.plan.FullQuery, qre.bindVars)
 	if err != nil {
 		return err
 	}
 
 	var replaceKeyspace string
-	if sqltypes.IncludeFieldsOrDefault(qre.options) == querypb.ExecuteOptions_ALL {
+	if sqltypes.IncludeFieldsOrDefault(qre.options) == querypb.ExecuteOptions_ALL && qre.tsv.sm.target.Keyspace != qre.tsv.config.DB.DBName {
 		replaceKeyspace = qre.tsv.sm.target.Keyspace
 	}
 
@@ -316,6 +465,11 @@ func (qre *QueryExecutor) Stream(callback StreamCallback) error {
 			return err
 		}
 		defer txConn.Unlock()
+		if qre.setting != nil {
+			if err = txConn.ApplySetting(qre.ctx, qre.setting); err != nil {
+				return vterrors.Wrap(err, "failed to execute system setting on the connection")
+			}
+		}
 		conn = txConn.UnderlyingDBConn()
 	} else {
 		dbConn, err := qre.getStreamConn()
@@ -482,12 +636,27 @@ func (qre *QueryExecutor) execDDL(conn *StatefulConnection) (*sqltypes.Result, e
 		}
 	}
 
-	defer func() {
-		if err := qre.tsv.se.Reload(qre.ctx); err != nil {
-			log.Errorf("failed to reload schema %v", err)
-		}
-	}()
-
+	isTemporaryTable := false
+	if ddlStmt, ok := qre.plan.FullStmt.(sqlparser.DDLStatement); ok {
+		isTemporaryTable = ddlStmt.IsTemporary()
+	}
+	if !isTemporaryTable {
+		// Temporary tables are limited to the session creating them. There is no need to Reload()
+		// the table because other connections will not be able to see the table anyway.
+		defer func() {
+			// Call se.Reload() with includeStats=false as obtaining table
+			// size stats involves joining `information_schema.tables`,
+			// which can be very costly on systems with a large number of
+			// tables.
+			//
+			// Instead of synchronously recalculating table size stats
+			// after every DDL, let them be outdated until the periodic
+			// schema reload fixes it.
+			if err := qre.tsv.se.ReloadAtEx(qre.ctx, mysql.Position{}, false); err != nil {
+				log.Errorf("failed to reload schema %v", err)
+			}
+		}()
+	}
 	sql := qre.query
 	// If FullQuery is not nil, then the DDL query was fully parsed
 	// and we should use the ast to generate the query instead.
@@ -654,7 +823,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execDMLLimit(conn *StatefulConnection) (*sqltypes.Result, error) {
-	maxrows := qre.tsv.qe.maxResultSize.Get()
+	maxrows := qre.tsv.qe.maxResultSize.Load()
 	qre.bindVars["#maxLimit"] = sqltypes.Int64BindVariable(maxrows + 1)
 	result, err := qre.txFetch(conn, true)
 	if err != nil {
@@ -673,7 +842,7 @@ func (qre *QueryExecutor) verifyRowCount(count, maxrows int64) error {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		return vterrors.Errorf(vtrpcpb.Code_ABORTED, "caller id: %s: row count exceeded %d", callerID.Username, maxrows)
 	}
-	warnThreshold := qre.tsv.qe.warnResultSize.Get()
+	warnThreshold := qre.tsv.qe.warnResultSize.Load()
 	if warnThreshold > 0 && count > warnThreshold {
 		callerID := callerid.ImmediateCallerIDFromContext(qre.ctx)
 		qre.tsv.Stats().Warnings.Add("ResultsExceeded", 1)
@@ -696,7 +865,7 @@ func (qre *QueryExecutor) getConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.conns.Get(ctx)
+	conn, err := qre.tsv.qe.conns.Get(ctx, qre.setting)
 
 	switch err {
 	case nil:
@@ -713,7 +882,7 @@ func (qre *QueryExecutor) getStreamConn() (*connpool.DBConn, error) {
 	defer span.Finish()
 
 	start := time.Now()
-	conn, err := qre.tsv.qe.streamConns.Get(ctx)
+	conn, err := qre.tsv.qe.streamConns.Get(ctx, qre.setting)
 	switch err {
 	case nil:
 		qre.logStats.WaitingForConnection += time.Since(start)
@@ -846,24 +1015,23 @@ func (qre *QueryExecutor) execAlterMigration() (*sqltypes.Result, error) {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting ALTER VITESS_MIGRATION plan")
 	}
 
-	// Make sure schema exists
-	if err := qre.tsv.onlineDDLExecutor.PrepareForQueryExecutor(qre.ctx); err != nil {
-		return nil, err
-	}
-
 	switch alterMigration.Type {
 	case sqlparser.RetryMigrationType:
 		return qre.tsv.onlineDDLExecutor.RetryMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CleanupMigrationType:
 		return qre.tsv.onlineDDLExecutor.CleanupMigration(qre.ctx, alterMigration.UUID)
+	case sqlparser.LaunchMigrationType:
+		return qre.tsv.onlineDDLExecutor.LaunchMigration(qre.ctx, alterMigration.UUID, alterMigration.Shards)
+	case sqlparser.LaunchAllMigrationType:
+		return qre.tsv.onlineDDLExecutor.LaunchMigrations(qre.ctx)
 	case sqlparser.CompleteMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompleteMigration(qre.ctx, alterMigration.UUID)
 	case sqlparser.CompleteAllMigrationType:
 		return qre.tsv.onlineDDLExecutor.CompletePendingMigrations(qre.ctx)
 	case sqlparser.CancelMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user")
+		return qre.tsv.onlineDDLExecutor.CancelMigration(qre.ctx, alterMigration.UUID, "CANCEL issued by user", true)
 	case sqlparser.CancelAllMigrationType:
-		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user")
+		return qre.tsv.onlineDDLExecutor.CancelPendingMigrations(qre.ctx, "CANCEL ALL issued by user", true)
 	case sqlparser.ThrottleMigrationType:
 		return qre.tsv.onlineDDLExecutor.ThrottleMigration(qre.ctx, alterMigration.UUID, alterMigration.Expire, alterMigration.Ratio)
 	case sqlparser.ThrottleAllMigrationType:
@@ -925,6 +1093,45 @@ func (qre *QueryExecutor) execShowThrottledApps() (*sqltypes.Result, error) {
 	return result, nil
 }
 
+func (qre *QueryExecutor) execShowThrottlerStatus() (*sqltypes.Result, error) {
+	if _, ok := qre.plan.FullStmt.(*sqlparser.ShowThrottlerStatus); !ok {
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_THROTTLER STATUS plan")
+	}
+	var enabled int32
+	if err := qre.tsv.lagThrottler.CheckIsReady(); err == nil {
+		enabled = 1
+	}
+	result := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{
+				Name: "shard",
+				Type: sqltypes.VarChar,
+			},
+			{
+				Name: "enabled",
+				Type: sqltypes.Int32,
+			},
+			{
+				Name: "threshold",
+				Type: sqltypes.Float64,
+			},
+			{
+				Name: "query",
+				Type: sqltypes.VarChar,
+			},
+		},
+		Rows: [][]sqltypes.Value{
+			{
+				sqltypes.NewVarChar(qre.tsv.sm.target.Shard),
+				sqltypes.NewInt32(enabled),
+				sqltypes.NewFloat64(qre.tsv.ThrottleMetricThreshold()),
+				sqltypes.NewVarChar(qre.tsv.lagThrottler.GetMetricsQuery()),
+			},
+		},
+	}
+	return result, nil
+}
+
 func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
 	more := true
 	for more {
@@ -938,7 +1145,7 @@ func (qre *QueryExecutor) drainResultSetOnConn(conn *connpool.DBConn) error {
 }
 
 func (qre *QueryExecutor) getSelectLimit() int64 {
-	return qre.tsv.qe.maxResultSize.Get()
+	return qre.tsv.qe.maxResultSize.Load()
 }
 
 func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -951,7 +1158,7 @@ func (qre *QueryExecutor) execDBConn(conn *connpool.DBConn, sql string, wantfiel
 	qre.tsv.statelessql.Add(qd)
 	defer qre.tsv.statelessql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 }
 
 func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string, wantfields bool) (*sqltypes.Result, error) {
@@ -964,7 +1171,7 @@ func (qre *QueryExecutor) execStatefulConn(conn *StatefulConnection, sql string,
 	qre.tsv.statefulql.Add(qd)
 	defer qre.tsv.statefulql.Remove(qd)
 
-	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Get()), wantfields)
+	return conn.Exec(ctx, sql, int(qre.tsv.qe.maxResultSize.Load()), wantfields)
 }
 
 func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction bool, sql string, callback func(*sqltypes.Result) error) error {
@@ -975,29 +1182,23 @@ func (qre *QueryExecutor) execStreamSQL(conn *connpool.DBConn, isTransaction boo
 		return callback(result)
 	}
 
-	qd := NewQueryDetail(qre.logStats.Ctx, conn)
+	start := time.Now()
+	defer qre.logStats.AddRewrittenSQL(sql, start)
 
 	// Add query detail object into QueryExecutor TableServer list w.r.t if it is a transactional or not. Previously we were adding it
 	// to olapql list regardless but that resulted in problems, where long-running stream queries which can be stateful (or transactional)
 	// weren't getting cleaned up during unserveCommon>handleShutdownGracePeriod in state_manager.go.
 	// This change will ensure that long-running streaming stateful queries get gracefully shutdown during ServingTypeChange
 	// once their grace period is over.
+	qd := NewQueryDetail(qre.logStats.Ctx, conn)
 	if isTransaction {
 		qre.tsv.statefulql.Add(qd)
 		defer qre.tsv.statefulql.Remove(qd)
-	} else {
-		qre.tsv.olapql.Add(qd)
-		defer qre.tsv.olapql.Remove(qd)
+		return conn.StreamOnce(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 	}
-
-	start := time.Now()
-	err := conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Get()), sqltypes.IncludeFieldsOrDefault(qre.options))
-	qre.logStats.AddRewrittenSQL(sql, start)
-	if err != nil {
-		// MySQL error that isn't due to a connection issue
-		return err
-	}
-	return nil
+	qre.tsv.olapql.Add(qd)
+	defer qre.tsv.olapql.Remove(qd)
+	return conn.Stream(ctx, sql, callBackClosingSpan, allocStreamResult, int(qre.tsv.qe.streamBufferSize.Load()), sqltypes.IncludeFieldsOrDefault(qre.options))
 }
 
 func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
@@ -1008,4 +1209,59 @@ func (qre *QueryExecutor) recordUserQuery(queryType string, duration int64) {
 	tableName := qre.plan.TableName().String()
 	qre.tsv.Stats().UserTableQueryCount.Add([]string{tableName, username, queryType}, 1)
 	qre.tsv.Stats().UserTableQueryTimesNs.Add([]string{tableName, username, queryType}, duration)
+}
+
+func generateBindVarsForViewDDLInsert(createView *sqlparser.CreateView) map[string]*querypb.BindVariable {
+	bindVars := make(map[string]*querypb.BindVariable)
+	bindVars["table_name"] = sqltypes.StringBindVariable(createView.ViewName.Name.String())
+	bindVars["create_statement"] = sqltypes.StringBindVariable(sqlparser.String(createView))
+	return bindVars
+}
+
+func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	switch tableType {
+	case querypb.SchemaTableType_VIEWS:
+		return qre.getViewDefinitions(tableNames, callback)
+	}
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid table type %v", tableType)
+}
+
+func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	query := mysql.FetchViews
+	var bindVars map[string]*querypb.BindVariable
+	if len(viewNames) > 0 {
+		query = mysql.FetchUpdatedViews
+		bindVars = map[string]*querypb.BindVariable{
+			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
+		}
+	}
+	return qre.generateFinalQueryAndStreamExecute(query, bindVars, func(result *sqltypes.Result) error {
+		schemaDef := make(map[string]string)
+		for _, row := range result.Rows {
+			schemaDef[row[0].ToString()] = row[1].ToString()
+		}
+		return callback(&querypb.GetSchemaResponse{TableDefinition: schemaDef})
+	})
+}
+
+func (qre *QueryExecutor) generateFinalQueryAndStreamExecute(query string, bindVars map[string]*querypb.BindVariable, callback func(result *sqltypes.Result) error) error {
+	sql := query
+	if len(bindVars) > 0 {
+		stmt, err := sqlparser.Parse(query)
+		if err != nil {
+			return err
+		}
+		sql, _, err = qre.generateFinalSQL(sqlparser.NewParsedQuery(stmt), bindVars)
+		if err != nil {
+			return err
+		}
+	}
+
+	conn, err := qre.getStreamConn()
+	if err != nil {
+		return err
+	}
+	defer conn.Recycle()
+
+	return qre.execStreamSQL(conn, false /* isTransaction */, sql, callback)
 }

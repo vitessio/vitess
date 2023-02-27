@@ -21,8 +21,8 @@ import (
 	"strings"
 
 	"github.com/spf13/viper"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 )
@@ -89,22 +89,22 @@ func (c *Config) Reify() error {
 	for i, rule := range c.Rules {
 		resourceRules := byResource[rule.Resource]
 
-		actions := sets.NewString(rule.Actions...)
+		actions := sets.New[string](rule.Actions...)
 		if actions.Has("*") && actions.Len() > 1 {
 			// error to have wildcard and something else
-			rec.RecordError(fmt.Errorf("rule %d: actions list cannot include wildcard and other actions, have %v", i, actions.List()))
+			rec.RecordError(fmt.Errorf("rule %d: actions list cannot include wildcard and other actions, have %v", i, sets.List(actions)))
 		}
 
-		subjects := sets.NewString(rule.Subjects...)
+		subjects := sets.New[string](rule.Subjects...)
 		if subjects.Has("*") && subjects.Len() > 1 {
 			// error to have wildcard and something else
-			rec.RecordError(fmt.Errorf("rule %d: subjects list cannot include wildcard and other subjects, have %v", i, subjects.List()))
+			rec.RecordError(fmt.Errorf("rule %d: subjects list cannot include wildcard and other subjects, have %v", i, sets.List(subjects)))
 		}
 
-		clusters := sets.NewString(rule.Clusters...)
+		clusters := sets.New[string](rule.Clusters...)
 		if clusters.Has("*") && clusters.Len() > 1 {
 			// error to have wildcard and something else
-			rec.RecordError(fmt.Errorf("rule %d: clusters list cannot include wildcard and other clusters, have %v", i, clusters.List()))
+			rec.RecordError(fmt.Errorf("rule %d: clusters list cannot include wildcard and other clusters, have %v", i, sets.List(clusters)))
 		}
 
 		resourceRules = append(resourceRules, &Rule{
@@ -168,16 +168,29 @@ func (c *Config) GetAuthorizer() *Authorizer {
 // It is mainly used in the case where users explicitly pass --no-rbac flag.
 func DefaultConfig() *Config {
 	log.Info("[rbac]: using default rbac configuration")
-	actions := []string{string(GetAction), string(CreateAction), string(DeleteAction), string(PutAction), string(PingAction)}
+	actions := []string{
+		string(GetAction),
+		string(CreateAction),
+		string(DeleteAction),
+		string(PutAction),
+		string(PingAction),
+		string(ReloadAction),
+		string(EmergencyFailoverShardAction),
+		string(PlannedFailoverShardAction),
+		string(TabletExternallyPromotedAction),
+		string(ManageTabletReplicationAction),
+		string(ManageTabletWritabilityAction),
+		string(RefreshTabletReplicationSourceAction),
+	}
 	subjects := []string{"*"}
 	clusters := []string{"*"}
 
 	cfg := map[string][]*Rule{
 		"*": {
 			{
-				clusters: sets.NewString(clusters...),
-				actions:  sets.NewString(actions...),
-				subjects: sets.NewString(subjects...),
+				clusters: sets.New[string](clusters...),
+				actions:  sets.New[string](actions...),
+				subjects: sets.New[string](subjects...),
 			},
 		},
 	}

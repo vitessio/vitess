@@ -140,6 +140,7 @@ const (
 	maxConcurrency                = 20
 	singleConnectionSleepInterval = 2 * time.Millisecond
 	countIterations               = 5
+	migrationWaitTimeout          = 60 * time.Second
 )
 
 func resetOpOrder() {
@@ -309,6 +310,10 @@ func TestSchemaChange(t *testing.T) {
 			})
 		})
 	}
+
+	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
+		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
+	})
 }
 
 func testWithInitialSchema(t *testing.T) {
@@ -344,7 +349,7 @@ func testOnlineDDLStatement(t *testing.T, alterStatement string, ddlStrategy str
 	assert.NoError(t, err)
 
 	if !strategySetting.Strategy.IsDirect() {
-		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, 30*time.Second, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+		status := onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, migrationWaitTimeout, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 		fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 	}
 

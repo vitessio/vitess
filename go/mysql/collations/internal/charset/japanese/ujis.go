@@ -147,6 +147,10 @@ func (Charset_ujis) DecodeRune(src []byte) (rune, int) {
 	return ujisDecodeRune(src, &table_jis208Decode, &table_jis212Decode)
 }
 
+func (Charset_ujis) MaxWidth() int {
+	return 3
+}
+
 type Charset_eucjpms struct{}
 
 func (Charset_eucjpms) Name() string {
@@ -172,4 +176,8 @@ func (Charset_eucjpms) EncodeRune(dst []byte, r rune) int {
 
 func (Charset_eucjpms) DecodeRune(src []byte) (rune, int) {
 	return ujisDecodeRune(src, &table_jis208_eucjpmsDecode, &table_jis212_eucjpmsDecode)
+}
+
+func (Charset_eucjpms) MaxWidth() int {
+	return 3
 }

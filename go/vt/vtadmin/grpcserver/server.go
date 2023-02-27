@@ -100,8 +100,8 @@ type Server struct {
 // options.
 //
 // The underlying gRPC server always has the following interceptors:
-//	- prometheus
-//	- recovery: this handles recovering from panics.
+//   - prometheus
+//   - recovery: this handles recovering from panics.
 //
 // The full list of interceptors is as follows:
 // - (optional) interceptors defined on the Options struct

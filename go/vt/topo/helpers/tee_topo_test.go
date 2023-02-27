@@ -33,5 +33,5 @@ func TestTeeTopo(t *testing.T) {
 			t.Fatalf("NewTee() failed: %v", err)
 		}
 		return tee
-	})
+	}, []string{"checkTryLock", "checkShardWithLock"})
 }

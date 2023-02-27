@@ -44,23 +44,24 @@ import (
 // It uses a discovery.HealthCheck to send replication-lag updates to the wrapped throttler.
 //
 // Intended Usage:
-//   // Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
-//   t := NewTxThrottler(config, topoServer)
 //
-//   // A transaction throttler must be opened before its first use:
-//   if err := t.Open(keyspace, shard); err != nil {
-//     return err
-//   }
+//	// Assuming topoServer is a topo.Server variable pointing to a Vitess topology server.
+//	t := NewTxThrottler(config, topoServer)
 //
-//   // Checking whether to throttle can be done as follows before starting a transaction.
-//   if t.Throttle() {
-//     return fmt.Errorf("Transaction throttled!")
-//   } else {
-//     // execute transaction.
-//   }
+//	// A transaction throttler must be opened before its first use:
+//	if err := t.Open(keyspace, shard); err != nil {
+//	  return err
+//	}
 //
-//   // To release the resources used by the throttler the caller should call Close().
-//   t.Close()
+//	// Checking whether to throttle can be done as follows before starting a transaction.
+//	if t.Throttle() {
+//	  return fmt.Errorf("Transaction throttled!")
+//	} else {
+//	  // execute transaction.
+//	}
+//
+//	// To release the resources used by the throttler the caller should call Close().
+//	t.Close()
 //
 // A TxThrottler object is generally not thread-safe: at any given time at most one goroutine should
 // be executing a method. The only exception is the 'Throttle' method where multiple goroutines are

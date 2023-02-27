@@ -57,14 +57,20 @@ type (
 		Execute(ctx context.Context, method string, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError bool, co vtgatepb.CommitOrder) (*sqltypes.Result, error)
 		AutocommitApproval() bool
 
-		// Primitive functions
+		// Execute the given primitive
 		ExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+		// Execute the given primitive in a new autocommit session
+		ExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error)
+
+		// Execute the given primitive
 		StreamExecutePrimitive(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error
+		// Execute the given primitive in a new autocommit session
+		StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 
 		// Shard-level functions.
-		ExecuteMultiShard(ctx context.Context, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
-		ExecuteStandalone(ctx context.Context, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
-		StreamExecuteMulti(ctx context.Context, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
+		ExecuteMultiShard(ctx context.Context, primitive Primitive, rss []*srvtopo.ResolvedShard, queries []*querypb.BoundQuery, rollbackOnError, canAutocommit bool) (*sqltypes.Result, []error)
+		ExecuteStandalone(ctx context.Context, primitive Primitive, query string, bindVars map[string]*querypb.BindVariable, rs *srvtopo.ResolvedShard) (*sqltypes.Result, error)
+		StreamExecuteMulti(ctx context.Context, primitive Primitive, query string, rss []*srvtopo.ResolvedShard, bindVars []map[string]*querypb.BindVariable, rollbackOnError bool, autocommit bool, callback func(reply *sqltypes.Result) error) []error
 
 		// Keyspace ID level functions.
 		ExecuteKeyspaceID(ctx context.Context, keyspace string, ksid []byte, query string, bindVars map[string]*querypb.BindVariable, rollbackOnError, autocommit bool) (*sqltypes.Result, error)
@@ -109,9 +115,6 @@ type (
 
 		// ReleaseLock releases all the held advisory locks.
 		ReleaseLock(ctx context.Context) error
-
-		// StreamExecutePrimitiveStandalone executes the primitive in its own new autocommit session.
-		StreamExecutePrimitiveStandalone(ctx context.Context, primitive Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(result *sqltypes.Result) error) error
 	}
 
 	// SessionActions gives primitives ability to interact with the session state
@@ -141,6 +144,7 @@ type (
 		SetTransactionMode(vtgatepb.TransactionMode)
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
+		SetConsolidator(querypb.ExecuteOptions_Consolidator)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)
@@ -169,6 +173,27 @@ type (
 		AddAdvisoryLock(name string)
 		// RemoveAdvisoryLock removes advisory lock from the session
 		RemoveAdvisoryLock(name string)
+
+		// VExplainLogging enables logging of all interactions to the tablets so
+		// VEXPLAIN QUERIES/ALL can report what's being done
+		VExplainLogging()
+
+		// GetVExplainLogs retrieves the vttablet interaction logs
+		GetVExplainLogs() []ExecuteEntry
+
+		// SetCommitOrder sets the commit order for the shard session in respect of the type of vindex lookup.
+		// This is used to select the right shard session to perform the vindex lookup query.
+		SetCommitOrder(co vtgatepb.CommitOrder)
+
+		// GetQueryTimeout gets the query timeout and takes in the query timeout from comments
+		GetQueryTimeout(queryTimeoutFromComment int) int
+
+		// SetQueryTimeout sets the query timeout
+		SetQueryTimeout(queryTimeout int64)
+
+		// InTransaction returns true if the session has already opened transaction or
+		// will start a transaction on the query execution.
+		InTransaction() bool
 	}
 
 	// Match is used to check if a Primitive matches

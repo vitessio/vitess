@@ -18,7 +18,6 @@ package vtgate
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"sync"
 
@@ -31,10 +30,10 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 // sandbox_test.go provides a sandbox for unit testing VTGate.
@@ -52,7 +51,7 @@ func init() {
 	createSandbox(KsTestUnsharded)
 	createSandbox(KsTestBadVSchema)
 	tabletconn.RegisterDialer("sandbox", sandboxDialer)
-	flag.Set("tablet_protocol", "sandbox")
+	tabletconntest.SetProtocol("go.vt.vtgate.sandbox_test", "sandbox")
 }
 
 var sandboxMu sync.Mutex
@@ -320,7 +319,7 @@ func sandboxDialer(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (que
 	sand.DialCounter++
 	if sand.DialMustFail > 0 {
 		sand.DialMustFail--
-		return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "conn error")
+		return nil, vterrors.VT14001()
 	}
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	return sbc, nil

@@ -21,15 +21,16 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
@@ -46,12 +47,15 @@ import (
 // its own queries and the underlying connection.
 // It will also trigger a CheckMySQL whenever applicable.
 type DBConn struct {
-	conn    *dbconnpool.DBConnection
-	info    dbconfigs.Connector
-	pool    *Pool
-	dbaPool *dbconnpool.ConnectionPool
-	stats   *tabletenv.Stats
-	current sync2.AtomicString
+	conn         *dbconnpool.DBConnection
+	info         dbconfigs.Connector
+	pool         *Pool
+	dbaPool      *dbconnpool.ConnectionPool
+	stats        *tabletenv.Stats
+	current      atomic.Value
+	timeCreated  time.Time
+	setting      string
+	resetSetting string
 
 	// err will be set if a query is killed through a Kill.
 	errmu sync.Mutex
@@ -69,28 +73,41 @@ func NewDBConn(ctx context.Context, cp *Pool, appParams dbconfigs.Connector) (*D
 		cp.env.CheckMySQL()
 		return nil, err
 	}
-	return &DBConn{
-		conn:    c,
-		info:    appParams,
-		pool:    cp,
-		dbaPool: cp.dbaPool,
-		stats:   cp.env.Stats(),
-	}, nil
+	db := &DBConn{
+		conn:        c,
+		info:        appParams,
+		pool:        cp,
+		dbaPool:     cp.dbaPool,
+		timeCreated: time.Now(),
+		stats:       cp.env.Stats(),
+	}
+	db.current.Store("")
+	return db, nil
 }
 
 // NewDBConnNoPool creates a new DBConn without a pool.
-func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool) (*DBConn, error) {
+func NewDBConnNoPool(ctx context.Context, params dbconfigs.Connector, dbaPool *dbconnpool.ConnectionPool, setting *pools.Setting) (*DBConn, error) {
 	c, err := dbconnpool.NewDBConnection(ctx, params)
 	if err != nil {
 		return nil, err
 	}
-	return &DBConn{
-		conn:    c,
-		info:    params,
-		dbaPool: dbaPool,
-		pool:    nil,
-		stats:   tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
-	}, nil
+	dbconn := &DBConn{
+		conn:        c,
+		info:        params,
+		dbaPool:     dbaPool,
+		pool:        nil,
+		timeCreated: time.Now(),
+		stats:       tabletenv.NewStats(servenv.NewExporter("Temp", "Tablet")),
+	}
+	dbconn.current.Store("")
+	if setting == nil {
+		return dbconn, nil
+	}
+	if err = dbconn.ApplySetting(ctx, setting); err != nil {
+		dbconn.Close()
+		return nil, err
+	}
+	return dbconn, nil
 }
 
 // Err returns an error if there was a client initiated error
@@ -143,8 +160,8 @@ func (dbc *DBConn) Exec(ctx context.Context, query string, maxrows int, wantfiel
 }
 
 func (dbc *DBConn) execOnce(ctx context.Context, query string, maxrows int, wantfields bool) (*sqltypes.Result, error) {
-	dbc.current.Set(query)
-	defer dbc.current.Set("")
+	dbc.current.Store(query)
+	defer dbc.current.Store("")
 
 	// Check if the context is already past its deadline before
 	// trying to execute the query.
@@ -248,8 +265,8 @@ func (dbc *DBConn) Stream(ctx context.Context, query string, callback func(*sqlt
 func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int) error {
 	defer dbc.stats.MySQLTimings.Record("ExecStream", time.Now())
 
-	dbc.current.Set(query)
-	defer dbc.current.Set("")
+	dbc.current.Store(query)
+	defer dbc.current.Store("")
 
 	done, wg := dbc.setDeadline(ctx)
 	err := dbc.conn.ExecuteStreamFetch(query, callback, alloc, streamBufferSize)
@@ -262,6 +279,24 @@ func (dbc *DBConn) streamOnce(ctx context.Context, query string, callback func(*
 		return dbcerr
 	}
 	return err
+}
+
+// StreamOnce executes the query and streams the results. But, does not retry on connection errors.
+func (dbc *DBConn) StreamOnce(ctx context.Context, query string, callback func(*sqltypes.Result) error, alloc func() *sqltypes.Result, streamBufferSize int, includedFields querypb.ExecuteOptions_IncludedFields) error {
+	resultSent := false
+	return dbc.streamOnce(
+		ctx,
+		query,
+		func(r *sqltypes.Result) error {
+			if !resultSent {
+				resultSent = true
+				r = r.StripMetadata(includedFields)
+			}
+			return callback(r)
+		},
+		alloc,
+		streamBufferSize,
+	)
 }
 
 var (
@@ -314,9 +349,47 @@ func (dbc *DBConn) Close() {
 	dbc.conn.Close()
 }
 
+// ApplySetting implements the pools.Resource interface.
+func (dbc *DBConn) ApplySetting(ctx context.Context, setting *pools.Setting) error {
+	query := setting.GetQuery()
+	if _, err := dbc.execOnce(ctx, query, 1, false); err != nil {
+		return err
+	}
+	dbc.setting = query
+	dbc.resetSetting = setting.GetResetQuery()
+	return nil
+}
+
+// IsSettingApplied implements the pools.Resource interface.
+func (dbc *DBConn) IsSettingApplied() bool {
+	return dbc.setting != ""
+}
+
+// IsSameSetting implements the pools.Resource interface.
+func (dbc *DBConn) IsSameSetting(setting string) bool {
+	return strings.EqualFold(setting, dbc.setting)
+}
+
+// ResetSetting implements the pools.Resource interface.
+func (dbc *DBConn) ResetSetting(ctx context.Context) error {
+	if _, err := dbc.execOnce(ctx, dbc.resetSetting, 1, false); err != nil {
+		return err
+	}
+	dbc.setting = ""
+	dbc.resetSetting = ""
+	return nil
+}
+
+var _ pools.Resource = (*DBConn)(nil)
+
 // IsClosed returns true if DBConn is closed.
 func (dbc *DBConn) IsClosed() bool {
 	return dbc.conn.IsClosed()
+}
+
+// Expired returns whether a connection has passed its lifetime
+func (dbc *DBConn) Expired(lifetimeTimeout time.Duration) bool {
+	return lifetimeTimeout > 0 && time.Until(dbc.timeCreated.Add(lifetimeTimeout)) < 0
 }
 
 // Recycle returns the DBConn to the pool.
@@ -372,7 +445,7 @@ func (dbc *DBConn) Kill(reason string, elapsed time.Duration) error {
 
 // Current returns the currently executing query.
 func (dbc *DBConn) Current() string {
-	return dbc.current.Get()
+	return dbc.current.Load().(string)
 }
 
 // ID returns the connection id.
@@ -380,9 +453,14 @@ func (dbc *DBConn) ID() int64 {
 	return dbc.conn.ID()
 }
 
-// BaseShowTables returns a query that shows tables and their sizes
+// BaseShowTables returns a query that shows tables
 func (dbc *DBConn) BaseShowTables() string {
 	return dbc.conn.BaseShowTables()
+}
+
+// BaseShowTablesWithSizes returns a query that shows tables and their sizes
+func (dbc *DBConn) BaseShowTablesWithSizes() string {
+	return dbc.conn.BaseShowTablesWithSizes()
 }
 
 func (dbc *DBConn) reconnect(ctx context.Context) error {
@@ -392,10 +470,16 @@ func (dbc *DBConn) reconnect(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	dbc.conn = newConn
+	if dbc.IsSettingApplied() {
+		err = dbc.applySameSetting(ctx)
+		if err != nil {
+			return err
+		}
+	}
 	dbc.errmu.Lock()
 	dbc.err = nil
 	dbc.errmu.Unlock()
-	dbc.conn = newConn
 	return nil
 }
 
@@ -449,4 +533,9 @@ func (dbc *DBConn) CurrentForLogging() string {
 		queryToLog, _ = sqlparser.RedactSQLQuery(dbc.Current())
 	}
 	return sqlparser.TruncateForLog(queryToLog)
+}
+
+func (dbc *DBConn) applySameSetting(ctx context.Context) (err error) {
+	_, err = dbc.execOnce(ctx, dbc.setting, 1, false)
+	return
 }

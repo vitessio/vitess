@@ -89,7 +89,7 @@ func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
 	}
 
 	if len(c.GRPCDialOptions) != 0 {
-		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.DialWithOpts(context.TODO(), c.GRPCDialOptions...))
+		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.Dial(c.GRPCDialOptions...))
 	}
 
 	return sql.Open(c.DriverName, json)
@@ -109,7 +109,7 @@ type drv struct {
 //
 // Example for a JSON string:
 //
-//   {"protocol": "grpc", "address": "localhost:1111", "target": "@primary"}
+//	{"protocol": "grpc", "address": "localhost:1111", "target": "@primary"}
 //
 // For a description of the available fields, see the Configuration struct.
 func (d drv) Open(name string) (driver.Conn, error) {

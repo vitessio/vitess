@@ -22,13 +22,13 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
@@ -61,21 +61,22 @@ type SandboxConn struct {
 
 	// These Count vars report how often the corresponding
 	// functions were called.
-	ExecCount                sync2.AtomicInt64
-	BeginCount               sync2.AtomicInt64
-	CommitCount              sync2.AtomicInt64
-	RollbackCount            sync2.AtomicInt64
-	AsTransactionCount       sync2.AtomicInt64
-	PrepareCount             sync2.AtomicInt64
-	CommitPreparedCount      sync2.AtomicInt64
-	RollbackPreparedCount    sync2.AtomicInt64
-	CreateTransactionCount   sync2.AtomicInt64
-	StartCommitCount         sync2.AtomicInt64
-	SetRollbackCount         sync2.AtomicInt64
-	ConcludeTransactionCount sync2.AtomicInt64
-	ReadTransactionCount     sync2.AtomicInt64
-	ReserveCount             sync2.AtomicInt64
-	ReleaseCount             sync2.AtomicInt64
+	ExecCount                atomic.Int64
+	BeginCount               atomic.Int64
+	CommitCount              atomic.Int64
+	RollbackCount            atomic.Int64
+	AsTransactionCount       atomic.Int64
+	PrepareCount             atomic.Int64
+	CommitPreparedCount      atomic.Int64
+	RollbackPreparedCount    atomic.Int64
+	CreateTransactionCount   atomic.Int64
+	StartCommitCount         atomic.Int64
+	SetRollbackCount         atomic.Int64
+	ConcludeTransactionCount atomic.Int64
+	ReadTransactionCount     atomic.Int64
+	ReserveCount             atomic.Int64
+	ReleaseCount             atomic.Int64
+	GetSchemaCount           atomic.Int64
 
 	// Queries stores the non-batch requests received.
 	Queries []*querypb.BoundQuery
@@ -104,10 +105,10 @@ type SandboxConn struct {
 	VStreamCh     chan *binlogdatapb.VEvent
 
 	// transaction id generator
-	TransactionID sync2.AtomicInt64
+	TransactionID atomic.Int64
 
 	// reserve id generator
-	ReserveID sync2.AtomicInt64
+	ReserveID atomic.Int64
 
 	mapMu     sync.Mutex //protects the map txIDToRID
 	txIDToRID map[int64]int64
@@ -119,6 +120,8 @@ type SandboxConn struct {
 	EphemeralShardErr error
 
 	NotServing bool
+
+	getSchemaResult []map[string]string
 }
 
 var _ queryservice.QueryService = (*SandboxConn)(nil) // compile-time interface check
@@ -152,6 +155,11 @@ func (sbc *SandboxConn) getError() error {
 // SetResults sets what this con should return next time.
 func (sbc *SandboxConn) SetResults(r []*sqltypes.Result) {
 	sbc.results = r
+}
+
+// SetSchemaResult sets what GetSchema should return on each call.
+func (sbc *SandboxConn) SetSchemaResult(r []map[string]string) {
+	sbc.getSchemaResult = r
 }
 
 // Execute is part of the QueryService interface.
@@ -576,6 +584,17 @@ func (sbc *SandboxConn) Release(ctx context.Context, target *querypb.Target, tra
 	return sbc.getError()
 }
 
+// GetSchema implements the QueryService interface
+func (sbc *SandboxConn) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	sbc.GetSchemaCount.Add(1)
+	if len(sbc.getSchemaResult) == 0 {
+		return nil
+	}
+	resp := sbc.getSchemaResult[0]
+	sbc.getSchemaResult = sbc.getSchemaResult[1:]
+	return callback(&querypb.GetSchemaResponse{TableDefinition: resp})
+}
+
 // Close does not change ExecCount
 func (sbc *SandboxConn) Close(ctx context.Context) error {
 	return nil
@@ -618,8 +637,7 @@ func (sbc *SandboxConn) getNextResult(stmt sqlparser.Statement) *sqltypes.Result
 		sqlparser.DDLStatement,
 		*sqlparser.AlterVschema,
 		*sqlparser.Use,
-		*sqlparser.OtherAdmin,
-		*sqlparser.SetTransaction:
+		*sqlparser.OtherAdmin:
 		return &sqltypes.Result{}
 	}
 
@@ -639,7 +657,7 @@ func (sbc *SandboxConn) getTxReservedID(txID int64) int64 {
 	return sbc.txIDToRID[txID]
 }
 
-//StringQueries returns the queries executed as a slice of strings
+// StringQueries returns the queries executed as a slice of strings
 func (sbc *SandboxConn) StringQueries() []string {
 	result := make([]string, len(sbc.Queries))
 	for i, query := range sbc.Queries {
@@ -657,7 +675,8 @@ func getSingleRowResult() *sqltypes.Result {
 		Rows:        SingleRowResult.Rows,
 	}
 
-	for _, field := range SingleRowResult.Fields {
+	fields := SingleRowResult.Fields
+	for _, field := range fields {
 		singleRowResult.Fields = append(singleRowResult.Fields, &querypb.Field{
 			Name: field.Name,
 			Type: field.Type,

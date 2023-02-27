@@ -47,19 +47,19 @@ type ReplicationStatus struct {
 	RelayLogSourceBinlogEquivalentPosition Position
 	// RelayLogFilePosition stores the position in the relay log file
 	RelayLogFilePosition  Position
-	SourceServerID        uint
+	SourceServerID        uint32
 	IOState               ReplicationState
 	LastIOError           string
 	SQLState              ReplicationState
 	LastSQLError          string
-	ReplicationLagSeconds uint
+	ReplicationLagSeconds uint32
 	ReplicationLagUnknown bool
 	SourceHost            string
-	SourcePort            int
+	SourcePort            int32
 	SourceUser            string
-	ConnectRetry          int
+	ConnectRetry          int32
 	SourceUUID            SID
-	SQLDelay              uint
+	SQLDelay              uint32
 	AutoPosition          bool
 	UsingGTID             bool
 	HasReplicationFilters bool
@@ -97,15 +97,15 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		RelayLogPosition:                       EncodePosition(s.RelayLogPosition),
 		FilePosition:                           EncodePosition(s.FilePosition),
 		RelayLogSourceBinlogEquivalentPosition: EncodePosition(s.RelayLogSourceBinlogEquivalentPosition),
-		SourceServerId:                         uint32(s.SourceServerID),
-		ReplicationLagSeconds:                  uint32(s.ReplicationLagSeconds),
+		SourceServerId:                         s.SourceServerID,
+		ReplicationLagSeconds:                  s.ReplicationLagSeconds,
 		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
-		SqlDelay:                               uint32(s.SQLDelay),
+		SqlDelay:                               s.SQLDelay,
 		RelayLogFilePosition:                   EncodePosition(s.RelayLogFilePosition),
 		SourceHost:                             s.SourceHost,
 		SourceUser:                             s.SourceUser,
-		SourcePort:                             int32(s.SourcePort),
-		ConnectRetry:                           int32(s.ConnectRetry),
+		SourcePort:                             s.SourcePort,
+		ConnectRetry:                           s.ConnectRetry,
 		SourceUuid:                             s.SourceUUID.String(),
 		IoState:                                int32(s.IOState),
 		LastIoError:                            s.LastIOError,
@@ -115,20 +115,6 @@ func ReplicationStatusToProto(s ReplicationStatus) *replicationdatapb.Status {
 		HasReplicationFilters:                  s.HasReplicationFilters,
 		AutoPosition:                           s.AutoPosition,
 		UsingGtid:                              s.UsingGTID,
-	}
-
-	// We need to be able to send gRPC response messages from v14 and newer tablets to
-	// v13 and older clients. The older clients will not be processing the IoState or
-	// SqlState values in the message but instead looking at the IoThreadRunning and
-	// SqlThreadRunning booleans so we need to map and share this dual state.
-	// Note: v13 and older clients considered the IO thread state of connecting to
-	//       be equal to running. That is why we do so here when mapping the states.
-	// This backwards compatibility can be removed in v15+.
-	if s.IOState == ReplicationStateRunning || s.IOState == ReplicationStateConnecting {
-		replstatuspb.IoThreadRunning = true
-	}
-	if s.SQLState == ReplicationStateRunning {
-		replstatuspb.SqlThreadRunning = true
 	}
 	return replstatuspb
 }
@@ -168,14 +154,14 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		FilePosition:                           filePos,
 		RelayLogSourceBinlogEquivalentPosition: fileRelayPos,
 		RelayLogFilePosition:                   relayFilePos,
-		SourceServerID:                         uint(s.SourceServerId),
-		ReplicationLagSeconds:                  uint(s.ReplicationLagSeconds),
+		SourceServerID:                         s.SourceServerId,
+		ReplicationLagSeconds:                  s.ReplicationLagSeconds,
 		ReplicationLagUnknown:                  s.ReplicationLagUnknown,
-		SQLDelay:                               uint(s.SqlDelay),
+		SQLDelay:                               s.SqlDelay,
 		SourceHost:                             s.SourceHost,
 		SourceUser:                             s.SourceUser,
-		SourcePort:                             int(s.SourcePort),
-		ConnectRetry:                           int(s.ConnectRetry),
+		SourcePort:                             s.SourcePort,
+		ConnectRetry:                           s.ConnectRetry,
 		SourceUUID:                             sid,
 		IOState:                                ReplicationState(s.IoState),
 		LastIOError:                            s.LastIoError,
@@ -186,36 +172,19 @@ func ProtoToReplicationStatus(s *replicationdatapb.Status) ReplicationStatus {
 		AutoPosition:                           s.AutoPosition,
 		UsingGTID:                              s.UsingGtid,
 	}
-
-	// We need to be able to process gRPC response messages from v13 and older tablets.
-	// In those cases there will be no value (unknown) for the IoState or SqlState but
-	// the message will have the IoThreadRunning and SqlThreadRunning booleans and we
-	// need to revert to our assumptions about a binary state as that's all the older
-	// tablet can provide (really only applicable to the IO status as that is NOT binary
-	// but rather has three states: Running, Stopped, Connecting).
-	// This backwards compatibility can be removed in v15+.
-	if replstatus.IOState == ReplicationStateUnknown {
-		if s.IoThreadRunning {
-			replstatus.IOState = ReplicationStateRunning
-		} else {
-			replstatus.IOState = ReplicationStateStopped
-		}
-	}
-	if replstatus.SQLState == ReplicationStateUnknown {
-		if s.SqlThreadRunning {
-			replstatus.SQLState = ReplicationStateRunning
-		} else {
-			replstatus.SQLState = ReplicationStateStopped
-		}
-	}
-
 	return replstatus
 }
 
 // FindErrantGTIDs can be used to find errant GTIDs in the receiver's relay log, by comparing it against all known replicas,
 // provided as a list of ReplicationStatus's. This method only works if the flavor for all retrieved ReplicationStatus's is MySQL.
 // The result is returned as a Mysql56GTIDSet, each of whose elements is a found errant GTID.
+// This function is best effort in nature. If it marks something as errant, then it is for sure errant. But there may be cases of errant GTIDs, which aren't caught by this function.
 func (s *ReplicationStatus) FindErrantGTIDs(otherReplicaStatuses []*ReplicationStatus) (Mysql56GTIDSet, error) {
+	if len(otherReplicaStatuses) == 0 {
+		// If there is nothing to compare this replica against, then we must assume that its GTID set is the correct one.
+		return nil, nil
+	}
+
 	relayLogSet, ok := s.RelayLogPosition.GTIDSet.(Mysql56GTIDSet)
 	if !ok {
 		return nil, fmt.Errorf("errant GTIDs can only be computed on the MySQL flavor")

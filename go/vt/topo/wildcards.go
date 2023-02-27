@@ -31,10 +31,10 @@ import (
 )
 
 // ResolveKeyspaceWildcard will resolve keyspace wildcards.
-// - If the param is not a wildcard, it will just be returned (if the keyspace
-//   doesn't exist, it is still returned).
-// - If the param is a wildcard, it will get all keyspaces and returns
-//   the ones which match the wildcard (which may be an empty list).
+//   - If the param is not a wildcard, it will just be returned (if the keyspace
+//     doesn't exist, it is still returned).
+//   - If the param is a wildcard, it will get all keyspaces and returns
+//     the ones which match the wildcard (which may be an empty list).
 func (ts *Server) ResolveKeyspaceWildcard(ctx context.Context, param string) ([]string, error) {
 	if !fileutil.HasWildcard(param) {
 		return []string{param}, nil
@@ -67,11 +67,11 @@ type KeyspaceShard struct {
 // ResolveShardWildcard will resolve shard wildcards. Both keyspace and shard
 // names can use wildcard. Errors talking to the topology server are returned.
 // ErrNoNode is ignored if it's the result of resolving a wildcard. Examples:
-// - */* returns all keyspace/shard pairs, or empty list if none.
-// - user/* returns all shards in user keyspace (or error if user keyspace
-//   doesn't exist)
-// - us*/* returns all shards in all keyspaces that start with 'us'. If no such
-//   keyspace exists, list is empty (it is not an error).
+//   - */* returns all keyspace/shard pairs, or empty list if none.
+//   - user/* returns all shards in user keyspace (or error if user keyspace
+//     doesn't exist)
+//   - us*/* returns all shards in all keyspaces that start with 'us'. If no such
+//     keyspace exists, list is empty (it is not an error).
 func (ts *Server) ResolveShardWildcard(ctx context.Context, param string) ([]KeyspaceShard, error) {
 	parts := strings.Split(param, "/")
 	if len(parts) != 2 {

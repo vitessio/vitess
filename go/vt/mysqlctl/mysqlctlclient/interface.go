@@ -19,15 +19,24 @@ limitations under the License.
 package mysqlctlclient
 
 import (
-	"flag"
+	"context"
 	"fmt"
 
-	"context"
+	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/servenv"
 )
 
-var protocol = flag.String("mysqlctl_client_protocol", "grpc", "the protocol to use to talk to the mysqlctl server")
+var protocol = "grpc"
+
+func init() {
+	servenv.OnParseFor("mysqlctl", registerFlags)
+}
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.StringVar(&protocol, "mysqlctl_client_protocol", protocol, "the protocol to use to talk to the mysqlctl server")
+}
 
 // MysqlctlClient defines the interface used to send remote mysqlctl commands
 type MysqlctlClient interface {
@@ -65,9 +74,9 @@ func RegisterFactory(name string, factory Factory) {
 
 // New creates a client implementation as specified by a flag.
 func New(network, addr string) (MysqlctlClient, error) {
-	factory, ok := factories[*protocol]
+	factory, ok := factories[protocol]
 	if !ok {
-		return nil, fmt.Errorf("unknown mysqlctl client protocol: %v", *protocol)
+		return nil, fmt.Errorf("unknown mysqlctl client protocol: %v", protocol)
 	}
 	return factory(network, addr)
 }

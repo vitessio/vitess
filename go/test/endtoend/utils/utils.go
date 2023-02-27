@@ -18,12 +18,11 @@ package utils
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
-
-	"vitess.io/vitess/go/test/utils"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
@@ -33,6 +32,14 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 )
 
+// AssertContains ensures the given query result contains the expected results.
+func AssertContains(t testing.TB, conn *mysql.Conn, query, expected string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	assert.Contains(t, got, expected, "Query: %s", query)
+}
+
 // AssertMatches ensures the given query produces the expected results.
 func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	t.Helper()
@@ -41,6 +48,30 @@ func AssertMatches(t testing.TB, conn *mysql.Conn, query, expected string) {
 	diff := cmp.Diff(expected, got)
 	if diff != "" {
 		t.Errorf("Query: %s (-want +got):\n%s\nGot:%s", query, diff, got)
+	}
+}
+
+// AssertMatchesContains ensures the given query produces the given substring.
+func AssertMatchesContains(t testing.TB, conn *mysql.Conn, query string, substrings ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, substring := range substrings {
+		if !strings.Contains(got, substring) {
+			t.Errorf("Query: %s Got:\n%s\nLooking for substring:%s", query, got, substring)
+		}
+	}
+}
+
+// AssertMatchesNotContains ensures the given query's output doesn't have the given substring.
+func AssertMatchesNotContains(t testing.TB, conn *mysql.Conn, query string, substrings ...string) {
+	t.Helper()
+	qr := Exec(t, conn, query)
+	got := fmt.Sprintf("%v", qr.Rows)
+	for _, substring := range substrings {
+		if strings.Contains(got, substring) {
+			t.Errorf("Query: %s Got:\n%s\nFound substring:%s", query, got, substring)
+		}
 	}
 }
 
@@ -83,8 +114,9 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
-	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+	if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
+		t.Errorf("for query: [%s] %v", query, err)
+	}
 }
 
 // AssertIsEmpty ensures that the given query returns 0 row.
@@ -166,7 +198,11 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 		case <-timeout:
 			require.Fail(t, failureMsg, diff)
 		case <-time.After(r):
-			qr := Exec(t, conn, query)
+			qr, err := ExecAllowError(t, conn, query)
+			if err != nil {
+				diff = err.Error()
+				break
+			}
 			diff = cmp.Diff(expected,
 				fmt.Sprintf("%v", qr.Rows))
 		}
@@ -175,7 +211,7 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 }
 
 // WaitForAuthoritative waits for a table to become authoritative
-func WaitForAuthoritative(t *testing.T, cluster *cluster.LocalProcessCluster, ks, tbl string) error {
+func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl string) error {
 	timeout := time.After(10 * time.Second)
 	for {
 		select {
@@ -183,7 +219,7 @@ func WaitForAuthoritative(t *testing.T, cluster *cluster.LocalProcessCluster, ks
 			return fmt.Errorf("schema tracking didn't mark table t2 as authoritative until timeout")
 		default:
 			time.Sleep(1 * time.Second)
-			res, err := cluster.VtgateProcess.ReadVSchema()
+			res, err := vtgateProcess.ReadVSchema()
 			require.NoError(t, err, res)
 			t2Map := getTableT2Map(res, ks, tbl)
 			authoritative, fieldPresent := t2Map["column_list_authoritative"]
@@ -195,6 +231,47 @@ func WaitForAuthoritative(t *testing.T, cluster *cluster.LocalProcessCluster, ks
 				continue
 			}
 			return nil
+		}
+	}
+}
+
+// WaitForColumn waits for a table's column to be present
+func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
+		default:
+			time.Sleep(1 * time.Second)
+			res, err := vtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			t2Map := getTableT2Map(res, ks, tbl)
+			authoritative, fieldPresent := t2Map["column_list_authoritative"]
+			if !fieldPresent {
+				break
+			}
+			authoritativeBool, isBool := authoritative.(bool)
+			if !isBool || !authoritativeBool {
+				break
+			}
+			colMap, exists := t2Map["columns"]
+			if !exists {
+				break
+			}
+			colList, isSlice := colMap.([]interface{})
+			if !isSlice {
+				break
+			}
+			for _, c := range colList {
+				colDef, isMap := c.(map[string]interface{})
+				if !isMap {
+					break
+				}
+				if colName, exists := colDef["name"]; exists && colName == col {
+					return nil
+				}
+			}
 		}
 	}
 }

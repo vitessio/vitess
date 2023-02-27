@@ -16,14 +16,13 @@
 
 # this script migrates traffic for the primary tablet
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient Reshard -- --tablet_types=primary SwitchTraffic main.main2regions
 
 # to go back to unsharded
-# call SwitchReads and SwitchWrites with workflow main.main2regions_reverse
-# delete vreplication rows from sharded tablets
-# drop all the tables
+# call Reshard ReverseTraffic with all tablet types
+# call Reshard Cancel
 # change vschema back to unsharded
 # drop lookup table
 

@@ -36,7 +36,7 @@ import (
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtctl/vtctlclient"
-	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 
 	// import the gRPC client implementation for tablet manager
 	_ "vitess.io/vitess/go/vt/vttablet/grpctmclient"
@@ -47,7 +47,7 @@ import (
 func init() {
 	// enforce we will use the right protocol (gRPC) (note the
 	// client is unused, but it is initialized, so it needs to exist)
-	*tmclient.TabletManagerProtocol = "grpc"
+	tmclienttest.SetProtocol("go.vt.vtctl.vtctlclienttest", "grpc")
 }
 
 // CreateTopoServer returns the test topo server properly configured

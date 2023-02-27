@@ -54,6 +54,10 @@ type Plan struct {
 
 	convertUsingUTF8Columns map[string]bool
 
+	// Any columns that require a function expression in the
+	// stream.
+	columnFuncExprs map[string]*sqlparser.FuncExpr
+
 	// Filters is the list of filters to be applied to the columns
 	// of the table.
 	Filters []Filter
@@ -475,6 +479,27 @@ func (plan *Plan) setConvertColumnUsingUTF8(columnName string) {
 	plan.convertUsingUTF8Columns[columnName] = true
 }
 
+// setColumnFuncExpr sets the function expression for the column, which
+// can then be used when building the streamer's query.
+func (plan *Plan) setColumnFuncExpr(columnName string, funcExpr *sqlparser.FuncExpr) {
+	if plan.columnFuncExprs == nil {
+		plan.columnFuncExprs = map[string]*sqlparser.FuncExpr{}
+	}
+	plan.columnFuncExprs[columnName] = funcExpr
+}
+
+// getColumnFuncExpr returns a function expression if the column needs
+// one when building the streamer's query.
+func (plan *Plan) getColumnFuncExpr(columnName string) *sqlparser.FuncExpr {
+	if plan.columnFuncExprs == nil {
+		return nil
+	}
+	if val, ok := plan.columnFuncExprs[columnName]; ok {
+		return val
+	}
+	return nil
+}
+
 func (plan *Plan) analyzeWhere(vschema *localVSchema, where *sqlparser.Where) error {
 	if where == nil {
 		return nil
@@ -613,28 +638,45 @@ func (plan *Plan) analyzeExpr(vschema *localVSchema, selExpr sqlparser.SelectExp
 			VindexColumns: vindexColumns,
 		}, nil
 	case *sqlparser.FuncExpr:
-		if inner.Name.Lowered() != "keyspace_id" {
+		switch inner.Name.Lowered() {
+		case "keyspace_id":
+			// This function is used internally to route queries and records properly
+			// in sharded keyspaces using vindexes.
+			if len(inner.Exprs) != 0 {
+				return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
+			}
+			cv, err := vschema.FindColVindex(plan.Table.Name)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			return ColExpr{
+				Field: &querypb.Field{
+					Name: "keyspace_id",
+					Type: sqltypes.VarBinary,
+				},
+				Vindex:        cv.Vindex,
+				VindexColumns: vindexColumns,
+			}, nil
+		case "convert_tz":
+			// This function is used when transforming datetime
+			// values between the source and target.
+			colnum, err := findColumn(plan.Table, aliased.As)
+			if err != nil {
+				return ColExpr{}, err
+			}
+			field := plan.Table.Fields[colnum]
+			plan.setColumnFuncExpr(field.Name, inner)
+			return ColExpr{
+				ColNum: colnum,
+				Field:  field,
+			}, nil
+		default:
 			return ColExpr{}, fmt.Errorf("unsupported function: %v", sqlparser.String(inner))
 		}
-		if len(inner.Exprs) != 0 {
-			return ColExpr{}, fmt.Errorf("unexpected: %v", sqlparser.String(inner))
-		}
-		cv, err := vschema.FindColVindex(plan.Table.Name)
-		if err != nil {
-			return ColExpr{}, err
-		}
-		vindexColumns, err := buildVindexColumns(plan.Table, cv.Columns)
-		if err != nil {
-			return ColExpr{}, err
-		}
-		return ColExpr{
-			Field: &querypb.Field{
-				Name: "keyspace_id",
-				Type: sqltypes.VarBinary,
-			},
-			Vindex:        cv.Vindex,
-			VindexColumns: vindexColumns,
-		}, nil
 	case *sqlparser.Literal:
 		//allow only intval 1
 		if inner.Type != sqlparser.IntVal {

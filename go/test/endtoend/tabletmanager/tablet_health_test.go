@@ -202,6 +202,7 @@ func checkHealth(t *testing.T, port int, shouldError bool) {
 	url := fmt.Sprintf("http://localhost:%d/healthz", port)
 	resp, err := http.Get(url)
 	require.NoError(t, err)
+	defer resp.Body.Close()
 	if shouldError {
 		assert.True(t, resp.StatusCode > 400)
 	} else {

@@ -19,6 +19,7 @@ package k8stopo
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"encoding/base64"
 	"fmt"
 	"hash/fnv"
@@ -28,13 +29,10 @@ import (
 	"strings"
 	"time"
 
-	"context"
-
 	"k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/util/retry"
 
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	vtv1beta1 "vitess.io/vitess/go/vt/topo/k8stopo/apis/topo/v1beta1"
 )
@@ -137,8 +135,6 @@ func (s *Server) buildFileResource(filePath string, contents []byte) (*vtv1beta1
 
 // Create is part of the topo.Conn interface.
 func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (topo.Version, error) {
-	log.V(7).Infof("Create at '%s' Contents: '%s'", filePath, string(contents))
-
 	resource, err := s.buildFileResource(filePath, contents)
 	if err != nil {
 		return nil, convertError(err, filePath)
@@ -160,8 +156,6 @@ func (s *Server) Create(ctx context.Context, filePath string, contents []byte) (
 
 // Update is part of the topo.Conn interface.
 func (s *Server) Update(ctx context.Context, filePath string, contents []byte, version topo.Version) (topo.Version, error) {
-	log.V(7).Infof("Update at '%s' Contents: '%s'", filePath, string(contents))
-
 	resource, err := s.buildFileResource(filePath, contents)
 	if err != nil {
 		return nil, convertError(err, filePath)
@@ -214,8 +208,6 @@ func (s *Server) Update(ctx context.Context, filePath string, contents []byte, v
 
 // Get is part of the topo.Conn interface.
 func (s *Server) Get(ctx context.Context, filePath string) ([]byte, topo.Version, error) {
-	log.V(7).Infof("Get at '%s'", filePath)
-
 	node := s.newNodeReference(filePath)
 
 	result, err := s.resourceClient.Get(ctx, node.id, metav1.GetOptions{})
@@ -243,11 +235,16 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 	if len(nodes) == 0 {
 		return results, topo.NewError(topo.NoNode, filePathPrefix)
 	}
+	rootPrefix := filepath.Join(s.root, filePathPrefix)
 	for _, node := range nodes {
-		if strings.HasPrefix(node.Data.Value, filePathPrefix) {
+		if strings.HasPrefix(node.Data.Key, rootPrefix) {
+			out, err := unpackValue([]byte(node.Data.Value))
+			if err != nil {
+				return results, convertError(err, node.Data.Key)
+			}
 			results = append(results, topo.KVInfo{
 				Key:     []byte(node.Data.Key),
-				Value:   []byte(node.Data.Value),
+				Value:   out,
 				Version: KubernetesVersion(node.GetResourceVersion()),
 			})
 		}
@@ -258,8 +255,6 @@ func (s *Server) List(ctx context.Context, filePathPrefix string) ([]topo.KVInfo
 
 // Delete is part of the topo.Conn interface.
 func (s *Server) Delete(ctx context.Context, filePath string, version topo.Version) error {
-	log.V(7).Infof("Delete at '%s'", filePath)
-
 	node := s.newNodeReference(filePath)
 
 	// Check version before delete

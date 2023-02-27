@@ -50,6 +50,7 @@ type iswitcher interface {
 	removeTargetTables(ctx context.Context) error
 	dropTargetShards(ctx context.Context) error
 	deleteRoutingRules(ctx context.Context) error
+	deleteShardRoutingRules(ctx context.Context) error
 	addParticipatingTablesToKeyspace(ctx context.Context, keyspace, tableSpecs string) error
 	logs() *[]string
 }

@@ -66,7 +66,7 @@ type ReplTracker struct {
 func NewReplTracker(env tabletenv.Env, alias *topodatapb.TabletAlias) *ReplTracker {
 	return &ReplTracker{
 		mode:           env.Config().ReplicationTracker.Mode,
-		forceHeartbeat: env.Config().EnableLagThrottler,
+		forceHeartbeat: env.Config().EnableLagThrottler || env.Config().ReplicationTracker.HeartbeatOnDemandSeconds.Get() > 0,
 		hw:             newHeartbeatWriter(env, alias),
 		hr:             newHeartbeatReader(env),
 		poller:         &poller{},

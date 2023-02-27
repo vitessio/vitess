@@ -26,8 +26,8 @@ import (
 	"time"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -294,7 +294,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			time_updated,
 			transaction_timestamp,
 			message,
-			tags
+			tags,
+			workflow_type,
+			workflow_sub_type
 		FROM
 			_vt.vreplication
 		%s`,
@@ -310,9 +312,9 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	m := sync.Mutex{} // guards access to the following maps during concurrent calls to scanWorkflow
 	workflowsMap := make(map[string]*vtctldatapb.Workflow, len(results))
 	sourceKeyspaceByWorkflow := make(map[string]string, len(results))
-	sourceShardsByWorkflow := make(map[string]sets.String, len(results))
+	sourceShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	targetKeyspaceByWorkflow := make(map[string]string, len(results))
-	targetShardsByWorkflow := make(map[string]sets.String, len(results))
+	targetShardsByWorkflow := make(map[string]sets.Set[string], len(results))
 	maxVReplicationLagByWorkflow := make(map[string]float64, len(results))
 
 	// We guarantee the following invariants when this function is called for a
@@ -322,7 +324,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 	// - sourceShardsByWorkflow[workflow.Name] != nil
 	// - targetShardsByWorkflow[workflow.Name] != nil
 	// - workflow.ShardStatuses != nil
-	scanWorkflow := func(ctx context.Context, workflow *vtctldatapb.Workflow, row []sqltypes.Value, tablet *topo.TabletInfo) error {
+	scanWorkflow := func(ctx context.Context, workflow *vtctldatapb.Workflow, row sqltypes.RowNamedValues, tablet *topo.TabletInfo) error {
 		span, ctx := trace.NewSpan(ctx, "workflow.Server.scanWorkflow")
 		defer span.Finish()
 
@@ -332,13 +334,13 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		span.Annotate("workflow", workflow.Name)
 		span.Annotate("tablet_alias", tablet.AliasString())
 
-		id, err := evalengine.ToInt64(row[0])
+		id, err := evalengine.ToInt64(row["id"])
 		if err != nil {
 			return err
 		}
 
 		var bls binlogdatapb.BinlogSource
-		rowBytes, err := row[2].ToBytes()
+		rowBytes, err := row["source"].ToBytes()
 		if err != nil {
 			return err
 		}
@@ -346,28 +348,30 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			return err
 		}
 
-		pos := row[3].ToString()
-		stopPos := row[4].ToString()
-		state := row[6].ToString()
-		dbName := row[7].ToString()
+		pos := row["pos"].ToString()
+		stopPos := row["stop_pos"].ToString()
+		state := row["state"].ToString()
+		dbName := row["db_name"].ToString()
 
-		timeUpdatedSeconds, err := evalengine.ToInt64(row[8])
+		timeUpdatedSeconds, err := evalengine.ToInt64(row["time_updated"])
 		if err != nil {
 			return err
 		}
 
-		transactionTimeSeconds, err := evalengine.ToInt64(row[9])
+		transactionTimeSeconds, err := evalengine.ToInt64(row["transaction_timestamp"])
 		if err != nil {
 			return err
 		}
 
-		message := row[10].ToString()
+		message := row["message"].ToString()
 
-		tags := row[11].ToString()
+		tags := row["tags"].ToString()
 		var tagArray []string
 		if tags != "" {
 			tagArray = strings.Split(tags, ",")
 		}
+		workflowType, _ := row["workflow_type"].ToInt32()
+		workflowSubType, _ := row["workflow_sub_type"].ToInt32()
 		stream := &vtctldatapb.Workflow_Stream{
 			Id:           id,
 			Shard:        tablet.Shard,
@@ -386,7 +390,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 			Message: message,
 			Tags:    tagArray,
 		}
-
+		workflow.WorkflowType = binlogdatapb.VReplicationWorkflowType_name[workflowType]
+		workflow.WorkflowSubType = binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType]
 		stream.CopyStates, err = s.getWorkflowCopyStates(ctx, tablet, id)
 		if err != nil {
 			return err
@@ -415,7 +420,7 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		shardStreamKey := fmt.Sprintf("%s/%s", tablet.Shard, tablet.AliasString())
 		shardStream, ok := workflow.ShardStreams[shardStreamKey]
 		if !ok {
-			ctx, cancel := context.WithTimeout(ctx, *topo.RemoteOperationTimeout)
+			ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 			defer cancel()
 
 			si, err := s.ts.GetShard(ctx, req.Keyspace, tablet.Shard)
@@ -481,8 +486,8 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 		// to a workflow we're already aggregating, or if it's a workflow we
 		// haven't seen yet for that shard primary. We use the workflow name to
 		// dedupe for this.
-		for _, row := range qr.Rows {
-			workflowName := row[1].ToString()
+		for _, row := range qr.Named().Rows {
+			workflowName := row["workflow"].ToString()
 			workflow, ok := workflowsMap[workflowName]
 			if !ok {
 				workflow = &vtctldatapb.Workflow{
@@ -491,12 +496,12 @@ func (s *Server) GetWorkflows(ctx context.Context, req *vtctldatapb.GetWorkflows
 				}
 
 				workflowsMap[workflowName] = workflow
-				sourceShardsByWorkflow[workflowName] = sets.NewString()
-				targetShardsByWorkflow[workflowName] = sets.NewString()
+				sourceShardsByWorkflow[workflowName] = sets.New[string]()
+				targetShardsByWorkflow[workflowName] = sets.New[string]()
 			}
 
 			scanWorkflowWg.Add(1)
-			go func(ctx context.Context, workflow *vtctldatapb.Workflow, row []sqltypes.Value, tablet *topo.TabletInfo) {
+			go func(ctx context.Context, workflow *vtctldatapb.Workflow, row sqltypes.RowNamedValues, tablet *topo.TabletInfo) {
 				defer scanWorkflowWg.Done()
 				if err := scanWorkflow(ctx, workflow, row, tablet); err != nil {
 					scanWorkflowErrors.RecordError(err)
@@ -677,12 +682,12 @@ ORDER BY
 
 		workflow.Source = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: sourceKeyspace,
-			Shards:   sourceShards.List(),
+			Shards:   sets.List(sourceShards),
 		}
 
 		workflow.Target = &vtctldatapb.Workflow_ReplicationLocation{
 			Keyspace: targetKeyspace,
-			Shards:   targetShards.List(),
+			Shards:   sets.List(targetShards),
 		}
 
 		workflow.MaxVReplicationLag = int64(maxVReplicationLag)
@@ -722,7 +727,7 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	span.Annotate("tablet_alias", tablet.AliasString())
 	span.Annotate("vrepl_id", id)
 
-	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d", id)
+	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)", id, id)
 	qr, err := s.tmc.VReplicationExec(ctx, tablet.Tablet, query)
 	if err != nil {
 		return nil, err

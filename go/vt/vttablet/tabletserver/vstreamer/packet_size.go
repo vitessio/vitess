@@ -17,17 +17,31 @@ limitations under the License.
 package vstreamer
 
 import (
-	"flag"
 	"time"
+
+	"github.com/spf13/pflag"
+
+	"vitess.io/vitess/go/vt/servenv"
 
 	"vitess.io/vitess/go/mathstats"
 )
 
-// defaultPacketSize is the suggested packet size for VReplication streamer.
-var defaultPacketSize = flag.Int("vstream_packet_size", 250000, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+var (
+	defaultPacketSize    = 250000
+	useDynamicPacketSize = true
+)
 
-// useDynamicPacketSize controls whether to use dynamic packet size adjustments to increase performance while streaming
-var useDynamicPacketSize = flag.Bool("vstream_dynamic_packet_size", true, "Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance.")
+func init() {
+	servenv.OnParseFor("vtcombo", registerPacketSizeFlags)
+	servenv.OnParseFor("vttablet", registerPacketSizeFlags)
+}
+
+func registerPacketSizeFlags(fs *pflag.FlagSet) {
+	// defaultPacketSize is the suggested packet size for VReplication streamer.
+	fs.IntVar(&defaultPacketSize, "vstream_packet_size", defaultPacketSize, "Suggested packet size for VReplication streamer. This is used only as a recommendation. The actual packet size may be more or less than this amount.")
+	// useDynamicPacketSize controls whether to use dynamic packet size adjustments to increase performance while streaming
+	fs.BoolVar(&useDynamicPacketSize, "vstream_dynamic_packet_size", useDynamicPacketSize, "Enable dynamic packet sizing for VReplication. This will adjust the packet size during replication to improve performance.")
+}
 
 // PacketSizer is a controller that adjusts the size of the packets being sent by the vstreamer at runtime
 type PacketSizer interface {
@@ -39,25 +53,25 @@ type PacketSizer interface {
 // DefaultPacketSizer creates a new PacketSizer using the default settings.
 // If dynamic packet sizing is enabled, this will return a dynamicPacketSizer.
 func DefaultPacketSizer() PacketSizer {
-	if *useDynamicPacketSize {
-		return newDynamicPacketSizer(*defaultPacketSize)
+	if useDynamicPacketSize {
+		return newDynamicPacketSizer(defaultPacketSize)
 	}
-	return newFixedPacketSize(*defaultPacketSize)
+	return newFixedPacketSize(defaultPacketSize)
 }
 
 // AdjustPacketSize temporarily adjusts the default packet sizes to the given value.
 // Calling the returned cleanup function resets them to their original value.
 // This function is only used for testing.
 func AdjustPacketSize(size int) func() {
-	originalSize := *defaultPacketSize
-	originalDyn := *useDynamicPacketSize
+	originalSize := defaultPacketSize
+	originalDyn := useDynamicPacketSize
 
-	*defaultPacketSize = size
-	*useDynamicPacketSize = false
+	defaultPacketSize = size
+	useDynamicPacketSize = false
 
 	return func() {
-		*defaultPacketSize = originalSize
-		*useDynamicPacketSize = originalDyn
+		defaultPacketSize = originalSize
+		useDynamicPacketSize = originalDyn
 	}
 }
 

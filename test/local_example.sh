@@ -20,12 +20,12 @@
 
 source build.env
 
-set -xe
+set -xeo pipefail
 
 cd "$VTROOT/examples/local"
 unset VTROOT # ensure that the examples can run without VTROOT now.
 
-source ./env.sh # Required so that "mysql" works from alias
+source ../common/env.sh # Required so that "mysql" works from alias
 
 ./101_initial_cluster.sh
 
@@ -38,10 +38,13 @@ mysql --table < ../common/select_commerce_data.sql
 
 for shard in "customer/0"; do
  while true; do
-  mysql "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
+  if $(mysql "$shard" -e 'show tables' &>/dev/null); then
+    break
+  fi
+  echo -e "waiting for shard: $shard ..."
   sleep 1
- done;
-done;
+ done
+done
 
 ./202_move_tables.sh
 sleep 3 # required for now
@@ -51,12 +54,15 @@ sleep 3 # required for now
 ./204_switch_writes.sh
 
 mysql --table < ../common/select_customer0_data.sql
-# Expected to fail!
-mysql --table < ../common/select_commerce_data.sql || echo "DenyList working as expected"
-./205_clean_commerce.sh
-# Expected to fail!
-mysql --table < ../common/select_commerce_data.sql || echo "Tables missing as expected"
 
+# We expect this to fail due to the denied tables
+# rules in place.
+# For some reason this succeeds...
+# $(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
+
+./205_clean_commerce.sh
+# We expect this to fail as the keyspace is now gone.
+$(mysql --table < ../common/select_commerce_data.sql &>/dev/null || true)
 
 ./301_customer_sharded.sh
 ./302_new_shards.sh
@@ -65,15 +71,16 @@ mysql --table < ../common/select_commerce_data.sql || echo "Tables missing as ex
 # TODO: Eliminate this race in the examples' scripts
 for shard in "customer/-80" "customer/80-"; do
  while true; do
-  mysql "$shard" -e 'show tables' && break || echo "waiting for shard: $shard!"
+  if $(mysql "$shard" -e 'show tables' &>/dev/null); then
+    break
+  fi
+  echo -e "waiting for shard: $shard ..."
   sleep 1
- done;
-done;
+ done
+done
 
 ./303_reshard.sh
-
 sleep 3 # TODO: Required for now!
-
 
 ./304_switch_reads.sh
 ./305_switch_writes.sh

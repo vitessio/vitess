@@ -21,12 +21,11 @@ deal with topology common tasks, like fake tablets and action loops.
 package testlib
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"testing"
 	"time"
-
-	"context"
 
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -35,15 +34,16 @@ import (
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vttablet/grpctmserver"
-	"vitess.io/vitess/go/vt/vttablet/tabletconn"
+	"vitess.io/vitess/go/vt/vttablet/tabletconntest"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
 	"vitess.io/vitess/go/vt/vttablet/tabletservermock"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
+	"vitess.io/vitess/go/vt/vttablet/tmclienttest"
 	"vitess.io/vitess/go/vt/wrangler"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -69,7 +69,7 @@ type FakeTablet struct {
 	// We also create the RPCServer, so users can register more services
 	// before calling StartActionLoop().
 	Tablet          *topodatapb.Tablet
-	FakeMysqlDaemon *fakemysqldaemon.FakeMysqlDaemon
+	FakeMysqlDaemon *mysqlctl.FakeMysqlDaemon
 	RPCServer       *grpc.Server
 
 	// The following fields are created when we start the event loop for
@@ -159,8 +159,8 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 	}
 
 	// create a FakeMysqlDaemon with the right information by default
-	fakeMysqlDaemon := fakemysqldaemon.NewFakeMysqlDaemon(db)
-	fakeMysqlDaemon.MysqlPort.Set(mysqlPort)
+	fakeMysqlDaemon := mysqlctl.NewFakeMysqlDaemon(db)
+	fakeMysqlDaemon.MysqlPort.Store(mysqlPort)
 
 	return &FakeTablet{
 		Tablet:          tablet,
@@ -173,6 +173,7 @@ func NewFakeTablet(t *testing.T, wr *wrangler.Wrangler, cell string, uid uint32,
 // StartActionLoop will start the action loop for a fake tablet,
 // using ft.FakeMysqlDaemon as the backing mysqld.
 func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
+	t.Helper()
 	if ft.TM != nil {
 		t.Fatalf("TM for %v is already running", ft.Tablet.Alias)
 	}
@@ -213,7 +214,7 @@ func (ft *FakeTablet) StartActionLoop(t *testing.T, wr *wrangler.Wrangler) {
 		VREngine:            vreplication.NewTestEngine(wr.TopoServer(), ft.Tablet.Alias.Cell, ft.FakeMysqlDaemon, binlogplayer.NewFakeDBClient, binlogplayer.NewFakeDBClient, topoproto.TabletDbName(ft.Tablet), nil),
 	}
 	if err := ft.TM.Start(ft.Tablet, 0); err != nil {
-		t.Fatal(err)
+		t.Fatalf("Error in tablet - %v, err - %v", topoproto.TabletAliasString(ft.Tablet.Alias), err.Error())
 	}
 	ft.Tablet = ft.TM.Tablet()
 
@@ -267,6 +268,6 @@ func (ft *FakeTablet) Target() *querypb.Target {
 
 func init() {
 	// enforce we will use the right protocol (gRPC) in all unit tests
-	*tmclient.TabletManagerProtocol = "grpc"
-	*tabletconn.TabletProtocol = "grpc"
+	tabletconntest.SetProtocol("go.vt.wrangler.testlib", "grpc")
+	tmclienttest.SetProtocol("go.vt.wrangler.testlib", "grpc")
 }

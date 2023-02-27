@@ -34,10 +34,6 @@ import (
 func TestSetSysVarSingle(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	type queriesWithExpectations struct {
 		name, expr string
 		expected   []string
@@ -82,6 +78,7 @@ func TestSetSysVarSingle(t *testing.T) {
 	}}
 
 	conn, err := mysql.Connect(ctx, &vtParams)
+
 	require.NoError(t, err)
 	defer conn.Close()
 
@@ -95,10 +92,6 @@ func TestSetSysVarSingle(t *testing.T) {
 }
 
 func TestSetSystemVariable(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -117,10 +110,6 @@ func TestSetSystemVariable(t *testing.T) {
 }
 
 func TestSetSystemVarWithTxFailure(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -149,10 +138,6 @@ func TestSetSystemVarWithTxFailure(t *testing.T) {
 }
 
 func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -171,10 +156,6 @@ func TestSetSystemVarWithConnectionTimeout(t *testing.T) {
 }
 
 func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -190,10 +171,6 @@ func TestSetSystemVariableAndThenSuccessfulTx(t *testing.T) {
 }
 
 func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -220,10 +197,6 @@ func TestSetSystemVariableAndThenSuccessfulAutocommitDML(t *testing.T) {
 }
 
 func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -239,11 +212,9 @@ func TestStartTxAndSetSystemVariableAndThenSuccessfulCommit(t *testing.T) {
 }
 
 func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
+	if clusterInstance.HasPartialKeyspaces {
+		t.Skip("For partial keyspaces, kill is called on the source keyspace but queries execute on the target, so this test will fail")
 	}
-
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -270,10 +241,6 @@ func TestSetSystemVarAutocommitWithConnError(t *testing.T) {
 }
 
 func TestSetSystemVarInTxWithConnError(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -305,10 +272,6 @@ func TestSetSystemVarInTxWithConnError(t *testing.T) {
 }
 
 func BenchmarkReservedConnFieldQuery(b *testing.B) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(b, err)
 	defer conn.Close()
@@ -326,10 +289,6 @@ func BenchmarkReservedConnFieldQuery(b *testing.B) {
 }
 
 func TestEnableSystemSettings(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -357,10 +316,6 @@ func TestEnableSystemSettings(t *testing.T) {
 
 // Tests type consitency through multiple queries
 func TestSystemVariableType(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -380,10 +335,6 @@ func TestSystemVariableType(t *testing.T) {
 }
 
 func TestSysvarSocket(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
 	defer conn.Close()
@@ -397,14 +348,10 @@ func TestSysvarSocket(t *testing.T) {
 	require.True(t, ok, "not a mysql error: %T", err)
 	assert.Equal(t, mysql.ERIncorrectGlobalLocalVar, sqlErr.Number())
 	assert.Equal(t, mysql.SSUnknownSQLState, sqlErr.SQLState())
-	assert.Equal(t, "variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
+	assert.Equal(t, "VT03010: variable 'socket' is a read only variable (errno 1238) (sqlstate HY000) during query: set socket = '/any/path'", sqlErr.Error())
 }
 
 func TestReservedConnInStreaming(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -421,10 +368,6 @@ func TestReservedConnInStreaming(t *testing.T) {
 }
 
 func TestUnifiedOlapAndOltp(t *testing.T) {
-	vtParams := mysql.ConnParams{
-		Host: "localhost",
-		Port: clusterInstance.VtgateMySQLPort,
-	}
 
 	conn, err := mysql.Connect(context.Background(), &vtParams)
 	require.NoError(t, err)
@@ -477,4 +420,43 @@ func checkOltpAndOlapInterchangingTx(t *testing.T, conn *mysql.Conn) {
 	// check in olap
 	utils.Exec(t, conn, "set workload = oltp")
 	utils.AssertMatches(t, conn, "select id, val1 from test where id = 80", "[[INT64(80) NULL]]")
+}
+
+func TestSysVarTxIsolation(t *testing.T) {
+	conn, err := mysql.Connect(context.Background(), &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	// will run every check twice to see that the isolation level is set for all the queries in the session and
+
+	// default from mysql
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("REPEATABLE-READ")]]`)
+	// ensuring it goes to mysql
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+	// second run, ensuring it has the same value.
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `REPEATABLE-READ`)
+
+	// setting to different value.
+	utils.Exec(t, conn, "set @@transaction_isolation = 'read-committed'")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-COMMITTED")]]`)
+	// ensuring it goes to mysql
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-COMMITTED`)
+
+	// changing setting to different value.
+	utils.Exec(t, conn, "set session transaction isolation level read uncommitted")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("READ-UNCOMMITTED")]]`)
+	// ensuring it goes to mysql
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
+	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `READ-UNCOMMITTED`)
+
+	// changing setting to different value.
+	utils.Exec(t, conn, "set transaction isolation level serializable")
+	utils.AssertMatches(t, conn, "select @@transaction_isolation", `[[VARCHAR("SERIALIZABLE")]]`)
+	// ensuring it goes to mysql
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
+	// second run, to ensuring the setting is applied on the session and not just on next query after settings.
+	utils.AssertContains(t, conn, "select @@transaction_isolation, connection_id()", `SERIALIZABLE`)
 }

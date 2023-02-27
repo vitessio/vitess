@@ -24,8 +24,6 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/vt/withddl"
-
 	"context"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -42,19 +40,8 @@ import (
 )
 
 const (
-	sqlCreateSidecarDB      = "create database if not exists %s"
-	sqlCreateHeartbeatTable = `CREATE TABLE IF NOT EXISTS %s.heartbeat (
-  keyspaceShard VARBINARY(256) NOT NULL PRIMARY KEY,
-  tabletUid INT UNSIGNED NOT NULL,
-  ts BIGINT UNSIGNED NOT NULL
-        ) engine=InnoDB`
 	sqlUpsertHeartbeat = "INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%a, %a, %a) ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)"
 )
-
-var withDDL = withddl.New([]string{
-	fmt.Sprintf(sqlCreateSidecarDB, "_vt"),
-	fmt.Sprintf(sqlCreateHeartbeatTable, "_vt"),
-})
 
 // heartbeatWriter runs on primary tablets and writes heartbeats to the _vt.heartbeat
 // table at a regular interval, defined by heartbeat_interval.
@@ -86,7 +73,7 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 	config := env.Config()
 
 	// config.EnableLagThrottler is a feature flag for the throttler; if throttler runs, then heartbeat must also run
-	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler {
+	if config.ReplicationTracker.Mode != tabletenv.Heartbeat && !config.EnableLagThrottler && config.ReplicationTracker.HeartbeatOnDemandSeconds.Get() == 0 {
 		return &heartbeatWriter{}
 	}
 	heartbeatInterval := config.ReplicationTracker.HeartbeatIntervalSeconds.Get()
@@ -101,8 +88,8 @@ func newHeartbeatWriter(env tabletenv.Env, alias *topodatapb.TabletAlias) *heart
 		errorLog:         logutil.NewThrottledLogger("HeartbeatWriter", 60*time.Second),
 		// We make this pool size 2; to prevent pool exhausted
 		// stats from incrementing continually, and causing concern
-		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
-		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, *mysqlctl.DbaIdleTimeout, *mysqlctl.PoolDynamicHostnameResolution),
+		appPool:      dbconnpool.NewConnectionPool("HeartbeatWriteAppPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
+		allPrivsPool: dbconnpool.NewConnectionPool("HeartbeatWriteAllPrivsPool", 2, mysqlctl.DbaIdleTimeout, 0, mysqlctl.PoolDynamicHostnameResolution),
 	}
 	if w.onDemandDuration > 0 {
 		// see RequestHeartbeats() for use of onDemandRequestTicks
@@ -221,7 +208,7 @@ func (w *heartbeatWriter) write() error {
 		return err
 	}
 	defer appConn.Recycle()
-	_, err = withDDL.Exec(ctx, upsert, appConn.ExecuteFetch, allPrivsConn.ExecuteFetch)
+	_, err = appConn.ExecuteFetch(upsert, 1, false)
 	if err != nil {
 		return err
 	}
@@ -238,9 +225,20 @@ func (w *heartbeatWriter) enableWrites(enable bool) {
 	if w.ticks == nil {
 		return
 	}
-	if enable {
-		w.ticks.Start(w.writeHeartbeat)
-	} else {
+	switch enable {
+	case true:
+		// We must combat a potential race condition: the writer is Open, and a request comes
+		// to enableWrites(true), but simultaneously the writes gets Close()d.
+		// We must not send any more ticks while the writer is closed.
+		go func() {
+			w.mu.Lock()
+			defer w.mu.Unlock()
+			if !w.isOpen {
+				return
+			}
+			w.ticks.Start(w.writeHeartbeat)
+		}()
+	case false:
 		w.ticks.Stop()
 		if w.onDemandDuration > 0 {
 			// Let the next RequestHeartbeats() go through

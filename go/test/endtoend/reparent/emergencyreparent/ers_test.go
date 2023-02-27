@@ -387,8 +387,6 @@ func TestERSForInitialization(t *testing.T) {
 	shard.Vttablets = tablets
 	clusterInstance.VtTabletExtraArgs = []string{
 		"--lock_tables_timeout", "5s",
-		"--enable_semi_sync",
-		"--init_populate_metadata",
 		"--track_schema_versions=true",
 	}
 
@@ -483,12 +481,20 @@ func TestERSFailFast(t *testing.T) {
 	// Confirm that replication is still working as intended
 	utils.ConfirmReplication(t, tablets[0], tablets[1:])
 
+	// Context to be used in the go-routine to cleanly exit it after the test ends
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	strChan := make(chan string)
 	go func() {
 		// We expect this to fail since we have ignored all replica tablets and only the rdonly is left, which is not capable of sending semi-sync ACKs
 		out, err := utils.ErsIgnoreTablet(clusterInstance, tablets[2], "240s", "90s", []*cluster.Vttablet{tablets[0], tablets[3]}, false)
 		require.Error(t, err)
-		strChan <- out
+		select {
+		case strChan <- out:
+			return
+		case <-ctx.Done():
+			return
+		}
 	}()
 
 	select {

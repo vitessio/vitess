@@ -31,15 +31,15 @@ import (
 // As an example, here's a minimal JSON file for a single Vitess cluster running locally
 // (such as the one described in https://vitess.io/docs/get-started/local-docker):
 //
-// 		{
-// 			"vtgates": [
-// 				{
-// 					"host": {
-// 						"hostname": "127.0.0.1:15991"
-// 					}
-// 				}
-// 			]
-// 		}
+//	{
+//		"vtgates": [
+//			{
+//				"host": {
+//					"hostname": "127.0.0.1:15991"
+//				}
+//			}
+//		]
+//	}
 //
 // For more examples of various static file configurations, see the unit tests.
 type StaticFileDiscovery struct {

@@ -79,13 +79,13 @@ func TestStatusHtml(t *testing.T) {
 
 	blpStats := binlogplayer.NewStats()
 	blpStats.SetLastPosition(pos)
-	blpStats.ReplicationLagSeconds.Set(2)
+	blpStats.ReplicationLagSeconds.Store(2)
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message1"})
 	blpStats.History.Add(&binlogplayer.StatsHistoryRecord{Time: time.Now(), Message: "Test Message2"})
 
 	testStats := &vrStats{}
 	testStats.isOpen = true
-	testStats.controllers = map[int]*controller{
+	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
 			source: &binlogdata.BinlogSource{
@@ -107,13 +107,13 @@ func TestStatusHtml(t *testing.T) {
 			done:     make(chan struct{}),
 		},
 	}
-	testStats.controllers[1].sourceTablet.Set("src1")
-	testStats.controllers[2].sourceTablet.Set("src2")
+	testStats.controllers[1].sourceTablet.Store("src1")
+	testStats.controllers[2].sourceTablet.Store("src2")
 	close(testStats.controllers[2].done)
 
 	tpl := template.Must(template.New("test").Parse(vreplicationTemplate))
 	buf := bytes.NewBuffer(nil)
-	tpl.Execute(buf, testStats.status())
+	require.NoError(t, tpl.Execute(buf, testStats.status()))
 	if strings.Contains(buf.String(), wantOut) {
 		t.Errorf("output: %v, want %v", buf, wantOut)
 	}
@@ -124,7 +124,7 @@ func TestVReplicationStats(t *testing.T) {
 
 	testStats := &vrStats{}
 	testStats.isOpen = true
-	testStats.controllers = map[int]*controller{
+	testStats.controllers = map[int32]*controller{
 		1: {
 			id: 1,
 			source: &binlogdata.BinlogSource{
@@ -135,7 +135,7 @@ func TestVReplicationStats(t *testing.T) {
 			done:     make(chan struct{}),
 		},
 	}
-	testStats.controllers[1].sourceTablet.Set("src1")
+	testStats.controllers[1].sourceTablet.Store("src1")
 
 	sleepTime := 1 * time.Millisecond
 	record := func(phase string) {

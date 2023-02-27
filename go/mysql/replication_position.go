@@ -138,12 +138,12 @@ func DecodePosition(s string) (rp Position, err error) {
 		return rp, nil
 	}
 
-	parts := strings.SplitN(s, "/", 2)
-	if len(parts) != 2 {
+	flav, gtid, ok := strings.Cut(s, "/")
+	if !ok {
 		// There is no flavor. Try looking for a default parser.
 		return ParsePosition("", s)
 	}
-	return ParsePosition(parts[0], parts[1])
+	return ParsePosition(flav, gtid)
 }
 
 // ParsePosition calls the parser for the specified flavor.

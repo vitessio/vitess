@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"sort"
-	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -54,11 +53,8 @@ type Update struct {
 
 // TryExecute performs a non-streaming exec.
 func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	if upd.QueryTimeout != 0 {
-		var cancel context.CancelFunc
-		ctx, cancel = context.WithTimeout(ctx, time.Duration(upd.QueryTimeout)*time.Millisecond)
-		defer cancel()
-	}
+	ctx, cancelFunc := addQueryTimeout(ctx, vcursor, upd.QueryTimeout)
+	defer cancelFunc()
 
 	rss, _, err := upd.findRoute(ctx, vcursor, bindVars)
 	if err != nil {
@@ -71,9 +67,9 @@ func (upd *Update) TryExecute(ctx context.Context, vcursor VCursor, bindVars map
 
 	switch upd.Opcode {
 	case Unsharded:
-		return upd.execUnsharded(ctx, vcursor, bindVars, rss)
-	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard:
-		return upd.execMultiDestination(ctx, vcursor, bindVars, rss, upd.updateVindexEntries)
+		return upd.execUnsharded(ctx, upd, vcursor, bindVars, rss)
+	case Equal, EqualUnique, IN, Scatter, ByDestination, SubShard, MultiEqual:
+		return upd.execMultiDestination(ctx, upd, vcursor, bindVars, rss, upd.updateVindexEntries)
 	default:
 		// Unreachable.
 		return nil, fmt.Errorf("unsupported opcode: %v", upd.Opcode)
@@ -109,7 +105,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	for i := range rss {
 		queries[i] = &querypb.BoundQuery{Sql: upd.OwnedVindexQuery, BindVariables: bindVars}
 	}
-	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
+	subQueryResult, errors := vcursor.ExecuteMultiShard(ctx, upd, rss, queries, false /* rollbackOnError */, false /* canAutocommit */)
 	for _, err := range errors {
 		if err != nil {
 			return err

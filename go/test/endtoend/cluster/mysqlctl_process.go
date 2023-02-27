@@ -65,7 +65,16 @@ func (mysqlctl *MysqlctlProcess) InitDb() (err error) {
 
 // Start executes mysqlctl command to start mysql instance
 func (mysqlctl *MysqlctlProcess) Start() (err error) {
-	tmpProcess, err := mysqlctl.StartProcess()
+	tmpProcess, err := mysqlctl.startProcess(true)
+	if err != nil {
+		return err
+	}
+	return tmpProcess.Wait()
+}
+
+// StartProvideInit executes mysqlctl command to start mysql instance
+func (mysqlctl *MysqlctlProcess) StartProvideInit(init bool) (err error) {
+	tmpProcess, err := mysqlctl.startProcess(init)
 	if err != nil {
 		return err
 	}
@@ -74,6 +83,10 @@ func (mysqlctl *MysqlctlProcess) Start() (err error) {
 
 // StartProcess starts the mysqlctl and returns the process reference
 func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
+	return mysqlctl.startProcess(true)
+}
+
+func (mysqlctl *MysqlctlProcess) startProcess(init bool) (*exec.Cmd, error) {
 	tmpProcess := exec.Command(
 		mysqlctl.Binary,
 		"--log_dir", mysqlctl.LogDirectory,
@@ -91,13 +104,22 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 		if mysqlctl.SecureTransport {
 			// Set up EXTRA_MY_CNF for ssl
 			sslPath := path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/ssl_%010d", mysqlctl.TabletUID))
+			os.MkdirAll(sslPath, 0755)
+
+			// create certificates
+			clientServerKeyPair := tlstest.CreateClientServerCertPairs(sslPath)
+
+			// use the certificate values in template to create cnf file
 			sslPathData := struct {
-				Dir string
+				Dir        string
+				ServerCert string
+				ServerKey  string
 			}{
-				Dir: sslPath,
+				Dir:        sslPath,
+				ServerCert: clientServerKeyPair.ServerCert,
+				ServerKey:  clientServerKeyPair.ServerKey,
 			}
 
-			os.MkdirAll(sslPath, 0755)
 			extraMyCNF := path.Join(sslPath, "ssl.cnf")
 			fout, err := os.Create(extraMyCNF)
 			if err != nil {
@@ -107,21 +129,21 @@ func (mysqlctl *MysqlctlProcess) StartProcess() (*exec.Cmd, error) {
 
 			template.Must(template.New(fmt.Sprintf("%010d", mysqlctl.TabletUID)).Parse(`
 ssl_ca={{.Dir}}/ca-cert.pem
-ssl_cert={{.Dir}}/server-001-cert.pem
-ssl_key={{.Dir}}/server-001-key.pem
+ssl_cert={{.ServerCert}}
+ssl_key={{.ServerKey}}
 `)).Execute(fout, sslPathData)
 			if err := fout.Close(); err != nil {
 				return nil, err
 			}
 
-			tlstest.CreateClientServerCertPairs(sslPath)
-
 			tmpProcess.Env = append(tmpProcess.Env, "EXTRA_MY_CNF="+extraMyCNF)
 			tmpProcess.Env = append(tmpProcess.Env, "VTDATAROOT="+os.Getenv("VTDATAROOT"))
 		}
 
-		tmpProcess.Args = append(tmpProcess.Args, "init", "--",
-			"--init_db_sql_file", mysqlctl.InitDBFile)
+		if init {
+			tmpProcess.Args = append(tmpProcess.Args, "init", "--",
+				"--init_db_sql_file", mysqlctl.InitDBFile)
+		}
 	}
 	tmpProcess.Args = append(tmpProcess.Args, "start")
 	log.Infof("Starting mysqlctl with command: %v", tmpProcess.Args)
@@ -184,6 +206,14 @@ func (mysqlctl *MysqlctlProcess) StopProcess() (*exec.Cmd, error) {
 	return tmpProcess, tmpProcess.Start()
 }
 
+func (mysqlctl *MysqlctlProcess) BasePath() string {
+	return path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctl.TabletUID))
+}
+
+func (mysqlctl *MysqlctlProcess) BinaryLogsPath() string {
+	return path.Join(mysqlctl.BasePath(), "bin-logs")
+}
+
 // CleanupFiles clean the mysql files to make sure we can start the same process again
 func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)))
@@ -191,6 +221,16 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)))
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)))
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
+}
+
+// Connect returns a new connection to the underlying MySQL server
+func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (*mysql.Conn, error) {
+	params := mysql.ConnParams{
+		Uname:      username,
+		UnixSocket: path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d", mysqlctl.TabletUID), "/mysql.sock"),
+	}
+
+	return mysql.Connect(ctx, &params)
 }
 
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process

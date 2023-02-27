@@ -17,12 +17,14 @@ limitations under the License.
 package planbuilder
 
 import (
+	"fmt"
+
 	"vitess.io/vitess/go/mysql/collations"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
@@ -49,12 +51,12 @@ type hashJoin struct {
 }
 
 // WireupGen4 implements the logicalPlan interface
-func (hj *hashJoin) WireupGen4(semTable *semantics.SemTable) error {
-	err := hj.Left.WireupGen4(semTable)
+func (hj *hashJoin) WireupGen4(ctx *plancontext.PlanningContext) error {
+	err := hj.Left.WireupGen4(ctx)
 	if err != nil {
 		return err
 	}
-	return hj.Right.WireupGen4(semTable)
+	return hj.Right.WireupGen4(ctx)
 }
 
 // Primitive implements the logicalPlan interface
@@ -79,7 +81,7 @@ func (hj *hashJoin) Inputs() []logicalPlan {
 // Rewrite implements the logicalPlan interface
 func (hj *hashJoin) Rewrite(inputs ...logicalPlan) error {
 	if len(inputs) != 2 {
-		return vterrors.New(vtrpcpb.Code_INTERNAL, "wrong number of children")
+		return vterrors.VT13001(fmt.Sprintf("wrong number of children in hashJoin rewrite: %d; should be exactly 2", len(inputs)))
 	}
 	hj.Left = inputs[0]
 	hj.Right = inputs[1]

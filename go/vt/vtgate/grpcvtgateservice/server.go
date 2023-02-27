@@ -18,13 +18,12 @@ limitations under the License.
 package grpcvtgateservice
 
 import (
-	"flag"
+	"context"
 
+	"github.com/spf13/pflag"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/peer"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/callerid"
@@ -47,8 +46,19 @@ const (
 )
 
 var (
-	useEffective = flag.Bool("grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+	useEffective       bool
+	useEffectiveGroups bool
 )
+
+func registerFlags(fs *pflag.FlagSet) {
+	fs.BoolVar(&useEffective, "grpc_use_effective_callerid", false, "If set, and SSL is not used, will set the immediate caller id from the effective caller id's principal.")
+	fs.BoolVar(&useEffectiveGroups, "grpc-use-effective-groups", false, "If set, and SSL is not used, will set the immediate caller's security groups from the effective caller id's groups.")
+}
+
+func init() {
+	servenv.OnParseFor("vtgate", registerFlags)
+	servenv.OnParseFor("vtcombo", registerFlags)
+}
 
 // VTGate is the public structure that is exported via gRPC
 type VTGate struct {
@@ -56,13 +66,13 @@ type VTGate struct {
 	server vtgateservice.VTGateService
 }
 
-// immediateCallerID tries to extract the common name as well as the (domain) subject
+// immediateCallerIDFromCert tries to extract the common name as well as the (domain) subject
 // alternative names of the certificate that was used to connect to vtgate.
 // If it fails for any reason, it will return "".
 // That immediate caller id is then inserted into a Context,
 // and will be used when talking to vttablet.
 // vttablet in turn can use table ACLs to validate access is authorized.
-func immediateCallerID(ctx context.Context) (string, []string) {
+func immediateCallerIDFromCert(ctx context.Context) (string, []string) {
 	p, ok := peer.FromContext(ctx)
 	if !ok {
 		return "", nil
@@ -84,19 +94,29 @@ func immediateCallerID(ctx context.Context) (string, []string) {
 	return cert.Subject.CommonName, cert.DNSNames
 }
 
+func immediateCallerID(ctx context.Context) (string, []string) {
+	if immediate := servenv.StaticAuthUsernameFromContext(ctx); immediate != "" {
+		return immediate, nil
+	}
+	return immediateCallerIDFromCert(ctx)
+}
+
 // withCallerIDContext creates a context that extracts what we need
 // from the incoming call and can be forwarded for use when talking to vttablet.
 func withCallerIDContext(ctx context.Context, effectiveCallerID *vtrpcpb.CallerID) context.Context {
-	immediate, dnsNames := immediateCallerID(ctx)
-	if immediate == "" && *useEffective && effectiveCallerID != nil {
+	immediate, securityGroups := immediateCallerID(ctx)
+	if immediate == "" && useEffective && effectiveCallerID != nil {
 		immediate = effectiveCallerID.Principal
+		if useEffectiveGroups && len(effectiveCallerID.Groups) > 0 {
+			securityGroups = effectiveCallerID.Groups
+		}
 	}
 	if immediate == "" {
 		immediate = unsecureClient
 	}
 	return callerid.NewContext(callinfo.GRPCCallInfo(ctx),
 		effectiveCallerID,
-		&querypb.VTGateCallerID{Username: immediate, Groups: dnsNames})
+		&querypb.VTGateCallerID{Username: immediate, Groups: securityGroups})
 }
 
 // Execute is the RPC version of vtgateservice.VTGateService method

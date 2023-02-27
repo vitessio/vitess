@@ -17,7 +17,7 @@
 # this script removes the customer and corder tables from the commerce
 # keyspace
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient MoveTables Complete customer.commerce2customer
 

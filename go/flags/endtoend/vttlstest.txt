@@ -1,0 +1,19 @@
+vttlstest is a tool for generating test certificates, keys, and related artifacts for TLS tests.
+
+Usage:
+  vttlstest [command]
+
+Available Commands:
+  CreateCA             Create certificate authority
+  CreateCRL            Create certificate revocation list
+  CreateIntermediateCA Create intermediate certificate authority
+  CreateSignedCert     Create signed certificate
+  RevokeCert           Revoke a certificate
+  completion           Generate the autocompletion script for the specified shell
+  help                 Help about any command
+
+Flags:
+  -h, --help          help for vttlstest
+      --root string   root directory for all artifacts (default ".")
+
+Use "vttlstest [command] --help" for more information about a command.

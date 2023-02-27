@@ -28,9 +28,9 @@ import (
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
+	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -50,6 +50,7 @@ type Engine struct {
 	cancelRetry context.CancelFunc
 
 	ts                      *topo.Server
+	tmClientFactory         func() tmclient.TabletManagerClient
 	dbClientFactoryFiltered func() binlogplayer.DBClient
 	dbClientFactoryDba      func() binlogplayer.DBClient
 	dbName                  string
@@ -64,20 +65,43 @@ type Engine struct {
 	snapshotMu sync.Mutex
 
 	vdiffSchemaCreateOnce sync.Once
+
+	// This should only be set when the engine is being used in tests. It then provides
+	// modified behavior for that env, e.g. not starting the retry goroutine. This should
+	// NOT be set in production.
+	fortests bool
 }
 
 func NewEngine(config *tabletenv.TabletConfig, ts *topo.Server, tablet *topodata.Tablet) *Engine {
 	vde := &Engine{
-		controllers: make(map[int64]*controller),
-		ts:          ts,
-		thisTablet:  tablet,
+		controllers:     make(map[int64]*controller),
+		ts:              ts,
+		thisTablet:      tablet,
+		tmClientFactory: func() tmclient.TabletManagerClient { return tmclient.NewTabletManagerClient() },
+	}
+	return vde
+}
+
+// NewTestEngine creates an Engine for use in tests. It uses the custom db client factory and
+// tablet manager client factory, while setting the fortests field to true to modify any engine
+// behavior when used in tests (e.g. not starting the retry goroutine).
+func NewTestEngine(ts *topo.Server, tablet *topodata.Tablet, dbn string, dbcf func() binlogplayer.DBClient, tmcf func() tmclient.TabletManagerClient) *Engine {
+	vde := &Engine{
+		controllers:             make(map[int64]*controller),
+		ts:                      ts,
+		thisTablet:              tablet,
+		dbName:                  dbn,
+		dbClientFactoryFiltered: dbcf,
+		dbClientFactoryDba:      dbcf,
+		tmClientFactory:         tmcf,
+		fortests:                true,
 	}
 	return vde
 }
 
 func (vde *Engine) InitDBConfig(dbcfgs *dbconfigs.DBConfigs) {
-	// If we're already initilized, it's a test engine. Ignore the call.
-	if vde.dbClientFactoryFiltered != nil && vde.dbClientFactoryDba != nil {
+	// If it's a test engine and we're already initilized then do nothing.
+	if vde.fortests && vde.dbClientFactoryFiltered != nil && vde.dbClientFactoryDba != nil {
 		return
 	}
 	vde.dbClientFactoryFiltered = func() binlogplayer.DBClient {
@@ -111,8 +135,16 @@ func (vde *Engine) Open(ctx context.Context, vre *vreplication.Engine) {
 }
 
 func (vde *Engine) openLocked(ctx context.Context) error {
-	// Start any pending VDiffs
-	rows, err := vde.getPendingVDiffs(ctx)
+	// This should never happen
+	if len(vde.controllers) > 0 {
+		log.Warningf("VDiff Engine invalid state detected: %d controllers existed when opening; resetting state", len(vde.controllers))
+		vde.resetControllers()
+	}
+
+	// At this point the tablet has no controllers running. So
+	// we want to start any VDiffs that have not been explicitly
+	// stopped or otherwise finished.
+	rows, err := vde.getVDiffsToRun(ctx)
 	if err != nil {
 		return err
 	}
@@ -124,17 +156,24 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 
 	// At this point we've fully and succesfully opened so begin
 	// retrying error'd VDiffs until the engine is closed.
-	go vde.retryErroredVDiffs()
+	vde.wg.Add(1)
+	go func() {
+		defer vde.wg.Done()
+		if vde.fortests {
+			return
+		}
+		vde.retryErroredVDiffs()
+	}()
 
 	return nil
 }
 
-var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
+var openRetryInterval = 1 * time.Second
 
 func (vde *Engine) retry(ctx context.Context, err error) {
 	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
 	for {
-		timer := time.NewTimer(openRetryInterval.Get())
+		timer := time.NewTimer(openRetryInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -219,10 +258,7 @@ func (vde *Engine) Close() {
 	vde.cancel()
 
 	// We still have to wait for all controllers to stop.
-	for _, ct := range vde.controllers {
-		ct.Stop()
-	}
-	vde.controllers = make(map[int64]*controller)
+	vde.resetControllers()
 
 	// Wait for long-running functions to exit.
 	vde.wg.Wait()
@@ -232,14 +268,7 @@ func (vde *Engine) Close() {
 	log.Infof("VDiff Engine: closed")
 }
 
-func (vde *Engine) getDBClient(isAdmin bool) binlogplayer.DBClient {
-	if isAdmin {
-		return vde.dbClientFactoryDba()
-	}
-	return vde.dbClientFactoryFiltered()
-}
-
-func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, error) {
+func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error) {
 	dbClient := vde.dbClientFactoryFiltered()
 	if err := dbClient.Connect(); err != nil {
 		return nil, err
@@ -248,7 +277,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 
 	// We have to use ExecIgnore here so as not to block quick tablet state
 	// transitions from primary to non-primary when starting the engine
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetPendingVDiffs, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRun, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -259,7 +288,7 @@ func (vde *Engine) getPendingVDiffs(ctx context.Context) (*sqltypes.Result, erro
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -342,4 +371,11 @@ func (vde *Engine) retryErroredVDiffs() {
 			log.Errorf("Error retrying vdiffs: %v", err)
 		}
 	}
+}
+
+func (vde *Engine) resetControllers() {
+	for _, ct := range vde.controllers {
+		ct.Stop()
+	}
+	vde.controllers = make(map[int64]*controller)
 }

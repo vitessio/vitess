@@ -182,11 +182,11 @@ func (te *Env) RemoveAnyDeprecatedDisplayWidths(orig string) string {
 	}
 	var adjusted string
 	baseIntType := "int"
-	intRE := regexp.MustCompile(`(i)?int\(([0-9]*)?\)`)
+	intRE := regexp.MustCompile(`(?i)int\(([0-9]*)?\)`)
 	adjusted = intRE.ReplaceAllString(orig, baseIntType)
 	if (te.DBMajorVersion > 8 || te.DBMinorVersion > 0) || te.DBPatchVersion >= 19 {
 		baseYearType := "year"
-		yearRE := regexp.MustCompile(`(i)?year\(([0-9]*)?\)`)
+		yearRE := regexp.MustCompile(`(?i)year\(([0-9]*)?\)`)
 		adjusted = yearRE.ReplaceAllString(adjusted, baseYearType)
 	}
 	return adjusted

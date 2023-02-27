@@ -82,7 +82,7 @@ func TestTimingsHook(t *testing.T) {
 
 func TestTimingsCombineDimension(t *testing.T) {
 	clear()
-	*combineDimensions = "a,c"
+	combineDimensions = "a,c"
 
 	t1 := NewTimings("timing_combine_dim1", "help", "label")
 	t1.Add("t1", 1*time.Nanosecond)

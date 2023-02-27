@@ -26,10 +26,13 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"google.golang.org/protobuf/encoding/protojson"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
+	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 )
 
 func TestPrimaryToSpareStateChangeImpossible(t *testing.T) {
@@ -360,84 +363,46 @@ func TestChangeTypeSemiSync(t *testing.T) {
 	utils.CheckDBstatus(ctx, t, rdonly2, "Rpl_semi_sync_slave_status", "ON")
 }
 
-func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
+// TestCrossCellDurability tests 2 things -
+// 1. When PRS is run with the cross_cell durability policy setup, then the semi-sync settings on all the tablets are as expected
+// 2. Bringing up a new vttablet should have its replication and semi-sync setup correctly without any manual intervention
+func TestCrossCellDurability(t *testing.T) {
 	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
+	clusterInstance := utils.SetupReparentCluster(t, "cross_cell")
 	defer utils.TeardownCluster(clusterInstance)
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
-	// Change the schema of the _vt.reparent_journal table, so that
-	// inserts into it will fail. That will make the primary fail.
-	_, err := tablets[0].VttabletProcess.QueryTabletWithDB(
-		"ALTER TABLE reparent_journal DROP COLUMN replication_position", "_vt")
-	require.NoError(t, err)
-
-	// Perform a planned reparent operation, the primary will fail the
-	// insert.  The replicas should then abort right away.
-	out, err := utils.Prs(t, clusterInstance, tablets[1])
-	require.Error(t, err)
-	assert.Contains(t, out, "primary failed to PopulateReparentJournal")
-}
-
-func TestReplicationStatus(t *testing.T) {
-	defer cluster.PanicHandler(t)
-	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
-	defer utils.TeardownCluster(clusterInstance)
-	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
-	// Stop the SQL_THREAD on tablets[1]
-	err := clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE SQL_THREAD;`)
-	require.NoError(t, err)
-	// Check the replication status on tablets[1] and assert that the IO thread is read to be running and SQL thread is stopped
-	replicationStatus := cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread := utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.True(t, ioThread)
-	require.False(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
+	// When tablets[0] is the primary, the only tablet in a different cell is tablets[3].
+	// So the other two should have semi-sync turned off
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[0], "ON")
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[3], "ON")
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[1], "OFF")
+	utils.CheckSemiSyncSetupCorrectly(t, tablets[2], "OFF")
 
-	// Stop replication on tablets[1] and verify that both the threads are reported as not running
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE;`)
-	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.False(t, ioThread)
-	require.False(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
+	// Run forced reparent operation, this should proceed unimpeded.
+	out, err := utils.Prs(t, clusterInstance, tablets[3])
+	require.NoError(t, err, out)
 
-	// Start replication on tablets[1] and verify that both the threads are reported as running
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `START SLAVE;`)
-	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.True(t, ioThread)
-	require.True(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
+	utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2]})
 
-	// Stop IO_THREAD on tablets[1] and verify that the IO thread is read to be stopped and SQL thread is running
-	err = clusterInstance.VtctlclientProcess.ExecuteCommand("ExecuteFetchAsDba", tablets[1].Alias, `STOP SLAVE IO_THREAD;`)
-	require.NoError(t, err)
-	replicationStatus = cluster.GetReplicationStatus(t, tablets[1], utils.Hostname)
-	ioThread, sqlThread = utils.ReplicationThreadsStatus(t, replicationStatus, clusterInstance.VtctlMajorVersion, clusterInstance.VtTabletMajorVersion)
-	require.False(t, ioThread)
-	require.True(t, sqlThread)
-	// Assert that the 4 file log positions are non-empty
-	assert.NotEmpty(t, replicationStatus.RelayLogSourceBinlogEquivalentPosition)
-	assert.NotEmpty(t, replicationStatus.FilePosition)
-	assert.NotEmpty(t, replicationStatus.Position)
-	assert.NotEmpty(t, replicationStatus.RelayLogPosition)
+	// All the tablets will have semi-sync setup since tablets[3] is in Cell2 and all
+	// others are in Cell1, so all of them are eligible to send semi-sync ACKs
+	for _, tablet := range tablets {
+		utils.CheckSemiSyncSetupCorrectly(t, tablet, "ON")
+	}
+
+	for i, supportsBackup := range []bool{false, true} {
+		// Bring up a new replica tablet
+		// In this new tablet, we do not disable active reparents, otherwise replication will not be started.
+		newReplica := utils.StartNewVTTablet(t, clusterInstance, 300+i, supportsBackup)
+		// Add the tablet to the list of tablets in this shard
+		clusterInstance.Keyspaces[0].Shards[0].Vttablets = append(clusterInstance.Keyspaces[0].Shards[0].Vttablets, newReplica)
+		// Check that we can replicate to it and semi-sync is setup correctly on it
+		utils.ConfirmReplication(t, tablets[3], []*cluster.Vttablet{tablets[0], tablets[1], tablets[2], newReplica})
+		utils.CheckSemiSyncSetupCorrectly(t, newReplica, "ON")
+	}
 }
 
 // TestFullStatus tests that the RPC FullStatus works as intended.
@@ -449,7 +414,11 @@ func TestFullStatus(t *testing.T) {
 	utils.ConfirmReplication(t, tablets[0], []*cluster.Vttablet{tablets[1], tablets[2], tablets[3]})
 
 	// Check that full status gives the correct result for a primary tablet
-	primaryStatus, err := utils.TmcFullStatus(context.Background(), tablets[0])
+	primaryTablet := tablets[0]
+	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
+	require.NoError(t, err)
+	primaryStatus := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(primaryStatusString), primaryStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, primaryStatus.ServerUuid)
 	assert.NotEmpty(t, primaryStatus.ServerId)
@@ -473,8 +442,15 @@ func TestFullStatus(t *testing.T) {
 	assert.Regexp(t, `[58]\.[07].*`, primaryStatus.Version)
 	assert.NotEmpty(t, primaryStatus.VersionComment)
 
+	replicaTablet := tablets[1]
+
+	waitForFilePosition(t, clusterInstance, primaryTablet, replicaTablet, 5*time.Second)
+
 	// Check that full status gives the correct result for a replica tablet
-	replicaStatus, err := utils.TmcFullStatus(context.Background(), tablets[1])
+	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", replicaTablet.Alias)
+	require.NoError(t, err)
+	replicaStatus := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(replicaStatusString), replicaStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, replicaStatus.ServerUuid)
 	assert.NotEmpty(t, replicaStatus.ServerId)
@@ -517,6 +493,32 @@ func TestFullStatus(t *testing.T) {
 	assert.True(t, replicaStatus.LogBinEnabled)
 	assert.Regexp(t, `[58]\.[07].*`, replicaStatus.Version)
 	assert.NotEmpty(t, replicaStatus.VersionComment)
+}
+
+func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, tablet *cluster.Vttablet) *replicationdatapb.FullStatus {
+	statusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablet.Alias)
+	require.NoError(t, err)
+	status := &replicationdatapb.FullStatus{}
+	err = protojson.Unmarshal([]byte(statusString), status)
+	require.NoError(t, err)
+	return status
+}
+
+// waitForFilePosition waits for timeout to see if FilePositions align b/w primary and replica, to fix flakiness in tests due to race conditions where replica is still catching up
+func waitForFilePosition(t *testing.T, clusterInstance *cluster.LocalProcessCluster, primary *cluster.Vttablet, replica *cluster.Vttablet, timeout time.Duration) {
+	start := time.Now()
+	for {
+		primaryStatus := getFullStatus(t, clusterInstance, primary)
+		replicaStatus := getFullStatus(t, clusterInstance, replica)
+		if primaryStatus.PrimaryStatus.FilePosition == replicaStatus.ReplicationStatus.FilePosition {
+			return
+		}
+		if d := time.Since(start); d > timeout {
+			require.FailNowf(t, "waitForFilePosition timed out, primary %s, replica %s",
+				primaryStatus.PrimaryStatus.FilePosition, replicaStatus.ReplicationStatus.FilePosition)
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 }
 
 // fileNameFromPosition gets the file name from the position

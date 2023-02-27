@@ -32,6 +32,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"vitess.io/vitess/go/vt/callerid"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -222,7 +224,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 
-	tsv.te.txPool.scp.lastID.Set(1)
+	tsv.te.txPool.scp.lastID.Store(1)
 	// Ensure we continue past errors.
 	db.AddQuery(tpc.readAllRedo, &sqltypes.Result{
 		Fields: []*querypb.Field{
@@ -258,7 +260,7 @@ func TestTabletServerRedoLogIsKeptBetweenRestarts(t *testing.T) {
 		t.Errorf("Failed dtids: %v, want %v", tsv.te.preparedPool.reserved, wantFailed)
 	}
 	// Verify last id got adjusted.
-	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Get(), "tsv.te.txPool.lastID.Get()")
+	assert.EqualValues(t, 20, tsv.te.txPool.scp.lastID.Load(), "tsv.te.txPool.lastID.Get()")
 	turnOffTxEngine()
 	assert.Empty(t, tsv.te.preparedPool.conns, "tsv.te.preparedPool.conns")
 }
@@ -761,6 +763,61 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 	}
 }
 
+func TestTabletServerBeginStreamExecute(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	callback := func(*sqltypes.Result) error { return nil }
+	state, err := tsv.BeginStreamExecute(ctx, &target, nil, executeSQL, nil, 0, nil, callback)
+	if err != nil {
+		t.Fatalf("TabletServer.BeginStreamExecute should success: %s, but get error: %v",
+			executeSQL, err)
+	}
+	require.NoError(t, err)
+	_, err = tsv.Commit(ctx, &target, state.TransactionID)
+	require.NoError(t, err)
+}
+
+func TestTabletServerBeginStreamExecuteWithError(t *testing.T) {
+	db, tsv := setupTabletServerTest(t, "")
+	defer tsv.StopService()
+	defer db.Close()
+
+	// Enforce an error so we can validate we get one back properly
+	tsv.qe.strictTableACL = true
+
+	executeSQL := "select * from test_table limit 1000"
+	executeSQLResult := &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Type: sqltypes.VarBinary},
+		},
+		Rows: [][]sqltypes.Value{
+			{sqltypes.NewVarBinary("row01")},
+		},
+	}
+	db.AddQuery(executeSQL, executeSQLResult)
+
+	target := querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	callback := func(*sqltypes.Result) error { return nil }
+	state, err := tsv.BeginStreamExecute(ctx, &target, nil, executeSQL, nil, 0, nil, callback)
+	require.Error(t, err)
+	err = tsv.Release(ctx, &target, state.TransactionID, 0)
+	require.NoError(t, err)
+}
+
 func TestSerializeTransactionsSameRow(t *testing.T) {
 	// This test runs three transaction in parallel:
 	// tx1 | tx2 | tx3
@@ -1253,6 +1310,34 @@ func TestMessageStream(t *testing.T) {
 	}
 }
 
+func TestCheckMySQLGauge(t *testing.T) {
+	_, tsv, db := newTestTxExecutor(t)
+	defer db.Close()
+	defer tsv.StopService()
+
+	// Check that initially checkMySQLGauge has 0 value
+	assert.EqualValues(t, 0, tsv.checkMysqlGaugeFunc.Get())
+	tsv.CheckMySQL()
+	// After the checkMySQL call checkMySQLGauge should have 1 value
+	assert.EqualValues(t, 1, tsv.checkMysqlGaugeFunc.Get())
+
+	// Wait for CheckMySQL to finish.
+	// This wait is required because CheckMySQL waits for 1 second after it finishes execution
+	// before letting go of the acquired locks.
+	timeout := time.After(2 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			t.Fatalf("Timedout waiting for CheckMySQL to finish")
+		default:
+			if tsv.checkMysqlGaugeFunc.Get() == 0 {
+				return
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+}
+
 func TestMessageAck(t *testing.T) {
 	_, tsv, db := newTestTxExecutor(t)
 	defer db.Close()
@@ -1564,7 +1649,7 @@ func TestTruncateMessages(t *testing.T) {
 	tl := newTestLogger()
 	defer tl.Close()
 
-	*sqlparser.TruncateErrLen = 52
+	sqlparser.SetTruncateErrLen(52)
 	sql := "select * from test_table where xyz = :vtg1 order by abc desc"
 	sqlErr := mysql.NewSQLError(10, "HY000", "sensitive message")
 	sqlErr.Query = "select * from test_table where xyz = 'this is kinda long eh'"
@@ -1588,7 +1673,7 @@ func TestTruncateMessages(t *testing.T) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(0), wantLog)
 	}
 
-	*sqlparser.TruncateErrLen = 140
+	sqlparser.SetTruncateErrLen(140)
 	err = tsv.convertAndLogError(
 		ctx,
 		sql,
@@ -1608,7 +1693,7 @@ func TestTruncateMessages(t *testing.T) {
 	if wantLog != tl.getLog(1) {
 		t.Errorf("log got '%s', want '%s'", tl.getLog(1), wantLog)
 	}
-	*sqlparser.TruncateErrLen = 0
+	sqlparser.SetTruncateErrLen(0)
 }
 
 func TestTerseErrorsIgnoreFailoverInProgress(t *testing.T) {
@@ -1728,11 +1813,11 @@ func TestConfigChanges(t *testing.T) {
 		t.Errorf("tsv.te.txPool.pool.Capacity: %d, want %d", val, newSize)
 	}
 
-	tsv.SetTxTimeout(newDuration)
-	if val := tsv.TxTimeout(); val != newDuration {
+	tsv.Config().SetTxTimeoutForWorkload(newDuration, querypb.ExecuteOptions_OLTP)
+	if val := tsv.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
 		t.Errorf("tsv.TxTimeout: %v, want %v", val, newDuration)
 	}
-	if val := tsv.te.txPool.Timeout(); val != newDuration {
+	if val := tsv.te.txPool.env.Config().TxTimeoutForWorkload(querypb.ExecuteOptions_OLTP); val != newDuration {
 		t.Errorf("tsv.te.Pool().Timeout: %v, want %v", val, newDuration)
 	}
 
@@ -1748,7 +1833,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.MaxResultSize(); val != newSize {
 		t.Errorf("MaxResultSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.maxResultSize.Get()); val != newSize {
+	if val := int(tsv.qe.maxResultSize.Load()); val != newSize {
 		t.Errorf("tsv.qe.maxResultSize.Get: %d, want %d", val, newSize)
 	}
 
@@ -1756,7 +1841,7 @@ func TestConfigChanges(t *testing.T) {
 	if val := tsv.WarnResultSize(); val != newSize {
 		t.Errorf("WarnResultSize: %d, want %d", val, newSize)
 	}
-	if val := int(tsv.qe.warnResultSize.Get()); val != newSize {
+	if val := int(tsv.qe.warnResultSize.Load()); val != newSize {
 		t.Errorf("tsv.qe.warnResultSize.Get: %d, want %d", val, newSize)
 	}
 }
@@ -2149,6 +2234,7 @@ func setupTabletServerTest(t *testing.T, keyspaceName string) (*fakesqldb.DB, *T
 
 func setupTabletServerTestCustom(t *testing.T, config *tabletenv.TabletConfig, keyspaceName string) (*fakesqldb.DB, *TabletServer) {
 	db := setupFakeDB(t)
+	sidecardb.AddSchemaInitQueries(db, true)
 	tsv := NewTabletServer("TabletServerTest", config, memorytopo.NewServer(""), &topodatapb.TabletAlias{})
 	require.Equal(t, StateNotConnected, tsv.sm.State())
 	dbcfgs := newDBConfigs(db)
@@ -2196,16 +2282,6 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 		"update test_table set name_string = 'tx3' where pk = 2 and `name` = 1 limit 10001": {
 			RowsAffected: 1,
 		},
-		// queries for twopc
-		fmt.Sprintf(sqlCreateSidecarDB, "_vt"):          {},
-		fmt.Sprintf(sqlDropLegacy1, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy2, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy3, "_vt"):              {},
-		fmt.Sprintf(sqlDropLegacy4, "_vt"):              {},
-		fmt.Sprintf(sqlCreateTableRedoState, "_vt"):     {},
-		fmt.Sprintf(sqlCreateTableRedoStatement, "_vt"): {},
-		fmt.Sprintf(sqlCreateTableDTState, "_vt"):       {},
-		fmt.Sprintf(sqlCreateTableDTParticipant, "_vt"): {},
 		// queries for schema info
 		"select unix_timestamp()": {
 			Fields: []*querypb.Field{{
@@ -2306,6 +2382,7 @@ func addTabletServerSupportedQueries(db *fakesqldb.DB) {
 		"rollback": {},
 		fmt.Sprintf(sqlReadAllRedo, "_vt", "_vt"): {},
 	}
+	sidecardb.AddSchemaInitQueries(db, true)
 	for query, result := range queryResultMap {
 		db.AddQuery(query, result)
 	}

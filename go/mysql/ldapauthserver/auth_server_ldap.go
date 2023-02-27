@@ -146,7 +146,7 @@ func (asl *AuthServerLdap) validate(username, password string) (mysql.Getter, er
 	return &LdapUserData{asl: asl, groups: groups, username: username, lastUpdated: time.Now(), updating: false}, nil
 }
 
-//this needs to be passed an already connected client...should check for this
+// this needs to be passed an already connected client...should check for this
 func (asl *AuthServerLdap) getGroups(username string) ([]string, error) {
 	err := asl.Client.Bind(asl.User, asl.Password)
 	if err != nil {

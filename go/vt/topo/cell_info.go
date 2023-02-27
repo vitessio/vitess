@@ -22,8 +22,8 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -163,7 +163,7 @@ func (ts *Server) DeleteCellInfo(ctx context.Context, cell string, force bool) e
 			// local-down-topo scenario would mean we never can delete it.
 			// (see https://github.com/vitessio/vitess/issues/8220).
 			var cancel context.CancelFunc
-			ctx, cancel = context.WithTimeout(context.Background(), *RemoteOperationTimeout)
+			ctx, cancel = context.WithTimeout(context.Background(), RemoteOperationTimeout)
 			defer cancel()
 		default:
 			// Context still has some time left, no need to make a new one.
@@ -194,7 +194,7 @@ func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, erro
 	var (
 		err         error
 		inputCells  []string
-		outputCells = sets.NewString() // Use a set to dedupe if the input cells list includes an alias and a cell in that alias.
+		outputCells = sets.New[string]() // Use a set to dedupe if the input cells list includes an alias and a cell in that alias.
 	)
 
 	if cells == "" {
@@ -207,13 +207,13 @@ func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, erro
 	}
 
 	expandCell := func(ctx context.Context, cell string) error {
-		shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+		shortCtx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 		defer cancel()
 
 		_, err := ts.GetCellInfo(shortCtx, cell, false /* strongRead */)
 		if err != nil {
 			// Not a valid cell name. Check whether it is an alias.
-			shortCtx, cancel := context.WithTimeout(ctx, *RemoteOperationTimeout)
+			shortCtx, cancel := context.WithTimeout(ctx, RemoteOperationTimeout)
 			defer cancel()
 
 			alias, err2 := ts.GetCellsAlias(shortCtx, cell, false /* strongRead */)
@@ -238,5 +238,5 @@ func (ts *Server) ExpandCells(ctx context.Context, cells string) ([]string, erro
 		}
 	}
 
-	return outputCells.List(), nil
+	return sets.List(outputCells), nil
 }

@@ -65,7 +65,7 @@ func vdiff1(t *testing.T, ksWorkflow, cells string) {
 
 func doVDiff1(t *testing.T, ksWorkflow, cells string) {
 	t.Run(fmt.Sprintf("vdiff1 %s", ksWorkflow), func(t *testing.T) {
-		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
+		output, err := vc.VtctlClient.ExecuteCommandWithOutput("VDiff", "--", "--v1", "--tablet_types=primary", "--source_cell="+cells, "--format", "json", ksWorkflow)
 		log.Infof("vdiff1 err: %+v, output: %+v", err, output)
 		require.Nil(t, err)
 		require.NotNil(t, output)
@@ -107,11 +107,14 @@ func waitForVDiff2ToComplete(t *testing.T, ksWorkflow, cells, uuid string, compl
 			} else if info.State == "started" { // test the progress report
 				// The ETA should always be in the future -- when we're able to estimate
 				// it -- and the progress percentage should only increase.
-				// The timstamp format allows us to compare them lexicographically.
+				// The timestamp format allows us to compare them lexicographically.
 				// We don't test that the ETA always increases as it can decrease based on how
 				// quickly we're doing work.
 				if info.Progress.ETA != "" {
-					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Format(vdiff2.TimestampFormat))
+					// If we're operating at the second boundary then the ETA can be up
+					// to 1 second in the past due to using second based precision.
+					loc, _ := time.LoadLocation("UTC")
+					require.GreaterOrEqual(t, info.Progress.ETA, time.Now().Add(-time.Second).In(loc).Format(vdiff2.TimestampFormat))
 				}
 				if !first {
 					require.GreaterOrEqual(t, info.Progress.Percentage, previousProgress.Percentage)
@@ -162,7 +165,7 @@ func doVdiff2(t *testing.T, keyspace, workflow, cells string, want *expectedVDif
 
 func performVDiff2Action(t *testing.T, ksWorkflow, cells, action, actionArg string, expectError bool, extraFlags ...string) (uuid string, output string) {
 	var err error
-	args := []string{"VDiff", "--", "--v2", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
+	args := []string{"VDiff", "--", "--tablet_types=primary", "--source_cell=" + cells, "--format=json"}
 	if len(extraFlags) > 0 {
 		args = append(args, extraFlags...)
 	}

@@ -17,47 +17,40 @@ limitations under the License.
 package main
 
 import (
-	"flag"
 	"log"
-	"os"
 
-	"vitess.io/vitess/go/tools/goimports"
+	"github.com/spf13/pflag"
 
-	. "vitess.io/vitess/go/tools/asthelpergen"
+	"vitess.io/vitess/go/tools/asthelpergen"
+	"vitess.io/vitess/go/tools/codegen"
 )
 
 func main() {
-	var patterns TypePaths
-	var generate, except string
+	var options asthelpergen.Options
 	var verify bool
 
-	flag.Var(&patterns, "in", "Go packages to load the generator")
-	flag.StringVar(&generate, "iface", "", "Root interface generate rewriter for")
-	flag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
-	flag.StringVar(&except, "except", "", "don't deep clone these types")
-	flag.Parse()
+	pflag.StringSliceVar(&options.Packages, "in", nil, "Go packages to load the generator")
+	pflag.StringVar(&options.RootInterface, "iface", "", "Root interface generate rewriter for")
+	pflag.StringSliceVar(&options.Clone.Exclude, "clone_exclude", nil, "don't deep clone these types")
+	pflag.StringSliceVar(&options.Equals.AllowCustom, "equals_custom", nil, "generate custom comparators for these types")
+	pflag.BoolVar(&verify, "verify", false, "ensure that the generated files are correct")
+	pflag.Parse()
 
-	result, err := GenerateASTHelpers(patterns, generate, except)
+	result, err := asthelpergen.GenerateASTHelpers(&options)
 	if err != nil {
 		log.Fatal(err)
 	}
 
 	if verify {
-		for _, err := range VerifyFilesOnDisk(result) {
+		for _, err := range asthelpergen.VerifyFilesOnDisk(result) {
 			log.Fatal(err)
 		}
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			content, err := goimports.FormatJenFile(file)
-			if err != nil {
-				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
+			if err := codegen.SaveJenFile(fullPath, file); err != nil {
+				log.Fatal(err)
 			}
-			err = os.WriteFile(fullPath, content, 0664)
-			if err != nil {
-				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
-			}
-			log.Printf("saved '%s'", fullPath)
 		}
 	}
 }

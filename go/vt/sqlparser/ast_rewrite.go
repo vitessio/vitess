@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -22,8 +22,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return true
 	}
 	switch node := node.(type) {
-	case AccessMode:
-		return a.rewriteAccessMode(parent, node, replacer)
 	case *AddColumns:
 		return a.rewriteRefOfAddColumns(parent, node, replacer)
 	case *AddConstraintDefinition:
@@ -210,8 +208,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfIntroducerExpr(parent, node, replacer)
 	case *IsExpr:
 		return a.rewriteRefOfIsExpr(parent, node, replacer)
-	case IsolationLevel:
-		return a.rewriteIsolationLevel(parent, node, replacer)
 	case *JSONArrayExpr:
 		return a.rewriteRefOfJSONArrayExpr(parent, node, replacer)
 	case *JSONAttributesExpr:
@@ -226,8 +222,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
 	case *JSONObjectExpr:
 		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
-	case JSONObjectParam:
-		return a.rewriteJSONObjectParam(parent, node, replacer)
+	case *JSONObjectParam:
+		return a.rewriteRefOfJSONObjectParam(parent, node, replacer)
 	case *JSONOverlapsExpr:
 		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
 	case *JSONPrettyExpr:
@@ -270,6 +266,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case *Limit:
 		return a.rewriteRefOfLimit(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -352,6 +350,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewritePartitions(parent, node, replacer)
 	case *PerformanceSchemaFuncExpr:
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
+	case *PointExpr:
+		return a.rewriteRefOfPointExpr(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case ReferenceAction:
@@ -398,8 +398,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfSetExpr(parent, node, replacer)
 	case SetExprs:
 		return a.rewriteSetExprs(parent, node, replacer)
-	case *SetTransaction:
-		return a.rewriteRefOfSetTransaction(parent, node, replacer)
 	case *Show:
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowBasic:
@@ -414,6 +412,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowOther(parent, node, replacer)
 	case *ShowThrottledApps:
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
+	case *ShowThrottlerStatus:
+		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
 	case *StarExpr:
 		return a.rewriteRefOfStarExpr(parent, node, replacer)
 	case *Std:
@@ -474,6 +474,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfUpdateXMLExpr(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
+	case *VExplainStmt:
+		return a.rewriteRefOfVExplainStmt(parent, node, replacer)
 	case *VStream:
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	case ValTuple:
@@ -1558,6 +1560,11 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 	}) {
 		return false
 	}
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ColumnDefinition).Type = newNode.(*ColumnType)
+	}) {
+		return false
+	}
 	if a.post != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -2487,6 +2494,11 @@ func (a *application) rewriteRefOfExplainStmt(parent SQLNode, node *ExplainStmt,
 	}
 	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
 		parent.(*ExplainStmt).Statement = newNode.(Statement)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*ExplainStmt).Comments = newNode.(*ParsedComments)
 	}) {
 		return false
 	}
@@ -3642,7 +3654,10 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	}
 	return true
 }
-func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectParam, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3652,12 +3667,12 @@ func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectPara
 		}
 	}
 	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Key' on 'JSONObjectParam'")
+		parent.(*JSONObjectParam).Key = newNode.(Expr)
 	}) {
 		return false
 	}
 	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Value' on 'JSONObjectParam'")
+		parent.(*JSONObjectParam).Value = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4356,6 +4371,33 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 	}
 	if !a.rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
 		parent.(*Limit).Rowcount = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStringExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.PointParams, func(newNode, parent SQLNode) {
+		parent.(*LineStringExpr).PointParams = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -5566,6 +5608,38 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 	}
 	return true
 }
+func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.XCordinate, func(newNode, parent SQLNode) {
+		parent.(*PointExpr).XCordinate = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.YCordinate, func(newNode, parent SQLNode) {
+		parent.(*PointExpr).YCordinate = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfPrepareStmt(parent SQLNode, node *PrepareStmt, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6352,42 +6426,6 @@ func (a *application) rewriteSetExprs(parent SQLNode, node SetExprs, replacer re
 	}
 	return true
 }
-func (a *application) rewriteRefOfSetTransaction(parent SQLNode, node *SetTransaction, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
-		parent.(*SetTransaction).Comments = newNode.(*ParsedComments)
-	}) {
-		return false
-	}
-	for x, el := range node.Characteristics {
-		if !a.rewriteCharacteristic(node, el, func(idx int) replacerFunc {
-			return func(newNode, parent SQLNode) {
-				parent.(*SetTransaction).Characteristics[idx] = newNode.(Characteristic)
-			}
-		}(x)) {
-			return false
-		}
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfShow(parent SQLNode, node *Show, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -6558,6 +6596,30 @@ func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, rep
 	return true
 }
 func (a *application) rewriteRefOfShowThrottledApps(parent SQLNode, node *ShowThrottledApps, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if a.post != nil {
+		if a.pre == nil {
+			a.cur.replacer = replacer
+			a.cur.parent = parent
+			a.cur.node = node
+		}
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfShowThrottlerStatus(parent SQLNode, node *ShowThrottlerStatus, replacer replacerFunc) bool {
 	if node == nil {
 		return true
 	}
@@ -7587,6 +7649,38 @@ func (a *application) rewriteRefOfUse(parent SQLNode, node *Use, replacer replac
 	}
 	return true
 }
+func (a *application) rewriteRefOfVExplainStmt(parent SQLNode, node *VExplainStmt, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteStatement(node, node.Statement, func(newNode, parent SQLNode) {
+		parent.(*VExplainStmt).Statement = newNode.(Statement)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfParsedComments(node, node.Comments, func(newNode, parent SQLNode) {
+		parent.(*VExplainStmt).Comments = newNode.(*ParsedComments)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
 func (a *application) rewriteRefOfVStream(parent SQLNode, node *VStream, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -8374,6 +8468,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case *LocateExpr:
 		return a.rewriteRefOfLocateExpr(parent, node, replacer)
 	case *MatchExpr:
@@ -8392,6 +8488,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *PerformanceSchemaFuncExpr:
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
+	case *PointExpr:
+		return a.rewriteRefOfPointExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -8414,20 +8512,6 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfValuesFuncExpr(parent, node, replacer)
 	case *WeightStringFuncExpr:
 		return a.rewriteRefOfWeightStringFuncExpr(parent, node, replacer)
-	default:
-		// this should never happen
-		return true
-	}
-}
-func (a *application) rewriteCharacteristic(parent SQLNode, node Characteristic, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	switch node := node.(type) {
-	case AccessMode:
-		return a.rewriteAccessMode(parent, node, replacer)
-	case IsolationLevel:
-		return a.rewriteIsolationLevel(parent, node, replacer)
 	default:
 		// this should never happen
 		return true
@@ -8636,6 +8720,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -8668,6 +8754,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *PerformanceSchemaFuncExpr:
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
+	case *PointExpr:
+		return a.rewriteRefOfPointExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -8870,14 +8958,14 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfSelect(parent, node, replacer)
 	case *Set:
 		return a.rewriteRefOfSet(parent, node, replacer)
-	case *SetTransaction:
-		return a.rewriteRefOfSetTransaction(parent, node, replacer)
 	case *Show:
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
 	case *ShowThrottledApps:
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
+	case *ShowThrottlerStatus:
+		return a.rewriteRefOfShowThrottlerStatus(parent, node, replacer)
 	case *Stream:
 		return a.rewriteRefOfStream(parent, node, replacer)
 	case *TruncateTable:
@@ -8890,6 +8978,8 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfUpdate(parent, node, replacer)
 	case *Use:
 		return a.rewriteRefOfUse(parent, node, replacer)
+	case *VExplainStmt:
+		return a.rewriteRefOfVExplainStmt(parent, node, replacer)
 	case *VStream:
 		return a.rewriteRefOfVStream(parent, node, replacer)
 	default:
@@ -8914,27 +9004,6 @@ func (a *application) rewriteTableExpr(parent SQLNode, node TableExpr, replacer 
 		// this should never happen
 		return true
 	}
-}
-func (a *application) rewriteAccessMode(parent SQLNode, node AccessMode, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
 }
 func (a *application) rewriteAlgorithmValue(parent SQLNode, node AlgorithmValue, replacer replacerFunc) bool {
 	if a.pre != nil {
@@ -8979,27 +9048,6 @@ func (a *application) rewriteArgument(parent SQLNode, node Argument, replacer re
 	return true
 }
 func (a *application) rewriteBoolVal(parent SQLNode, node BoolVal, replacer replacerFunc) bool {
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if a.post != nil {
-		if a.pre == nil {
-			a.cur.replacer = replacer
-			a.cur.parent = parent
-			a.cur.node = node
-		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteIsolationLevel(parent SQLNode, node IsolationLevel, replacer replacerFunc) bool {
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -9125,38 +9173,6 @@ func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierC
 			a.cur.parent = parent
 			a.cur.node = node
 		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectParam).Key = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectParam).Value = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

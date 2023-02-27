@@ -19,11 +19,14 @@ package tabletserver
 import (
 	"context"
 	"errors"
+	"sort"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
@@ -60,6 +63,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	config := newConfig(db)
+	config.SignalWhenSchemaChange = false
 
 	env := tabletenv.NewEnv(config, "ReplTrackerTest")
 	alias := &topodatapb.TabletAlias{
@@ -85,7 +89,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			HealthError: "tabletserver uninitialized",
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	hs.ChangeState(topodatapb.TabletType_REPLICA, time.Time{}, 0, nil, false)
 	shr = <-ch
@@ -99,7 +103,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test primary and timestamp.
 	now := time.Now()
@@ -117,7 +121,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test non-serving, and 0 timestamp for non-primary.
 	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 1*time.Second, nil, false)
@@ -133,7 +137,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 
 	// Test Health error.
 	hs.ChangeState(topodatapb.TabletType_REPLICA, now, 0, errors.New("repl err"), false)
@@ -149,7 +153,7 @@ func TestHealthStreamerBroadcast(t *testing.T) {
 			BinlogPlayersCount:            2,
 		},
 	}
-	assert.Equal(t, want, shr)
+	assert.Truef(t, proto.Equal(want, shr), "want: %v, got: %v", want, shr)
 }
 
 func TestReloadSchema(t *testing.T) {
@@ -170,8 +174,6 @@ func TestReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
-	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
 	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -185,6 +187,7 @@ func TestReloadSchema(t *testing.T) {
 		"product",
 		"users",
 	))
+	db.AddQuery(mysql.SelectAllViews, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -283,8 +286,6 @@ func TestInitialReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQuery(mysql.CreateVTDatabase, &sqltypes.Result{})
-	db.AddQuery(mysql.CreateSchemaCopyTable, &sqltypes.Result{})
 	db.AddQueryPattern(mysql.ClearSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQueryPattern(mysql.InsertIntoSchemaCopy+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
@@ -298,6 +299,7 @@ func TestInitialReloadSchema(t *testing.T) {
 		"product",
 		"users",
 	))
+	db.AddQuery(mysql.SelectAllViews, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -325,6 +327,80 @@ func TestInitialReloadSchema(t *testing.T) {
 		// should not timeout despite SignalSchemaChangeReloadIntervalSeconds being set to 1 minute
 		t.Errorf("timed out")
 	}
+}
+
+// TestReloadView tests that the health streamer tracks view changes correctly
+func TestReloadView(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	config := newConfig(db)
+	config.SignalSchemaChangeReloadIntervalSeconds.Set(100 * time.Millisecond)
+	config.EnableViews = true
+
+	env := tabletenv.NewEnv(config, "TestReloadView")
+	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
+	hs := newHealthStreamer(env, alias)
+
+	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
+	configs := config.DB
+
+	db.AddQuery(mysql.DetectSchemaChangeOnlyBaseTable, &sqltypes.Result{})
+	db.AddQuery(mysql.SelectAllViews, &sqltypes.Result{})
+
+	hs.InitDBConfig(target, configs.DbaWithDB())
+	hs.Open()
+	defer hs.Close()
+
+	tcases := []struct {
+		res *sqltypes.Result
+		exp []string
+	}{{
+		// view_a and view_b added.
+		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
+			"view_a|2023-01-12 14:23:33", "view_b|2023-01-12 15:23:33"),
+		exp: []string{"view_a", "view_b"},
+	}, {
+		// view_b modified
+		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
+			"view_a|2023-01-12 14:23:33", "view_b|2023-01-12 18:23:33"),
+		exp: []string{"view_b"},
+	}, {
+		// view_a modified, view_b deleted and view_c added.
+		res: sqltypes.MakeTestResult(sqltypes.MakeTestFields("table_name|updated_at", "varchar|timestamp"),
+			"view_a|2023-01-12 16:23:33", "view_c|2023-01-12 18:23:33"),
+		exp: []string{"view_a", "view_b", "view_c"},
+	}}
+
+	// setting first test case result.
+	db.AddQuery(mysql.SelectAllViews, tcases[0].res)
+
+	var tcCount atomic.Int32
+	ch := make(chan struct{})
+
+	go func() {
+		hs.Stream(ctx, func(response *querypb.StreamHealthResponse) error {
+			if response.RealtimeStats.ViewSchemaChanged != nil {
+				sort.Strings(response.RealtimeStats.ViewSchemaChanged)
+				assert.Equal(t, tcases[tcCount.Load()].exp, response.RealtimeStats.ViewSchemaChanged)
+				tcCount.Add(1)
+				ch <- struct{}{}
+			}
+			return nil
+		})
+	}()
+
+	for {
+		select {
+		case <-ch:
+			if tcCount.Load() == int32(len(tcases)) {
+				return
+			}
+			db.AddQuery(mysql.SelectAllViews, tcases[tcCount.Load()].res)
+		case <-time.After(1000 * time.Second):
+			t.Fatalf("timed out")
+		}
+	}
+
 }
 
 func testStream(hs *healthStreamer) (<-chan *querypb.StreamHealthResponse, context.CancelFunc) {

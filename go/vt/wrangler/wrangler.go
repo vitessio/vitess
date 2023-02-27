@@ -21,6 +21,8 @@ package wrangler
 import (
 	"context"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
@@ -36,7 +38,7 @@ var (
 	// lock actions use RemoteOperationTimeout,
 	// so basing this to be greater than RemoteOperationTimeout is good.
 	// Use this as the default value for Context that need a deadline.
-	DefaultActionTimeout = *topo.RemoteOperationTimeout * 4
+	DefaultActionTimeout = topo.RemoteOperationTimeout * 4
 )
 
 // Wrangler manages complex actions on the topology, like reparents,
@@ -53,6 +55,8 @@ type Wrangler struct {
 	// VExecFunc is a test-only fixture that allows us to short circuit vexec commands.
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
+	// Limt the number of concurrent background goroutines if needed.
+	sem *semaphore.Weighted
 }
 
 // New creates a new Wrangler object.
@@ -62,6 +66,18 @@ func New(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClien
 		ts:       ts,
 		tmc:      tmc,
 		vtctld:   grpcvtctldserver.NewVtctldServer(ts),
+		sourceTs: ts,
+	}
+}
+
+// NewTestWrangler creates a new Wrangler object for use in tests. This should NOT be used
+// in production.
+func NewTestWrangler(logger logutil.Logger, ts *topo.Server, tmc tmclient.TabletManagerClient) *Wrangler {
+	return &Wrangler{
+		logger:   logger,
+		ts:       ts,
+		tmc:      tmc,
+		vtctld:   grpcvtctldserver.NewTestVtctldServer(ts, tmc),
 		sourceTs: ts,
 	}
 }

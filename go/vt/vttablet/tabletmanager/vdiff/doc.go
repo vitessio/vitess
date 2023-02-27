@@ -15,10 +15,8 @@ limitations under the License.
 */
 
 /*
-
 package vdiff implements the Vitess Diff functionality which compares the logical contents of MySQL tables across keyspaces and shards
 
 Please see ./README.md for more information.
-
 */
 package vdiff

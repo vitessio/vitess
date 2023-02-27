@@ -17,14 +17,13 @@ limitations under the License.
 package servenv
 
 import (
-	"flag"
+	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/flagutil"
 	"vitess.io/vitess/go/vt/log"
 )
 
 var (
-	serviceMapFlag flagutil.StringListValue
+	serviceMapFlag []string
 
 	// serviceMap is the used version of the service map.
 	// init() functions can add default values to it (using InitServiceMap).
@@ -33,11 +32,14 @@ var (
 	serviceMap = make(map[string]bool)
 )
 
-func init() {
-	flag.Var(&serviceMapFlag, "service_map", "comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice")
-	OnInit(func() {
-		updateServiceMap()
+// RegisterServiceMapFlag registers an OnParse hook to install the
+// `--service_map` flag for a given cmd. It must be called before ParseFlags or
+// ParseFlagsWithArgs.
+func RegisterServiceMapFlag() {
+	OnParse(func(fs *pflag.FlagSet) {
+		fs.StringSliceVar(&serviceMapFlag, "service_map", serviceMapFlag, "comma separated list of services to enable (or disable if prefixed with '-') Example: grpc-queryservice")
 	})
+	OnInit(updateServiceMap)
 }
 
 // InitServiceMap will set the default value for a protocol/name to be served.
@@ -57,9 +59,9 @@ func updateServiceMap() {
 	}
 }
 
-// CheckServiceMap returns if we should register a RPC service
+// checkServiceMap returns if we should register a RPC service
 // (and also logs how to enable / disable it)
-func CheckServiceMap(protocol, name string) bool {
+func checkServiceMap(protocol, name string) bool {
 	if serviceMap[protocol+"-"+name] {
 		log.Infof("Registering %v for %v, disable it with -%v-%v service_map parameter", name, protocol, protocol, name)
 		return true

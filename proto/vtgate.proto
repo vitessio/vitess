@@ -149,6 +149,9 @@ message Session {
   bool enable_system_settings = 23;
 
   map<string, int64> advisory_lock = 24;
+
+  // query_timeout is the maximum amount of time a query is permitted to run
+  int64 query_timeout = 25;
 }
 
 // ReadAfterWrite contains information regarding gtid set and timeout

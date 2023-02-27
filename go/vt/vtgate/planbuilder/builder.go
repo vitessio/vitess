@@ -32,8 +32,6 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
 const (
@@ -83,7 +81,7 @@ func tablesFromSemantics(semTable *semantics.SemTable) []string {
 		if vindexTable == nil {
 			continue
 		}
-		tables[vindexTable.ToString()] = nil
+		tables[vindexTable.String()] = nil
 	}
 
 	names := make([]string, 0, len(tables))
@@ -101,7 +99,7 @@ func TestBuilder(query string, vschema plancontext.VSchema, keyspace string) (*e
 	if err != nil {
 		return nil, err
 	}
-	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil)
+	result, err := sqlparser.RewriteAST(stmt, keyspace, sqlparser.SQLSelectLimitUnset, "", nil, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -190,7 +188,7 @@ func getPlannerFromQueryHint(stmt sqlparser.Statement) (plancontext.PlannerVersi
 	}
 
 	d := cm.GetParsedComments().Directives()
-	val, ok := d[sqlparser.DirectiveQueryPlanner]
+	val, ok := d.GetString(sqlparser.DirectiveQueryPlanner, "")
 	if !ok {
 		return plancontext.PlannerVersion(0), false
 	}
@@ -221,7 +219,11 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		}
 		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Delete:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildDeletePlan)
+		configuredPlanner, err := getConfiguredPlanner(vschema, buildDeletePlan, stmt, query)
+		if err != nil {
+			return nil, err
+		}
+		return buildRoutePlan(stmt, reservedVars, vschema, configuredPlanner)
 	case *sqlparser.Union:
 		configuredPlanner, err := getConfiguredPlanner(vschema, buildUnionPlan, stmt, query)
 		if err != nil {
@@ -238,12 +240,16 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildShowMigrationLogsPlan(query, vschema, enableOnlineDDL)
 	case *sqlparser.ShowThrottledApps:
 		return buildShowThrottledAppsPlan(query, vschema)
+	case *sqlparser.ShowThrottlerStatus:
+		return buildShowThrottlerStatusPlan(query, vschema)
 	case *sqlparser.AlterVschema:
 		return buildVSchemaDDLPlan(stmt, vschema)
 	case *sqlparser.Use:
 		return buildUsePlan(stmt)
 	case sqlparser.Explain:
 		return buildExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
+	case *sqlparser.VExplainStmt:
+		return buildVExplainPlan(stmt, reservedVars, vschema, enableOnlineDDL, enableDirectDDL)
 	case *sqlparser.OtherRead, *sqlparser.OtherAdmin:
 		return buildOtherReadAndAdmin(query, vschema)
 	case *sqlparser.Set:
@@ -252,8 +258,6 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildLoadPlan(query, vschema)
 	case sqlparser.DBDDLStatement:
 		return buildRoutePlan(stmt, reservedVars, vschema, buildDBDDLPlan)
-	case *sqlparser.SetTransaction:
-		return buildRoutePlan(stmt, reservedVars, vschema, buildSetTxPlan)
 	case *sqlparser.Begin, *sqlparser.Commit, *sqlparser.Rollback, *sqlparser.Savepoint, *sqlparser.SRollback, *sqlparser.Release:
 		// Empty by design. Not executed by a plan
 		return nil, nil
@@ -277,7 +281,7 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return newPlanResult(engine.NewRowsPrimitive(nil, nil)), nil
 	}
 
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: unexpected statement type: %T", stmt)
+	return nil, vterrors.VT13001(fmt.Sprintf("unexpected statement type: %T", stmt))
 }
 
 func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
@@ -298,31 +302,24 @@ func buildDBDDLPlan(stmt sqlparser.Statement, _ *sqlparser.ReservedVars, vschema
 			return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
 		}
 		if !ksExists {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.DbDropExists, "Can't drop database '%s'; database doesn't exists", ksName)
+			return nil, vterrors.VT05001(ksName)
 		}
 		return newPlanResult(engine.NewDBDDL(ksName, false, queryTimeout(dbDDL.Comments.Directives()))), nil
 	case *sqlparser.AlterDatabase:
 		if !ksExists {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_NOT_FOUND, vterrors.BadDb, "Can't alter database '%s'; unknown database", ksName)
+			return nil, vterrors.VT05002(ksName)
 		}
-		return nil, vterrors.New(vtrpcpb.Code_UNIMPLEMENTED, "alter database is not supported")
+		return nil, vterrors.VT12001("ALTER DATABASE")
 	case *sqlparser.CreateDatabase:
 		if dbDDL.IfNotExists && ksExists {
 			return newPlanResult(engine.NewRowsPrimitive(make([][]sqltypes.Value, 0), make([]*querypb.Field, 0))), nil
 		}
 		if !dbDDL.IfNotExists && ksExists {
-			return nil, vterrors.NewErrorf(vtrpcpb.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "Can't create database '%s'; database exists", ksName)
+			return nil, vterrors.VT06001(ksName)
 		}
 		return newPlanResult(engine.NewDBDDL(ksName, true, queryTimeout(dbDDL.Comments.Directives()))), nil
 	}
-	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] database ddl not recognized: %s", sqlparser.String(dbDDLstmt))
-}
-
-func buildSetTxPlan(_ sqlparser.Statement, _ *sqlparser.ReservedVars, _ plancontext.VSchema) (*planResult, error) {
-	// TODO: This is a NOP, modeled off of tx_isolation and tx_read_only.
-	// It's incredibly dangerous that it's a NOP, this will be fixed when it will be implemented.
-	// This is currently the refactor of existing setup.
-	return newPlanResult(engine.NewRowsPrimitive(nil, nil)), nil
+	return nil, vterrors.VT13001(fmt.Sprintf("database DDL not recognized: %s", sqlparser.String(dbDDLstmt)))
 }
 
 func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, error) {
@@ -333,7 +330,7 @@ func buildLoadPlan(query string, vschema plancontext.VSchema) (*planResult, erro
 
 	destination := vschema.Destination()
 	if destination == nil {
-		if err := vschema.ErrorIfShardedF(keyspace, "LOAD", "LOAD is not supported on sharded database"); err != nil {
+		if err := vschema.ErrorIfShardedF(keyspace, "LOAD", "LOAD is not supported on sharded keyspace"); err != nil {
 			return nil, err
 		}
 		destination = key.DestinationAnyShard{}

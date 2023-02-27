@@ -18,11 +18,11 @@ package endtoend
 
 import (
 	"context"
-	"flag"
 	"fmt"
 	"os"
 	"testing"
 
+	_flag "vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vttest"
@@ -32,14 +32,25 @@ import (
 )
 
 var (
-	cluster        *vttest.LocalCluster
-	vtParams       mysql.ConnParams
-	mysqlParams    mysql.ConnParams
-	grpcAddress    string
-	tabletHostName = flag.String("tablet_hostname", "", "the tablet hostname")
+	cluster     *vttest.LocalCluster
+	vtParams    mysql.ConnParams
+	mysqlParams mysql.ConnParams
+	grpcAddress string
 
 	schema = `
 create table t1(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t1_copy_basic(
+	id1 bigint,
+	id2 bigint,
+	primary key(id1)
+) Engine=InnoDB;
+
+create table t1_copy_resume(
 	id1 bigint,
 	id2 bigint,
 	primary key(id1)
@@ -133,6 +144,18 @@ create table t1_sharded(
 					Name:   "t1_id2_vdx",
 				}},
 			},
+			"t1_copy_basic": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+			},
+			"t1_copy_resume": {
+				ColumnVindexes: []*vschemapb.ColumnVindex{{
+					Column: "id1",
+					Name:   "hash",
+				}},
+			},
 			"t1_sharded": {
 				ColumnVindexes: []*vschemapb.ColumnVindex{{
 					Column: "id1",
@@ -197,7 +220,7 @@ create table t1_sharded(
 )
 
 func TestMain(m *testing.M) {
-	flag.Parse()
+	_flag.ParseFlagsForTest()
 
 	exitCode := func() int {
 		var cfg vttest.Config
@@ -217,8 +240,6 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 		defer os.RemoveAll(cfg.SchemaDir)
-
-		cfg.TabletHostName = *tabletHostName
 
 		cluster = &vttest.LocalCluster{
 			Config: cfg,

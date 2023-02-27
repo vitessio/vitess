@@ -159,7 +159,7 @@ func (h *historian) GetTableForPos(tableName sqlparser.IdentifierCS, gtid string
 // loadFromDB loads all rows from the schema_version table that the historian does not have as yet
 // caller should have locked h.mu
 func (h *historian) loadFromDB(ctx context.Context) error {
-	conn, err := h.conns.Get(ctx)
+	conn, err := h.conns.Get(ctx, nil)
 	if err != nil {
 		return err
 	}

@@ -288,7 +288,7 @@ func (bs *S3BackupStorage) ListBackups(ctx context.Context, dir string) ([]backu
 	} else {
 		searchPrefix = objName(dir, "")
 	}
-	log.Infof("objName: %v", searchPrefix)
+	log.Infof("objName: %v", *searchPrefix)
 
 	query := &s3.ListObjectsV2Input{
 		Bucket:    &bucket,
@@ -408,6 +408,11 @@ func (bs *S3BackupStorage) Close() error {
 	bs._client = nil
 	bs.s3SSE.reset()
 	return nil
+}
+
+func (bs *S3BackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new S3BackupStorage that uses params.
+	return bs
 }
 
 var _ backupstorage.BackupStorage = (*S3BackupStorage)(nil)

@@ -112,7 +112,7 @@ func TestVSchema(t *testing.T) {
 	utils.AssertMatches(t, conn, "delete from vt_user", `[]`)
 
 	// Test empty vschema
-	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[[VARCHAR("dual")]]`)
+	utils.AssertMatches(t, conn, "SHOW VSCHEMA TABLES", `[]`)
 
 	// Use the DDL to create an unsharded vschema and test again
 
@@ -130,7 +130,7 @@ func TestVSchema(t *testing.T) {
 	// Test Showing Tables
 	utils.AssertMatches(t, conn,
 		"SHOW VSCHEMA TABLES",
-		`[[VARCHAR("dual")] [VARCHAR("main")] [VARCHAR("vt_user")]]`)
+		`[[VARCHAR("main")] [VARCHAR("vt_user")]]`)
 
 	// Test Showing Vindexes
 	utils.AssertMatches(t, conn, "SHOW VSCHEMA VINDEXES", `[]`)

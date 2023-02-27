@@ -40,6 +40,11 @@ func (s *Server) Lock(ctx context.Context, dirPath, contents string) (topo.LockD
 	return s.lock(ctx, dirPath, contents, false)
 }
 
+// TryLock is part of the topo.Conn interface. Its implementation is same as Lock
+func (s *Server) TryLock(ctx context.Context, dirPath, contents string) (topo.LockDescriptor, error) {
+	return s.Lock(ctx, dirPath, contents)
+}
+
 // lock is used by both Lock() and primary election.
 // it blocks until the lock is taken, interrupted, or times out
 func (s *Server) lock(ctx context.Context, nodePath, contents string, createMissing bool) (topo.LockDescriptor, error) {

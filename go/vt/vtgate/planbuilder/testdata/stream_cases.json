@@ -1,0 +1,19 @@
+[
+  {
+    "comment": "stream table",
+    "query": "stream * from music",
+    "plan": {
+      "QueryType": "STREAM",
+      "Original": "stream * from music",
+      "Instructions": {
+        "OperatorType": "MStream",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "TargetDestination": "ExactKeyRange(-)",
+        "Table": "music"
+      }
+    }
+  }
+]

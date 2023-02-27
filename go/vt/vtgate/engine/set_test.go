@@ -23,6 +23,7 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/srvtopo"
 
 	"github.com/stretchr/testify/require"
 
@@ -59,6 +60,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 			),
 			"foobar",
 		)},
+		shardSession: []*srvtopo.ResolvedShard{{Target: &querypb.Target{Keyspace: "ks", Shard: "-20"}}},
 	}
 	_, err := set.TryExecute(context.Background(), vc, map[string]*querypb.BindVariable{}, false)
 	require.NoError(t, err)
@@ -68,6 +70,7 @@ func TestSetSystemVariableAsString(t *testing.T) {
 		"ExecuteMultiShard ks.-20: select dummy_expr from dual where @@x != dummy_expr {} false false",
 		"SysVar set with (x,'foobar')",
 		"Needs Reserved Conn",
+		"ExecuteMultiShard ks.-20: set x = dummy_expr {} false false",
 	})
 }
 
@@ -563,10 +566,10 @@ func TestSetTable(t *testing.T) {
 				tc.input = &SingleRow{}
 			}
 
-			oldMySQLVersion := sqlparser.MySQLVersion
-			defer func() { sqlparser.MySQLVersion = oldMySQLVersion }()
+			oldMySQLVersion := sqlparser.GetParserVersion()
+			defer func() { sqlparser.SetParserVersion(oldMySQLVersion) }()
 			if tc.mysqlVersion != "" {
-				sqlparser.MySQLVersion = tc.mysqlVersion
+				sqlparser.SetParserVersion(tc.mysqlVersion)
 			}
 
 			set := &Set{

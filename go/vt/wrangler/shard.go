@@ -167,7 +167,7 @@ func (wr *Wrangler) DeleteShard(ctx context.Context, keyspace, shard string, rec
 // SourceShardDelete will delete a SourceShard inside a shard, by index.
 //
 // This takes the keyspace lock as not to interfere with resharding operations.
-func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard string, uid uint32) (err error) {
+func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard string, uid int32) (err error) {
 	resp, err := wr.VtctldServer().SourceShardDelete(ctx, &vtctldatapb.SourceShardDeleteRequest{
 		Keyspace: keyspace,
 		Shard:    shard,
@@ -185,7 +185,7 @@ func (wr *Wrangler) SourceShardDelete(ctx context.Context, keyspace, shard strin
 }
 
 // SourceShardAdd will add a new SourceShard inside a shard.
-func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid uint32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
+func (wr *Wrangler) SourceShardAdd(ctx context.Context, keyspace, shard string, uid int32, skeyspace, sshard string, keyRange *topodatapb.KeyRange, tables []string) (err error) {
 	resp, err := wr.VtctldServer().SourceShardAdd(ctx, &vtctldatapb.SourceShardAddRequest{
 		Keyspace:       keyspace,
 		Shard:          shard,

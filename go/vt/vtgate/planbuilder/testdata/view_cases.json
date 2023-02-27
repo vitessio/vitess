@@ -1,0 +1,110 @@
+[
+  {
+    "comment": "Alter View",
+    "query": "alter view user.user_extra as select * from user.user",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "alter view user.user_extra as select * from user.user",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "alter view user_extra as select * from `user`.`user`"
+      },
+      "TablesUsed": [
+        "user.user_extra"
+      ]
+    }
+  },
+  {
+    "comment": "create view with different keyspaces",
+    "query": "create view user.view_a as (select id from unsharded union select id from unsharded_auto) union (select id from unsharded_auto union select name from unsharded)",
+    "plan": "VT12001: unsupported: Select query does not belong to the same keyspace as the view statement"
+  },
+  {
+    "comment": "create view with authoritative columns",
+    "query": "create view user.view_ac as select * from authoritative",
+    "v3-plan": {
+      "QueryType": "DDL",
+      "Original": "create view user.view_ac as select * from authoritative",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create view view_ac as select * from authoritative"
+      },
+      "TablesUsed": [
+        "user.view_ac"
+      ]
+    },
+    "gen4-plan": {
+      "QueryType": "DDL",
+      "Original": "create view user.view_ac as select * from authoritative",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "user",
+          "Sharded": true
+        },
+        "Query": "create view view_ac as select user_id, col1, col2 from authoritative"
+      },
+      "TablesUsed": [
+        "user.view_ac"
+      ]
+    }
+  },
+  {
+    "comment": "Drop view",
+    "query": "drop view main.a",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "drop view main.a",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop view main.a"
+      },
+      "TablesUsed": [
+        "main.a"
+      ]
+    }
+  },
+  {
+    "comment": "Drop multiple view",
+    "query": "drop view main.a, main.b, main.c",
+    "plan": {
+      "QueryType": "DDL",
+      "Original": "drop view main.a, main.b, main.c",
+      "Instructions": {
+        "OperatorType": "DDL",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "Query": "drop view main.a, main.b, main.c"
+      },
+      "TablesUsed": [
+        "main.a",
+        "main.b",
+        "main.c"
+      ]
+    }
+  },
+  {
+    "comment": "Drop mixed keyspace view",
+    "query": "drop view main.a, user.b",
+    "plan": "VT12001: unsupported: cannot drop views from multiple keyspace in a single statement"
+  },
+  {
+    "comment": "Drop same views",
+    "query": "drop view main.a, main.b, main.a",
+    "plan": "VT03013: not unique table/alias: 'a'"
+  }
+]

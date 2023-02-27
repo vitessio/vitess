@@ -17,18 +17,16 @@ limitations under the License.
 package vtgate
 
 import (
+	"context"
 	"strings"
 	"testing"
 
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/test/utils"
 
 	"github.com/stretchr/testify/require"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/discovery"
@@ -74,11 +72,11 @@ func init() {
 }
 `
 	hcVTGateTest = discovery.NewFakeHealthCheck(nil)
-	*transactionMode = "MULTI"
-	Init(context.Background(), hcVTGateTest, new(sandboxTopo), "aa", nil, querypb.ExecuteOptions_Gen4)
+	transactionMode = "MULTI"
+	Init(context.Background(), hcVTGateTest, newSandboxForCells([]string{"aa"}), "aa", nil, querypb.ExecuteOptions_Gen4)
 
-	*mysqlServerPort = 0
-	*mysqlAuthServerImpl = "none"
+	mysqlServerPort = 0
+	mysqlAuthServerImpl = "none"
 	initMySQLProtocol()
 }
 
@@ -137,7 +135,7 @@ func TestVTGateExecuteWithKeyspaceShard(t *testing.T) {
 		"select id from none",
 		nil,
 	)
-	want := "Unknown database 'invalid_keyspace' in vschema"
+	want := "VT05003: unknown database 'invalid_keyspace' in vschema"
 	assert.EqualError(t, err, want)
 
 	// Valid keyspace/shard.
@@ -411,8 +409,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -424,10 +422,10 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
 	}
-	sbc.RollbackCount.Set(0)
+	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_ABORTED] = 0
 
 	// Start a transaction, send one statement.
@@ -451,8 +449,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -464,10 +462,10 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 1 {
-		t.Errorf("want 1, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 1 {
+		t.Errorf("want 1, got %d", sbc.RollbackCount.Load())
 	}
-	sbc.RollbackCount.Set(0)
+	sbc.RollbackCount.Store(0)
 	sbc.MustFailCodes[vtrpcpb.Code_RESOURCE_EXHAUSTED] = 0
 
 	// Start a transaction, send one statement.
@@ -491,8 +489,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("want nil, got %v", err)
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 20
 	_, _, err = rpcVTGate.Execute(
@@ -504,8 +502,8 @@ func TestErrorIssuesRollback(t *testing.T) {
 	if err == nil {
 		t.Fatalf("want error but got nil")
 	}
-	if sbc.RollbackCount.Get() != 0 {
-		t.Errorf("want 0, got %d", sbc.RollbackCount.Get())
+	if sbc.RollbackCount.Load() != 0 {
+		t.Errorf("want 0, got %d", sbc.RollbackCount.Load())
 	}
 	sbc.MustFailCodes[vtrpcpb.Code_ALREADY_EXISTS] = 0
 }

@@ -85,8 +85,9 @@ func (q *query) Begin(ctx context.Context, request *querypb.BeginRequest) (respo
 	}
 
 	return &querypb.BeginResponse{
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -252,9 +253,10 @@ func (q *query) BeginExecute(ctx context.Context, request *querypb.BeginExecuteR
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.BeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
+		Result:              sqltypes.ResultToProto3(result),
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -270,15 +272,18 @@ func (q *query) BeginStreamExecute(request *querypb.BeginStreamExecuteRequest, s
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.BeginStreamExecuteResponse{
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
-	})
-	if err != nil {
+
+	if err != nil && state.TransactionID == 0 {
 		return vterrors.ToGRPC(err)
 	}
 
-	return vterrors.ToGRPC(errInLastPacket)
+	err = stream.Send(&querypb.BeginStreamExecuteResponse{
+		Error:               vterrors.ToVTRPC(err),
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // MessageStream is part of the queryservice.QueryServer interface
@@ -396,15 +401,16 @@ func (q *query) ReserveStreamExecute(request *querypb.ReserveStreamExecuteReques
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveStreamExecuteResponse{
-		ReservedId:  state.ReservedID,
-		TabletAlias: state.TabletAlias,
-	})
-	if err != nil {
+	if err != nil && state.ReservedID == 0 {
 		return vterrors.ToGRPC(err)
 	}
 
-	return vterrors.ToGRPC(errInLastPacket)
+	err = stream.Send(&querypb.ReserveStreamExecuteResponse{
+		Error:       vterrors.ToVTRPC(err),
+		ReservedId:  state.ReservedID,
+		TabletAlias: state.TabletAlias,
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // ReserveBeginExecute implements the QueryServer interface
@@ -419,19 +425,21 @@ func (q *query) ReserveBeginExecute(ctx context.Context, request *querypb.Reserv
 		// if we have a valid reservedID, return the error in-band
 		if state.ReservedID != 0 {
 			return &querypb.ReserveBeginExecuteResponse{
-				Error:         vterrors.ToVTRPC(err),
-				TransactionId: state.TransactionID,
-				ReservedId:    state.ReservedID,
-				TabletAlias:   state.TabletAlias,
+				Error:               vterrors.ToVTRPC(err),
+				TransactionId:       state.TransactionID,
+				ReservedId:          state.ReservedID,
+				TabletAlias:         state.TabletAlias,
+				SessionStateChanges: state.SessionStateChanges,
 			}, nil
 		}
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ReserveBeginExecuteResponse{
-		Result:        sqltypes.ResultToProto3(result),
-		TransactionId: state.TransactionID,
-		ReservedId:    state.ReservedID,
-		TabletAlias:   state.TabletAlias,
+		Result:              sqltypes.ResultToProto3(result),
+		TransactionId:       state.TransactionID,
+		ReservedId:          state.ReservedID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
 	}, nil
 }
 
@@ -447,16 +455,18 @@ func (q *query) ReserveBeginStreamExecute(request *querypb.ReserveBeginStreamExe
 			Result: sqltypes.ResultToProto3(reply),
 		})
 	})
-	errInLastPacket := stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
-		ReservedId:    state.ReservedID,
-		TransactionId: state.TransactionID,
-		TabletAlias:   state.TabletAlias,
-	})
-	if err != nil {
+	if err != nil && state.ReservedID == 0 && state.TransactionID == 0 {
 		return vterrors.ToGRPC(err)
 	}
 
-	return vterrors.ToGRPC(errInLastPacket)
+	err = stream.Send(&querypb.ReserveBeginStreamExecuteResponse{
+		Error:               vterrors.ToVTRPC(err),
+		ReservedId:          state.ReservedID,
+		TransactionId:       state.TransactionID,
+		TabletAlias:         state.TabletAlias,
+		SessionStateChanges: state.SessionStateChanges,
+	})
+	return vterrors.ToGRPC(err)
 }
 
 // Release implements the QueryServer interface
@@ -471,6 +481,13 @@ func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (r
 		return nil, vterrors.ToGRPC(err)
 	}
 	return &querypb.ReleaseResponse{}, nil
+}
+
+// GetSchema implements the QueryServer interface
+func (q *query) GetSchema(request *querypb.GetSchemaRequest, stream queryservicepb.Query_GetSchemaServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	err = q.server.GetSchema(stream.Context(), request.Target, request.TableType, request.TableNames, stream.Send)
+	return vterrors.ToGRPC(err)
 }
 
 // Register registers the implementation on the provide gRPC Server.

@@ -41,7 +41,6 @@ type queryEntry struct {
 	lastQueryTime time.Time
 	value         any
 	lastError     error
-	lastErrorCtx  context.Context
 }
 
 type resilientQuery struct {
@@ -109,7 +108,7 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 				}
 			}()
 
-			newCtx, cancel := context.WithTimeout(ctx, *srvTopoTimeout)
+			newCtx, cancel := context.WithTimeout(ctx, srvTopoTimeout)
 			defer cancel()
 
 			result, err := q.query(newCtx, entry)
@@ -144,7 +143,6 @@ func (q *resilientQuery) getCurrentValue(ctx context.Context, wkey fmt.Stringer,
 			}
 
 			entry.lastError = err
-			entry.lastErrorCtx = newCtx
 		}()
 	}
 

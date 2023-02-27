@@ -46,8 +46,7 @@ import (
 )
 
 type compressionDetails struct {
-	BuiltinCompressor       string
-	BuiltinDecompressor     string
+	CompressionEngineName   string
 	ExternalCompressorCmd   string
 	ExternalCompressorExt   string
 	ExternalDecompressorCmd string
@@ -59,26 +58,21 @@ func TestBackupRestore(t *testing.T) {
 	require.NoError(t, err)
 }
 
-// TODO: @rameez. I was expecting this test to fail but it turns out
-// we infer decompressor through compression engine in builtinEngine.
-// It is only in xtrabackup where we infer decompressor through extension & BuiltinDecompressor param.
 func TestBackupRestoreWithPargzip(t *testing.T) {
 	defer setDefaultCompressionFlag()
 	cDetails := &compressionDetails{
-		BuiltinCompressor:   "pargzip",
-		BuiltinDecompressor: "lz4",
+		CompressionEngineName: "pargzip",
 	}
 
 	err := testBackupRestore(t, cDetails)
-	require.ErrorContains(t, err, "lz4: bad magic number")
+	require.NoError(t, err)
 }
 
 func setDefaultCompressionFlag() {
-	*mysqlctl.BuiltinCompressor = "pgzip"
-	*mysqlctl.BuiltinDecompressor = "auto"
-	*mysqlctl.ExternalCompressorCmd = ""
-	*mysqlctl.ExternalCompressorExt = ""
-	*mysqlctl.ExternalDecompressorCmd = ""
+	mysqlctl.CompressionEngineName = "pgzip"
+	mysqlctl.ExternalCompressorCmd = ""
+	mysqlctl.ExternalCompressorExt = ""
+	mysqlctl.ExternalDecompressorCmd = ""
 }
 
 func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
@@ -98,17 +92,10 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.local_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.shard_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
 	root := t.TempDir()
@@ -116,22 +103,19 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 	if cDetails != nil {
-		if cDetails.BuiltinCompressor != "" {
-			*mysqlctl.BuiltinCompressor = cDetails.BuiltinCompressor
-		}
-		if cDetails.BuiltinDecompressor != "" {
-			*mysqlctl.BuiltinDecompressor = cDetails.BuiltinDecompressor
+		if cDetails.CompressionEngineName != "" {
+			mysqlctl.CompressionEngineName = cDetails.CompressionEngineName
 		}
 		if cDetails.ExternalCompressorCmd != "" {
-			*mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
+			mysqlctl.ExternalCompressorCmd = cDetails.ExternalCompressorCmd
 		}
 		if cDetails.ExternalCompressorExt != "" {
-			*mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
+			mysqlctl.ExternalCompressorExt = cDetails.ExternalCompressorExt
 		}
 		if cDetails.ExternalDecompressorCmd != "" {
-			*mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
+			mysqlctl.ExternalDecompressorCmd = cDetails.ExternalDecompressorCmd
 		}
 	}
 
@@ -143,8 +127,18 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 	for _, s := range []string{sourceInnodbDataDir, sourceInnodbLogDir, sourceDataDbDir} {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
@@ -181,6 +175,10 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		},
 	}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		// This first set of STOP and START commands come from
 		// the builtinBackupEngine implementation which stops the replication
 		// while taking the backup
@@ -189,6 +187,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -225,9 +224,14 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -250,7 +254,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		RelayLogInfoPath:      path.Join(root, "relay-log.info"),
 	}
 
-	err := destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
+	err = destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* backupTime */)
 	if err != nil {
 		return err
 	}
@@ -280,6 +284,7 @@ func testBackupRestore(t *testing.T, cDetails *compressionDetails) error {
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -331,17 +336,10 @@ func TestBackupRestoreLagged(t *testing.T) {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.local_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.shard_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
 	root := t.TempDir()
@@ -349,7 +347,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -360,7 +358,17 @@ func TestBackupRestoreLagged(t *testing.T) {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its position
@@ -397,6 +405,10 @@ func TestBackupRestoreLagged(t *testing.T) {
 	}
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		// This first set of STOP and START commands come from
 		// the builtinBackupEngine implementation which stops the replication
 		// while taking the backup
@@ -405,6 +417,7 @@ func TestBackupRestoreLagged(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -462,9 +475,14 @@ func TestBackupRestoreLagged(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -535,17 +553,10 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.local_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.shard_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
 	root := t.TempDir()
@@ -553,7 +564,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -564,7 +575,17 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
@@ -600,6 +621,10 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	}
 	sourceTablet.FakeMysqlDaemon.SetReplicationSourceInputs = []string{fmt.Sprintf("%s:%d", primary.Tablet.MysqlHostname, primary.Tablet.MysqlPort)}
 	sourceTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		// This first set of STOP and START commands come from
 		// the builtinBackupEngine implementation which stops the replication
 		// while taking the backup
@@ -608,6 +633,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		// These commands come from SetReplicationSource RPC called
 		// to set the correct primary and semi-sync after Backup has concluded
 		"STOP SLAVE",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -637,9 +663,14 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 		},
 	}
 	destTablet.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
+		// These 3 statements come from tablet startup
+		"RESET SLAVE ALL",
+		"FAKE SET MASTER",
+		"START SLAVE",
 		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET SLAVE POSITION",
+		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
 	}
@@ -666,7 +697,7 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 	primary.StopActionLoop(t)
 
 	// set a short timeout so that we don't have to wait 30 seconds
-	*topo.RemoteOperationTimeout = 2 * time.Second
+	topo.RemoteOperationTimeout = 2 * time.Second
 	// Restore should still succeed
 	require.NoError(t, destTablet.TM.RestoreData(ctx, logutil.NewConsoleLogger(), 0 /* waitForBackupInterval */, false /* deleteBeforeRestore */, time.Time{} /* restoreFromBackupTs */))
 	// verify the full status
@@ -676,11 +707,11 @@ func TestRestoreUnreachablePrimary(t *testing.T) {
 }
 
 func TestDisableActiveReparents(t *testing.T) {
-	*mysqlctl.DisableActiveReparents = true
+	mysqlctl.DisableActiveReparents = true
 	delay := discovery.GetTabletPickerRetryDelay()
 	defer func() {
 		// When you mess with globals you must remember to reset them
-		*mysqlctl.DisableActiveReparents = false
+		mysqlctl.DisableActiveReparents = false
 		discovery.SetTabletPickerRetryDelay(delay)
 	}()
 	discovery.SetTabletPickerRetryDelay(5 * time.Millisecond)
@@ -695,17 +726,10 @@ func TestDisableActiveReparents(t *testing.T) {
 	defer vp.Close()
 
 	// Set up mock query results.
-	db.AddQuery("CREATE DATABASE IF NOT EXISTS _vt", &sqltypes.Result{})
+	db.AddQuery(mysqlctl.GenerateInitialBinlogEntry(), &sqltypes.Result{})
 	db.AddQuery("BEGIN", &sqltypes.Result{})
 	db.AddQuery("COMMIT", &sqltypes.Result{})
 	db.AddQueryPattern(`SET @@session\.sql_log_bin = .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`CREATE TABLE IF NOT EXISTS _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.local_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`ALTER TABLE _vt\.shard_metadata .*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.local_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`UPDATE _vt\.shard_metadata SET db_name=.*`, &sqltypes.Result{})
-	db.AddQueryPattern(`INSERT INTO _vt\.local_metadata .*`, &sqltypes.Result{})
 
 	// Initialize our temp dirs
 	root := t.TempDir()
@@ -713,7 +737,7 @@ func TestDisableActiveReparents(t *testing.T) {
 	// Initialize BackupStorage
 	fbsRoot := path.Join(root, "fbs")
 	filebackupstorage.FileBackupStorageRoot = fbsRoot
-	*backupstorage.BackupStorageImplementation = "file"
+	backupstorage.BackupStorageImplementation = "file"
 
 	// Initialize the fake mysql root directories
 	sourceInnodbDataDir := path.Join(root, "source_innodb_data")
@@ -724,7 +748,17 @@ func TestDisableActiveReparents(t *testing.T) {
 		require.NoError(t, os.MkdirAll(s, os.ModePerm))
 	}
 	require.NoError(t, os.WriteFile(path.Join(sourceInnodbDataDir, "innodb_data_1"), []byte("innodb data 1 contents"), os.ModePerm))
-	require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+
+	needIt, err := needInnoDBRedoLogSubdir()
+	require.NoError(t, err)
+	if needIt {
+		newPath := path.Join(sourceInnodbLogDir, mysql.DynamicRedoLogSubdir)
+		require.NoError(t, os.Mkdir(newPath, os.ModePerm))
+		require.NoError(t, os.WriteFile(path.Join(newPath, "#ib_redo1"), []byte("innodb log 1 contents"), os.ModePerm))
+	} else {
+		require.NoError(t, os.WriteFile(path.Join(sourceInnodbLogDir, "innodb_log_1"), []byte("innodb log 1 contents"), os.ModePerm))
+	}
+
 	require.NoError(t, os.WriteFile(path.Join(sourceDataDbDir, "db.opt"), []byte("db opt file"), os.ModePerm))
 
 	// create a primary tablet, set its primary position
@@ -821,4 +855,26 @@ func TestDisableActiveReparents(t *testing.T) {
 	require.NoError(t, destTablet.FakeMysqlDaemon.CheckSuperQueryList(), "destTablet.FakeMysqlDaemon.CheckSuperQueryList failed")
 	assert.False(t, destTablet.FakeMysqlDaemon.Replicating)
 	assert.True(t, destTablet.FakeMysqlDaemon.Running)
+}
+
+// needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
+// Starting with MySQL 8.0.30, the InnoDB redo logs are stored in a subdirectory of the
+// <innodb_log_group_home_dir> (<datadir>/. by default) called "#innodb_redo". See:
+//
+//	https://dev.mysql.com/doc/refman/8.0/en/innodb-redo-log.html#innodb-modifying-redo-log-capacity
+func needInnoDBRedoLogSubdir() (needIt bool, err error) {
+	mysqldVersionStr, err := mysqlctl.GetVersionString()
+	if err != nil {
+		return needIt, err
+	}
+	_, sv, err := mysqlctl.ParseVersionString(mysqldVersionStr)
+	if err != nil {
+		return needIt, err
+	}
+	versionStr := fmt.Sprintf("%d.%d.%d", sv.Major, sv.Minor, sv.Patch)
+	_, capableOf, _ := mysql.GetFlavor(versionStr, nil)
+	if capableOf == nil {
+		return needIt, fmt.Errorf("cannot determine database flavor details for version %s", versionStr)
+	}
+	return capableOf(mysql.DynamicRedoLogCapacityFlavorCapability)
 }

@@ -17,14 +17,16 @@ limitations under the License.
 package vterrors
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
+	"math/rand"
 	"reflect"
 	"strings"
 	"testing"
 
-	"context"
+	"github.com/stretchr/testify/assert"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 )
@@ -56,6 +58,68 @@ func TestWrap(t *testing.T) {
 			t.Errorf("Wrap(%v, %v): got: [%v], want [%v]", tt.err, tt, Code(got), tt.wantCode)
 		}
 	}
+}
+
+func TestUnwrap(t *testing.T) {
+	tests := []struct {
+		err       error
+		isWrapped bool
+	}{
+		{fmt.Errorf("some error: %d", 17), false},
+		{errors.New("some new error"), false},
+		{Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "some msg %d", 19), false},
+		{Wrapf(errors.New("some wrapped error"), "some msg"), true},
+		{nil, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%v", tt.err), func(t *testing.T) {
+			{
+				wasWrapped, unwrapped := Unwrap(tt.err)
+				assert.Equal(t, tt.isWrapped, wasWrapped)
+				if !wasWrapped {
+					assert.Equal(t, tt.err, unwrapped)
+				}
+			}
+			{
+				wrapped := Wrap(tt.err, "some message")
+				wasWrapped, unwrapped := Unwrap(wrapped)
+				assert.Equal(t, wasWrapped, (tt.err != nil))
+				assert.Equal(t, tt.err, unwrapped)
+			}
+		})
+	}
+}
+
+func TestUnwrapAll(t *testing.T) {
+	tests := []struct {
+		err error
+	}{
+		{fmt.Errorf("some error: %d", 17)},
+		{errors.New("some new error")},
+		{Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "some msg %d", 19)},
+		{nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(fmt.Sprintf("%v", tt.err), func(t *testing.T) {
+			{
+				// see that unwrapping a non-wrapped error just returns the same error
+				unwrapped := UnwrapAll(tt.err)
+				assert.Equal(t, tt.err, unwrapped)
+			}
+			{
+				// see that unwrapping a 5-times wrapped error returns the original error
+				wrapped := tt.err
+				for range rand.Perm(5) {
+					wrapped = Wrap(wrapped, "some message")
+				}
+				unwrapped := UnwrapAll(wrapped)
+				assert.Equal(t, tt.err, unwrapped)
+			}
+		})
+	}
+
 }
 
 type nilError struct{}
@@ -193,8 +257,8 @@ func TestStackFormat(t *testing.T) {
 	assertContains(t, got, "middle", false)
 	assertContains(t, got, "outer", false)
 
-	LogErrStacks = true
-	defer func() { LogErrStacks = false }()
+	logErrStacks = true
+	defer func() { logErrStacks = false }()
 	got = fmt.Sprintf("%v", err)
 	assertContains(t, got, "innerMost", true)
 	assertContains(t, got, "middle", true)
@@ -276,9 +340,9 @@ func TestWrapping(t *testing.T) {
 	err3 := Wrapf(err2, "baz")
 	errorWithoutStack := fmt.Sprintf("%v", err3)
 
-	LogErrStacks = true
+	logErrStacks = true
 	errorWithStack := fmt.Sprintf("%v", err3)
-	LogErrStacks = false
+	logErrStacks = false
 
 	assertEquals(t, err3.Error(), "baz: bar: foo")
 	assertContains(t, errorWithoutStack, "foo", true)
