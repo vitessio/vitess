@@ -2582,7 +2582,7 @@ func TestStreamingDML(t *testing.T) {
 		// match the query received on tablet
 		assertQueries(t, sbc, tcase.expQuery)
 
-		assert.EqualValues(t, tcase.commitCount, sbc.CommitCount.Get())
+		assert.EqualValues(t, tcase.commitCount, sbc.CommitCount.Load())
 	}
 }
 

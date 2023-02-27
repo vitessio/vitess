@@ -1032,41 +1032,9 @@
     }
   },
   {
-    "comment": "select from dual on sharded keyspace",
-    "query": "select @@session.auto_increment_increment from user.dual",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select @@session.auto_increment_increment from user.dual",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual",
-        "Table": "dual"
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select @@session.auto_increment_increment from user.dual",
-      "Instructions": {
-        "OperatorType": "Route",
-        "Variant": "Reference",
-        "Keyspace": {
-          "Name": "user",
-          "Sharded": true
-        },
-        "FieldQuery": "select @@auto_increment_increment from dual where 1 != 1",
-        "Query": "select @@auto_increment_increment from dual",
-        "Table": "dual"
-      },
-      "TablesUsed": [
-        "user.dual"
-      ]
-    }
+    "comment": "prefixing dual with a keyspace should not work",
+    "query": "select 1 from user.dual",
+    "plan": "table dual not found"
   },
   {
     "comment": "RHS route referenced",
@@ -2823,7 +2791,7 @@
       "Original": "select 42 from dual where false",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Reference",
+        "Variant": "None",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
@@ -3545,82 +3513,6 @@
         "FieldQuery": "select 42, id from dual, `user` where 1 != 1",
         "Query": "select 42, id from dual, `user`",
         "Table": "`user`, dual"
-      },
-      "TablesUsed": [
-        "main.dual",
-        "user.user"
-      ]
-    }
-  },
-  {
-    "comment": "Table named \"dual\" with a qualifier joined on user should not be merged",
-    "query": "select 42, user.id from main.dual, user",
-    "v3-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42, user.id from main.dual, user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "dual_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 42 from dual where 1 != 1",
-            "Query": "select 42 from dual",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          }
-        ]
-      }
-    },
-    "gen4-plan": {
-      "QueryType": "SELECT",
-      "Original": "select 42, user.id from main.dual, user",
-      "Instructions": {
-        "OperatorType": "Join",
-        "Variant": "Join",
-        "JoinColumnIndexes": "L:0,R:0",
-        "TableName": "dual_`user`",
-        "Inputs": [
-          {
-            "OperatorType": "Route",
-            "Variant": "Reference",
-            "Keyspace": {
-              "Name": "main",
-              "Sharded": false
-            },
-            "FieldQuery": "select 42 from dual where 1 != 1",
-            "Query": "select 42 from dual",
-            "Table": "dual"
-          },
-          {
-            "OperatorType": "Route",
-            "Variant": "Scatter",
-            "Keyspace": {
-              "Name": "user",
-              "Sharded": true
-            },
-            "FieldQuery": "select `user`.id from `user` where 1 != 1",
-            "Query": "select `user`.id from `user`",
-            "Table": "`user`"
-          }
-        ]
       },
       "TablesUsed": [
         "main.dual",
@@ -5633,7 +5525,7 @@
                     "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
                     "Table": "name_user_vdx",
                     "Values": [
-                      ":name"
+                      "::name"
                     ],
                     "Vindex": "user_index"
                   },
@@ -5682,7 +5574,7 @@
                     "Query": "select `name`, keyspace_id from name_user_vdx where `name` in ::__vals",
                     "Table": "name_user_vdx",
                     "Values": [
-                      ":name"
+                      "::name"
                     ],
                     "Vindex": "user_index"
                   },
@@ -5856,7 +5748,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -5926,7 +5818,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6310,7 +6202,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6372,7 +6264,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6445,7 +6337,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6498,7 +6390,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6544,7 +6436,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6595,7 +6487,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6672,7 +6564,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6723,7 +6615,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6774,7 +6666,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6818,7 +6710,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6869,7 +6761,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6913,7 +6805,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -6964,7 +6856,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7056,7 +6948,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7148,7 +7040,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7206,7 +7098,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7275,7 +7167,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7329,7 +7221,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -7376,7 +7268,7 @@
             "Query": "select music.id from music where :__sq_has_values1 = 1 and music.id in ::__vals",
             "Table": "music",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "music_user_map"
           }
@@ -8001,6 +7893,44 @@
       },
       "TablesUsed": [
         "user.user"
+      ]
+    }
+  },
+  {
+    "comment": "query with a derived table and dual table in unsharded keyspace",
+    "query": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+    "v3-plan": {
+      "Instructions": {
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OperatorType": "Route",
+        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
+        "Table": "unsharded_a, dual",
+        "Variant": "Unsharded"
+      },
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+      "QueryType": "SELECT"
+    },
+    "gen4-plan": {
+      "Instructions": {
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "OperatorType": "Route",
+        "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
+        "Table": "dual, unsharded_a",
+        "Variant": "Unsharded"
+      },
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
+      "QueryType": "SELECT",
+      "TablesUsed": [
+        "main.dual",
+        "main.unsharded_a"
       ]
     }
   }

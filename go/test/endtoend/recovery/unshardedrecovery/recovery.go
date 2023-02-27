@@ -160,6 +160,9 @@ SET GLOBAL old_alter_table = ON;
 		if err := localCluster.VtctlclientProcess.InitializeShard(keyspaceName, shard.Name, cell, primary.TabletUID); err != nil {
 			return 1, err
 		}
+		if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+			return 1, err
+		}
 		return m.Run(), nil
 	}()
 
@@ -224,8 +227,6 @@ func TestRecoveryImpl(t *testing.T) {
 	assert.Contains(t, output, "vt_insert_test")
 
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 1)
-
-	cluster.VerifyLocalMetadata(t, replica2, recoveryKS1, shardName, cell)
 
 	// update the original row in primary
 	_, err = primary.VttabletProcess.QueryTablet("update vt_insert_test set msg = 'msgx1' where id = 1", keyspaceName, true)

@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -222,8 +222,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfJSONKeysExpr(parent, node, replacer)
 	case *JSONObjectExpr:
 		return a.rewriteRefOfJSONObjectExpr(parent, node, replacer)
-	case JSONObjectParam:
-		return a.rewriteJSONObjectParam(parent, node, replacer)
+	case *JSONObjectParam:
+		return a.rewriteRefOfJSONObjectParam(parent, node, replacer)
 	case *JSONOverlapsExpr:
 		return a.rewriteRefOfJSONOverlapsExpr(parent, node, replacer)
 	case *JSONPrettyExpr:
@@ -266,6 +266,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
 	case *Limit:
 		return a.rewriteRefOfLimit(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -348,6 +350,8 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewritePartitions(parent, node, replacer)
 	case *PerformanceSchemaFuncExpr:
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
+	case *PointExpr:
+		return a.rewriteRefOfPointExpr(parent, node, replacer)
 	case *PrepareStmt:
 		return a.rewriteRefOfPrepareStmt(parent, node, replacer)
 	case ReferenceAction:
@@ -1553,6 +1557,11 @@ func (a *application) rewriteRefOfColumnDefinition(parent SQLNode, node *ColumnD
 	}
 	if !a.rewriteIdentifierCI(node, node.Name, func(newNode, parent SQLNode) {
 		parent.(*ColumnDefinition).Name = newNode.(IdentifierCI)
+	}) {
+		return false
+	}
+	if !a.rewriteRefOfColumnType(node, node.Type, func(newNode, parent SQLNode) {
+		parent.(*ColumnDefinition).Type = newNode.(*ColumnType)
 	}) {
 		return false
 	}
@@ -3645,7 +3654,10 @@ func (a *application) rewriteRefOfJSONObjectExpr(parent SQLNode, node *JSONObjec
 	}
 	return true
 }
-func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectParam, replacer replacerFunc) bool {
+func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
 	if a.pre != nil {
 		a.cur.replacer = replacer
 		a.cur.parent = parent
@@ -3655,12 +3667,12 @@ func (a *application) rewriteJSONObjectParam(parent SQLNode, node JSONObjectPara
 		}
 	}
 	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Key' on 'JSONObjectParam'")
+		parent.(*JSONObjectParam).Key = newNode.(Expr)
 	}) {
 		return false
 	}
 	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
-		panic("[BUG] tried to replace 'Value' on 'JSONObjectParam'")
+		parent.(*JSONObjectParam).Value = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -4359,6 +4371,33 @@ func (a *application) rewriteRefOfLimit(parent SQLNode, node *Limit, replacer re
 	}
 	if !a.rewriteExpr(node, node.Rowcount, func(newNode, parent SQLNode) {
 		parent.(*Limit).Rowcount = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfLineStringExpr(parent SQLNode, node *LineStringExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExprs(node, node.PointParams, func(newNode, parent SQLNode) {
+		parent.(*LineStringExpr).PointParams = newNode.(Exprs)
 	}) {
 		return false
 	}
@@ -5556,6 +5595,38 @@ func (a *application) rewriteRefOfPerformanceSchemaFuncExpr(parent SQLNode, node
 	}
 	if !a.rewriteExpr(node, node.Argument, func(newNode, parent SQLNode) {
 		parent.(*PerformanceSchemaFuncExpr).Argument = newNode.(Expr)
+	}) {
+		return false
+	}
+	if a.post != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.post(&a.cur) {
+			return false
+		}
+	}
+	return true
+}
+func (a *application) rewriteRefOfPointExpr(parent SQLNode, node *PointExpr, replacer replacerFunc) bool {
+	if node == nil {
+		return true
+	}
+	if a.pre != nil {
+		a.cur.replacer = replacer
+		a.cur.parent = parent
+		a.cur.node = node
+		if !a.pre(&a.cur) {
+			return true
+		}
+	}
+	if !a.rewriteExpr(node, node.XCordinate, func(newNode, parent SQLNode) {
+		parent.(*PointExpr).XCordinate = newNode.(Expr)
+	}) {
+		return false
+	}
+	if !a.rewriteExpr(node, node.YCordinate, func(newNode, parent SQLNode) {
+		parent.(*PointExpr).YCordinate = newNode.(Expr)
 	}) {
 		return false
 	}
@@ -8397,6 +8468,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case *LocateExpr:
 		return a.rewriteRefOfLocateExpr(parent, node, replacer)
 	case *MatchExpr:
@@ -8415,6 +8488,8 @@ func (a *application) rewriteCallable(parent SQLNode, node Callable, replacer re
 		return a.rewriteRefOfNtileExpr(parent, node, replacer)
 	case *PerformanceSchemaFuncExpr:
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
+	case *PointExpr:
+		return a.rewriteRefOfPointExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -8645,6 +8720,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfJSONValueModifierExpr(parent, node, replacer)
 	case *LagLeadExpr:
 		return a.rewriteRefOfLagLeadExpr(parent, node, replacer)
+	case *LineStringExpr:
+		return a.rewriteRefOfLineStringExpr(parent, node, replacer)
 	case ListArg:
 		return a.rewriteListArg(parent, node, replacer)
 	case *Literal:
@@ -8677,6 +8754,8 @@ func (a *application) rewriteExpr(parent SQLNode, node Expr, replacer replacerFu
 		return a.rewriteRefOfOrExpr(parent, node, replacer)
 	case *PerformanceSchemaFuncExpr:
 		return a.rewriteRefOfPerformanceSchemaFuncExpr(parent, node, replacer)
+	case *PointExpr:
+		return a.rewriteRefOfPointExpr(parent, node, replacer)
 	case *RegexpInstrExpr:
 		return a.rewriteRefOfRegexpInstrExpr(parent, node, replacer)
 	case *RegexpLikeExpr:
@@ -9094,38 +9173,6 @@ func (a *application) rewriteRefOfIdentifierCS(parent SQLNode, node *IdentifierC
 			a.cur.parent = parent
 			a.cur.node = node
 		}
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
-func (a *application) rewriteRefOfJSONObjectParam(parent SQLNode, node *JSONObjectParam, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteExpr(node, node.Key, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectParam).Key = newNode.(Expr)
-	}) {
-		return false
-	}
-	if !a.rewriteExpr(node, node.Value, func(newNode, parent SQLNode) {
-		parent.(*JSONObjectParam).Value = newNode.(Expr)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
 		if !a.post(&a.cur) {
 			return false
 		}

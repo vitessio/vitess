@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -20,9 +20,8 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/vt/sqlparser"
-
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -104,6 +103,11 @@ func TestTranslateSimplification(t *testing.T) {
 		{"ifnull(null, 23)", ok(`CASE WHEN NULL IS NULL THEN INT64(23) ELSE NULL`), ok(`INT64(23)`)},
 		{"nullif(1, 1)", ok(`CASE WHEN INT64(1) = INT64(1) THEN NULL ELSE INT64(1)`), ok(`NULL`)},
 		{"nullif(1, 2)", ok(`CASE WHEN INT64(1) = INT64(2) THEN NULL ELSE INT64(1)`), ok(`INT64(1)`)},
+		{"12 between 5 and 20", ok("(INT64(12) >= INT64(5)) AND (INT64(12) <= INT64(20))"), ok(`INT64(1)`)},
+		{"12 not between 5 and 20", ok("(INT64(12) < INT64(5)) OR (INT64(12) > INT64(20))"), ok(`INT64(0)`)},
+		{"2 not between 5 and 20", ok("(INT64(2) < INT64(5)) OR (INT64(2) > INT64(20))"), ok(`INT64(1)`)},
+		{"column0->\"$.c\"", ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))"), ok("JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\"))")},
+		{"column0->>\"$.c\"", ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))"), ok("JSON_UNQUOTE(JSON_EXTRACT([COLUMN 0], VARCHAR(\"$.c\")))")},
 	}
 
 	for _, tc := range testCases {
@@ -114,7 +118,7 @@ func TestTranslateSimplification(t *testing.T) {
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := TranslateEx(astExpr, LookupDefaultCollation(45), false)
+			converted, err := TranslateEx(astExpr, &LookupIntegrationTest{45}, false)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -126,7 +130,7 @@ func TestTranslateSimplification(t *testing.T) {
 			}
 			assert.Equal(t, tc.converted.literal, FormatExpr(converted))
 
-			simplified, err := TranslateEx(astExpr, LookupDefaultCollation(45), true)
+			simplified, err := TranslateEx(astExpr, &LookupIntegrationTest{45}, true)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
@@ -377,4 +381,46 @@ func TestTranslationFailures(t *testing.T) {
 		})
 	}
 
+}
+
+func TestCardinalityWithBindVariables(t *testing.T) {
+	testcases := []struct {
+		expr string
+		err  string
+	}{
+		{expr: `:foo + 1`},
+		{expr: `1 IN ::bar`},
+		{expr: `:foo IN ::bar`},
+		{expr: `:foo IN _binary ::bar`, err: "syntax error"},
+		{expr: `::foo + 1`, err: "syntax error"},
+		{expr: `::foo = 1`, err: "syntax error"},
+		{expr: `::foo = ::bar`, err: "syntax error"},
+		{expr: `::foo = :bar`, err: "syntax error"},
+		{expr: `:foo = :bar`},
+		{expr: `:foo IN :bar`, err: "syntax error"},
+		{expr: `:foo IN ::bar`},
+		{expr: `(1, 2) IN ::bar`, err: "Operand should contain 1 column"},
+		{expr: `1 IN ::bar`},
+	}
+
+	for _, testcase := range testcases {
+		t.Run(testcase.expr, func(t *testing.T) {
+			err := func() error {
+				stmt, err := sqlparser.Parse("select " + testcase.expr)
+				if err != nil {
+					return err
+				}
+
+				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
+				_, err = Translate(astExpr, LookupDefaultCollation(45))
+				return err
+			}()
+
+			if testcase.err == "" {
+				require.NoError(t, err)
+			} else {
+				require.ErrorContains(t, err, testcase.err)
+			}
+		})
+	}
 }

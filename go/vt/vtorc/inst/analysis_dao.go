@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"time"
 
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	"vitess.io/vitess/go/vt/log"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -34,8 +35,6 @@ import (
 
 	"github.com/patrickmn/go-cache"
 	"github.com/rcrowley/go-metrics"
-
-	"github.com/openark/golib/sqlutils"
 )
 
 var analysisChangeWriteAttemptCounter = metrics.NewCounter()
@@ -365,7 +364,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.AnalyzedShard = m.GetString("shard")
 		a.PrimaryTimeStamp = m.GetTime("primary_timestamp")
 
-		if keyspaceType := topodatapb.KeyspaceType(m.GetInt("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
+		if keyspaceType := topodatapb.KeyspaceType(m.GetInt32("keyspace_type")); keyspaceType == topodatapb.KeyspaceType_SNAPSHOT {
 			log.Errorf("keyspace %v is a snapshot keyspace. Skipping.", a.AnalyzedKeyspace)
 			return nil
 		}
@@ -380,7 +379,7 @@ func GetReplicationAnalysis(keyspace string, shard string, hints *ReplicationAna
 		a.AnalyzedInstancePhysicalEnvironment = m.GetString("physical_environment")
 		a.AnalyzedInstanceBinlogCoordinates = BinlogCoordinates{
 			LogFile: m.GetString("binary_log_file"),
-			LogPos:  m.GetInt64("binary_log_pos"),
+			LogPos:  m.GetUint32("binary_log_pos"),
 			Type:    BinaryLog,
 		}
 		isStaleBinlogCoordinates := m.GetBool("is_stale_binlog_coordinates")

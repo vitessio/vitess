@@ -1640,11 +1640,11 @@ func commandSourceShardDelete(ctx context.Context, wr *wrangler.Wrangler, subFla
 	if err != nil {
 		return err
 	}
-	uid, err := strconv.Atoi(subFlags.Arg(1))
+	uid, err := strconv.ParseInt(subFlags.Arg(1), 10, 32)
 	if err != nil {
 		return err
 	}
-	return wr.SourceShardDelete(ctx, keyspace, shard, uint32(uid))
+	return wr.SourceShardDelete(ctx, keyspace, shard, int32(uid))
 }
 
 func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -1660,7 +1660,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	if err != nil {
 		return err
 	}
-	uid, err := strconv.Atoi(subFlags.Arg(1))
+	uid, err := strconv.ParseInt(subFlags.Arg(1), 10, 32)
 	if err != nil {
 		return err
 	}
@@ -1678,7 +1678,7 @@ func commandSourceShardAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 			return err
 		}
 	}
-	return wr.SourceShardAdd(ctx, keyspace, shard, uint32(uid), skeyspace, sshard, kr, tables)
+	return wr.SourceShardAdd(ctx, keyspace, shard, int32(uid), skeyspace, sshard, kr, tables)
 }
 
 func commandShardReplicationAdd(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
@@ -3903,7 +3903,6 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 		}
 	}
 
-	wr.Logger().Printf("Unknown command: %v\n", action)
 	return ErrUnknownCommand
 }
 

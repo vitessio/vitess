@@ -1448,7 +1448,7 @@ INPUT
 select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'),Point('-0', '0'), Point('0', '0'))))) as result;
 END
 OUTPUT
-select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'), Point('-0', '0'), Point('0', '0'))))) as result from dual
+select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(point('0', '-0'), point('-0', '0'), point('0', '0'))))) as result from dual
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name = 'tm' order by table_name;
@@ -1532,7 +1532,7 @@ INPUT
 select ST_AsText(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1,1), Point(0, 1), Point(0, 0))));
 END
 OUTPUT
-select ST_AsText(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1, 1), Point(0, 1), Point(0, 0)))) from dual
+select ST_AsText(Polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 1), point(0, 0)))) from dual
 END
 INPUT
 select get_lock('ee_16407_5', 60);
@@ -2840,7 +2840,7 @@ INPUT
 select ST_astext(ST_centroid(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select ST_astext(ST_centroid(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0))))))) from dual
+select ST_astext(ST_centroid(ST_PolyFromWKB(ST_AsWKB(Polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END
 INPUT
 select null sounds like 'null';
@@ -3986,7 +3986,7 @@ INPUT
 select ST_astext(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0))));
 END
 OUTPUT
-select ST_astext(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))) from dual
+select ST_astext(Polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0)))) from dual
 END
 INPUT
 select host,user from mysql.user where User='myuser';
@@ -6308,7 +6308,7 @@ INPUT
 select ST_astext(ST_convexhull(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select ST_astext(ST_convexhull(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0))))))) from dual
+select ST_astext(ST_convexhull(ST_PolyFromWKB(ST_AsWKB(Polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END
 INPUT
 select * from t1 where i between 2 and 4 and v in ('def','3r4f','abc');
@@ -8168,7 +8168,7 @@ INPUT
 select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '0'),Point('-0', '0'), Point('0', '-0')))))) as result;
 END
 OUTPUT
-select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '0'), Point('-0', '0'), Point('0', '-0')))))) as result from dual
+select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(point('0', '0'), point('-0', '0'), point('0', '-0')))))) as result from dual
 END
 INPUT
 select constraint_name from information_schema.table_constraints where table_schema='test' order by constraint_name;
@@ -9422,7 +9422,7 @@ INPUT
 select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(POINT(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), LINESTRING(point(0, 0),point(10, 10)), MULTILINESTRING(LINESTRING(point(1, 2), point(1, 3))), POLYGON(LineString(Point(10, 20), Point(1, 1), Point(2, 2), Point(1, 1), Point(10, 20))), MULTIPOLYGON(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1, 1), Point(0, 0)))))))) as Result;
 END
 OUTPUT
-select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(POINT(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), LINESTRING(point(0, 0), point(10, 10)), MULTILINESTRING(LINESTRING(point(1, 2), point(1, 3))), POLYGON(LineString(Point(10, 20), Point(1, 1), Point(2, 2), Point(1, 1), Point(10, 20))), MULTIPOLYGON(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1, 1), Point(0, 0)))))))) as Result from dual
+select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(point(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), linestring(point(0, 0), point(10, 10)), MULTILINESTRING(linestring(point(1, 2), point(1, 3))), POLYGON(linestring(point(10, 20), point(1, 1), point(2, 2), point(1, 1), point(10, 20))), MULTIPOLYGON(Polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0)))))))) as Result from dual
 END
 INPUT
 select s1*0 as s1 from t1 group by s1 having s1 <> 0;
@@ -12050,7 +12050,7 @@ INPUT
 select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '0'),Point('-0', '0'), Point('0', '-0'))))) as result;
 END
 OUTPUT
-select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '0'), Point('-0', '0'), Point('0', '-0'))))) as result from dual
+select ST_astext(ST_MPointFromWKB(ST_AsWKB(MultiPoint(point('0', '0'), point('-0', '0'), point('0', '-0'))))) as result from dual
 END
 INPUT
 select IF(0,"ERROR","this"),IF(1,"is","ERROR"),IF(NULL,"ERROR","a"),IF(1,2,3)|0,IF(1,2.0,3.0)+0;
@@ -19670,7 +19670,7 @@ INPUT
 select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(POINT(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), LINESTRING(point(0, 0),point(10, 10)), MULTILINESTRING(LINESTRING(point(1, 2), point(1, 3))), POLYGON(LineString(Point(10, 20), Point(1, 1), Point(2, 2), Point(10, 20))), MULTIPOLYGON(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1, 1), Point(0, 0)))))))) as Result;
 END
 OUTPUT
-select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(POINT(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), LINESTRING(point(0, 0), point(10, 10)), MULTILINESTRING(LINESTRING(point(1, 2), point(1, 3))), POLYGON(LineString(Point(10, 20), Point(1, 1), Point(2, 2), Point(10, 20))), MULTIPOLYGON(Polygon(LineString(Point(0, 0), Point(1, 0), Point(1, 1), Point(0, 0)))))))) as Result from dual
+select ST_AsText(ST_GeometryFromWKB(ST_AsWKB(GeometryCollection(point(0, 0), MULTIPOINT(point(0, 0), point(1, 1)), linestring(point(0, 0), point(10, 10)), MULTILINESTRING(linestring(point(1, 2), point(1, 3))), POLYGON(linestring(point(10, 20), point(1, 1), point(2, 2), point(10, 20))), MULTIPOLYGON(Polygon(linestring(point(0, 0), point(1, 0), point(1, 1), point(0, 0)))))))) as Result from dual
 END
 INPUT
 select bar from t1 having group_concat(bar)='';
@@ -20378,7 +20378,7 @@ INPUT
 select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'),Point('-0', '0'), Point('0', '0')))))) as result;
 END
 OUTPUT
-select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(Point('0', '-0'), Point('-0', '0'), Point('0', '0')))))) as result from dual
+select ST_Astext(ST_Envelope(ST_MPointFromWKB(ST_AsWKB(MultiPoint(point('0', '-0'), point('-0', '0'), point('0', '0')))))) as result from dual
 END
 INPUT
 select date_add("9999-12-31 23:59:59",INTERVAL 1 SECOND);
@@ -22172,7 +22172,7 @@ INPUT
 select ST_astext(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0))))));
 END
 OUTPUT
-select ST_astext(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))) from dual
+select ST_astext(ST_PolyFromWKB(ST_AsWKB(Polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0)))))) from dual
 END
 INPUT
 select count(*) from `load`;
@@ -23120,5 +23120,5 @@ INPUT
 select ST_astext(ST_envelope(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
 END
 OUTPUT
-select ST_astext(ST_envelope(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0))))))) from dual
+select ST_astext(ST_envelope(ST_PolyFromWKB(ST_AsWKB(Polygon(linestring(point(0, 0), point(30, 0), point(30, 30), point(1, 0), point(0, 0))))))) from dual
 END

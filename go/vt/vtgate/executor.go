@@ -28,6 +28,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/spf13/pflag"
@@ -38,7 +39,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/key"
@@ -258,7 +258,7 @@ func (e *Executor) StreamExecute(
 	var err error
 
 	resultHandler := func(ctx context.Context, plan *engine.Plan, vc *vcursorImpl, bindVars map[string]*querypb.BindVariable, execStart time.Time) error {
-		var seenResults sync2.AtomicBool
+		var seenResults atomic.Bool
 		var resultMu sync.Mutex
 		result := &sqltypes.Result{}
 		if canReturnRows(plan.Type) {
@@ -273,7 +273,7 @@ func (e *Executor) StreamExecute(
 					if err := callback(qr.Metadata()); err != nil {
 						return err
 					}
-					seenResults.Set(true)
+					seenResults.Store(true)
 				}
 
 				for _, row := range qr.Rows {
@@ -285,7 +285,7 @@ func (e *Executor) StreamExecute(
 
 					if byteCount >= e.streamSize {
 						err := callback(result)
-						seenResults.Set(true)
+						seenResults.Store(true)
 						result = &sqltypes.Result{}
 						byteCount = 0
 						if err != nil {
@@ -315,7 +315,7 @@ func (e *Executor) StreamExecute(
 		}
 
 		// Send left-over rows if there is no error on execution.
-		if len(result.Rows) > 0 || !seenResults.Get() {
+		if len(result.Rows) > 0 || !seenResults.Load() {
 			if err := callback(result); err != nil {
 				return err
 			}

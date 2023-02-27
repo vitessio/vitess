@@ -17,75 +17,6 @@ limitations under the License.
 package onlineddl
 
 const (
-	// SchemaMigrationsTableName is used by VExec interceptor to call the correct handler
-	sqlCreateSidecarDB             = "create database if not exists _vt"
-	sqlCreateSchemaMigrationsTable = `CREATE TABLE IF NOT EXISTS _vt.schema_migrations (
-		id bigint(20) unsigned NOT NULL AUTO_INCREMENT,
-		migration_uuid varchar(64) NOT NULL,
-		keyspace varchar(256) NOT NULL,
-		shard varchar(255) NOT NULL,
-		mysql_schema varchar(128) NOT NULL,
-		mysql_table varchar(128) NOT NULL,
-		migration_statement text NOT NULL,
-		strategy varchar(128) NOT NULL,
-		options varchar(8192) NOT NULL,
-		added_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		requested_timestamp timestamp NOT NULL DEFAULT CURRENT_TIMESTAMP,
-		ready_timestamp timestamp NULL DEFAULT NULL,
-		started_timestamp timestamp NULL DEFAULT NULL,
-		liveness_timestamp timestamp NULL DEFAULT NULL,
-		completed_timestamp timestamp NULL DEFAULT NULL,
-		cleanup_timestamp timestamp NULL DEFAULT NULL,
-		migration_status varchar(128) NOT NULL,
-		log_path varchar(1024) NOT NULL,
-		artifacts varchar(1024) NOT NULL,
-		PRIMARY KEY (id),
-		UNIQUE KEY uuid_idx (migration_uuid),
-		KEY keyspace_shard_idx (keyspace(64),shard(64)),
-		KEY status_idx (migration_status, liveness_timestamp),
-		KEY cleanup_status_idx (cleanup_timestamp, migration_status)
-	) engine=InnoDB DEFAULT CHARSET=utf8mb4`
-	alterSchemaMigrationsTableRetries                  = "ALTER TABLE _vt.schema_migrations add column retries int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTablet                   = "ALTER TABLE _vt.schema_migrations add column tablet varchar(128) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableArtifacts                = "ALTER TABLE _vt.schema_migrations modify artifacts TEXT NOT NULL"
-	alterSchemaMigrationsTableTabletFailure            = "ALTER TABLE _vt.schema_migrations add column tablet_failure tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTabletFailureIndex       = "ALTER TABLE _vt.schema_migrations add KEY tablet_failure_idx (tablet_failure, migration_status, retries)"
-	alterSchemaMigrationsTableProgress                 = "ALTER TABLE _vt.schema_migrations add column progress float NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableContext                  = "ALTER TABLE _vt.schema_migrations add column migration_context varchar(1024) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableDDLAction                = "ALTER TABLE _vt.schema_migrations add column ddl_action varchar(16) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableMessage                  = "ALTER TABLE _vt.schema_migrations add column message TEXT NOT NULL"
-	alterSchemaMigrationsTableTableCompleteIndex       = "ALTER TABLE _vt.schema_migrations add KEY table_complete_idx (migration_status, keyspace(64), mysql_table(64), completed_timestamp)"
-	alterSchemaMigrationsTableETASeconds               = "ALTER TABLE _vt.schema_migrations add column eta_seconds bigint NOT NULL DEFAULT -1"
-	alterSchemaMigrationsTableRowsCopied               = "ALTER TABLE _vt.schema_migrations add column rows_copied bigint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableTableRows                = "ALTER TABLE _vt.schema_migrations add column table_rows bigint NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableAddedUniqueKeys          = "ALTER TABLE _vt.schema_migrations add column added_unique_keys int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableRemovedUniqueKeys        = "ALTER TABLE _vt.schema_migrations add column removed_unique_keys int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableLogFile                  = "ALTER TABLE _vt.schema_migrations add column log_file varchar(1024) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableRetainArtifacts          = "ALTER TABLE _vt.schema_migrations add column retain_artifacts_seconds bigint NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTablePostponeCompletion       = "ALTER TABLE _vt.schema_migrations add column postpone_completion tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableContextIndex             = "ALTER TABLE _vt.schema_migrations add KEY migration_context_idx (migration_context(64))"
-	alterSchemaMigrationsTableRemovedUniqueNames       = "ALTER TABLE _vt.schema_migrations add column removed_unique_key_names text NOT NULL"
-	alterSchemaMigrationsTableRemovedNoDefaultColNames = "ALTER TABLE _vt.schema_migrations add column dropped_no_default_column_names text NOT NULL"
-	alterSchemaMigrationsTableExpandedColNames         = "ALTER TABLE _vt.schema_migrations add column expanded_column_names text NOT NULL"
-	alterSchemaMigrationsTableRevertibleNotes          = "ALTER TABLE _vt.schema_migrations add column revertible_notes text NOT NULL"
-	alterSchemaMigrationsTableAllowConcurrent          = "ALTER TABLE _vt.schema_migrations add column allow_concurrent tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableRevertedUUID             = "ALTER TABLE _vt.schema_migrations add column reverted_uuid varchar(64) NOT NULL DEFAULT ''"
-	alterSchemaMigrationsTableRevertedUUIDIndex        = "ALTER TABLE _vt.schema_migrations add KEY reverted_uuid_idx (reverted_uuid(64))"
-	alterSchemaMigrationsTableIsView                   = "ALTER TABLE _vt.schema_migrations add column is_view tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableReadyToComplete          = "ALTER TABLE _vt.schema_migrations add column ready_to_complete tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableStowawayTable            = "ALTER TABLE _vt.schema_migrations add column stowaway_table tinytext NOT NULL"
-	alterSchemaMigrationsTableVreplLivenessIndicator   = "ALTER TABLE _vt.schema_migrations add column vitess_liveness_indicator bigint NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableUserThrottleRatio        = "ALTER TABLE _vt.schema_migrations add column user_throttle_ratio float NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableSpecialPlan              = "ALTER TABLE _vt.schema_migrations add column special_plan text NOT NULL"
-	alterSchemaMigrationsLastThrottled                 = "ALTER TABLE _vt.schema_migrations add column last_throttled_timestamp timestamp NULL DEFAULT NULL"
-	alterSchemaMigrationsComponentThrottled            = "ALTER TABLE _vt.schema_migrations add column component_throttled tinytext NOT NULL"
-	alterSchemaMigrationsCancelledTimestamp            = "ALTER TABLE _vt.schema_migrations add column cancelled_timestamp timestamp NULL DEFAULT NULL"
-	alterSchemaMigrationsTablePostponeLaunch           = "ALTER TABLE _vt.schema_migrations add column postpone_launch tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsStage                         = "ALTER TABLE _vt.schema_migrations add column stage text not null"
-	alterSchemaMigrationsCutoverAttempts               = "ALTER TABLE _vt.schema_migrations add column cutover_attempts int unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsTableImmediateOperation       = "ALTER TABLE _vt.schema_migrations add column is_immediate_operation tinyint unsigned NOT NULL DEFAULT 0"
-	alterSchemaMigrationsReviewedTimestamp             = "ALTER TABLE _vt.schema_migrations add column reviewed_timestamp timestamp NULL DEFAULT NULL"
-
 	sqlInsertMigration = `INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
 		keyspace,
@@ -107,7 +38,7 @@ const (
 		reverted_uuid,
 		is_view
 	) VALUES (
-		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(), %a, %a, %a, %a, %a, %a, %a, %a, %a
+		%a, %a, %a, %a, %a, %a, %a, %a, %a, NOW(6), %a, %a, %a, %a, %a, %a, %a, %a, %a
 	)`
 
 	sqlSelectQueuedMigrations = `SELECT
@@ -122,6 +53,7 @@ const (
 		WHERE
 			migration_status='queued'
 			AND reviewed_timestamp IS NOT NULL
+		ORDER BY id
 	`
 	sqlUpdateMySQLTable = `UPDATE _vt.schema_migrations
 			SET mysql_table=%a
@@ -168,24 +100,19 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationStowawayTable = `UPDATE _vt.schema_migrations
-			SET stowaway_table=%a
-		WHERE
-			migration_uuid=%a
-	`
 	sqlUpdateMigrationUserThrottleRatio = `UPDATE _vt.schema_migrations
 			SET user_throttle_ratio=%a
 		WHERE
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationStartedTimestamp = `UPDATE _vt.schema_migrations SET
-			started_timestamp =IFNULL(started_timestamp,  NOW()),
-			liveness_timestamp=IFNULL(liveness_timestamp, NOW())
+			started_timestamp =IFNULL(started_timestamp,  NOW(6)),
+			liveness_timestamp=IFNULL(liveness_timestamp, NOW(6))
 		WHERE
 			migration_uuid=%a
 	`
 	sqlUpdateMigrationTimestamp = `UPDATE _vt.schema_migrations
-			SET %s=NOW()
+			SET %s=NOW(6)
 		WHERE
 			migration_uuid=%a
 	`
@@ -346,7 +273,6 @@ const (
 	sqlSelectRunningMigrations = `SELECT
 			migration_uuid,
 			postpone_completion,
-			stowaway_table,
 			timestampdiff(second, started_timestamp, now()) as elapsed_seconds
 		FROM _vt.schema_migrations
 		WHERE
@@ -390,6 +316,7 @@ const (
 		FROM _vt.schema_migrations
 		WHERE
 			migration_status IN ('queued', 'ready', 'running')
+		ORDER BY id
 	`
 	sqlSelectQueuedUnreviewedMigrations = `SELECT
 			migration_uuid
@@ -397,6 +324,7 @@ const (
 		WHERE
 			migration_status='queued'
 			AND reviewed_timestamp IS NULL
+		ORDER BY id
 	`
 	sqlSelectUncollectedArtifacts = `SELECT
 			migration_uuid,
@@ -413,7 +341,7 @@ const (
 	`
 	sqlFixCompletedTimestamp = `UPDATE _vt.schema_migrations
 		SET
-			completed_timestamp=NOW()
+			completed_timestamp=NOW(6)
 		WHERE
 			migration_status='failed'
 			AND cleanup_timestamp IS NULL
@@ -448,7 +376,6 @@ const (
 			is_view,
 			ready_to_complete,
 			reverted_uuid,
-			stowaway_table,
 			rows_copied,
 			vitess_liveness_indicator,
 			user_throttle_ratio,
@@ -456,7 +383,9 @@ const (
 			cancelled_timestamp,
 			component_throttled,
 			postpone_launch,
-			postpone_completion
+			postpone_completion,
+			is_immediate_operation,
+			reviewed_timestamp
 		FROM _vt.schema_migrations
 		WHERE
 			migration_uuid=%a
@@ -636,49 +565,3 @@ var (
 	}
 	sqlDropOnlineDDLUser = `DROP USER IF EXISTS %s`
 )
-
-// ApplyDDL ddls to be applied at the start
-var ApplyDDL = []string{
-	sqlCreateSidecarDB,
-	sqlCreateSchemaMigrationsTable,
-	alterSchemaMigrationsTableRetries,
-	alterSchemaMigrationsTableTablet,
-	alterSchemaMigrationsTableArtifacts,
-	alterSchemaMigrationsTableTabletFailure,
-	alterSchemaMigrationsTableTabletFailureIndex,
-	alterSchemaMigrationsTableProgress,
-	alterSchemaMigrationsTableContext,
-	alterSchemaMigrationsTableDDLAction,
-	alterSchemaMigrationsTableMessage,
-	alterSchemaMigrationsTableTableCompleteIndex,
-	alterSchemaMigrationsTableETASeconds,
-	alterSchemaMigrationsTableRowsCopied,
-	alterSchemaMigrationsTableTableRows,
-	alterSchemaMigrationsTableAddedUniqueKeys,
-	alterSchemaMigrationsTableRemovedUniqueKeys,
-	alterSchemaMigrationsTableLogFile,
-	alterSchemaMigrationsTableRetainArtifacts,
-	alterSchemaMigrationsTablePostponeCompletion,
-	alterSchemaMigrationsTableContextIndex,
-	alterSchemaMigrationsTableRemovedUniqueNames,
-	alterSchemaMigrationsTableRemovedNoDefaultColNames,
-	alterSchemaMigrationsTableExpandedColNames,
-	alterSchemaMigrationsTableRevertibleNotes,
-	alterSchemaMigrationsTableAllowConcurrent,
-	alterSchemaMigrationsTableRevertedUUID,
-	alterSchemaMigrationsTableRevertedUUIDIndex,
-	alterSchemaMigrationsTableIsView,
-	alterSchemaMigrationsTableReadyToComplete,
-	alterSchemaMigrationsTableStowawayTable,
-	alterSchemaMigrationsTableVreplLivenessIndicator,
-	alterSchemaMigrationsTableUserThrottleRatio,
-	alterSchemaMigrationsTableSpecialPlan,
-	alterSchemaMigrationsLastThrottled,
-	alterSchemaMigrationsComponentThrottled,
-	alterSchemaMigrationsCancelledTimestamp,
-	alterSchemaMigrationsTablePostponeLaunch,
-	alterSchemaMigrationsStage,
-	alterSchemaMigrationsCutoverAttempts,
-	alterSchemaMigrationsTableImmediateOperation,
-	alterSchemaMigrationsReviewedTimestamp,
-}

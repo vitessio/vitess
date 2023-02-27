@@ -171,8 +171,7 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--enable-lag-throttler",
-			"--throttle_threshold", "1s",
+			"--throttler-config-via-topo",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
@@ -253,6 +252,12 @@ func TestSchemaChange(t *testing.T) {
 
 	providedUUID := ""
 	providedMigrationContext := ""
+
+	t.Run("enabling throttler with default threshold", func(t *testing.T) {
+		_, err := onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+		assert.NoError(t, err)
+	})
+
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
 		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), providedUUID, providedMigrationContext, "vtctl", "non_online", "", false)
@@ -487,7 +492,9 @@ func TestSchemaChange(t *testing.T) {
 	// reparent shard -80 to replica
 	// and then reparent it back to original state
 	// (two pretty much identical tests, the point is to end up with original state)
-	for currentPrimaryTabletIndex, reparentTabletIndex := range []int{1, 0} {
+	for _, currentPrimaryTabletIndex := range []int{0, 1} {
+		currentPrimaryTablet := shards[0].Vttablets[currentPrimaryTabletIndex]
+		reparentTablet := shards[0].Vttablets[1-currentPrimaryTabletIndex]
 		t.Run(fmt.Sprintf("PlannedReparentShard via throttling %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
 
 			insertRows(t, 2)
@@ -498,8 +505,8 @@ func TestSchemaChange(t *testing.T) {
 				case 0:
 					// this is the shard where we run PRS
 					// Use per-tablet throttling API
-					body, err = throttleApp(shards[i].Vttablets[currentPrimaryTabletIndex], onlineDDLThrottlerAppName)
-					defer unthrottleApp(shards[i].Vttablets[currentPrimaryTabletIndex], onlineDDLThrottlerAppName)
+					body, err = throttleApp(currentPrimaryTablet, onlineDDLThrottlerAppName)
+					defer unthrottleApp(currentPrimaryTablet, onlineDDLThrottlerAppName)
 				case 1:
 					// no PRS on this shard
 					// Use per-tablet throttling API
@@ -511,12 +518,19 @@ func TestSchemaChange(t *testing.T) {
 			}
 			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
 
-			t.Run("wait for migration and vreplication to run", func(t *testing.T) {
+			t.Run("wait for migration to run", func(t *testing.T) {
 				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
-				time.Sleep(5 * time.Second) // wait for _vt.vreplication to be created
-				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards, uuid, normalMigrationWait, "Copying")
+			})
+			t.Run("wait for vreplication to run on shard -80", func(t *testing.T) {
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
 				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+			})
+			t.Run("wait for vreplication to run on shard 80-", func(t *testing.T) {
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
+				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+			})
+			t.Run("check status again", func(t *testing.T) {
 				// again see that we're still 'running'
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 				testRows(t)
@@ -533,7 +547,7 @@ func TestSchemaChange(t *testing.T) {
 
 					switch shard {
 					case "-80":
-						require.Equal(t, shards[0].Vttablets[currentPrimaryTabletIndex].Alias, tablet)
+						require.Equal(t, currentPrimaryTablet.Alias, tablet)
 					case "80-":
 						require.Equal(t, shards[1].Vttablets[0].Alias, tablet)
 					default:
@@ -543,10 +557,12 @@ func TestSchemaChange(t *testing.T) {
 			})
 			t.Run("PRS shard -80", func(t *testing.T) {
 				// migration has started and is throttled. We now run PRS
-				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", shards[0].Vttablets[reparentTabletIndex].Alias)
+				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", reparentTablet.Alias)
 				require.NoError(t, err, "failed PRS: %v", err)
+				rs := onlineddl.VtgateExecQuery(t, &vtParams, "show vitess_tablets", "")
+				onlineddl.PrintQueryResult(os.Stdout, rs)
 			})
-			t.Run("unthrottle and expect completion", func(t *testing.T) {
+			t.Run("unthrottle", func(t *testing.T) {
 				for i := range shards {
 					var body string
 					var err error
@@ -554,7 +570,7 @@ func TestSchemaChange(t *testing.T) {
 					case 0:
 						// this is the shard where we run PRS
 						// Use per-tablet throttling API
-						body, err = unthrottleApp(shards[i].Vttablets[currentPrimaryTabletIndex], onlineDDLThrottlerAppName)
+						body, err = unthrottleApp(currentPrimaryTablet, onlineDDLThrottlerAppName)
 					case 1:
 						// no PRS on this shard
 						// Use per-tablet throttling API
@@ -563,7 +579,8 @@ func TestSchemaChange(t *testing.T) {
 					assert.NoError(t, err)
 					assert.Contains(t, body, onlineDDLThrottlerAppName)
 				}
-
+			})
+			t.Run("expect completion", func(t *testing.T) {
 				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
 				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 			})
@@ -581,7 +598,7 @@ func TestSchemaChange(t *testing.T) {
 					switch shard {
 					case "-80":
 						// PRS for this tablet, we promoted tablet[1]
-						require.Equal(t, shards[0].Vttablets[reparentTabletIndex].Alias, tablet)
+						require.Equal(t, reparentTablet.Alias, tablet)
 					case "80-":
 						// No PRS for this tablet
 						require.Equal(t, shards[1].Vttablets[0].Alias, tablet)
@@ -596,6 +613,105 @@ func TestSchemaChange(t *testing.T) {
 			})
 		})
 	}
+
+	// reparent shard -80 to replica
+	// and then reparent it back to original state
+	// (two pretty much identical tests, the point is to end up with original state)
+	for _, currentPrimaryTabletIndex := range []int{0, 1} {
+		currentPrimaryTablet := shards[0].Vttablets[currentPrimaryTabletIndex]
+		reparentTablet := shards[0].Vttablets[1-currentPrimaryTabletIndex]
+
+		t.Run(fmt.Sprintf("PlannedReparentShard via postponed %d/2", (currentPrimaryTabletIndex+1)), func(t *testing.T) {
+
+			insertRows(t, 2)
+
+			uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess --postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "", true)
+
+			t.Run("wait for migration to run", func(t *testing.T) {
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, normalMigrationWait, schema.OnlineDDLStatusRunning)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+			})
+			t.Run("wait for vreplication to run on shard -80", func(t *testing.T) {
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, currentPrimaryTablet, uuid, normalMigrationWait, "Copying", "Running")
+				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+			})
+			t.Run("wait for vreplication to run on shard 80-", func(t *testing.T) {
+				vreplStatus := onlineddl.WaitForVReplicationStatus(t, &vtParams, shards[1].Vttablets[0], uuid, normalMigrationWait, "Copying", "Running")
+				require.Contains(t, []string{"Copying", "Running"}, vreplStatus)
+			})
+			t.Run("check status again", func(t *testing.T) {
+				// again see that we're still 'running'
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
+				testRows(t)
+			})
+
+			t.Run("Check tablet", func(t *testing.T) {
+				// onlineddl.Executor marks this migration with its tablet alias
+				// reminder that onlineddl.Executor runs on the primary tablet.
+				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					shard := row["shard"].ToString()
+					tablet := row["tablet"].ToString()
+
+					switch shard {
+					case "-80":
+						require.Equal(t, currentPrimaryTablet.Alias, tablet)
+					case "80-":
+						require.Equal(t, shards[1].Vttablets[0].Alias, tablet)
+					default:
+						require.NoError(t, fmt.Errorf("unexpected shard name: %s", shard))
+					}
+				}
+			})
+			t.Run("PRS shard -80", func(t *testing.T) {
+				// migration has started and completion is postponed. We now PRS
+				err := clusterInstance.VtctlclientProcess.ExecuteCommand("PlannedReparentShard", "--", "--keyspace_shard", keyspaceName+"/-80", "--new_primary", reparentTablet.Alias)
+				require.NoError(t, err, "failed PRS: %v", err)
+				rs := onlineddl.VtgateExecQuery(t, &vtParams, "show vitess_tablets", "")
+				onlineddl.PrintQueryResult(os.Stdout, rs)
+			})
+			t.Run("complete and expect completion", func(t *testing.T) {
+				query := fmt.Sprintf("select * from _vt.vreplication where workflow ='%s'", uuid)
+				rs, err := reparentTablet.VttabletProcess.QueryTablet(query, "", true)
+				assert.NoError(t, err)
+				onlineddl.PrintQueryResult(os.Stdout, rs)
+
+				onlineddl.CheckCompleteAllMigrations(t, &vtParams, len(shards))
+
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete, schema.OnlineDDLStatusFailed)
+				onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
+			})
+
+			t.Run("Check tablet post PRS", func(t *testing.T) {
+				// onlineddl.Executor will find that a vrepl migration started in a different tablet.
+				// it will own the tablet and will update 'tablet' column in _vt.schema_migrations with its own
+				// (promoted primary) tablet alias.
+				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					shard := row["shard"].ToString()
+					tablet := row["tablet"].ToString()
+
+					switch shard {
+					case "-80":
+						// PRS for this tablet
+						require.Equal(t, reparentTablet.Alias, tablet)
+					case "80-":
+						// No PRS for this tablet
+						require.Equal(t, shards[1].Vttablets[0].Alias, tablet)
+					default:
+						require.NoError(t, fmt.Errorf("unexpected shard name: %s", shard))
+					}
+				}
+
+				onlineddl.CheckRetryPartialMigration(t, &vtParams, uuid, 1)
+				// Now it should complete on the failed shard
+				_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete)
+			})
+		})
+	}
+
 	t.Run("Online DROP, vtctl", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, onlineDDLDropTableStatement, "online", providedUUID, providedMigrationContext, "vtctl", "", "", false)
 		t.Run("test ready to complete", func(t *testing.T) {
@@ -754,6 +870,9 @@ func TestSchemaChange(t *testing.T) {
 				}
 			}
 		})
+	})
+	t.Run("summary: validate sequential migration IDs", func(t *testing.T) {
+		onlineddl.ValidateSequentialMigrationIDs(t, &vtParams, shards)
 	})
 }
 

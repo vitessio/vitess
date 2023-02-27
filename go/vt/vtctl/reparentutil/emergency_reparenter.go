@@ -24,10 +24,9 @@ import (
 
 	"google.golang.org/protobuf/proto"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -56,7 +55,7 @@ type EmergencyReparenter struct {
 // for callers to mutate and reuse options structs for multiple calls.
 type EmergencyReparentOptions struct {
 	NewPrimaryAlias           *topodatapb.TabletAlias
-	IgnoreReplicas            sets.String
+	IgnoreReplicas            sets.Set[string]
 	WaitReplicasTimeout       time.Duration
 	PreventCrossCellPromotion bool
 

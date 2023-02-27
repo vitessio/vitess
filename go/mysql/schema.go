@@ -23,12 +23,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// This file provides a few utility variables and methods, mostly for tests.
-// The assumptions made about the types of fields and data returned
-// by MySQl are validated in schema_test.go. This way all tests
-// can use these variables and methods to simulate a MySQL server
-// (using fakesqldb/ package for instance) and still be guaranteed correct
-// data.
+// This file contains the mysql queries used by different parts of the code.
 
 const (
 	// BaseShowPrimary is the base query for fetching primary key info.
@@ -39,22 +34,6 @@ const (
 		ORDER BY table_name, SEQ_IN_INDEX`
 	// ShowRowsRead is the query used to find the number of rows read.
 	ShowRowsRead = "show status like 'Innodb_rows_read'"
-
-	// CreateVTDatabase creates the _vt database
-	CreateVTDatabase = `CREATE DATABASE IF NOT EXISTS _vt`
-
-	// CreateSchemaCopyTable query creates schemacopy table in _vt schema.
-	CreateSchemaCopyTable = `
-CREATE TABLE if not exists _vt.schemacopy (
-	table_schema varchar(64) NOT NULL,
-	table_name varchar(64) NOT NULL,
-	column_name varchar(64) NOT NULL,
-	ordinal_position bigint(21) unsigned NOT NULL,
-	character_set_name varchar(32) DEFAULT NULL,
-	collation_name varchar(32) DEFAULT NULL,
-	data_type varchar(64) NOT NULL,
-	column_key varchar(3) NOT NULL,
-	PRIMARY KEY (table_schema, table_name, ordinal_position))`
 
 	// DetectSchemaChange query detects if there is any schema change from previous copy.
 	DetectSchemaChange = `
@@ -67,7 +46,25 @@ FROM (
 	UNION ALL
 
 	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
-	FROM _vt.schemacopy c
+	FROM _vt.schemacopy
+	WHERE table_schema = database()
+) _inner
+GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+HAVING COUNT(*) = 1
+`
+
+	// DetectSchemaChangeOnlyBaseTable query detects if there is any schema change from previous copy excluding view tables.
+	DetectSchemaChangeOnlyBaseTable = `
+SELECT DISTINCT table_name
+FROM (
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM information_schema.columns
+	WHERE table_schema = database() and table_name in (select table_name from information_schema.tables where table_schema = database() and table_type = 'BASE TABLE')
+
+	UNION ALL
+
+	SELECT table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
+	FROM _vt.schemacopy
 	WHERE table_schema = database()
 ) _inner
 GROUP BY table_name, column_name, ordinal_position, character_set_name, collation_name, data_type, column_key
@@ -103,40 +100,32 @@ order by table_name, ordinal_position`
 	GetColumnNamesQueryPatternForTable = `SELECT COLUMN_NAME.*TABLE_NAME.*%s.*`
 
 	// Views
-	CreateViewsTable = `CREATE TABLE IF NOT EXISTS _vt.views (
-	TABLE_NAME varchar(64) NOT NULL,
-	VIEW_DEFINITION longtext NOT NULL,
-	CREATE_STATEMENT longtext NOT NULL,
-	UPDATED_AT TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-	PRIMARY KEY (TABLE_NAME))`
+	InsertIntoViewsTable = `insert into _vt.views (
+    table_schema,
+	table_name,
+	create_statement) values (database(), :table_name, :create_statement)`
 
-	InsertIntoViewsTable = `INSERT INTO _vt.views (
-	TABLE_NAME,
-	VIEW_DEFINITION,
-	CREATE_STATEMENT) VALUES (:TABLE_NAME, :VIEW_DEFINITION, :CREATE_STATEMENT)`
+	ReplaceIntoViewsTable = `replace into _vt.views (
+	table_schema,
+	table_name,
+	create_statement) values (database(), :table_name, :create_statement)`
 
-	ReplaceIntoViewsTable = `REPLACE INTO _vt.views (
-	TABLE_NAME,
-	VIEW_DEFINITION,
-	CREATE_STATEMENT) VALUES (:TABLE_NAME, :VIEW_DEFINITION, :CREATE_STATEMENT)`
+	UpdateViewsTable = `update _vt.views 
+	set create_statement = :create_statement 
+	where table_schema = database() and table_name = :table_name`
 
-	UpdateViewsTable = `UPDATE _vt.views 
-	SET VIEW_DEFINITION = :VIEW_DEFINITION, CREATE_STATEMENT = :CREATE_STATEMENT 
-	WHERE TABLE_NAME = :TABLE_NAME`
+	DeleteFromViewsTable = `delete from _vt.views where table_schema = database() and table_name in ::table_name`
 
-	DeleteFromViewsTable = `DELETE FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
+	SelectFromViewsTable = `select table_name from _vt.views where table_schema = database() and table_name in ::table_name`
 
-	SelectFromViewsTable = `SELECT TABLE_NAME FROM _vt.views WHERE TABLE_NAME IN ::TABLE_NAME`
+	SelectAllViews = `select table_name, updated_at from _vt.views where table_schema = database()`
 
-	SelectAllViews = `SELECT TABLE_NAME, UPDATED_AT FROM _vt.views`
+	// FetchUpdatedViews queries fetches information about updated views
+	FetchUpdatedViews = `select table_name, create_statement from _vt.views where table_schema = database() and table_name in ::viewnames`
+
+	// FetchViews queries fetches all views
+	FetchViews = `select table_name, create_statement from _vt.views where table_schema = database()`
 )
-
-// VTDatabaseInit contains all the schema creation queries needed to
-var VTDatabaseInit = []string{
-	CreateVTDatabase,
-	CreateSchemaCopyTable,
-	CreateViewsTable,
-}
 
 // BaseShowTablesFields contains the fields returned by a BaseShowTables or a BaseShowTablesForTable command.
 // They are validated by the

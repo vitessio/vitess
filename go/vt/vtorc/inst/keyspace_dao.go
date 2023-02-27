@@ -19,8 +19,7 @@ package inst
 import (
 	"errors"
 
-	"github.com/openark/golib/sqlutils"
-
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtorc/db"
@@ -44,7 +43,7 @@ func ReadKeyspace(keyspaceName string) (*topo.KeyspaceInfo, error) {
 		Keyspace: &topodatapb.Keyspace{},
 	}
 	err := db.QueryVTOrc(query, args, func(row sqlutils.RowMap) error {
-		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt("keyspace_type"))
+		keyspace.KeyspaceType = topodatapb.KeyspaceType(row.GetInt32("keyspace_type"))
 		keyspace.DurabilityPolicy = row.GetString("durability_policy")
 		keyspace.SetKeyspaceName(keyspaceName)
 		return nil

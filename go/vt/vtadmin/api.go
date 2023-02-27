@@ -31,8 +31,8 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -1402,7 +1402,7 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 
 			workflows, err := c.GetWorkflows(ctx, req.Keyspaces, cluster.GetWorkflowsOptions{
 				ActiveOnly:      req.ActiveOnly,
-				IgnoreKeyspaces: sets.NewString(req.IgnoreKeyspaces...),
+				IgnoreKeyspaces: sets.New[string](req.IgnoreKeyspaces...),
 			})
 			if err != nil {
 				rec.RecordError(err)
@@ -1913,6 +1913,9 @@ func (api *API) ValidateVersionShard(ctx context.Context, req *vtadminpb.Validat
 
 // VTExplain is part of the vtadminpb.VTAdminServer interface.
 func (api *API) VTExplain(ctx context.Context, req *vtadminpb.VTExplainRequest) (*vtadminpb.VTExplainResponse, error) {
+	// TODO (andrew): https://github.com/vitessio/vitess/issues/12161.
+	log.Warningf("VTAdminServer.VTExplain is deprecated; please use a vexplain query instead. For more details, see https://vitess.io/docs/user-guides/sql/vexplain/.")
+
 	span, ctx := trace.NewSpan(ctx, "API.VTExplain")
 	defer span.Finish()
 

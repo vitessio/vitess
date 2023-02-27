@@ -31,7 +31,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -169,12 +168,12 @@ func (vde *Engine) openLocked(ctx context.Context) error {
 	return nil
 }
 
-var openRetryInterval = sync2.NewAtomicDuration(1 * time.Second)
+var openRetryInterval = 1 * time.Second
 
 func (vde *Engine) retry(ctx context.Context, err error) {
 	log.Errorf("Error starting vdiff engine: %v, will keep retrying.", err)
 	for {
-		timer := time.NewTimer(openRetryInterval.Get())
+		timer := time.NewTimer(openRetryInterval)
 		select {
 		case <-ctx.Done():
 			timer.Stop()
@@ -278,7 +277,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 
 	// We have to use ExecIgnore here so as not to block quick tablet state
 	// transitions from primary to non-primary when starting the engine
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRun, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRun, -1)
 	if err != nil {
 		return nil, err
 	}
@@ -289,7 +288,7 @@ func (vde *Engine) getVDiffsToRun(ctx context.Context) (*sqltypes.Result, error)
 }
 
 func (vde *Engine) getVDiffsToRetry(ctx context.Context, dbClient binlogplayer.DBClient) (*sqltypes.Result, error) {
-	qr, err := withDDL.ExecIgnore(ctx, sqlGetVDiffsToRetry, dbClient.ExecuteFetch)
+	qr, err := dbClient.ExecuteFetch(sqlGetVDiffsToRetry, -1)
 	if err != nil {
 		return nil, err
 	}

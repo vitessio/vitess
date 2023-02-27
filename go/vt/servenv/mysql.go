@@ -23,7 +23,7 @@ import (
 // mySQLServerVersion is what Vitess will present as it's version during the connection handshake,
 // and as the value to the @@version system variable. If nothing is provided, Vitess will report itself as
 // a specific MySQL version with the vitess version appended to it
-var mySQLServerVersion string
+var mySQLServerVersion = "8.0.30-Vitess"
 
 // RegisterMySQLServerFlags installs the flags needed to specify or expose a
 // particular MySQL server version from Vitess.

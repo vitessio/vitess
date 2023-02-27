@@ -36,6 +36,14 @@ var (
 	_ Authenticator = (*StaticAuthPlugin)(nil)
 )
 
+// The datatype for static auth Context keys
+type staticAuthKey int
+
+const (
+	// Internal Context key for the authenticated username
+	staticAuthUsername staticAuthKey = 0
+)
+
 func registerGRPCServerAuthStaticFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&credsFile, "grpc_auth_static_password_file", credsFile, "JSON File to read the users/passwords from.")
 }
@@ -66,12 +74,25 @@ func (sa *StaticAuthPlugin) Authenticate(ctx context.Context, fullMethod string)
 		password := md["password"][0]
 		for _, authEntry := range sa.entries {
 			if username == authEntry.Username && password == authEntry.Password {
-				return ctx, nil
+				return newStaticAuthContext(ctx, username), nil
 			}
 		}
 		return nil, status.Errorf(codes.PermissionDenied, "auth failure: caller %q provided invalid credentials", username)
 	}
 	return nil, status.Errorf(codes.Unauthenticated, "username and password must be provided")
+}
+
+// StaticAuthUsernameFromContext returns the username authenticated by the static auth plugin and stored in the Context, if any
+func StaticAuthUsernameFromContext(ctx context.Context) string {
+	username, ok := ctx.Value(staticAuthUsername).(string)
+	if ok {
+		return username
+	}
+	return ""
+}
+
+func newStaticAuthContext(ctx context.Context, username string) context.Context {
+	return context.WithValue(ctx, staticAuthUsername, username)
 }
 
 func staticAuthPluginInitializer() (Authenticator, error) {

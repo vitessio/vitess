@@ -50,6 +50,7 @@ type VSchemaManager struct {
 // SchemaInfo is an interface to schema tracker.
 type SchemaInfo interface {
 	Tables(ks string) map[string][]vindexes.Column
+	Views(ks string) map[string]sqlparser.SelectStatement
 }
 
 // GetCurrentSrvVschema returns a copy of the latest SrvVschema from the
@@ -208,6 +209,14 @@ func (vm *VSchemaManager) updateFromSchema(vschema *vindexes.VSchema) {
 				// if we found the matching table and the vschema view of it is not authoritative, then we just update the columns of the table
 				vTbl.Columns = columns
 				vTbl.ColumnListAuthoritative = true
+			}
+		}
+
+		views := vm.schema.Views(ksName)
+		if views != nil {
+			ks.Views = make(map[string]sqlparser.SelectStatement, len(views))
+			for name, def := range views {
+				ks.Views[name] = sqlparser.CloneSelectStatement(def)
 			}
 		}
 	}

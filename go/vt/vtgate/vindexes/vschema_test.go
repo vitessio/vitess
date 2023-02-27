@@ -24,15 +24,13 @@ import (
 	"strings"
 	"testing"
 
-	"vitess.io/vitess/go/test/utils"
-
-	"google.golang.org/protobuf/proto"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/json2"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
 
@@ -267,10 +265,6 @@ func TestUnshardedVSchema(t *testing.T) {
 	table, err = got.FindTable("", "t1")
 	require.NoError(t, err)
 	assert.NotNil(t, table)
-
-	table, err = got.FindTable("", "dual")
-	require.NoError(t, err)
-	assert.Equal(t, TypeReference, table.Type)
 }
 
 func TestVSchemaColumns(t *testing.T) {
@@ -323,6 +317,32 @@ func TestVSchemaViews(t *testing.T) {
 
 	view = vschema.FindView("", "v1")
 	assert.Equal(t, "select c1 + c2 as added from t1", sqlparser.String(view))
+
+	out, err := json.MarshalIndent(vschema.Keyspaces["unsharded"], "", "  ")
+	require.NoError(t, err)
+	got := string(out)
+	want := `
+{
+  "tables": {
+    "t1": {
+      "name": "t1",
+      "columns": [
+        {
+          "name": "c1",
+          "type": "NULL_TYPE"
+        },
+        {
+          "name": "c2",
+          "type": "VARCHAR"
+        }
+      ]
+    }
+  },
+  "views": {
+    "v1": "select c1 + c2 as added from t1"
+  }
+}`
+	require.JSONEq(t, want, got)
 }
 
 func TestVSchemaColumnListAuthoritative(t *testing.T) {
@@ -605,23 +625,12 @@ func TestVSchemaRoutingRules(t *testing.T) {
 		Name:     sqlparser.NewIdentifierCS("t2"),
 		Keyspace: ks2,
 	}
-	dual1 := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks1,
-		Type:     TypeReference,
-	}
-	dual2 := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks2,
-		Type:     TypeReference,
-	}
 	want := &VSchema{
 		global: globalSchema{
 			keyspaceNames: map[string]any{},
 			tables: map[string]*Table{
-				"t1":   t1,
-				"t2":   t2,
-				"dual": dual1,
+				"t1": t1,
+				"t2": t2,
 			},
 			vindexes: map[string]Vindex{
 				"stfu1": vindex1,
@@ -657,8 +666,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			"ks1": {
 				Keyspace: ks1,
 				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual1,
+					"t1": t1,
 				},
 				Vindexes: map[string]Vindex{
 					"stfu1": vindex1,
@@ -667,8 +675,7 @@ func TestVSchemaRoutingRules(t *testing.T) {
 			"ks2": {
 				Keyspace: ks2,
 				Tables: map[string]*Table{
-					"t2":   t2,
-					"dual": dual2,
+					"t2": t2,
 				},
 				Vindexes: map[string]Vindex{},
 			},
@@ -1038,17 +1045,11 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[0],
 	}
-	dual := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     TypeReference,
-	}
 	want := &VSchema{
 		global: globalSchema{
 			keyspaceNames: map[string]any{},
 			tables: map[string]*Table{
-				"t1":   t1,
-				"dual": dual,
+				"t1": t1,
 			},
 			vindexes: map[string]Vindex{
 				"stfu1": vindex1,
@@ -1059,8 +1060,7 @@ func TestShardedVSchemaMultiColumnVindex(t *testing.T) {
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual},
+					"t1": t1},
 				Vindexes: map[string]Vindex{
 					"stfu1": vindex1},
 			}}}
@@ -1122,17 +1122,12 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 	t1.Ordered = []*ColumnVindex{
 		t1.ColumnVindexes[1],
 		t1.ColumnVindexes[0]}
-	dual := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ks,
-		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
 		global: globalSchema{
 			keyspaceNames: map[string]any{},
 			tables: map[string]*Table{
-				"t1":   t1,
-				"dual": dual,
+				"t1": t1,
 			},
 			vindexes: map[string]Vindex{
 				"stlu1": vindex1,
@@ -1143,8 +1138,8 @@ func TestShardedVSchemaNotOwned(t *testing.T) {
 			"sharded": {
 				Keyspace: ks,
 				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": dual},
+					"t1": t1,
+				},
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
 					"stfu1": vindex2},
@@ -1235,35 +1230,26 @@ func TestBuildVSchemaDupSeq(t *testing.T) {
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 		Type:     "sequence"}
-	duala := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ksa,
-		Type:     TypeReference}
-	dualb := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ksb,
-		Type:     TypeReference}
 	want := &VSchema{
 		RoutingRules: map[string]*RoutingRule{},
 		Keyspaces: map[string]*KeyspaceSchema{
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1":   t1a,
-					"dual": duala},
+					"t1": t1a,
+				},
 				Vindexes: map[string]Vindex{},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1":   t1b,
-					"dual": dualb},
+					"t1": t1b,
+				},
 				Vindexes: map[string]Vindex{}}},
 		global: globalSchema{
 			keyspaceNames: map[string]any{},
 			tables: map[string]*Table{
-				"t1":   nil,
-				"dual": duala,
+				"t1": nil,
 			},
 			vindexes: map[string]Vindex{},
 		}}
@@ -1304,22 +1290,11 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 		Name:     sqlparser.NewIdentifierCS("t1"),
 		Keyspace: ksb,
 	}
-	duala := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ksa,
-		Type:     TypeReference,
-	}
-	dualb := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ksb,
-		Type:     TypeReference,
-	}
 	want := &VSchema{
 		global: globalSchema{
 			keyspaceNames: map[string]any{},
 			tables: map[string]*Table{
-				"t1":   nil,
-				"dual": duala,
+				"t1": nil,
 			},
 			vindexes: map[string]Vindex{},
 		},
@@ -1328,16 +1303,14 @@ func TestBuildVSchemaDupTable(t *testing.T) {
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1":   t1a,
-					"dual": duala,
+					"t1": t1a,
 				},
 				Vindexes: map[string]Vindex{},
 			},
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1":   t1b,
-					"dual": dualb,
+					"t1": t1b,
 				},
 				Vindexes: map[string]Vindex{},
 			},
@@ -1445,22 +1418,11 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 	t2.Ordered = []*ColumnVindex{
 		t2.ColumnVindexes[0],
 	}
-	duala := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ksa,
-		Type:     TypeReference,
-	}
-	dualb := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ksb,
-		Type:     TypeReference,
-	}
 	want := &VSchema{
 		global: globalSchema{
 			keyspaceNames: map[string]any{},
 			tables: map[string]*Table{
-				"t1":   nil,
-				"dual": duala,
+				"t1": nil,
 			},
 			vindexes: map[string]Vindex{
 				"stlu1": nil,
@@ -1471,8 +1433,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 			"ksa": {
 				Keyspace: ksa,
 				Tables: map[string]*Table{
-					"t1":   t1,
-					"dual": duala,
+					"t1": t1,
 				},
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
@@ -1481,8 +1442,7 @@ func TestBuildVSchemaDupVindex(t *testing.T) {
 			"ksb": {
 				Keyspace: ksb,
 				Tables: map[string]*Table{
-					"t1":   t2,
-					"dual": dualb,
+					"t1": t2,
 				},
 				Vindexes: map[string]Vindex{
 					"stlu1": vindex1,
@@ -2034,24 +1994,13 @@ func TestSequence(t *testing.T) {
 	t2.Ordered = []*ColumnVindex{
 		t2.ColumnVindexes[0],
 	}
-	duala := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: ksu,
-		Type:     TypeReference,
-	}
-	dualb := &Table{
-		Name:     sqlparser.NewIdentifierCS("dual"),
-		Keyspace: kss,
-		Type:     TypeReference,
-	}
 	want := &VSchema{
 		global: globalSchema{
 			keyspaceNames: map[string]any{},
 			tables: map[string]*Table{
-				"seq":  seq,
-				"t1":   t1,
-				"t2":   t2,
-				"dual": dualb,
+				"seq": seq,
+				"t1":  t1,
+				"t2":  t2,
 			},
 			vindexes: map[string]Vindex{
 				"stfu1": vindex1,
@@ -2062,17 +2011,15 @@ func TestSequence(t *testing.T) {
 			"unsharded": {
 				Keyspace: ksu,
 				Tables: map[string]*Table{
-					"seq":  seq,
-					"dual": duala,
+					"seq": seq,
 				},
 				Vindexes: map[string]Vindex{},
 			},
 			"sharded": {
 				Keyspace: kss,
 				Tables: map[string]*Table{
-					"t1":   t1,
-					"t2":   t2,
-					"dual": dualb,
+					"t1": t1,
+					"t2": t2,
 				},
 				Vindexes: map[string]Vindex{
 					"stfu1": vindex1,

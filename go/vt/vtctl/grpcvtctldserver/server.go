@@ -29,15 +29,15 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -1007,7 +1007,7 @@ func (s *VtctldServer) EmergencyReparentShard(ctx context.Context, req *vtctldat
 		req.Shard,
 		reparentutil.EmergencyReparentOptions{
 			NewPrimaryAlias:           req.NewPrimary,
-			IgnoreReplicas:            sets.NewString(ignoreReplicaAliases...),
+			IgnoreReplicas:            sets.New[string](ignoreReplicaAliases...),
 			WaitReplicasTimeout:       waitReplicasTimeout,
 			PreventCrossCellPromotion: req.PreventCrossCellPromotion,
 		},
@@ -1658,10 +1658,10 @@ func (s *VtctldServer) GetSrvVSchemas(ctx context.Context, req *vtctldatapb.GetS
 
 	// Omit any cell names in the request that don't map to existing cells
 	if len(req.Cells) > 0 {
-		s1 := sets.NewString(allCells...)
-		s2 := sets.NewString(req.Cells...)
+		s1 := sets.New[string](allCells...)
+		s2 := sets.New[string](req.Cells...)
 
-		cells = s1.Intersection(s2).List()
+		cells = sets.List(s1.Intersection(s2))
 	}
 
 	span.Annotate("cells", strings.Join(cells, ","))
@@ -1930,7 +1930,7 @@ func (s *VtctldServer) GetVersion(ctx context.Context, req *vtctldatapb.GetVersi
 		return nil, err
 	}
 
-	version, err := getVersionFromTablet(tablet.Addr())
+	version, err := GetVersionFunc()(tablet.Addr())
 	if err != nil {
 		return nil, err
 	}
@@ -2476,9 +2476,9 @@ func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.R
 
 	logger, getEvents := eventStreamLogger()
 
-	var sema *sync2.Semaphore
+	var sema *semaphore.Weighted
 	if req.Concurrency > 0 {
-		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+		sema = semaphore.NewWeighted(int64(req.Concurrency))
 	}
 
 	s.reloadSchemaShard(ctx, req, sema, logger)
@@ -2488,7 +2488,7 @@ func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.R
 	}, nil
 }
 
-func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *sync2.Semaphore, logger logutil.Logger) {
+func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *semaphore.Weighted, logger logutil.Logger) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaShard")
 	defer span.Finish()
 
@@ -2526,12 +2526,12 @@ func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatap
 
 	var (
 		wg                sync.WaitGroup
-		sema              *sync2.Semaphore
+		sema              *semaphore.Weighted
 		logger, getEvents = eventStreamLogger()
 	)
 
 	if req.Concurrency > 0 {
-		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+		sema = semaphore.NewWeighted(int64(req.Concurrency))
 	}
 
 	for _, shard := range shards {
@@ -3624,7 +3624,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 			span, ctx := trace.NewSpan(ctx, "VtctldServer.validateAllTablets")
 			defer span.Finish()
 
-			cellSet := sets.NewString()
+			cellSet := sets.New[string]()
 			for _, keyspace := range keyspaces {
 				getShardNamesCtx, getShardNamesCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				shards, err := s.ts.GetShardNames(getShardNamesCtx, keyspace)
@@ -3655,7 +3655,7 @@ func (s *VtctldServer) Validate(ctx context.Context, req *vtctldatapb.ValidateRe
 				}
 			}
 
-			for _, cell := range cellSet.List() {
+			for _, cell := range sets.List(cellSet) {
 				getTabletsByCellCtx, getTabletsByCellCancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 				aliases, err := s.ts.GetTabletAliasesByCell(getTabletsByCellCtx, cell)
 				getTabletsByCellCancel() // don't defer in a loop
@@ -4426,7 +4426,20 @@ var getVersionFromTabletDebugVars = func(tabletAddr string) (string, error) {
 	return version, nil
 }
 
+var versionFuncMu sync.Mutex
 var getVersionFromTablet = getVersionFromTabletDebugVars
+
+func SetVersionFunc(versionFunc func(string) (string, error)) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	getVersionFromTablet = versionFunc
+}
+
+func GetVersionFunc() func(string) (string, error) {
+	versionFuncMu.Lock()
+	defer versionFuncMu.Unlock()
+	return getVersionFromTablet
+}
 
 // helper method to asynchronously get and diff a version
 func (s *VtctldServer) diffVersion(ctx context.Context, primaryVersion string, primaryAlias *topodatapb.TabletAlias, alias *topodatapb.TabletAlias, wg *sync.WaitGroup, er concurrency.ErrorRecorder) {

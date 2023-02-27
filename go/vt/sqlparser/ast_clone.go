@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -223,8 +223,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfJSONKeysExpr(in)
 	case *JSONObjectExpr:
 		return CloneRefOfJSONObjectExpr(in)
-	case JSONObjectParam:
-		return CloneJSONObjectParam(in)
+	case *JSONObjectParam:
+		return CloneRefOfJSONObjectParam(in)
 	case *JSONOverlapsExpr:
 		return CloneRefOfJSONOverlapsExpr(in)
 	case *JSONPrettyExpr:
@@ -267,6 +267,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfLagLeadExpr(in)
 	case *Limit:
 		return CloneRefOfLimit(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -349,6 +351,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return ClonePartitions(in)
 	case *PerformanceSchemaFuncExpr:
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
+	case *PointExpr:
+		return CloneRefOfPointExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case ReferenceAction:
@@ -869,7 +873,7 @@ func CloneRefOfColumnDefinition(n *ColumnDefinition) *ColumnDefinition {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Type = CloneColumnType(n.Type)
+	out.Type = CloneRefOfColumnType(n.Type)
 	return &out
 }
 
@@ -1577,9 +1581,15 @@ func CloneRefOfJSONObjectExpr(n *JSONObjectExpr) *JSONObjectExpr {
 	return &out
 }
 
-// CloneJSONObjectParam creates a deep clone of the input.
-func CloneJSONObjectParam(n JSONObjectParam) JSONObjectParam {
-	return *CloneRefOfJSONObjectParam(&n)
+// CloneRefOfJSONObjectParam creates a deep clone of the input.
+func CloneRefOfJSONObjectParam(n *JSONObjectParam) *JSONObjectParam {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.Key = CloneExpr(n.Key)
+	out.Value = CloneExpr(n.Value)
+	return &out
 }
 
 // CloneRefOfJSONOverlapsExpr creates a deep clone of the input.
@@ -1815,6 +1825,16 @@ func CloneRefOfLimit(n *Limit) *Limit {
 	out := *n
 	out.Offset = CloneExpr(n.Offset)
 	out.Rowcount = CloneExpr(n.Rowcount)
+	return &out
+}
+
+// CloneRefOfLineStringExpr creates a deep clone of the input.
+func CloneRefOfLineStringExpr(n *LineStringExpr) *LineStringExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PointParams = CloneExprs(n.PointParams)
 	return &out
 }
 
@@ -2231,6 +2251,17 @@ func CloneRefOfPerformanceSchemaFuncExpr(n *PerformanceSchemaFuncExpr) *Performa
 	}
 	out := *n
 	out.Argument = CloneExpr(n.Argument)
+	return &out
+}
+
+// CloneRefOfPointExpr creates a deep clone of the input.
+func CloneRefOfPointExpr(n *PointExpr) *PointExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.XCordinate = CloneExpr(n.XCordinate)
+	out.YCordinate = CloneExpr(n.YCordinate)
 	return &out
 }
 
@@ -3297,6 +3328,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case *LocateExpr:
 		return CloneRefOfLocateExpr(in)
 	case *MatchExpr:
@@ -3315,6 +3348,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfNtileExpr(in)
 	case *PerformanceSchemaFuncExpr:
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
+	case *PointExpr:
+		return CloneRefOfPointExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3557,6 +3592,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfJSONValueModifierExpr(in)
 	case *LagLeadExpr:
 		return CloneRefOfLagLeadExpr(in)
+	case *LineStringExpr:
+		return CloneRefOfLineStringExpr(in)
 	case ListArg:
 		return in
 	case *Literal:
@@ -3589,6 +3626,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfOrExpr(in)
 	case *PerformanceSchemaFuncExpr:
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
+	case *PointExpr:
+		return CloneRefOfPointExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3932,11 +3971,6 @@ func CloneSliceOfRefOfWhen(n []*When) []*When {
 	return res
 }
 
-// CloneColumnType creates a deep clone of the input.
-func CloneColumnType(n ColumnType) ColumnType {
-	return *CloneRefOfColumnType(&n)
-}
-
 // CloneRefOfColumnTypeOptions creates a deep clone of the input.
 func CloneRefOfColumnTypeOptions(n *ColumnTypeOptions) *ColumnTypeOptions {
 	if n == nil {
@@ -4049,17 +4083,6 @@ func CloneSliceOfRefOfJSONObjectParam(n []*JSONObjectParam) []*JSONObjectParam {
 	return res
 }
 
-// CloneRefOfJSONObjectParam creates a deep clone of the input.
-func CloneRefOfJSONObjectParam(n *JSONObjectParam) *JSONObjectParam {
-	if n == nil {
-		return nil
-	}
-	out := *n
-	out.Key = CloneExpr(n.Key)
-	out.Value = CloneExpr(n.Value)
-	return &out
-}
-
 // CloneSliceOfRefOfJtColumnDefinition creates a deep clone of the input.
 func CloneSliceOfRefOfJtColumnDefinition(n []*JtColumnDefinition) []*JtColumnDefinition {
 	if n == nil {
@@ -4089,7 +4112,7 @@ func CloneRefOfJtPathColDef(n *JtPathColDef) *JtPathColDef {
 	}
 	out := *n
 	out.Name = CloneIdentifierCI(n.Name)
-	out.Type = CloneColumnType(n.Type)
+	out.Type = CloneRefOfColumnType(n.Type)
 	out.Path = CloneExpr(n.Path)
 	out.EmptyOnResponse = CloneRefOfJtOnResponse(n.EmptyOnResponse)
 	out.ErrorOnResponse = CloneRefOfJtOnResponse(n.ErrorOnResponse)

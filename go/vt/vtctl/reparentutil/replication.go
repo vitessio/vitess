@@ -21,10 +21,9 @@ import (
 	"sync"
 	"time"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"vitess.io/vitess/go/event"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -215,7 +214,7 @@ func stopReplicationAndBuildStatusMaps(
 	ev *events.Reparent,
 	tabletMap map[string]*topo.TabletInfo,
 	stopReplicationTimeout time.Duration,
-	ignoredTablets sets.String,
+	ignoredTablets sets.Set[string],
 	tabletToWaitFor *topodatapb.TabletAlias,
 	durability Durabler,
 	logger logutil.Logger,

@@ -17,12 +17,11 @@ limitations under the License.
 package timer
 
 import (
+	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
-
-	"vitess.io/vitess/go/sync2"
 )
 
 const (
@@ -31,47 +30,47 @@ const (
 	tenth   = 10 * time.Millisecond
 )
 
-var numcalls sync2.AtomicInt64
+var numcalls atomic.Int64
 
 func f() {
 	numcalls.Add(1)
 }
 
 func TestWait(t *testing.T) {
-	numcalls.Set(0)
+	numcalls.Store(0)
 	timer := NewTimer(quarter)
 	assert.False(t, timer.Running())
 	timer.Start(f)
 	defer timer.Stop()
 	assert.True(t, timer.Running())
 	time.Sleep(tenth)
-	assert.Equal(t, int64(0), numcalls.Get())
+	assert.Equal(t, int64(0), numcalls.Load())
 	time.Sleep(quarter)
-	assert.Equal(t, int64(1), numcalls.Get())
+	assert.Equal(t, int64(1), numcalls.Load())
 	time.Sleep(quarter)
-	assert.Equal(t, int64(2), numcalls.Get())
+	assert.Equal(t, int64(2), numcalls.Load())
 }
 
 func TestReset(t *testing.T) {
-	numcalls.Set(0)
+	numcalls.Store(0)
 	timer := NewTimer(half)
 	timer.Start(f)
 	defer timer.Stop()
 	timer.SetInterval(quarter)
 	time.Sleep(tenth)
-	assert.Equal(t, int64(0), numcalls.Get())
+	assert.Equal(t, int64(0), numcalls.Load())
 	time.Sleep(quarter)
-	assert.Equal(t, int64(1), numcalls.Get())
+	assert.Equal(t, int64(1), numcalls.Load())
 }
 
 func TestIndefinite(t *testing.T) {
-	numcalls.Set(0)
+	numcalls.Store(0)
 	timer := NewTimer(0)
 	timer.Start(f)
 	defer timer.Stop()
 	timer.TriggerAfter(quarter)
 	time.Sleep(tenth)
-	assert.Equal(t, int64(0), numcalls.Get())
+	assert.Equal(t, int64(0), numcalls.Load())
 	time.Sleep(quarter)
-	assert.Equal(t, int64(1), numcalls.Get())
+	assert.Equal(t, int64(1), numcalls.Load())
 }

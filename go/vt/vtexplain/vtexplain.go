@@ -299,7 +299,6 @@ func (vte *VTExplain) Run(sql string) ([]*Explain, error) {
 			if vte.vtgateSession == nil || !vte.vtgateSession.GetInTransaction() {
 				vte.batchTime = sync2.NewBatcher(batchInterval)
 			}
-			log.V(100).Infof("explain %s", sql)
 			e, err := vte.explain(sql)
 			if err != nil {
 				return nil, err

@@ -71,6 +71,12 @@ func IsFloat(t querypb.Type) bool {
 	return int(t)&flagIsFloat == flagIsFloat
 }
 
+// IsDecimal returns true is querypb.Type is a decimal.
+// If you have a Value object, use its member function.
+func IsDecimal(t querypb.Type) bool {
+	return t == Decimal
+}
+
 // IsQuoted returns true if querypb.Type is a quoted text or binary.
 // If you have a Value object, use its member function.
 func IsQuoted(t querypb.Type) bool {

@@ -34,13 +34,8 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
-// Generate all the AST helpers using the tooling in `go/tools`
-
-//go:generate go run ../../tools/asthelpergen/main  --in . --iface vitess.io/vitess/go/vt/sqlparser.SQLNode --clone_exclude "*ColName" --equals_custom "*ColName"
-//go:generate go run ../../tools/astfmtgen vitess.io/vitess/go/vt/sqlparser/...
-
-// Walk calls visit on every node.
-// If visit returns true, the underlying nodes
+// Walk calls postVisit on every node.
+// If postVisit returns true, the underlying nodes
 // are also visited. If it returns an error, walking
 // is interrupted, and the error is returned.
 func Walk(visit Visit, nodes ...SQLNode) error {
@@ -54,7 +49,7 @@ func Walk(visit Visit, nodes ...SQLNode) error {
 }
 
 // Visit defines the signature of a function that
-// can be used to visit all nodes of a parse tree.
+// can be used to postVisit all nodes of a parse tree.
 // returning false on kontinue means that children will not be visited
 // returning an error will abort the visitation and return the error
 type Visit func(node SQLNode) (kontinue bool, err error)

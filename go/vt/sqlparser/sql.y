@@ -65,7 +65,7 @@ func bindVariable(yylex yyLexer, bvar string) {
   identifierCI      IdentifierCI
   joinCondition *JoinCondition
   databaseOption DatabaseOption
-  columnType    ColumnType
+  columnType    *ColumnType
   columnCharset ColumnCharset
 }
 
@@ -1990,81 +1990,81 @@ numeric_type:
 int_type:
   BIT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOL
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BOOLEAN
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | SMALLINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | INTEGER
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | BIGINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 decimal_type:
 REAL double_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | DOUBLE double_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT8_TYPE double_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT_TYPE float_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | FLOAT4_TYPE float_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | DECIMAL_TYPE decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
 | NUMERIC decimal_length_opt
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
     $$.Length = $2.Length
     $$.Scale = $2.Scale
   }
@@ -2072,126 +2072,126 @@ REAL double_length_opt
 time_type:
   DATE
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TIMESTAMP length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | DATETIME length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | YEAR length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 
 char_type:
   CHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
 | CHAR length_opt BYTE
   {
     // CHAR BYTE is an alias for binary. See also:
     // https://dev.mysql.com/doc/refman/8.0/en/string-type-syntax.html
-    $$ = ColumnType{Type: "binary", Length: $2}
+    $$ = &ColumnType{Type: "binary", Length: $2}
   }
 | VARCHAR length_opt charset_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2, Charset: $3}
+    $$ = &ColumnType{Type: string($1), Length: $2, Charset: $3}
   }
 | BINARY length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | VARBINARY length_opt
   {
-    $$ = ColumnType{Type: string($1), Length: $2}
+    $$ = &ColumnType{Type: string($1), Length: $2}
   }
 | TEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | TINYTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | MEDIUMTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | LONGTEXT charset_opt
   {
-    $$ = ColumnType{Type: string($1), Charset: $2}
+    $$ = &ColumnType{Type: string($1), Charset: $2}
   }
 | BLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | TINYBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MEDIUMBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LONGBLOB
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | JSON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | ENUM '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
 // need set_values / SetValues ?
 | SET '(' enum_values ')' charset_opt
   {
-    $$ = ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
+    $$ = &ColumnType{Type: string($1), EnumValues: $3, Charset: $5}
   }
 
 spatial_type:
   GEOMETRY
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | LINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | POLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | GEOMETRYCOLLECTION
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOINT
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTILINESTRING
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 | MULTIPOLYGON
   {
-    $$ = ColumnType{Type: string($1)}
+    $$ = &ColumnType{Type: string($1)}
   }
 
 enum_values:
@@ -6177,6 +6177,14 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| LINESTRING openb expression_list closeb
+  {
+    $$ = &LineStringExpr{ PointParams:$3 }
+  }
+| POINT openb expression ',' expression closeb
+  {
+    $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
+  }
 | argument_less_window_expr_type openb closeb over_clause
   {
     $$ = &ArgumentLessWindowExpr{ Type: $1, OverClause : $4 }
@@ -6640,7 +6648,7 @@ separator_opt:
   }
 | SEPARATOR STRING
   {
-    $$ = " separator "+encodeSQLString($2)
+    $$ = encodeSQLString($2)
   }
 
 when_expression_list:
@@ -7714,7 +7722,7 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINES
-| LINESTRING
+| LINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | LIST
 | LOAD
 | LOCAL
@@ -7785,7 +7793,7 @@ non_reserved_keyword:
 | PS_CURRENT_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
-| POINT
+| POINT %prec FUNCTION_CALL_NON_KEYWORD
 | POLYGON
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE

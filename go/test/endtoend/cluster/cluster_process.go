@@ -33,6 +33,7 @@ import (
 	"strings"
 	"sync"
 	"syscall"
+	"testing"
 	"time"
 
 	"vitess.io/vitess/go/json2"
@@ -250,6 +251,22 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	return
 }
 
+// StartVTOrc starts a VTOrc instance
+func (cluster *LocalProcessCluster) StartVTOrc(keyspace string) error {
+	// Start vtorc
+	vtorcProcess := cluster.NewVTOrcProcess(VTOrcConfiguration{})
+	err := vtorcProcess.Setup()
+	if err != nil {
+		log.Error(err.Error())
+		return err
+	}
+	if keyspace != "" {
+		vtorcProcess.ExtraArgs = append(vtorcProcess.ExtraArgs, fmt.Sprintf(`--clusters_to_watch="%s"`, keyspace))
+	}
+	cluster.VTOrcProcesses = append(cluster.VTOrcProcesses, vtorcProcess)
+	return nil
+}
+
 // StartUnshardedKeyspace starts unshared keyspace with shard name as "0"
 func (cluster *LocalProcessCluster) StartUnshardedKeyspace(keyspace Keyspace, replicaCount int, rdonly bool) error {
 	return cluster.StartKeyspace(keyspace, []string{"0"}, replicaCount, rdonly)
@@ -425,6 +442,13 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Infof("Done creating keyspace: %v ", keyspace.Name)
+
+	err = cluster.StartVTOrc(keyspace.Name)
+	if err != nil {
+		log.Errorf("Error starting VTOrc - %v", err)
+		return err
+	}
+
 	return
 }
 
@@ -1061,11 +1085,10 @@ func getPort() int {
 	if len(portBytes) == 0 || time.Now().After(fileInfo.ModTime().Add(portFileTimeout)) {
 		port = getVtStartPort()
 	} else {
-		parsedPort, err := strconv.ParseInt(string(portBytes), 10, 64)
+		port, err = strconv.Atoi(string(portBytes))
 		if err != nil {
 			panic(err)
 		}
-		port = int(parsedPort)
 	}
 
 	portFile.Truncate(0)
@@ -1229,4 +1252,18 @@ func (cluster *LocalProcessCluster) GetVTParams(dbname string) mysql.ConnParams 
 		params.DbName = dbname
 	}
 	return params
+}
+
+// DisableVTOrcRecoveries stops all VTOrcs from running any recoveries
+func (cluster *LocalProcessCluster) DisableVTOrcRecoveries(t *testing.T) {
+	for _, vtorc := range cluster.VTOrcProcesses {
+		vtorc.DisableGlobalRecoveries(t)
+	}
+}
+
+// EnableVTOrcRecoveries allows all VTOrcs to run any recoveries
+func (cluster *LocalProcessCluster) EnableVTOrcRecoveries(t *testing.T) {
+	for _, vtorc := range cluster.VTOrcProcesses {
+		vtorc.EnableGlobalRecoveries(t)
+	}
 }

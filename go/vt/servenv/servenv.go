@@ -77,11 +77,13 @@ var (
 
 // Flags specific to Init, Run, and RunDefault functions.
 var (
-	lameduckPeriod = 50 * time.Millisecond
-	onTermTimeout  = 10 * time.Second
-	onCloseTimeout = 10 * time.Second
-	catchSigpipe   bool
-	maxStackSize   = 64 * 1024 * 1024
+	lameduckPeriod       = 50 * time.Millisecond
+	onTermTimeout        = 10 * time.Second
+	onCloseTimeout       = 10 * time.Second
+	catchSigpipe         bool
+	maxStackSize         = 64 * 1024 * 1024
+	initStartTime        time.Time // time when tablet init started: for debug purposes to time how long a tablet init takes
+	tableRefreshInterval int
 )
 
 // RegisterFlags installs the flags used by Init, Run, and RunDefault.
@@ -95,16 +97,24 @@ func RegisterFlags() {
 		fs.DurationVar(&onCloseTimeout, "onclose_timeout", onCloseTimeout, "wait no more than this for OnClose handlers before stopping")
 		fs.BoolVar(&catchSigpipe, "catch-sigpipe", catchSigpipe, "catch and ignore SIGPIPE on stdout and stderr if specified")
 		fs.IntVar(&maxStackSize, "max-stack-size", maxStackSize, "configure the maximum stack size in bytes")
+		fs.IntVar(&tableRefreshInterval, "table-refresh-interval", tableRefreshInterval, "interval in milliseconds to refresh tables in status page with refreshRequired class")
 
 		// pid_file.go
 		fs.StringVar(&pidFile, "pid_file", pidFile, "If set, the process will write its pid to the named file, and delete it on graceful shutdown.")
 	})
 }
 
+func GetInitStartTime() time.Time {
+	mu.Lock()
+	defer mu.Unlock()
+	return initStartTime
+}
+
 // Init is the first phase of the server startup.
 func Init() {
 	mu.Lock()
 	defer mu.Unlock()
+	initStartTime = time.Now()
 
 	// Ignore SIGPIPE if specified
 	// The Go runtime catches SIGPIPE for us on all fds except stdout/stderr

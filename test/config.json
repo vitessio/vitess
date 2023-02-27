@@ -297,43 +297,16 @@
 		},
 		"onlineddl_revert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
 			"RetryMax": 1,
 			"Tags": []
 		},
-		"onlineddl_revertible": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revertible"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_revertible",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"onlineddl_declarative": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/declarative"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_declarative",
-			"RetryMax": 1,
-			"Tags": []
-		},
-		"onlineddl_singleton": {
-			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/singleton"],
-			"Command": [],
-			"Manual": false,
-			"Shard": "onlineddl_singleton",
-			"RetryMax": 1,
-			"Tags": []
-		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "20m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
@@ -909,6 +882,15 @@
 			"RetryMax": 1,
 			"Tags": []
 		},
+		"vtgate_grpc_server_auth_static": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vtgate/grpc_server_auth_static"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "vtgate_general_heavy",
+			"RetryMax": 1,
+			"Tags": []
+		},
 		"topo_zk2": {
 			"File": "unused.go",
 			"Args": ["vitess.io/vitess/go/test/endtoend/topotest/zk2", "--topo-flavor=zk2"],
@@ -1041,6 +1023,15 @@
 			"Command": [],
 			"Manual": false,
 			"Shard": "vreplication_cellalias",
+			"RetryMax": 2,
+			"Tags": []
+		},
+		"sidecardb": {
+			"File": "unused.go",
+			"Args": ["vitess.io/vitess/go/test/endtoend/vreplication", "-run", "TestSidecarDB"],
+			"Command": [],
+			"Manual": false,
+			"Shard": "schemadiff_vrepl",
 			"RetryMax": 2,
 			"Tags": []
 		},

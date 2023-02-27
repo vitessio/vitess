@@ -301,6 +301,32 @@ func (e *ForeignKeyColumnTypeMismatchError) Error() string {
 	)
 }
 
+type MissingForeignKeyReferencedIndexError struct {
+	Table           string
+	Constraint      string
+	ReferencedTable string
+}
+
+func (e *MissingForeignKeyReferencedIndexError) Error() string {
+	return fmt.Sprintf("missing index in referenced table %s for foreign key constraint %s in table %s",
+		sqlescape.EscapeID(e.ReferencedTable),
+		sqlescape.EscapeID(e.Constraint),
+		sqlescape.EscapeID(e.Table),
+	)
+}
+
+type IndexNeededByForeignKeyError struct {
+	Table string
+	Key   string
+}
+
+func (e *IndexNeededByForeignKeyError) Error() string {
+	return fmt.Sprintf("key %s needed by a foreign key constraint in table %s",
+		sqlescape.EscapeID(e.Key),
+		sqlescape.EscapeID(e.Table),
+	)
+}
+
 type ViewDependencyUnresolvedError struct {
 	View string
 }

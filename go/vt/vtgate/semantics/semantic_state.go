@@ -309,25 +309,24 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 // the expressions behind the column definition of the derived table
 // SELECT foo FROM (SELECT id+42 as foo FROM user) as t
 // We need `foo` to be translated to `id+42` on the inside of the derived table
-func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
-	newExpr := sqlparser.SafeRewrite(sqlparser.CloneExpr(expr), nil, func(cursor *sqlparser.Cursor) bool {
+func RewriteDerivedTableExpression(expr sqlparser.Expr, vt TableInfo) sqlparser.Expr {
+	return sqlparser.CopyOnRewrite(expr, nil, func(cursor *sqlparser.CopyOnWriteCursor) {
 		node, ok := cursor.Node().(*sqlparser.ColName)
 		if !ok {
-			return true
+			return
 		}
 		exp, err := vt.getExprFor(node.Name.String())
 		if err == nil {
 			cursor.Replace(exp)
-		} else {
-			// cloning the expression and removing the qualifier
-			col := *node
-			col.Qualifier = sqlparser.TableName{}
-			cursor.Replace(&col)
+			return
 		}
-		return true
-	})
 
-	return newExpr.(sqlparser.Expr), nil
+		// cloning the expression and removing the qualifier
+		col := *node
+		col.Qualifier = sqlparser.TableName{}
+		cursor.Replace(&col)
+
+	}, nil).(sqlparser.Expr)
 }
 
 // FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality
@@ -344,7 +343,7 @@ func (st *SemTable) FindSubqueryReference(subquery *sqlparser.Subquery) *sqlpars
 func (st *SemTable) GetSubqueryNeedingRewrite() []*sqlparser.ExtractedSubquery {
 	var res []*sqlparser.ExtractedSubquery
 	for _, extractedSubquery := range st.SubqueryRef {
-		if extractedSubquery.NeedsRewrite {
+		if extractedSubquery.Merged {
 			res = append(res, extractedSubquery)
 		}
 	}
@@ -376,11 +375,18 @@ func (st *SemTable) SingleUnshardedKeyspace() (*vindexes.Keyspace, []*vindexes.T
 	for _, table := range st.Tables {
 		vindexTable := table.GetVindexTable()
 
-		if vindexTable == nil || vindexTable.Type != "" {
+		if vindexTable == nil {
 			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
 				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
+				continue
+			}
+			return nil, nil
+		}
+		if vindexTable.Type != "" {
+			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
+			if vindexTable.Type == vindexes.TypeReference {
 				continue
 			}
 			return nil, nil

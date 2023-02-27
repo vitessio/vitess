@@ -261,6 +261,12 @@ func (vc *vcursorImpl) FindRoutedTable(name sqlparser.TableName) (*vindexes.Tabl
 
 // FindTableOrVindex finds the specified table or vindex.
 func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	if name.Qualifier.IsEmpty() && name.Name.String() == "dual" {
+		// The magical MySQL dual table should only be resolved
+		// when it is not qualified by a database name.
+		return vc.getDualTable()
+	}
+
 	destKeyspace, destTabletType, dest, err := vc.executor.ParseDestinationTarget(name.Qualifier.String())
 	if err != nil {
 		return nil, nil, "", destTabletType, nil, err
@@ -273,6 +279,23 @@ func (vc *vcursorImpl) FindTableOrVindex(name sqlparser.TableName) (*vindexes.Ta
 		return nil, nil, "", destTabletType, nil, err
 	}
 	return table, vindex, destKeyspace, destTabletType, dest, nil
+}
+
+func (vc *vcursorImpl) getDualTable() (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	ksName := vc.getActualKeyspace()
+	var ks *vindexes.Keyspace
+	if ksName == "" {
+		ks = vc.vschema.FirstKeyspace()
+		ksName = ks.Name
+	} else {
+		ks = vc.vschema.Keyspaces[ksName].Keyspace
+	}
+	tbl := &vindexes.Table{
+		Name:     sqlparser.NewIdentifierCS("dual"),
+		Keyspace: ks,
+		Type:     vindexes.TypeReference,
+	}
+	return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
 }
 
 func (vc *vcursorImpl) getActualKeyspace() string {
@@ -406,6 +429,19 @@ const MaxBufferingRetries = 3
 func (vc *vcursorImpl) ExecutePrimitive(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
 	for try := 0; try < MaxBufferingRetries; try++ {
 		res, err := primitive.TryExecute(ctx, vc, bindVars, wantfields)
+		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
+			continue
+		}
+		return res, err
+	}
+	return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "upstream shards are not available")
+}
+
+func (vc *vcursorImpl) ExecutePrimitiveStandalone(ctx context.Context, primitive engine.Primitive, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
+	// clone the vcursorImpl with a new session.
+	newVC := vc.cloneWithAutocommitSession()
+	for try := 0; try < MaxBufferingRetries; try++ {
+		res, err := primitive.TryExecute(ctx, newVC, bindVars, wantfields)
 		if err != nil && vterrors.RootCause(err) == buffer.ShardMissingError {
 			continue
 		}
@@ -916,7 +952,7 @@ func (vc *vcursorImpl) ErrorIfShardedF(ks *vindexes.Keyspace, warn, errFormat st
 func (vc *vcursorImpl) WarnUnshardedOnly(format string, params ...any) {
 	if vc.warnShardedOnly {
 		vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-			Code:    mysql.ERNotSupportedYet,
+			Code:    uint32(mysql.ERNotSupportedYet),
 			Message: fmt.Sprintf(format, params...),
 		})
 	}
@@ -928,7 +964,7 @@ func (vc *vcursorImpl) PlannerWarning(message string) {
 		return
 	}
 	vc.warnings = append(vc.warnings, &querypb.QueryWarning{
-		Code:    mysql.ERNotSupportedYet,
+		Code:    uint32(mysql.ERNotSupportedYet),
 		Message: message,
 	})
 }
@@ -1061,6 +1097,7 @@ func (vc *vcursorImpl) ReleaseLock(ctx context.Context) error {
 
 func (vc *vcursorImpl) cloneWithAutocommitSession() *vcursorImpl {
 	safeSession := NewAutocommitSession(vc.safeSession.Session)
+	safeSession.logging = vc.safeSession.logging
 	return &vcursorImpl{
 		safeSession:     safeSession,
 		keyspace:        vc.keyspace,

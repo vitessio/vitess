@@ -13,7 +13,7 @@ concurrency:
 jobs:
   get_previous_release:
     if: always()
-    name: Get latest release
+    name: Get Previous Release - Reparent Old VTTablet
     runs-on: ubuntu-22.04
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
@@ -33,7 +33,7 @@ jobs:
 
   upgrade_downgrade_test:
     if: always() && (needs.get_previous_release.result == 'success')
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Reparent Old VTTablet
     runs-on: ubuntu-22.04
     needs:
       - get_previous_release
@@ -192,4 +192,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_reparent
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_reparent

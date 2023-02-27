@@ -65,8 +65,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 	sbclookup.Queries = nil
 
 	// Txn
@@ -76,8 +76,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 	sbclookup.Queries = nil
 
 	// Reserve
@@ -87,8 +87,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 	sbclookup.Queries = nil
 
 	// Reserve and Txn
@@ -99,8 +99,8 @@ func TestSelectNext(t *testing.T) {
 	require.NoError(t, err)
 
 	utils.MustMatch(t, wantQueries, sbclookup.Queries)
-	assert.Zero(t, sbclookup.BeginCount.Get())
-	assert.Zero(t, sbclookup.ReserveCount.Get())
+	assert.Zero(t, sbclookup.BeginCount.Load())
+	assert.Zero(t, sbclookup.ReserveCount.Load())
 }
 
 func TestSelectDBA(t *testing.T) {
@@ -161,7 +161,7 @@ func TestSystemVariablesMySQLBelow80(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "57000"
+	sqlparser.SetParserVersion("57000")
 	setVarEnabled = true
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
@@ -197,7 +197,7 @@ func TestSystemVariablesWithSetVarDisabled(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80000"
+	sqlparser.SetParserVersion("80000")
 	setVarEnabled = false
 	defer func() {
 		setVarEnabled = true
@@ -235,7 +235,7 @@ func TestSetSystemVariablesTx(t *testing.T) {
 	executor, sbc1, _, _ := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80001"
+	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: "TestExecutor"})
 
@@ -283,7 +283,7 @@ func TestSetSystemVariables(t *testing.T) {
 	executor, _, _, lookup := createExecutorEnv()
 	executor.normalize = true
 
-	sqlparser.MySQLVersion = "80001"
+	sqlparser.SetParserVersion("80001")
 
 	session := NewAutocommitSession(&vtgatepb.Session{EnableSystemSettings: true, TargetString: KsTestUnsharded, SystemVariables: map[string]string{}})
 
@@ -459,13 +459,14 @@ func TestGen4SelectDBA(t *testing.T) {
 	executor.normalize = true
 	executor.pv = querypb.ExecuteOptions_Gen4
 
-	query := "select * from INFORMATION_SCHEMA.foo"
+	query := "select * from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
 	_, err := executor.Execute(context.Background(), "TestSelectDBA",
 		NewSafeSession(&vtgatepb.Session{TargetString: "TestExecutor"}),
 		query, map[string]*querypb.BindVariable{},
 	)
 	require.NoError(t, err)
-	wantQueries := []*querypb.BoundQuery{{Sql: query, BindVariables: map[string]*querypb.BindVariable{}}}
+	expected := "select CONSTRAINT_CATALOG, CONSTRAINT_SCHEMA, CONSTRAINT_NAME, TABLE_SCHEMA, TABLE_NAME, CONSTRAINT_TYPE, `ENFORCED` from INFORMATION_SCHEMA.TABLE_CONSTRAINTS"
+	wantQueries := []*querypb.BoundQuery{{Sql: expected, BindVariables: map[string]*querypb.BindVariable{}}}
 	utils.MustMatch(t, wantQueries, sbc1.Queries)
 
 	sbc1.Queries = nil
@@ -1177,7 +1178,7 @@ func TestSelectEqual(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
 		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
@@ -1192,7 +1193,7 @@ func TestSelectEqual(t *testing.T) {
 		BindVariables: map[string]*querypb.BindVariable{},
 	}}
 	utils.MustMatch(t, wantQueries, sbc2.Queries)
-	if execCount := sbc1.ExecCount.Get(); execCount != 1 {
+	if execCount := sbc1.ExecCount.Load(); execCount != 1 {
 		t.Errorf("sbc1.ExecCount: %v, want 1\n", execCount)
 	}
 	if sbc1.Queries != nil {
@@ -3428,7 +3429,7 @@ func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	require.NoError(t, err)
 	unshardedWantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select `simple`.id from `simple`, zip_detail where `simple`.zip_detail_id = zip_detail.id",
+			Sql:           "select `simple`.id from `simple` join zip_detail on `simple`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
@@ -3741,7 +3742,7 @@ func TestSelectAggregationData(t *testing.T) {
 	}{
 		{
 			sql:         `select count(distinct col) from user`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col", "int64"), "1", "2", "2", "3"),
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|weight_string(col)", "int64|varbinary"), "1|NULL", "2|NULL", "2|NULL", "3|NULL"),
 			expSandboxQ: "select col, weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    `[name:"count(distinct col)" type:INT64]`,
 			expRow:      `[[INT64(3)]]`,
@@ -3755,14 +3756,14 @@ func TestSelectAggregationData(t *testing.T) {
 		},
 		{
 			sql:         `select col, count(*) from user group by col`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|3"),
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|3|NULL"),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc",
 			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(1) INT64(24)]]`,
 		},
 		{
 			sql:         `select col, count(*) from user group by col limit 2`,
-			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)", "int64|int64"), "1|2", "2|1", "3|4"),
+			sandboxRes:  sqltypes.MakeTestResult(sqltypes.MakeTestFields("col|count(*)|weight_string(col)", "int64|int64|varbinary"), "1|2|NULL", "2|1|NULL", "3|4|NULL"),
 			expSandboxQ: "select col, count(*), weight_string(col) from `user` group by col, weight_string(col) order by col asc limit :__upper_limit",
 			expField:    `[name:"col" type:INT64 name:"count(*)" type:INT64]`,
 			expRow:      `[[INT64(1) INT64(16)] [INT64(2) INT64(8)]]`,

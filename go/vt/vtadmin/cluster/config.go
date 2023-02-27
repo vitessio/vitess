@@ -346,16 +346,14 @@ func parseCacheConfigFlag(cfg *cache.Config, name, val string) (err error) {
 	case "backfill-request-duplicate-interval":
 		cfg.BackfillRequestDuplicateInterval, err = time.ParseDuration(val)
 	case "backfill-queue-size":
-		size, err := strconv.ParseInt(val, 10, 64)
+		cfg.BackfillQueueSize, err = strconv.Atoi(val)
 		if err != nil {
 			return err
 		}
 
-		if size < 0 {
-			return fmt.Errorf("%w: backfill queue size must be non-negative; got %d", strconv.ErrRange, size)
+		if cfg.BackfillQueueSize < 0 {
+			return fmt.Errorf("%w: backfill queue size must be non-negative; got %d", strconv.ErrRange, cfg.BackfillQueueSize)
 		}
-
-		cfg.BackfillQueueSize = int(size)
 	case "backfill-enqueue-wait-time":
 		cfg.BackfillEnqueueWaitTime, err = time.ParseDuration(val)
 	default:
@@ -443,16 +441,14 @@ func (cfg *RPCPoolConfig) merge(override *RPCPoolConfig) *RPCPoolConfig {
 func (cfg *RPCPoolConfig) parseFlag(name string, val string) (err error) {
 	switch name {
 	case "size":
-		size, err := strconv.ParseInt(val, 10, 64)
+		cfg.Size, err = strconv.Atoi(val)
 		if err != nil {
 			return err
 		}
 
-		if size < 0 {
-			return fmt.Errorf("%w: pool size must be non-negative; got %d", strconv.ErrRange, size)
+		if cfg.Size < 0 {
+			return fmt.Errorf("%w: pool size must be non-negative; got %d", strconv.ErrRange, cfg.Size)
 		}
-
-		cfg.Size = int(size)
 	case "timeout":
 		cfg.WaitTimeout, err = time.ParseDuration(val)
 		if err != nil {

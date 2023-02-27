@@ -1,4 +1,4 @@
-CREATE TABLE tokens_token_lookup (
+CREATE TABLE IF NOT EXISTS tokens_token_lookup (
   id BIGINT NOT NULL AUTO_INCREMENT,
   page BIGINT UNSIGNED,
   token VARCHAR(255) DEFAULT NULL,
@@ -6,7 +6,7 @@ CREATE TABLE tokens_token_lookup (
   UNIQUE KEY idx_token_page (`token`, `page`)
 ) ENGINE=InnoDB;
 
-CREATE TABLE messages_message_lookup (
+CREATE TABLE IF NOT EXISTS messages_message_lookup (
   id BIGINT NOT NULL AUTO_INCREMENT,
   page BIGINT UNSIGNED,
   message VARCHAR(1000),

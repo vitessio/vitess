@@ -141,7 +141,7 @@ func TestTracking(t *testing.T) {
 		t.Run(fmt.Sprintf("%d - %s", i, tcase.tName), func(t *testing.T) {
 			sbc := sandboxconn.NewSandboxConn(tablet)
 			ch := make(chan *discovery.TabletHealth)
-			tracker := NewTracker(ch, "")
+			tracker := NewTracker(ch, "", false)
 			tracker.consumeDelay = 1 * time.Millisecond
 			tracker.Start()
 			defer tracker.Stop()
@@ -210,7 +210,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
-	tracker := NewTracker(ch, "")
+	tracker := NewTracker(ch, "", false)
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()
@@ -307,4 +307,87 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 	assert.NotNil(t, ks1.reloadKeyspace, "ks1 needs to be initialized")
 	assert.NotNil(t, ks2.reloadKeyspace, "ks2 needs to be initialized")
 	assert.Nil(t, ks3.reloadKeyspace, "ks3 already initialized")
+}
+
+// TestViewsTracking tests that the tracker is able to track views.
+func TestViewsTracking(t *testing.T) {
+	target := &querypb.Target{Cell: "aa", Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
+
+	schemaDefResult := []map[string]string{{
+		"prior": "create view prior as select 1 from tbl",
+		"t1":    "create view t1 as select 1 from tbl1",
+		"t2":    "create view t2 as select 1 from tbl2",
+	}, {
+		"t2": "create view t2 as select 1,2 from tbl2",
+		"t3": "create view t3 as select 1 from tbl3",
+	}, {
+		"t4": "create view t4 as select 1 from tbl4",
+	}}
+
+	testcases := []struct {
+		testName string
+		updView  []string
+		exp      map[string]string
+	}{{
+		testName: "new views",
+		updView:  []string{"prior", "t1", "t2"},
+		exp: map[string]string{
+			"t1":    "select 1 from tbl1",
+			"t2":    "select 1 from tbl2",
+			"prior": "select 1 from tbl"},
+	}, {
+		testName: "delete prior, updated t2 and new t3",
+		updView:  []string{"prior", "t2", "t3"},
+		exp: map[string]string{
+			"t1": "select 1 from tbl1",
+			"t2": "select 1, 2 from tbl2",
+			"t3": "select 1 from tbl3"},
+	}, {
+		testName: "new t4",
+		updView:  []string{"t4"},
+		exp: map[string]string{
+			"t1": "select 1 from tbl1",
+			"t2": "select 1, 2 from tbl2",
+			"t3": "select 1 from tbl3",
+			"t4": "select 1 from tbl4"},
+	}}
+
+	ch := make(chan *discovery.TabletHealth)
+	tracker := NewTracker(ch, "", true)
+	tracker.tables = nil // making tables map nil - so load keyspace does not try to load the tables information.
+	tracker.consumeDelay = 1 * time.Millisecond
+	tracker.Start()
+	defer tracker.Stop()
+
+	wg := sync.WaitGroup{}
+	tracker.RegisterSignalReceiver(func() {
+		wg.Done()
+	})
+
+	sbc := sandboxconn.NewSandboxConn(tablet)
+	sbc.SetSchemaResult(schemaDefResult)
+
+	for count, tcase := range testcases {
+		t.Run(tcase.testName, func(t *testing.T) {
+			wg.Add(1)
+			ch <- &discovery.TabletHealth{
+				Conn:    sbc,
+				Tablet:  tablet,
+				Target:  target,
+				Serving: true,
+				Stats:   &querypb.RealtimeStats{ViewSchemaChanged: tcase.updView},
+			}
+
+			require.False(t, waitTimeout(&wg, time.Second), "schema was updated but received no signal")
+			require.EqualValues(t, count+1, sbc.GetSchemaCount.Load())
+
+			_, keyspacePresent := tracker.tracked[target.Keyspace]
+			require.Equal(t, true, keyspacePresent)
+
+			for k, v := range tcase.exp {
+				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews("ks", k)), "mismatch for table: ", k)
+			}
+		})
+	}
 }

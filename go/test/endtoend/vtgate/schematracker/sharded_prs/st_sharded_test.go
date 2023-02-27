@@ -173,6 +173,10 @@ func TestMain(m *testing.M) {
 			}
 		}
 
+		if err := clusterInstance.StartVTOrc(KeyspaceName); err != nil {
+			return 1
+		}
+
 		err = waitForVTGateAndVTTablet()
 		if err != nil {
 			fmt.Println(err)

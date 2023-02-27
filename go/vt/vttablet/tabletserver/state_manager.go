@@ -20,16 +20,18 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -74,7 +76,7 @@ type stateManager struct {
 	// If an acquire is successful, we must either Release explicitly
 	// or invoke execTransition, which will release once it's done.
 	// There are no ordering restrictions on using TryAcquire.
-	transitioning *sync2.Semaphore
+	transitioning *semaphore.Weighted
 
 	// mu should be held to access the group of variables under it.
 	// It is required in spite of the transitioning semaphore.
@@ -125,11 +127,11 @@ type stateManager struct {
 
 	// checkMySQLThrottler ensures that CheckMysql
 	// doesn't get spammed.
-	checkMySQLThrottler *sync2.Semaphore
-	checkMySQLRunning   sync2.AtomicBool
+	checkMySQLThrottler *semaphore.Weighted
+	checkMySQLRunning   atomic.Bool
 
 	timebombDuration      time.Duration
-	unhealthyThreshold    sync2.AtomicDuration
+	unhealthyThreshold    atomic.Int64
 	shutdownGracePeriod   time.Duration
 	transitionGracePeriod time.Duration
 }
@@ -190,11 +192,11 @@ type (
 // Init performs the second phase of initialization.
 func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 	sm.target = proto.Clone(target).(*querypb.Target)
-	sm.transitioning = sync2.NewSemaphore(1, 0)
-	sm.checkMySQLThrottler = sync2.NewSemaphore(1, 0)
+	sm.transitioning = semaphore.NewWeighted(1)
+	sm.checkMySQLThrottler = semaphore.NewWeighted(1)
 	sm.timebombDuration = env.Config().OltpReadPool.TimeoutSeconds.Get() * 10
 	sm.hcticks = timer.NewTimer(env.Config().Healthcheck.IntervalSeconds.Get())
-	sm.unhealthyThreshold = sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get())
+	sm.unhealthyThreshold.Store(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get().Nanoseconds())
 	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
 }
@@ -228,7 +230,9 @@ func (sm *stateManager) SetServingType(tabletType topodatapb.TabletType, terTime
 // already in progress, it waits. If the desired state is already reached, it
 // returns false without acquiring the semaphore.
 func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTimestamp time.Time, state servingState, reason string) bool {
-	sm.transitioning.Acquire()
+	if sm.transitioning.Acquire(context.Background(), 1) != nil {
+		return false
+	}
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 
@@ -237,14 +241,14 @@ func (sm *stateManager) mustTransition(tabletType topodatapb.TabletType, terTime
 	sm.terTimestamp = terTimestamp
 	sm.reason = reason
 	if sm.target.TabletType == tabletType && sm.state == state {
-		sm.transitioning.Release()
+		sm.transitioning.Release(1)
 		return false
 	}
 	return true
 }
 
 func (sm *stateManager) execTransition(tabletType topodatapb.TabletType, state servingState) error {
-	defer sm.transitioning.Release()
+	defer sm.transitioning.Release(1)
 
 	var err error
 	switch state {
@@ -299,7 +303,7 @@ func (sm *stateManager) recheckState() bool {
 		sm.retrying = false
 		return true
 	}
-	if !sm.transitioning.TryAcquire() {
+	if !sm.transitioning.TryAcquire(1) {
 		return false
 	}
 	go sm.execTransition(sm.wantTabletType, sm.wantState)
@@ -310,16 +314,16 @@ func (sm *stateManager) recheckState() bool {
 // If it fails, then we shutdown the service and initiate
 // the retry loop.
 func (sm *stateManager) checkMySQL() {
-	if !sm.checkMySQLThrottler.TryAcquire() {
+	if !sm.checkMySQLThrottler.TryAcquire(1) {
 		return
 	}
 	log.Infof("CheckMySQL started")
-	sm.checkMySQLRunning.Set(true)
+	sm.checkMySQLRunning.Store(true)
 	go func() {
 		defer func() {
 			time.Sleep(1 * time.Second)
-			sm.checkMySQLRunning.Set(false)
-			sm.checkMySQLThrottler.Release()
+			sm.checkMySQLRunning.Store(false)
+			sm.checkMySQLThrottler.Release(1)
 			log.Infof("CheckMySQL finished")
 		}()
 
@@ -328,11 +332,11 @@ func (sm *stateManager) checkMySQL() {
 			return
 		}
 
-		if !sm.transitioning.TryAcquire() {
+		if !sm.transitioning.TryAcquire(1) {
 			// If we're already transitioning, don't interfere.
 			return
 		}
-		defer sm.transitioning.Release()
+		defer sm.transitioning.Release(1)
 
 		// This is required to prevent new queries from running in StartRequest
 		// unless they are part of a running transaction.
@@ -355,7 +359,7 @@ func (sm *stateManager) setWantState(stateWanted servingState) {
 
 // isCheckMySQLRunning returns 1 if CheckMySQL function is in progress
 func (sm *stateManager) isCheckMySQLRunning() int64 {
-	if sm.checkMySQLRunning.Get() {
+	if sm.checkMySQLRunning.Load() {
 		return 1
 	}
 	return 0
@@ -598,6 +602,9 @@ func (sm *stateManager) setTimeBomb() chan struct{} {
 
 // setState changes the state and logs the event.
 func (sm *stateManager) setState(tabletType topodatapb.TabletType, state servingState) {
+	defer func() {
+		log.Infof("Tablet Init took %d ms", time.Since(servenv.GetInitStartTime()).Milliseconds())
+	}()
 	sm.mu.Lock()
 	defer sm.mu.Unlock()
 	if tabletType == topodatapb.TabletType_UNKNOWN {
@@ -672,7 +679,7 @@ func (sm *stateManager) refreshReplHealthLocked() (time.Duration, error) {
 		}
 		sm.replHealthy = false
 	} else {
-		if lag > sm.unhealthyThreshold.Get() {
+		if lag > time.Duration(sm.unhealthyThreshold.Load()) {
 			if sm.replHealthy {
 				log.Infof("Going unhealthy due to high replication lag: %v", lag)
 			}
@@ -801,5 +808,5 @@ func (sm *stateManager) IsServingString() string {
 }
 
 func (sm *stateManager) SetUnhealthyThreshold(v time.Duration) {
-	sm.unhealthyThreshold.Set(v)
+	sm.unhealthyThreshold.Store(v.Nanoseconds())
 }
