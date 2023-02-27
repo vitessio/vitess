@@ -370,11 +370,19 @@ func (st *SemTable) SingleUnshardedKeyspace() *vindexes.Keyspace {
 	var ks *vindexes.Keyspace
 	for _, table := range st.Tables {
 		vindexTable := table.GetVindexTable()
-		if vindexTable == nil || vindexTable.Type != "" {
+
+		if vindexTable == nil {
 			_, isDT := table.getExpr().Expr.(*sqlparser.DerivedTable)
 			if isDT {
 				// derived tables are ok, as long as all real tables are from the same unsharded keyspace
 				// we check the real tables inside the derived table as well for same unsharded keyspace.
+				continue
+			}
+			return nil
+		}
+		if vindexTable.Type != "" {
+			// A reference table is not an issue when seeing if a query is going to an unsharded keyspace
+			if vindexTable.Type == vindexes.TypeReference {
 				continue
 			}
 			return nil
