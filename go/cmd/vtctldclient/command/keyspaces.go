@@ -266,12 +266,16 @@ func commandGetKeyspace(cmd *cobra.Command, args []string) error {
 	resp, err := client.GetKeyspace(commandCtx, &vtctldatapb.GetKeyspaceRequest{
 		Keyspace: ks,
 	})
-
 	if err != nil {
 		return err
 	}
 
-	fmt.Printf("%+v\n", resp.Keyspace)
+	data, err := cli.MarshalJSON(resp.Keyspace)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
 
 	return nil
 }
