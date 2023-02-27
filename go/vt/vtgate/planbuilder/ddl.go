@@ -208,18 +208,19 @@ func buildAlterView(vschema plancontext.VSchema, ddl *sqlparser.AlterView, reser
 	if err != nil {
 		return nil, nil, err
 	}
+	selPlanKs := selectPlan.primitive.GetKeyspaceName()
+	if keyspace.Name != selPlanKs {
+		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
+	}
 	if vschema.IsViewsEnabled() {
 		if keyspace == nil {
 			return nil, nil, vterrors.VT09005()
 		}
 		return destination, keyspace, nil
 	}
-	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
+	isRoutePlan, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.VT12001(ViewComplex)
-	}
-	if keyspace.Name != keyspaceName {
-		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
 	}
 	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
 		return nil, nil, vterrors.VT12001(ViewComplex)
@@ -249,18 +250,19 @@ func buildCreateView(vschema plancontext.VSchema, ddl *sqlparser.CreateView, res
 	if err != nil {
 		return nil, nil, err
 	}
+	selPlanKs := selectPlan.primitive.GetKeyspaceName()
+	if keyspace.Name != selPlanKs {
+		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
+	}
 	if vschema.IsViewsEnabled() {
 		if keyspace == nil {
 			return nil, nil, vterrors.VT09005()
 		}
 		return destination, keyspace, nil
 	}
-	isRoutePlan, keyspaceName, opCode := tryToGetRoutePlan(selectPlan.primitive)
+	isRoutePlan, opCode := tryToGetRoutePlan(selectPlan.primitive)
 	if !isRoutePlan {
 		return nil, nil, vterrors.VT12001(ViewComplex)
-	}
-	if keyspace.Name != keyspaceName {
-		return nil, nil, vterrors.VT12001(ViewDifferentKeyspace)
 	}
 	if opCode != engine.Unsharded && opCode != engine.EqualUnique && opCode != engine.Scatter {
 		return nil, nil, vterrors.VT12001(ViewComplex)
@@ -403,13 +405,13 @@ func buildRenameTable(vschema plancontext.VSchema, renameTable *sqlparser.Rename
 	return destination, keyspace, nil
 }
 
-func tryToGetRoutePlan(selectPlan engine.Primitive) (valid bool, keyspaceName string, opCode engine.Opcode) {
+func tryToGetRoutePlan(selectPlan engine.Primitive) (valid bool, opCode engine.Opcode) {
 	switch plan := selectPlan.(type) {
 	case *engine.Route:
-		return true, plan.Keyspace.Name, plan.Opcode
+		return true, plan.Opcode
 	case engine.Gen4Comparer:
 		return tryToGetRoutePlan(plan.GetGen4Primitive())
 	default:
-		return false, "", engine.Opcode(0)
+		return false, engine.Opcode(0)
 	}
 }

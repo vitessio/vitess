@@ -10,10 +10,15 @@
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
 
 ## <a id="major-changes"/> Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
+
+When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used. 
 
 #### <a id="deprecated-stats"/>Deprecated Stats
 
@@ -168,3 +173,7 @@ Some notes to help understand these metrics:
 
 We are introducing new error counter `QueryErrorCountsWithCode` for VTTablet. It is similar to existing [QueryErrorCounts](https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletserver/query_engine.go#L174) except it contains errorCode as additional dimension.
 We will deprecate `QueryErrorCounts` in v18.
+
+## <a id="deprecations-and-deletions"/> Deprecations and Deletions
+
+* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.

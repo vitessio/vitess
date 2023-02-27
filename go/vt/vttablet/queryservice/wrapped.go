@@ -324,6 +324,14 @@ func (ws *wrappedService) Release(ctx context.Context, target *querypb.Target, t
 	})
 }
 
+func (ws *wrappedService) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) (err error) {
+	err = ws.wrapper(ctx, target, ws.impl, "GetSchema", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
+		innerErr := conn.GetSchema(ctx, target, tableType, tableNames, callback)
+		return canRetry(ctx, innerErr), innerErr
+	})
+	return err
+}
+
 func (ws *wrappedService) Close(ctx context.Context) error {
 	return ws.wrapper(ctx, nil, ws.impl, "Close", false, func(ctx context.Context, target *querypb.Target, conn QueryService) (bool, error) {
 		// No point retrying Close.

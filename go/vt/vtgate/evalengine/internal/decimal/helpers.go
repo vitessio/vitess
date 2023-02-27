@@ -1,7 +1,5 @@
-//go:build amd64 || arm64 || mips64 || mips64le || ppc64 || ppc64le || riscv64 || s390x
-
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -16,15 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package collations
+package decimal
 
-const (
-	m1 = 0xa0761d6478bd642f
-	m2 = 0xe7037ed1a0b428db
-	m3 = 0x8ebc6af09c88c6e3
-	m4 = 0x589965cc75374cc3
-	m5 = 0x1d8e4e27c47d124f
-)
+import "vitess.io/vitess/go/vt/vthash"
 
-// Generate all the metadata used for collations from the JSON data dumped from MySQL
-//go:generate go run ./tools/makecolldata/ --embed=true
+func (d *Decimal) Hash(hasher *vthash.Hasher) {
+	_, _ = hasher.Write(d.formatFast(0, false, true))
+}

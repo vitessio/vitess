@@ -134,20 +134,23 @@ func (t *Tracker) loadViews(conn queryservice.QueryService, target *querypb.Targ
 		return nil
 	}
 
-	fvRes, err := conn.Execute(t.ctx, target, mysql.FetchViews, nil, 0, 0, nil)
-	if err != nil {
-		return err
-	}
-
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	// We must clear out any previous view definition before loading it here as this is called
-	// whenever a shard's primary tablet starts and sends the initial signal. Without
-	// clearing out the previous view definition removes any dropped views.
+	// whenever a shard's primary tablet starts and sends the initial signal.
+	// This is needed clear out any stale view definitions.
 	t.clearKeyspaceViews(target.Keyspace)
-	t.updateViews(target.Keyspace, fvRes)
-	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, len(fvRes.Rows))
 
+	var numViews int
+	err := conn.GetSchema(t.ctx, target, querypb.SchemaTableType_VIEWS, nil, func(schemaRes *querypb.GetSchemaResponse) error {
+		t.updateViews(target.Keyspace, schemaRes.TableDefinition)
+		numViews += len(schemaRes.TableDefinition)
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+	log.Infof("finished loading views for keyspace %s. Found %d views", target.Keyspace, numViews)
 	return nil
 }
 
@@ -299,42 +302,31 @@ func (t *Tracker) updateTables(keyspace string, res *sqltypes.Result) {
 }
 
 func (t *Tracker) updatedViewSchema(th *discovery.TabletHealth) bool {
-	viewsUpdated := th.Stats.ViewSchemaChanged
-	views, err := sqltypes.BuildBindVariable(viewsUpdated)
-	if err != nil {
-		log.Errorf("failed to read updated views from TabletHealth: %v", err)
-		return false
-	}
-	bv := map[string]*querypb.BindVariable{"viewNames": views}
-	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedViews, bv, 0, 0, nil)
-	if err != nil {
-		t.tracked[th.Target.Keyspace].setLoaded(false)
-		// TODO: optimize for the views that got errored out.
-		log.Warningf("error fetching new views definition for %v", viewsUpdated, err)
-		code := vterrors.Code(err)
-		if code == vtrpcpb.Code_UNAUTHENTICATED || code == vtrpcpb.Code_PERMISSION_DENIED {
-			log.Warning(aclErrorMessageLog)
-		}
-		return false
-	}
-
 	t.mu.Lock()
 	defer t.mu.Unlock()
+
+	viewsUpdated := th.Stats.ViewSchemaChanged
 
 	// first we empty all prior schema. deleted tables will not show up in the result,
 	// so this is the only chance to delete
 	for _, view := range viewsUpdated {
 		t.views.delete(th.Target.Keyspace, view)
 	}
-	t.updateViews(th.Target.Keyspace, res)
+	err := th.Conn.GetSchema(t.ctx, th.Target, querypb.SchemaTableType_VIEWS, viewsUpdated, func(schemaRes *querypb.GetSchemaResponse) error {
+		t.updateViews(th.Target.Keyspace, schemaRes.TableDefinition)
+		return nil
+	})
+	if err != nil {
+		t.tracked[th.Target.Keyspace].setLoaded(false)
+		// TODO: optimize for the views that got errored out.
+		log.Warningf("error fetching new views definition for %v", viewsUpdated, err)
+		return false
+	}
 	return true
-
 }
 
-func (t *Tracker) updateViews(keyspace string, res *sqltypes.Result) {
-	for _, row := range res.Rows {
-		viewName := row[0].ToString()
-		viewDef := row[1].ToString()
+func (t *Tracker) updateViews(keyspace string, res map[string]string) {
+	for viewName, viewDef := range res {
 		t.views.set(keyspace, viewName, viewDef)
 	}
 }
@@ -413,12 +405,12 @@ func (vm *viewMap) set(ks, tbl, sql string) {
 		log.Warningf("ignoring view '%s', parsing error in view definition: '%s'", tbl, sql)
 		return
 	}
-	sel, ok := stmt.(sqlparser.SelectStatement)
+	cv, ok := stmt.(*sqlparser.CreateView)
 	if !ok {
-		log.Warningf("ignoring view '%s', view definition is not a select query: %T", tbl, stmt)
+		log.Warningf("ignoring view '%s', view definition is not a create view query: %T", tbl, stmt)
 		return
 	}
-	m[tbl] = sel
+	m[tbl] = cv.Select
 }
 
 func (vm *viewMap) get(ks, tbl string) sqlparser.SelectStatement {

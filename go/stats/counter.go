@@ -17,10 +17,11 @@ limitations under the License.
 package stats
 
 import (
+	"math"
 	"strconv"
+	"sync/atomic"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 )
 
@@ -31,7 +32,7 @@ var logCounterNegative = logutil.NewThrottledLogger("StatsCounterNegative", 1*ti
 // For a one-dimensional or multi-dimensional counter, please use
 // CountersWithSingleLabel or CountersWithMultiLabels instead.
 type Counter struct {
-	i    sync2.AtomicInt64
+	i    atomic.Int64
 	help string
 }
 
@@ -57,22 +58,22 @@ func (v *Counter) Add(delta int64) {
 // only when we are certain that the underlying value we are setting
 // is increment only
 func (v *Counter) Set(value int64) {
-	v.i.Set(value)
+	v.i.Store(value)
 }
 
 // Reset resets the counter value to 0.
 func (v *Counter) Reset() {
-	v.i.Set(int64(0))
+	v.i.Store(0)
 }
 
 // Get returns the value.
 func (v *Counter) Get() int64 {
-	return v.i.Get()
+	return v.i.Load()
 }
 
 // String implements the expvar.Var interface.
 func (v *Counter) String() string {
-	return strconv.FormatInt(v.i.Get(), 10)
+	return strconv.FormatInt(v.Get(), 10)
 }
 
 // Help returns the help string.
@@ -137,7 +138,7 @@ func NewGauge(name string, help string) *Gauge {
 
 // Set overwrites the current value.
 func (v *Gauge) Set(value int64) {
-	v.Counter.i.Set(value)
+	v.Counter.i.Store(value)
 }
 
 // Add adds the provided value to the Gauge.
@@ -172,7 +173,7 @@ func NewGaugeFunc(name string, help string, f func() int64) *GaugeFunc {
 // For a one-dimensional or multi-dimensional counter, please use
 // CountersWithSingleLabel or CountersWithMultiLabels instead.
 type GaugeFloat64 struct {
-	i    sync2.AtomicFloat64
+	i    atomic.Uint64
 	help string
 }
 
@@ -190,22 +191,22 @@ func NewGaugeFloat64(name string, help string) *GaugeFloat64 {
 // only when we are certain that the underlying value we are setting
 // is increment only
 func (v *GaugeFloat64) Set(value float64) {
-	v.i.Set(value)
+	v.i.Store(math.Float64bits(value))
 }
 
 // Reset resets the counter value to 0.
 func (v *GaugeFloat64) Reset() {
-	v.i.Set(float64(0))
+	v.i.Store(0)
 }
 
 // Get returns the value.
 func (v *GaugeFloat64) Get() float64 {
-	return v.i.Get()
+	return math.Float64frombits(v.i.Load())
 }
 
 // String implements the expvar.Var interface.
 func (v *GaugeFloat64) String() string {
-	return strconv.FormatFloat(v.i.Get(), 'f', -1, 64)
+	return strconv.FormatFloat(v.Get(), 'f', -1, 64)
 }
 
 // Help returns the help string.

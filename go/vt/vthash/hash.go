@@ -1,5 +1,5 @@
 /*
-Copyright 2019 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -14,5 +14,17 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package sync2 provides extra functionality along the same lines as sync.
-package sync2
+package vthash
+
+import (
+	"vitess.io/vitess/go/vt/vthash/metro"
+)
+
+type Hasher = metro.Metro128
+type Hash = [16]byte
+
+func New() Hasher {
+	h := Hasher{}
+	h.Reset()
+	return h
+}
