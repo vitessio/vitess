@@ -9,6 +9,7 @@
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
 
 ## <a id="major-changes"/> Major Changes
 
@@ -164,3 +165,7 @@ Some notes to help understand these metrics:
  * `DurationByPhaseSeconds["CatchUpReplication"]` measures how long it took to catch-up replication after the restore phase.
  * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
  * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
+
+## <a id="deprecations-and-deletions"/> Deprecations and Deletions
+
+* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
