@@ -13241,6 +13241,9 @@ export namespace topodata {
 
         /** Keyspace durability_policy */
         durability_policy?: (string|null);
+
+        /** Keyspace throttler_config */
+        throttler_config?: (topodata.IThrottlerConfig|null);
     }
 
     /** Represents a Keyspace. */
@@ -13266,6 +13269,9 @@ export namespace topodata {
 
         /** Keyspace durability_policy. */
         public durability_policy: string;
+
+        /** Keyspace throttler_config. */
+        public throttler_config?: (topodata.IThrottlerConfig|null);
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -13930,6 +13936,114 @@ export namespace topodata {
         public toJSON(): { [k: string]: any };
     }
 
+    /** Properties of a ThrottlerConfig. */
+    interface IThrottlerConfig {
+
+        /** ThrottlerConfig enabled */
+        enabled?: (boolean|null);
+
+        /** ThrottlerConfig threshold */
+        threshold?: (number|null);
+
+        /** ThrottlerConfig custom_query */
+        custom_query?: (string|null);
+
+        /** ThrottlerConfig check_as_check_self */
+        check_as_check_self?: (boolean|null);
+    }
+
+    /** Represents a ThrottlerConfig. */
+    class ThrottlerConfig implements IThrottlerConfig {
+
+        /**
+         * Constructs a new ThrottlerConfig.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: topodata.IThrottlerConfig);
+
+        /** ThrottlerConfig enabled. */
+        public enabled: boolean;
+
+        /** ThrottlerConfig threshold. */
+        public threshold: number;
+
+        /** ThrottlerConfig custom_query. */
+        public custom_query: string;
+
+        /** ThrottlerConfig check_as_check_self. */
+        public check_as_check_self: boolean;
+
+        /**
+         * Creates a new ThrottlerConfig instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns ThrottlerConfig instance
+         */
+        public static create(properties?: topodata.IThrottlerConfig): topodata.ThrottlerConfig;
+
+        /**
+         * Encodes the specified ThrottlerConfig message. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
+         * @param message ThrottlerConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified ThrottlerConfig message, length delimited. Does not implicitly {@link topodata.ThrottlerConfig.verify|verify} messages.
+         * @param message ThrottlerConfig message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: topodata.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a ThrottlerConfig message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns ThrottlerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.ThrottlerConfig;
+
+        /**
+         * Decodes a ThrottlerConfig message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns ThrottlerConfig
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.ThrottlerConfig;
+
+        /**
+         * Verifies a ThrottlerConfig message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a ThrottlerConfig message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns ThrottlerConfig
+         */
+        public static fromObject(object: { [k: string]: any }): topodata.ThrottlerConfig;
+
+        /**
+         * Creates a plain object from a ThrottlerConfig message. Also converts values to other types if specified.
+         * @param message ThrottlerConfig
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: topodata.ThrottlerConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this ThrottlerConfig to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
     /** Properties of a SrvKeyspace. */
     interface ISrvKeyspace {
 
@@ -13940,7 +14054,7 @@ export namespace topodata {
         served_from?: (topodata.SrvKeyspace.IServedFrom[]|null);
 
         /** SrvKeyspace throttler_config */
-        throttler_config?: (topodata.SrvKeyspace.IThrottlerConfig|null);
+        throttler_config?: (topodata.IThrottlerConfig|null);
     }
 
     /** Represents a SrvKeyspace. */
@@ -13959,7 +14073,7 @@ export namespace topodata {
         public served_from: topodata.SrvKeyspace.IServedFrom[];
 
         /** SrvKeyspace throttler_config. */
-        public throttler_config?: (topodata.SrvKeyspace.IThrottlerConfig|null);
+        public throttler_config?: (topodata.IThrottlerConfig|null);
 
         /**
          * Creates a new SrvKeyspace instance using the specified properties.
@@ -14227,114 +14341,6 @@ export namespace topodata {
 
             /**
              * Converts this ServedFrom to JSON.
-             * @returns JSON object
-             */
-            public toJSON(): { [k: string]: any };
-        }
-
-        /** Properties of a ThrottlerConfig. */
-        interface IThrottlerConfig {
-
-            /** ThrottlerConfig enabled */
-            enabled?: (boolean|null);
-
-            /** ThrottlerConfig threshold */
-            threshold?: (number|null);
-
-            /** ThrottlerConfig custom_query */
-            custom_query?: (string|null);
-
-            /** ThrottlerConfig check_as_check_self */
-            check_as_check_self?: (boolean|null);
-        }
-
-        /** Represents a ThrottlerConfig. */
-        class ThrottlerConfig implements IThrottlerConfig {
-
-            /**
-             * Constructs a new ThrottlerConfig.
-             * @param [properties] Properties to set
-             */
-            constructor(properties?: topodata.SrvKeyspace.IThrottlerConfig);
-
-            /** ThrottlerConfig enabled. */
-            public enabled: boolean;
-
-            /** ThrottlerConfig threshold. */
-            public threshold: number;
-
-            /** ThrottlerConfig custom_query. */
-            public custom_query: string;
-
-            /** ThrottlerConfig check_as_check_self. */
-            public check_as_check_self: boolean;
-
-            /**
-             * Creates a new ThrottlerConfig instance using the specified properties.
-             * @param [properties] Properties to set
-             * @returns ThrottlerConfig instance
-             */
-            public static create(properties?: topodata.SrvKeyspace.IThrottlerConfig): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Encodes the specified ThrottlerConfig message. Does not implicitly {@link topodata.SrvKeyspace.ThrottlerConfig.verify|verify} messages.
-             * @param message ThrottlerConfig message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encode(message: topodata.SrvKeyspace.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Encodes the specified ThrottlerConfig message, length delimited. Does not implicitly {@link topodata.SrvKeyspace.ThrottlerConfig.verify|verify} messages.
-             * @param message ThrottlerConfig message or plain object to encode
-             * @param [writer] Writer to encode to
-             * @returns Writer
-             */
-            public static encodeDelimited(message: topodata.SrvKeyspace.IThrottlerConfig, writer?: $protobuf.Writer): $protobuf.Writer;
-
-            /**
-             * Decodes a ThrottlerConfig message from the specified reader or buffer.
-             * @param reader Reader or buffer to decode from
-             * @param [length] Message length if known beforehand
-             * @returns ThrottlerConfig
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Decodes a ThrottlerConfig message from the specified reader or buffer, length delimited.
-             * @param reader Reader or buffer to decode from
-             * @returns ThrottlerConfig
-             * @throws {Error} If the payload is not a reader or valid buffer
-             * @throws {$protobuf.util.ProtocolError} If required fields are missing
-             */
-            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Verifies a ThrottlerConfig message.
-             * @param message Plain object to verify
-             * @returns `null` if valid, otherwise the reason why it is not
-             */
-            public static verify(message: { [k: string]: any }): (string|null);
-
-            /**
-             * Creates a ThrottlerConfig message from a plain object. Also converts values to their respective internal types.
-             * @param object Plain object
-             * @returns ThrottlerConfig
-             */
-            public static fromObject(object: { [k: string]: any }): topodata.SrvKeyspace.ThrottlerConfig;
-
-            /**
-             * Creates a plain object from a ThrottlerConfig message. Also converts values to other types if specified.
-             * @param message ThrottlerConfig
-             * @param [options] Conversion options
-             * @returns Plain object
-             */
-            public static toObject(message: topodata.SrvKeyspace.ThrottlerConfig, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-            /**
-             * Converts this ThrottlerConfig to JSON.
              * @returns JSON object
              */
             public toJSON(): { [k: string]: any };

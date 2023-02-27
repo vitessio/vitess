@@ -129,7 +129,7 @@ type Throttler struct {
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlInventoryChan      chan *mysql.Inventory
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
-	throttlerConfigChan     chan *topodatapb.SrvKeyspace_ThrottlerConfig
+	throttlerConfigChan     chan *topodatapb.ThrottlerConfig
 
 	mysqlInventory *mysql.Inventory
 
@@ -187,7 +187,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
-	throttler.throttlerConfigChan = make(chan *topodatapb.SrvKeyspace_ThrottlerConfig)
+	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.mysqlInventory = mysql.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
@@ -283,7 +283,7 @@ func (throttler *Throttler) initConfig() {
 }
 
 // readThrottlerConfig proactively reads the throttler's config from SrvKeyspace in local topo
-func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatapb.SrvKeyspace_ThrottlerConfig, error) {
+func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatapb.ThrottlerConfig, error) {
 	srvks, err := throttler.ts.GetSrvKeyspace(ctx, throttler.cell, throttler.keyspace)
 	if err != nil {
 		return nil, err
@@ -292,9 +292,9 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 }
 
 // normalizeThrottlerConfig noramlizes missing throttler config information, as needed.
-func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 	if thottlerConfig == nil {
-		thottlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+		thottlerConfig = &topodatapb.ThrottlerConfig{}
 	}
 	if thottlerConfig.CustomQuery == "" {
 		// no custom query; we check replication lag
@@ -332,7 +332,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 
 // applyThrottlerConfig receives a Throttlerconfig as read from SrvKeyspace, and applies the configuration. This may cause
 // the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
-func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) {
+func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
 	if !throttlerConfigViaTopo {
 		return
 	}
