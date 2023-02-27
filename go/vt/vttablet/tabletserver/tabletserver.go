@@ -753,7 +753,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 			workload := ""
 			// Only spend time getting the actual workload from the query if we are using per workload metrics
 			if tsv.Config().EnablePerWorkloadTableMetrics {
-				workload = sqlparser.GetWorkloadFromComments(query, tsv.config.WorkloadLabel)
+				workload = sqlparser.GetWorkloadFromComments(sql, tsv.config.WorkloadLabel)
 			}
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {

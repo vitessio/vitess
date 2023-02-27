@@ -20,6 +20,7 @@ import (
 	"strconv"
 	"strings"
 	"unicode"
+
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -421,21 +422,23 @@ func GetWorkloadFromComments(query string, workloadLabel string) string {
 
 	parsedComments := commentedStatement.GetParsedComments()
 
-	for _, comment := range parsedComments.comments {
+	if parsedComments != nil {
+		for _, comment := range parsedComments.comments {
 
-		workloadLabelStart := strings.Index(comment, workloadLabel)
-		if workloadLabelStart == -1 {
-			continue
+			workloadLabelStart := strings.Index(comment, workloadLabel)
+			if workloadLabelStart == -1 {
+				continue
+			}
+
+			workloadLabelEnd := strings.Index(comment[workloadLabelStart:], ";")
+			if workloadLabelEnd == -1 {
+				continue
+			}
+
+			workloadLabelEnd += workloadLabelStart
+			return strings.TrimSpace(comment[workloadLabelStart+len(workloadLabel)+1 : workloadLabelEnd])
+
 		}
-
-		workloadLabelEnd := strings.Index(comment[workloadLabelStart:], ";")
-		if workloadLabelEnd == -1 {
-			continue
-		}
-
-		workloadLabelEnd += workloadLabelStart
-		return strings.TrimSpace(comment[workloadLabelStart+len(workloadLabel)+1 : workloadLabelEnd])
-
 	}
 
 	return unspecified
