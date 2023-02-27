@@ -4,14 +4,13 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
-    - [Deprecated Stats](#deprecated-stats)
     - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
-- **[Minor Changes](#minor-changes)**
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Stats](#deprecated-stats)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -20,15 +19,6 @@
 #### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
 
 When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used. 
-
-#### <a id="deprecated-stats"/>Deprecated Stats
-
-These stats are deprecated in v17.
-
-| Deprecated stat | Supported alternatives |
-|-|-|
-| `backup_duration_seconds` | `BackupDurationNanoseconds` |
-| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
 
 #### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
 
@@ -193,8 +183,15 @@ Some notes to help understand these metrics:
  * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
  * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
 
-## <a id="minor-changes"/>Minor changes
-
-### <a id="deprecations-and-deletions"/> Deprecations and Deletions
+## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
 * The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
+
+### <a id="deprecated-stats"/>Deprecated Stats
+
+These stats are deprecated in v17.
+
+| Deprecated stat | Supported alternatives |
+|-|-|
+| `backup_duration_seconds` | `BackupDurationNanoseconds` |
+| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
