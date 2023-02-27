@@ -1,6 +1,7 @@
 #!/bin/bash
 
-script_dir="$(dirname "${BASH_SOURCE[0]:-$0}")"
+script_dir="`pwd`/../common/scripts"
+echo "script_dir=${script_dir}"
 source "${script_dir}/../env.sh"
 
 log_dir="${VTDATAROOT}/tmp"

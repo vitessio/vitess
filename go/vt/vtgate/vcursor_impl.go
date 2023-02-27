@@ -117,6 +117,7 @@ type vcursorImpl struct {
 // on behalf of the original query.
 func newVCursorImpl(
 	safeSession *SafeSession,
+	sql string,
 	marginComments sqlparser.MarginComments,
 	executor *Executor,
 	logStats *logstats.LogStats,
@@ -127,7 +128,13 @@ func newVCursorImpl(
 	warnShardedOnly bool,
 	pv plancontext.PlannerVersion,
 ) (*vcursorImpl, error) {
-	keyspace, tabletType, destination, err := parseDestinationTarget(safeSession.TargetString, vschema)
+	// use the suggestedTabletType if safeSession.TargetString is not specified
+	suggestedTabletType, err := suggestTabletType(safeSession.InTransaction(), sql)
+	if err != nil {
+		return nil, err
+	}
+
+	keyspace, tabletType, destination, err := parseDestinationTarget(suggestedTabletType, safeSession.TargetString, vschema)
 	if err != nil {
 		return nil, err
 	}
@@ -979,8 +986,8 @@ func (vc *vcursorImpl) ForeignKeyMode() string {
 }
 
 // ParseDestinationTarget parses destination target string and sets default keyspace if possible.
-func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
-	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, defaultTabletType)
+func parseDestinationTarget(suggestedTabletType topodatapb.TabletType, targetString string, vschema *vindexes.VSchema) (string, topodatapb.TabletType, key.Destination, error) {
+	destKeyspace, destTabletType, dest, err := topoprotopb.ParseDestination(targetString, suggestedTabletType)
 	// Set default keyspace
 	if destKeyspace == "" && len(vschema.Keyspaces) == 1 {
 		for k := range vschema.Keyspaces {

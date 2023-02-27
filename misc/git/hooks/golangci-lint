@@ -26,5 +26,6 @@ fi
 
 gopackages=$(echo "$gofiles" | xargs -n1 dirname | sort -u | paste -sd ' ' -)
 
+echo "`pwd`"
 echo "Linting $gopackages"
 golangci-lint run $gopackages
