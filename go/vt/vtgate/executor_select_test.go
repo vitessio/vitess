@@ -3429,7 +3429,7 @@ func TestGen4CrossShardJoinQualifiedReferenceTable(t *testing.T) {
 	require.NoError(t, err)
 	unshardedWantQueries := []*querypb.BoundQuery{
 		{
-			Sql:           "select `simple`.id from `simple`, zip_detail where `simple`.zip_detail_id = zip_detail.id",
+			Sql:           "select `simple`.id from `simple` join zip_detail on `simple`.zip_detail_id = zip_detail.id",
 			BindVariables: map[string]*querypb.BindVariable{},
 		},
 	}
