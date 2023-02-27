@@ -3529,9 +3529,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 
 	keyspace := subFlags.Arg(0)
 
-	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
 		if customQuerySet {
 			// custom query provided
