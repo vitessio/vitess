@@ -25,6 +25,8 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	utilstest "vitess.io/vitess/go/test/endtoend/utils"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/reparent/utils"
 	"vitess.io/vitess/go/vt/log"
@@ -183,13 +185,13 @@ func TestReparentFromOutsideWithNoPrimary(t *testing.T) {
 }
 
 func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessCluster, downPrimary bool) {
-	//This test will start a primary and 3 replicas.
-	//Then:
-	//- one replica will be the new primary
-	//- one replica will be reparented to that new primary
-	//- one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
-	//Args:
-	//downPrimary: kills the old primary first
+	// This test will start a primary and 3 replicas.
+	// Then:
+	// - one replica will be the new primary
+	// - one replica will be reparented to that new primary
+	// - one replica will be busted and dead in the water and we'll call TabletExternallyReparented.
+	// Args:
+	// downPrimary: kills the old primary first
 	ctx := context.Background()
 	tablets := clusterInstance.Keyspaces[0].Shards[0].Vttablets
 
@@ -202,7 +204,7 @@ func reparentFromOutside(t *testing.T, clusterInstance *cluster.LocalProcessClus
 		demoteCommands := "SET GLOBAL read_only = ON; FLUSH TABLES WITH READ LOCK; UNLOCK TABLES"
 		utils.RunSQL(ctx, t, demoteCommands, tablets[0])
 
-		//Get the position of the old primary and wait for the new one to catch up.
+		// Get the position of the old primary and wait for the new one to catch up.
 		err := utils.WaitForReplicationPosition(t, tablets[0], tablets[1])
 		require.NoError(t, err)
 	}
@@ -359,6 +361,8 @@ func TestChangeTypeSemiSync(t *testing.T) {
 }
 
 func TestReparentDoesntHangIfPrimaryFails(t *testing.T) {
+	utilstest.SkipIfBinaryIsAboveVersion(t, 15, "vttablet")
+
 	defer cluster.PanicHandler(t)
 	clusterInstance := utils.SetupReparentCluster(t, "semi_sync")
 	defer utils.TeardownCluster(clusterInstance)
