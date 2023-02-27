@@ -66,7 +66,7 @@ type QueryExecutor struct {
 
 const (
 	streamRowsSize         = 256
-	maxQueryBufferDuration = 10 * time.Second
+	maxQueryBufferDuration = 15 * time.Second
 )
 
 var (
