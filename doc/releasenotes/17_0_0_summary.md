@@ -22,7 +22,7 @@ When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit versi
 
 #### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
 
-Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute Prepare operations generate stats under independent stats keys.
+Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute and Prepare operations generate stats under independent stats keys.
 
 Here is a (condensed) example of stats output:
 
