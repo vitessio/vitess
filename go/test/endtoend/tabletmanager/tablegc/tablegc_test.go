@@ -252,7 +252,7 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 			return
 		}
 	}
-	assert.Fail(t, "could not match any of the states: %v", states)
+	assert.Failf(t, "could not match any of the states", "%v", states)
 }
 
 // dropTable drops a table
@@ -370,7 +370,8 @@ func TestPurge(t *testing.T) {
 	time.Sleep(5 * gcPurgeCheckInterval) // wwait for table to be purged
 	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
 	if fastDropTable {
-		validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+		// if MySQL supports fast DROP TABLE, TableGC completely skips the PURGE state. Rows are not purged.
+		validateAnyState(t, 1024, schema.DropTableGCState, schema.TableDroppedGCState)
 	} else {
 		validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 	}
