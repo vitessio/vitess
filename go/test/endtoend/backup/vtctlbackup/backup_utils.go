@@ -651,10 +651,10 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	// force the old primary to restore at the latest backup.
 	method(t, primary)
 
-	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
-
 	// wait for it to catch up.
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
+
+	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
 
 	// teardown
 	restartPrimaryAndReplica(t)
@@ -926,6 +926,9 @@ func terminateRestore(t *testing.T) {
 	if useXtrabackup {
 		stopRestoreMsg = "Restore: Preparing"
 		useXtrabackup = false
+		defer func() {
+			useXtrabackup = true
+		}()
 	}
 
 	args := append([]string{"--server", localCluster.VtctlclientProcess.Server, "--alsologtostderr"}, "RestoreFromBackup", "--", primary.Alias)
