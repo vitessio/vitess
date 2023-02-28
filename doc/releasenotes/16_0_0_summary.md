@@ -174,6 +174,20 @@ The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16 as part o
 The Prometheus metrics exporter now properly normalizes _all_ label names into their `snake_case` form, as it is idiomatic for Prometheus metrics. Previously, Vitess instances were emitting inconsistent labels for their metrics, with some of them being `CamelCase` and others being `snake_case`.
 More information about this change can be found on [Pull Request #12057](https://github.com/vitessio/vitess/pull/12057).
 
+For example, `vtgate_topology_watcher_errors{Operation="GetTablet"} 0` will become `vtgate_topology_watcher_errors{operation="GetTablet"} 0`
+
+Some more of these changes are listed here -
+
+| Previous metric                                             | New Metric                                                  |
+|-------------------------------------------------------------|-------------------------------------------------------------|
+| vtgate_topology_watcher_operations{Operation="AddTablet"}   | vtgate_topology_watcher_operations{operation="AddTablet"}   |
+| vtgate_queries_processed{Plan="Reference"}                  | vtgate_queries_processed{plan="Reference"}                  |
+| vtgate_queries_routed{Plan="Reference"}                     | vtgate_queries_routed{plan="Reference"}                     |
+| vttablet_table_allocated_size{Table="corder"}               | vttablet_table_allocated_size{table="corder"}               |
+| vttablet_table_file_size{Table="corder"}                    | vttablet_table_file_size{table="corder"}                    |
+| vttablet_topology_watcher_errors{Operation="GetTablet"}     | vttablet_topology_watcher_errors{operation="GetTablet"}     |
+| vttablet_topology_watcher_operations{Operation="AddTablet"} | vttablet_topology_watcher_operations{operation="AddTablet"} |
+
 ### <a id="repl-manager-removal"/>Replication manager removal and VTOrc becomes mandatory
 VTOrc is now a **required** component of Vitess starting from v16. If the users want Vitess to manage replication, then they must run VTOrc.
 Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
@@ -215,7 +229,7 @@ In [Pull Request #11097](https://github.com/vitessio/vitess/pull/11097) we intro
 
 `--query-timeout` allows you to specify a timeout for queries. This timeout is applied to all queries.
 It can be overridden by setting the `query_timeout` session variable.
-Setting it as command line directive with `QUERY_TIMEOUT_MS` will override other values.
+Setting it as query comment directive with `QUERY_TIMEOUT_MS` will override other values.
 
 #### <a id="vrepl-parallel-workers"/>VTTablet: VReplication parallel insert workers --vreplication-parallel-insert-workers
 
@@ -280,9 +294,9 @@ $ vtctlclient -- Backup --incremental_from_pos "auto" zone1-0000000102
 
 When the value is `auto`, the position is evaluated as the last successful backup's `Position`. The idea with incremental backups is to create a contiguous (overlaps allowed) sequence of backups that store all changes from last full backup.
 
-The incremental backup copies binary log files. It does not take MySQL down nor places any locks. It does not interrupt traffic on the MySQL server. The incremental backup copies comlete binlog files. It initially rotates binary logs, then copies anything from the requested position and up to the last completed binary log.
+The incremental backup copies binary log files. It does not take MySQL down nor places any locks. It does not interrupt traffic on the MySQL server. The incremental backup copies complete binlog files. It initially rotates binary logs, then copies anything from the requested position and up to the last completed binary log.
 
-The backup thus does not necessarily start _exactly_ at the requested position. It starts with the first binary log that has newer entries than requested position. It is OK if the binary logs include transactions prior to the equested position. The restore process will discard any duplicates.
+The backup thus does not necessarily start _exactly_ at the requested position. It starts with the first binary log that has newer entries than requested position. It is OK if the binary logs include transactions prior to the requested position. The restore process will discard any duplicates.
 
 Normally, you can expect the backups to be precisely contiguous. Consider an `auto` value: due to the nature of log rotation and the fact we copy complete binlog files, the next incremental backup will start with the first binay log not covered by the previous backup, which in itself copied the one previous binlog file in full. Again, it is completely valid to enter any good position.
 
@@ -319,13 +333,12 @@ The `RestoreFromBackup  --restore_to_pos` ends with:
 - tablet type is `DRAINED`
 
 #### <a id="new-vexplain-command"/>New `vexplain` command
-A new `vexplain` command has been introduced with the following syntax -
+A new `vexplain` command has been introduced with the following syntax:
 ```
 VEXPLAIN [ALL|QUERIES|PLAN] explainable_stmt
 ```
 
-This command will help the users look at the plan that vtgate comes up with for the given query (`PLAN` type), see all the queries that are executed on all the MySQL instances (`QUERIES` type), 
-and see the vtgate plan along with the MySQL explain output for the executed queries (`ALL` type).
+This command will help users look at the plan that vtgate comes up with for the given query (`PLAN` type), see all the queries that are executed on all the MySQL instances (`QUERIES` type), and see the vtgate plan along with the MySQL explain output for the executed queries (`ALL` type).
 
 The formats `VTEXPLAIN` and `VITESS` for `EXPLAIN` queries are deprecated, and these newly introduced commands should be used instead.
 
@@ -452,11 +465,11 @@ BenchmarkCompressLz4Builtin
 This is an internal refactor and should not change the behavior of Vitess as seen by users. 
 
 Developers will see a difference though: v16 changes the way we maintain vttablet's sidecar database schema (also referred to as the `_vt`
-database). Instead of using the `WithDDL` package, introduced in #6348, we use a declarative approach. Users will now have to update
-the desired schema in the `go/vt/sidecardb/schema` directory.
+database). Instead of using the `WithDDL` package, introduced in [PR #6348](https://github.com/vitessio/vitess/pull/6348), we use a
+declarative approach. Developers will now have to update the desired schema in the `go/vt/sidecardb/schema` directory.
 
 The desired schema is specified, one per table. A new module `sidecardb`, compares this to the existing schema and
 performs the required `create` or `alter` to reach it. This is done whenever a primary vttablet starts up.
 
 The sidecar tables `local_metadata` and `shard_metadata` are no longer in use and all references to them are removed as
-part of this refactor. There were used previously for Orchestrator support, which has been superseded by `vtorc`.
+part of this refactor. They were used previously for Orchestrator support, which has been superseded by `vtorc`.
