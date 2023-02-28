@@ -497,7 +497,7 @@ func planHorizon(ctx *plancontext.PlanningContext, plan logicalPlan, in sqlparse
 			return nil, ctx.SemTable.NotSingleRouteErr
 		}
 		if isRoute && rb.isSingleShard() {
-			err = planSingleShardRoutePlan(node, rb)
+			err = planSingleRoutePlan(node, rb)
 		} else {
 			plan, err = planOrderByOnUnion(ctx, plan, node)
 		}

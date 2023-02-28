@@ -44,7 +44,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	if isRoute && rb.isSingleShard() {
-		err := planSingleShardRoutePlan(hp.sel, rb)
+		err := planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -88,7 +88,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		// if we already did sorting, we don't need to do it again
 		needsOrdering = needsOrdering && !hp.qp.CanPushDownSorting
 	case canShortcut:
-		err = planSingleShardRoutePlan(hp.sel, rb)
+		err = planSingleRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
 		}
@@ -1097,7 +1097,7 @@ func exprHasVindex(semTable *semantics.SemTable, expr sqlparser.Expr, hasToBeUni
 	return false
 }
 
-func planSingleShardRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
+func planSingleRoutePlan(sel sqlparser.SelectStatement, rb *routeGen4) error {
 	err := stripDownQuery(sel, rb.Select)
 	if err != nil {
 		return err
