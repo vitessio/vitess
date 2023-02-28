@@ -75,10 +75,6 @@ type BackupParams struct {
 	Stats backupstats.Stats
 }
 
-func BackupEngineImplementation() string {
-	return backupEngineImplementation
-}
-
 func (b BackupParams) Copy() BackupParams {
 	return BackupParams{
 		b.Cnf,

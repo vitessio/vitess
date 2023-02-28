@@ -651,6 +651,8 @@ func testRestoreOldPrimary(t *testing.T, method restoreMethod) {
 	// force the old primary to restore at the latest backup.
 	method(t, primary)
 
+	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
+
 	// wait for it to catch up.
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
 
@@ -768,6 +770,9 @@ func terminatedRestore(t *testing.T) {
 	assert.True(t, os.IsNotExist(err))
 
 	cluster.VerifyRowsInTablet(t, primary, keyspaceName, 3)
+
+	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
+
 	stopAllTablets()
 }
 
@@ -1076,7 +1081,7 @@ func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectEr
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	// Currently only the builtin backup engine instruments bytes-processed
 	// counts.
-	if mysqlctl.BackupEngineImplementation() == "builtin" {
+	if !useXtrabackup {
 		require.Contains(t, vars, "BackupBytes")
 		bb := vars["BackupBytes"].(map[string]any)
 		require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
@@ -1091,7 +1096,7 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	bc := vars["BackupCount"].(map[string]any)
 	require.Contains(t, bc, "-.-.Backup")
 	// Currently only the builtin backup engine implements operation counts.
-	if mysqlctl.BackupEngineImplementation() == "builtin" {
+	if !useXtrabackup {
 		require.Contains(t, bc, "BackupEngine.Builtin.Compressor:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
@@ -1103,7 +1108,7 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	bd := vars["BackupDurationNanoseconds"]
 	require.Contains(t, bd, "-.-.Backup")
 	// Currently only the builtin backup engine emits timings.
-	if mysqlctl.BackupEngineImplementation() == "builtin" {
+	if !useXtrabackup {
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Write")
 		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
@@ -1121,22 +1126,20 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	// Currently only the builtin backup engine instruments bytes-processed
 	// counts.
-	if mysqlctl.BackupEngineImplementation() == "builtin" {
+	if !useXtrabackup {
 		require.Contains(t, vars, "RestoreBytes")
 		bb := vars["RestoreBytes"].(map[string]any)
 		require.Contains(t, bb, "BackupEngine.Builtin.Decompressor:Read")
 		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
 		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
-		if backupstorage.BackupStorageImplementation == "file" {
-			require.Contains(t, bb, "BackupStorage.File.File:Read")
-		}
+		require.Contains(t, bb, "BackupStorage.File.File:Read")
 	}
 
 	require.Contains(t, vars, "RestoreCount")
 	bc := vars["RestoreCount"].(map[string]any)
 	require.Contains(t, bc, "-.-.Restore")
 	// Currently only the builtin backup engine emits operation counts.
-	if mysqlctl.BackupEngineImplementation() == "builtin" {
+	if !useXtrabackup {
 		require.Contains(t, bc, "BackupEngine.Builtin.Decompressor:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
 		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
@@ -1148,7 +1151,7 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 	bd := vars["RestoreDurationNanoseconds"]
 	require.Contains(t, bd, "-.-.Restore")
 	// Currently only the builtin backup engine emits timings.
-	if mysqlctl.BackupEngineImplementation() == "builtin" {
+	if !useXtrabackup {
 		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Read")
 		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
@@ -1158,7 +1161,5 @@ func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
 		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
 	}
-	if backupstorage.BackupStorageImplementation == "file" {
-		require.Contains(t, bd, "BackupStorage.File.File:Read")
-	}
+	require.Contains(t, bd, "BackupStorage.File.File:Read")
 }
