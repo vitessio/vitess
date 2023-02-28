@@ -77,13 +77,13 @@ var (
 )
 
 var vexecUpdateTemplates = []string{
-	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where mysql_schema='val2'`, sidecardb.GetIdentifier()),
-	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`, sidecardb.GetIdentifier()),
-	fmt.Sprintf(`update %s.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`, sidecardb.GetIdentifier()),
+	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2'`,
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
+	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`,
 }
 
 var vexecInsertTemplates = []string{
-	fmt.Sprintf(`INSERT IGNORE INTO %s.schema_migrations (
+	`INSERT IGNORE INTO _vt.schema_migrations (
 		migration_uuid,
 		keyspace,
 		shard,
@@ -98,7 +98,7 @@ var vexecInsertTemplates = []string{
 		migration_status
 	) VALUES (
 		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
-	)`, sidecardb.GetIdentifier()),
+	)`,
 }
 
 var emptyResult = &sqltypes.Result{}
@@ -285,7 +285,13 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 		return result, err
 	}
 	defer conn.Recycle()
-	return conn.Exec(ctx, query, math.MaxInt32, true)
+
+	// Replace any provided sidecar DB qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	return conn.Exec(ctx, uq, math.MaxInt32, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
@@ -659,8 +665,7 @@ func (e *Executor) doesConnectionInfoMatch(ctx context.Context, connID int64, su
 	return len(rs.Rows) == 1, nil
 }
 
-// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent or a child
-// in at least one foreign key constraint
+// tableParticipatesInForeignKeyRelationship checks if a given table is either a parent or a child in at least one foreign key constraint
 func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context, schema string, table string) (bool, error) {
 	for _, fkQuery := range []string{selSelectCountFKParentConstraints, selSelectCountFKChildConstraints} {
 		query, err := sqlparser.ParseAndBind(fkQuery,
@@ -686,8 +691,7 @@ func (e *Executor) tableParticipatesInForeignKeyRelationship(ctx context.Context
 	return false, nil
 }
 
-// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns
-// detailed error if not.
+// validateTableForAlterAction checks whether a table is good to undergo a ALTER operation. It returns detailed error if not.
 func (e *Executor) validateTableForAlterAction(ctx context.Context, onlineDDL *schema.OnlineDDL) (err error) {
 	if !onlineDDL.StrategySetting().IsAllowForeignKeysFlag() {
 		// Validate table does not participate in foreign key relationship:
@@ -714,8 +718,7 @@ func (e *Executor) primaryPosition(ctx context.Context) (pos mysql.Position, err
 	return pos, err
 }
 
-// terminateVReplMigration stops vreplication, then removes the vreplication table
-// record for the given migration
+// terminateVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) error {
 	tmClient := e.tabletManagerClient()
 	defer tmClient.Close()
@@ -724,15 +727,14 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	if err != nil {
 		return err
 	}
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlStopVReplStream, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlStopVReplStream,
 		sqltypes.StringBindVariable(e.dbName),
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
 		return err
 	}
-	// silently skip error; stopping the stream is just a graceful act; later deleting it
-	// is more important
+	// silently skip error; stopping the stream is just a graceful act; later deleting it is more important
 	if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 		log.Errorf("FAIL vreplicationExec: uuid=%s, query=%v, error=%v", uuid, query, err)
 	}
@@ -743,8 +745,7 @@ func (e *Executor) terminateVReplMigration(ctx context.Context, uuid string) err
 	return nil
 }
 
-// cutOverVReplMigration stops vreplication, then removes the vreplication record for
-// the given migration
+// cutOverVReplMigration stops vreplication, then removes the _vt.vreplication entry for the given migration
 func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) error {
 	if err := e.incrementCutoverAttempts(ctx, s.workflow); err != nil {
 		return err
@@ -1422,10 +1423,9 @@ func (e *Executor) ExecuteWithVReplication(ctx context.Context, onlineDDL *schem
 		}
 
 		{
-			// temporary hack. todo: this should be done when inserting any vreplication record across
-			// all workflow types
-			query := fmt.Sprintf("update %s.vreplication set workflow_type = %d where workflow = '%s'",
-				sidecardb.GetIdentifier(), binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
+			// temporary hack. todo: this should be done when inserting any _vt.vreplication record across all workflow types
+			query := fmt.Sprintf("update _vt.vreplication set workflow_type = %d where workflow = '%s'",
+				binlogdatapb.VReplicationWorkflowType_OnlineDDL, v.workflow)
 			if _, err := e.vreplicationExec(ctx, tablet.Tablet, query); err != nil {
 				return vterrors.Wrapf(err, "VReplicationExec(%v, %s)", tablet.Tablet, query)
 			}
@@ -1885,7 +1885,7 @@ export MYSQL_PWD
 
 func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *schema.OnlineDDL, row sqltypes.RowNamedValues, err error) {
 
-	parsed := sqlparser.BuildParsedQuery(fmt.Sprintf(sqlSelectMigration, sidecardb.GetIdentifier()), ":migration_uuid")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectMigration, ":migration_uuid")
 	bindVars := map[string]*querypb.BindVariable{
 		"migration_uuid": sqltypes.StringBindVariable(uuid),
 	}
@@ -1921,7 +1921,7 @@ func (e *Executor) readMigration(ctx context.Context, uuid string) (onlineDDL *s
 
 // readPendingMigrationsUUIDs returns UUIDs for migrations in pending state (queued/ready/running)
 func (e *Executor) readPendingMigrationsUUIDs(ctx context.Context) (uuids []string, err error) {
-	r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectPendingMigrations, sidecardb.GetIdentifier()))
+	r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 	if err != nil {
 		return uuids, err
 	}
@@ -2151,7 +2151,7 @@ func (e *Executor) scheduleNextMigration(ctx context.Context) error {
 
 	var onlyScheduleOneMigration sync.Once
 
-	r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectQueuedMigrations, sidecardb.GetIdentifier()))
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
 		return err
 	}
@@ -2290,7 +2290,7 @@ func (e *Executor) reviewQueuedMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectQueuedUnreviewedMigrations, sidecardb.GetIdentifier()))
+	r, err := e.execQuery(ctx, sqlSelectQueuedUnreviewedMigrations)
 	if err != nil {
 		return err
 	}
@@ -2374,7 +2374,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 	}
 	{
 		// Validation: see if there's a pending migration on this table:
-		r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectPendingMigrations, sidecardb.GetIdentifier()))
+		r, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 		if err != nil {
 			return err
 		}
@@ -2395,7 +2395,7 @@ func (e *Executor) validateMigrationRevertible(ctx context.Context, revertMigrat
 		}
 		{
 			// Validation: see that we're reverting the last successful migration on this table:
-			query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlSelectCompleteMigrationsOnTable, sidecardb.GetIdentifier()),
+			query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsOnTable,
 				sqltypes.StringBindVariable(e.keyspace),
 				sqltypes.StringBindVariable(revertMigration.Table),
 			)
@@ -2637,7 +2637,7 @@ func (e *Executor) getCompletedMigrationByContextAndSQL(ctx context.Context, onl
 		// only applies to migrations with an explicit context
 		return "", nil
 	}
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlSelectCompleteMigrationsByContextAndSQL, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlSelectCompleteMigrationsByContextAndSQL,
 		sqltypes.StringBindVariable(e.keyspace),
 		sqltypes.StringBindVariable(onlineDDL.MigrationContext),
 		sqltypes.StringBindVariable(onlineDDL.SQL),
@@ -3245,7 +3245,7 @@ func (e *Executor) runNextMigration(ctx context.Context) error {
 		if err != nil {
 			return nil, err
 		}
-		r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectReadyMigrations, sidecardb.GetIdentifier()))
+		r, err := e.execQuery(ctx, sqlSelectReadyMigrations)
 		if err != nil {
 			return nil, err
 		}
@@ -3363,9 +3363,9 @@ func (e *Executor) dropPTOSCMigrationTriggers(ctx context.Context, onlineDDL *sc
 	return err
 }
 
-// readVReplStream reads the vreplication record for given workflow
+// readVReplStream reads _vt.vreplication entries for given workflow
 func (e *Executor) readVReplStream(ctx context.Context, uuid string, okIfMissing bool) (*VReplStream, error) {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlReadVReplStream, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlReadVReplStream,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -3439,7 +3439,7 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 	{
 		// copy_state must have no entries for this vreplication id: if entries are
 		// present that means copy is still in progress
-		query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlReadCountCopyState, sidecardb.GetIdentifier()),
+		query, err := sqlparser.ParseAndBind(sqlReadCountCopyState,
 			sqltypes.Int32BindVariable(s.id),
 		)
 		if err != nil {
@@ -3506,7 +3506,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 	}
 
 	var throttlerOnce sync.Once
-	r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectRunningMigrations, sidecardb.GetIdentifier()))
+	r, err := e.execQuery(ctx, sqlSelectRunningMigrations)
 	if err != nil {
 		return countRunnning, cancellable, err
 	}
@@ -3530,7 +3530,7 @@ func (e *Executor) reviewRunningMigrations(ctx context.Context) (countRunnning i
 		switch onlineDDL.StrategySetting().Strategy {
 		case schema.DDLStrategyOnline, schema.DDLStrategyVitess:
 			{
-				// We check the vreplication table
+				// We check the _vt.vreplication table
 				s, err := e.readVReplStream(ctx, uuid, true)
 				if err != nil {
 					return countRunnning, cancellable, err
@@ -3704,7 +3704,7 @@ func (e *Executor) reviewStaleMigrations(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlSelectStaleMigrations, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlSelectStaleMigrations,
 		sqltypes.Int64BindVariable(staleMigrationMinutes),
 	)
 	if err != nil {
@@ -3784,10 +3784,10 @@ func (e *Executor) reloadSchema(ctx context.Context) error {
 	return tmClient.ReloadSchema(ctx, tablet.Tablet, "")
 }
 
-// deleteVReplicationEntry cleans up a vreplication table record; this function is
-// called as part of migration termination and as part of artifact cleanup
+// deleteVReplicationEntry cleans up a _vt.vreplication entry; this function is called as part of
+// migration termination and as part of artifact cleanup
 func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlDeleteVReplStream, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlDeleteVReplStream,
 		sqltypes.StringBindVariable(e.dbName),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -3829,14 +3829,14 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	if _, err := e.execQuery(ctx, fmt.Sprintf(sqlFixCompletedTimestamp, sidecardb.GetIdentifier())); err != nil {
+	if _, err := e.execQuery(ctx, sqlFixCompletedTimestamp); err != nil {
 		// This query fixes a bug where stale migrations were marked as 'failed' without updating 'completed_timestamp'
 		// see https://github.com/vitessio/vitess/issues/8499
 		// Running this query retroactively sets completed_timestamp
 		// This 'if' clause can be removed in version v13
 		return err
 	}
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlSelectUncollectedArtifacts, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlSelectUncollectedArtifacts,
 		sqltypes.Int64BindVariable(int64((retainOnlineDDLTables).Seconds())),
 	)
 	if err != nil {
@@ -3945,7 +3945,7 @@ func (e *Executor) onMigrationCheckTick() {
 }
 
 func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid string) error {
-	parsed := sqlparser.BuildParsedQuery(fmt.Sprintf(sqlUpdateMigrationStartedTimestamp, sidecardb.GetIdentifier()),
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationStartedTimestamp,
 		":migration_uuid",
 	)
 	bindVars := map[string]*querypb.BindVariable{
@@ -3963,8 +3963,7 @@ func (e *Executor) updateMigrationStartedTimestamp(ctx context.Context, uuid str
 }
 
 func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn string, uuid string) error {
-	parsed := sqlparser.BuildParsedQuery(fmt.Sprintf(sqlUpdateMigrationTimestamp, sidecardb.GetIdentifier(),
-		timestampColumn),
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateMigrationTimestamp, timestampColumn,
 		":migration_uuid",
 	)
 	bindVars := map[string]*querypb.BindVariable{
@@ -3984,7 +3983,7 @@ func (e *Executor) updateMigrationTimestamp(ctx context.Context, timestampColumn
 func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, hostname, logPath string) error {
 	logFile := path.Join(logPath, migrationLogFileName)
 	hostLogPath := fmt.Sprintf("%s:%s", hostname, logPath)
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationLogPath, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationLogPath,
 		sqltypes.StringBindVariable(hostLogPath),
 		sqltypes.StringBindVariable(logFile),
 		sqltypes.StringBindVariable(uuid),
@@ -3998,7 +3997,7 @@ func (e *Executor) updateMigrationLogPath(ctx context.Context, uuid string, host
 
 func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts ...string) error {
 	bindArtifacts := strings.Join(artifacts, ",")
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateArtifacts, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateArtifacts,
 		sqltypes.StringBindVariable(bindArtifacts),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4010,7 +4009,7 @@ func (e *Executor) updateArtifacts(ctx context.Context, uuid string, artifacts .
 }
 
 func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlClearArtifacts, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlClearArtifacts,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4021,7 +4020,7 @@ func (e *Executor) clearArtifacts(ctx context.Context, uuid string) error {
 }
 
 func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, specialPlan string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateSpecialPlan, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateSpecialPlan,
 		sqltypes.StringBindVariable(specialPlan),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4035,7 +4034,7 @@ func (e *Executor) updateMigrationSpecialPlan(ctx context.Context, uuid string, 
 func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage string, args ...interface{}) error {
 	msg := fmt.Sprintf(stage, args...)
 	log.Infof("updateMigrationStage: uuid=%s, stage=%s", uuid, msg)
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateStage, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateStage,
 		sqltypes.StringBindVariable(msg),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4047,7 +4046,7 @@ func (e *Executor) updateMigrationStage(ctx context.Context, uuid string, stage 
 }
 
 func (e *Executor) incrementCutoverAttempts(ctx context.Context, uuid string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlIncrementCutoverAttempts, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlIncrementCutoverAttempts,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4059,7 +4058,7 @@ func (e *Executor) incrementCutoverAttempts(ctx context.Context, uuid string) er
 
 // updateMigrationTablet sets 'tablet' column to be this executor's tablet alias for given migration
 func (e *Executor) updateMigrationTablet(ctx context.Context, uuid string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateTablet, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateTablet,
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4072,7 +4071,7 @@ func (e *Executor) updateMigrationTablet(ctx context.Context, uuid string) error
 
 // updateTabletFailure marks a given migration as "tablet_failed"
 func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
-	parsed := sqlparser.BuildParsedQuery(fmt.Sprintf(sqlUpdateTabletFailure, sidecardb.GetIdentifier()),
+	parsed := sqlparser.BuildParsedQuery(sqlUpdateTabletFailure,
 		":migration_uuid",
 	)
 	bindVars := map[string]*querypb.BindVariable{
@@ -4088,7 +4087,7 @@ func (e *Executor) updateTabletFailure(ctx context.Context, uuid string) error {
 
 func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, uuid string) error {
 	log.Infof("updateMigrationStatus: transitioning migration: %s into status failed or cancelled", uuid)
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationStatusFailedOrCancelled, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatusFailedOrCancelled,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4100,7 +4099,7 @@ func (e *Executor) updateMigrationStatusFailedOrCancelled(ctx context.Context, u
 
 func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, status schema.OnlineDDLStatus) error {
 	log.Infof("updateMigrationStatus: transitioning migration: %s into status: %s", uuid, string(status))
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationStatus, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationStatus,
 		sqltypes.StringBindVariable(string(status)),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4115,7 +4114,7 @@ func (e *Executor) updateMigrationStatus(ctx context.Context, uuid string, statu
 }
 
 func (e *Executor) updateDDLAction(ctx context.Context, uuid string, actionStr string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateDDLAction, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateDDLAction,
 		sqltypes.StringBindVariable(actionStr),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4135,7 +4134,7 @@ func (e *Executor) updateMigrationMessage(ctx context.Context, uuid string, mess
 			message = message[0:maxlen]
 		}
 		message = strings.ToValidUTF8(message, "�")
-		query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMessage, sidecardb.GetIdentifier()),
+		query, err := sqlparser.ParseAndBind(sqlUpdateMessage,
 			sqltypes.StringBindVariable(message),
 			sqltypes.StringBindVariable(uuid),
 		)
@@ -4157,7 +4156,7 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 	addedUniqueKeys, removedUnqiueKeys int, removedUniqueKeyNames string,
 	droppedNoDefaultColumnNames string, expandedColumnNames string,
 	revertibleNotes string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateSchemaAnalysis, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateSchemaAnalysis,
 		sqltypes.Int64BindVariable(int64(addedUniqueKeys)),
 		sqltypes.Int64BindVariable(int64(removedUnqiueKeys)),
 		sqltypes.StringBindVariable(removedUniqueKeyNames),
@@ -4174,7 +4173,7 @@ func (e *Executor) updateSchemaAnalysis(ctx context.Context, uuid string,
 }
 
 func (e *Executor) updateMySQLTable(ctx context.Context, uuid string, tableName string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMySQLTable, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMySQLTable,
 		sqltypes.StringBindVariable(tableName),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4186,7 +4185,7 @@ func (e *Executor) updateMySQLTable(ctx context.Context, uuid string, tableName 
 }
 
 func (e *Executor) updateMigrationETASeconds(ctx context.Context, uuid string, etaSeconds int64) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationETASeconds, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASeconds,
 		sqltypes.Int64BindVariable(etaSeconds),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4204,7 +4203,7 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 		// In both cases there's nothing to update
 		return nil
 	}
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationProgress, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationProgress,
 		sqltypes.Float64BindVariable(progress),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4216,7 +4215,7 @@ func (e *Executor) updateMigrationProgress(ctx context.Context, uuid string, pro
 }
 
 func (e *Executor) updateMigrationProgressByRowsCopied(ctx context.Context, uuid string, rowsCopied int64) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationProgressByRowsCopied, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationProgressByRowsCopied,
 		sqltypes.Int64BindVariable(rowsCopied),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4228,7 +4227,7 @@ func (e *Executor) updateMigrationProgressByRowsCopied(ctx context.Context, uuid
 }
 
 func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationETASecondsByProgress, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationETASecondsByProgress,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4239,7 +4238,7 @@ func (e *Executor) updateMigrationETASecondsByProgress(ctx context.Context, uuid
 }
 
 func (e *Executor) updateMigrationLastThrottled(ctx context.Context, uuid string, lastThrottledUnixTime int64, throttledCompnent string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateLastThrottled, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateLastThrottled,
 		sqltypes.Int64BindVariable(lastThrottledUnixTime),
 		sqltypes.StringBindVariable(throttledCompnent),
 		sqltypes.StringBindVariable(uuid),
@@ -4252,7 +4251,7 @@ func (e *Executor) updateMigrationLastThrottled(ctx context.Context, uuid string
 }
 
 func (e *Executor) updateMigrationTableRows(ctx context.Context, uuid string, tableRows int64) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationTableRows, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationTableRows,
 		sqltypes.Int64BindVariable(tableRows),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4269,7 +4268,7 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 		// we don't update the table value.
 		return nil
 	}
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationRowsCopied, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationRowsCopied,
 		sqltypes.Int64BindVariable(rowsCopied),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4281,7 +4280,7 @@ func (e *Executor) updateRowsCopied(ctx context.Context, uuid string, rowsCopied
 }
 
 func (e *Executor) updateVitessLivenessIndicator(ctx context.Context, uuid string, livenessIndicator int64) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationVitessLivenessIndicator, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationVitessLivenessIndicator,
 		sqltypes.Int64BindVariable(livenessIndicator),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4293,7 +4292,7 @@ func (e *Executor) updateVitessLivenessIndicator(ctx context.Context, uuid strin
 }
 
 func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isView bool) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationIsView, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationIsView,
 		sqltypes.BoolBindVariable(isView),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4305,7 +4304,7 @@ func (e *Executor) updateMigrationIsView(ctx context.Context, uuid string, isVie
 }
 
 func (e *Executor) updateMigrationSetImmediateOperation(ctx context.Context, uuid string) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationSetImmediateOperation, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationSetImmediateOperation,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4316,7 +4315,7 @@ func (e *Executor) updateMigrationSetImmediateOperation(ctx context.Context, uui
 }
 
 func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid string, isReady bool) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationReadyToComplete, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationReadyToComplete,
 		sqltypes.BoolBindVariable(isReady),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4339,7 +4338,7 @@ func (e *Executor) updateMigrationReadyToComplete(ctx context.Context, uuid stri
 }
 
 func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid string, ratio float64) error {
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateMigrationUserThrottleRatio, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateMigrationUserThrottleRatio,
 		sqltypes.Float64BindVariable(ratio),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4354,8 +4353,7 @@ func (e *Executor) updateMigrationUserThrottleRatio(ctx context.Context, uuid st
 func (e *Executor) retryMigrationWhere(ctx context.Context, whereExpr string) (result *sqltypes.Result, err error) {
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
-	parsed := sqlparser.BuildParsedQuery(fmt.Sprintf(sqlRetryMigrationWhere, sidecardb.GetIdentifier(), whereExpr),
-		":tablet")
+	parsed := sqlparser.BuildParsedQuery(sqlRetryMigrationWhere, ":tablet", whereExpr)
 	bindVars := map[string]*querypb.BindVariable{
 		"tablet": sqltypes.StringBindVariable(e.TabletAliasString()),
 	}
@@ -4378,7 +4376,7 @@ func (e *Executor) RetryMigration(ctx context.Context, uuid string) (result *sql
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlRetryMigration, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlRetryMigration,
 		sqltypes.StringBindVariable(e.TabletAliasString()),
 		sqltypes.StringBindVariable(uuid),
 	)
@@ -4403,7 +4401,7 @@ func (e *Executor) CleanupMigration(ctx context.Context, uuid string) (result *s
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateReadyForCleanup, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateReadyForCleanup,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4430,7 +4428,7 @@ func (e *Executor) CompleteMigration(ctx context.Context, uuid string) (result *
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateCompleteMigration, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateCompleteMigration,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4493,7 +4491,7 @@ func (e *Executor) LaunchMigration(ctx context.Context, uuid string, shardsArg s
 	e.migrationMutex.Lock()
 	defer e.migrationMutex.Unlock()
 
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlUpdateLaunchMigration, sidecardb.GetIdentifier()),
+	query, err := sqlparser.ParseAndBind(sqlUpdateLaunchMigration,
 		sqltypes.StringBindVariable(uuid),
 	)
 	if err != nil {
@@ -4518,7 +4516,7 @@ func (e *Executor) LaunchMigrations(ctx context.Context) (result *sqltypes.Resul
 	if err != nil {
 		return result, err
 	}
-	r, err := e.execQuery(ctx, fmt.Sprintf(sqlSelectQueuedMigrations, sidecardb.GetIdentifier()))
+	r, err := e.execQuery(ctx, sqlSelectQueuedMigrations)
 	if err != nil {
 		return result, err
 	}
@@ -4680,7 +4678,7 @@ func (e *Executor) SubmitMigration(
 	revertedUUID, _ := onlineDDL.GetRevertUUID() // Empty value if the migration is not actually a REVERT. Safe to ignore error.
 	retainArtifactsSeconds := int64((retainOnlineDDLTables).Seconds())
 	_, allowConcurrentMigration := e.allowConcurrentMigration(onlineDDL)
-	submitQuery, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlInsertMigration, sidecardb.GetIdentifier()),
+	submitQuery, err := sqlparser.ParseAndBind(sqlInsertMigration,
 		sqltypes.StringBindVariable(onlineDDL.UUID),
 		sqltypes.StringBindVariable(e.keyspace),
 		sqltypes.StringBindVariable(e.shard),
