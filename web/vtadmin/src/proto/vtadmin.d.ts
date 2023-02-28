@@ -14061,9 +14061,6 @@ export namespace topodata {
 
         /** SrvKeyspace throttler_config */
         throttler_config?: (topodata.IThrottlerConfig|null);
-
-        /** SrvKeyspace sidecar_db_name */
-        sidecar_db_name?: (string|null);
     }
 
     /** Represents a SrvKeyspace. */
@@ -14083,9 +14080,6 @@ export namespace topodata {
 
         /** SrvKeyspace throttler_config. */
         public throttler_config?: (topodata.IThrottlerConfig|null);
-
-        /** SrvKeyspace sidecar_db_name. */
-        public sidecar_db_name: string;
 
         /**
          * Creates a new SrvKeyspace instance using the specified properties.

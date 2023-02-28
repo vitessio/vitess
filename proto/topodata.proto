@@ -430,12 +430,6 @@ message SrvKeyspace {
   // shards and tablets. This is copied from the global keyspace
   // object.
   ThrottlerConfig throttler_config = 6;
-
-  // SidecarDBName is the name of the Vitess sidecar database
-  // used for various system metadata that is stored in each
-  // tablet's mysqld instance. This is copied from the global
-  // keyspace object.
-  string sidecar_db_name = 7;
 }
 
 // CellInfo contains information about a cell. CellInfo objects are
