@@ -32,6 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -743,6 +744,10 @@ func (vw *vschemaWrapper) getActualKeyspace() string {
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return vw.v.Keyspaces["main"].Keyspace, nil
+}
+
+func (vw *vschemaWrapper) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
+	return sidecardb.DefaultName, nil
 }
 
 func (vw *vschemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {

@@ -17,6 +17,7 @@ limitations under the License.
 package planbuilder
 
 import (
+	"context"
 	"fmt"
 	"regexp"
 	"sort"
@@ -265,7 +266,13 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sql := "SELECT * FROM _vt.schema_migrations"
+	sidecar, err := vschema.GetSidecarDBName(context.Background(), ks.Name)
+	if err != nil {
+		return nil, err
+	}
+	sidecarid := sqlparser.NewIdentifierCS(sidecar)
+
+	sql := fmt.Sprintf("SELECT * FROM %s.schema_migrations", sqlparser.String(sidecarid))
 
 	if show.Filter != nil {
 		if show.Filter.Filter != nil {
