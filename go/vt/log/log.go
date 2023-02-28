@@ -78,6 +78,5 @@ var (
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
-	defaultMaxSize := glog.MaxSize
-	fs.Uint64Var(&glog.MaxSize, "log_rotate_max_size", defaultMaxSize, "size in bytes at which logs are rotated (glog.MaxSize)")
+	fs.Uint64Var(&glog.MaxSize, "log_rotate_max_size", glog.MaxSize, "size in bytes at which logs are rotated (glog.MaxSize)")
 }
