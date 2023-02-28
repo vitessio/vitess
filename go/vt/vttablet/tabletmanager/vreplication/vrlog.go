@@ -33,7 +33,7 @@ import (
 var (
 	vrLogStatsLogger   = streamlog.New[*VrLogStats]("VReplication", 50)
 	vrLogStatsTemplate = template.Must(template.New("vrlog").
-		Parse("{{.Type}} Event	{{.Detail}}	{{.LogTime}}	{{.DurationNs}}\n"))
+				Parse("{{.Type}} Event	{{.Detail}}	{{.LogTime}}	{{.DurationNs}}\n"))
 )
 
 // VrLogStats collects attributes of a vreplication event for logging
