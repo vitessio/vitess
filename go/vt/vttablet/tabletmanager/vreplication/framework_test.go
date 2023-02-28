@@ -441,7 +441,7 @@ func expectDeleteQueries(t *testing.T) {
 	))
 }
 
-func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan any) {
+func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan *VrLogStats) {
 	t.Helper()
 	defer vrLogStatsLogger.Unsubscribe(logCh)
 	failed := false
@@ -451,11 +451,7 @@ func expectLogsAndUnsubscribe(t *testing.T, logs []LogExpectation, logCh chan an
 			continue
 		}
 		select {
-		case data := <-logCh:
-			got, ok := data.(*VrLogStats)
-			if !ok {
-				t.Errorf("got not ok casting to VrLogStats: %v", data)
-			}
+		case got := <-logCh:
 			var match bool
 			match = (log.Type == got.Type)
 			if match {
