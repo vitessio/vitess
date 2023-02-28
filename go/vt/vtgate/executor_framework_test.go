@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
@@ -127,11 +128,13 @@ func init() {
 }
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
+	ctx := context.Background()
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
+	serv.topoServer.CreateKeyspace(ctx, "TestExecutor", &topodatapb.Keyspace{SidecarDbName: sidecardb.DefaultName})
 	resolver := newTestResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_PRIMARY, true, 1, nil)

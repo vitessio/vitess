@@ -22,6 +22,7 @@ import (
 	"regexp"
 	"sort"
 	"strings"
+	"sync"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/topo"
@@ -46,6 +47,13 @@ const (
 	both    = "both"
 	charset = "charset"
 )
+
+// Lazily loaded cache of sidecardb identifiers by keyspace.
+// The key is a keyspace name string and the val is an sqlparser
+// string built from an IdentifierCS using the sidecar database
+// name stored in the global topo Keyspace record for the given
+// keyspace.
+var sidecarDBIdentifiers sync.Map
 
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
@@ -249,7 +257,9 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
 }
 
-// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all PRIMARY tablets on keyspace's shards.
+// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
+// It invokes queries on _vt.schema_migrations on all PRIMARY tablets on
+// keyspace's shards.
 func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {
@@ -267,15 +277,19 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-	defer cancel()
-	sidecar, err := vschema.GetSidecarDBName(ctx, ks.Name)
-	if err != nil {
-		return nil, err
+	sidecarDBID, ok := sidecarDBIdentifiers.Load(ks.Name)
+	if !ok || sidecarDBID == nil || sidecarDBID == "" {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+		sidecarDBName, err := vschema.GetSidecarDBName(ctx, ks.Name)
+		if err != nil {
+			return nil, err
+		}
+		sidecarDBID = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
+		sidecarDBIdentifiers.Store(ks.Name, sidecarDBID)
 	}
-	sidecarid := sqlparser.NewIdentifierCS(sidecar)
 
-	sql := fmt.Sprintf("SELECT * FROM %s.schema_migrations", sqlparser.String(sidecarid))
+	sql := fmt.Sprintf("SELECT * FROM %s.schema_migrations", sidecarDBID)
 
 	if show.Filter != nil {
 		if show.Filter.Filter != nil {
