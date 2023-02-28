@@ -17,6 +17,7 @@ limitations under the License.
 package sysloglogger
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"log/syslog"
@@ -24,8 +25,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/streamlog"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -101,7 +100,7 @@ func TestSyslog(t *testing.T) {
 	// Overwrite the usual syslog writer and StatsLogger subscription channel with mocks
 	mock := newFakeWriter()
 	writer = mock
-	ch = make(chan any, 10)
+	ch = make(chan *tabletenv.LogStats, 10)
 
 	// Start running the plugin loop
 	syncChannel := make(chan bool)
@@ -147,7 +146,7 @@ func TestSyslogRedacted(t *testing.T) {
 	}()
 	mock := newFakeWriter()
 	writer = mock
-	ch = make(chan any, 10)
+	ch = make(chan *tabletenv.LogStats, 10)
 
 	// Start running the plugin loop
 	syncChannel := make(chan bool)
@@ -188,7 +187,7 @@ func TestSyslogRedacted(t *testing.T) {
 func TestSyslogWithBadData(t *testing.T) {
 	mock := newFakeWriter()
 	writer = mock
-	ch = make(chan any, 10)
+	ch = make(chan *tabletenv.LogStats, 10)
 
 	syncChannel := make(chan bool)
 	go func() {
@@ -200,7 +199,6 @@ func TestSyslogWithBadData(t *testing.T) {
 	ch <- mockLogStats("select 1")
 	ch <- mockLogStats("select 2")
 	ch <- mockLogStats("select 3")
-	ch <- "Wait... this is just a garbage 'string', not of type '*tabletserver.LogStats'!"
 	ch <- mockLogStats("select 5")
 	close(ch)
 	<-syncChannel
@@ -231,7 +229,7 @@ func TestSyslogWithInterruptedConnection(t *testing.T) {
 	// This mock will simulate a broken syslog connection when processing every 4th record
 	mock := newFailingFakeWriter()
 	writer = mock
-	ch = make(chan any, 10)
+	ch = make(chan *tabletenv.LogStats, 10)
 
 	syncChannel := make(chan bool)
 	go func() {
