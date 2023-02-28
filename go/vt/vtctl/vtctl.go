@@ -2888,6 +2888,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	}
 	if *allowLongUnavailability {
 		log.Warningf("--allow_long_unavailability flag is deprecated. We recommend using Online DDL for schema changes, big or small.")
+	}
 	if *skipPreflight {
 		log.Warningf("--skip_preflight flag is deprecated. Always assumed to be 'true'")
 	}
