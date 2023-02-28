@@ -1171,6 +1171,9 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 	for i := range alterTable.AlterOptions {
 		opt := alterTable.AlterOptions[i]
 		switch opt := opt.(type) {
+		case sqlparser.AlgorithmValue:
+			// we do not pass ALGORITHM. We choose our own ALGORITHM.
+			continue
 		case *sqlparser.AddIndexDefinition:
 			if opt.IndexDefinition.Info.Fulltext {
 				countAddFullTextStatements++
@@ -1189,6 +1192,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 		redactedOptions = append(redactedOptions, opt)
 	}
 	alterTable.AlterOptions = redactedOptions
+	alterTable.AlterOptions = append(alterTable.AlterOptions, sqlparser.AlgorithmValue("COPY"))
 	return alters, nil
 }
 
