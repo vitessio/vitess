@@ -24,6 +24,7 @@ import (
 	"strings"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/topo"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -266,7 +267,9 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecar, err := vschema.GetSidecarDBName(context.Background(), ks.Name)
+	ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+	defer cancel()
+	sidecar, err := vschema.GetSidecarDBName(ctx, ks.Name)
 	if err != nil {
 		return nil, err
 	}
