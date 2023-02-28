@@ -442,6 +442,8 @@ func primaryBackup(t *testing.T) {
 	err = localCluster.VtctlclientProcess.ExecuteCommand("RestoreFromBackup", "--", "--backup_timestamp", firstBackupTimestamp, primary.Alias)
 	require.Nil(t, err)
 
+	verifyTabletRestoreStats(t, primary.VttabletProcess.GetVars())
+
 	// Re-init the shard -- making the original primary tablet (primary) primary again -- for subsequent tests
 	err = localCluster.VtctlclientProcess.InitShardPrimary(keyspaceName, shardName, cell, primary.TabletUID)
 	require.Nil(t, err)
@@ -1068,6 +1070,7 @@ func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectEr
 		return
 	}
 	require.NoErrorf(t, err, "output: %v", output)
+	verifyTabletRestoreStats(t, replica1.VttabletProcess.GetVars())
 }
 
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
@@ -1099,7 +1102,7 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	require.Contains(t, vars, "BackupDurationNanoseconds")
 	bd := vars["BackupDurationNanoseconds"]
 	require.Contains(t, bd, "-.-.Backup")
-	// Currently only the builtin backup engine implements timings.
+	// Currently only the builtin backup engine emits timings.
 	if mysqlctl.BackupEngineImplementation() == "builtin" {
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Close")
 		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Write")
@@ -1112,5 +1115,50 @@ func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
 	}
 	if backupstorage.BackupStorageImplementation == "file" {
 		require.Contains(t, bd, "BackupStorage.File.File:Write")
+	}
+}
+
+func verifyTabletRestoreStats(t *testing.T, vars map[string]any) {
+	// Currently only the builtin backup engine instruments bytes-processed
+	// counts.
+	if mysqlctl.BackupEngineImplementation() == "builtin" {
+		require.Contains(t, vars, "RestoreBytes")
+		bb := vars["RestoreBytes"].(map[string]any)
+		require.Contains(t, bb, "BackupEngine.Builtin.Decompressor:Read")
+		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
+		if backupstorage.BackupStorageImplementation == "file" {
+			require.Contains(t, bb, "BackupStorage.File.File:Read")
+		}
+	}
+
+	require.Contains(t, vars, "RestoreCount")
+	bc := vars["RestoreCount"].(map[string]any)
+	require.Contains(t, bc, "-.-.Restore")
+	// Currently only the builtin backup engine emits operation counts.
+	if mysqlctl.BackupEngineImplementation() == "builtin" {
+		require.Contains(t, bc, "BackupEngine.Builtin.Decompressor:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Open")
+	}
+
+	require.Contains(t, vars, "RestoreDurationNanoseconds")
+	bd := vars["RestoreDurationNanoseconds"]
+	require.Contains(t, bd, "-.-.Restore")
+	// Currently only the builtin backup engine emits timings.
+	if mysqlctl.BackupEngineImplementation() == "builtin" {
+		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Decompressor:Read")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
+	}
+	if backupstorage.BackupStorageImplementation == "file" {
+		require.Contains(t, bd, "BackupStorage.File.File:Read")
 	}
 }
