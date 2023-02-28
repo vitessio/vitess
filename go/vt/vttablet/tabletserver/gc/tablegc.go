@@ -415,7 +415,9 @@ func (collector *TableGC) checkTables(ctx context.Context, dropTablesChan chan<-
 		if state == schema.PurgeTableGCState {
 			if isBaseTable {
 				// This table needs to be purged. Make sure to enlist it (we may already have)
-				collector.addPurgingTable(tableName)
+				if !collector.addPurgingTable(tableName) {
+					collector.submitTransitionRequest(ctx, transitionRequestsChan, state, tableName, isBaseTable, uuid)
+				}
 			} else {
 				// This is a view. We don't need to delete rows from views. Just transition into next phase
 				collector.submitTransitionRequest(ctx, transitionRequestsChan, state, tableName, isBaseTable, uuid)
@@ -579,17 +581,18 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 }
 
 // addPurgingTable adds a table to the list of droppingpurging (or pending purging) tables
-func (collector *TableGC) addPurgingTable(tableName string) {
+func (collector *TableGC) addPurgingTable(tableName string) (added bool) {
 	if _, ok := collector.lifecycleStates[schema.PurgeTableGCState]; !ok {
 		// PURGE is not a handled state. We don't want to purge this table or any other table,
 		// so we don't populate the purgingTables map.
-		return
+		return false
 	}
 
 	collector.purgeMutex.Lock()
 	defer collector.purgeMutex.Unlock()
 
 	collector.purgingTables[tableName] = true
+	return true
 }
 
 // removePurgingTable removes a table from the purging list; likely this is called when
