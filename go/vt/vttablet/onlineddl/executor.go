@@ -1178,7 +1178,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 					// in the same statement
 					extraAlterTable := &sqlparser.AlterTable{
 						Table:        alterTable.Table,
-						AlterOptions: []sqlparser.AlterOption{opt},
+						AlterOptions: []sqlparser.AlterOption{opt, sqlparser.AlgorithmValue("COPY")},
 					}
 					alters = append(alters, extraAlterTable)
 					continue
