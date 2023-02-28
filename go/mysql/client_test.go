@@ -475,7 +475,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: x509:")
+	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: tls:")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")

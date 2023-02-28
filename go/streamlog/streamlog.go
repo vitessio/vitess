@@ -118,11 +118,11 @@ const (
 
 // StreamLogger is a non-blocking broadcaster of messages.
 // Subscribers can use channels or HTTP.
-type StreamLogger struct {
+type StreamLogger[T any] struct {
 	name       string
 	size       int
 	mu         sync.Mutex
-	subscribed map[chan any]string
+	subscribed map[chan T]string
 }
 
 // LogFormatter is the function signature used to format an arbitrary
@@ -131,17 +131,17 @@ type LogFormatter func(out io.Writer, params url.Values, message any) error
 
 // New returns a new StreamLogger that can stream events to subscribers.
 // The size parameter defines the channel size for the subscribers.
-func New(name string, size int) *StreamLogger {
-	return &StreamLogger{
+func New[T any](name string, size int) *StreamLogger[T] {
+	return &StreamLogger[T]{
 		name:       name,
 		size:       size,
-		subscribed: make(map[chan any]string),
+		subscribed: make(map[chan T]string),
 	}
 }
 
 // Send sends message to all the writers subscribed to logger. Calling
 // Send does not block.
-func (logger *StreamLogger) Send(message any) {
+func (logger *StreamLogger[T]) Send(message T) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
@@ -158,17 +158,17 @@ func (logger *StreamLogger) Send(message any) {
 
 // Subscribe returns a channel which can be used to listen
 // for messages.
-func (logger *StreamLogger) Subscribe(name string) chan any {
+func (logger *StreamLogger[T]) Subscribe(name string) chan T {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
-	ch := make(chan any, logger.size)
+	ch := make(chan T, logger.size)
 	logger.subscribed[ch] = name
 	return ch
 }
 
 // Unsubscribe removes the channel from the subscription.
-func (logger *StreamLogger) Unsubscribe(ch chan any) {
+func (logger *StreamLogger[T]) Unsubscribe(ch chan T) {
 	logger.mu.Lock()
 	defer logger.mu.Unlock()
 
@@ -176,13 +176,13 @@ func (logger *StreamLogger) Unsubscribe(ch chan any) {
 }
 
 // Name returns the name of StreamLogger.
-func (logger *StreamLogger) Name() string {
+func (logger *StreamLogger[T]) Name() string {
 	return logger.name
 }
 
 // ServeLogs registers the URL on which messages will be broadcast.
 // It is safe to register multiple URLs for the same StreamLogger.
-func (logger *StreamLogger) ServeLogs(url string, logf LogFormatter) {
+func (logger *StreamLogger[T]) ServeLogs(url string, logf LogFormatter) {
 	http.HandleFunc(url, func(w http.ResponseWriter, r *http.Request) {
 		if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 			acl.SendError(w, err)
@@ -213,7 +213,7 @@ func (logger *StreamLogger) ServeLogs(url string, logf LogFormatter) {
 //
 // Returns the channel used for the subscription which can be used to close
 // it.
-func (logger *StreamLogger) LogToFile(path string, logf LogFormatter) (chan any, error) {
+func (logger *StreamLogger[T]) LogToFile(path string, logf LogFormatter) (chan T, error) {
 	rotateChan := make(chan os.Signal, 1)
 	signal.Notify(rotateChan, syscall.SIGUSR2)
 
@@ -248,7 +248,7 @@ type Formatter interface {
 
 // GetFormatter returns a formatter function for objects conforming to the
 // Formatter interface
-func GetFormatter(logger *StreamLogger) LogFormatter {
+func GetFormatter[T any](logger *StreamLogger[T]) LogFormatter {
 	return func(w io.Writer, params url.Values, val any) error {
 		fmter, ok := val.(Formatter)
 		if !ok {
