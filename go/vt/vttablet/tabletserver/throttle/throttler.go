@@ -160,6 +160,7 @@ type ThrottlerStatus struct {
 
 	IsLeader  bool
 	IsOpen    bool
+	IsEnabled bool
 	IsDormant bool
 
 	AggregatedMetrics map[string]base.MetricResult
@@ -305,12 +306,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 	return thottlerConfig
 }
 
-// WatchSrvKeyspaceCallback gets called whenever SrvKeyspace has been modified. This callback only examines the ThrottlerConfig part of
-// SrvKeyspace, and proceeds to inform the throttler of the new config
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
-	throttler.enableMutex.Lock()
-	defer throttler.enableMutex.Unlock()
-
 	if err != nil {
 		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
 		return false
@@ -542,7 +538,7 @@ func (throttler *Throttler) isDormant() bool {
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
-// run the probes, colelct metrics, refresh inventory, etc.
+// run the probes, collect metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context) {
 
 	tickers := [](*timer.SuspendableTicker){}
@@ -1035,6 +1031,7 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 
 		IsLeader:  (atomic.LoadInt64(&throttler.isLeader) > 0),
 		IsOpen:    (atomic.LoadInt64(&throttler.isOpen) > 0),
+		IsEnabled: (atomic.LoadInt64(&throttler.isEnabled) > 0),
 		IsDormant: throttler.isDormant(),
 
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
