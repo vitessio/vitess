@@ -255,6 +255,9 @@ func recoverDeadPrimary(ctx context.Context, analysisEntry inst.ReplicationAnaly
 
 	// Read the tablet information from the database to find the shard and keyspace of the tablet
 	tablet, err := inst.ReadTablet(analysisEntry.AnalyzedInstanceKey)
+	if err != nil {
+		return false, nil, err
+	}
 
 	var candidateTabletAlias *topodatapb.TabletAlias
 	if candidateInstanceKey != nil {

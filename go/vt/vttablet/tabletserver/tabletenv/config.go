@@ -51,10 +51,10 @@ var (
 	// TxLogger can be used to enable logging of transactions.
 	// Call TxLogger.ServeLogs in your main program to enable logging.
 	// The log format can be inferred by looking at TxConnection.Format.
-	TxLogger = streamlog.New("TxLog", 10)
+	TxLogger = streamlog.New[any]("TxLog", 10)
 
 	// StatsLogger is the main stream logger object
-	StatsLogger = streamlog.New("TabletServer", 50)
+	StatsLogger = streamlog.New[*LogStats]("TabletServer", 50)
 
 	// The following vars are used for custom initialization of Tabletconfig.
 	enableHotRowProtection       bool
