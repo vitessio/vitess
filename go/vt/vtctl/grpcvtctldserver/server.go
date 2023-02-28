@@ -222,7 +222,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("skip_preflight", req.SkipPreflight)
 	span.Annotate("ddl_strategy", req.DdlStrategy)
 
 	if len(req.Sql) == 0 {
@@ -265,9 +264,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	})
 
 	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
-	if req.SkipPreflight {
-		executor.SkipPreflight()
-	}
 
 	if err = executor.SetDDLStrategy(req.DdlStrategy); err != nil {
 		err = vterrors.Wrapf(err, "invalid DdlStrategy: %s", req.DdlStrategy)

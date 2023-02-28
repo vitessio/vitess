@@ -10,7 +10,7 @@ concurrency:
 jobs:
   get_previous_release:
     if: always()
-    name: Get latest release
+    name: Get Previous Release - Backups - E2E
     runs-on: ubuntu-22.04
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
@@ -31,7 +31,7 @@ jobs:
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60
     if: always() && needs.get_previous_release.result == 'success'
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Backups - E2E
     runs-on: ubuntu-22.04
     needs:
       - get_previous_release
