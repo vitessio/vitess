@@ -24,6 +24,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
@@ -155,6 +156,14 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 	if topodatapb.KeyspaceType(createKeyspaceOptions.KeyspaceType) == topodatapb.KeyspaceType_SNAPSHOT {
 		if createKeyspaceOptions.DurabilityPolicy != "none" {
 			return errors.New("--durability-policy cannot be specified while creating a snapshot keyspace")
+		}
+
+		if createKeyspaceOptions.SidecarDBName == "" {
+			return errors.New("--sidecar-db-name cannot be empty when creating a keyspace")
+		}
+		if len(createKeyspaceOptions.SidecarDBName) > mysql.MaxIdentifierLength {
+			return mysql.NewSQLError(mysql.ERTooLongIdent, mysql.SSDataTooLong, "--sidecar-db-name identifier value of %q is too long (%d chars), max length for database identifiers is %d characters",
+				createKeyspaceOptions.SidecarDBName, len(createKeyspaceOptions.SidecarDBName), mysql.MaxIdentifierLength)
 		}
 
 		if createKeyspaceOptions.BaseKeyspace == "" {
