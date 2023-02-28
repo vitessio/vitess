@@ -96,7 +96,6 @@ func RebuildKeyspaceLocked(ctx context.Context, log logutil.Logger, ts *topo.Ser
 		srvKeyspaceMap[cell] = &topodatapb.SrvKeyspace{
 			ServedFrom: ki.ComputeCellServedFrom(cell),
 		}
-		srvKeyspaceMap[cell].ThrottlerConfig = ki.ThrottlerConfig
 	}
 
 	servedTypes := []topodatapb.TabletType{topodatapb.TabletType_PRIMARY, topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY}

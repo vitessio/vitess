@@ -1582,9 +1582,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
-	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
+	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
 		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.ThrottlerConfig{}
+			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
 		}
 		if req.CustomQuerySet {
 			// custom query provided
@@ -1617,20 +1617,10 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	}
 	defer unlock(&err)
 
-	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
-	if err != nil {
-		return nil, err
-	}
-
-	ki.ThrottlerConfig = update(ki.ThrottlerConfig)
-
-	err = s.ts.UpdateKeyspace(ctx, ki)
-	if err != nil {
-		return nil, err
-	}
-
 	_, err = s.ts.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
-
+	if err != nil {
+		return nil, err
+	}
 	return &vtctldatapb.UpdateThrottlerConfigResponse{}, nil
 }
 

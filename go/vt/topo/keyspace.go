@@ -213,14 +213,6 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 	return "none", nil
 }
 
-func (ts *Server) GetThrottlerConfig(ctx context.Context, keyspace string) (*topodatapb.ThrottlerConfig, error) {
-	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return nil, err
-	}
-	return keyspaceInfo.ThrottlerConfig, nil
-}
-
 func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
 	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
 	if err != nil {

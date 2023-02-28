@@ -254,22 +254,10 @@ func TestSchemaChange(t *testing.T) {
 	providedUUID := ""
 	providedMigrationContext := ""
 
-	// We execute the throttler commands via vtgate, which in turn
-	// executes them via vttablet. So let's wait until vtgate's view
-	// is updated.
-	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
-	require.NoError(t, err)
-
-	_, err = onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
-	require.NoError(t, err)
-
-	for _, ks := range clusterInstance.Keyspaces {
-		for _, shard := range ks.Shards {
-			for _, tablet := range shard.Vttablets {
-				onlineddl.WaitForThrottlerStatusEnabled(t, tablet, extendedMigrationWait)
-			}
-		}
-	}
+	t.Run("enabling throttler with default threshold", func(t *testing.T) {
+		_, err := onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+		assert.NoError(t, err)
+	})
 
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
