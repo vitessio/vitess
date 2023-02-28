@@ -174,6 +174,20 @@ The stats `QueriesProcessed` and `QueriesRouted` are deprecated in v16 as part o
 The Prometheus metrics exporter now properly normalizes _all_ label names into their `snake_case` form, as it is idiomatic for Prometheus metrics. Previously, Vitess instances were emitting inconsistent labels for their metrics, with some of them being `CamelCase` and others being `snake_case`.
 More information about this change can be found on [Pull Request #12057](https://github.com/vitessio/vitess/pull/12057).
 
+For example, `vtgate_topology_watcher_errors{Operation="GetTablet"} 0` will become `vtgate_topology_watcher_errors{operation="GetTablet"} 0`
+
+Some more of these changes are listed here -
+
+| Previous metric                                             | New Metric                                                  |
+|-------------------------------------------------------------|-------------------------------------------------------------|
+| vtgate_topology_watcher_operations{Operation="AddTablet"}   | vtgate_topology_watcher_operations{operation="AddTablet"}   |
+| vtgate_queries_processed{Plan="Reference"}                  | vtgate_queries_processed{plan="Reference"}                  |
+| vtgate_queries_routed{Plan="Reference"}                     | vtgate_queries_routed{plan="Reference"}                     |
+| vttablet_table_allocated_size{Table="corder"}               | vttablet_table_allocated_size{table="corder"}               |
+| vttablet_table_file_size{Table="corder"}                    | vttablet_table_file_size{table="corder"}                    |
+| vttablet_topology_watcher_errors{Operation="GetTablet"}     | vttablet_topology_watcher_errors{operation="GetTablet"}     |
+| vttablet_topology_watcher_operations{Operation="AddTablet"} | vttablet_topology_watcher_operations{operation="AddTablet"} |
+
 ### <a id="repl-manager-removal"/>Replication manager removal and VTOrc becomes mandatory
 VTOrc is now a **required** component of Vitess starting from v16. If the users want Vitess to manage replication, then they must run VTOrc.
 Replication manager is removed from vttablets since the responsibility of fixing replication lies entirely with VTOrc now.
