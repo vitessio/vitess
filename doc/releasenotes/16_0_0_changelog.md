@@ -21,6 +21,8 @@
  * Fix files changes filtering in CI [#11714](https://github.com/vitessio/vitess/pull/11714)
  * Fix `codeql` workflow timeout issue [#11760](https://github.com/vitessio/vitess/pull/11760)
  * Trigger OnlineDDL workflow when test data changes [#11827](https://github.com/vitessio/vitess/pull/11827) 
+#### CLI
+ * [release-16.0] vtctldclient: Format GetKeyspace output using cli.MarshalJSON (#12495) [#12503](https://github.com/vitessio/vitess/pull/12503) 
 #### Cluster management
  * BugFix: Errant GTID detection for a single replica [#12024](https://github.com/vitessio/vitess/pull/12024)
  * BugFix: Fix race in `IsFlagProvided` [#12042](https://github.com/vitessio/vitess/pull/12042) 
@@ -98,7 +100,8 @@
  * [release-16.0] fix: added null safe operator precendence rule (#12297) [#12307](https://github.com/vitessio/vitess/pull/12307)
  * Fix for USING when column names not lower cased [#12379](https://github.com/vitessio/vitess/pull/12379)
  * [release-16.0] Fix bug in vtexplain around JOINs (#12376) [#12384](https://github.com/vitessio/vitess/pull/12384)
- * Fix scalar aggregation engine primitive for column truncation [#12468](https://github.com/vitessio/vitess/pull/12468) 
+ * Fix scalar aggregation engine primitive for column truncation [#12468](https://github.com/vitessio/vitess/pull/12468)
+ * [release-16.0] BugFix: Unsharded query using a derived table and a dual table [#12484](https://github.com/vitessio/vitess/pull/12484) 
 #### VReplication
  * VReplication:  escape identifiers when renaming source tables [#11670](https://github.com/vitessio/vitess/pull/11670)
  * VReplication: Prevent Orphaned VDiff2 Jobs [#11768](https://github.com/vitessio/vitess/pull/11768)
@@ -230,7 +233,8 @@
  * Add default lower stack limit [#11569](https://github.com/vitessio/vitess/pull/11569)
  * Upgrade to `go1.19.4` [#11905](https://github.com/vitessio/vitess/pull/11905)
  * Add structure logging to Vitess [#11960](https://github.com/vitessio/vitess/pull/11960)
- * Revert changes made in #11960 [#12219](https://github.com/vitessio/vitess/pull/12219) 
+ * Revert changes made in #11960 [#12219](https://github.com/vitessio/vitess/pull/12219)
+ * Upgrade `release-16.0` to `go1.20.1` [#12398](https://github.com/vitessio/vitess/pull/12398) 
 #### Governance
  * Add manan and florent to Docker files CODEOWNERS [#11981](https://github.com/vitessio/vitess/pull/11981) 
 #### Query Serving
