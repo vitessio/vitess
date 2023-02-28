@@ -254,11 +254,6 @@ func TestSchemaChange(t *testing.T) {
 	providedUUID := ""
 	providedMigrationContext := ""
 
-	t.Run("enabling throttler with default threshold", func(t *testing.T) {
-		_, err := onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
-		assert.NoError(t, err)
-	})
-
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
 		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), providedUUID, providedMigrationContext, "vtctl", "non_online", "", false)
