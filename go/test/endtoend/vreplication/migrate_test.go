@@ -56,10 +56,10 @@ func TestMigrate(t *testing.T) {
 
 	defaultCell = vc.Cells[defaultCellName]
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, nil)
-	vtgate = defaultCell.Vtgates[0]
-	require.NotNil(t, vtgate)
 	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
 	require.NoError(t, err)
+	vtgate = defaultCell.Vtgates[0]
+	require.NotNil(t, vtgate)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -78,7 +78,7 @@ func TestMigrate(t *testing.T) {
 	extVtgate := extCell2.Vtgates[0]
 	require.NotNil(t, extVtgate)
 
-	err = cluster.WaitForHealthyShard(vc.VtctldClient, "rating", "0")
+	err = cluster.WaitForHealthyShard(extVc.VtctldClient, "rating", "0")
 	require.NoError(t, err)
 	verifyClusterHealth(t, extVc)
 	extVtgateConn := getConnection(t, extVc.ClusterConfig.hostname, extVc.ClusterConfig.vtgateMySQLPort)
