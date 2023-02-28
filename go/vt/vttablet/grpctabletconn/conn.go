@@ -1018,6 +1018,48 @@ func (conn *gRPCQueryClient) Release(ctx context.Context, target *querypb.Target
 	return nil
 }
 
+// GetSchema implements the queryservice interface
+func (conn *gRPCQueryClient) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
+	conn.mu.RLock()
+	defer conn.mu.RUnlock()
+	if conn.cc == nil {
+		return tabletconn.ConnClosed
+	}
+
+	stream, err := func() (queryservicepb.Query_GetSchemaClient, error) {
+		conn.mu.RLock()
+		defer conn.mu.RUnlock()
+		if conn.cc == nil {
+			return nil, tabletconn.ConnClosed
+		}
+
+		stream, err := conn.c.GetSchema(ctx, &querypb.GetSchemaRequest{
+			Target:     target,
+			TableType:  tableType,
+			TableNames: tableNames,
+		})
+		if err != nil {
+			return nil, tabletconn.ErrorFromGRPC(err)
+		}
+		return stream, nil
+	}()
+	if err != nil {
+		return err
+	}
+	for {
+		shr, err := stream.Recv()
+		if err != nil {
+			return tabletconn.ErrorFromGRPC(err)
+		}
+		if err := callback(shr); err != nil {
+			if err == nil || err == io.EOF {
+				return nil
+			}
+			return err
+		}
+	}
+}
+
 // Close closes underlying gRPC channel.
 func (conn *gRPCQueryClient) Close(ctx context.Context) error {
 	conn.mu.Lock()

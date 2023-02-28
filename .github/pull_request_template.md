@@ -20,6 +20,7 @@
 
 -   [ ] "Backport to:" labels have been added if this change should be back-ported
 -   [ ] Tests were added or are not required
+-   [ ] Did the new or modified tests pass consistently locally and on the CI
 -   [ ] Documentation was added or is not required
 
 ## Deployment Notes

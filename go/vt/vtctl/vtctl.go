@@ -3903,7 +3903,6 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 		}
 	}
 
-	wr.Logger().Printf("Unknown command: %v\n", action)
 	return ErrUnknownCommand
 }
 

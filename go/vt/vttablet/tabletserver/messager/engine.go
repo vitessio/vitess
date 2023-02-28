@@ -20,8 +20,9 @@ import (
 	"context"
 	"sync"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/schema"
@@ -56,7 +57,7 @@ type Engine struct {
 	tsv          TabletService
 	se           *schema.Engine
 	vs           VStreamer
-	postponeSema *sync2.Semaphore
+	postponeSema *semaphore.Weighted
 }
 
 // NewEngine creates a new Engine.
@@ -65,7 +66,7 @@ func NewEngine(tsv TabletService, se *schema.Engine, vs VStreamer) *Engine {
 		tsv:          tsv,
 		se:           se,
 		vs:           vs,
-		postponeSema: sync2.NewSemaphore(tsv.Config().MessagePostponeParallelism, 0),
+		postponeSema: semaphore.NewWeighted(int64(tsv.Config().MessagePostponeParallelism)),
 		managers:     make(map[string]*messageManager),
 	}
 }

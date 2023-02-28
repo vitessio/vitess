@@ -530,7 +530,7 @@ func TestServer(t *testing.T) {
 	defer authServer.close()
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
-	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
+	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	defer l.Close()
 	go l.Accept()
 
@@ -630,7 +630,7 @@ func TestServerStats(t *testing.T) {
 	defer authServer.close()
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
-	l.SlowConnectWarnThreshold.Set(time.Nanosecond * 1)
+	l.SlowConnectWarnThreshold.Store(time.Nanosecond.Nanoseconds())
 	defer l.Close()
 	go l.Accept()
 
@@ -675,7 +675,7 @@ func TestServerStats(t *testing.T) {
 	}
 
 	// Set the slow connect threshold to something high that we don't expect to trigger
-	l.SlowConnectWarnThreshold.Set(time.Second * 1)
+	l.SlowConnectWarnThreshold.Store(time.Second.Nanoseconds())
 
 	// Run a 'panic' command, other side should panic, recover and
 	// close the connection.
@@ -723,7 +723,7 @@ func TestClearTextServer(t *testing.T) {
 	// Run a 'select rows' command with results.  This should fail
 	// as clear text is not enabled by default on the client
 	// (except MariaDB).
-	l.AllowClearTextWithoutTLS.Set(true)
+	l.AllowClearTextWithoutTLS.Store(true)
 	sql := "select rows"
 	output, ok := runMysql(t, params, sql)
 	if ok {
@@ -741,7 +741,7 @@ func TestClearTextServer(t *testing.T) {
 	}
 
 	// Now enable clear text plugin in client, but server requires SSL.
-	l.AllowClearTextWithoutTLS.Set(false)
+	l.AllowClearTextWithoutTLS.Store(false)
 	if !isMariaDB {
 		sql = enableCleartextPluginPrefix + sql
 	}
@@ -750,7 +750,7 @@ func TestClearTextServer(t *testing.T) {
 	assert.Contains(t, output, "Cannot use clear text authentication over non-SSL connections", "Unexpected output for 'select rows': %v", output)
 
 	// Now enable clear text plugin, it should now work.
-	l.AllowClearTextWithoutTLS.Set(true)
+	l.AllowClearTextWithoutTLS.Store(true)
 	output, ok = runMysql(t, params, sql)
 	require.True(t, ok, "mysql failed: %v", output)
 
@@ -777,7 +777,7 @@ func TestDialogServer(t *testing.T) {
 	defer authServer.close()
 	l, err := NewListener("tcp", "127.0.0.1:", authServer, th, 0, 0, false, false)
 	require.NoError(t, err)
-	l.AllowClearTextWithoutTLS.Set(true)
+	l.AllowClearTextWithoutTLS.Store(true)
 	defer l.Close()
 	go l.Accept()
 

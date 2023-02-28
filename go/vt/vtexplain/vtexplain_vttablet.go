@@ -18,7 +18,6 @@ package vtexplain
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
@@ -637,9 +636,6 @@ func (t *explainTablet) handleSelect(query string) (*sqltypes.Result, error) {
 		InsertID: 0,
 		Rows:     rows,
 	}
-
-	resultJSON, _ := json.MarshalIndent(result, "", "    ")
-	log.V(100).Infof("query %s result %s\n", query, string(resultJSON))
 	return result, nil
 }
 

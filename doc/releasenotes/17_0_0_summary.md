@@ -9,10 +9,15 @@
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
 
 ## <a id="major-changes"/> Major Changes
 
 ### <a id="breaking-changes"/>Breaking Changes
+
+#### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
+
+When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used. 
 
 #### <a id="deprecated-stats"/>Deprecated Stats
 
@@ -160,3 +165,7 @@ Some notes to help understand these metrics:
  * `DurationByPhaseSeconds["CatchUpReplication"]` measures how long it took to catch-up replication after the restore phase.
  * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
  * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
+
+## <a id="deprecations-and-deletions"/> Deprecations and Deletions
+
+* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.

@@ -13,7 +13,7 @@ concurrency:
 jobs:
   get_next_release:
     if: always()
-    name: Get latest release
+    name: Get Latest Release - Reparent New Vtctl
     runs-on: ubuntu-22.04
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
@@ -33,7 +33,7 @@ jobs:
 
   upgrade_downgrade_test:
     if: always() && (needs.get_next_release.result == 'success')
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Reparent New Vtctl
     runs-on: ubuntu-22.04
     needs:
       - get_next_release
@@ -198,4 +198,4 @@ jobs:
         mkdir -p /tmp/vtdataroot
 
         source build.env
-        eatmydata -- go run test.go -skip-build -keep-data -docker=false -print-log -follow -tag upgrade_downgrade_reparent
+        eatmydata -- go run test.go -skip-build -keep-data=false -docker=false -print-log -follow -tag upgrade_downgrade_reparent

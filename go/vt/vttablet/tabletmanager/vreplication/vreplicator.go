@@ -87,8 +87,8 @@ const (
 		select pca.id from _vt.post_copy_action as pca inner join _vt.vreplication as vr on (pca.vrepl_id = vr.id)
 		where pca.table_name=%a
 	) for update`
-	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where
-	action->>'$.type'=%a and vrepl_id=%a and table_name=%a`
+	sqlGetPostCopyActionTaskByType = `select json_unquote(json_extract(action, '$.task')) as task from _vt.post_copy_action where
+	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
 )
@@ -431,7 +431,7 @@ func (vr *vreplicator) setState(state, message string) error {
 			Message: message,
 		})
 	}
-	vr.stats.State.Set(state)
+	vr.stats.State.Store(state)
 	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)

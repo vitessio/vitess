@@ -29,6 +29,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var testcollationMap map[string]Collation
@@ -839,10 +840,15 @@ func TestFastIterators(t *testing.T) {
 func TestUniqueHashes(t *testing.T) {
 	for _, teststr := range AllTestStrings {
 		t.Run(teststr.Name, func(t *testing.T) {
-			var hashes = make(map[uintptr]string)
+			var hashes = make(map[uint64]string)
+			var hasher vthash.Hasher
+
 			for _, collation := range testall() {
 				trans, _ := charset.ConvertFromUTF8(nil, collation.Charset(), []byte(teststr.Content))
-				h := collation.Hash(trans, 0)
+
+				hasher.Reset()
+				collation.Hash(&hasher, trans, 0)
+				h := hasher.Sum64()
 				if dupname, dup := hashes[h]; dup {
 					t.Fatalf("%s hashes to %d in %s and %s", teststr.Name, h, collation.Name(), dupname)
 				}
@@ -870,8 +876,14 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 		c.t.Errorf("ConsistentCollation(%s): expected WeightString %q / %v == %q / %v to be %v", c.Name(), left, w1, right, w2, equal)
 	}
 
-	h1 := c.Hash(left, 0)
-	h2 := c.Hash(right, 0)
+	hasher := vthash.New()
+	c.Hash(&hasher, left, 0)
+	h1 := hasher.Sum64()
+
+	hasher.Reset()
+	c.Hash(&hasher, right, 0)
+	h2 := hasher.Sum64()
+
 	if (h1 == h2) != equal {
 		c.t.Errorf("ConsistentCollation(%s): expected Hash %q / %v == %q / %v to be %v", c.Name(), left, h1, right, h2, equal)
 	}

@@ -45,6 +45,7 @@ func TestCreateTableDiff(t *testing.T) {
 		colrename  int
 		constraint int
 		charset    int
+		algorithm  int
 	}{
 		{
 			name: "identical",
@@ -1147,6 +1148,31 @@ func TestCreateTableDiff(t *testing.T) {
 			diff:  "alter table t4 add column created_at datetime(6) not null default (now() + interval 30 minute)",
 			cdiff: "ALTER TABLE `t4` ADD COLUMN `created_at` datetime(6) NOT NULL DEFAULT (now() + INTERVAL 30 minute)",
 		},
+		// algorithm
+		{
+			name:      "algorithm: COPY",
+			from:      "create table t1 (`id` int primary key)",
+			to:        "create table t2 (id int primary key, `i` int not null default 0)",
+			diff:      "alter table t1 add column i int not null default 0, algorithm = COPY",
+			cdiff:     "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0, ALGORITHM = COPY",
+			algorithm: AlterTableAlgorithmStrategyCopy,
+		},
+		{
+			name:      "algorithm: INPLACE",
+			from:      "create table t1 (`id` int primary key)",
+			to:        "create table t2 (id int primary key, `i` int not null default 0)",
+			diff:      "alter table t1 add column i int not null default 0, algorithm = INPLACE",
+			cdiff:     "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0, ALGORITHM = INPLACE",
+			algorithm: AlterTableAlgorithmStrategyInplace,
+		},
+		{
+			name:      "algorithm: INSTANT",
+			from:      "create table t1 (`id` int primary key)",
+			to:        "create table t2 (id int primary key, `i` int not null default 0)",
+			diff:      "alter table t1 add column i int not null default 0, algorithm = INSTANT",
+			cdiff:     "ALTER TABLE `t1` ADD COLUMN `i` int NOT NULL DEFAULT 0, ALGORITHM = INSTANT",
+			algorithm: AlterTableAlgorithmStrategyInstant,
+		},
 	}
 	standardHints := DiffHints{}
 	for _, ts := range tt {
@@ -1173,6 +1199,7 @@ func TestCreateTableDiff(t *testing.T) {
 			hints.ColumnRenameStrategy = ts.colrename
 			hints.FullTextKeyStrategy = ts.fulltext
 			hints.TableCharsetCollateStrategy = ts.charset
+			hints.AlterTableAlgorithmStrategy = ts.algorithm
 			alter, err := c.Diff(other, &hints)
 
 			require.Equal(t, len(ts.diffs), len(ts.cdiffs))

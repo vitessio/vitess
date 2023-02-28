@@ -97,7 +97,7 @@ func TestConnPoolMaxWaiters(t *testing.T) {
 	// Wait for the first waiter to increment count.
 	for {
 		runtime.Gosched()
-		if connPool.waiterCount.Get() == 1 {
+		if connPool.waiterCount.Load() == 1 {
 			break
 		}
 	}
