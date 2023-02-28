@@ -1,4 +1,4 @@
-# Changelog of Vitess v16.0.0-rc1
+# Changelog of Vitess v16.0.0
 
 ### Announcement 
 #### Governance
@@ -21,9 +21,17 @@
  * Fix files changes filtering in CI [#11714](https://github.com/vitessio/vitess/pull/11714)
  * Fix `codeql` workflow timeout issue [#11760](https://github.com/vitessio/vitess/pull/11760)
  * Trigger OnlineDDL workflow when test data changes [#11827](https://github.com/vitessio/vitess/pull/11827) 
+#### CLI
+ * [release-16.0] vtctldclient: Format GetKeyspace output using cli.MarshalJSON (#12495) [#12503](https://github.com/vitessio/vitess/pull/12503) 
 #### Cluster management
  * BugFix: Errant GTID detection for a single replica [#12024](https://github.com/vitessio/vitess/pull/12024)
  * BugFix: Fix race in `IsFlagProvided` [#12042](https://github.com/vitessio/vitess/pull/12042) 
+#### Examples
+ * Examples: Add lib functions to wait for shard states [#12239](https://github.com/vitessio/vitess/pull/12239)
+ * Examples: Correct VTAdmin Discovery File Path And Add Check [#12415](https://github.com/vitessio/vitess/pull/12415)
+ * examples: Fix Vtop example and release script [#12440](https://github.com/vitessio/vitess/pull/12440)
+ * Fix vtctldclient command in vtop test script and the fix operator example [#12458](https://github.com/vitessio/vitess/pull/12458)
+ * Open vtadmin-api port in docker-local example to enable vtadmin access [#12467](https://github.com/vitessio/vitess/pull/12467) 
 #### General
  * [main] Stats Flags: include stats flags in the correct binaries (#11450) [#11453](https://github.com/vitessio/vitess/pull/11453)
  * Test flags: Update logic for parsing test flags to run unit tests within GoLand and to parse test flags in vtgate to allow running unit tests [#11551](https://github.com/vitessio/vitess/pull/11551)
@@ -32,7 +40,8 @@
 #### Observability
  * stats/prometheus: normalize labels for single-label implementations [#12057](https://github.com/vitessio/vitess/pull/12057) 
 #### Online DDL
- * Parse binlog variable length encoded columns [#11871](https://github.com/vitessio/vitess/pull/11871) 
+ * Parse binlog variable length encoded columns [#11871](https://github.com/vitessio/vitess/pull/11871)
+ * Allow zero (in) date when setting up internal _vt schema [#12262](https://github.com/vitessio/vitess/pull/12262) 
 #### Operator
  * [main] Increase the memory limit of the vitess-operator (#11548) [#11550](https://github.com/vitessio/vitess/pull/11550)
  * Fix rbac config in the vtop example [#12034](https://github.com/vitessio/vitess/pull/12034) 
@@ -85,13 +94,22 @@
  * VTGate: Ensure HealthCheck Cache Secondary Maps Stay in Sync With Authoritative Map on Tablet Delete [#12178](https://github.com/vitessio/vitess/pull/12178)
  * schemadiff: fix scenario where no tables exist in schema and with just views reading from DUAL [#12189](https://github.com/vitessio/vitess/pull/12189)
  * Fix parsing of bitnum values larger than 64 bit [#12191](https://github.com/vitessio/vitess/pull/12191)
- * Online DDL: fix deadlock by releasing mutex before calling callback [#12211](https://github.com/vitessio/vitess/pull/12211) 
+ * Online DDL: fix deadlock by releasing mutex before calling callback [#12211](https://github.com/vitessio/vitess/pull/12211)
+ * fix: transaction_isolation to be applied at session level [#12281](https://github.com/vitessio/vitess/pull/12281)
+ * Fix aggregation on outer joins [#12298](https://github.com/vitessio/vitess/pull/12298)
+ * [release-16.0] fix: added null safe operator precendence rule (#12297) [#12307](https://github.com/vitessio/vitess/pull/12307)
+ * Fix for USING when column names not lower cased [#12379](https://github.com/vitessio/vitess/pull/12379)
+ * [release-16.0] Fix bug in vtexplain around JOINs (#12376) [#12384](https://github.com/vitessio/vitess/pull/12384)
+ * Fix scalar aggregation engine primitive for column truncation [#12468](https://github.com/vitessio/vitess/pull/12468)
+ * [release-16.0] BugFix: Unsharded query using a derived table and a dual table [#12484](https://github.com/vitessio/vitess/pull/12484) 
 #### VReplication
  * VReplication:  escape identifiers when renaming source tables [#11670](https://github.com/vitessio/vitess/pull/11670)
  * VReplication: Prevent Orphaned VDiff2 Jobs [#11768](https://github.com/vitessio/vitess/pull/11768)
  * VDiff2: Properly Apply --only_pks Report Flag [#12025](https://github.com/vitessio/vitess/pull/12025)
  * VReplication: Improve Error/Status Reporting [#12052](https://github.com/vitessio/vitess/pull/12052)
- * VReplication: Propagate Binlog Stream Errors [#12095](https://github.com/vitessio/vitess/pull/12095) 
+ * VReplication: Propagate Binlog Stream Errors [#12095](https://github.com/vitessio/vitess/pull/12095)
+ * VReplication: ignore GC tables in schema analysis [#12320](https://github.com/vitessio/vitess/pull/12320)
+ * Sidecar schema init: use COPY algorithm while altering sidecardb tables [#12436](https://github.com/vitessio/vitess/pull/12436) 
 #### VTorc
  * Fix VTOrc holding locks after shutdown [#11442](https://github.com/vitessio/vitess/pull/11442)
  * [15.0] Fix VTOrc to handle multiple failures [#11489](https://github.com/vitessio/vitess/pull/11489)
@@ -129,7 +147,8 @@
  * consolidating OnlineDDL 'declarative' tests into 'scheduler' tests: part 1 [#12061](https://github.com/vitessio/vitess/pull/12061)
  * OnlineDDL CI: remove 'revertible' tests (part 2) [#12192](https://github.com/vitessio/vitess/pull/12192)
  * Update vtadmin dependencies [#12201](https://github.com/vitessio/vitess/pull/12201)
- * Update Go dependencies [#12215](https://github.com/vitessio/vitess/pull/12215) 
+ * Update Go dependencies [#12215](https://github.com/vitessio/vitess/pull/12215)
+ * Download mariadb from vitess-resources [#12271](https://github.com/vitessio/vitess/pull/12271) 
 #### Cluster management
  * Endtoend cluster improvements [#11859](https://github.com/vitessio/vitess/pull/11859)
  * CI, tabletmanager throttler topo tests: polling until status received [#12107](https://github.com/vitessio/vitess/pull/12107) 
@@ -143,7 +162,8 @@
  * Add more codeowners to the `/test` directory [#11762](https://github.com/vitessio/vitess/pull/11762) 
 #### Query Serving
  * Consistent sorting in Online DDL Vrepl suite test [#11821](https://github.com/vitessio/vitess/pull/11821)
- * Flakes: Properly Test HealthCheck Cache Response Handling [#12226](https://github.com/vitessio/vitess/pull/12226) 
+ * Flakes: Properly Test HealthCheck Cache Response Handling [#12226](https://github.com/vitessio/vitess/pull/12226)
+ * Fix `SHOW VSCHEMA TABLES` tests using v17 vtgate that expected `dual` [#12381](https://github.com/vitessio/vitess/pull/12381) 
 #### TabletManager
  * Update throttler-topo workflow file [#11784](https://github.com/vitessio/vitess/pull/11784)
  * Fix closing the body for HTTP requests [#11842](https://github.com/vitessio/vitess/pull/11842) 
@@ -152,6 +172,9 @@
 #### VTorc
  * Move vtorc runners back to normal github runners [#11482](https://github.com/vitessio/vitess/pull/11482)
 ### Dependabot 
+#### Build/CI
+ * [release-16.0] Bump golang.org/x/net from 0.5.0 to 0.7.0 (#12390) [#12400](https://github.com/vitessio/vitess/pull/12400)
+ * [release-16.0] Update additional Go dependencies (#12401) [#12402](https://github.com/vitessio/vitess/pull/12402) 
 #### Java
  * build(deps): Bump protobuf-java from 3.19.4 to 3.19.6 in /java [#11439](https://github.com/vitessio/vitess/pull/11439) 
 #### VTAdmin
@@ -167,6 +190,8 @@
 #### Documentation
  * Upgrades the release notes for v15.0.0 [#11567](https://github.com/vitessio/vitess/pull/11567)
  * Copy design docs over from website [#12071](https://github.com/vitessio/vitess/pull/12071) 
+#### Query Serving
+ * Add release notes summary for views [#12422](https://github.com/vitessio/vitess/pull/12422) 
 #### VReplication
  * Mark VDiff V2 as GA in v16 [#12084](https://github.com/vitessio/vitess/pull/12084)
 ### Enhancement 
@@ -185,7 +210,8 @@
  * Allow override of build git env in docker/base builds [#11968](https://github.com/vitessio/vitess/pull/11968)
  * Add vtorc port to vitess local docker run [#12001](https://github.com/vitessio/vitess/pull/12001)
  * Update the MySQL version used by our Docker images [#12054](https://github.com/vitessio/vitess/pull/12054)
- * Fail CI when a PR is labeled with `NeedsWebsiteDocsUpdate` or `NeedsDescriptionUpdate` [#12062](https://github.com/vitessio/vitess/pull/12062) 
+ * Fail CI when a PR is labeled with `NeedsWebsiteDocsUpdate` or `NeedsDescriptionUpdate` [#12062](https://github.com/vitessio/vitess/pull/12062)
+ * Revert default MySQL 80 version to `8.0.30` [#12252](https://github.com/vitessio/vitess/pull/12252) 
 #### CLI
  * Add GenerateShardRanges to vtctldclient [#11492](https://github.com/vitessio/vitess/pull/11492)
  * Properly deprecate flags and fix default for `--cell` [#11501](https://github.com/vitessio/vitess/pull/11501)
@@ -207,7 +233,8 @@
  * Add default lower stack limit [#11569](https://github.com/vitessio/vitess/pull/11569)
  * Upgrade to `go1.19.4` [#11905](https://github.com/vitessio/vitess/pull/11905)
  * Add structure logging to Vitess [#11960](https://github.com/vitessio/vitess/pull/11960)
- * Revert changes made in #11960 [#12219](https://github.com/vitessio/vitess/pull/12219) 
+ * Revert changes made in #11960 [#12219](https://github.com/vitessio/vitess/pull/12219)
+ * Upgrade `release-16.0` to `go1.20.1` [#12398](https://github.com/vitessio/vitess/pull/12398) 
 #### Governance
  * Add manan and florent to Docker files CODEOWNERS [#11981](https://github.com/vitessio/vitess/pull/11981) 
 #### Query Serving
@@ -263,7 +290,13 @@
  * schemadiff: TableCharsetCollateStrategy hint [#12137](https://github.com/vitessio/vitess/pull/12137)
  * Support BETWEEN in the evalengine [#12150](https://github.com/vitessio/vitess/pull/12150)
  * Use schema for the information_schema views [#12171](https://github.com/vitessio/vitess/pull/12171)
- * vtgateconn: add DeregisterDialer hook [#12213](https://github.com/vitessio/vitess/pull/12213) 
+ * vtgateconn: add DeregisterDialer hook [#12213](https://github.com/vitessio/vitess/pull/12213)
+ * add database name to _vt.views table [#12368](https://github.com/vitessio/vitess/pull/12368)
+ * Schema RPC to fetch table/view definition [#12375](https://github.com/vitessio/vitess/pull/12375)
+ * Change `GetSchema` RPC to return `CreateView` instead of `SelectStmt` [#12421](https://github.com/vitessio/vitess/pull/12421)
+ * GetSchema rpc to streaming api [#12447](https://github.com/vitessio/vitess/pull/12447) 
+#### TabletManager
+ * SidecarDB Init: don't fail on schema init errors [#12328](https://github.com/vitessio/vitess/pull/12328) 
 #### VReplication
  * VReplication Copy Phase: Parallelize Bulk Inserts [#10828](https://github.com/vitessio/vitess/pull/10828)
  * VSCopy: Resume the copy phase consistently from given GTID and lastpk [#11103](https://github.com/vitessio/vitess/pull/11103)
@@ -273,7 +306,8 @@
  * Allow users to control VReplication DDL handling [#11532](https://github.com/vitessio/vitess/pull/11532)
  * VReplication: Defer Secondary Index Creation [#11700](https://github.com/vitessio/vitess/pull/11700)
  * VSCopy: Send COPY_COMPLETED events when the copy operation is done [#11740](https://github.com/vitessio/vitess/pull/11740)
- * Add `VStreamerCount` stat to `vttablet` [#11978](https://github.com/vitessio/vitess/pull/11978) 
+ * Add `VStreamerCount` stat to `vttablet` [#11978](https://github.com/vitessio/vitess/pull/11978)
+ * VReplication: Use MariaDB Compat JSON Functions [#12420](https://github.com/vitessio/vitess/pull/12420) 
 #### VTAdmin
  * [VTAdmin] `Validate`, `ValidateShard`, `ValidateVersionShard`, `GetFullStatus` [#11438](https://github.com/vitessio/vitess/pull/11438)
  * Full Status tab improvements for VTAdmin [#11470](https://github.com/vitessio/vitess/pull/11470)
@@ -291,8 +325,9 @@
  * Add support for views in vtgate [#11195](https://github.com/vitessio/vitess/pull/11195)
  * Add support for Views DDL [#11896](https://github.com/vitessio/vitess/pull/11896)
  * notify view change to vtgate [#12115](https://github.com/vitessio/vitess/pull/12115)
- * Views Support: Updating Views in VSchema for query serving [#12124](https://github.com/vitessio/vitess/pull/12124) 
-#### Admin Web UI
+ * Views Support: Updating Views in VSchema for query serving [#12124](https://github.com/vitessio/vitess/pull/12124)
+ * Create Views allowed for same keyspace [#12409](https://github.com/vitessio/vitess/pull/12409) 
+#### web UI
  * [VTAdmin] Topology Browser [#11496](https://github.com/vitessio/vitess/pull/11496)
 ### Internal Cleanup 
 #### Backup and Restore
@@ -316,7 +351,11 @@
  * Remove example script that caused some confusion [#11529](https://github.com/vitessio/vitess/pull/11529)
  * Remove unused ioutil2 code [#11661](https://github.com/vitessio/vitess/pull/11661)
  * Fix some linter errors [#11773](https://github.com/vitessio/vitess/pull/11773)
- * Remove Deprecated flags, code and stats. [#12083](https://github.com/vitessio/vitess/pull/12083) 
+ * Remove Deprecated flags, code and stats. [#12083](https://github.com/vitessio/vitess/pull/12083)
+ * Fix release notes on release-16.0 [#12276](https://github.com/vitessio/vitess/pull/12276)
+ * Fix summary and release notes [#12283](https://github.com/vitessio/vitess/pull/12283)
+ * Reorder summary in order of importance [#12433](https://github.com/vitessio/vitess/pull/12433)
+ * release notes: mark dynamic throttler configuration as experimental [#12475](https://github.com/vitessio/vitess/pull/12475) 
 #### Governance
  * Correct minor inaccuracies in governing docs [#11933](https://github.com/vitessio/vitess/pull/11933) 
 #### Online DDL
@@ -343,7 +382,7 @@
  * VReplication: Remove Deprecated V1 Client Commands [#11705](https://github.com/vitessio/vitess/pull/11705) 
 #### VTAdmin
  * move react-scripts to dev dependencies [#11767](https://github.com/vitessio/vitess/pull/11767) 
-#### Admin Web UI
+#### web UI
  * [vtctld2] Remove vtctld2 UI and vtctld server components that serve the app UI [#11851](https://github.com/vitessio/vitess/pull/11851)
 ### Performance 
 #### Cluster management
@@ -373,6 +412,10 @@
  * Release notes for 15.0.1 [#11850](https://github.com/vitessio/vitess/pull/11850)
  * updating summary and release notes for v15.0.1 [#11852](https://github.com/vitessio/vitess/pull/11852)
  * [main] Update the release `15.0.2` summary doc (#11954) [#11956](https://github.com/vitessio/vitess/pull/11956)
+ * Release of v16.0.0-rc1 [#12235](https://github.com/vitessio/vitess/pull/12235)
+ * Back to dev mode after v16.0.0-rc1 [#12277](https://github.com/vitessio/vitess/pull/12277)
+ * [release-16.0] Fix release script for the version in the docker script (#12284) [#12289](https://github.com/vitessio/vitess/pull/12289)
+ * Code freeze of release-16.0 for v16.0.0 [#12469](https://github.com/vitessio/vitess/pull/12469)
 ### Testing 
 #### Backup and Restore
  * go/vt/mysqlctl: add compression benchmarks [#11994](https://github.com/vitessio/vitess/pull/11994) 
@@ -385,9 +428,12 @@
  * Remove the semgrep action [#12148](https://github.com/vitessio/vitess/pull/12148)
  * CI cleanup: remove onlineddl_declarative, onlineddl_singleton (cleanup part 2) [#12182](https://github.com/vitessio/vitess/pull/12182)
  * Online DDL CI: consolidated revertible and revert CI tests (part 1) [#12183](https://github.com/vitessio/vitess/pull/12183)
- * Allow manually kicking off CodeQL [#12200](https://github.com/vitessio/vitess/pull/12200) 
+ * Allow manually kicking off CodeQL [#12200](https://github.com/vitessio/vitess/pull/12200)
+ * Don't keep data in upgrade-downgrade tests [#12462](https://github.com/vitessio/vitess/pull/12462) 
 #### General
  * endtoend: fix dbconfig initialization for endtoend tests [#11609](https://github.com/vitessio/vitess/pull/11609) 
+#### Online DDL
+ * Backport to v16: onlineddl_vrepl flakiness and subsequent fixes [#12426](https://github.com/vitessio/vitess/pull/12426) 
 #### Query Serving
  * Add additional unit test with state changes swapped [#11192](https://github.com/vitessio/vitess/pull/11192)
  * Use JSON for plan tests [#11430](https://github.com/vitessio/vitess/pull/11430)
