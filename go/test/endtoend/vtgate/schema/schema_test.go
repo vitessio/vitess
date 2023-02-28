@@ -105,7 +105,6 @@ func TestSchemaChange(t *testing.T) {
 	testWithAlterSchema(t)
 	testWithAlterDatabase(t)
 	testWithDropCreateSchema(t)
-	testSchemaChangePreflightErrorPartially(t)
 	testDropNonExistentTables(t)
 	testCreateInvalidView(t)
 	testCopySchemaShards(t, clusterInstance.Keyspaces[0].Shards[0].Vttablets[0].VttabletProcess.TabletPath, 2)
@@ -195,17 +194,6 @@ func matchSchema(t *testing.T, firstTablet string, secondTablet string) {
 	assert.Equal(t, firstShardSchema, secondShardSchema)
 }
 
-// testSchemaChangePreflightErrorPartially applying same schema + new schema should throw error for existing one
-// Tests that some SQL statements fail properly during PreflightSchema.
-func testSchemaChangePreflightErrorPartially(t *testing.T) {
-	createNewTable := fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 5)) + fmt.Sprintf(createTable, fmt.Sprintf("vt_select_test_%02d", 2))
-	output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--sql", createNewTable, keyspaceName)
-	require.Error(t, err)
-	assert.True(t, strings.Contains(output, "already exists"))
-
-	checkTables(t, totalTableCount)
-}
-
 // testDropNonExistentTables applying same schema + new schema should throw error for existing one and also add the new schema
 // If a table does not exist, DROP TABLE should error during preflight
 // because the statement does not change the schema as there is
@@ -230,7 +218,7 @@ func testDropNonExistentTables(t *testing.T) {
 func testCreateInvalidView(t *testing.T) {
 	for _, ddlStrategy := range []string{"direct", "direct -allow-zero-in-date"} {
 		createInvalidView := "CREATE OR REPLACE VIEW invalid_view AS SELECT * FROM nonexistent_table;"
-		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--skip_preflight", "--ddl_strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
+		output, err := clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput("ApplySchema", "--", "--ddl_strategy", ddlStrategy, "--sql", createInvalidView, keyspaceName)
 		require.Error(t, err)
 		assert.Contains(t, output, "doesn't exist (errno 1146)")
 	}
