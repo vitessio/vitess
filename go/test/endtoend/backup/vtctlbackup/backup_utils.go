@@ -32,6 +32,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -1070,35 +1071,46 @@ func TestReplicaRestoreToPos(t *testing.T, restoreToPos mysql.Position, expectEr
 }
 
 func verifyTabletBackupStats(t *testing.T, vars map[string]any) {
-	require.Contains(t, vars, "BackupBytes")
-	require.Contains(t, vars, "BackupCount")
-	require.Contains(t, vars, "BackupDurationNanoseconds")
+	// Currently only the builtin backup engine instruments bytes-processed
+	// counts.
+	if mysqlctl.BackupEngineImplementation() == "builtin" {
+		require.Contains(t, vars, "BackupBytes")
+		bb := vars["BackupBytes"].(map[string]any)
+		require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
+		require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
+		if backupstorage.BackupStorageImplementation == "file" {
+			require.Contains(t, bb, "BackupStorage.File.File:Write")
+		}
+	}
 
-	bb := vars["BackupBytes"].(map[string]any)
-	require.Contains(t, bb, "BackupEngine.Builtin.Compressor:Write")
-	require.Contains(t, bb, "BackupEngine.Builtin.Destination:Write")
-	require.Contains(t, bb, "BackupEngine.Builtin.Source:Read")
-	require.Contains(t, bb, "BackupStorage.File.File:Write")
 	require.Contains(t, vars, "BackupCount")
-
 	bc := vars["BackupCount"].(map[string]any)
 	require.Contains(t, bc, "-.-.Backup")
-	require.Contains(t, bc, "BackupEngine.Builtin.Compressor:Close")
-	require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
-	require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
-	require.Contains(t, bc, "BackupEngine.Builtin.Source:Close")
-	require.Contains(t, bc, "BackupEngine.Builtin.Source:Open")
-	require.Contains(t, vars, "BackupDurationNanoseconds")
+	// Currently only the builtin backup engine implements operation counts.
+	if mysqlctl.BackupEngineImplementation() == "builtin" {
+		require.Contains(t, bc, "BackupEngine.Builtin.Compressor:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bc, "BackupEngine.Builtin.Source:Open")
+	}
 
+	require.Contains(t, vars, "BackupDurationNanoseconds")
 	bd := vars["BackupDurationNanoseconds"]
 	require.Contains(t, bd, "-.-.Backup")
-	require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Close")
-	require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Write")
-	require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
-	require.Contains(t, bd, "BackupEngine.Builtin.Destination:Open")
-	require.Contains(t, bd, "BackupEngine.Builtin.Destination:Write")
-	require.Contains(t, bd, "BackupEngine.Builtin.Source:Close")
-	require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
-	require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
-	require.Contains(t, bd, "BackupStorage.File.File:Write")
+	// Currently only the builtin backup engine implements timings.
+	if mysqlctl.BackupEngineImplementation() == "builtin" {
+		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Compressor:Write")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Destination:Write")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Close")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Open")
+		require.Contains(t, bd, "BackupEngine.Builtin.Source:Read")
+	}
+	if backupstorage.BackupStorageImplementation == "file" {
+		require.Contains(t, bd, "BackupStorage.File.File:Write")
+	}
 }
