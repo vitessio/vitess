@@ -33,6 +33,9 @@ ARG BUILD_GIT_REV
 USER root
 COPY . /vt/src/vitess.io/vitess
 
+# Trust dubious ownership of git directory
+RUN git config --global --add safe.directory /vt/src/vitess.io/vitess
+
 # Build Vitess
 RUN make build
 
