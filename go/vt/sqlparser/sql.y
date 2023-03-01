@@ -2299,6 +2299,10 @@ signal_information_item:
   {
     $$ = SignalInfo{ConditionItemName: $1, Value: $3.(*SQLVal)}
   }
+| signal_information_name '=' sql_id
+  {
+    $$ = SignalInfo{ConditionItemName: $1, Value: &ColName{Name: $3}}
+  }
 
 signal_information_name:
   CLASS_ORIGIN
