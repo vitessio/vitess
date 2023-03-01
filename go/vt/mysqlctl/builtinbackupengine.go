@@ -351,9 +351,9 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	if sourceIsPrimary {
 		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
 		if !superReadOnly {
-			params.Logger.Infof("turning primary super-read-only before backup")
+			params.Logger.Infof("turning primary super_read_only before backup")
 			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
-				return false, vterrors.Wrap(err, "can't set super-read-only status")
+				return false, vterrors.Wrap(err, "can't set super_read_only status")
 			}
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition()

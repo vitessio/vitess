@@ -316,7 +316,7 @@ func SetupVttabletsAndVTOrcs(t *testing.T, clusterInfo *VTOrcClusterInfo, numRep
 // cleanAndStartVttablet cleans the MySQL instance underneath for running a new test. It also starts the vttablet.
 func cleanAndStartVttablet(t *testing.T, clusterInfo *VTOrcClusterInfo, vttablet *cluster.Vttablet) {
 	t.Helper()
-	// set super-read-only to false
+	// set super_read_only to false
 	_, err := RunSQL(t, "SET GLOBAL super_read_only = OFF", vttablet, "")
 	require.NoError(t, err)
 	// remove the databases if they exist

@@ -630,7 +630,7 @@ func VttabletProcessInstance(port, grpcPort, tabletUID int, cell, shard, keyspac
 }
 
 // QueryTabletWithSuperReadOnlyHandling will retry the query up to 10 times with a small sleep in between each try.
-// This allows the tests to be more robust in the face of transient failures. It disables super-read-only during query execution.
+// This allows the tests to be more robust in the face of transient failures. It disables super_read_only during query execution.
 func (vttablet *VttabletProcess) QueryTabletWithSuperReadOnlyHandling(query string, keyspace string, useDb bool) (*sqltypes.Result, error) {
 	var (
 		err    error

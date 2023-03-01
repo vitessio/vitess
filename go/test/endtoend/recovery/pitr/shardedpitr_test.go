@@ -19,7 +19,9 @@ package pitr
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path"
 	"testing"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -63,7 +66,7 @@ var (
 	shard1Name     = "80-"
 	dbName         = "vt_ks"
 	mysqlUserName  = "vt_dba"
-	mysqlPassword  = "password"
+	mysqlPassword  = "VtDbaPass"
 	vSchema        = `{
 		"sharded": true,
 		"vindexes": {
@@ -408,6 +411,10 @@ func initializeCluster(t *testing.T) {
 	shard0.Vttablets = []*cluster.Vttablet{shard0Primary, shard0Replica1, shard0Replica2}
 	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica1, shard1Replica2}
 
+	dbCredentialFile := cluster.WriteDbCredentialToTmp(clusterInstance.TmpDirectory)
+	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+	commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
+
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--restore_from_backup")
 
@@ -416,10 +423,27 @@ func initializeCluster(t *testing.T) {
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
 	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
+
+	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+	sql := string(initDb)
+	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
+	if err != nil {
+		require.NoError(t, err, "expected to load init_db file")
+	}
+	newInitDBFile := path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
+	if err != nil {
+		require.NoError(t, err, "expected to load init_db file")
+	}
+
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
+			tablet.VttabletProcess.DbPassword = mysqlPassword
+			tablet.MysqlctlProcess.ExtraArgs = extraArgs
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -432,23 +456,8 @@ func initializeCluster(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	queryCmds := []string{
-		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
-		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
-		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
-		fmt.Sprintf("create database %s;", "vt_ks"),
-		"FLUSH PRIVILEGES;",
-	}
-
-	// Executing these queries with super_read_only since these are additional DMLs outside init_db.sql
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-
-			for _, query := range queryCmds {
-				_, err = tablet.VttabletProcess.QueryTabletWithSuperReadOnlyHandling(query, keyspace.Name, false)
-				require.NoError(t, err)
-			}
-
 			err = tablet.VttabletProcess.Setup()
 			require.NoError(t, err)
 		}
@@ -462,6 +471,21 @@ func initializeCluster(t *testing.T) {
 
 	err = clusterInstance.VtctlclientProcess.InitShardPrimary(keyspaceName, shard1.Name, cell, shard1Primary.TabletUID)
 	require.NoError(t, err)
+
+	/*queryCmds := []string{
+		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
+		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
+		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
+		"FLUSH PRIVILEGES;",
+	}
+
+	// Run DMLs on primary and let replication takes care of changes on replica
+	for _, tablet := range []*cluster.Vttablet{primary, shard0Primary, shard1Primary} {
+		for _, query := range queryCmds {
+			_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
+			require.NoError(t, err)
+		}
+	}*/
 
 	err = clusterInstance.StartVTOrc(keyspaceName)
 	require.NoError(t, err)
