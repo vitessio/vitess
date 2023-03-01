@@ -30,7 +30,6 @@ import (
 )
 
 var (
-	EmptyKey        = []byte{}
 	ZeroKey         = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
 	KeyRangePattern = regexp.MustCompile(`^[0-9a-fA-F]*-[0-9a-fA-F]*$`)
 )
@@ -183,12 +182,19 @@ func KeyRangeEndEqual(a, b *topodatapb.KeyRange) bool {
 }
 
 // KeyRangeCompare compares two KeyRange values, taking into account both the Start and End fields and their
-// field-specific comparison logic; returns -1 if a<b, 1 if a>b, 0 if equal.
+// field-specific comparison logic; returns -1 if a<b, 1 if a>b, 0 if equal. Specifically:
+//
+//   - The Start-specific KeyRangeStartCompare and End-specific KeyRangeEndCompare are used for proper comparison
+//     of an empty value for either Start or End.
+//   - The Start is compared first and End is only compared if Start is equal.
 func KeyRangeCompare(a, b *topodatapb.KeyRange) int {
+	// First, compare the Start field.
 	if v := KeyRangeStartCompare(a, b); v != 0 {
+		// The Start field for a and b differ, and that is enough; return that comparison.
 		return v
 	}
 
+	// The Start field was equal, so compare the End field and return that comparison.
 	return KeyRangeEndCompare(a, b)
 }
 

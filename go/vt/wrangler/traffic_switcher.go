@@ -949,7 +949,6 @@ func (ts *trafficSwitcher) isPartialMoveTables(sourceShards, targetShards []stri
 		return false, err
 	}
 
-	// both cover full range
 	if key.KeyRangeIsComplete(skr) || key.KeyRangeIsComplete(tkr) || len(sourceShards) != len(targetShards) {
 		return false, nil
 	}

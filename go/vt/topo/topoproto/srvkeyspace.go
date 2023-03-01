@@ -30,12 +30,12 @@ type ShardReferenceArray []*topodatapb.ShardReference
 // Len implements sort.Interface
 func (sra ShardReferenceArray) Len() int { return len(sra) }
 
-// Len implements sort.Interface
+// Less implements sort.Interface
 func (sra ShardReferenceArray) Less(i, j int) bool {
 	return key.KeyRangeLess(sra[i].KeyRange, sra[j].KeyRange)
 }
 
-// Len implements sort.Interface
+// Swap implements sort.Interface
 func (sra ShardReferenceArray) Swap(i, j int) {
 	sra[i], sra[j] = sra[j], sra[i]
 }
