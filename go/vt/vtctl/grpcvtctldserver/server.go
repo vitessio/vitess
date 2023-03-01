@@ -1626,7 +1626,7 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 
 	_, err = s.ts.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
 
-	return &vtctldatapb.UpdateThrottlerConfigResponse{}, nil
+	return &vtctldatapb.UpdateThrottlerConfigResponse{}, err
 }
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.
