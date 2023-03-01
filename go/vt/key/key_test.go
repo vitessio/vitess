@@ -587,7 +587,7 @@ func TestKeyRangeContiguous(t *testing.T) {
 	}, {
 		first:  "-",
 		second: "-40",
-		out:    true,
+		out:    false,
 	}, {
 		first:  "40-80",
 		second: "c0-",

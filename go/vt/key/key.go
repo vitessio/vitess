@@ -221,11 +221,8 @@ func KeyRangeIsPartial(keyRange *topodatapb.KeyRange) bool {
 // KeyRangeContiguous returns true if the end of the KeyRange a exactly matches the start of the KeyRange b,
 // meaning that they are contiguous.
 func KeyRangeContiguous(a, b *topodatapb.KeyRange) bool {
-	if a == nil {
-		return KeyRangeIsComplete(b)
-	}
-	if b == nil {
-		return KeyRangeIsComplete(a)
+	if KeyRangeIsComplete(a) || KeyRangeIsComplete(b) {
+		return false // no two KeyRange values can be contiguous if either is the complete range
 	}
 
 	return Equal(a.End, b.Start)
