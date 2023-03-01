@@ -65,6 +65,12 @@ const (
 	AddSequenceStr      = "add sequence"
 	AddAutoIncStr       = "add auto_increment"
 
+	// ALTER TABLE ALGORITHM string.
+	DefaultStr = "default"
+	CopyStr    = "copy"
+	InplaceStr = "inplace"
+	InstantStr = "instant"
+
 	// Partition and subpartition type strings
 	HashTypeStr  = "hash"
 	KeyTypeStr   = "key"

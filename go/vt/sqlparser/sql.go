@@ -12769,7 +12769,7 @@ yydefault:
 		var yyLOCAL AlterOption
 //line sql.y:3100
 		{
-			yyLOCAL = AlgorithmValue(string(yyDollar[3].str))
+			yyLOCAL = AlgorithmValue(DefaultStr)
 		}
 		yyVAL.union = yyLOCAL
 	case 562:
@@ -12777,7 +12777,7 @@ yydefault:
 		var yyLOCAL AlterOption
 //line sql.y:3104
 		{
-			yyLOCAL = AlgorithmValue(string(yyDollar[3].str))
+			yyLOCAL = AlgorithmValue(InplaceStr)
 		}
 		yyVAL.union = yyLOCAL
 	case 563:
@@ -12785,7 +12785,7 @@ yydefault:
 		var yyLOCAL AlterOption
 //line sql.y:3108
 		{
-			yyLOCAL = AlgorithmValue(string(yyDollar[3].str))
+			yyLOCAL = AlgorithmValue(CopyStr)
 		}
 		yyVAL.union = yyLOCAL
 	case 564:
@@ -12793,7 +12793,7 @@ yydefault:
 		var yyLOCAL AlterOption
 //line sql.y:3112
 		{
-			yyLOCAL = AlgorithmValue(string(yyDollar[3].str))
+			yyLOCAL = AlgorithmValue(InstantStr)
 		}
 		yyVAL.union = yyLOCAL
 	case 565:

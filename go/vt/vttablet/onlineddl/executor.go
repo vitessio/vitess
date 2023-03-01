@@ -102,6 +102,7 @@ var vexecInsertTemplates = []string{
 
 var emptyResult = &sqltypes.Result{}
 var acceptableDropTableIfExistsErrorCodes = []int{mysql.ERCantFindFile, mysql.ERNoSuchTable}
+var copyAlgorithm = sqlparser.AlgorithmValue(sqlparser.CopyStr)
 
 var (
 	ghostOverridePath       string
@@ -1178,7 +1179,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 					// in the same statement
 					extraAlterTable := &sqlparser.AlterTable{
 						Table:        alterTable.Table,
-						AlterOptions: []sqlparser.AlterOption{opt, sqlparser.AlgorithmValue("COPY")},
+						AlterOptions: []sqlparser.AlterOption{opt, copyAlgorithm},
 					}
 					alters = append(alters, extraAlterTable)
 					continue
@@ -1188,7 +1189,7 @@ func (e *Executor) validateAndEditAlterTableStatement(ctx context.Context, onlin
 		redactedOptions = append(redactedOptions, opt)
 	}
 	alterTable.AlterOptions = redactedOptions
-	alterTable.AlterOptions = append(alterTable.AlterOptions, sqlparser.AlgorithmValue("COPY"))
+	alterTable.AlterOptions = append(alterTable.AlterOptions, copyAlgorithm)
 	return alters, nil
 }
 
