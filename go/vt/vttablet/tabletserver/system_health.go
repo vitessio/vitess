@@ -46,9 +46,9 @@ type systemHealthCollector struct {
 }
 
 // newSystemHealthMonitor initiates a new systemHealthCollector.
-func newSystemHealthMonitor(config *tabletenv.TabletConfig) systemHealthMonitor {
+func newSystemHealthMonitor(env tabletenv.Env) systemHealthMonitor {
 	return &systemHealthCollector{
-		config:          config,
+		config:          env.Config(),
 		cpuSampleWindow: systemHealthMonitorCPUSampleWindow,
 		interval:        systemHealthMonitorInterval,
 	}

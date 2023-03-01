@@ -206,7 +206,7 @@ func (sm *stateManager) Init(env tabletenv.Env, target *querypb.Target) {
 	sm.unhealthyThreshold = sync2.NewAtomicDuration(env.Config().Healthcheck.UnhealthyThresholdSeconds.Get())
 	sm.shutdownGracePeriod = env.Config().GracePeriods.ShutdownSeconds.Get()
 	sm.transitionGracePeriod = env.Config().GracePeriods.TransitionSeconds.Get()
-	sm.systemHealth = newSystemHealthMonitor(env.Config())
+	sm.systemHealth = newSystemHealthMonitor(env)
 }
 
 // SetServingType changes the state to the specified settings.

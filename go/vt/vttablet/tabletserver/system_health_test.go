@@ -26,17 +26,19 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
+// TestSystemHealthCollector generates load on all available CPUs and
+// checks that systemHealthCollector measures the activity.
 func TestSystemHealthCollector(t *testing.T) {
-	monitor := &systemHealthCollector{
-		config: &tabletenv.TabletConfig{
-			EnableSystemHealthMonitor: true,
-		},
-		cpuSampleWindow: time.Millisecond * 50,
-		interval:        time.Millisecond * 100,
-	}
+	tabletEnv := tabletenv.NewEnv(&tabletenv.TabletConfig{
+		EnableSystemHealthMonitor: true,
+	}, t.Name())
+	monitor := newSystemHealthMonitor(tabletEnv)
+	collector := monitor.(*systemHealthCollector)
+	collector.cpuSampleWindow = time.Millisecond * 50
+	collector.interval = time.Millisecond * 100
 
 	// open
-	assert.Nil(t, monitor.Open())
+	assert.Nil(t, collector.Open())
 
 	// generate cpu load to measure
 	stopLoadGeneration := make(chan bool, 1)
@@ -51,24 +53,24 @@ func TestSystemHealthCollector(t *testing.T) {
 			}
 		}()
 	}
-	time.Sleep(monitor.interval * 2)
+	time.Sleep(collector.interval * 2)
 
 	// try 10 times in case CPU usage is still 0.00%
 	var tries int
-	cpuUsage := monitor.GetCPUUsage()
+	cpuUsage := collector.GetCPUUsage()
 	for cpuUsage == 0 && tries < 10 {
-		cpuUsage = monitor.GetCPUUsage()
+		cpuUsage = collector.GetCPUUsage()
 		tries++
-		time.Sleep(monitor.interval)
+		time.Sleep(collector.interval)
 	}
 	stopLoadGeneration <- true
 	close(stopLoadGeneration)
 	assert.Less(t, tries, 10)
 
-	assert.True(t, monitor.started)
+	assert.True(t, collector.started)
 	assert.NotZero(t, cpuUsage)
 
 	// test close
-	monitor.Close()
-	assert.False(t, monitor.started)
+	collector.Close()
+	assert.False(t, collector.started)
 }
