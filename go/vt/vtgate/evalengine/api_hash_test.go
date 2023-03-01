@@ -22,6 +22,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/vthash"
@@ -55,6 +56,57 @@ func TestHashCodesRandom(t *testing.T) {
 		}
 	}
 	t.Logf("tested %d values, with %d equalities found\n", tested, equal)
+}
+
+type equality bool
+
+func (e equality) Operator() string {
+	if e {
+		return "="
+	}
+	return "!="
+}
+
+func (e equality) String() string {
+	if e {
+		return "equal"
+	}
+	return "not equal"
+}
+
+func TestHashCodes128(t *testing.T) {
+	var cases = []struct {
+		static, dynamic sqltypes.Value
+		equal           bool
+		err             error
+	}{
+		{sqltypes.NewInt64(-1), sqltypes.NewUint64(^uint64(0)), true, nil},
+		{sqltypes.NewUint64(^uint64(0)), sqltypes.NewInt64(-1), true, nil},
+		{sqltypes.NewInt64(-1), sqltypes.NewVarChar("-1"), true, nil},
+		{sqltypes.NewVarChar("-1"), sqltypes.NewInt64(-1), true, nil},
+		{sqltypes.NewInt64(23), sqltypes.NewFloat64(23.0), true, nil},
+		{sqltypes.NewInt64(23), sqltypes.NewFloat64(23.1), false, ErrHashCoercionIsNotExact},
+		{sqltypes.NewUint64(^uint64(0)), sqltypes.NewFloat64(-1.0), false, ErrHashCoercionIsNotExact},
+		{sqltypes.NewUint64(42), sqltypes.NewFloat64(42.0), true, nil},
+	}
+
+	for _, tc := range cases {
+		cmp, err := NullsafeCompare(tc.static, tc.dynamic, collations.CollationUtf8mb4ID)
+		require.NoError(t, err)
+		require.Equalf(t, tc.equal, cmp == 0, "got %v %s %v (expected %s)", tc.static, equality(cmp == 0).Operator(), tc.dynamic, equality(tc.equal))
+
+		hasher1 := vthash.New()
+		err = NullsafeHashcode128(&hasher1, tc.static, collations.CollationUtf8mb4ID, tc.static.Type())
+		require.NoError(t, err)
+
+		hasher2 := vthash.New()
+		err = NullsafeHashcode128(&hasher2, tc.dynamic, collations.CollationUtf8mb4ID, tc.static.Type())
+		require.ErrorIs(t, err, tc.err)
+
+		h1 := hasher1.Sum128()
+		h2 := hasher2.Sum128()
+		assert.Equalf(t, tc.equal, h1 == h2, "HASH(%v) %s HASH(%v) (expected %s)", tc.static, equality(h1 == h2).Operator(), tc.dynamic, equality(tc.equal))
+	}
 }
 
 // The following test tries to produce lots of different values and compares them both using hash code and compare,

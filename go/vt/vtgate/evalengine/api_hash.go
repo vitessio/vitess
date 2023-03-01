@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"math"
+	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -67,6 +68,8 @@ const (
 	hashPrefixDecimal          = 0xDDDD
 )
 
+var ErrHashCoercionIsNotExact = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "cannot coerce into target type without losing precision")
+
 // NullsafeHashcode128 returns a 128-bit hashcode that is guaranteed to be the same
 // for two values that are considered equal by `NullsafeCompare`.
 // This can be used to avoid having to do comparison checks after a hash,
@@ -112,6 +115,22 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			var uval uint64
 			uval, err = v.ToUint64()
 			i = int64(uval)
+		case v.IsFloat():
+			var fval float64
+			fval, err = v.ToFloat64()
+			if fval != math.Trunc(fval) {
+				return ErrHashCoercionIsNotExact
+			}
+			i = int64(fval)
+		case v.IsQuoted():
+			i, err = strconv.ParseInt(v.RawStr(), 10, 64)
+			if err != nil {
+				fval := parseStringToFloat(v.RawStr())
+				if fval != math.Trunc(fval) {
+					return ErrHashCoercionIsNotExact
+				}
+				i, err = int64(fval), nil
+			}
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 		}
@@ -136,6 +155,22 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 			u = uint64(ival)
 		case v.IsUnsigned():
 			u, err = v.ToUint64()
+		case v.IsFloat():
+			var fval float64
+			fval, err = v.ToFloat64()
+			if fval != math.Trunc(fval) || fval < 0 {
+				return ErrHashCoercionIsNotExact
+			}
+			u = uint64(fval)
+		case v.IsQuoted():
+			u, err = strconv.ParseUint(v.RawStr(), 10, 64)
+			if err != nil {
+				fval := parseStringToFloat(v.RawStr())
+				if fval != math.Trunc(fval) || fval < 0 {
+					return ErrHashCoercionIsNotExact
+				}
+				u, err = uint64(fval), nil
+			}
 		default:
 			return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "unexpected type %v", v.Type())
 		}

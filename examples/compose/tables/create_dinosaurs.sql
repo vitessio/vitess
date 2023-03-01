@@ -1,4 +1,4 @@
-CREATE TABLE dinosaurs (
+CREATE TABLE IF NOT EXISTS dinosaurs (
   id BIGINT UNSIGNED,
   time_created_ns BIGINT UNSIGNED,
   name VARCHAR(255),

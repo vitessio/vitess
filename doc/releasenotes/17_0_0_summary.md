@@ -9,6 +9,7 @@
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
+  - **[Deprecations and Deletions](#deprecations-and-deletions)**
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
     - [Deprecated Flags](#deprecated-flags)
@@ -168,6 +169,9 @@ Some notes to help understand these metrics:
  * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
  * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
 
+## <a id="deprecations-and-deletions"/> Deprecations and Deletions
+
+* The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
