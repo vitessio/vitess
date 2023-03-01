@@ -26,6 +26,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/timer"
+	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -87,8 +88,8 @@ const (
 		select pca.id from _vt.post_copy_action as pca inner join _vt.vreplication as vr on (pca.vrepl_id = vr.id)
 		where pca.table_name=%a
 	) for update`
-	sqlGetPostCopyActionTaskByType = `select action->>'$.task' from _vt.post_copy_action where
-	action->>'$.type'=%a and vrepl_id=%a and table_name=%a`
+	sqlGetPostCopyActionTaskByType = `select json_unquote(json_extract(action, '$.task')) as task from _vt.post_copy_action where
+	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
 	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
 	table_name=%a and id=%a`
 )
@@ -288,7 +289,7 @@ type ColumnInfo struct {
 }
 
 func (vr *vreplicator) buildColInfoMap(ctx context.Context) (map[string][]*ColumnInfo, error) {
-	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}}
+	req := &tabletmanagerdatapb.GetSchemaRequest{Tables: []string{"/.*/"}, ExcludeTables: []string{"/" + schema.GCTableNameExpression + "/"}}
 	schema, err := vr.mysqld.GetSchema(ctx, vr.dbClient.DBName(), req)
 	if err != nil {
 		return nil, err

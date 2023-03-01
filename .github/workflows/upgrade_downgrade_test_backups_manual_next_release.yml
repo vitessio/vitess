@@ -10,7 +10,7 @@ concurrency:
 jobs:
   get_next_release:
     if: always()
-    name: Get a recent LTS release
+    name: Get Previous Release - Backups - Manual - Next Release
     runs-on: ubuntu-22.04
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
@@ -32,7 +32,7 @@ jobs:
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     if: always() && (needs.get_next_release.result == 'success')
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
     runs-on: ubuntu-22.04
     needs:
       - get_next_release
@@ -88,7 +88,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.4
+        go-version: 1.20.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -194,18 +194,18 @@ jobs:
     # We also insert a few rows in our three tables.
     - name: Create the example Vitess cluster with all components using version N
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
+      timeout-minutes: 10
       run: |
-        source build.env ; cd examples/local
-        ./backups/start_cluster.sh
+        source build.env ; cd examples/backups
+        ./start_cluster.sh
 
     # Taking a backup
     - name: Take a backup of all the shards
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 2
+      timeout-minutes: 5
       run: |
-        source build.env ; cd examples/local
-        ./backups/take_backups.sh
+        source build.env ; cd examples/backups
+        ./take_backups.sh
 
     # We insert more data in every table after the backup.
     # When we restore the backup made in the next step, we do not want to see the rows we are about to insert now.
@@ -217,7 +217,7 @@ jobs:
     - name: Insert more data after the backup
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        source build.env ; cd examples/local ; source ./env.sh
+        source build.env ; cd examples ; source ./common/env.sh
 
         echo "insert into customer(email) values('new_user_1@domain.com');" | mysql
         echo "insert into product(sku, description, price) values('SKU-1009', 'description', 89);" | mysql
@@ -226,10 +226,10 @@ jobs:
     # Stop all the tablets and remove their data
     - name: Stop tablets
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
+      timeout-minutes: 10
       run: |
-        source build.env ; cd examples/local
-        ./backups/stop_tablets.sh
+        source build.env ; cd examples/backups
+        ./stop_tablets.sh
 
     # We downgrade: we use the version N+1 of vttablet
     - name: Downgrade - Swap binaries, use VTTablet N+1
@@ -244,10 +244,10 @@ jobs:
     # Starting the tablets again, they will automatically start restoring the last backup.
     - name: Start new tablets and restore
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
+      timeout-minutes: 10
       run: |
-        source build.env ; cd examples/local
-        ./backups/restart_tablets.sh
+        source build.env ; cd examples/backups
+        ./restart_tablets.sh
         # give enough time to the tablets to restore the backup
         sleep 60
 
@@ -255,7 +255,7 @@ jobs:
     - name: Assert the number of rows in every table
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        source build.env ; cd examples/local ; source ./env.sh
+        source build.env ; cd examples ; source ./common/env.sh
 
         echo "select count(sku) from product;" | mysql 2>&1| grep 2
         echo "select count(email) from customer;" | mysql 2>&1| grep 5
@@ -265,7 +265,7 @@ jobs:
     - name: Insert more rows in the tables
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        source build.env ; cd examples/local ; source ./env.sh
+        source build.env ; cd examples ; source ./common/env.sh
 
         echo "insert into customer(email) values('new_user_2@domain.com');" | mysql
         echo "insert into product(sku, description, price) values('SKU-1011', 'description', 111);" | mysql
@@ -274,18 +274,18 @@ jobs:
     # Taking a second backup of the cluster.
     - name: Take a second backup of all the shards
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 2
+      timeout-minutes: 10
       run: |
-        source build.env ; cd examples/local
-        ./backups/take_backups.sh
+        source build.env ; cd examples/backups
+        ./take_backups.sh
 
     # Stopping the tablets so we can perform the upgrade.
     - name: Stop tablets
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
+      timeout-minutes: 10
       run: |
-        source build.env ; cd examples/local
-        ./backups/stop_tablets.sh
+        source build.env ; cd examples/backups
+        ./stop_tablets.sh
 
     # We upgrade: we swap binaries and use the version N of the tablet.
     - name: Upgrade - Swap binaries, use VTTablet N
@@ -300,18 +300,18 @@ jobs:
     # Starting the tablets again and restoring the next backup.
     - name: Start new tablets and restore
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      timeout-minutes: 5
+      timeout-minutes: 10
       run: |
-        source build.env ; cd examples/local
-        ./backups/restart_tablets.sh
+        source build.env ; cd examples/backups
+        ./restart_tablets.sh
         # give enough time to the tablets to restore the backup
-        sleep 60
+        sleep 90
 
     # We count the number of rows in every table to check that the restore step was successful.
     - name: Assert the number of rows in every table
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       run: |
-        source build.env ; cd examples/local ; source ./env.sh
+        source build.env ; cd examples ; source ./common/env.sh
 
         echo "select count(sku) from product;" | mysql 2>&1| grep 3
         echo "select count(email) from customer;" | mysql 2>&1| grep 6

@@ -17,6 +17,6 @@
 # this script migrates primary traffic for the customer keyspace to the
 # new primary tablet
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient MoveTables -- --tablet_types=primary SwitchTraffic customer.commerce2customer

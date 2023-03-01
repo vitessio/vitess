@@ -336,6 +336,7 @@ func TestReloadView(t *testing.T) {
 	defer db.Close()
 	config := newConfig(db)
 	config.SignalSchemaChangeReloadIntervalSeconds.Set(100 * time.Millisecond)
+	config.EnableViews = true
 
 	env := tabletenv.NewEnv(config, "TestReloadView")
 	alias := &topodatapb.TabletAlias{Cell: "cell", Uid: 1}
@@ -344,7 +345,7 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQuery(mysql.DetectSchemaChange, &sqltypes.Result{})
+	db.AddQuery(mysql.DetectSchemaChangeOnlyBaseTable, &sqltypes.Result{})
 	db.AddQuery(mysql.SelectAllViews, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
