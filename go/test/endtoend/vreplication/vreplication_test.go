@@ -137,8 +137,10 @@ func TestVReplicationDDLHandling(t *testing.T) {
 	}
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
+	require.NoError(t, err)
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
+	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -148,7 +150,7 @@ func TestVReplicationDDLHandling(t *testing.T) {
 
 	insertInitialData(t)
 
-	_, err := vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", sourceKs), 1, false)
+	_, err = vtgateConn.ExecuteFetch(fmt.Sprintf("use %s", sourceKs), 1, false)
 	require.NoError(t, err)
 
 	addColDDL := fmt.Sprintf("alter table %s add column %s varchar(64)", table, newColumn)
@@ -231,8 +233,10 @@ func TestVreplicationCopyThrottling(t *testing.T) {
 	}
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
+	require.NoError(t, err)
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
+	require.NoError(t, err)
 
 	// Confirm that the initial copy table phase does not proceed until the source tablet(s)
 	// have an InnoDB History List length that is less than specified in the tablet's config.
@@ -290,7 +294,8 @@ func testVreplicationWorkflows(t *testing.T, minimal bool) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, "product", "0")
+	require.NoError(t, err)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -360,17 +365,20 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	require.NotNil(t, vc)
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
+	keyspace := "product"
+	shard := "0"
 
 	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
-	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell1, cell2}, keyspace, shard, initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
+	require.NoError(t, err)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -405,8 +413,10 @@ func TestVStreamFlushBinlog(t *testing.T) {
 	}
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, shard), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, shard), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
+	require.NoError(t, err)
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
+	require.NoError(t, err)
 	verifyClusterHealth(t, vc)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
@@ -551,12 +561,14 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	allCellNames = "zone1,zone2"
 	defaultCellName := "zone1"
 	defaultCell = vc.Cells[defaultCellName]
+	keyspace := "product"
+	shard := "0"
 
 	defer vc.TearDown(t)
 
 	cell1 := vc.Cells["zone1"]
 	cell2 := vc.Cells["zone2"]
-	vc.AddKeyspace(t, []*Cell{cell1, cell2}, "product", "0", initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
+	vc.AddKeyspace(t, []*Cell{cell1, cell2}, keyspace, shard, initialProductVSchema, initialProductSchema, defaultReplicas, defaultRdonly, 100, sourceKsOpts)
 
 	// Add cell alias containing only zone2
 	result, err := vc.VtctlClient.ExecuteCommandWithOutput("AddCellsAlias", "--", "--cells", "zone2", "alias")
@@ -564,8 +576,9 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", "product", "0"), 2)
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, keyspace, shard)
+	require.NoError(t, err)
+	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.replica", keyspace, shard), 2)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -573,7 +586,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 
 	insertInitialData(t)
 	t.Run("VStreamFrom", func(t *testing.T) {
-		testVStreamFrom(t, "product", 2)
+		testVStreamFrom(t, keyspace, 2)
 	})
 	shardCustomer(t, true, []*Cell{cell1, cell2}, "alias", false)
 }
@@ -698,12 +711,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 		if _, err := vc.AddKeyspace(t, cells, "customer", "-80,80-", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "-80"), 1); err != nil {
-			t.Fatal(err)
-		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "80-"), 1); err != nil {
-			t.Fatal(err)
-		}
+		err := cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, "-80")
+		require.NoError(t, err)
+		err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, "80-")
+		require.NoError(t, err)
 
 		// Assume we are operating on first cell
 		defaultCell := cells[0]
@@ -971,9 +982,8 @@ func reshard(t *testing.T, ksName string, tableName string, workflow string, sou
 		arrTargetShardNames := strings.Split(targetShards, ",")
 
 		for _, shardName := range arrTargetShardNames {
-			if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ksName, shardName), 1); err != nil {
-				t.Fatal(err)
-			}
+			err := cluster.WaitForHealthyShard(vc.VtctldClient, ksName, shardName)
+			require.NoError(t, err)
 		}
 		workflowType := "Reshard"
 		if err := vc.VtctlClient.ExecuteCommand(workflowType, "--", "--source_shards="+sourceShards, "--target_shards="+targetShards,
@@ -1063,12 +1073,10 @@ func shardMerchant(t *testing.T) {
 		if _, err := vc.AddKeyspace(t, []*Cell{defaultCell}, merchantKeyspace, "-80,80-", merchantVSchema, "", defaultReplicas, defaultRdonly, 400, targetKsOpts); err != nil {
 			t.Fatal(err)
 		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "-80"), 1); err != nil {
-			t.Fatal(err)
-		}
-		if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", merchantKeyspace, "80-"), 1); err != nil {
-			t.Fatal(err)
-		}
+		err := cluster.WaitForHealthyShard(vc.VtctldClient, merchantKeyspace, "-80")
+		require.NoError(t, err)
+		err = cluster.WaitForHealthyShard(vc.VtctldClient, merchantKeyspace, "80-")
+		require.NoError(t, err)
 		moveTablesAction(t, "Create", cell, workflow, sourceKs, targetKs, tables)
 		merchantKs := vc.Cells[defaultCell.Name].Keyspaces[merchantKeyspace]
 		merchantTab1 := merchantKs.Shards["-80"].Tablets["zone1-400"].Vttablet

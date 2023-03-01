@@ -17,10 +17,11 @@ limitations under the License.
 package vreplication
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 const smSchema = `
@@ -68,6 +69,7 @@ func testShardedMaterialize(t *testing.T) {
 	vc = NewVitessCluster(t, "TestShardedMaterialize", allCells, mainClusterConfig)
 	ks1 := "ks1"
 	ks2 := "ks2"
+	shard := "0"
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
@@ -78,15 +80,17 @@ func testShardedMaterialize(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks1, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 100, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks1, "0"), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, ks1, shard)
+	require.NoError(t, err)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, ks2, "0", smVSchema, smSchema, defaultReplicas, defaultRdonly, 200, nil)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", ks2, "0"), 1)
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, ks2, shard)
+	require.NoError(t, err)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
-	_, err := vtgateConn.ExecuteFetch(initDataQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(initDataQuery, 0, false)
 	require.NoError(t, err)
 	materialize(t, smMaterializeSpec)
 	tab := vc.getPrimaryTablet(t, ks2, "0")
@@ -184,6 +188,7 @@ func testMaterialize(t *testing.T) {
 	vc = NewVitessCluster(t, "TestMaterialize", allCells, mainClusterConfig)
 	sourceKs := "source"
 	targetKs := "target"
+	shard := "0"
 	require.NotNil(t, vc)
 	defaultReplicas = 0 // because of CI resource constraints we can only run this test with primary tablets
 	defer func() { defaultReplicas = 1 }()
@@ -194,19 +199,21 @@ func testMaterialize(t *testing.T) {
 	vc.AddKeyspace(t, []*Cell{defaultCell}, sourceKs, "0", smMaterializeVSchemaSource, smMaterializeSchemaSource, defaultReplicas, defaultRdonly, 300, nil)
 	vtgate = defaultCell.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", sourceKs, "0"), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
+	require.NoError(t, err)
 
 	vc.AddKeyspace(t, []*Cell{defaultCell}, targetKs, "0", smMaterializeVSchemaTarget, smMaterializeSchemaTarget, defaultReplicas, defaultRdonly, 400, nil)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", targetKs, "0"), 1)
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
+	require.NoError(t, err)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
 	verifyClusterHealth(t, vc)
 
-	_, err := vtgateConn.ExecuteFetch(materializeInitDataQuery, 0, false)
+	_, err = vtgateConn.ExecuteFetch(materializeInitDataQuery, 0, false)
 	require.NoError(t, err)
 
-	ks2Primary := vc.getPrimaryTablet(t, targetKs, "0")
+	ks2Primary := vc.getPrimaryTablet(t, targetKs, shard)
 	_, err = ks2Primary.QueryTablet(customFunc, targetKs, true)
 	require.NoError(t, err)
 
