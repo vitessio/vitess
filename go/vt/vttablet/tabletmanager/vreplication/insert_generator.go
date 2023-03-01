@@ -22,7 +22,6 @@ import (
 	"time"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/throttler"
 )
 
@@ -39,8 +38,7 @@ type InsertGenerator struct {
 // NewInsertGenerator creates a new InsertGenerator.
 func NewInsertGenerator(state, dbname string) *InsertGenerator {
 	buf := &strings.Builder{}
-	buf.WriteString(fmt.Sprintf("insert into %s.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values ",
-		sidecardb.GetIdentifier()))
+	buf.WriteString("insert into _vt.vreplication(workflow, source, pos, max_tps, max_replication_lag, cell, tablet_types, time_updated, transaction_timestamp, state, db_name, workflow_type, workflow_sub_type, defer_secondary_keys) values ")
 	return &InsertGenerator{
 		buf:    buf,
 		state:  state,

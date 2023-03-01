@@ -27,7 +27,6 @@ import (
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/vt/discovery"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/tb"
@@ -247,7 +246,7 @@ func (ct *controller) runBlp(ctx context.Context) (err error) {
 		}
 		// Tables may have varying character sets. To ship the bits without interpreting them
 		// we set the character set to be binary.
-		if _, err := dbClient.ExecuteFetch("set names binary", 10000); err != nil {
+		if _, err := dbClient.ExecuteFetch("set names 'binary'", 10000); err != nil {
 			return err
 		}
 		// We must apply AUTO_INCREMENT values precisely as we got them. This include the 0 value, which is not recommended in AUTO_INCREMENT, and yet is valid.
@@ -293,8 +292,7 @@ func (ct *controller) setMessage(dbClient binlogplayer.DBClient, message string)
 		Time:    time.Now(),
 		Message: message,
 	})
-	query := fmt.Sprintf("update %s.vreplication set message=%v where id=%v",
-		sidecardb.GetIdentifier(), encodeString(binlogplayer.MessageTruncate(message)), ct.id)
+	query := fmt.Sprintf("update _vt.vreplication set message=%v where id=%v", encodeString(binlogplayer.MessageTruncate(message)), ct.id)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
 	}

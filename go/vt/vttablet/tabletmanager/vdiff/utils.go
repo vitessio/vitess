@@ -23,7 +23,6 @@ import (
 
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/log"
-	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -71,10 +70,10 @@ func pkColsToGroupByParams(pkCols []int) []*engine.GroupByParams {
 }
 
 func insertVDiffLog(ctx context.Context, dbClient binlogplayer.DBClient, vdiffID int64, message string) {
-	query := "insert into %s.vdiff_log(vdiff_id, message) values (%d, %s)"
-	query = fmt.Sprintf(query, sidecardb.GetIdentifier(), vdiffID, encodeString(message))
+	query := "insert into _vt.vdiff_log(vdiff_id, message) values (%d, %s)"
+	query = fmt.Sprintf(query, vdiffID, encodeString(message))
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
-		log.Error("Error inserting into %s.vdiff_log: %v", sidecardb.GetIdentifier(), err)
+		log.Error("Error inserting into _vt.vdiff_log: %v", err)
 	}
 }
 

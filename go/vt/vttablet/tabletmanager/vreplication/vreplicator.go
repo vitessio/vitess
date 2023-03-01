@@ -22,12 +22,12 @@ import (
 	"fmt"
 	"math"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -74,23 +74,23 @@ const (
 	StrictSQLMode    = "STRICT_ALL_TABLES,NO_AUTO_VALUE_ON_ZERO"
 	setSQLModeQueryf = `SET @@session.sql_mode='%s'`
 
-	sqlCreatePostCopyAction = `insert into %s.post_copy_action(vrepl_id, table_name, action)
-	values(%%a, %%a, convert(%%a using utf8mb4))`
-	sqlGetPostCopyActions = `select id, action from %s.post_copy_action where vrepl_id=%%a and
-	table_name=%%a`
+	sqlCreatePostCopyAction = `insert into _vt.post_copy_action(vrepl_id, table_name, action)
+	values(%a, %a, convert(%a using utf8mb4))`
+	sqlGetPostCopyActions = `select id, action from _vt.post_copy_action where vrepl_id=%a and
+	table_name=%a`
 	// sqlGetPostCopyActionsForTable gets a write lock on all post_copy_action
 	// rows for the table and should only be called from within an explicit
 	// multi-statement transaction in order to hold those locks until the
 	// related work is finished as this is a concurrency control mechanism.
-	sqlGetAndLockPostCopyActionsForTable = `select id, vrepl_id, action from %s.post_copy_action where id in
+	sqlGetAndLockPostCopyActionsForTable = `select id, vrepl_id, action from _vt.post_copy_action where id in
 	(
-		select pca.id from %s.post_copy_action as pca inner join %s.vreplication as vr on (pca.vrepl_id = vr.id)
-		where pca.table_name=%%a
+		select pca.id from _vt.post_copy_action as pca inner join _vt.vreplication as vr on (pca.vrepl_id = vr.id)
+		where pca.table_name=%a
 	) for update`
-	sqlGetPostCopyActionTaskByType = `select json_unquote(json_extract(action, '$.task')) as task from %s.post_copy_action where
-	json_unquote(json_extract(action, '$.type'))=%%a and vrepl_id=%a and table_name=%%a`
-	sqlDeletePostCopyAction = `delete from %s.post_copy_action where vrepl_id=%%a and
-	table_name=%%a and id=%%a`
+	sqlGetPostCopyActionTaskByType = `select json_unquote(json_extract(action, '$.task')) as task from _vt.post_copy_action where
+	json_unquote(json_extract(action, '$.type'))=%a and vrepl_id=%a and table_name=%a`
+	sqlDeletePostCopyAction = `delete from _vt.post_copy_action where vrepl_id=%a and
+	table_name=%a and id=%a`
 )
 
 type ComponentName string
@@ -387,7 +387,7 @@ func (vr *vreplicator) readSettings(ctx context.Context, dbClient *vdbClient) (s
 		return settings, numTablesToCopy, fmt.Errorf("error reading VReplication settings: %v", err)
 	}
 
-	query := fmt.Sprintf("select count(distinct table_name) from %s.copy_state where vrepl_id=%d", sidecardb.GetIdentifier(), vr.id)
+	query := fmt.Sprintf("select count(distinct table_name) from _vt.copy_state where vrepl_id=%d", vr.id)
 	qr, err := vr.dbClient.ExecuteFetch(query, maxRows)
 	if err != nil {
 		return settings, numTablesToCopy, err
@@ -409,7 +409,7 @@ func (vr *vreplicator) setMessage(message string) error {
 		Message: message,
 	})
 	buf := sqlparser.NewTrackedBuffer(nil)
-	buf.Myprintf("update %s.vreplication set message=%s where id=%d", sidecardb.GetIdentifier(), encodeString(message), vr.id)
+	buf.Myprintf("update _vt.vreplication set message=%s where id=%s", encodeString(message), strconv.Itoa(int(vr.id)))
 	query := buf.ParsedQuery().Query
 	if _, err := vr.dbClient.Execute(query); err != nil {
 		return fmt.Errorf("could not set message: %v: %v", query, err)
@@ -432,8 +432,7 @@ func (vr *vreplicator) setState(state, message string) error {
 		})
 	}
 	vr.stats.State.Store(state)
-	query := fmt.Sprintf("update %s.vreplication set state='%v', message=%v where id=%v", sidecardb.GetIdentifier(),
-		state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
+	query := fmt.Sprintf("update _vt.vreplication set state='%v', message=%v where id=%v", state, encodeString(binlogplayer.MessageTruncate(message)), vr.id)
 	if _, err := vr.dbClient.ExecuteFetch(query, 1); err != nil {
 		return fmt.Errorf("could not set state: %v: %v", query, err)
 	}
@@ -638,8 +637,8 @@ func (vr *vreplicator) stashSecondaryKeys(ctx context.Context, tableName string)
 		if err != nil {
 			return err
 		}
-		insert, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlCreatePostCopyAction, sidecardb.GetIdentifier()),
-			sqltypes.Int32BindVariable(vr.id), sqltypes.StringBindVariable(tableName), sqltypes.StringBindVariable(string(action)))
+		insert, err := sqlparser.ParseAndBind(sqlCreatePostCopyAction, sqltypes.Int32BindVariable(vr.id),
+			sqltypes.StringBindVariable(tableName), sqltypes.StringBindVariable(string(action)))
 		if err != nil {
 			return err
 		}
@@ -722,8 +721,8 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 	defer dbClient.Close()
 
-	query, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlGetPostCopyActions, sidecardb.GetIdentifier()),
-		sqltypes.Int32BindVariable(vr.id), sqltypes.StringBindVariable(tableName))
+	query, err := sqlparser.ParseAndBind(sqlGetPostCopyActions, sqltypes.Int32BindVariable(vr.id),
+		sqltypes.StringBindVariable(tableName))
 	if err != nil {
 		return err
 	}
@@ -757,8 +756,8 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 	}
 
 	deleteAction := func(dbc *vdbClient, id int64, vid int32, tn string) error {
-		delq, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlDeletePostCopyAction, sidecardb.GetIdentifier()),
-			sqltypes.Int32BindVariable(vid), sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
+		delq, err := sqlparser.ParseAndBind(sqlDeletePostCopyAction, sqltypes.Int32BindVariable(vid),
+			sqltypes.StringBindVariable(tn), sqltypes.Int64BindVariable(id))
 		if err != nil {
 			return err
 		}
@@ -854,8 +853,7 @@ func (vr *vreplicator) execPostCopyActions(ctx context.Context, tableName string
 		if err != nil {
 			return err
 		}
-		vrsq, err := sqlparser.ParseAndBind(fmt.Sprintf(sqlGetAndLockPostCopyActionsForTable, sidecardb.GetIdentifier(),
-			sidecardb.GetIdentifier(), sidecardb.GetIdentifier()), sqltypes.StringBindVariable(tableName))
+		vrsq, err := sqlparser.ParseAndBind(sqlGetAndLockPostCopyActionsForTable, sqltypes.StringBindVariable(tableName))
 		if err != nil {
 			return err
 		}

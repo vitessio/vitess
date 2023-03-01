@@ -58,7 +58,7 @@ type vplayer struct {
 	lastTimestampNs int64
 	// timeOffsetNs keeps track of the clock difference with respect to source tablet.
 	timeOffsetNs int64
-	// numAccumulatedHeartbeats keeps track of how many heartbeats have been received since we updated the time_updated column of vreplication table.
+	// numAccumulatedHeartbeats keeps track of how many heartbeats have been received since we updated the time_updated column of _vt.vreplication
 	numAccumulatedHeartbeats int
 
 	// canAcceptStmtEvents is set to true if the current player can accept events in statement mode. Only true for filters that are match all.
@@ -74,7 +74,7 @@ type vplayer struct {
 //
 //	Also used to access the engine for registering journal events.
 //
-// settings: current settings read from vreplication sidecardb table.
+// settings: current settings read from _vt.vreplication.
 // copyState: if set, contains the list of tables yet to be copied, or in the process
 //
 //	of being copied. If copyState is non-nil, the plans generated make sure that

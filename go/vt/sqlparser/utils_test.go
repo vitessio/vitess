@@ -245,6 +245,11 @@ func TestReplaceTableQualifiers(t *testing.T) {
 			in:   "delete from _vt.foo where id = 1",
 			out:  "delete from foo where id = 1",
 		},
+		{
+			name: "simple set",
+			in:   "set names 'binary'",
+			out:  "set names 'binary'",
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

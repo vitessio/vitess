@@ -24,7 +24,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -55,7 +54,7 @@ const (
 )
 
 type controller struct {
-	id              int64 // id from row in vdiff table
+	id              int64 // id from row in _vt.vdiff
 	uuid            string
 	workflow        string
 	cancel          context.CancelFunc
@@ -71,7 +70,7 @@ type controller struct {
 
 	targetShardStreamer *shardStreamer
 	filter              *binlogdatapb.Filter            // vreplication row filter
-	options             *tabletmanagerdata.VDiffOptions // options initially from vtctld command and later from the vdiff table
+	options             *tabletmanagerdata.VDiffOptions // options initially from vtctld command and later from _vt.vdiff
 
 	sourceTimeZone, targetTimeZone string // named time zones if conversions are necessary for datetime values
 
@@ -166,8 +165,7 @@ func (ct *controller) updateState(dbClient binlogplayer.DBClient, state VDiffSta
 		// Clear out any previous error for the vdiff on this shard
 		err = errors.New("")
 	}
-	query := fmt.Sprintf(sqlUpdateVDiffState, sidecardb.GetIdentifier(), encodeString(string(state)),
-		encodeString(err.Error()), extraCols, ct.id)
+	query := fmt.Sprintf(sqlUpdateVDiffState, encodeString(string(state)), encodeString(err.Error()), extraCols, ct.id)
 	if _, err := dbClient.ExecuteFetch(query, 1); err != nil {
 		return err
 	}
@@ -182,7 +180,7 @@ func (ct *controller) start(ctx context.Context, dbClient binlogplayer.DBClient)
 	default:
 	}
 	ct.workflowFilter = fmt.Sprintf("where workflow = %s and db_name = %s", encodeString(ct.workflow), encodeString(ct.vde.dbName))
-	query := fmt.Sprintf(sqlGetVReplicationEntry, sidecardb.GetIdentifier(), ct.workflowFilter)
+	query := fmt.Sprintf(sqlGetVReplicationEntry, ct.workflowFilter)
 	qr, err := dbClient.ExecuteFetch(query, -1)
 	if err != nil {
 		return err
@@ -254,8 +252,7 @@ func (ct *controller) markStoppedByRequest() error {
 	}
 	defer dbClient.Close()
 
-	query := fmt.Sprintf(sqlUpdateVDiffStopped, sidecardb.GetIdentifier(),
-		sidecardb.GetIdentifier(), ct.id)
+	query := fmt.Sprintf(sqlUpdateVDiffStopped, ct.id)
 	var res *sqltypes.Result
 	var err error
 	if res, err = dbClient.ExecuteFetch(query, 1); err != nil {

@@ -81,7 +81,7 @@ func TestControllerPlan(t *testing.T) {
 		err: "unsupported construct: insert ignore into _vt.vreplication values (null)",
 	}, {
 		in:  "insert into other values(null)",
-		err: "invalid table name: other",
+		err: "invalid database name: ",
 	}, {
 		in:  "insert into _vt.vreplication partition(a) values(null)",
 		err: "unsupported construct: insert into _vt.vreplication partition (a) values (null)",
@@ -133,7 +133,7 @@ func TestControllerPlan(t *testing.T) {
 			opcode: reshardingJournalQuery,
 		},
 	}, {
-		in:  "update a set state='Running' where id = 1",
+		in:  "update _vt.a set state='Running' where id = 1",
 		err: "invalid table name: a",
 	}, {
 		in:  "update _vt.vreplication set state='Running' where id = 1 order by id",
@@ -183,7 +183,7 @@ func TestControllerPlan(t *testing.T) {
 			opcode: reshardingJournalQuery,
 		},
 	}, {
-		in:  "delete from a where id = 1",
+		in:  "delete from _vt.a where id = 1",
 		err: "invalid table name: a",
 	}, {
 		in:  "delete a, b from _vt.vreplication where id = 1",
@@ -218,8 +218,11 @@ func TestControllerPlan(t *testing.T) {
 			query:  "select * from _vt.copy_state",
 		},
 	}, {
-		in:  "select * from a",
+		in:  "select * from _vt.a",
 		err: "invalid table name: a",
+	}, {
+		in:  "select * from nope.a",
+		err: "invalid database name: nope",
 
 		// Parser
 	}, {

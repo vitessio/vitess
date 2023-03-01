@@ -24,6 +24,8 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 // DBClient is a high level interface to the database.
@@ -116,7 +118,12 @@ func LimitString(s string, limit int) string {
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, true)
+	// Replace any provided sidecar DB qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	mqr, err := dc.dbConn.ExecuteFetch(uq, maxrows, true)
 	if err != nil {
 		dc.handleError(err)
 		return nil, err

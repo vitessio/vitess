@@ -168,6 +168,7 @@ func testWorkflow(t *testing.T, vc *VitessCluster, tc *testCase, cells []*Cell) 
 	args = append(args, "--tables", tc.tables)
 	args = append(args, "Create")
 	args = append(args, ksWorkflow)
+	t.Logf("Executing: %v", args)
 	err := vc.VtctlClient.ExecuteCommand(args...)
 	require.NoError(t, err)
 
