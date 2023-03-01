@@ -3,6 +3,7 @@ This is an alphabetical list of known adopters of Vitess. Some have already gone
 * [Axon](https://axon.com)
 * [BetterCloud](https://bettercloud.com)
 * [CloudSigma](https://www.cloudsigma.com/)
+* [Etsy](https://www.etsy.com)
 * [FlipKart](https://flipkart.com)
 * [GitHub](https://github.com/)
 * [HubSpot](https://product.hubspot.com/)
