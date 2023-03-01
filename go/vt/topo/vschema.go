@@ -39,7 +39,7 @@ func (ts *Server) SaveVSchema(ctx context.Context, keyspace string, vschema *vsc
 	}
 
 	nodePath := path.Join(KeyspacesPath, keyspace, VSchemaFile)
-	data, err := proto.Marshal(vschema)
+	data, err := vschema.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -97,7 +97,7 @@ func (ts *Server) EnsureVSchema(ctx context.Context, keyspace string) error {
 
 // SaveRoutingRules saves the routing rules into the topo.
 func (ts *Server) SaveRoutingRules(ctx context.Context, routingRules *vschemapb.RoutingRules) error {
-	data, err := proto.Marshal(routingRules)
+	data, err := routingRules.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -133,7 +133,7 @@ func (ts *Server) GetRoutingRules(ctx context.Context) (*vschemapb.RoutingRules,
 
 // SaveShardRoutingRules saves the shard routing rules into the topo.
 func (ts *Server) SaveShardRoutingRules(ctx context.Context, shardRoutingRules *vschemapb.ShardRoutingRules) error {
-	data, err := proto.Marshal(shardRoutingRules)
+	data, err := shardRoutingRules.MarshalVT()
 	if err != nil {
 		return err
 	}

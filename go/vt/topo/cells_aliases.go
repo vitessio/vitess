@@ -119,7 +119,7 @@ func (ts *Server) CreateCellsAlias(ctx context.Context, alias string, cellsAlias
 	ts.clearCellAliasesCache()
 
 	// Pack the content.
-	contents, err := proto.Marshal(cellsAlias)
+	contents, err := cellsAlias.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -169,7 +169,7 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 		}
 
 		// Pack and save.
-		contents, err = proto.Marshal(cellsAlias)
+		contents, err = cellsAlias.MarshalVT()
 		if err != nil {
 			return err
 		}

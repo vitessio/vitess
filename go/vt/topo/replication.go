@@ -204,7 +204,7 @@ func (ts *Server) UpdateShardReplicationFields(ctx context.Context, cell, keyspa
 		}
 
 		// marshall and save
-		data, err = proto.Marshal(sr)
+		data, err = sr.MarshalVT()
 		if err != nil {
 			return err
 		}

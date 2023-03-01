@@ -402,7 +402,7 @@ func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregatePa
 				Shard:    row[aggr.Col+1].ToString(),
 				Gtid:     row[aggr.Col].ToString(),
 			})
-			data, _ := proto.Marshal(vgtid)
+			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			newRow[aggr.Col] = val
 		}
@@ -525,7 +525,7 @@ func merge(
 				Shard:    row2[aggr.Col+1].ToString(),
 				Gtid:     row2[aggr.Col].ToString(),
 			})
-			data, _ := proto.Marshal(vgtid)
+			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
 		case AggregateRandom:

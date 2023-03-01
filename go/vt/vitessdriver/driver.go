@@ -354,7 +354,7 @@ func newSessionTokenRow(session *vtgatepb.Session, c *converter) (driver.Rows, e
 }
 
 func sessionToSessionToken(session *vtgatepb.Session) (string, error) {
-	b, err := proto.Marshal(session)
+	b, err := session.MarshalVT()
 	if err != nil {
 		return "", err
 	}

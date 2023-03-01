@@ -635,7 +635,7 @@ func (ts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, 
 	}
 
 	nodePath := srvKeyspaceFileName(keyspace)
-	data, err := proto.Marshal(srvKeyspace)
+	data, err := srvKeyspace.MarshalVT()
 	if err != nil {
 		return err
 	}

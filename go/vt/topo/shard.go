@@ -228,7 +228,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
-	data, err := proto.Marshal(si.Shard)
+	data, err := si.Shard.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -311,7 +311,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	}
 
 	// Marshal and save.
-	data, err := proto.Marshal(value)
+	data, err := value.MarshalVT()
 	if err != nil {
 		return err
 	}

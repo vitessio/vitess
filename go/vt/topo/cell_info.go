@@ -83,7 +83,7 @@ func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool)
 // CreateCellInfo creates a new CellInfo with the provided content.
 func (ts *Server) CreateCellInfo(ctx context.Context, cell string, ci *topodatapb.CellInfo) error {
 	// Pack the content.
-	contents, err := proto.Marshal(ci)
+	contents, err := ci.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -126,7 +126,7 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		}
 
 		// Pack and save.
-		contents, err = proto.Marshal(ci)
+		contents, err = ci.MarshalVT()
 		if err != nil {
 			return err
 		}

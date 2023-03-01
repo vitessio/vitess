@@ -161,7 +161,7 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 // CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
-	data, err := proto.Marshal(value)
+	data, err := value.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -220,7 +220,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		return err
 	}
 
-	data, err := proto.Marshal(ki.Keyspace)
+	data, err := ki.Keyspace.MarshalVT()
 	if err != nil {
 		return err
 	}

@@ -105,7 +105,7 @@ func (ts *Server) UpdateSrvVSchema(ctx context.Context, cell string, srvVSchema 
 	}
 
 	nodePath := SrvVSchemaFile
-	data, err := proto.Marshal(srvVSchema)
+	data, err := srvVSchema.MarshalVT()
 	if err != nil {
 		return err
 	}
