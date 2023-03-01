@@ -4,14 +4,14 @@ metadata:
   name: example
 spec:
   images:
-    vtctld: vitess/lite:v16.0.0-rc1
-    vtadmin: vitess/vtadmin:v16.0.0-rc1
-    vtgate: vitess/lite:v16.0.0-rc1
-    vttablet: vitess/lite:v16.0.0-rc1
-    vtbackup: vitess/lite:v16.0.0-rc1
-    vtorc: vitess/lite:v16.0.0-rc1
+    vtctld: vitess/lite:v16.0.0
+    vtadmin: vitess/vtadmin:v16.0.0
+    vtgate: vitess/lite:v16.0.0
+    vttablet: vitess/lite:v16.0.0
+    vtbackup: vitess/lite:v16.0.0
+    vtorc: vitess/lite:v16.0.0
     mysqld:
-      mysql80Compatible: vitess/lite:v16.0.0-rc1
+      mysql80Compatible: vitess/lite:v16.0.0
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: zone1
