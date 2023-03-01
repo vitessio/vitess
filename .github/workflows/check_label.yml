@@ -14,21 +14,12 @@ jobs:
     runs-on: ubuntu-22.04
     if: github.repository == 'vitessio/vitess'
     steps:
-      - uses: mheap/github-action-required-labels@v1
-        name: Check release notes label
-        id: required_label
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          mode: exactly
-          count: 0
-          labels: "release notes (needs details)"
-
-      - name: Print helper
-        if: failure() && steps.required_label.outcome == 'failure'
+      - name: Release Notes label
         run: |
-          echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary "('./doc/releasenotes/16_0_0_summary.md')". Once documented, the "release notes (needs details)" label can be removed.
-          exit 1
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'release notes (needs details)')}}" == "true" ]]; then
+            echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary "('./doc/releasenotes/16_0_0_summary.md')". Once documented, the "release notes (needs details)" label can be removed.
+            exit 1
+          fi
 
       - name: Check type and component labels
         env:
@@ -69,5 +60,13 @@ jobs:
           fi
           if cat ${LABELS_JSON} | jq -r '.[].name ' | grep -q 'NeedsWebsiteDocsUpdate' ; then
             echo "Expecting PR to not have the NeedsWebsiteDocsUpdate label, please update the documentation and remove the label."
+            exit 1
+          fi
+          
+
+      - name: Do Not Merge label
+        run: |
+          if [[ "${{contains( github.event.pull_request.labels.*.name, 'Do Not Merge')}}" == "true" ]]; then
+            echo "This PR should not be merged. The 'Do Not Merge' label is set. Please unset it if you wish to merge this PR."
             exit 1
           fi
