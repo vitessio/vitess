@@ -83,7 +83,7 @@ mysql57)
     )
     ;;
 mysql80)
-    mysql8_version=8.0.30
+    mysql8_version=8.0.32
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb /tmp/libmysqlclient21_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client-core_${mysql8_version}-1debian10_amd64.deb
     do_fetch https://repo.mysql.com/apt/debian/pool/mysql-8.0/m/mysql-community/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb /tmp/mysql-community-client-plugins_${mysql8_version}-1debian10_amd64.deb
@@ -159,6 +159,17 @@ percona80)
     echo 'deb http://repo.percona.com/apt buster main' > /etc/apt/sources.list.d/percona.list
     echo 'deb http://repo.percona.com/ps-80/apt buster main' > /etc/apt/sources.list.d/percona80.list
     ;;
+esac
+
+case "${FLAVOR}" in
+mysql80|percona80)
+    echo "Package: *
+Pin: release o=Percona Development Team
+Pin-Priority: 1
+
+Package: percona-xtrabackup-80
+Pin: version *8.0.31*
+Pin-Priority: 550" > /etc/apt/preferences.d/00percona.pre
 esac
 
 # Pre-fill values for installation prompts that are normally interactive.
