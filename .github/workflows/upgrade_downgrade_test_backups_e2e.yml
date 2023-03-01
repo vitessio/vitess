@@ -10,14 +10,14 @@ concurrency:
 jobs:
   get_previous_release:
     if: always()
-    name: Get latest release
+    name: Get Previous Release - Backups - E2E
     runs-on: ubuntu-latest
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
 
     steps:
       - name: Check out to HEAD
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
@@ -31,7 +31,7 @@ jobs:
   upgrade_downgrade_test_e2e:
     timeout-minutes: 60
     if: always() && needs.get_previous_release.result == 'success'
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Backups - E2E
     runs-on: ubuntu-20.04
     needs:
       - get_previous_release
@@ -49,7 +49,7 @@ jobs:
 
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Check for changes in relevant files
       if: steps.skip-workflow.outputs.skip-workflow == 'false'
@@ -74,13 +74,13 @@ jobs:
 
     - name: Set up Go
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-go@v2
+      uses: actions/setup-go@v3
       with:
         go-version: 1.18.9
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
 
     - name: Tune the OS
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -110,7 +110,7 @@ jobs:
     # Checkout to the last release of Vitess
     - name: Check out other version's code (${{ needs.get_previous_release.outputs.previous_release }})
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
       with:
         ref: ${{ needs.get_previous_release.outputs.previous_release }}
 
@@ -132,7 +132,7 @@ jobs:
     # Checkout to this build's commit
     - name: Check out commit's code
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Get dependencies for this commit
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
