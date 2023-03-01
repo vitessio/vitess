@@ -1374,7 +1374,7 @@ type Signal struct {
 // SignalInfo represents a piece of information for a SIGNAL statement
 type SignalInfo struct {
 	ConditionItemName SignalConditionItemName
-	Value             *SQLVal
+	Value             Expr
 }
 
 // SignalConditionItemName represents the item name for the set conditions of a SIGNAL statement.

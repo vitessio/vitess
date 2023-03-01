@@ -3445,6 +3445,35 @@ var ignoreWhitespaceTests = []parseTest{
 									select a + 1 from c; update b set c = 1;
 								end if;
 							end`,
+	}, {
+		// https://github.com/dolthub/dolt/issues/5452
+		input: `
+/*!50003 CREATE*/ /*!50017 DEFINER=root@localhost*/ /*!50003 TRIGGER forecast_db.before_ai_suggested_task_label_delete
+    BEFORE DELETE
+    ON forecast_db.ai_suggested_task_label
+    FOR EACH ROW
+BEGIN
+    IF OLD.delete != (1)
+    THEN
+        SET @message_text =
+                CONCAT('CANNOT DELETE ai_suggested_task_label IF DELETE FLAG IS NOT SET FOR: ', CAST(OLD.id AS CHAR));
+        SIGNAL SQLSTATE '45000'
+            SET MESSAGE_TEXT = @message_text;
+    END IF;
+    INSERT INTO forecast_db_events.event_ai_suggested_task_label
+        (action, id,created_at,updated_at,created_by,updated_by,company_id,label_id,task_id,delete)
+    VALUES ("delete", OLD.id,OLD.created_at,OLD.updated_at,OLD.created_by,OLD.updated_by,OLD.company_id,OLD.label_id,OLD.task_id,OLD.delete);
+    END */
+`,
+   output: "create definer = `root`@`localhost` trigger forecast_db.before_ai_suggested_task_label_delete " +
+			"before delete on forecast_db.ai_suggested_task_label for each row begin\n" +
+			"if OLD.`delete` != (1) then " +
+			"set @message_text = CONCAT('CANNOT DELETE ai_suggested_task_label IF DELETE FLAG IS NOT SET FOR: ', CAST(OLD.id, CHAR)); " +
+			"signal sqlstate value '45000' set message_text = @message_text;\n" +
+			"end if;\n" +
+			"insert into forecast_db_events.event_ai_suggested_task_label(`action`, id, created_at, updated_at, created_by, updated_by, company_id, label_id, task_id, `delete`) " +
+			"values ('delete', OLD.id, OLD.created_at, OLD.updated_at, OLD.created_by, OLD.updated_by, OLD.company_id, OLD.label_id, OLD.task_id, OLD.`delete`);\n" +
+			"end",
 	},
 }
 
@@ -3455,18 +3484,14 @@ func TestValidIgnoreWhitespace(t *testing.T) {
 				tcase.output = tcase.input
 			}
 			tree, err := Parse(tcase.input)
-			if err != nil {
-				t.Errorf("Parse(%q) err: %v, want nil", tcase.input, err)
-				return
-			}
+			require.NoError(t, err)
+			
 			out := String(tree)
 			normalize := regexp.MustCompile("\\s+")
 			normalizedOut := normalize.ReplaceAllLiteralString(out, " ")
 			expectedOut := normalize.ReplaceAllLiteralString(tcase.output, " ")
+			assert.Equal(t, expectedOut, normalizedOut)
 
-			if normalizedOut != expectedOut {
-				t.Errorf("Parse(%q) = %q, want: %q", tcase.input, normalizedOut, expectedOut)
-			}
 			// This test just exercises the tree walking functionality.
 			// There's no way automated way to verify that a node calls
 			// all its children. But we can examine code coverage and
@@ -6018,8 +6043,7 @@ func TestParseDjangoQueries(t *testing.T) {
 	scanner := bufio.NewScanner(file)
 
 	for scanner.Scan() {
-
-		_, err := Parse(string(scanner.Text()))
+		_, err := Parse(scanner.Text())
 		if err != nil {
 			t.Error(scanner.Text())
 			t.Errorf(" Error: %v", err)
