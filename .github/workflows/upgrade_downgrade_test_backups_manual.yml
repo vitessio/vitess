@@ -10,7 +10,7 @@ concurrency:
 jobs:
   get_previous_release:
     if: always()
-    name: Get a recent LTS release
+    name: Get Previous Release - Backups - Manual
     runs-on: ubuntu-22.04
     outputs:
       previous_release: ${{ steps.output-previous-release-ref.outputs.previous_release_ref }}
@@ -32,7 +32,7 @@ jobs:
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     if: always() && (needs.get_previous_release.result == 'success')
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Backups - Manual
     runs-on: ubuntu-22.04
     needs:
       - get_previous_release
