@@ -19,8 +19,6 @@ package topo
 import (
 	"path"
 
-	"google.golang.org/protobuf/proto"
-
 	"context"
 
 	"vitess.io/vitess/go/vt/vterrors"
@@ -188,7 +186,7 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 	}
 
 	k := &topodatapb.Keyspace{}
-	if err = proto.Unmarshal(data, k); err != nil {
+	if err = k.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrap(err, "bad keyspace data")
 	}
 

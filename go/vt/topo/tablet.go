@@ -245,7 +245,7 @@ func (ts *Server) GetTablet(ctx context.Context, alias *topodatapb.TabletAlias) 
 		return nil, err
 	}
 	tablet := &topodatapb.Tablet{}
-	if err := proto.Unmarshal(data, tablet); err != nil {
+	if err := tablet.UnmarshalVT(data); err != nil {
 		return nil, err
 	}
 
@@ -310,7 +310,7 @@ func (ts *Server) GetTabletsByCell(ctx context.Context, cellAlias string) ([]*Ta
 	tablets := make([]*TabletInfo, len(listResults))
 	for n := range listResults {
 		tablet := &topodatapb.Tablet{}
-		if err := proto.Unmarshal(listResults[n].Value, tablet); err != nil {
+		if err := tablet.UnmarshalVT(listResults[n].Value); err != nil {
 			return nil, err
 		}
 		tablets[n] = &TabletInfo{Tablet: tablet, version: listResults[n].Version}

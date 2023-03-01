@@ -25,8 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -516,7 +514,7 @@ func merge(
 			if err != nil {
 				return nil, nil, err
 			}
-			err = proto.Unmarshal(rowBytes, vgtid)
+			err = vgtid.UnmarshalVT(rowBytes)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -575,7 +573,7 @@ func convertFinal(current []sqltypes.Value, aggregates []*AggregateParams) ([]sq
 			if err != nil {
 				return nil, err
 			}
-			err = proto.Unmarshal(currentBytes, vgtid)
+			err = vgtid.UnmarshalVT(currentBytes)
 			if err != nil {
 				return nil, err
 			}

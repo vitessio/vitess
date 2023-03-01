@@ -26,7 +26,6 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -369,7 +368,7 @@ func sessionTokenToSession(sessionToken string) (*vtgatepb.Session, error) {
 	}
 
 	session := &vtgatepb.Session{}
-	err = proto.Unmarshal(b, session)
+	err = session.UnmarshalVT(b)
 	if err != nil {
 		return nil, err
 	}

@@ -20,8 +20,6 @@ import (
 	"context"
 	"path"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/event"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo/events"
@@ -77,7 +75,7 @@ func (ts *Server) GetExternalVitessCluster(ctx context.Context, clusterName stri
 		return nil, err
 	}
 	vc := &topodatapb.ExternalVitessCluster{}
-	if err = proto.Unmarshal(data, vc); err != nil {
+	if err = vc.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrap(err, "bad vitess cluster data")
 	}
 

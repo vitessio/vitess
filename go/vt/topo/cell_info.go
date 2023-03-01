@@ -21,8 +21,6 @@ import (
 	"path"
 	"strings"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/vterrors"
 
@@ -74,7 +72,7 @@ func (ts *Server) GetCellInfo(ctx context.Context, cell string, strongRead bool)
 
 	// Unpack the contents.
 	ci := &topodatapb.CellInfo{}
-	if err := proto.Unmarshal(contents, ci); err != nil {
+	if err := ci.UnmarshalVT(contents); err != nil {
 		return nil, err
 	}
 	return ci, nil
@@ -108,7 +106,7 @@ func (ts *Server) UpdateCellInfoFields(ctx context.Context, cell string, update 
 		contents, version, err := ts.globalCell.Get(ctx, filePath)
 		switch {
 		case err == nil:
-			if err := proto.Unmarshal(contents, ci); err != nil {
+			if err := ci.UnmarshalVT(contents); err != nil {
 				return err
 			}
 		case IsErrType(err, NoNode):

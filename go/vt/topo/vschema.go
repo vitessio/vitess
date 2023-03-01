@@ -124,7 +124,7 @@ func (ts *Server) GetRoutingRules(ctx context.Context) (*vschemapb.RoutingRules,
 		}
 		return nil, err
 	}
-	err = proto.Unmarshal(data, rr)
+	err = rr.UnmarshalVT(data)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "bad routing rules data: %q", data)
 	}
@@ -159,7 +159,7 @@ func (ts *Server) GetShardRoutingRules(ctx context.Context) (*vschemapb.ShardRou
 		}
 		return nil, err
 	}
-	err = proto.Unmarshal(data, srr)
+	err = srr.UnmarshalVT(data)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "invalid shard routing rules: %q", data)
 	}

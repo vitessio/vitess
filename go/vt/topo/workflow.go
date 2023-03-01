@@ -21,8 +21,6 @@ import (
 
 	"context"
 
-	"google.golang.org/protobuf/proto"
-
 	workflowpb "vitess.io/vitess/go/vt/proto/workflow"
 )
 
@@ -90,7 +88,7 @@ func (ts *Server) GetWorkflow(ctx context.Context, uuid string) (*WorkflowInfo, 
 
 	// Unpack the contents.
 	w := &workflowpb.Workflow{}
-	if err := proto.Unmarshal(contents, w); err != nil {
+	if err := w.UnmarshalVT(contents); err != nil {
 		return nil, err
 	}
 
