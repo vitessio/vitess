@@ -20,6 +20,7 @@ type Charset interface {
 	Name() string
 	SupportsSupplementaryChars() bool
 	IsSuperset(other Charset) bool
+	MaxWidth() int
 
 	EncodeRune([]byte, rune) int
 	DecodeRune([]byte) (rune, int)

@@ -244,7 +244,7 @@ func TestTabletExternallyReparentedWithDifferentMysqlPort(t *testing.T) {
 	// On the elected primary, we will respond to
 	// TabletActionReplicaWasPromoted, so we need a MysqlDaemon
 	// that returns no primary, and the new port (as returned by mysql)
-	newPrimary.FakeMysqlDaemon.MysqlPort.Set(3303)
+	newPrimary.FakeMysqlDaemon.MysqlPort.Store(3303)
 	newPrimary.StartActionLoop(t, wr)
 	defer newPrimary.StopActionLoop(t)
 

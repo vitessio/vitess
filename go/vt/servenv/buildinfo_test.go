@@ -45,5 +45,5 @@ func TestVersionString(t *testing.T) {
 
 	assert.Equal(t, "Version: v1.2.3-SNAPSHOT (Jenkins build 422) (Git revision d54b87ca0be09b678bb4490060e8f23f890ddb92 branch 'gitBranch') built on time is now by user@host using 1.19.3 amiga/amd64", v.String())
 
-	assert.Equal(t, "8.0.31-Vitess", v.MySQLVersion())
+	assert.Equal(t, "8.0.30-Vitess", v.MySQLVersion())
 }

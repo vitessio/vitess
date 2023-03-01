@@ -17,6 +17,7 @@ limitations under the License.
 package mysql
 
 import (
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -28,7 +29,7 @@ import (
 func TestDumuxResourceExhaustedErrors(t *testing.T) {
 	type testCase struct {
 		msg  string
-		want int
+		want ErrorCode
 	}
 
 	cases := []testCase{
@@ -53,7 +54,7 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 func TestNewSQLErrorFromError(t *testing.T) {
 	var tCases = []struct {
 		err error
-		num int
+		num ErrorCode
 		ss  string
 	}{
 		{
@@ -150,6 +151,21 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			err: vterrors.NewErrorf(vtrpc.Code_FAILED_PRECONDITION, vterrors.NoDB, "no db selected"),
 			num: ERNoDb,
 			ss:  SSNoDB,
+		},
+		{
+			err: fmt.Errorf("just some random text here"),
+			num: ERUnknownError,
+			ss:  SSUnknownSQLState,
+		},
+		{
+			err: fmt.Errorf("task error: Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"),
+			num: ERBadNullError,
+			ss:  SSConstraintViolation,
+		},
+		{
+			err: vterrors.Wrapf(fmt.Errorf("Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"), "task error: %d", 17),
+			num: ERBadNullError,
+			ss:  SSConstraintViolation,
 		},
 	}
 

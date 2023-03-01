@@ -59,7 +59,7 @@ func TestTxConnBegin(t *testing.T) {
 	require.NoError(t,
 		sc.txConn.Begin(ctx, safeSession, nil))
 	utils.MustMatch(t, &wantSession, session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
 }
 
 func TestTxConnCommitFailure(t *testing.T) {
@@ -115,8 +115,8 @@ func TestTxConnCommitFailure(t *testing.T) {
 	require.ErrorContains(t, sc.txConn.Commit(ctx, session), expectErr.Error())
 	wantSession = vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 }
 
 func TestTxConnCommitSuccess(t *testing.T) {
@@ -166,8 +166,8 @@ func TestTxConnCommitSuccess(t *testing.T) {
 		sc.txConn.Commit(ctx, session))
 	wantSession = vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 }
 
 func TestTxConnReservedCommitSuccess(t *testing.T) {
@@ -241,15 +241,15 @@ func TestTxConnReservedCommitSuccess(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 
 	require.NoError(t,
 		sc.txConn.Release(ctx, session))
 	wantSession = vtgatepb.Session{InReservedConn: true}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
-	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
+	assert.EqualValues(t, 1, sbc0.ReleaseCount.Load(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 1, sbc1.ReleaseCount.Load(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
@@ -341,8 +341,8 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndCommit(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 0, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 0, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 }
 
 func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
@@ -434,8 +434,8 @@ func TestTxConnReservedOn2ShardTxOn1ShardAndRollback(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 0, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 1, sbc0.RollbackCount.Load(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 0, sbc1.RollbackCount.Load(), "sbc1.RollbackCount")
 }
 
 func TestTxConnCommitOrderFailure1(t *testing.T) {
@@ -461,12 +461,12 @@ func TestTxConnCommitOrderFailure1(t *testing.T) {
 
 	wantSession := vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
 	// first commit failed so we don't try to commit the second shard
-	assert.EqualValues(t, 0, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 0, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 	// When the commit fails, we try to clean up by issuing a rollback
-	assert.EqualValues(t, 2, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
-	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
+	assert.EqualValues(t, 2, sbc0.ReleaseCount.Load(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 1, sbc1.ReleaseCount.Load(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnCommitOrderFailure2(t *testing.T) {
@@ -494,11 +494,11 @@ func TestTxConnCommitOrderFailure2(t *testing.T) {
 
 	wantSession := vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 	// When the commit fails, we try to clean up by issuing a rollback
-	assert.EqualValues(t, 0, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
-	assert.EqualValues(t, 2, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
+	assert.EqualValues(t, 0, sbc0.ReleaseCount.Load(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 2, sbc1.ReleaseCount.Load(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnCommitOrderFailure3(t *testing.T) {
@@ -535,10 +535,10 @@ func TestTxConnCommitOrderFailure3(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 2, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
-	assert.EqualValues(t, 0, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 0, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 2, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
+	assert.EqualValues(t, 0, sbc0.RollbackCount.Load(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 0, sbc1.RollbackCount.Load(), "sbc1.RollbackCount")
 }
 
 func TestTxConnCommitOrderSuccess(t *testing.T) {
@@ -633,8 +633,8 @@ func TestTxConnCommitOrderSuccess(t *testing.T) {
 		sc.txConn.Commit(ctx, session))
 	wantSession = vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 2, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 2, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 }
 
 func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
@@ -767,15 +767,15 @@ func TestTxConnReservedCommitOrderSuccess(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 2, sbc0.CommitCount.Get(), "sbc0.CommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitCount.Get(), "sbc1.CommitCount")
+	assert.EqualValues(t, 2, sbc0.CommitCount.Load(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitCount.Load(), "sbc1.CommitCount")
 
 	require.NoError(t,
 		sc.txConn.Release(ctx, session))
 	wantSession = vtgatepb.Session{InReservedConn: true}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 2, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
-	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
+	assert.EqualValues(t, 2, sbc0.ReleaseCount.Load(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 1, sbc1.ReleaseCount.Load(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnCommit2PC(t *testing.T) {
@@ -787,11 +787,11 @@ func TestTxConnCommit2PC(t *testing.T) {
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	require.NoError(t,
 		sc.txConn.Commit(ctx, session))
-	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Get(), "sbc0.CreateTransactionCount")
-	assert.EqualValues(t, 1, sbc1.PrepareCount.Get(), "sbc1.PrepareCount")
-	assert.EqualValues(t, 1, sbc0.StartCommitCount.Get(), "sbc0.StartCommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnCommit2PCOneParticipant(t *testing.T) {
@@ -801,7 +801,7 @@ func TestTxConnCommit2PCOneParticipant(t *testing.T) {
 	session.TransactionMode = vtgatepb.TransactionMode_TWOPC
 	require.NoError(t,
 		sc.txConn.Commit(ctx, session))
-	assert.EqualValues(t, 1, sbc0.CommitCount.Get(), "sbc0.CommitCount")
+	assert.EqualValues(t, 1, sbc0.CommitCount.Load(), "sbc0.CommitCount")
 }
 
 func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
@@ -817,13 +817,13 @@ func TestTxConnCommit2PCCreateTransactionFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Commit")
-	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Get(), "sbc0.CreateTransactionCount")
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
-	assert.EqualValues(t, 0, sbc1.PrepareCount.Get(), "sbc1.PrepareCount")
-	assert.EqualValues(t, 0, sbc0.StartCommitCount.Get(), "sbc0.StartCommitCount")
-	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 1, sbc0.RollbackCount.Load(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackCount.Load(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 0, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+	assert.EqualValues(t, 0, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnCommit2PCPrepareFail(t *testing.T) {
@@ -839,11 +839,11 @@ func TestTxConnCommit2PCPrepareFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Commit")
-	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Get(), "sbc0.CreateTransactionCount")
-	assert.EqualValues(t, 1, sbc1.PrepareCount.Get(), "sbc1.PrepareCount")
-	assert.EqualValues(t, 0, sbc0.StartCommitCount.Get(), "sbc0.StartCommitCount")
-	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+	assert.EqualValues(t, 0, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
@@ -859,11 +859,11 @@ func TestTxConnCommit2PCStartCommitFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Commit")
-	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Get(), "sbc0.CreateTransactionCount")
-	assert.EqualValues(t, 1, sbc1.PrepareCount.Get(), "sbc1.PrepareCount")
-	assert.EqualValues(t, 1, sbc0.StartCommitCount.Get(), "sbc0.StartCommitCount")
-	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
@@ -879,11 +879,11 @@ func TestTxConnCommit2PCCommitPreparedFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Commit")
-	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Get(), "sbc0.CreateTransactionCount")
-	assert.EqualValues(t, 1, sbc1.PrepareCount.Get(), "sbc1.PrepareCount")
-	assert.EqualValues(t, 1, sbc0.StartCommitCount.Get(), "sbc0.StartCommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
@@ -899,11 +899,11 @@ func TestTxConnCommit2PCConcludeTransactionFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Commit")
-	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Get(), "sbc0.CreateTransactionCount")
-	assert.EqualValues(t, 1, sbc1.PrepareCount.Get(), "sbc1.PrepareCount")
-	assert.EqualValues(t, 1, sbc0.StartCommitCount.Get(), "sbc0.StartCommitCount")
-	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.CreateTransactionCount.Load(), "sbc0.CreateTransactionCount")
+	assert.EqualValues(t, 1, sbc1.PrepareCount.Load(), "sbc1.PrepareCount")
+	assert.EqualValues(t, 1, sbc0.StartCommitCount.Load(), "sbc0.StartCommitCount")
+	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnRollback(t *testing.T) {
@@ -916,8 +916,8 @@ func TestTxConnRollback(t *testing.T) {
 		sc.txConn.Rollback(ctx, session))
 	wantSession := vtgatepb.Session{}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 1, sbc0.RollbackCount.Load(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackCount.Load(), "sbc1.RollbackCount")
 }
 
 func TestTxConnReservedRollback(t *testing.T) {
@@ -949,10 +949,10 @@ func TestTxConnReservedRollback(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
-	assert.EqualValues(t, 0, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
-	assert.EqualValues(t, 0, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
+	assert.EqualValues(t, 1, sbc0.RollbackCount.Load(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackCount.Load(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 0, sbc0.ReleaseCount.Load(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 0, sbc1.ReleaseCount.Load(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnReservedRollbackFailure(t *testing.T) {
@@ -978,10 +978,10 @@ func TestTxConnReservedRollbackFailure(t *testing.T) {
 		}},
 	}
 	utils.MustMatch(t, &wantSession, session.Session, "Session")
-	assert.EqualValues(t, 1, sbc0.RollbackCount.Get(), "sbc0.RollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackCount.Get(), "sbc1.RollbackCount")
-	assert.EqualValues(t, 1, sbc0.ReleaseCount.Get(), "sbc0.ReleaseCount")
-	assert.EqualValues(t, 1, sbc1.ReleaseCount.Get(), "sbc1.ReleaseCount")
+	assert.EqualValues(t, 1, sbc0.RollbackCount.Load(), "sbc0.RollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackCount.Load(), "sbc1.RollbackCount")
+	assert.EqualValues(t, 1, sbc0.ReleaseCount.Load(), "sbc0.ReleaseCount")
+	assert.EqualValues(t, 1, sbc1.ReleaseCount.Load(), "sbc1.ReleaseCount")
 }
 
 func TestTxConnResolveOnPrepare(t *testing.T) {
@@ -999,10 +999,10 @@ func TestTxConnResolveOnPrepare(t *testing.T) {
 	}}
 	err := sc.txConn.Resolve(ctx, dtid)
 	require.NoError(t, err)
-	assert.EqualValues(t, 1, sbc0.SetRollbackCount.Get(), "sbc0.SetRollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Get(), "sbc1.RollbackPreparedCount")
-	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnResolveOnRollback(t *testing.T) {
@@ -1020,10 +1020,10 @@ func TestTxConnResolveOnRollback(t *testing.T) {
 	}}
 	require.NoError(t,
 		sc.txConn.Resolve(ctx, dtid))
-	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Get(), "sbc0.SetRollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Get(), "sbc1.RollbackPreparedCount")
-	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnResolveOnCommit(t *testing.T) {
@@ -1041,10 +1041,10 @@ func TestTxConnResolveOnCommit(t *testing.T) {
 	}}
 	require.NoError(t,
 		sc.txConn.Resolve(ctx, dtid))
-	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Get(), "sbc0.SetRollbackCount")
-	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Get(), "sbc1.RollbackPreparedCount")
-	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
+	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
+	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnResolveInvalidDTID(t *testing.T) {
@@ -1103,10 +1103,10 @@ func TestTxConnResolveSetRollbackFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Resolve")
-	assert.EqualValues(t, 1, sbc0.SetRollbackCount.Get(), "sbc0.SetRollbackCount")
-	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Get(), "sbc1.RollbackPreparedCount")
-	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 1, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
+	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
@@ -1127,10 +1127,10 @@ func TestTxConnResolveRollbackPreparedFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Resolve")
-	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Get(), "sbc0.SetRollbackCount")
-	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Get(), "sbc1.RollbackPreparedCount")
-	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
+	assert.EqualValues(t, 1, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
+	assert.EqualValues(t, 0, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnResolveCommitPreparedFail(t *testing.T) {
@@ -1151,10 +1151,10 @@ func TestTxConnResolveCommitPreparedFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Resolve")
-	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Get(), "sbc0.SetRollbackCount")
-	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Get(), "sbc1.RollbackPreparedCount")
-	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
+	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
+	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 0, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
@@ -1175,10 +1175,10 @@ func TestTxConnResolveConcludeTransactionFail(t *testing.T) {
 	want := "error: err"
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), want, "Resolve")
-	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Get(), "sbc0.SetRollbackCount")
-	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Get(), "sbc1.RollbackPreparedCount")
-	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Get(), "sbc1.CommitPreparedCount")
-	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Get(), "sbc0.ConcludeTransactionCount")
+	assert.EqualValues(t, 0, sbc0.SetRollbackCount.Load(), "sbc0.SetRollbackCount")
+	assert.EqualValues(t, 0, sbc1.RollbackPreparedCount.Load(), "sbc1.RollbackPreparedCount")
+	assert.EqualValues(t, 1, sbc1.CommitPreparedCount.Load(), "sbc1.CommitPreparedCount")
+	assert.EqualValues(t, 1, sbc0.ConcludeTransactionCount.Load(), "sbc0.ConcludeTransactionCount")
 }
 
 func TestTxConnMultiGoSessions(t *testing.T) {

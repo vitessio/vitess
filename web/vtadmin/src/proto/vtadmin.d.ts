@@ -20859,7 +20859,7 @@ export namespace tabletmanagerdata {
     interface IVReplicationWaitForPosRequest {
 
         /** VReplicationWaitForPosRequest id */
-        id?: (number|Long|null);
+        id?: (number|null);
 
         /** VReplicationWaitForPosRequest position */
         position?: (string|null);
@@ -20875,7 +20875,7 @@ export namespace tabletmanagerdata {
         constructor(properties?: tabletmanagerdata.IVReplicationWaitForPosRequest);
 
         /** VReplicationWaitForPosRequest id. */
-        public id: (number|Long);
+        public id: number;
 
         /** VReplicationWaitForPosRequest position. */
         public position: string;
@@ -31276,6 +31276,205 @@ export namespace query {
 
         /**
          * Converts this TransactionMetadata to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** SchemaTableType enum. */
+    enum SchemaTableType {
+        VIEWS = 0,
+        TABLES = 1,
+        ALL = 2
+    }
+
+    /** Properties of a GetSchemaRequest. */
+    interface IGetSchemaRequest {
+
+        /** GetSchemaRequest target */
+        target?: (query.ITarget|null);
+
+        /** GetSchemaRequest table_type */
+        table_type?: (query.SchemaTableType|null);
+
+        /** GetSchemaRequest table_names */
+        table_names?: (string[]|null);
+    }
+
+    /** Represents a GetSchemaRequest. */
+    class GetSchemaRequest implements IGetSchemaRequest {
+
+        /**
+         * Constructs a new GetSchemaRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IGetSchemaRequest);
+
+        /** GetSchemaRequest target. */
+        public target?: (query.ITarget|null);
+
+        /** GetSchemaRequest table_type. */
+        public table_type: query.SchemaTableType;
+
+        /** GetSchemaRequest table_names. */
+        public table_names: string[];
+
+        /**
+         * Creates a new GetSchemaRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSchemaRequest instance
+         */
+        public static create(properties?: query.IGetSchemaRequest): query.GetSchemaRequest;
+
+        /**
+         * Encodes the specified GetSchemaRequest message. Does not implicitly {@link query.GetSchemaRequest.verify|verify} messages.
+         * @param message GetSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IGetSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSchemaRequest message, length delimited. Does not implicitly {@link query.GetSchemaRequest.verify|verify} messages.
+         * @param message GetSchemaRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IGetSchemaRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSchemaRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.GetSchemaRequest;
+
+        /**
+         * Decodes a GetSchemaRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSchemaRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.GetSchemaRequest;
+
+        /**
+         * Verifies a GetSchemaRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSchemaRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSchemaRequest
+         */
+        public static fromObject(object: { [k: string]: any }): query.GetSchemaRequest;
+
+        /**
+         * Creates a plain object from a GetSchemaRequest message. Also converts values to other types if specified.
+         * @param message GetSchemaRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.GetSchemaRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSchemaRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSchemaResponse. */
+    interface IGetSchemaResponse {
+
+        /** GetSchemaResponse table_definition */
+        table_definition?: ({ [k: string]: string }|null);
+    }
+
+    /** Represents a GetSchemaResponse. */
+    class GetSchemaResponse implements IGetSchemaResponse {
+
+        /**
+         * Constructs a new GetSchemaResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: query.IGetSchemaResponse);
+
+        /** GetSchemaResponse table_definition. */
+        public table_definition: { [k: string]: string };
+
+        /**
+         * Creates a new GetSchemaResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSchemaResponse instance
+         */
+        public static create(properties?: query.IGetSchemaResponse): query.GetSchemaResponse;
+
+        /**
+         * Encodes the specified GetSchemaResponse message. Does not implicitly {@link query.GetSchemaResponse.verify|verify} messages.
+         * @param message GetSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: query.IGetSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSchemaResponse message, length delimited. Does not implicitly {@link query.GetSchemaResponse.verify|verify} messages.
+         * @param message GetSchemaResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: query.IGetSchemaResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSchemaResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): query.GetSchemaResponse;
+
+        /**
+         * Decodes a GetSchemaResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSchemaResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): query.GetSchemaResponse;
+
+        /**
+         * Verifies a GetSchemaResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSchemaResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSchemaResponse
+         */
+        public static fromObject(object: { [k: string]: any }): query.GetSchemaResponse;
+
+        /**
+         * Creates a plain object from a GetSchemaResponse message. Also converts values to other types if specified.
+         * @param message GetSchemaResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: query.GetSchemaResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSchemaResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

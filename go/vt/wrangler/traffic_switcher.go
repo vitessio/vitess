@@ -177,13 +177,13 @@ func (ts *trafficSwitcher) ForAllTargets(f func(source *workflow.MigrationTarget
 	return allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (ts *trafficSwitcher) ForAllUIDs(f func(target *workflow.MigrationTarget, uid uint32) error) error {
+func (ts *trafficSwitcher) ForAllUIDs(f func(target *workflow.MigrationTarget, uid int32) error) error {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	for _, target := range ts.Targets() {
 		for uid := range target.Sources {
 			wg.Add(1)
-			go func(target *workflow.MigrationTarget, uid uint32) {
+			go func(target *workflow.MigrationTarget, uid int32) {
 				defer wg.Done()
 
 				if err := f(target, uid); err != nil {
@@ -1202,14 +1202,14 @@ func (ts *trafficSwitcher) waitForCatchup(ctx context.Context, filteredReplicati
 	ctx, cancel := context.WithTimeout(ctx, filteredReplicationWaitTime)
 	defer cancel()
 	// source writes have been stopped, wait for all streams on targets to catch up
-	if err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
+	if err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid int32) error {
 		ts.Logger().Infof("Before Catchup: uid: %d, target primary %s, target position %s, shard %s", uid,
 			target.GetPrimary().AliasString(), target.Position, target.GetShard().String())
 		bls := target.Sources[uid]
 		source := ts.Sources()[bls.Shard]
 		ts.Logger().Infof("Before Catchup: waiting for keyspace:shard: %v:%v to reach source position %v, uid %d",
 			ts.TargetKeyspaceName(), target.GetShard().ShardName(), source.Position, uid)
-		if err := ts.TabletManagerClient().VReplicationWaitForPos(ctx, target.GetPrimary().Tablet, int(uid), source.Position); err != nil {
+		if err := ts.TabletManagerClient().VReplicationWaitForPos(ctx, target.GetPrimary().Tablet, uid, source.Position); err != nil {
 			return err
 		}
 		log.Infof("After catchup: target keyspace:shard: %v:%v, source position %v, uid %d",
@@ -1283,7 +1283,7 @@ func (ts *trafficSwitcher) createReverseVReplication(ctx context.Context) error 
 	if err := ts.deleteReverseVReplication(ctx); err != nil {
 		return err
 	}
-	err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid uint32) error {
+	err := ts.ForAllUIDs(func(target *workflow.MigrationTarget, uid int32) error {
 		bls := target.Sources[uid]
 		source := ts.Sources()[bls.Shard]
 		reverseBls := &binlogdatapb.BinlogSource{

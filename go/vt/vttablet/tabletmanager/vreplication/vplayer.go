@@ -17,6 +17,7 @@ limitations under the License.
 package vreplication
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -24,8 +25,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
@@ -328,7 +327,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 	// If we're not running, set ReplicationLagSeconds to be very high.
 	// TODO(sougou): if we also stored the time of the last event, we
 	// can estimate this value more accurately.
-	defer vp.vr.stats.ReplicationLagSeconds.Set(math.MaxInt64)
+	defer vp.vr.stats.ReplicationLagSeconds.Store(math.MaxInt64)
 	defer vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), math.MaxInt64)
 	var sbm int64 = -1
 	for {
@@ -349,7 +348,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		// So, we should assume we're falling behind.
 		if len(items) == 0 {
 			behind := time.Now().UnixNano() - vp.lastTimestampNs - vp.timeOffsetNs
-			vp.vr.stats.ReplicationLagSeconds.Set(behind / 1e9)
+			vp.vr.stats.ReplicationLagSeconds.Store(behind / 1e9)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(behind/1e9)*time.Second)
 		}
 		// Empty transactions are saved at most once every idleTimeout.
@@ -405,7 +404,7 @@ func (vp *vplayer) applyEvents(ctx context.Context, relay *relayLog) error {
 		}
 
 		if sbm >= 0 {
-			vp.vr.stats.ReplicationLagSeconds.Set(sbm)
+			vp.vr.stats.ReplicationLagSeconds.Store(sbm)
 			vp.vr.stats.VReplicationLags.Add(strconv.Itoa(int(vp.vr.id)), time.Duration(sbm)*time.Second)
 		}
 
@@ -619,7 +618,7 @@ func (vp *vplayer) applyEvent(ctx context.Context, event *binlogdatapb.VEvent, m
 			// All were found. We must register journal.
 		}
 		log.Infof("Binlog event registering journal event %+v", event.Journal)
-		if err := vp.vr.vre.registerJournal(event.Journal, int(vp.vr.id)); err != nil {
+		if err := vp.vr.vre.registerJournal(event.Journal, vp.vr.id); err != nil {
 			if err := vp.vr.setState(binlogplayer.BlpStopped, err.Error()); err != nil {
 				return err
 			}

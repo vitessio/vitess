@@ -46,7 +46,7 @@ type InfoForRecoveryAnalysis struct {
 	Region                                    string
 	PhysicalEnvironment                       string
 	LogFile                                   string
-	LogPos                                    int64
+	LogPos                                    uint32
 	IsStaleBinlogCoordinates                  int
 	GTIDMode                                  string
 	LastCheckValid                            int

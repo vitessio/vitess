@@ -20,7 +20,10 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
+
+//go:generate go run ./tools/makecolldata/ -embed=true
 
 // CaseAwareCollation implements lowercase and uppercase conventions for collations.
 type CaseAwareCollation interface {
@@ -123,7 +126,7 @@ type Collation interface {
 	// the hash will interpret the source string as if it were stored in a `CHAR(n)` column. If the value of
 	// numCodepoints is 0, this is equivalent to setting `numCodepoints = RuneCount(src)`.
 	// For collations with NO PAD, the numCodepoint argument is ignored.
-	Hash(src []byte, numCodepoints int) HashCode
+	Hash(hasher *vthash.Hasher, src []byte, numCodepoints int)
 
 	// Wildcard returns a matcher for the given wildcard pattern. The matcher can be used to repeatedly
 	// test different strings to check if they match the pattern. The pattern must be a traditional wildcard
@@ -150,8 +153,6 @@ type Collation interface {
 	// IsBinary returns whether this collation is a binary collation
 	IsBinary() bool
 }
-
-type HashCode = uintptr
 
 // WildcardPattern is a matcher for a wildcard pattern, constructed from a given collation
 type WildcardPattern interface {
@@ -199,4 +200,10 @@ func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collat
 // Length returns the number of codepoints in the input based on the given collation
 func Length(collation Collation, input []byte) int {
 	return charset.Length(collation.Charset(), input)
+}
+
+// ConvertForJSON behaves like Convert, but the output string is always utf8mb4 encoded,
+// as it is required for JSON strings in MySQL.
+func ConvertForJSON(dst []byte, src []byte, srcCollation Collation) ([]byte, error) {
+	return charset.Convert(dst, charset.Charset_utf8mb4{}, src, srcCollation.Charset())
 }

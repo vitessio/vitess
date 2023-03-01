@@ -27,8 +27,8 @@ import (
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/logutil"
@@ -121,7 +121,7 @@ type ITrafficSwitcher interface {
 
 	ForAllSources(f func(source *MigrationSource) error) error
 	ForAllTargets(f func(target *MigrationTarget) error) error
-	ForAllUIDs(f func(target *MigrationTarget, uid uint32) error) error
+	ForAllUIDs(f func(target *MigrationTarget, uid int32) error) error
 	SourceShards() []*topo.ShardInfo
 	TargetShards() []*topo.ShardInfo
 }
@@ -169,7 +169,7 @@ func (source *MigrationSource) GetPrimary() *topo.TabletInfo {
 type MigrationTarget struct {
 	si       *topo.ShardInfo
 	primary  *topo.TabletInfo
-	Sources  map[uint32]*binlogdatapb.BinlogSource
+	Sources  map[int32]*binlogdatapb.BinlogSource
 	Position string
 }
 
@@ -239,12 +239,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 		target := &MigrationTarget{
 			si:      si,
 			primary: primary,
-			Sources: make(map[uint32]*binlogdatapb.BinlogSource),
+			Sources: make(map[int32]*binlogdatapb.BinlogSource),
 		}
 
 		qr := sqltypes.Proto3ToResult(p3qr)
 		for _, row := range qr.Named().Rows {
-			id, err := row["id"].ToInt64()
+			id, err := row["id"].ToInt32()
 			if err != nil {
 				return nil, err
 			}
@@ -262,7 +262,7 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 				frozen = true
 			}
 
-			target.Sources[uint32(id)] = &bls
+			target.Sources[id] = &bls
 			optCells = row["cell"].ToString()
 			optTabletTypes = row["tablet_types"].ToString()
 
@@ -289,12 +289,12 @@ func BuildTargets(ctx context.Context, ts *topo.Server, tmc tmclient.TabletManag
 }
 
 func getVReplicationWorkflowType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowType {
-	i, _ := row["workflow_type"].ToInt64()
+	i, _ := row["workflow_type"].ToInt32()
 	return binlogdatapb.VReplicationWorkflowType(i)
 }
 
 func getVReplicationWorkflowSubType(row sqltypes.RowNamedValues) binlogdatapb.VReplicationWorkflowSubType {
-	i, _ := row["workflow_sub_type"].ToInt64()
+	i, _ := row["workflow_sub_type"].ToInt32()
 	return binlogdatapb.VReplicationWorkflowSubType(i)
 }
 

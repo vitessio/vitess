@@ -37,7 +37,7 @@ import (
 )
 
 // assertSQLError makes sure we get the right error.
-func assertSQLError(t *testing.T, err error, code int, sqlState, subtext, query, pattern string) {
+func assertSQLError(t *testing.T, err error, code ErrorCode, sqlState, subtext, query, pattern string) {
 	t.Helper()
 
 	require.Error(t, err, "was expecting SQLError %v / %v / %v but got no error.", code, sqlState, subtext)
@@ -475,7 +475,7 @@ func TestTLSClientVerifyIdentity(t *testing.T) {
 
 	fmt.Printf("Error: %s", err)
 
-	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: x509:")
+	assert.Contains(t, err.Error(), "cannot send HandshakeResponse41: tls:")
 
 	// Now setup proper CA that is valid to verify
 	params.SslCa = path.Join(root, "ca-cert.pem")

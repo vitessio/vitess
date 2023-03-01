@@ -334,16 +334,16 @@ func (rs *resharder) createStreams(ctx context.Context) error {
 				OnDdl:         binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[rs.onDDL]),
 			}
 			ig.AddRow(rs.workflow, bls, "", rs.cell, rs.tabletTypes,
-				int64(binlogdatapb.VReplicationWorkflowType_Reshard),
-				int64(binlogdatapb.VReplicationWorkflowSubType_None),
+				binlogdatapb.VReplicationWorkflowType_Reshard,
+				binlogdatapb.VReplicationWorkflowSubType_None,
 				rs.deferSecondaryKeys)
 		}
 
 		for _, rstream := range rs.refStreams {
 			ig.AddRow(rstream.workflow, rstream.bls, "", rstream.cell, rstream.tabletTypes,
 				//todo: fix based on original stream
-				int64(binlogdatapb.VReplicationWorkflowType_Reshard),
-				int64(binlogdatapb.VReplicationWorkflowSubType_None),
+				binlogdatapb.VReplicationWorkflowType_Reshard,
+				binlogdatapb.VReplicationWorkflowSubType_None,
 				rs.deferSecondaryKeys)
 		}
 		query := ig.String()

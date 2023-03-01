@@ -110,10 +110,6 @@ func TestUpdateVSchema(t *testing.T) {
     "vttest": {
       "sharded": true,
       "tables": {
-        "dual": {
-          "type": "reference",
-          "name": "dual"
-        },
         "t1": {
           "name": "t1",
           "column_vindexes": [

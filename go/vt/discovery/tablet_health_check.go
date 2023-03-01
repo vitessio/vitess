@@ -21,9 +21,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"vitess.io/vitess/go/sync2"
 
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
@@ -255,14 +254,14 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		// timedout is accessed atomically because there could be a race
 		// between the goroutine that sets it and the check for its value
 		// later.
-		timedout := sync2.NewAtomicBool(false)
+		var timedout atomic.Bool
 		go func() {
 			for {
 				select {
 				case <-servingStatus:
 					continue
 				case <-time.After(hc.healthCheckTimeout):
-					timedout.Set(true)
+					timedout.Store(true)
 					streamCancel()
 					return
 				case <-streamCtx.Done():
@@ -306,7 +305,7 @@ func (thc *tabletHealthCheck) checkConn(hc *HealthCheckImpl) {
 		// If there was a timeout send an error. We do this after stream has returned.
 		// This will ensure that this update prevails over any previous message that
 		// stream could have sent.
-		if timedout.Get() {
+		if timedout.Load() {
 			thc.LastError = fmt.Errorf("healthcheck timed out (latest %v)", thc.lastResponseTimestamp)
 			thc.setServingState(false, thc.LastError.Error())
 			hcErrorCounters.Add([]string{thc.Target.Keyspace, thc.Target.Shard, topoproto.TabletTypeLString(thc.Target.TabletType)}, 1)

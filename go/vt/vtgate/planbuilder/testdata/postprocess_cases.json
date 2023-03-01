@@ -230,7 +230,7 @@
             "Query": "select id from `user` having :__sq_has_values1 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }
@@ -270,7 +270,7 @@
             "Query": "select id from `user` where :__sq_has_values1 = 1 and id in ::__vals",
             "Table": "`user`",
             "Values": [
-              ":__sq1"
+              "::__sq1"
             ],
             "Vindex": "user_index"
           }

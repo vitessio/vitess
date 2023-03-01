@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type Collation_multibyte struct {
@@ -147,11 +148,11 @@ func (c *Collation_multibyte) WeightString(dst, src []byte, numCodepoints int) [
 	return dst
 }
 
-func (c *Collation_multibyte) Hash(src []byte, numCodepoints int) HashCode {
+func (c *Collation_multibyte) Hash(hasher *vthash.Hasher, src []byte, numCodepoints int) {
 	cs := c.charset
 	sortOrder := c.sort
 
-	var hash = uintptr(c.id)
+	hasher.Write64(uint64(c.id))
 	var left = numCodepoints
 	if left == 0 {
 		left = math.MaxInt32
@@ -162,22 +163,21 @@ func (c *Collation_multibyte) Hash(src []byte, numCodepoints int) HashCode {
 			if sortOrder != nil {
 				w = sortOrder[w]
 			}
-			hash = memhash8(w, hash)
+			hasher.Write8(w)
 			src = src[1:]
 		} else {
 			_, width := cs.DecodeRune(src)
-			hash = memhash(src[:width], hash)
+			hasher.Write(src[:width])
 			src = src[width:]
 		}
 		left--
 	}
 	if numCodepoints > 0 {
 		for left > 0 {
-			hash = memhash8(' ', hash)
+			hasher.Write8(' ')
 			left--
 		}
 	}
-	return hash
 }
 
 func (c *Collation_multibyte) WeightStringLen(numCodepoints int) int {

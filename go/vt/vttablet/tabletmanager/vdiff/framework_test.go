@@ -457,7 +457,7 @@ func (tmc *fakeTMClient) WaitForPosition(ctx context.Context, tablet *topodatapb
 	return nil
 }
 
-func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+func (tmc *fakeTMClient) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	select {
 	case <-ctx.Done():
 		return ctx.Err()

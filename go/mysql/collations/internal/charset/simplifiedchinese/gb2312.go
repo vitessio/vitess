@@ -126,3 +126,7 @@ func (Charset_gb2312) DecodeRune(src []byte) (rune, int) {
 	}
 	return rune(r), 2
 }
+
+func (Charset_gb2312) MaxWidth() int {
+	return 2
+}

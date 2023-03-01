@@ -11,7 +11,7 @@ spec:
     vtbackup: vitess/lite:latest
     vtorc: vitess/lite:latest
     mysqld:
-      mysql56Compatible: vitess/lite:latest
+      mysql80Compatible: vitess/lite:latest
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: zone1
@@ -83,15 +83,12 @@ spec:
           databaseInitScriptSecret:
             name: example-cluster-config
             key: init_db.sql
-          replication:
-            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
             replicas: 2
             vttablet:
               extraFlags:
-                disable_active_reparents: "true"
                 db_charset: utf8mb4
               resources:
                 limits:
@@ -121,8 +118,6 @@ spec:
           databaseInitScriptSecret:
             name: example-cluster-config
             key: init_db.sql
-          replication:
-            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
@@ -154,8 +149,6 @@ spec:
           databaseInitScriptSecret:
             name: example-cluster-config
             key: init_db.sql
-          replication:
-            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
