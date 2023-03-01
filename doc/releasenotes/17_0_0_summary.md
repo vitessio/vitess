@@ -169,3 +169,5 @@ Some notes to help understand these metrics:
 ## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
 * The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
+* Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
+* Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
