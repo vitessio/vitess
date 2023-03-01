@@ -36,6 +36,7 @@ func TestMoveTablesTZ(t *testing.T) {
 	workflow := "tz"
 	sourceKs := "product"
 	targetKs := "customer"
+	shard := "0"
 	ksWorkflow := fmt.Sprintf("%s.%s", targetKs, workflow)
 	ksReverseWorkflow := fmt.Sprintf("%s.%s_reverse", sourceKs, workflow)
 
@@ -51,7 +52,8 @@ func TestMoveTablesTZ(t *testing.T) {
 
 	vtgate = cell1.Vtgates[0]
 	require.NotNil(t, vtgate)
-	vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "product", "0"), 1)
+	err := cluster.WaitForHealthyShard(vc.VtctldClient, sourceKs, shard)
+	require.NoError(t, err)
 
 	vtgateConn = getConnection(t, vc.ClusterConfig.hostname, vc.ClusterConfig.vtgateMySQLPort)
 	defer vtgateConn.Close()
@@ -87,9 +89,8 @@ func TestMoveTablesTZ(t *testing.T) {
 	if _, err := vc.AddKeyspace(t, cells, targetKs, "0", customerVSchema, customerSchema, defaultReplicas, defaultRdonly, 200, targetKsOpts); err != nil {
 		t.Fatal(err)
 	}
-	if err := vtgate.WaitForStatusOfTabletInShard(fmt.Sprintf("%s.%s.primary", "customer", "0"), 1); err != nil {
-		t.Fatal(err)
-	}
+	err = cluster.WaitForHealthyShard(vc.VtctldClient, targetKs, shard)
+	require.NoError(t, err)
 
 	defaultCell := vc.Cells["zone1"]
 	custKs := vc.Cells[defaultCell.Name].Keyspaces[targetKs]
