@@ -2200,7 +2200,7 @@ func (node *AddColumns) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node AlgorithmValue) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "algorithm = %s", string(node))
+	buf.astPrintf(node, "algorithm = %#s", string(node))
 }
 
 // Format formats the node
