@@ -3098,19 +3098,19 @@ alter_commands_modifier_list:
 alter_commands_modifier:
   ALGORITHM equal_opt DEFAULT
     {
-      $$ = AlgorithmValue(string($3))
+      $$ = AlgorithmValue(DefaultStr)
     }
   | ALGORITHM equal_opt INPLACE
     {
-      $$ = AlgorithmValue(string($3))
+      $$ = AlgorithmValue(InplaceStr)
     }
   | ALGORITHM equal_opt COPY
     {
-      $$ = AlgorithmValue(string($3))
+      $$ = AlgorithmValue(CopyStr)
     }
   | ALGORITHM equal_opt INSTANT
     {
-      $$ = AlgorithmValue(string($3))
+      $$ = AlgorithmValue(InstantStr)
     }
   | LOCK equal_opt DEFAULT
     {
