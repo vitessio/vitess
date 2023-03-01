@@ -45,8 +45,21 @@ type dbClientImpl struct {
 	dbConn   *mysql.Conn
 }
 
+// dbClientImplWithSidecarDBReplacement is a DBClient implementation
+// that serves primarily as a pass-through to dbClientImpl, with the
+// exception of ExecuteFetch, where it first replaces any default
+// SidecarDB name with the actual one in use on the tablet.
+type dbClientImplWithSidecarDBReplacement struct {
+	dbClientImpl
+}
+
 // NewDBClient creates a DBClient instance
 func NewDBClient(params dbconfigs.Connector) DBClient {
+	if sidecardb.GetName() != sidecardb.DefaultName {
+		return &dbClientImplWithSidecarDBReplacement{
+			dbClientImpl{dbConfig: params},
+		}
+	}
 	return &dbClientImpl{
 		dbConfig: params,
 	}
@@ -118,15 +131,19 @@ func LimitString(s string, limit int) string {
 }
 
 func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	// Replace any provided sidecar DB qualifiers with the correct one.
-	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
-	if err != nil {
-		return nil, err
-	}
-	mqr, err := dc.dbConn.ExecuteFetch(uq, maxrows, true)
+	mqr, err := dc.dbConn.ExecuteFetch(query, maxrows, true)
 	if err != nil {
 		dc.handleError(err)
 		return nil, err
 	}
 	return mqr, nil
+}
+
+func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
+	// Replace any provided sidecar DB qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	return dcr.dbClientImpl.ExecuteFetch(uq, maxrows)
 }
