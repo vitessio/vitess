@@ -1243,8 +1243,7 @@ var (
 	}, {
 		input: "alter table `By` add column foo int, algorithm = inplace",
 	}, {
-		input:  "alter table `By` add column foo int, algorithm = INPLACE",
-		output: "alter table `By` add column foo int, algorithm = inplace",
+		input: "alter table `By` add column foo int, algorithm = INPLACE",
 	}, {
 		input: "alter table `By` add column foo int, algorithm = instant",
 	}, {
