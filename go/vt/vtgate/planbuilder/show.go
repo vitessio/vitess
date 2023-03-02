@@ -277,16 +277,9 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecarDBID, ok := sidecarDBIdentifiers.Load(ks.Name)
-	if !ok || sidecarDBID == nil || sidecarDBID == "" {
-		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-		defer cancel()
-		sidecarDBName, err := vschema.GetSidecarDBName(ctx, ks.Name)
-		if err != nil {
-			return nil, err
-		}
-		sidecarDBID = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
-		sidecarDBIdentifiers.Store(ks.Name, sidecarDBID)
+	sidecarDBID, err := getSidecarDBIDForKeyspace(vschema, ks.Name)
+	if err != nil {
+		return nil, err
 	}
 
 	sql := fmt.Sprintf("SELECT * FROM %s.schema_migrations", sidecarDBID)
@@ -769,4 +762,26 @@ func buildVschemaVindexesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 	), nil
 
+}
+
+// getSidecarDBIDForKeyspace is a helper function that can be used
+// to get the configured sidecar database identifier to use for a
+// given keyspace when generating raw SQL queries targeted at any
+// of tablet's sidecardb tables.
+// NOTE: this should be avoided whenever possible, preferring instead
+// to use a well defined vtgate->vttablet RPC that hides the
+// implementation details (so that the schema is not the interface).
+func getSidecarDBIDForKeyspace(vschema plancontext.VSchema, keyspace string) (string, error) {
+	sdbid, ok := sidecarDBIdentifiers.Load(keyspace)
+	if !ok || sdbid == nil || sdbid == "" {
+		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+		defer cancel()
+		sdbname, err := vschema.GetSidecarDBName(ctx, keyspace)
+		if err != nil {
+			return sdbname, err
+		}
+		sdbid = sqlparser.String(sqlparser.NewIdentifierCS(sdbname))
+		sidecarDBIdentifiers.Store(keyspace, sdbid)
+	}
+	return sdbid.(string), nil
 }
