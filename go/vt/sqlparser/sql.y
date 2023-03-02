@@ -6417,13 +6417,13 @@ function_call_nonkeyword:
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
-| TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
+| TIMESTAMPADD openb time_unit ',' value_expression ',' value_expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:string($3), Expr1:$5, Expr2:$7}
   }
-| TIMESTAMPDIFF openb sql_id ',' value_expression ',' value_expression closeb
+| TIMESTAMPDIFF openb time_unit ',' value_expression ',' value_expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:string($3), Expr1:$5, Expr2:$7}
   }
 
 // Optional parens for certain keyword functions that don't require them.
