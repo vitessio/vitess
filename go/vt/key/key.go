@@ -54,19 +54,17 @@ func (i Uint64Key) Bytes() []byte {
 
 // Helper methods for keyspace id values.
 
-// Normalize adds padding to id as necessary to make sure it can be compared as an 8 byte integer.
+// Normalize removes any trailing zero bytes from id. This allows two id values to be compared even if they are
+// different lengths.
 // From a key range perspective, -80 == 00-80 == 0000-8000 == 000000-800000, etc. and they should
 // always be treated the same even if they are different lengths.
 func Normalize(id []byte) []byte {
-	if len(id) >= 8 {
-		return id[:8]
+	trailingZeroes := 0
+	for i := len(id) - 1; i >= 0 && id[i] == 0x00; i-- {
+		trailingZeroes += 1
 	}
 
-	paddedId := []byte{}
-	paddedId = append(paddedId, id[:]...)
-	paddedId = append(paddedId, ZeroKey[0:8-len(id)]...)
-
-	return paddedId
+	return id[:len(id)-trailingZeroes]
 }
 
 // Compare compares two keyspace IDs while taking care to normalize them; returns -1 if a<b, 1 if a>b, 0 if equal.
