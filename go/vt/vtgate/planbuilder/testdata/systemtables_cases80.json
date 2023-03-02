@@ -1783,5 +1783,63 @@
         "information_schema.TABLES"
       ]
     }
+  },
+  {
+    "comment": "Query from TypeORM",
+    "query": "SELECT * FROM ( SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'fuelings' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_payments' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'pools' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'orders' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_hops' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'market_outlets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'prefuel' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'billing_statements' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_market_outlets' ) `kcu` WHERE `CONSTRAINT_NAME` = 'PRIMARY'",
+    "v3-plan": "symbol CONSTRAINT_NAME not found in table or subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM ( SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'fuelings' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_payments' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'pools' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'orders' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_hops' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'market_outlets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'prefuel' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'billing_statements' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_market_outlets' ) `kcu` WHERE `CONSTRAINT_NAME` = 'PRIMARY'",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from (select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1) as kcu where 1 != 1",
+        "Query": "select * from (select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME1 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME2 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME3 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME4 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME5 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME6 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME7 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME8 and CONSTRAINT_NAME = 'PRIMARY' union all select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME9 and CONSTRAINT_NAME = 'PRIMARY' union select * from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME10 and CONSTRAINT_NAME = 'PRIMARY') as kcu",
+        "SysTableTableName": "[kcu_TABLE_NAME10:VARCHAR(\"perp_market_outlets\"), kcu_TABLE_NAME1:VARCHAR(\"order_payments\"), kcu_TABLE_NAME2:VARCHAR(\"pools\"), kcu_TABLE_NAME3:VARCHAR(\"orders\"), kcu_TABLE_NAME4:VARCHAR(\"order_hops\"), kcu_TABLE_NAME5:VARCHAR(\"markets\"), kcu_TABLE_NAME6:VARCHAR(\"market_outlets\"), kcu_TABLE_NAME7:VARCHAR(\"prefuel\"), kcu_TABLE_NAME8:VARCHAR(\"billing_statements\"), kcu_TABLE_NAME9:VARCHAR(\"perp_markets\"), kcu_TABLE_NAME:VARCHAR(\"fuelings\")]",
+        "SysTableTableSchema": "[VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\")]",
+        "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE"
+      }
+    }
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (without star projection)",
+    "query": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "id = 'primary'",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select id from information_schema.key_column_usage as kcu where 1 != 1 union select id from information_schema.key_column_usage as kcu where 1 != 1",
+                "Query": "select id from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name union select id from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1",
+                "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
+                "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
+                "Table": "information_schema.key_column_usage"
+              }
+            ]
+          }
+        ]
+      }
+    }
   }
 ]
