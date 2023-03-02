@@ -749,12 +749,7 @@ func TestTabletServerStreamExecuteComments(t *testing.T) {
 
 	wantSQL := executeSQL
 	select {
-	case out := <-ch:
-		stats, ok := out.(*tabletenv.LogStats)
-		if !ok {
-			t.Errorf("Unexpected value in query logs: %#v (expecting value of type %T)", out, &tabletenv.LogStats{})
-		}
-
+	case stats := <-ch:
 		if wantSQL != stats.OriginalSQL {
 			t.Errorf("logstats: SQL want %s got %s", wantSQL, stats.OriginalSQL)
 		}
