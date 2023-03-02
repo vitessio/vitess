@@ -19,6 +19,7 @@ package wrangler
 import (
 	"context"
 	"fmt"
+	"math/rand"
 	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -53,39 +54,34 @@ type testWranglerEnv struct {
 	tabletType topodatapb.TabletType
 	tmc        *testWranglerTMClient
 	mu         sync.Mutex
-	tablets    map[int]*testWranglerTablet
-}
-
-// wranglerEnv has to be a global for RegisterDialer to work.
-var wranglerEnv *testWranglerEnv
-
-func init() {
-	tabletconn.RegisterDialer("WranglerTest", func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
-		wranglerEnv.mu.Lock()
-		defer wranglerEnv.mu.Unlock()
-		if qs, ok := wranglerEnv.tablets[int(tablet.Alias.Uid)]; ok {
-			return qs, nil
-		}
-		// some tests don't require the query service. Earlier we were returning an error for such cases but the tablet picker
-		// now logs a warning and spams the logs. Hence we return a fake service instead
-		return newFakeTestWranglerTablet(), nil
-	})
 }
 
 //----------------------------------------------
 // testWranglerEnv
 
 func newWranglerTestEnv(sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
-	tabletconntest.SetProtocol("go.vt.wrangler.vdiff_env_test", "WranglerTest")
 	env := &testWranglerEnv{
 		workflow:   "wrWorkflow",
-		tablets:    make(map[int]*testWranglerTablet),
 		topoServ:   memorytopo.NewServer("zone1"),
 		cell:       "zone1",
 		tabletType: topodatapb.TabletType_REPLICA,
 		tmc:        newTestWranglerTMClient(),
 	}
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
+	env.tmc.tablets = make(map[int]*testWranglerTablet)
+
+	dialerName := fmt.Sprintf("WranglerTest-%d", rand.Intn(1000000000))
+	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
+		env.mu.Lock()
+		defer env.mu.Unlock()
+		if qs, ok := env.tmc.tablets[int(tablet.Alias.Uid)]; ok {
+			return qs, nil
+		}
+		// some tests don't require the query service. Earlier we were returning an error for such cases but the tablet picker
+		// now logs a warning and spams the logs. Hence we return a fake service instead
+		return newFakeTestWranglerTablet(), nil
+	})
+	tabletconntest.SetProtocol("go.vt.wrangler.wrangler_env_test", dialerName)
 
 	tabletID := 100
 	for _, shard := range sourceShards {
@@ -198,17 +194,16 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 		"wrWorkflow", "wrWorkflow2",
 	)
 	env.tmc.setVRResults(primary.tablet, "select distinct workflow from _vt.vreplication where db_name = 'vt_target2'", result)
-	wranglerEnv = env
 	return env
 }
 
 func (env *testWranglerEnv) close() {
 	env.mu.Lock()
 	defer env.mu.Unlock()
-	for _, t := range env.tablets {
+	for _, t := range env.tmc.tablets {
 		env.topoServ.DeleteTablet(context.Background(), t.tablet.Alias)
 	}
-	env.tablets = nil
+	env.tmc.tablets = nil
 }
 
 func newFakeTestWranglerTablet() *testWranglerTablet {
@@ -245,7 +240,7 @@ func (env *testWranglerEnv) addTablet(id int, keyspace, shard string, tabletType
 			"test": int32(id),
 		},
 	}
-	env.tablets[id] = newTestWranglerTablet(tablet)
+	env.tmc.tablets[id] = newTestWranglerTablet(tablet)
 	if err := env.wr.TopoServer().InitTablet(context.Background(), tablet, false /* allowPrimaryOverride */, true /* createShardAndKeyspace */, false /* allowUpdate */); err != nil {
 		panic(err)
 	}
@@ -258,8 +253,8 @@ func (env *testWranglerEnv) addTablet(id int, keyspace, shard string, tabletType
 			panic(err)
 		}
 	}
-	env.tablets[id].queryResults = make(map[string]*querypb.QueryResult)
-	return env.tablets[id]
+	env.tmc.tablets[id].queryResults = make(map[string]*querypb.QueryResult)
+	return env.tmc.tablets[id]
 }
 
 //----------------------------------------------
@@ -296,6 +291,7 @@ func (tvt *testWranglerTablet) StreamHealth(ctx context.Context, callback func(*
 
 type testWranglerTMClient struct {
 	tmclient.TabletManagerClient
+	tablets   map[int]*testWranglerTablet
 	schema    *tabletmanagerdatapb.SchemaDefinition
 	vrQueries map[int]map[string]*querypb.QueryResult
 	waitpos   map[int]string
@@ -334,7 +330,7 @@ func (tmc *testWranglerTMClient) VReplicationExec(ctx context.Context, tablet *t
 }
 
 func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
-	t := wranglerEnv.tablets[int(tablet.Alias.Uid)]
+	t := tmc.tablets[int(tablet.Alias.Uid)]
 	t.gotQueries = append(t.gotQueries, string(req.Query))
 	result, ok := t.queryResults[string(req.Query)]
 	if !ok {
