@@ -4544,19 +4544,29 @@ func (e *Executor) submitCallbackIfNonConflicting(
 		e.migrationMutex.Lock()
 		defer e.migrationMutex.Unlock()
 
-		pendingUUIDs, err := e.readPendingMigrationsUUIDs(ctx)
+		rs, err := e.execQuery(ctx, sqlSelectPendingMigrations)
 		if err != nil {
 			return err
 		}
+		rows := rs.Named().Rows
+
 		switch {
 		case onlineDDL.StrategySetting().IsSingleton():
 			// We will reject this migration if there's any pending migration
-			if len(pendingUUIDs) > 0 {
-				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [%s]", strings.Join(pendingUUIDs, ", "))
+			if len(rows) > 0 {
+				samplePendingUUID := rows[0]["migration_uuid"].ToString()
+				return vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "singleton migration rejected: found pending migrations [sample: %s]", samplePendingUUID)
 			}
 		case onlineDDL.StrategySetting().IsSingletonContext():
 			// We will reject this migration if there's any pending migration within a different context
-			for _, pendingUUID := range pendingUUIDs {
+			for _, row := range rows {
+				migrationContext := row["migration_context"].ToString()
+				if onlineDDL.MigrationContext == migrationContext {
+					// obviously no conflict here. We can skip the next checks, which are more expensive
+					// as they require reading each migration separately.
+					continue
+				}
+				pendingUUID := row["migration_uuid"].ToString()
 				pendingOnlineDDL, _, err := e.readMigration(ctx, pendingUUID)
 				if err != nil {
 					return vterrors.Wrapf(err, "validateSingleton() migration: %s", pendingUUID)

@@ -310,6 +310,7 @@ const (
 	`
 	sqlSelectPendingMigrations = `SELECT
 			migration_uuid,
+			migration_context,
 			keyspace,
 			mysql_table,
 			migration_status
