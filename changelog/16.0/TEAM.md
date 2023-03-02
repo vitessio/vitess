@@ -1,4 +1,4 @@
-# Release Team for v16
+## Release Team for v16
 
 - **Lead:** Rameez Sajwani ([rsajwani](https://github.com/rsajwani)) rameez@planetscale.com
 - **Shadow:** Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com

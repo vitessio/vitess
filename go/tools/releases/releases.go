@@ -38,7 +38,7 @@ const (
 	majorVersionTmpl = `## v{{ .Name }}
 
 {{- if .Team }}
-The dedicated team for this release can be found [here](.Team).{{ end }}
+The dedicated team for this release can be found [here]({{.Team}}).{{ end }}
 
 {{- range $r := .SubDirs }}
 * **[{{ $r.Name }}]({{ $r.Name }})**
@@ -65,45 +65,29 @@ func main() {
 		log.Fatal(err)
 	}
 
-	err = createRootReadMe(rootDir)
+	err = execReadMeTemplateWithDir(rootDir, rootFileTmpl)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	err = createMajorReleasesReadMe(rootDir.SubDirs)
-	if err != nil {
-		log.Fatal(err)
+	for _, subDir := range rootDir.SubDirs {
+		err := execReadMeTemplateWithDir(subDir, majorVersionTmpl)
+		if err != nil {
+			log.Fatal(err)
+		}
 	}
 }
 
-func createRootReadMe(rootDirs dir) error {
-	// Create the rootDir README
-	rootRM, err := os.OpenFile(path.Join(rootDir, "README.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+func execReadMeTemplateWithDir(d dir, tmpl string) error {
+	rootRM, err := os.OpenFile(path.Join(d.Path, "README.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 	if err != nil {
 		return err
 	}
 
-	// Render all the rootDir directories to the rootDir README
-	t := template.Must(template.New("root_readme").Parse(rootFileTmpl))
-	err = t.ExecuteTemplate(rootRM, "root_readme", rootDirs)
+	t := template.Must(template.New("root_readme").Parse(tmpl))
+	err = t.ExecuteTemplate(rootRM, "root_readme", d)
 	if err != nil {
 		return err
-	}
-	return nil
-}
-
-func createMajorReleasesReadMe(subDirs []dir) error {
-	for _, subDir := range subDirs {
-		majorVersionReadMeFile, err := os.OpenFile(path.Join(subDir.Path, "README.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
-		if err != nil {
-			return err
-		}
-
-		t := template.Must(template.New("major_version_readme").Parse(majorVersionTmpl))
-		err = t.ExecuteTemplate(majorVersionReadMeFile, "major_version_readme", subDir)
-		if err != nil {
-			return err
-		}
 	}
 	return nil
 }
