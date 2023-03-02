@@ -406,7 +406,7 @@ You will need administrator privileges on the vitess repository to be able to ma
     git checkout v12.0.0
     ```
 
-2. Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
+2. Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key. Note that this can print error messages that can be ignored on Mac.
 
     ```bash
     eval $(gpg-agent --daemon --no-grab --write-env-file $HOME/.gpg-agent-info)
@@ -425,7 +425,9 @@ You will need administrator privileges on the vitess repository to be able to ma
     > **Warning:** After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
 
     ```bash
+    cd ./java/
     mvn clean deploy -P release -DskipTests
     cd ..
     ```
+
 5. It will take some time for artifacts to appear on [maven directory](https://mvnrepository.com/artifact/io.vitess/vitess-client)
