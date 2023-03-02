@@ -79,11 +79,13 @@ type (
 	}
 )
 
-const (
-	releaseNotesPath       = `doc/releasenotes/`
-	releaseNotesPathGitHub = `https://github.com/vitessio/vitess/blob/main/` + releaseNotesPath
+var (
+	releaseNotesPath = `changelog/`
+)
 
-	markdownTemplate = `# Release of Vitess {{.Version}}
+const (
+	releaseNotesPathGitHub = `https://github.com/vitessio/vitess/blob/main/`
+	markdownTemplate       = `# Release of Vitess {{.Version}}
 
 {{- if or .Announcement .AddDetails }}
 {{ .Announcement }}
@@ -138,7 +140,7 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
 	var err error
 	// Generate the release notes
-	rn.PathToChangeLogFileOnGH = fmt.Sprintf(releaseNotesPathGitHub+"%s_changelog.md", rn.VersionUnderscore)
+	rn.PathToChangeLogFileOnGH = fmt.Sprintf(releaseNotesPathGitHub+releaseNotesPath+"%s_changelog.md", rn.VersionUnderscore)
 	if rnFile == nil {
 		rnFile, err = os.OpenFile(fmt.Sprintf(path.Join(releaseNotesPath, "%s_release_notes.md"), rn.VersionUnderscore), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
@@ -504,6 +506,16 @@ func main() {
 	versionMatch := rx.FindStringSubmatch(versionName)
 	if len(versionMatch) != 4 {
 		log.Fatal("The --version flag must be set using a valid format. Format: 'vX.X.X'.")
+	}
+
+	// Define the path to the release notes folder
+	majorVersion := versionMatch[1] + "." + versionMatch[2]
+	patchVersion := versionMatch[0]
+	releaseNotesPath = path.Join(releaseNotesPath, majorVersion, patchVersion)
+
+	err := os.MkdirAll(releaseNotesPath, os.ModePerm)
+	if err != nil {
+		log.Fatal(err)
 	}
 
 	releaseNotes := releaseNote{
