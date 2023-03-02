@@ -18,12 +18,13 @@ package tabletserver
 
 import (
 	"context"
+	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/shirou/gopsutil/v3/cpu"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
@@ -37,7 +38,7 @@ const (
 type systemHealthCollector struct {
 	config          *tabletenv.TabletConfig
 	cpuSampleWindow time.Duration
-	cpuUsage        sync2.AtomicFloat64
+	cpuUsagePercent atomic.Uint64
 	interval        time.Duration
 	mu              sync.Mutex
 	started         bool
@@ -94,10 +95,30 @@ func (s *systemHealthCollector) Close() {
 	s.started = false
 }
 
-// GetCPUUsage returns the average cpu usage for the system
-// running vttablet as a percent.
+// GetCPUUsage returns the average cpu usage percent for
+// the system running vttablet as a percent.
 func (s *systemHealthCollector) GetCPUUsage() float64 {
-	return s.cpuUsage.Get()
+	return math.Float64frombits(s.cpuUsagePercent.Load())
+}
+
+// collectCPUUsage collects the CPU usage percent of the system running vttablet.
+func (s *systemHealthCollector) collectCPUUsage() error {
+	ctx, cancel := context.WithTimeout(context.Background(), s.interval)
+	defer cancel()
+
+	// get avg cpu of all cpu cores. passing 'false' to .PercentWithContext
+	// causes a single average of all cores to be returned as a percentage.
+	cpuPercents, err := cpu.PercentWithContext(ctx, s.cpuSampleWindow, false)
+	if err == nil && len(cpuPercents) == 1 {
+		s.setCPUUsage(cpuPercents[0])
+	}
+	return err
+}
+
+// setCPUUsage sets the average cpu usage for the system running
+// vttablet as a percent.
+func (s *systemHealthCollector) setCPUUsage(usagePercent float64) {
+	s.cpuUsagePercent.Store(math.Float64bits(usagePercent))
 }
 
 // startCollection begins the collection of system health metrics.
@@ -117,18 +138,4 @@ func (s *systemHealthCollector) startCollection() {
 			}
 		}
 	}
-}
-
-// collectCPUUsage collects the CPU usage percent of the system running vttablet.
-func (s *systemHealthCollector) collectCPUUsage() error {
-	ctx, cancel := context.WithTimeout(context.Background(), s.interval)
-	defer cancel()
-
-	// get avg cpu of all cpu cores. passing 'false' to .PercentWithContext
-	// causes a single average of all cores to be returned as a percentage.
-	cpuPercents, err := cpu.PercentWithContext(ctx, s.cpuSampleWindow, false)
-	if err == nil && len(cpuPercents) > 0 {
-		s.cpuUsage.Set(cpuPercents[0])
-	}
-	return err
 }
