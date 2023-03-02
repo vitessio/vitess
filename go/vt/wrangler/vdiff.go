@@ -398,7 +398,7 @@ func (df *vdiff) buildVDiffPlan(ctx context.Context, filter *binlogdatapb.Filter
 			continue
 		}
 		query := rule.Filter
-		if rule.Filter == "" || key.IsKeyRange(rule.Filter) {
+		if rule.Filter == "" || key.IsValidKeyRange(rule.Filter) {
 			buf := sqlparser.NewTrackedBuffer(nil)
 			buf.Myprintf("select * from %v", sqlparser.NewIdentifierCS(table.Name))
 			query = buf.String()

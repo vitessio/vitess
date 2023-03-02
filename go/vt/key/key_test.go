@@ -693,30 +693,366 @@ func TestKeyRangeComparisons(t *testing.T) {
 		args  args
 		wants wants
 	}{
-		{"a and b are both full range", args{stringToKeyRange("-"), stringToKeyRange("-")}, wants{0, true, 0, true, 0, true}},
-		{"a is equal to b", args{stringToKeyRange("10-30"), stringToKeyRange("10-30")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, end only) but equal to b (2 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-80")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, end only) but equal to b (4 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-8000")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, end only) but equal to b (6 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-800000")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, end only) but equal to b (8 digits, end only)", args{stringToKeyRange("-80"), stringToKeyRange("-80000000")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, start only) but equal to b (2 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("80-")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, start only) but equal to b (4 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("8000-")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, start only) but equal to b (6 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("800000-")}, wants{0, true, 0, true, 0, true}},
-		{"a (2 digit, start only) but equal to b (8 digits, start only)", args{stringToKeyRange("80-"), stringToKeyRange("80000000-")}, wants{0, true, 0, true, 0, true}},
-		{"a (4 digits) but equal to b (2 digits)", args{stringToKeyRange("1000-3000"), stringToKeyRange("10-30")}, wants{0, true, 0, true, 0, true}},
-		{"a (8 digits) but equal to b (4 digits)", args{stringToKeyRange("10000000-30000000"), stringToKeyRange("1000-3000")}, wants{0, true, 0, true, 0, true}},
-		{"b (4 digits) but equal to a (2 digits)", args{stringToKeyRange("10-30"), stringToKeyRange("1000-3000")}, wants{0, true, 0, true, 0, true}},
-		{"b (8 digits) but equal to a (4 digits)", args{stringToKeyRange("10-30"), stringToKeyRange("10000000-30000000")}, wants{0, true, 0, true, 0, true}},
-		{"a is full range, b is not", args{stringToKeyRange("-"), stringToKeyRange("20-30")}, wants{-1, false, 1, false, -1, false}},
-		{"b is full range, a is not", args{stringToKeyRange("10-30"), stringToKeyRange("-")}, wants{1, false, -1, false, 1, false}},
-		{"a start is greater than b start", args{stringToKeyRange("10-30"), stringToKeyRange("20-30")}, wants{-1, false, 0, true, -1, false}},
-		{"b start is greater than a start", args{stringToKeyRange("20-30"), stringToKeyRange("10-30")}, wants{1, false, 0, true, 1, false}},
-		{"a start is empty, b start is not", args{stringToKeyRange("-30"), stringToKeyRange("10-30")}, wants{-1, false, 0, true, -1, false}},
-		{"b start is empty, a start is not", args{stringToKeyRange("10-30"), stringToKeyRange("-30")}, wants{1, false, 0, true, 1, false}},
-		{"a end is greater than b end", args{stringToKeyRange("10-30"), stringToKeyRange("10-20")}, wants{0, true, 1, false, 1, false}},
-		{"b end is greater than a end", args{stringToKeyRange("10-20"), stringToKeyRange("10-30")}, wants{0, true, -1, false, -1, false}},
-		{"a end is empty, b end is not", args{stringToKeyRange("10-"), stringToKeyRange("10-30")}, wants{0, true, 1, false, 1, false}},
-		{"b end is empty, a end is not", args{stringToKeyRange("10-30"), stringToKeyRange("10-")}, wants{0, true, -1, false, -1, false}},
+		{
+			name: "a and b are both full range",
+			args: args{
+				a: stringToKeyRange("-"),
+				b: stringToKeyRange("-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a is equal to b",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (2 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-80"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (4 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-8000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (6 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-800000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, end only) but equal to b (8 digits, end only)",
+			args: args{
+				a: stringToKeyRange("-80"),
+				b: stringToKeyRange("-80000000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (2 digits, start only)",
+			args: args{
+				stringToKeyRange("80-"),
+				stringToKeyRange("80-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (4 digits, start only)",
+			args: args{
+				a: stringToKeyRange("80-"),
+				b: stringToKeyRange("8000-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (6 digits, start only)",
+			args: args{
+				a: stringToKeyRange("80-"),
+				b: stringToKeyRange("800000-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (2 digit, start only) but equal to b (8 digits, start only)",
+			args: args{
+				a: stringToKeyRange("80-"),
+				b: stringToKeyRange("80000000-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (4 digits) but equal to b (2 digits)",
+			args: args{
+				a: stringToKeyRange("1000-3000"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a (8 digits) but equal to b (4 digits)",
+			args: args{
+				a: stringToKeyRange("10000000-30000000"),
+				b: stringToKeyRange("1000-3000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "b (4 digits) but equal to a (2 digits)",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("1000-3000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "b (8 digits) but equal to a (4 digits)",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10000000-30000000"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      0,
+				wantEqual:        true,
+			},
+		},
+		{
+			name: "a is full range, b is not",
+			args: args{
+				a: stringToKeyRange("-"),
+				b: stringToKeyRange("20-30"),
+			},
+			wants: wants{
+				wantStartCompare: -1,
+				wantStartEqual:   false,
+				wantEndCompare:   1,
+				wantEndEqual:     false,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b is full range, a is not",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("-"),
+			},
+			wants: wants{
+				wantStartCompare: 1,
+				wantStartEqual:   false,
+				wantEndCompare:   -1,
+				wantEndEqual:     false,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a start is greater than b start",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("20-30"),
+			},
+			wants: wants{
+				wantStartCompare: -1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b start is greater than a start",
+			args: args{
+				a: stringToKeyRange("20-30"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a start is empty, b start is not",
+			args: args{
+				a: stringToKeyRange("-30"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: -1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b start is empty, a start is not",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("-30"),
+			},
+			wants: wants{
+				wantStartCompare: 1,
+				wantStartEqual:   false,
+				wantEndCompare:   0,
+				wantEndEqual:     true,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a end is greater than b end",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10-20"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   1,
+				wantEndEqual:     false,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b end is greater than a end",
+			args: args{
+				a: stringToKeyRange("10-20"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   -1,
+				wantEndEqual:     false,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "a end is empty, b end is not",
+			args: args{
+				a: stringToKeyRange("10-"),
+				b: stringToKeyRange("10-30"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   1,
+				wantEndEqual:     false,
+				wantCompare:      1,
+				wantEqual:        false,
+			},
+		},
+		{
+			name: "b end is empty, a end is not",
+			args: args{
+				a: stringToKeyRange("10-30"),
+				b: stringToKeyRange("10-"),
+			},
+			wants: wants{
+				wantStartCompare: 0,
+				wantStartEqual:   true,
+				wantEndCompare:   -1,
+				wantEndEqual:     false,
+				wantCompare:      -1,
+				wantEqual:        false,
+			},
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -962,44 +1298,36 @@ func BenchmarkKeyRangesOverlap(b *testing.B) {
 	}
 }
 
-func TestIsKeyRange(t *testing.T) {
-	testcases := []struct {
-		in  string
-		out bool
-	}{{
-		in:  "-",
-		out: true,
-	}, {
-		in:  "-80",
-		out: true,
-	}, {
-		in:  "40-80",
-		out: true,
-	}, {
-		in:  "80-",
-		out: true,
-	}, {
-		in:  "a0-",
-		out: true,
-	}, {
-		in:  "-A0",
-		out: true,
-	}, {
-		in:  "",
-		out: false,
-	}, {
-		in:  "x-80",
-		out: false,
-	}, {
-		in:  "-80x",
-		out: false,
-	}, {
-		in:  "select",
-		out: false,
-	}}
+func TestIsValidKeyRange(t *testing.T) {
+	tests := []struct {
+		arg  string
+		want bool
+	}{
+		// normal cases
+		{"-", true},
+		{"00-", true},
+		{"-80", true},
+		{"40-80", true},
+		{"80-", true},
+		{"a0-", true},
+		{"-A0", true},
 
-	for _, tcase := range testcases {
-		assert.Equal(t, IsKeyRange(tcase.in), tcase.out, tcase.in)
+		// special cases
+		{"0", true}, // equal to "-"
+
+		// invalid cases
+		{"", false},       // empty is not allowed
+		{"11", false},     // no hyphen
+		{"-1", false},     // odd number of digits
+		{"-111", false},   // odd number of digits
+		{"1-2", false},    // odd number of digits
+		{"x-80", false},   // invalid character
+		{"-80x", false},   // invalid character
+		{"select", false}, // nonsense
+		{"+", false},      // nonsense
+	}
+	for _, tt := range tests {
+		assert.Equalf(t, tt.want, IsValidKeyRange(tt.arg), "IsValidKeyRange(%v)", tt.arg)
 	}
 }
 

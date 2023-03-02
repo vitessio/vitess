@@ -30,8 +30,7 @@ import (
 )
 
 var (
-	ZeroKey         = []byte{0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	KeyRangePattern = regexp.MustCompile(`^[0-9a-fA-F]*-[0-9a-fA-F]*$`)
+	KeyRangePattern = regexp.MustCompile(`^(0|([0-9a-fA-F]{2})*-([0-9a-fA-F]{2})*)$`)
 )
 
 //
@@ -84,7 +83,7 @@ func Equal(a, b []byte) bool {
 
 // Empty returns true if id is an empty keyspace ID.
 func Empty(id []byte) bool {
-	return len(id) == 0
+	return len(Normalize(id)) == 0
 }
 
 //
@@ -114,7 +113,7 @@ func KeyRangeContains(keyRange *topodatapb.KeyRange, id []byte) bool {
 	return (Empty(keyRange.Start) || Compare(id, keyRange.Start) >= 0) && (Empty(keyRange.End) || Compare(id, keyRange.End) < 0)
 }
 
-// ParseKeyRangeParts parses a start and end hex values and build a proto KeyRange
+// ParseKeyRangeParts parses a Start and End as hex encoded strings and builds a proto KeyRange.
 func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
 	startKey, err := hex.DecodeString(start)
 	if err != nil {
@@ -127,7 +126,7 @@ func ParseKeyRangeParts(start, end string) (*topodatapb.KeyRange, error) {
 	return &topodatapb.KeyRange{Start: startKey, End: endKey}, nil
 }
 
-// KeyRangeString formats a topodatapb.KeyRange into a string.
+// KeyRangeString formats a topodatapb.KeyRange into a hex encoded string.
 func KeyRangeString(keyRange *topodatapb.KeyRange) string {
 	if KeyRangeIsComplete(keyRange) {
 		return "-"
@@ -135,7 +134,7 @@ func KeyRangeString(keyRange *topodatapb.KeyRange) string {
 	return hex.EncodeToString(keyRange.Start) + "-" + hex.EncodeToString(keyRange.End)
 }
 
-// KeyRangeStartCompare compares the Start of two KeyRange values using semantics unique to start values where an
+// KeyRangeStartCompare compares the Start of two KeyRange values using semantics unique to Start values where an
 // empty Start means the *minimum* value; returns -1 if a<b, 1 if a>b, 0 if equal.
 func KeyRangeStartCompare(a, b *topodatapb.KeyRange) int {
 	aIsMinimum := a == nil || Empty(a.Start)
@@ -152,12 +151,12 @@ func KeyRangeStartCompare(a, b *topodatapb.KeyRange) int {
 	return Compare(a.Start, b.Start)
 }
 
-// KeyRangeStartEqual returns true if both KeyRange values have the same start.
+// KeyRangeStartEqual returns true if both KeyRange values have the same Start.
 func KeyRangeStartEqual(a, b *topodatapb.KeyRange) bool {
 	return KeyRangeStartCompare(a, b) == 0
 }
 
-// KeyRangeEndCompare compares the End of two KeyRange values using semantics unique to end values where an
+// KeyRangeEndCompare compares the End of two KeyRange values using semantics unique to End values where an
 // empty End means the *maximum* value; returns -1 if a<b, 1 if a>b, 0 if equal.
 func KeyRangeEndCompare(a, b *topodatapb.KeyRange) int {
 	aIsMaximum := a == nil || Empty(a.End)
@@ -174,7 +173,7 @@ func KeyRangeEndCompare(a, b *topodatapb.KeyRange) int {
 	return Compare(a.End, b.End)
 }
 
-// KeyRangeEndEqual returns true if both KeyRange values have the same end.
+// KeyRangeEndEqual returns true if both KeyRange values have the same End.
 func KeyRangeEndEqual(a, b *topodatapb.KeyRange) bool {
 	return KeyRangeEndCompare(a, b) == 0
 }
@@ -216,8 +215,8 @@ func KeyRangeIsPartial(keyRange *topodatapb.KeyRange) bool {
 	return !KeyRangeIsComplete(keyRange)
 }
 
-// KeyRangeContiguous returns true if the end of the KeyRange a exactly matches the start of the KeyRange b,
-// meaning that they are contiguous.
+// KeyRangeContiguous returns true if the End of KeyRange a is equivalent to the Start of the KeyRange b,
+// which means that they are contiguous.
 func KeyRangeContiguous(a, b *topodatapb.KeyRange) bool {
 	if KeyRangeIsComplete(a) || KeyRangeIsComplete(b) {
 		return false // no two KeyRange values can be contiguous if either is the complete range
@@ -235,13 +234,15 @@ func KeyRangeContiguous(a, b *topodatapb.KeyRange) bool {
 // KeyRangesIntersect returns true if some part of KeyRange a and b overlap, meaning that some keyspace ID values
 // exist in both a and b.
 func KeyRangesIntersect(a, b *topodatapb.KeyRange) bool {
-	if a == nil || b == nil {
-		return true
+	if KeyRangeIsComplete(a) || KeyRangeIsComplete(b) {
+		return true // if either KeyRange is complete, there must be an intersection
 	}
 
 	return (Empty(a.End) || Less(b.Start, a.End)) && (Empty(b.End) || Less(a.Start, b.End))
 }
 
+// keyRangeStartMax returns the maximum value for Start for KeyRange a and b; due to the treatment of
+// an empty key as the "minimum" value, this is not exactly
 func keyRangeStartMax(a, b *topodatapb.KeyRange) []byte {
 	if Empty(a.Start) {
 		return b.Start
@@ -349,8 +350,8 @@ func ParseShardingSpec(spec string) ([]*topodatapb.KeyRange, error) {
 	return ranges, nil
 }
 
-// IsKeyRange returns true if the string represents a keyrange.
-func IsKeyRange(keyRangeString string) bool {
+// IsValidKeyRange returns true if the string represents a valid key range.
+func IsValidKeyRange(keyRangeString string) bool {
 	return KeyRangePattern.MatchString(keyRangeString)
 }
 
