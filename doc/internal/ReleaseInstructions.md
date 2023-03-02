@@ -178,13 +178,21 @@ That includes:
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
   > - Documentation for the pre-release of the Vitess Operator is available [here](https://github.com/planetscale/vitess-operator/blob/main/docs/release-process.md#prepare-for-release).
+- **Update the release notes on `main`.**
+  > - One Pull Request against `main` must be created, it will contain the new release notes that we are adding in the Release Pull Request.
+  > - We open this Pull Request now to avoid waiting on the CI during release day.
+  > - All future changes to the release notes during the code freeze will need to be ported to both PRs: the one on `main` and the Release Pull Request.
 
 ### Release
 
 On the release day, there are several things to do:
 
+- **Merge the Release Pull Request.**
+  > - During the code freeze, we created a Release Pull Request. It must be merged.
 - **Tag the Vitess release.**
   > - A guide on how to tag a version is available in the [How To Release Vitess](#how-to-release-vitess) section.
+- **Update the release notes on `main`.**
+  > - During the code freeze, we created a Pull Request against `main` to update the release notes. It must be merged.
 - **Create the corresponding Vitess operator release.**
   > - Applies only to versions greater or equal to `v14.0.0`.
   > - If we are doing an RC release, then we will need to create the Vitess Operator RC too. If we are doing a GA release, we're also doing a GA release in the Operator.
@@ -206,8 +214,6 @@ On the release day, there are several things to do:
   > - After a while, those elements will finish their execution and their status will be green.
   > - This step is even more important for GA releases as we often include a link to _arewefastyet_ in the blog post.
   > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
-- **Update the release notes on `main`.**
-  > - One Pull Request against `main` must be created, it will contain the new release notes. 
 - **Go back to dev mode on the release branch.**
   > - The version constants across the codebase must be updated to `SNAPSHOT`. 
 - **Build k8s Docker images and publish them**
