@@ -379,7 +379,6 @@ func (vre *Engine) exec(query string, runAsAdmin bool) (*sqltypes.Result, error)
 	// Change the database to ensure that these events don't get
 	// replicated by another vreplication. This can happen when
 	// we reverse replication.
-	//if _, err := dbClient.ExecuteFetch("use _vt", 1); err != nil {
 	if _, err := dbClient.ExecuteFetch(fmt.Sprintf("use %s", sidecardb.GetIdentifier()), 1); err != nil {
 		return nil, err
 	}

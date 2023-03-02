@@ -144,7 +144,9 @@ func TestMiscSidecarDB(t *testing.T) {
 		"int64"),
 		GetName(),
 	)
-	db.AddQuery(fmt.Sprintf(sidecarDBExistsQuery, GetIdentifier()), result)
+	dbeq, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	require.NoError(t, err)
+	db.AddQuery(dbeq, result)
 	db.AddQuery(fmt.Sprintf(createSidecarDBQuery, GetIdentifier()), &sqltypes.Result{})
 	AddSchemaInitQueries(db, false)
 

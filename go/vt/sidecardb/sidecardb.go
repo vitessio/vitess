@@ -47,7 +47,7 @@ import (
 const (
 	DefaultName          = "_vt"
 	createSidecarDBQuery = "create database if not exists %s"
-	sidecarDBExistsQuery = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = '%s'"
+	sidecarDBExistsQuery = "select 'true' as 'dbexists' from information_schema.SCHEMATA where SCHEMA_NAME = %a"
 	showCreateTableQuery = "show create table %s.%s"
 
 	maxDDLErrorHistoryLength = 100
@@ -129,7 +129,7 @@ func validateSchemaDefinition(name, schema string) (string, error) {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "expected CREATE TABLE. Got %v", sqlparser.CanonicalString(stmt))
 	}
 	tableName := createTable.Table.Name.String()
-	// The database qualifier should be set via the flag.
+	// The database qualifier should be configured externally.
 	qualifier := createTable.Table.Qualifier.String()
 	if qualifier != "" {
 		return "", vterrors.Errorf(vtrpcpb.Code_INTERNAL, "database qualifier of %s specified for the %s table when there should not be one", qualifier, name)
@@ -325,7 +325,11 @@ func (si *schemaInit) setPermissiveSQLMode() (func(), error) {
 }
 
 func (si *schemaInit) doesSidecarDBExist() (bool, error) {
-	rs, err := si.exec(si.ctx, fmt.Sprintf(sidecarDBExistsQuery, GetName()), 2, false)
+	query, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	if err != nil {
+		return false, err
+	}
+	rs, err := si.exec(si.ctx, query, 2, false)
 	if err != nil {
 		log.Error(err)
 		return false, err
@@ -339,8 +343,8 @@ func (si *schemaInit) doesSidecarDBExist() (bool, error) {
 		log.Infof("doesSidecarDBExist: found %s", GetName())
 		return true, nil
 	default:
-		log.Errorf("found too many rows for sidecarDB %s: %d", GetName(), len(rs.Rows))
-		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "found too many rows for sidecarDB %s: %d", GetName(), len(rs.Rows))
+		// This should never happen.
+		return false, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid results for SidecarDB query %q as it produced %d rows", query, len(rs.Rows))
 	}
 }
 
@@ -484,7 +488,6 @@ var (
 	sidecarDBInitQueries = []string{
 		"use %s",
 		createSidecarDBQuery,
-		sidecarDBExistsQuery,
 	}
 	// Query patterns to handle in mocks.
 	sidecarDBInitQueryPatterns = []string{
@@ -499,13 +502,14 @@ var (
 func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	once.Do(loadSchemaDefinitions)
 	result := &sqltypes.Result{}
-	db.AddQuery(fmt.Sprintf("use %s", GetIdentifier()), result)
 	for _, q := range sidecarDBInitQueryPatterns {
 		db.AddQueryPattern(q, result)
 	}
 	for _, q := range sidecarDBInitQueries {
 		db.AddQuery(fmt.Sprintf(q, GetIdentifier()), result)
 	}
+	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	db.AddQuery(sdbe, result)
 	for _, table := range sidecarTables {
 		result = &sqltypes.Result{}
 		if populateTables {
@@ -537,6 +541,10 @@ func MatchesInitQuery(query string) bool {
 		if strings.EqualFold(fmt.Sprintf(q, GetIdentifier()), query) {
 			return true
 		}
+	}
+	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	if strings.EqualFold(sdbe, query) {
+		return true
 	}
 	for _, q := range sidecarDBInitQueryPatterns {
 		q = strings.ToLower(q)
