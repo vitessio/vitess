@@ -2,6 +2,8 @@
 
 ### Table of Contents
 
+- **[Known Issues](#known-issues)**
+  - [MySQL & Xtrabackup known issue](#mysql-xtrabackup-ddl) 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
     - [VTGate Advertised MySQL Version](#advertised-mysql-version)
@@ -49,6 +51,53 @@
   - **[Backup compression benchmarks](#backup-comp-benchmarks)**
 - **[Refactor](#refactor)**
   - **[VTTablet sidecar schema maintenance refactor](#vttablet-sidecar-schema)**
+
+## <a id="known-issues"/>Known Issues
+
+### <a id="mysql-xtrabackup-ddl"/>MySQL & Xtrabackup known issue
+
+There is a known issue with MySQL's INSTANT DDL combined with Percona XtraBackup, that affects users of Vitess 16.0.
+The problem is described in https://docs.percona.com/percona-xtrabackup/8.0/em/instant.html, and the immediate impact is you may not be able to backup your database using XtraBackup under certain conditions.
+
+As of MySQL 8.0.12, the default `ALGORITHM` for InnoDB's `ALTER TABLE` is `INSTANT`. In `8.0.12` only a small number of operations were eligible for `INSTANT`, but MySQL `8.0.29` added support for more common cases.
+Unfortunately, the changes in `8.0.29` affect XtraBackup as follows: if you `ALTER TABLE` in MySQL `8.0.29`, and that `ALTER` is eligible for `INSTANT` DDL (e.g. add new table column), then as of that moment, XtraBackup is unable to backup that table, hence your entire database.
+
+It is important to note that even if you then upgrade your MySQL server to, e.g. `8.0.32`, the table still cannot be backed up.
+
+Versions where XtraBackup is unable to backup such tables: MySQL `8.0.29` - `8.0.31`. This does not apply to Percona Server flavor.
+
+The issue is resolved with Percona XtraBackup `8.0.32` combined with MySQL `8.0.32`.
+
+You might be affected if:
+
+- You're using MySQL `8.0.29` - `8.0.31` and are using XtraBackup to backup your database
+- and, you have issued an `ALTER TABLE`, either directly, or using Online DDL in vitess `v16.0` and below
+
+A futures Vitess patch release `v16.0.1` will address the issue via Online DDL migrations.
+
+#### Mitigations
+
+- Use Percona XtraBackup `8.0.32` combined with MySQL `8.0.32`. To go with this option, you can use the docker image `vitess/lite:v16.0.0-mysql-8.0.32`.
+- or, Use a Percona Server flavor
+- or, always ensure to add `ALGORITHM=INPLACE` or `ALGORITHM=COPY` to your `ALTER TABLE` statements
+
+#### Workarounds
+
+If you have already been affected, these are the options to be able to backup your database:
+
+- Use `builtin` backups, see https://vitess.io/docs/15.0/user-guides/operating-vitess/backup-and-restore/creating-a-backup/. `builting` backups are not based on XtraBackup.
+- Upgrade to MySQL `8.0.32` or above and to Xtrabackup `8.0.32`, or switch to Percona Server. To go with this option, you can use the docker image `vitess/lite:v16.0.0-mysql-8.0.32`. Then rebuild the table directly via:
+  - `OPTIMIZE TABLE your_table`
+  - or, `ALTER TABLE your_table ENGINE=INNOB`
+- Upgrade to Vitess patch release `v16.0.1`, upgrade to MySQL `8.0.32` or above and to Xtrabackup `8.0.32`, or switch to Percona Server, and rebuild the table via Online DDL:
+```shell
+$ vtctldclient ApplySchema --skip_preflight --ddl_strategy "vitess" --sql "ALTER TABLE your_table ENGINE=InnoDB" your_keyspace
+```
+or
+```sql
+> SET @@ddl_strategy='vitess';
+> ALTER TABLE your_table ENGINE=InnoDB;
+```
 
 ## <a id="major-changes"/>Major Changes
 
