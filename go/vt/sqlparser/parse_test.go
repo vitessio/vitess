@@ -1239,6 +1239,12 @@ var (
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
 	}, {
+		input: "alter table `By` add column foo int, algorithm = copy",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = inplace",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = INPLACE",
+	}, {
 		input: "alter table `By` add column foo int, algorithm = instant",
 	}, {
 		input: "alter table a rename b",
