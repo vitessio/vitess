@@ -319,7 +319,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SUBSTR SUBSTRING
 %token <bytes> TRIM LEADING TRAILING BOTH
 %token <bytes> GROUP_CONCAT SEPARATOR
-%token <bytes> TIMESTAMPADD TIMESTAMPDIFF
+%token <bytes> TIMESTAMPADD TIMESTAMPDIFF EXTRACT
 
 // Window functions
 %token <bytes> OVER WINDOW GROUPING GROUPS
@@ -6425,6 +6425,10 @@ function_call_nonkeyword:
   {
     $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:string($3), Expr1:$5, Expr2:$7}
   }
+| EXTRACT openb time_unit FROM value_expression closeb
+  {
+    $$ = &ExtractFuncExpr{Name: string($1), Unit: string($3), Expr: $5}
+  }
 
 // Optional parens for certain keyword functions that don't require them.
 func_parens_opt:
@@ -8350,6 +8354,7 @@ non_reserved_keyword2:
 | COMMENT_KEYWORD
 | EVENT
 | EXECUTE
+| EXTRACT
 | FAILED_LOGIN_ATTEMPTS
 | FILE
 | FIRST

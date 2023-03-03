@@ -2835,6 +2835,9 @@ var (
 			input:  "DROP TABLE `dual`",
 			output: "drop table `dual`",
 		},
+		{
+			input: "select EXTRACT(DAY from '2020-10-1')",
+		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
 	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.

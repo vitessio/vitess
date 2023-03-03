@@ -4265,6 +4265,7 @@ func (*IntervalExpr) iExpr()      {}
 func (*CollateExpr) iExpr()       {}
 func (*FuncExpr) iExpr()          {}
 func (*TimestampFuncExpr) iExpr() {}
+func (*ExtractFuncExpr) iExpr() {}
 func (*CurTimeFuncExpr) iExpr()   {}
 func (*CaseExpr) iExpr()          {}
 func (*ValuesFuncExpr) iExpr()    {}
@@ -5038,6 +5039,35 @@ func (node *IntervalExpr) walkSubtree(visit Visit) error {
 
 func (node *IntervalExpr) replace(from, to Expr) bool {
 	return replaceExprs(from, to, &node.Expr)
+}
+
+// ExtractFuncExpr represents the function and arguments for EXTRACT(<time_unit> from <expr>) functions.
+type ExtractFuncExpr struct {
+	Name  string
+	Unit  string
+	Expr Expr
+}
+
+// Format formats the node.
+func (node *ExtractFuncExpr) Format(buf *TrackedBuffer) {
+	buf.Myprintf("%s(%s from %v)", node.Name, node.Unit, node.Expr)
+}
+
+func (node *ExtractFuncExpr) walkSubtree(visit Visit) error {
+	if node == nil {
+		return nil
+	}
+	return Walk(
+		visit,
+		node.Expr,
+	)
+}
+
+func (node *ExtractFuncExpr) replace(from, to Expr) bool {
+	if replaceExprs(from, to, &node.Expr) {
+		return true
+	}
+	return false
 }
 
 // TimestampFuncExpr represents the function and arguments for TIMESTAMP{ADD,DIFF} functions.
