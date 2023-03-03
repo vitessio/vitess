@@ -22,6 +22,9 @@ limitations under the License.
 package log
 
 import (
+	"strconv"
+	"sync/atomic"
+
 	"github.com/golang/glog"
 	"github.com/spf13/pflag"
 )
@@ -78,5 +81,32 @@ var (
 // calls this function, or call this function directly before parsing
 // command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
-	fs.Uint64Var(&glog.MaxSize, "log_rotate_max_size", glog.MaxSize, "size in bytes at which logs are rotated (glog.MaxSize)")
+	flagVal := logRotateMaxSize{
+		val: "1887436800", // glog.MaxSize value (which is not concurrency safe)
+	}
+	fs.Var(&flagVal, "log_rotate_max_size", "size in bytes at which logs are rotated (glog.MaxSize)")
+}
+
+// logRotateMaxSize implements pflag.Value and is used to
+// try and provide thread-safe access to glog.MaxSize.
+type logRotateMaxSize struct {
+	val string
+}
+
+func (lrms *logRotateMaxSize) Set(s string) error {
+	maxSize, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return err
+	}
+	atomic.StoreUint64(&glog.MaxSize, maxSize)
+	lrms.val = s
+	return nil
+}
+
+func (lrms *logRotateMaxSize) String() string {
+	return lrms.val
+}
+
+func (lrms *logRotateMaxSize) Type() string {
+	return "uint64"
 }
