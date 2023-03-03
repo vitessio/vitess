@@ -17,14 +17,13 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/topoproto"
-
-	"context"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
@@ -564,7 +563,8 @@ func TestPermissions(t *testing.T) {
 	}
 	replica.FakeMysqlDaemon.SetReplicationSourceInputs = append(replica.FakeMysqlDaemon.SetReplicationSourceInputs, topoproto.MysqlAddr(primary.Tablet))
 	replica.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 3 statements come from tablet startup
+		// These 4 statements come from tablet startup
+		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
