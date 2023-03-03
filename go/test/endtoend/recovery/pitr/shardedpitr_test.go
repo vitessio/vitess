@@ -19,7 +19,9 @@ package pitr
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
+	"path"
 	"testing"
 	"time"
 
@@ -29,6 +31,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -51,20 +54,22 @@ var (
 	shard1Replica1 *cluster.Vttablet
 	shard1Replica2 *cluster.Vttablet
 
-	cell           = "zone1"
-	hostname       = "localhost"
-	binlogHost     = "127.0.0.1"
-	keyspaceName   = "ks"
-	restoreKS1Name = "restoreks1"
-	restoreKS2Name = "restoreks2"
-	restoreKS3Name = "restoreks3"
-	shardName      = "0"
-	shard0Name     = "-80"
-	shard1Name     = "80-"
-	dbName         = "vt_ks"
-	mysqlUserName  = "vt_dba"
-	mysqlPassword  = "password"
-	vSchema        = `{
+	cell                   = "zone1"
+	hostname               = "localhost"
+	binlogHost             = "127.0.0.1"
+	keyspaceName           = "ks"
+	restoreKS1Name         = "restoreks1"
+	restoreKS2Name         = "restoreks2"
+	restoreKS3Name         = "restoreks3"
+	shardName              = "0"
+	shard0Name             = "-80"
+	shard1Name             = "80-"
+	dbName                 = "vt_ks"
+	mysqlUserName          = "vt_dba"
+	mysqlPassword          = "VtDbaPass"
+	dbCredentialFile       = ""
+	initDBFileWithPassword = ""
+	vSchema                = `{
 		"sharded": true,
 		"vindexes": {
 			"hash_index": {
@@ -408,6 +413,10 @@ func initializeCluster(t *testing.T) {
 	shard0.Vttablets = []*cluster.Vttablet{shard0Primary, shard0Replica1, shard0Replica2}
 	shard1.Vttablets = []*cluster.Vttablet{shard1Primary, shard1Replica1, shard1Replica2}
 
+	dbCredentialFile = cluster.WriteDbCredentialToTmp(clusterInstance.TmpDirectory)
+	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+	commonTabletArg = append(commonTabletArg, "--db-credentials-file", dbCredentialFile)
+
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, commonTabletArg...)
 	clusterInstance.VtTabletExtraArgs = append(clusterInstance.VtTabletExtraArgs, "--restore_from_backup")
 
@@ -416,10 +425,27 @@ func initializeCluster(t *testing.T) {
 	vtctldClientProcess := cluster.VtctldClientProcessInstance("localhost", clusterInstance.VtctldProcess.GrpcPort, clusterInstance.TmpDirectory)
 	out, err := vtctldClientProcess.ExecuteCommandWithOutput("SetKeyspaceDurabilityPolicy", keyspaceName, "--durability-policy=semi_sync")
 	require.NoError(t, err, out)
+
+	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
+	sql := string(initDb)
+	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
+	if err != nil {
+		require.NoError(t, err, "expected to load init_db file")
+	}
+	initDBFileWithPassword = path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
+	err = os.WriteFile(initDBFileWithPassword, []byte(sql), 0666)
+	if err != nil {
+		require.NoError(t, err, "expected to load init_db file")
+	}
+
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
+			tablet.MysqlctlProcess.InitDBFile = initDBFileWithPassword
+			tablet.VttabletProcess.DbPassword = mysqlPassword
+			tablet.MysqlctlProcess.ExtraArgs = extraArgs
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			require.NoError(t, err)
 			mysqlCtlProcessList = append(mysqlCtlProcessList, proc)
@@ -432,21 +458,8 @@ func initializeCluster(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	queryCmds := []string{
-		fmt.Sprintf("CREATE USER '%s'@'%%' IDENTIFIED BY '%s';", mysqlUserName, mysqlPassword),
-		fmt.Sprintf("GRANT ALL ON *.* TO '%s'@'%%';", mysqlUserName),
-		fmt.Sprintf("GRANT GRANT OPTION ON *.* TO '%s'@'%%';", mysqlUserName),
-		fmt.Sprintf("create database %s;", "vt_ks"),
-		"FLUSH PRIVILEGES;",
-	}
-
 	for _, shard := range clusterInstance.Keyspaces[0].Shards {
 		for _, tablet := range shard.Vttablets {
-			for _, query := range queryCmds {
-				_, err = tablet.VttabletProcess.QueryTablet(query, keyspace.Name, false)
-				require.NoError(t, err)
-			}
-
 			err = tablet.VttabletProcess.Setup()
 			require.NoError(t, err)
 		}
@@ -550,8 +563,14 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		"--lock_tables_timeout", "5s",
 		"--watch_replication_stream",
 		"--serving_state_grace_period", "1s",
+		"--db-credentials-file", dbCredentialFile,
 	}
 	tablet.VttabletProcess.ServingStatus = ""
+
+	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+	tablet.MysqlctlProcess.InitDBFile = initDBFileWithPassword
+	tablet.VttabletProcess.DbPassword = mysqlPassword
+	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
 	err = tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
