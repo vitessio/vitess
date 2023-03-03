@@ -523,6 +523,10 @@ func testTabletRecovery(t *testing.T, binlogServer *binLogServer, lookupTimeout,
 
 func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *binLogServer, lookupTimeout, restoreKeyspaceName, shardName string) {
 	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
+	tablet.MysqlctlProcess.InitDBFile = initDBFileWithPassword
+	tablet.VttabletProcess.DbPassword = mysqlPassword
+	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 	err := tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
@@ -566,11 +570,6 @@ func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *
 		"--db-credentials-file", dbCredentialFile,
 	}
 	tablet.VttabletProcess.ServingStatus = ""
-
-	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
-	tablet.MysqlctlProcess.InitDBFile = initDBFileWithPassword
-	tablet.VttabletProcess.DbPassword = mysqlPassword
-	tablet.MysqlctlProcess.ExtraArgs = extraArgs
 
 	err = tablet.VttabletProcess.Setup()
 	require.NoError(t, err)
