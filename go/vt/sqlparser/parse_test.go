@@ -4210,7 +4210,7 @@ func TestFunctionCalls(t *testing.T) {
 		"select ELT() from dual",
 		"select EXP() from dual",
 		"select EXPORT_SET() from dual",
-		"select EXTRACT() from dual",
+		"select EXTRACT(DAY from '2023-03-03') from dual",
 		"select ExtractValue() from dual",
 		"select FIELD() from dual",
 		"select FIND_IN_SET() from dual",
