@@ -17,13 +17,12 @@ limitations under the License.
 package testlib
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/vt/discovery"
-
-	"context"
 
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
@@ -74,7 +73,8 @@ func copySchema(t *testing.T, useShardAsSource bool) {
 	sourceRdonly := NewFakeTablet(t, wr, "cell1", 1,
 		topodatapb.TabletType_RDONLY, sourceRdonlyDb, TabletKeyspaceShard(t, "ks", "-80"))
 	sourceRdonly.FakeMysqlDaemon.ExpectedExecuteSuperQueryList = []string{
-		// These 3 statements come from tablet startup
+		// These 4 statements come from tablet startup
+		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
