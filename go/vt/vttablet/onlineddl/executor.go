@@ -3799,7 +3799,7 @@ func (e *Executor) deleteVReplicationEntry(ctx context.Context, uuid string) err
 }
 
 // gcArtifactTable garbage-collects a single table
-func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string, timestampInThePast time.Time) (string, error) {
+func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid string, t time.Time) (string, error) {
 	tableExists, err := e.tableExists(ctx, artifactTable)
 	if err != nil {
 		return "", err
@@ -3813,7 +3813,7 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid stri
 	// - The Online DDL executor compeltely loses it and has no more access to its data
 	// - TableGC will find it on next iteration, see that it's been on HOLD "long enough", and will
 	//   take it from there to transition it into PURGE or EVAC, or DROP, and eventually drop it.
-	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.HoldTableGCState, schema.OnlineDDLToGCUUID(uuid), timestampInThePast)
+	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.HoldTableGCState, schema.OnlineDDLToGCUUID(uuid), t)
 	if err != nil {
 		return toTableName, err
 	}
