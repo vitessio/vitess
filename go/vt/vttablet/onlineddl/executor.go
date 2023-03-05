@@ -3787,9 +3787,13 @@ func (e *Executor) gcArtifactTable(ctx context.Context, artifactTable, uuid stri
 	if !tableExists {
 		return "", nil
 	}
-	// We've already concluded in gcArtifacts() that this table was held for long enough.
-	// We therefore move it into PURGE state.
-	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.PurgeTableGCState, schema.OnlineDDLToGCUUID(uuid), t)
+	// The fact we're here means the table is not needed anymore. We can throw it away.
+	// We do so by renaming it into a GC table. We use the HOLD state and with a timestamp that is
+	// in the past. So as we rename the table:
+	// - The Online DDL executor compeltely loses it and has no more access to its data
+	// - TableGC will find it on next iteration, see that it's been on HOLD "long enough", and will
+	//   take it from there to transition it into PURGE or EVAC, or DROP, and eventually drop it.
+	renameStatement, toTableName, err := schema.GenerateRenameStatementWithUUID(artifactTable, schema.HoldTableGCState, schema.OnlineDDLToGCUUID(uuid), t)
 	if err != nil {
 		return toTableName, err
 	}
@@ -3825,10 +3829,12 @@ func (e *Executor) gcArtifacts(ctx context.Context) error {
 		for i, artifactTable := range artifactTables {
 			// We wish to generate distinct timestamp values for each table in this UUID,
 			// because all tables will be renamed as _something_UUID_timestamp. Since UUID
-			// is shared for all artifacts in this loop, we differentiate via timestamp
+			// is shared for multiple artifacts in this loop, we differentiate via timestamp.
+			// Also, the timestamp we create is in the past, so that the table GC mechanism can
+			// take it away from there on next iteration.
 			log.Infof("Executor.gcArtifacts: will GC artifact %s for migration %s", artifactTable, uuid)
-			t := timeNow.Add(time.Duration(i) * time.Second).UTC()
-			toTableName, err := e.gcArtifactTable(ctx, artifactTable, uuid, t)
+			timestampInThePast := timeNow.Add(time.Duration(-i) * time.Second).UTC()
+			toTableName, err := e.gcArtifactTable(ctx, artifactTable, uuid, timestampInThePast)
 			if err != nil {
 				return vterrors.Wrapf(err, "in gcArtifacts() for %s", artifactTable)
 			}

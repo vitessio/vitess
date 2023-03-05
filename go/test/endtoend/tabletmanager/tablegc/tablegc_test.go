@@ -165,11 +165,10 @@ func tableExists(tableExpr string) (exists bool, tableName string, err error) {
 	if err != nil {
 		return false, "", err
 	}
-	row := rs.Named().Row()
-	if row == nil {
-		return false, "", nil
+	for _, row := range rs.Named().Rows {
+		return true, row.AsString("table_name", ""), nil
 	}
-	return true, row.AsString("table_name", ""), nil
+	return false, "", nil
 }
 
 func validateTableDoesNotExist(t *testing.T, tableExpr string) {
@@ -252,7 +251,7 @@ func validateAnyState(t *testing.T, expectNumRows int64, states ...schema.TableG
 			return
 		}
 	}
-	assert.Fail(t, "could not match any of the states: %v", states)
+	assert.Failf(t, "could not match any of the states", "states=%v", states)
 }
 
 // dropTable drops a table
@@ -367,10 +366,13 @@ func TestPurge(t *testing.T) {
 		validateTableExists(t, tableName)
 		checkTableRows(t, tableName, 1024)
 	}
-	time.Sleep(5 * gcPurgeCheckInterval) // wwait for table to be purged
-	time.Sleep(2 * gcCheckInterval)      // wait for GC state transition
+	if !fastDropTable {
+		time.Sleep(5 * gcPurgeCheckInterval) // wait for table to be purged
+	}
+	validateTableDoesNotExist(t, tableName) // whether purged or not, table should at some point transition to next state
 	if fastDropTable {
-		validateAnyState(t, 0, schema.DropTableGCState, schema.TableDroppedGCState)
+		// if MySQL supports fast DROP TABLE, TableGC completely skips the PURGE state. Rows are not purged.
+		validateAnyState(t, 1024, schema.DropTableGCState, schema.TableDroppedGCState)
 	} else {
 		validateAnyState(t, 0, schema.EvacTableGCState, schema.DropTableGCState, schema.TableDroppedGCState)
 	}
