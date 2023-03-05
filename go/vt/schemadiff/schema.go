@@ -767,12 +767,12 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 
 	checkDependencies := func(diff EntityDiff, dependentNames []string) (dependentDiffs []EntityDiff, relationsMade bool) {
 		for _, dependentName := range dependentNames {
-			dependentDiffs = schemaDiff.DiffsByEntityName(dependentName)
+			dependentDiffs = schemaDiff.diffsByEntityName(dependentName)
 			for _, dependentDiff := range dependentDiffs {
 				// so, 'diff' is an entity that has changed. But now we also see that one of the
 				// entities our entity depends on, has also changed.
 				relationsMade = true
-				schemaDiff.AddDep(diff, dependentDiff, DiffDepOrderUnknown)
+				schemaDiff.addDep(diff, dependentDiff, DiffDepOrderUnknown)
 			}
 		}
 		return dependentDiffs, relationsMade
@@ -799,7 +799,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 							for _, parentDiff := range dependentDiffs {
 								switch parentDiff := parentDiff.(type) {
 								case *CreateTableEntityDiff:
-									schemaDiff.AddDep(diff, parentDiff, DiffDepSequentialExecution)
+									schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
 								case *AlterTableEntityDiff:
 									// all right, this is the scenario to validate.
 									// the current diff is ALTER TABLE ... ADD FOREIGN KEY
@@ -815,17 +815,17 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 										switch node := node.(type) {
 										case *sqlparser.ModifyColumn:
 											if referencedColumnNames[node.NewColDefinition.Name.Lowered()] {
-												schemaDiff.AddDep(diff, parentDiff, DiffDepSequentialExecution)
+												schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
 											}
 										case *sqlparser.AddColumns:
 											for _, col := range node.Columns {
 												if referencedColumnNames[col.Name.Lowered()] {
-													schemaDiff.AddDep(diff, parentDiff, DiffDepSequentialExecution)
+													schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
 												}
 											}
 										case *sqlparser.DropColumn:
 											if referencedColumnNames[node.Name.Name.Lowered()] {
-												schemaDiff.AddDep(diff, parentDiff, DiffDepSequentialExecution)
+												schemaDiff.addDep(diff, parentDiff, DiffDepSequentialExecution)
 											}
 										}
 										return true, nil
