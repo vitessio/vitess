@@ -264,7 +264,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 
 // Permissions Tokens
 %token <bytes> USER IDENTIFIED ROLE REUSE GRANT GRANTS REVOKE NONE ATTRIBUTE RANDOM PASSWORD INITIAL AUTHENTICATION
-%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER DAY OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
+%token <bytes> SSL X509 CIPHER ISSUER SUBJECT ACCOUNT EXPIRE NEVER OPTION OPTIONAL EXCEPT ADMIN PRIVILEGES
 %token <bytes> MAX_QUERIES_PER_HOUR MAX_UPDATES_PER_HOUR MAX_CONNECTIONS_PER_HOUR MAX_USER_CONNECTIONS FLUSH
 %token <bytes> FAILED_LOGIN_ATTEMPTS PASSWORD_LOCK_TIME UNBOUNDED REQUIRE PROXY ROUTINE TABLESPACE CLIENT SLAVE
 %token <bytes> EVENT EXECUTE FILE RELOAD REPLICATION SHUTDOWN SUPER USAGE LOGS ENGINE ERROR GENERAL HOSTS
@@ -291,7 +291,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // Type Tokens
 %token <bytes> BIT TINYINT SMALLINT MEDIUMINT INT INTEGER BIGINT INTNUM SERIAL
 %token <bytes> REAL DOUBLE FLOAT_TYPE DECIMAL NUMERIC DEC FIXED PRECISION
-%token <bytes> TIME TIMESTAMP DATETIME YEAR
+%token <bytes> TIME TIMESTAMP DATETIME
 %token <bytes> CHAR VARCHAR BOOL CHARACTER VARBINARY NCHAR NVARCHAR NATIONAL VARYING
 %token <bytes> TEXT TINYTEXT MEDIUMTEXT LONGTEXT LONG
 %token <bytes> BLOB TINYBLOB MEDIUMBLOB LONGBLOB JSON ENUM
@@ -319,7 +319,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %token <bytes> SUBSTR SUBSTRING
 %token <bytes> TRIM LEADING TRAILING BOTH
 %token <bytes> GROUP_CONCAT SEPARATOR
-%token <bytes> TIMESTAMPADD TIMESTAMPDIFF
+%token <bytes> TIMESTAMPADD TIMESTAMPDIFF EXTRACT
 
 // Window functions
 %token <bytes> OVER WINDOW GROUPING GROUPS
@@ -343,21 +343,28 @@ func yySpecialCommentMode(yylex interface{}) bool {
 // Match
 %token <bytes> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION
 
+// Time Unit Tokens
+%token <bytes> MICROSECOND SECOND MINUTE HOUR DAY WEEK MONTH QUARTER YEAR
+%token <bytes> SECOND_MICROSECOND
+%token <bytes> MINUTE_MICROSECOND MINUTE_SECOND
+%token <bytes> HOUR_MICROSECOND HOUR_SECOND HOUR_MINUTE
+%token <bytes> DAY_MICROSECOND DAY_SECOND DAY_MINUTE DAY_HOUR
+%token <bytes> YEAR_MONTH
+
 // MySQL reserved words that are currently unused.
 %token <bytes> ACCESSIBLE ASENSITIVE
 %token <bytes> CUBE
-%token <bytes> DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND DELAYED DISTINCTROW
+%token <bytes> DELAYED DISTINCTROW
 %token <bytes> EMPTY
 %token <bytes> FLOAT4 FLOAT8
 %token <bytes> GET
-%token <bytes> HIGH_PRIORITY HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND
+%token <bytes> HIGH_PRIORITY
 %token <bytes> INSENSITIVE INT1 INT2 INT3 INT4 INT8 IO_AFTER_GTIDS IO_BEFORE_GTIDS LINEAR
-%token <bytes> MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MIDDLEINT MINUTE_MICROSECOND MINUTE_SECOND
+%token <bytes> MASTER_BIND MASTER_SSL_VERIFY_SERVER_CERT MIDDLEINT
 %token <bytes> PURGE
 %token <bytes> READ_WRITE RLIKE
-%token <bytes> SECOND_MICROSECOND SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
+%token <bytes> SENSITIVE SPECIFIC SQL_BIG_RESULT SQL_SMALL_RESULT
 %token <bytes> VARCHARACTER
-%token <bytes> YEAR_MONTH
 
 %token <bytes> UNUSED DESCRIPTION LATERAL MEMBER RECURSIVE
 %token <bytes> BUCKETS CLONE COMPONENT DEFINITION ENFORCED EXCLUDE FOLLOWING GEOMCOLLECTION GET_MASTER_PUBLIC_KEY HISTOGRAM HISTORY
@@ -433,6 +440,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <str> compare
 %type <ins> insert_data
 %type <expr> value value_expression num_val as_of_opt integral_or_value_arg integral_or_interval_expr
+%type <bytes> time_unit
 %type <expr> function_call_keyword function_call_nonkeyword function_call_generic function_call_conflict
 %type <expr> func_datetime_precision function_call_window function_call_aggregate_with_window
 %type <str> is_suffix
@@ -5208,15 +5216,37 @@ window_definition:
     $$ = def
   }
 
+time_unit:
+  MICROSECOND
+| SECOND
+| MINUTE
+| HOUR
+| DAY
+| WEEK
+| MONTH
+| QUARTER
+| YEAR
+| SECOND_MICROSECOND
+| MINUTE_MICROSECOND
+| MINUTE_SECOND
+| HOUR_MICROSECOND
+| HOUR_SECOND
+| HOUR_MINUTE
+| DAY_MICROSECOND
+| DAY_SECOND
+| DAY_MINUTE
+| DAY_HOUR
+| YEAR_MONTH
+
 // TODO : support prepared statements
 integral_or_interval_expr:
-INTEGRAL
+  INTEGRAL
   {
     $$ = NewIntVal($1)
   }
-| INTERVAL value sql_id
+| INTERVAL value time_unit
   {
-    $$ = &IntervalExpr{Expr: $2, Unit: $3.String()}
+    $$ = &IntervalExpr{Expr: $2, Unit: string($3)}
   }
 
 as_ci_opt:
@@ -6386,13 +6416,17 @@ function_call_nonkeyword:
   {
     $$ = &CurTimeFuncExpr{Name:NewColIdent(string($1)), Fsp:$2}
   }
-| TIMESTAMPADD openb sql_id ',' value_expression ',' value_expression closeb
+| TIMESTAMPADD openb time_unit ',' value_expression ',' value_expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &TimestampFuncExpr{Name:string("timestampadd"), Unit:string($3), Expr1:$5, Expr2:$7}
   }
-| TIMESTAMPDIFF openb sql_id ',' value_expression ',' value_expression closeb
+| TIMESTAMPDIFF openb time_unit ',' value_expression ',' value_expression closeb
   {
-    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:$3.String(), Expr1:$5, Expr2:$7}
+    $$ = &TimestampFuncExpr{Name:string("timestampdiff"), Unit:string($3), Expr1:$5, Expr2:$7}
+  }
+| EXTRACT openb time_unit FROM value_expression closeb
+  {
+    $$ = &ExtractFuncExpr{Name: string($1), Unit: string($3), Expr: $5}
   }
 
 // Optional parens for certain keyword functions that don't require them.
@@ -8144,6 +8178,7 @@ non_reserved_keyword:
 | HISTOGRAM
 | HISTORY
 | HOSTS
+| HOUR
 | INACTIVE
 | INDEXES
 | INITIAL
@@ -8175,9 +8210,12 @@ non_reserved_keyword:
 | MAX_USER_CONNECTIONS
 | MERGE
 | MESSAGE_TEXT
+| MICROSECOND
 | MIN_ROWS
+| MINUTE
 | MODE
 | MODIFY
+| MONTH
 | MULTILINESTRING
 | MULTIPOINT
 | MULTIPOLYGON
@@ -8217,6 +8255,7 @@ non_reserved_keyword:
 | PRIVILEGES
 | PROCESSLIST
 | PROXY
+| QUARTER
 | QUERY
 | RANDOM
 | REDUNDANT
@@ -8242,6 +8281,7 @@ non_reserved_keyword:
 | ROW_FORMAT
 | SAVEPOINT
 | SCHEMA_NAME
+| SECOND
 | SECONDARY
 | SECONDARY_ENGINE
 | SECONDARY_ENGINE_ATTRIBUTE
@@ -8302,6 +8342,7 @@ non_reserved_keyword:
 | VISIBLE
 | UNDEFINED
 | WARNINGS
+| WEEK
 | WORK
 | X509
 | YEAR
@@ -8312,6 +8353,7 @@ non_reserved_keyword2:
 | COMMENT_KEYWORD
 | EVENT
 | EXECUTE
+| EXTRACT
 | FAILED_LOGIN_ATTEMPTS
 | FILE
 | FIRST

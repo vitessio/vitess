@@ -2835,6 +2835,9 @@ var (
 			input:  "DROP TABLE `dual`",
 			output: "drop table `dual`",
 		},
+		{
+			input: "select EXTRACT(DAY from '2020-10-1')",
+		},
 	}
 	// Any tests that contain multiple statements within the body (such as BEGIN/END blocks) should go here.
 	// validSQL is used by TestParseNextValid, which expects a semicolon to mean the end of a full statement.
@@ -4207,7 +4210,7 @@ func TestFunctionCalls(t *testing.T) {
 		"select ELT() from dual",
 		"select EXP() from dual",
 		"select EXPORT_SET() from dual",
-		"select EXTRACT() from dual",
+		"select EXTRACT(DAY from '2023-03-03') from dual",
 		"select ExtractValue() from dual",
 		"select FIELD() from dual",
 		"select FIND_IN_SET() from dual",
@@ -4509,8 +4512,8 @@ func TestFunctionCalls(t *testing.T) {
 		"select TIME_TO_SEC() from dual",
 		"select TIMEDIFF() from dual",
 		"select TIMESTAMP() from dual",
-		"select timestampadd(col, 1, 2) from dual",
-		"select timestampdiff(col, 1, 2) from dual",
+		"select timestampadd(MONTH, 1, col) from dual",
+		"select timestampdiff(MONTH, 1, col) from dual",
 		"select TO_BASE64() from dual",
 		"select TO_DAYS() from dual",
 		"select TO_SECONDS() from dual",
