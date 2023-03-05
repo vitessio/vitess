@@ -193,6 +193,7 @@ func (collector *TableGC) Open() (err error) {
 		delete(collector.lifecycleStates, schema.PurgeTableGCState)
 		delete(collector.lifecycleStates, schema.EvacTableGCState)
 	}
+	log.Infof("TableGC: MySQL version=%v, serverSupportsFastDrops=%v, lifecycleStates=%v", conn.ServerVersion, serverSupportsFastDrops, collector.lifecycleStates)
 
 	ctx := context.Background()
 	ctx, collector.cancelOperation = context.WithCancel(ctx)
@@ -272,22 +273,16 @@ func (collector *TableGC) operate(ctx context.Context) {
 					}
 					if tableName == "" {
 						// No table purged (or at least not to completion)
+						// Either because there _is_ nothing to purge, or because PURGE isn't a handled state
 						return
 					}
-					// a table was successfully purged to complection. Chances are, there's more
-					// tables waiting to be purged. Let's speed things by
-					// requesting another purge, instead of waiting a full hour
-					// The table is now empty!
-					// we happen to know at this time that the table is in PURGE state,
-					// I mean, that's why we're here. We can hard code that.
+					// The table has been purged! Let's move the table into the next phase:
 					_, _, uuid, _, _ := schema.AnalyzeGCTableName(tableName)
 					collector.submitTransitionRequest(ctx, transitionRequestsChan, schema.PurgeTableGCState, tableName, true, uuid)
 					collector.removePurgingTable(tableName)
-					// finished with this table. Maybe more tables are looking to be purged.
-					// Trigger another call to purge(), instead of waiting a full purgeReentranceInterval cycle
-
+					// Chances are, there's more tables waiting to be purged. Let's speed things by
+					// requesting another purge, instead of waiting a full purgeReentranceInterval cycle
 					time.AfterFunc(time.Second, func() { purgeRequestsChan <- true })
-
 				}()
 			}
 		case dropTableName := <-dropTablesChan:
@@ -299,7 +294,7 @@ func (collector *TableGC) operate(ctx context.Context) {
 			}
 		case transition := <-transitionRequestsChan:
 			{
-				log.Info("TableGC: transitionRequestsChan")
+				log.Info("TableGC: transitionRequestsChan, transition=%v", transition)
 				if err := collector.transitionTable(ctx, transition); err != nil {
 					log.Errorf("TableGC: error transitioning table %s to %+v: %+v", transition.fromTableName, transition.toGCState, err)
 				}
@@ -420,7 +415,9 @@ func (collector *TableGC) checkTables(ctx context.Context, dropTablesChan chan<-
 		if state == schema.PurgeTableGCState {
 			if isBaseTable {
 				// This table needs to be purged. Make sure to enlist it (we may already have)
-				collector.addPurgingTable(tableName)
+				if !collector.addPurgingTable(tableName) {
+					collector.submitTransitionRequest(ctx, transitionRequestsChan, state, tableName, isBaseTable, uuid)
+				}
 			} else {
 				// This is a view. We don't need to delete rows from views. Just transition into next phase
 				collector.submitTransitionRequest(ctx, transitionRequestsChan, state, tableName, isBaseTable, uuid)
@@ -584,11 +581,18 @@ func (collector *TableGC) transitionTable(ctx context.Context, transition *trans
 }
 
 // addPurgingTable adds a table to the list of droppingpurging (or pending purging) tables
-func (collector *TableGC) addPurgingTable(tableName string) {
+func (collector *TableGC) addPurgingTable(tableName string) (added bool) {
+	if _, ok := collector.lifecycleStates[schema.PurgeTableGCState]; !ok {
+		// PURGE is not a handled state. We don't want to purge this table or any other table,
+		// so we don't populate the purgingTables map.
+		return false
+	}
+
 	collector.purgeMutex.Lock()
 	defer collector.purgeMutex.Unlock()
 
 	collector.purgingTables[tableName] = true
+	return true
 }
 
 // removePurgingTable removes a table from the purging list; likely this is called when
