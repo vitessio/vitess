@@ -5216,7 +5216,6 @@ window_definition:
     $$ = def
   }
 
-// make sure these are all defined in token
 time_unit:
   MICROSECOND
 | SECOND
