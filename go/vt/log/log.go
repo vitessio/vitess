@@ -22,6 +22,7 @@ limitations under the License.
 package log
 
 import (
+	"fmt"
 	"strconv"
 	"sync/atomic"
 
@@ -82,7 +83,7 @@ var (
 // command-line arguments.
 func RegisterFlags(fs *pflag.FlagSet) {
 	flagVal := logRotateMaxSize{
-		val: "1887436800", // glog.MaxSize value (which is not concurrency safe)
+		val: fmt.Sprintf("%d", atomic.LoadUint64(&glog.MaxSize)),
 	}
 	fs.Var(&flagVal, "log_rotate_max_size", "size in bytes at which logs are rotated (glog.MaxSize)")
 }
