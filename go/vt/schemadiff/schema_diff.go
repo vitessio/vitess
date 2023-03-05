@@ -126,12 +126,15 @@ func (d *SchemaDiff) loadDiffs(diffs []EntityDiff) {
 	}
 }
 
+// addDep adds a dependency: `depDiff` depends on `diff`, with given `depType`. If there's an
+// already existing dependency between the two diffs, then we compare the dependency type; if the new
+// type has a higher order (ie stricter) then we replace the existing dependency with the new one.
 func (d *SchemaDiff) addDep(diff EntityDiff, depDiff EntityDiff, depType DiffDepType) *DiffDep {
 	_, _ = d.r.Relate(diff.CanonicalStatementString(), depDiff.CanonicalStatementString())
 	diffDep := NewDiffDep(diff, depDiff, depType)
 	if existingDep, ok := d.deps[diffDep.hashKey()]; ok {
 		if existingDep.depType >= diffDep.depType {
-			// nothing new here.
+			// nothing new here, the new dependency is weaker or equals to an existing dependency
 			return existingDep
 		}
 	}
@@ -140,11 +143,13 @@ func (d *SchemaDiff) addDep(diff EntityDiff, depDiff EntityDiff, depType DiffDep
 	return diffDep
 }
 
+// diffByStatementString is a utility function that returns a diff by its canonical statement string
 func (d *SchemaDiff) diffByStatementString(s string) (EntityDiff, bool) {
 	diff, ok := d.diffMap[s]
 	return diff, ok
 }
 
+// diffsByEntityName returns all diffs that apply to a given entity (table/view)
 func (d *SchemaDiff) diffsByEntityName(name string) (diffs []EntityDiff) {
 	for _, diff := range d.diffs {
 		if diff.EntityName() == name {
@@ -154,10 +159,13 @@ func (d *SchemaDiff) diffsByEntityName(name string) (diffs []EntityDiff) {
 	return diffs
 }
 
-func (d *SchemaDiff) AllDiffs() []EntityDiff {
+// allDiffs returns all the diffs. These are not sorted by dependencies. These are basically
+// the original diffs, "flatteninf" any subsequent diffs they may have.
+func (d *SchemaDiff) allDiffs() []EntityDiff {
 	return d.diffs
 }
 
+// AllDeps returns all known dependencies
 func (d *SchemaDiff) AllDeps() (deps []*DiffDep) {
 	for _, dep := range d.deps {
 		deps = append(deps, dep)
@@ -165,10 +173,13 @@ func (d *SchemaDiff) AllDeps() (deps []*DiffDep) {
 	return deps
 }
 
+// HasDeps returns `true` if there is at least one known diff dependency.
+// If this function returns `false` then that means there is no restriction whatsoever to the order of diffs.
 func (d *SchemaDiff) HasDeps() bool {
 	return len(d.deps) > 0
 }
 
+// AllSequentialExecutionDeps returns all diffs that are of "subsequential execution" type.
 func (d *SchemaDiff) AllSequentialExecutionDeps() (deps []*DiffDep) {
 	for _, dep := range d.deps {
 		if dep.depType >= DiffDepSequentialExecution {
@@ -178,6 +189,8 @@ func (d *SchemaDiff) AllSequentialExecutionDeps() (deps []*DiffDep) {
 	return deps
 }
 
+// HasSequentialExecutionDeps return `true` if there is at least one "subsequential execution" type diff.
+// If not, that means all diffs can be applied in parallel.
 func (d *SchemaDiff) HasSequentialExecutionDeps() bool {
 	for _, dep := range d.deps {
 		if dep.depType >= DiffDepSequentialExecution {
@@ -187,12 +200,16 @@ func (d *SchemaDiff) HasSequentialExecutionDeps() bool {
 	return false
 }
 
+// OrderedDiffs returns the list of diff in applicable order, if possible. This is a linearized representation
+// where diffs may be applied in-order one after another, keeping the schema in valid state at all times.
 func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 	lastGoodSchema := d.schema
 	var orderedDiffs []EntityDiff
 	m := d.r.Map()
+	// The order of classes in the quivalence relation is, generally speaking, loyal to the order of original diffs.
 	for _, class := range d.r.OrderedClasses() {
 		classDiffs := []EntityDiff{}
+		// Which diffs are in this equivalence class?
 		for _, statementString := range m[class] {
 			diff, ok := d.diffByStatementString(statementString)
 			if !ok {
@@ -200,6 +217,8 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 			}
 			classDiffs = append(classDiffs, diff)
 		}
+		// We will now permutate the diffs in this equivalence class, and hopefully find
+		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
 		foundValidPathForClass := permutateDiffs(classDiffs, func(permutatedDiffs []EntityDiff) bool {
 			// We want to apply the changes one by one, and validate the schema after each change
 			for i := range permutatedDiffs {
@@ -215,8 +234,10 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 			return true // early break! No need to keep searching
 		})
 		if !foundValidPathForClass {
+			// In this equivalence class, there is no valid permutation. We cannot linearize the diffs.
 			return nil, ErrImpossibleDiffOrder
 		}
+		// Done taking care of this equivalence class.
 	}
 	return orderedDiffs, nil
 }

@@ -51,7 +51,7 @@ func TestPermutations(t *testing.T) {
 	schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
 	require.NoError(t, err)
 
-	allDiffs := schemaDiff.AllDiffs()[:]
+	allDiffs := schemaDiff.allDiffs()[:]
 	require.Equal(t, 4, len(allDiffs))
 
 	toSingleString := func(diffs []EntityDiff) string {
@@ -64,7 +64,7 @@ func TestPermutations(t *testing.T) {
 	{
 		iteration := 0
 		allPerms := map[string]bool{}
-		allDiffs := schemaDiff.AllDiffs()[:]
+		allDiffs := schemaDiff.allDiffs()[:]
 		originalSingleString := toSingleString(allDiffs)
 		earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 			// cover all permutations
@@ -84,7 +84,7 @@ func TestPermutations(t *testing.T) {
 	}
 	{
 		allPerms := map[string]bool{}
-		allDiffs := schemaDiff.AllDiffs()[:]
+		allDiffs := schemaDiff.allDiffs()[:]
 		originalSingleString := toSingleString(allDiffs)
 		earlyBreak := permutateDiffs(allDiffs, func(pdiffs []EntityDiff) (earlyBreak bool) {
 			// Single visit
@@ -581,7 +581,7 @@ func TestSchemaDiff(t *testing.T) {
 			schemaDiff, err := fromSchema.SchemaDiff(toSchema, hints)
 			require.NoError(t, err)
 
-			allDiffs := schemaDiff.AllDiffs()
+			allDiffs := schemaDiff.allDiffs()
 			allDiffsStatements := []string{}
 			for _, diff := range allDiffs {
 				allDiffsStatements = append(allDiffsStatements, diff.CanonicalStatementString())
