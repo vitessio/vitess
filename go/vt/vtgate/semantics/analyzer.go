@@ -63,7 +63,7 @@ func newAnalyzer(dbName string, si SchemaInformation) *analyzer {
 
 // Analyze analyzes the parsed query.
 func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
-	analyzer := newAnalyzer(currentDb, si)
+	analyzer := newAnalyzer(currentDb, newSchemaInfo(si))
 
 	// Analysis for initial scope
 	err := analyzer.analyze(statement)

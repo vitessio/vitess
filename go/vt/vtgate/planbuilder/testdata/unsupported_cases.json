@@ -273,26 +273,32 @@
     "plan": "unsupported: REPLACE INTO with sharded schema"
   },
   {
+    "comment": "select keyspace_id from user_index where id = 1 and id = 2",
     "query": "select keyspace_id from user_index where id = 1 and id = 2",
     "plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (multiple filters)"
   },
   {
+    "comment": "select keyspace_id from user_index where func(id)",
     "query": "select keyspace_id from user_index where func(id)",
     "plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not a comparison)"
   },
   {
+    "comment": "select keyspace_id from user_index where id > 1",
     "query": "select keyspace_id from user_index where id > 1",
     "plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (not equality)"
   },
   {
+    "comment": "select keyspace_id from user_index where 1 = id",
     "query": "select keyspace_id from user_index where 1 = id",
     "plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not a column)"
   },
   {
+    "comment": "select keyspace_id from user_index where keyspace_id = 1",
     "query": "select keyspace_id from user_index where keyspace_id = 1",
     "plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (lhs is not id)"
   },
   {
+    "comment": "select keyspace_id from user_index where id = id+1",
     "query": "select keyspace_id from user_index where id = id+1",
     "plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (rhs is not a value)"
   },
@@ -307,6 +313,7 @@
     "plan": "unsupported: where clause for vindex function must be of the form id = <val> or id in(<val>,...) (where clause missing)"
   },
   {
+    "comment": "select func(keyspace_id) from user_index where id = :id",
     "query": "select func(keyspace_id) from user_index where id = :id",
     "plan": "unsupported: expression on results of a vindex function"
   },
@@ -393,11 +400,6 @@
     "plan": "generating order by clause: ambiguous symbol reference: a"
   },
   {
-    "comment": "subquery of information_schema with itself and star expression in outer select",
-    "query": "select a.*, u.id from information_schema.a a, user u where a.id in (select * from information_schema.b)",
-    "plan": "unsupported: '*' expression in cross-shard query"
-  },
-  {
     "comment": "outer and inner subquery route reference the same \"uu.id\" name\n# but they refer to different things. The first reference is to the outermost query,\n# and the second reference is to the innermost 'from' subquery.\n# This query will never work as the inner derived table is only selecting one of the column",
     "query": "select id2 from user uu where id in (select id from user where id = uu.id and user.col in (select col from (select id from user_extra where user_id = 5) uu where uu.user_id = uu.id))",
     "plan": "unsupported: cross-shard correlated subquery"
@@ -449,7 +451,7 @@
     "comment": "systable union query in derived table with constraint on outside (without star projection)",
     "query": "select id from (select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select id from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `id` = 'primary'",
     "v3-plan": "unsupported: filtering on results of cross-shard subquery",
-    "gen4-plan": "can't push predicates on concatenate"
+    "gen4-plan": "symbol id not found"
   },
   {
     "comment": "insert having subquery in row values",
