@@ -257,18 +257,19 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  1,
 			entityOrder: []string{"t2", "v2"},
 		},
-		{
-			name: "alter view (2 tables), alter tables",
-			toQueries: []string{
-				"create table t1 (id int primary key, info int not null, dt datetime);",
-				"create table t2 (id int primary key, ts timestamp, v varchar);",
-				"create view v1 as select id from t1",
-				"create view v2 as select info, v from t1, t2",
-			},
-			expectDiffs: 3,
-			expectDeps:  2,
-			entityOrder: []string{"t1", "t2", "v2"},
-		},
+		// {
+		// 	// This will become relevant when https://github.com/vitessio/vitess/pull/12147 is merged
+		// 	name: "alter view (2 tables), alter tables",
+		// 	toQueries: []string{
+		// 		"create table t1 (id int primary key, info int not null, dt datetime);",
+		// 		"create table t2 (id int primary key, ts timestamp, v varchar);",
+		// 		"create view v1 as select id from t1",
+		// 		"create view v2 as select info, v from t1, t2",
+		// 	},
+		// 	expectDiffs: 3,
+		// 	expectDeps:  2,
+		// 	entityOrder: []string{"t1", "t2", "v2"},
+		// },
 		{
 			name: "drop view",
 			toQueries: []string{
@@ -354,7 +355,7 @@ func TestSchemaDiff(t *testing.T) {
 			entityOrder: []string{"t2", "v1", "v2"},
 		},
 		// {
-		// 	// This will become relevant when https://github.com/vitessio/vitess/issues/12147 is merged
+		// 	// This will become relevant when https://github.com/vitessio/vitess/pull/12147 is merged
 		// 	name: "alter table, alter view, impossible sequence",
 		// 	fromQueries: []string{
 		// 		"create table t1 (id int primary key, info int not null);",
