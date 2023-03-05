@@ -86,7 +86,8 @@ func (r *EquivalenceRelation) ElementClass(element string) (int, error) {
 }
 
 // Declare two elements to be associated in the same class. If they're already in the same class, nothing is done.
-// Otherwise, this merges their two classes into one.
+// Otherwise, this merges their two classes into one. Specifically, the classes are merged into the lower-valued
+// class of the two, ie the "earlier" class of the two, and the "later" class is erased.
 func (r *EquivalenceRelation) Relate(element1, element2 string) (int, error) {
 	class1, err := r.ElementClass(element1)
 	if err != nil {
@@ -127,6 +128,7 @@ func (r *EquivalenceRelation) Related(element1, element2 string) (bool, error) {
 	return class1 == class2, nil
 }
 
+// OrderedClasses returns the list of classes, increasing
 func (r *EquivalenceRelation) OrderedClasses() []int {
 	classes := []int{}
 	for class := range r.classElementsMap {
@@ -136,6 +138,7 @@ func (r *EquivalenceRelation) OrderedClasses() []int {
 	return classes
 }
 
+// Map returns the complete map of classes to list of elements.
 func (r *EquivalenceRelation) Map() map[int]([]string) {
 	return r.classElementsMap
 }
