@@ -757,6 +757,9 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	return dup, nil
 }
 
+// SchemaDiff calulates a rich diff between this schema and the given schema. It is stronger than Diff().
+// On top of returning the list of diffs that can take this schema into the given schema, this function also
+// evaluates the dependencies between those diffs, if any.
 func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error) {
 	diffs, err := s.Diff(other, hints)
 	if err != nil {
