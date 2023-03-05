@@ -17,14 +17,6 @@ var (
 	ErrImpossibleDiffOrder            = errors.New("Impossible diff sequence")
 )
 
-type UnexpectedError struct {
-	msg string
-}
-
-func (e *UnexpectedError) Error() string {
-	return fmt.Sprintf("unexpected: %s", e.msg)
-}
-
 type UnsupportedEntityError struct {
 	Entity    string
 	Statement string
