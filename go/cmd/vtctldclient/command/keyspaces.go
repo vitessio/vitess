@@ -158,14 +158,6 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 			return errors.New("--durability-policy cannot be specified while creating a snapshot keyspace")
 		}
 
-		if createKeyspaceOptions.SidecarDBName == "" {
-			return errors.New("--sidecar-db-name cannot be empty when creating a keyspace")
-		}
-		if len(createKeyspaceOptions.SidecarDBName) > mysql.MaxIdentifierLength {
-			return mysql.NewSQLError(mysql.ERTooLongIdent, mysql.SSDataTooLong, "--sidecar-db-name identifier value of %q is too long (%d chars), max length for database identifiers is %d characters",
-				createKeyspaceOptions.SidecarDBName, len(createKeyspaceOptions.SidecarDBName), mysql.MaxIdentifierLength)
-		}
-
 		if createKeyspaceOptions.BaseKeyspace == "" {
 			return errors.New("--base-keyspace is required for a snapshot keyspace")
 		}
@@ -184,6 +176,14 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		}
 
 		snapshotTime = logutil.TimeToProto(t)
+	}
+
+	if createKeyspaceOptions.SidecarDBName == "" {
+		return errors.New("--sidecar-db-name cannot be empty when creating a keyspace")
+	}
+	if len(createKeyspaceOptions.SidecarDBName) > mysql.MaxIdentifierLength {
+		return mysql.NewSQLError(mysql.ERTooLongIdent, mysql.SSDataTooLong, "--sidecar-db-name identifier value of %q is too long (%d chars), max length for database identifiers is %d characters",
+			createKeyspaceOptions.SidecarDBName, len(createKeyspaceOptions.SidecarDBName), mysql.MaxIdentifierLength)
 	}
 
 	cli.FinishedParsing(cmd)
