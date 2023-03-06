@@ -113,3 +113,7 @@ func (c *Charset) DecodeToUTF8(dst, src []byte) ([]byte, error) {
 func (c *Charset) Convert(dst, src []byte, srcCharset charset.Charset) ([]byte, error) {
 	return c.performConversion(dst, c.name, src, srcCharset.Name())
 }
+
+func (c *Charset) MaxWidth() int {
+	return 1
+}

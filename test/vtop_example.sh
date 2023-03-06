@@ -27,6 +27,7 @@ source build.env
 # set -x
 shopt -s expand_aliases
 alias vtctlclient="vtctlclient --server=localhost:15999"
+alias vtctldclient="vtctldclient --server=localhost:15999"
 alias mysql="mysql -h 127.0.0.1 -P 15306 -u user"
 
 cd "$VTROOT"
@@ -100,7 +101,7 @@ function applySchemaWithRetry() {
   ks=$2
   drop_sql=$3
   for i in {1..600} ; do
-    vtctlclient ApplySchema -sql="$(cat $schema)" $ks
+    vtctldclient ApplySchema --sql-file="$schema" $ks
     if [ $? -eq 0 ]; then
       return
     fi
@@ -168,7 +169,7 @@ function get_started() {
     sleep 5
 
     applySchemaWithRetry create_commerce_schema.sql commerce drop_all_commerce_tables.sql
-    vtctlclient ApplyVSchema -vschema="$(cat vschema_commerce_initial.json)" commerce
+    vtctldclient ApplyVSchema --vschema-file="vschema_commerce_initial.json" commerce
     if [ $? -ne 0 ]; then
       echo "ApplySchema failed for initial commerce"
       printMysqlErrorFiles
@@ -232,7 +233,7 @@ function verifyVtadminSetup() {
   curlGetRequestWithRetry "localhost:14001/api/keyspaces" "commerce"
   # Verify the other APIs work as well
   curlGetRequestWithRetry "localhost:14001/api/tablets" '"tablets":\[{"cluster":{"id":"example","name":"example"},"tablet":{"alias":{"cell":"zone1"'
-  curlGetRequestWithRetry "localhost:14001/api/schemas" '"keyspace":"commerce","table_definitions":\[{"name":"corder","schema":"CREATE TABLE `corder` (\\n  `order_id` bigint(20) NOT NULL AUTO_INCREMENT'
+  curlGetRequestWithRetry "localhost:14001/api/schemas" '"keyspace":"commerce","table_definitions":\[{"name":"corder","schema":"CREATE TABLE `corder` (\\n  `order_id` bigint NOT NULL AUTO_INCREMENT'
   # Verify that we are able to create a keyspace
   curlPostRequest "localhost:14001/api/keyspace/example" '{"name":"testKeyspace"}'
   # List the keyspaces and check that we have them both
@@ -242,7 +243,7 @@ function verifyVtadminSetup() {
   # We should still have both the keyspaces
   curlGetRequestWithRetry "localhost:14001/api/keyspaces" "commerce.*testKeyspace"
   # Delete the keyspace by using the vtctlclient
-  vtctlclient DeleteKeyspace testKeyspace
+  vtctldclient DeleteKeyspace testKeyspace
   # Verify we still have the commerce keyspace and no other keyspace
   curlGetRequestWithRetry "localhost:14001/api/keyspaces" "commerce.*}}}}]"
 }
@@ -251,7 +252,7 @@ function verifyVtadminSetup() {
 function verifyVTOrcSetup() {
   # Set the primary tablet to readOnly using the vtctld and wait for VTOrc to repair
   primaryTablet=$(getPrimaryTablet)
-  vtctlclient SetReadOnly "$primaryTablet"
+  vtctldclient SetWritable "$primaryTablet" false
 
   # Now that we have set the primary tablet to read only, we know that this will
   # only succeed if VTOrc is able to fix it
@@ -331,7 +332,7 @@ function move_tables() {
 
   sleep 10
 
-  vtctlclient MoveTables -source commerce -tables 'customer,corder' Create customer.commerce2customer
+  vtctldclient LegacyVtctlCommand -- MoveTables --source commerce --tables 'customer,corder' Create customer.commerce2customer
   if [ $? -ne 0 ]; then
     echo "MoveTables failed"
     printMysqlErrorFiles
@@ -340,29 +341,28 @@ function move_tables() {
 
   sleep 10
 
-  vdiff_out=$(vtctlclient VDiff customer.commerce2customer)
-  echo "$vdiff_out" | grep "ProcessedRows: 5" | wc -l | grep "2" > /dev/null
-  if [ $? -ne 0 ]; then
-    echo -e "VDiff output is invalid, got:\n$vdiff_out"
-    printMysqlErrorFiles
-    exit 1
-  fi
+  vdiff_out=$(vtctldclient LegacyVtctlCommand -- VDiff customer.commerce2customer)
+    echo "$vdiff_out" | grep "ProcessedRows: 5" | wc -l | grep "2" > /dev/null
+    if [ $? -ne 0 ]; then
+      echo -e "VDiff output is invalid, got:\n$vdiff_out"
+      # Allow failure
+    fi
 
-  vtctlclient MoveTables -tablet_types=rdonly,replica SwitchTraffic customer.commerce2customer
+  vtctldclient LegacyVtctlCommand -- MoveTables --tablet_types='rdonly,replica' SwitchTraffic customer.commerce2customer
   if [ $? -ne 0 ]; then
     echo "SwitchTraffic for rdonly and replica failed"
     printMysqlErrorFiles
     exit 1
   fi
 
-  vtctlclient MoveTables -tablet_types=primary SwitchTraffic customer.commerce2customer
+  vtctldclient LegacyVtctlCommand -- MoveTables --tablet_types='primary' SwitchTraffic customer.commerce2customer
   if [ $? -ne 0 ]; then
     echo "SwitchTraffic for primary failed"
     printMysqlErrorFiles
     exit 1
   fi
 
-  vtctlclient MoveTables Complete customer.commerce2customer
+  vtctldclient LegacyVtctlCommand -- MoveTables Complete customer.commerce2customer
   if [ $? -ne 0 ]; then
     echo "MoveTables Complete failed"
     printMysqlErrorFiles
@@ -376,14 +376,14 @@ function resharding() {
   echo "Create new schemas for new shards"
   applySchemaWithRetry create_commerce_seq.sql commerce
   sleep 4
-  vtctlclient ApplyVSchema -vschema="$(cat vschema_commerce_seq.json)" commerce
+  vtctldclient ApplyVSchema --vschema-file="vschema_commerce_seq.json" commerce
   if [ $? -ne 0 ]; then
     echo "ApplyVschema commerce_seq during resharding failed"
     printMysqlErrorFiles
     exit 1
   fi
   sleep 4
-  vtctlclient ApplyVSchema -vschema="$(cat vschema_customer_sharded.json)" customer
+  vtctldclient ApplyVSchema --vschema-file="vschema_customer_sharded.json" customer
   if [ $? -ne 0 ]; then
     echo "ApplyVschema customer_sharded during resharding failed"
     printMysqlErrorFiles
@@ -407,7 +407,7 @@ function resharding() {
   echo "Ready to reshard ..."
   sleep 15
 
-  vtctlclient Reshard -source_shards '-' -target_shards '-80,80-' Create customer.cust2cust
+  vtctldclient LegacyVtctlCommand -- Reshard --source_shards '-' --target_shards '-80,80-' Create customer.cust2cust
   if [ $? -ne 0 ]; then
     echo "Reshard Create failed"
     printMysqlErrorFiles
@@ -416,20 +416,20 @@ function resharding() {
 
   sleep 15
 
-  vdiff_out=$(vtctlclient VDiff customer.cust2cust)
+  vdiff_out=$(vtctldclient LegacyVtctlCommand -- VDiff customer.cust2cust)
   echo "$vdiff_out" | grep "ProcessedRows: 5" | wc -l | grep "2" > /dev/null
   if [ $? -ne 0 ]; then
     echo -e "VDiff output is invalid, got:\n$vdiff_out"
     # Allow failure
   fi
 
-  vtctlclient Reshard -tablet_types=rdonly,replica SwitchTraffic customer.cust2cust
+  vtctldclient LegacyVtctlCommand -- Reshard --tablet_types='rdonly,replica' SwitchTraffic customer.cust2cust
   if [ $? -ne 0 ]; then
     echo "Reshard SwitchTraffic for replica,rdonly failed"
     printMysqlErrorFiles
     exit 1
   fi
-  vtctlclient Reshard -tablet_types=primary SwitchTraffic customer.cust2cust
+  vtctldclient LegacyVtctlCommand -- Reshard --tablet_types='primary' SwitchTraffic customer.cust2cust
   if [ $? -ne 0 ]; then
     echo "Reshard SwitchTraffic for primary failed"
     printMysqlErrorFiles

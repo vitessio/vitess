@@ -29,6 +29,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // Collation is a generic implementation of the Collation interface
@@ -120,11 +121,11 @@ func (c *Collation) Collate(left, right []byte, isPrefix bool) int {
 	c.sql.WriteString(c.suffix)
 	c.sql.WriteString(")")
 
-	var cmp int64
+	var cmp int
 	if result := c.performRemoteQuery(); result != nil {
-		cmp, c.err = result[0].ToInt64()
+		cmp, c.err = result[0].ToInt()
 	}
-	return int(cmp)
+	return cmp
 }
 
 func (c *Collation) performRemoteQuery() []sqltypes.Value {
@@ -170,7 +171,7 @@ func (c *Collation) WeightString(dst, src []byte, numCodepoints int) []byte {
 	return dst
 }
 
-func (c *Collation) Hash(_ []byte, _ int) collations.HashCode {
+func (c *Collation) Hash(_ *vthash.Hasher, _ []byte, _ int) {
 	panic("unsupported: Hash for remote collations")
 }
 

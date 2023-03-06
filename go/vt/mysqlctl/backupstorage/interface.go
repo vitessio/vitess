@@ -119,6 +119,13 @@ type BackupStorage interface {
 	// session, such as closing connections. Implementations of
 	// BackupStorage must support being reused after Close() is called.
 	Close() error
+
+	// WithParams should return a new BackupStorage which is a shared-nothing
+	// copy of the current BackupStorage and which uses Params.
+	//
+	// This method is intended to give BackupStorage implementations logging
+	// and metrics mechanisms.
+	WithParams(Params) BackupStorage
 }
 
 // BackupStorageMap contains the registered implementations for BackupStorage

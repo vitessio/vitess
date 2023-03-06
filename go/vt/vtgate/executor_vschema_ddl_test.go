@@ -318,9 +318,9 @@ func TestPlanExecutorAddDropVschemaTableDDL(t *testing.T) {
 	// No queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
 	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
+		sbc1.ExecCount.Load(),
+		sbc2.ExecCount.Load(),
+		sbclookup.ExecCount.Load(),
 	}
 	if !reflect.DeepEqual(gotCount, wantCount) {
 		t.Errorf("Exec %s: %v, want %v", stmt, gotCount, wantCount)
@@ -614,9 +614,9 @@ func TestExecutorAddDropVindexDDL(t *testing.T) {
 	// no queries should have gone to any tablets
 	wantCount := []int64{0, 0, 0}
 	gotCount := []int64{
-		sbc1.ExecCount.Get(),
-		sbc2.ExecCount.Get(),
-		sbclookup.ExecCount.Get(),
+		sbc1.ExecCount.Load(),
+		sbc2.ExecCount.Load(),
+		sbclookup.ExecCount.Load(),
 	}
 	utils.MustMatch(t, wantCount, gotCount)
 }

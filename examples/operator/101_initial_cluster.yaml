@@ -15,7 +15,7 @@ spec:
     vtbackup: vitess/lite:latest
     vtorc: vitess/lite:latest
     mysqld:
-      mysql56Compatible: vitess/lite:latest
+      mysql80Compatible: vitess/lite:latest
     mysqldExporter: prom/mysqld-exporter:v0.11.0
   cells:
   - name: zone1
@@ -87,15 +87,12 @@ spec:
           databaseInitScriptSecret:
             name: example-cluster-config
             key: init_db.sql
-          replication:
-            enforceSemiSync: false
           tabletPools:
           - cell: zone1
             type: replica
             replicas: 2
             vttablet:
               extraFlags:
-                disable_active_reparents: "true"
                 db_charset: utf8mb4
               resources:
                 limits:
@@ -211,14 +208,6 @@ stringData:
       LOCK TABLES, EXECUTE, REPLICATION SLAVE, REPLICATION CLIENT, CREATE VIEW,
       SHOW VIEW, CREATE ROUTINE, ALTER ROUTINE, CREATE USER, EVENT, TRIGGER
       ON *.* TO 'vt_filtered'@'localhost';
-
-    # User for Orchestrator (https://github.com/openark/orchestrator).
-    # TODO: Reenable when the password is randomly generated.
-    CREATE USER 'orc_client_user'@'%' IDENTIFIED BY 'orc_client_user_password';
-    GRANT SUPER, PROCESS, REPLICATION SLAVE, RELOAD
-      ON *.* TO 'orc_client_user'@'%';
-    GRANT SELECT
-      ON _vt.* TO 'orc_client_user'@'%';
 
     FLUSH PRIVILEGES;
 

@@ -29,11 +29,10 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/logutil"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
+	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
@@ -379,9 +378,10 @@ func TestCheckPrimaryShip(t *testing.T) {
 	tablet.Type = topodatapb.TabletType_REPLICA
 	tablet.PrimaryTermStartTime = nil
 	// Get the fakeMySQL and set it up to expect a set replication source command
-	fakeMysql := tm.MysqlDaemon.(*fakemysqldaemon.FakeMysqlDaemon)
+	fakeMysql := tm.MysqlDaemon.(*mysqlctl.FakeMysqlDaemon)
 	fakeMysql.SetReplicationSourceInputs = append(fakeMysql.SetReplicationSourceInputs, fmt.Sprintf("%v:%v", otherTablet.MysqlHostname, otherTablet.MysqlPort))
 	fakeMysql.ExpectedExecuteSuperQueryList = []string{
+		"STOP SLAVE",
 		"RESET SLAVE ALL",
 		"FAKE SET MASTER",
 		"START SLAVE",
@@ -446,7 +446,7 @@ func TestStartFindMysqlPort(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int32(0), ti.MysqlPort)
 
-	fmd.MysqlPort.Set(3306)
+	fmd.MysqlPort.Store(3306)
 	for i := 0; i < 10; i++ {
 		ti, err := ts.GetTablet(ctx, tm.tabletAlias)
 		require.NoError(t, err)
@@ -638,7 +638,7 @@ func TestGetBuildTags(t *testing.T) {
 	}
 }
 
-func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaemon {
+func newTestMysqlDaemon(t *testing.T, port int32) *mysqlctl.FakeMysqlDaemon {
 	t.Helper()
 
 	db := fakesqldb.New(t)
@@ -646,8 +646,8 @@ func newTestMysqlDaemon(t *testing.T, port int32) *fakemysqldaemon.FakeMysqlDaem
 	db.AddQueryPattern("BEGIN", &sqltypes.Result{})
 	db.AddQueryPattern("COMMIT", &sqltypes.Result{})
 
-	mysqld := fakemysqldaemon.NewFakeMysqlDaemon(db)
-	mysqld.MysqlPort = sync2.NewAtomicInt32(port)
+	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
+	mysqld.MysqlPort.Store(port)
 
 	return mysqld
 }

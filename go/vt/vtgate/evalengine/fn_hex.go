@@ -19,7 +19,6 @@ package evalengine
 import (
 	"math/bits"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -47,14 +46,10 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	case evalNumeric:
 		encoded = hexEncodeUint(arg.toUint64().u)
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", arg.sqlType())
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", arg.SQLType())
 	}
 
-	return newEvalText(encoded, collations.TypedCollation{
-		Collation:    env.DefaultCollation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}), nil
+	return newEvalText(encoded, env.collation()), nil
 }
 
 func (call *builtinHex) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

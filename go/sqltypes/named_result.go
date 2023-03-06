@@ -54,6 +54,14 @@ func (r RowNamedValues) ToInt64(fieldName string) (int64, error) {
 	return 0, ErrNoSuchField
 }
 
+// ToInt returns the named field as int
+func (r RowNamedValues) ToInt(fieldName string) (int, error) {
+	if v, ok := r[fieldName]; ok {
+		return v.ToInt()
+	}
+	return 0, ErrNoSuchField
+}
+
 func (r RowNamedValues) ToInt32(fieldName string) (int32, error) {
 	if v, ok := r[fieldName]; ok {
 		return v.ToInt32()

@@ -405,7 +405,7 @@ type ReplicationStatus struct {
 	// Tablet is the tablet alias that the ReplicationStatus came from.
 	Tablet string
 	// ID represents the id column from the _vt.vreplication table.
-	ID int64
+	ID int32
 	// Bls represents the BinlogSource.
 	Bls *binlogdatapb.BinlogSource
 	// Pos represents the pos column from the _vt.vreplication table.
@@ -445,14 +445,15 @@ type ReplicationStatus struct {
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
+	var id int32
+	var timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
 	var state, dbName, pos, stopPos, message, tags, componentThrottled string
 	var workflowType, workflowSubType int32
 	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
 	var rowsCopied int64
-	id, err = row.ToInt64("id")
+	id, err = row.ToInt32("id")
 	if err != nil {
 		return nil, "", err
 	}
@@ -761,7 +762,7 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)
 }
 
-func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
+func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int32) ([]copyState, error) {
 	var cs []copyState
 	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
 		id, id)

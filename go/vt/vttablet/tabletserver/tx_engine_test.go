@@ -207,7 +207,7 @@ func TestTxEngineRenewFails(t *testing.T) {
 	conn2, err := te.txPool.scp.NewConn(ctx, options, nil)
 	require.NoError(t, err)
 	defer conn2.Release(tx.TxCommit)
-	te.txPool.scp.lastID.Set(conn2.ConnID - 1)
+	te.txPool.scp.lastID.Store(conn2.ConnID - 1)
 
 	// commit will do a renew
 	dbConn := conn.dbConn

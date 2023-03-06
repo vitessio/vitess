@@ -1150,7 +1150,7 @@
       "Original": "select Id from user where 1 in ('aa', 'bb')",
       "Instructions": {
         "OperatorType": "Route",
-        "Variant": "Scatter",
+        "Variant": "None",
         "Keyspace": {
           "Name": "user",
           "Sharded": true

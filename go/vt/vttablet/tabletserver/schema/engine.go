@@ -28,20 +28,19 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sidecardb"
 
-	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/vt/dbconnpool"
-	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/dbconfigs"
+	"vitess.io/vitess/go/vt/dbconnpool"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 
@@ -405,7 +404,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 	}
 	tableData, err := conn.Exec(ctx, showTablesQuery, maxTableCount, false)
 	if err != nil {
-		return err
+		return vterrors.Wrapf(err, "in Engine.reload(), reading tables")
 	}
 
 	err = se.updateInnoDBRowsRead(ctx, conn)
@@ -456,7 +455,7 @@ func (se *Engine) reload(ctx context.Context, includeStats bool) error {
 		log.V(2).Infof("Reading schema for table: %s", tableName)
 		table, err := LoadTable(conn, se.cp.DBName(), tableName, row[3].ToString())
 		if err != nil {
-			rec.RecordError(err)
+			rec.RecordError(vterrors.Wrapf(err, "in Engine.reload(), reading table %s", tableName))
 			continue
 		}
 		if includeStats {

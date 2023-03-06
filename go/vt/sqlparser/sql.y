@@ -6177,6 +6177,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| LINESTRING openb expression_list closeb
+  {
+    $$ = &LineStringExpr{ PointParams:$3 }
+  }
 | POINT openb expression ',' expression closeb
   {
     $$ = &PointExpr{ XCordinate:$3, YCordinate:$5 }
@@ -6644,7 +6648,7 @@ separator_opt:
   }
 | SEPARATOR STRING
   {
-    $$ = " separator "+encodeSQLString($2)
+    $$ = encodeSQLString($2)
   }
 
 when_expression_list:
@@ -7718,7 +7722,7 @@ non_reserved_keyword:
 | LESS
 | LEVEL
 | LINES
-| LINESTRING
+| LINESTRING %prec FUNCTION_CALL_NON_KEYWORD
 | LIST
 | LOAD
 | LOCAL

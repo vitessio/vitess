@@ -44,9 +44,13 @@ const (
 	TableDroppedGCState TableGCState = ""
 )
 
+const (
+	GCTableNameExpression string = `^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`
+)
+
 var (
 	gcUUIDRegexp      = regexp.MustCompile(`^[0-f]{32}$`)
-	gcTableNameRegexp = regexp.MustCompile(`^_vt_(HOLD|PURGE|EVAC|DROP)_([0-f]{32})_([0-9]{14})$`)
+	gcTableNameRegexp = regexp.MustCompile(GCTableNameExpression)
 
 	gcStates = map[string]TableGCState{
 		string(HoldTableGCState):  HoldTableGCState,

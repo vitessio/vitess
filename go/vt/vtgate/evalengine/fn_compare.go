@@ -101,7 +101,7 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 		case *evalDecimal:
 			decimals++
 		case *evalBytes:
-			switch arg.sqlType() {
+			switch arg.SQLType() {
 			case sqltypes.Text, sqltypes.VarChar:
 				text++
 			case sqltypes.Blob, sqltypes.Binary, sqltypes.VarBinary:
@@ -186,7 +186,7 @@ func compareAllDecimal(args []eval, cmp int) (eval, error) {
 
 func compareAllText(args []eval, cmp int) (eval, error) {
 	env := collations.Local()
-	candidateB := args[0].toRawBytes()
+	candidateB := args[0].ToRawBytes()
 	collationB := evalCollation(args[0])
 
 	var ca collationAggregation
@@ -195,7 +195,7 @@ func compareAllText(args []eval, cmp int) (eval, error) {
 	}
 
 	for _, arg := range args[1:] {
-		thisB := arg.toRawBytes()
+		thisB := arg.ToRawBytes()
 		thisColl := evalCollation(arg)
 		if err := ca.add(env, thisColl); err != nil {
 			return nil, err
@@ -225,10 +225,10 @@ func compareAllText(args []eval, cmp int) (eval, error) {
 }
 
 func compareAllBinary(args []eval, cmp int) (eval, error) {
-	candidateB := args[0].toRawBytes()
+	candidateB := args[0].ToRawBytes()
 
 	for _, arg := range args[1:] {
-		thisB := arg.toRawBytes()
+		thisB := arg.ToRawBytes()
 		if (cmp < 0) == (bytes.Compare(thisB, candidateB) < 0) {
 			candidateB = thisB
 		}
