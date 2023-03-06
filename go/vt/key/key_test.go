@@ -1105,68 +1105,156 @@ func TestKeyRangeContains(t *testing.T) {
 	}
 }
 
-func TestKeyRangeIntersectOverlap(t *testing.T) {
-	var table = []struct {
-		a          string
-		b          string
-		c          string
-		d          string
-		intersects bool
-		overlap    string
-	}{
-		{a: "40", b: "80", c: "c0", d: "d0", intersects: false},
-		{a: "", b: "80", c: "80", d: "", intersects: false},
-		{a: "", b: "80", c: "", d: "40", intersects: true, overlap: "-40"},
-		{a: "80", b: "", c: "c0", d: "", intersects: true, overlap: "c0-"},
-		{a: "", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
-		{a: "40", b: "80", c: "60", d: "a0", intersects: true, overlap: "60-80"},
-		{a: "40", b: "80", c: "50", d: "60", intersects: true, overlap: "50-60"},
-		{a: "40", b: "80", c: "10", d: "50", intersects: true, overlap: "40-50"},
-		{a: "40", b: "80", c: "40", d: "80", intersects: true, overlap: "40-80"},
-		{a: "", b: "80", c: "", d: "80", intersects: true, overlap: "-80"},
-		{a: "40", b: "", c: "40", d: "", intersects: true, overlap: "40-"},
-		{a: "40", b: "80", c: "20", d: "40", intersects: false},
-		{a: "80", b: "", c: "80", d: "c0", intersects: true, overlap: "80-c0"},
-		{a: "", b: "", c: "c0", d: "d0", intersects: true, overlap: "c0-d0"},
+func TestKeyRangesIntersect(t *testing.T) {
+	type args struct {
+		a *topodatapb.KeyRange
+		b *topodatapb.KeyRange
 	}
+	tests := []struct {
+		name string
+		args args
+		want bool
+	}{
+		// non-intersecting cases
+		{
+			name: "typical half-range split, ascending order",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("80-")},
+			want: false,
+		},
+		{
+			name: "typical half-range split, descending order",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("-80")},
+			want: false,
+		},
+		{
+			name: "partial ranges, ascending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("c0-d0")},
+			want: false,
+		},
+		{
+			name: "partial ranges, descending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("20-40")},
+			want: false,
+		},
+		{
+			name: "partial ranges, different key lengths",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("20-40")},
+			want: false,
+		},
 
-	for _, el := range table {
-		a, err := hex.DecodeString(el.a)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		b, err := hex.DecodeString(el.b)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		left := &topodatapb.KeyRange{Start: a, End: b}
-		c, err := hex.DecodeString(el.c)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		d, err := hex.DecodeString(el.d)
-		if err != nil {
-			t.Errorf("Unexpected error: %v", err)
-		}
-		right := &topodatapb.KeyRange{Start: c, End: d}
-		if c := KeyRangesIntersect(left, right); c != el.intersects {
-			t.Errorf("Unexpected result: KeyRangesIntersect for %v and %v yields %v.", left, right, c)
-		}
-		overlap, err := KeyRangesOverlap(left, right)
-		if el.intersects {
-			if err != nil {
-				t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v returned an error: %v", left, right, err)
-			} else {
-				got := hex.EncodeToString(overlap.Start) + "-" + hex.EncodeToString(overlap.End)
-				if got != el.overlap {
-					t.Errorf("Unexpected result: KeyRangesOverlap for overlapping %v and %v should have returned: %v but got: %v", left, right, el.overlap, got)
-				}
-			}
-		} else {
-			if err == nil {
-				t.Errorf("Unexpected result: KeyRangesOverlap for non-overlapping %v and %v should have returned an error", left, right)
-			}
-		}
+		// intersecting cases with a full range
+		{
+			name: "full range with full range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("-")},
+			want: true,
+		},
+		{
+			name: "full range with maximum key partial range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("80-")},
+			want: true,
+		},
+		{
+			name: "full range with partial range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("c0-d0")},
+			want: true,
+		},
+		{
+			name: "minimum key partial range with full range",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("-")},
+			want: true,
+		},
+		{
+			name: "partial range with full range",
+			args: args{a: stringToKeyRange("a0-b0"), b: stringToKeyRange("-")},
+			want: true,
+		},
+
+		// intersecting cases with only partial ranges
+		{
+			name: "the same range, both from minimum key",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("-80")},
+			want: true,
+		},
+		{
+			name: "the same range, both from minimum key, different key lengths",
+			args: args{a: stringToKeyRange("-8000"), b: stringToKeyRange("-80")},
+			want: true,
+		},
+		{
+			name: "the same range, both to maximum key",
+			args: args{a: stringToKeyRange("40-"), b: stringToKeyRange("40-")},
+			want: true,
+		},
+		{
+			name: "the same range, both to maximum key, different key lengths",
+			args: args{a: stringToKeyRange("4000-"), b: stringToKeyRange("40-")},
+			want: true,
+		},
+		{
+			name: "the same range, both with mid-range keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("40-80")},
+			want: true,
+		},
+		{
+			name: "the same range, both with mid-range keys, different key lengths",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("4000-8000")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, both from minimum key",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("-40")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, both to maximum key",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("c0-")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, from minimum key with mid-range key",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("40-80")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, from minimum key with mid-range key, different key lengths",
+			args: args{a: stringToKeyRange("-80"), b: stringToKeyRange("4000-8000")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, to maximum key with mid-range key",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("80-c0")},
+			want: true,
+		},
+		{
+			name: "different-sized partial ranges, to maximum key with mid-range key, different key lengths",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("8000-c000")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, in ascending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("60-a0")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, in descending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("10-50")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, one fully containing the other, in ascending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("50-60")},
+			want: true,
+		},
+		{
+			name: "partially overlapping ranges, one fully containing the other, in descending order",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("30-90")},
+			want: true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, KeyRangesIntersect(tt.args.a, tt.args.b), "KeyRangesIntersect(%v, %v)", tt.args.a, tt.args.b)
+		})
 	}
 }
 
