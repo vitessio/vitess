@@ -102,25 +102,25 @@ func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return t1, flags
 }
 
-func (a *opArithAdd) eval(left, right eval) (eval, error) {
+func (op *opArithAdd) eval(left, right eval) (eval, error) {
 	return addNumericWithError(left, right)
 }
-func (a *opArithAdd) String() string { return "+" }
+func (op *opArithAdd) String() string { return "+" }
 
-func (s *opArithSub) eval(left, right eval) (eval, error) {
+func (op *opArithSub) eval(left, right eval) (eval, error) {
 	return subtractNumericWithError(left, right)
 }
-func (s *opArithSub) String() string { return "-" }
+func (op *opArithSub) String() string { return "-" }
 
-func (m *opArithMul) eval(left, right eval) (eval, error) {
+func (op *opArithMul) eval(left, right eval) (eval, error) {
 	return multiplyNumericWithError(left, right)
 }
-func (m *opArithMul) String() string { return "*" }
+func (op *opArithMul) String() string { return "*" }
 
-func (d *opArithDiv) eval(left, right eval) (eval, error) {
+func (op *opArithDiv) eval(left, right eval) (eval, error) {
 	return divideNumericWithError(left, right, true)
 }
-func (d *opArithDiv) String() string { return "/" }
+func (op *opArithDiv) String() string { return "/" }
 
 func (n *NegateExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := n.Inner.eval(env)
