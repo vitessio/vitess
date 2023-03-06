@@ -20,6 +20,7 @@ import (
 	"bytes"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -117,7 +118,7 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 			return newEvalInt64(int64(len(e.bytes))), nil
 		}
 		coll := collations.Local().LookupByID(e.col.Collation)
-		count := collations.Length(coll, e.bytes)
+		count := charset.Length(coll.Charset(), e.bytes)
 		return newEvalInt64(int64(count)), nil
 	default:
 		return newEvalInt64(int64(len(e.ToRawBytes()))), nil

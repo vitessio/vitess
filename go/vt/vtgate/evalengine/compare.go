@@ -165,7 +165,7 @@ func compareDateAndString(l, r eval) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-	case evalResultIsTextual(lb):
+	case typeIsTextual(lb.SQLType()):
 		lTime, err = matchExprWithAnyDateFormat(l)
 		if err != nil {
 			return 0, err

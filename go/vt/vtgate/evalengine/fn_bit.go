@@ -52,5 +52,6 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinBitCount) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env)
+	// The MySQL docs are actually wrong and this returns an int64, not a uint64.
 	return sqltypes.Int64, f
 }

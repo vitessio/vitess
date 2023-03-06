@@ -19,7 +19,7 @@ package japanese
 import (
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 type Charset_sjis struct{}
