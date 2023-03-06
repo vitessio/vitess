@@ -81,6 +81,8 @@ func init() {
 }
 
 func TestVTGateExecute(t *testing.T) {
+	counts := rpcVTGate.timings.Timings.Counts()
+
 	createSandbox(KsTestUnsharded)
 	hcVTGateTest.Reset()
 	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
@@ -97,11 +99,123 @@ func TestVTGateExecute(t *testing.T) {
 	if err != nil {
 		t.Errorf("want nil, got %v", err)
 	}
+
 	want := *sandboxconn.SingleRowResult
 	want.StatusFlags = 0 // VTGate result set does not contain status flags in sqltypes.Result
 	utils.MustMatch(t, &want, qr)
 	if !proto.Equal(sbc.Options[0], executeOptions) {
 		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	}
+
+	newCounts := rpcVTGate.timings.Timings.Counts()
+	require.Contains(t, newCounts, "All")
+	require.Equal(t, counts["All"]+1, newCounts["All"])
+	require.Contains(t, newCounts, "Execute..primary")
+	require.Equal(t, counts["Execute..primary"]+1, newCounts["Execute..primary"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Prepare") {
+			require.Equal(t, v, counts[k])
+		}
+	}
+}
+
+func TestVTGateExecuteError(t *testing.T) {
+	counts := errorCounts.Counts()
+
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_, qr, err := rpcVTGate.Execute(
+		context.Background(),
+		&vtgatepb.Session{
+			Autocommit:   true,
+			TargetString: "@primary",
+			Options:      executeOptions,
+		},
+		"bad select id from t1",
+		nil,
+	)
+	require.Error(t, err)
+	require.Nil(t, qr)
+
+	newCounts := errorCounts.Counts()
+	require.Contains(t, newCounts, "Execute..primary.INVALID_ARGUMENT")
+	require.Equal(t, counts["Execute..primary.INVALID_ARGUMENT"]+1, newCounts["Execute..primary.INVALID_ARGUMENT"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Prepare") {
+			require.Equal(t, v, counts[k])
+		}
+	}
+}
+
+func TestVTGatePrepare(t *testing.T) {
+	counts := rpcVTGate.timings.Timings.Counts()
+
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	sbc := hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_, qr, err := rpcVTGate.Prepare(
+		context.Background(),
+		&vtgatepb.Session{
+			Autocommit:   true,
+			TargetString: "@primary",
+			Options:      executeOptions,
+		},
+		"select id from t1",
+		nil,
+	)
+	if err != nil {
+		t.Errorf("want nil, got %v", err)
+	}
+
+	want := sandboxconn.SingleRowResult.Fields
+	utils.MustMatch(t, want, qr)
+	if !proto.Equal(sbc.Options[0], executeOptions) {
+		t.Errorf("got ExecuteOptions \n%+v, want \n%+v", sbc.Options[0], executeOptions)
+	}
+
+	newCounts := rpcVTGate.timings.Timings.Counts()
+	require.Contains(t, newCounts, "All")
+	require.Equal(t, counts["All"]+1, newCounts["All"])
+	require.Contains(t, newCounts, "Prepare..primary")
+	require.Equal(t, counts["Prepare..primary"]+1, newCounts["Prepare..primary"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Execute") {
+			require.Equal(t, v, counts[k])
+		}
+	}
+}
+
+func TestVTGatePrepareError(t *testing.T) {
+	counts := errorCounts.Counts()
+
+	createSandbox(KsTestUnsharded)
+	hcVTGateTest.Reset()
+	hcVTGateTest.AddTestTablet("aa", "1.1.1.1", 1001, KsTestUnsharded, "0", topodatapb.TabletType_PRIMARY, true, 1, nil)
+	_, qr, err := rpcVTGate.Prepare(
+		context.Background(),
+		&vtgatepb.Session{
+			Autocommit:   true,
+			TargetString: "@primary",
+			Options:      executeOptions,
+		},
+		"bad select id from t1",
+		nil,
+	)
+	require.Error(t, err)
+	require.Nil(t, qr)
+
+	newCounts := errorCounts.Counts()
+	require.Contains(t, newCounts, "Prepare..primary.INTERNAL")
+	require.Equal(t, counts["Prepare..primary.INTERNAL"]+1, newCounts["Prepare..primary.INTERNAL"])
+
+	for k, v := range newCounts {
+		if strings.HasPrefix(k, "Execute") {
+			require.Equal(t, v, counts[k])
+		}
 	}
 }
 
