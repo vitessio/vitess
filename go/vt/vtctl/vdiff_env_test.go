@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -68,7 +69,7 @@ type testVDiffEnv struct {
 //----------------------------------------------
 // testVDiffEnv
 
-func newTestVDiffEnv(sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
+func newTestVDiffEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string) *testVDiffEnv {
 	env := &testVDiffEnv{
 		workflow:   "vdiffTest",
 		tablets:    make(map[int]*testVDiffTablet),
@@ -80,7 +81,8 @@ func newTestVDiffEnv(sourceShards, targetShards []string, query string, position
 	}
 	env.wr = wrangler.NewTestWrangler(env.cmdlog, env.topoServ, env.tmc)
 
-	dialerName := fmt.Sprintf("VDiffTest-%d", rand.Intn(1000000000))
+	// Generate a unique dialer name.
+	dialerName := fmt.Sprintf("VDiffTest-%s-%d", t.Name(), rand.Intn(1000000000))
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		env.mu.Lock()
 		defer env.mu.Unlock()

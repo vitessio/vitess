@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"math/rand"
 	"sync"
+	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/grpcclient"
@@ -59,7 +60,7 @@ type testWranglerEnv struct {
 //----------------------------------------------
 // testWranglerEnv
 
-func newWranglerTestEnv(sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
+func newWranglerTestEnv(t testing.TB, sourceShards, targetShards []string, query string, positions map[string]string, timeUpdated int64) *testWranglerEnv {
 	env := &testWranglerEnv{
 		workflow:   "wrWorkflow",
 		topoServ:   memorytopo.NewServer("zone1"),
@@ -70,7 +71,8 @@ func newWranglerTestEnv(sourceShards, targetShards []string, query string, posit
 	env.wr = New(logutil.NewConsoleLogger(), env.topoServ, env.tmc)
 	env.tmc.tablets = make(map[int]*testWranglerTablet)
 
-	dialerName := fmt.Sprintf("WranglerTest-%d", rand.Intn(1000000000))
+	// Generate a unique dialer name.
+	dialerName := fmt.Sprintf("WranglerTest-%s-%d", t.Name(), rand.Intn(1000000000))
 	tabletconn.RegisterDialer(dialerName, func(tablet *topodatapb.Tablet, failFast grpcclient.FailFast) (queryservice.QueryService, error) {
 		env.mu.Lock()
 		defer env.mu.Unlock()
