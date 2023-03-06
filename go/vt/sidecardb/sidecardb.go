@@ -391,6 +391,7 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
+		AlterTableAlgorithmStrategy: schemadiff.AlterTableAlgorithmStrategyCopy,
 	}
 	diff, err := schemadiff.DiffCreateTablesQueries(current, desired, hints)
 	if err != nil {

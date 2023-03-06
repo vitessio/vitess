@@ -275,6 +275,9 @@ func TestSchemaChange(t *testing.T) {
 		for _, row := range rs.Named().Rows {
 			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
 			assert.Equal(t, int64(86400), retainArtifactSeconds)
+
+			artifacts := row.AsString("artifacts", "")
+			assert.NotContains(t, artifacts, "_vt_HOLD_") // _vt_HOLD table removed at cut-over time
 		}
 
 		onlineddl.CheckCleanupMigration(t, &vtParams, shards, uuid)

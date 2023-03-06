@@ -19,7 +19,7 @@ package simplifiedchinese
 import (
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 type Charset_gb2312 struct{}

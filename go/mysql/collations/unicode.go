@@ -21,7 +21,7 @@ import (
 	"math"
 	"math/bits"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 

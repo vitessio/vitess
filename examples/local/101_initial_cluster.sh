@@ -71,5 +71,9 @@ vtctldclient ApplyVSchema --vschema-file vschema_commerce_initial.json commerce 
 CELL=zone1 ../common/scripts/vtgate-up.sh
 
 # start vtadmin
-../common/scripts/vtadmin-up.sh
+if [[ -n ${SKIP_VTADMIN} ]]; then
+	echo -e "\nSkipping VTAdmin! If this is not what you want then please unset the SKIP_VTADMIN env variable in your shell."
+else
+	../common/scripts/vtadmin-up.sh
+fi
 
