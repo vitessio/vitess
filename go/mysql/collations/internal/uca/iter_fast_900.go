@@ -66,7 +66,7 @@ func (it *FastIterator900) FastForward32(it2 *FastIterator900) int {
 
 	p1 := it.input
 	p2 := it2.input
-	var w1, w2 uint32
+	var w1, w2 uint16
 
 	for len(p1) >= 4 && len(p2) >= 4 {
 		dword1 := *(*uint32)(unsafe.Pointer(&p1[0]))
@@ -76,16 +76,16 @@ func (it *FastIterator900) FastForward32(it2 *FastIterator900) int {
 		if nonascii == 0 {
 			if dword1 != dword2 {
 				table := it.fastTable
-				if w1, w2 = table[p1[0]], table[p2[0]]; w1 != w2 {
+				if w1, w2 = uint16(table[p1[0]]), uint16(table[p2[0]]); w1 != w2 {
 					goto mismatch
 				}
-				if w1, w2 = table[p1[1]], table[p2[1]]; w1 != w2 {
+				if w1, w2 = uint16(table[p1[1]]), uint16(table[p2[1]]); w1 != w2 {
 					goto mismatch
 				}
-				if w1, w2 = table[p1[2]], table[p2[2]]; w1 != w2 {
+				if w1, w2 = uint16(table[p1[2]]), uint16(table[p2[2]]); w1 != w2 {
 					goto mismatch
 				}
-				if w1, w2 = table[p1[3]], table[p2[3]]; w1 != w2 {
+				if w1, w2 = uint16(table[p1[3]]), uint16(table[p2[3]]); w1 != w2 {
 					goto mismatch
 				}
 			}
@@ -114,7 +114,7 @@ mismatch:
 		it.unicode++
 		return 0
 	}
-	return int(w1) - int(w2)
+	return int(bits.ReverseBytes16(w1)) - int(bits.ReverseBytes16(w2))
 }
 
 // NextWeightBlock64 takes a byte slice of 16 bytes and fills it with the next
