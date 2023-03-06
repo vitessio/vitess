@@ -16,20 +16,35 @@ ARG DEBIAN_VER=stable-slim
 
 FROM debian:${DEBIAN_VER}
 
-COPY logrotate.conf /vt/logrotate.conf
+ARG GID=2000
+ARG GROUP=vitess
+ARG LOGROTATEROOT=/vt
+ARG UID=1000
+ARG USER=vitess
 
-COPY rotate.sh /vt/rotate.sh
+ENV GROUP $GROUP
+ENV LOGROTATEROOT $LOGROTATEROOT
+ENV USER $USER
+
+COPY rotate.sh $LOGROTATEROOT/rotate.sh
+COPY logrotate.conf.tpl $LOGROTATEROOT/logrotate.conf.tpl
 
 RUN mkdir -p /vt && \
    apt-get update && \
    apt-get upgrade -qq && \
-   apt-get install logrotate -qq --no-install-recommends && \
+   apt-get install default-mysql-client gettext logrotate -qq --no-install-recommends && \
    apt-get autoremove -qq && \
    apt-get clean && \
    rm -rf /var/lib/apt/lists/* && \
-   groupadd -r --gid 2000 vitess && \
-   useradd -r -g vitess --uid 1000 vitess && \
-   chown -R vitess:vitess /vt && \
-   chmod +x /vt/rotate.sh
+   groupadd -r --gid $GID $GROUP && \
+   useradd -r -g $GROUP --uid $UID $USER && \
+   chown -R $USER:$GROUP /vt && \
+   chmod +x $LOGROTATEROOT/rotate.sh
 
-ENTRYPOINT [ "/vt/rotate.sh" ]
+USER $USER
+
+# Use /bin/bash to invoke rotate.sh so we can interpolate $LOGROTATEROOT in the
+# rotate.sh path.
+#
+# See https://stackoverflow.com/a/67206046/614660
+ENTRYPOINT ["/bin/bash", "-c", "exec $LOGROTATEROOT/rotate.sh \"${@}\"", "--"]
