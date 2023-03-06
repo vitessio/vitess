@@ -31,7 +31,8 @@ import (
 
 const (
 	systemHealthMonitorCPUSampleWindow = time.Millisecond * 200
-	systemHealthMonitorInterval        = time.Millisecond * 1000
+	// systemHealthMonitorInterval must be > 2 * systemHealthMonitorCPUSampleWindow
+	systemHealthMonitorInterval = time.Millisecond * 1000
 )
 
 // systemHealthCollector is a collector for system health.
@@ -41,8 +42,8 @@ type systemHealthCollector struct {
 	cpuUsagePercent atomic.Uint64
 	interval        time.Duration
 	mu              sync.Mutex
-	started         bool
-	stop            chan bool
+	running         bool
+	stop            chan struct{}
 	wg              sync.WaitGroup
 }
 
@@ -64,13 +65,13 @@ func (s *systemHealthCollector) Open() error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if s.started {
+	if s.running {
 		return nil
 	}
 
-	s.stop = make(chan bool, 1)
+	s.stop = make(chan struct{})
 	go s.startCollection()
-	s.started = true
+	s.running = true
 
 	return s.collectCPUUsage()
 }
@@ -84,15 +85,14 @@ func (s *systemHealthCollector) Close() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if !s.started {
+	if !s.running {
 		return
 	}
 
-	s.stop <- true
 	close(s.stop)
-
 	s.wg.Wait()
-	s.started = false
+	s.running = false
+	s.stop = nil
 }
 
 // GetCPUUsage returns the average cpu usage percent for
@@ -103,7 +103,7 @@ func (s *systemHealthCollector) GetCPUUsage() float64 {
 
 // collectCPUUsage collects the CPU usage percent of the system running vttablet.
 func (s *systemHealthCollector) collectCPUUsage() error {
-	ctx, cancel := context.WithTimeout(context.Background(), s.interval)
+	ctx, cancel := context.WithTimeout(context.Background(), s.cpuSampleWindow*2)
 	defer cancel()
 
 	// get avg cpu of all cpu cores. passing 'false' to .PercentWithContext
@@ -117,8 +117,8 @@ func (s *systemHealthCollector) collectCPUUsage() error {
 
 // setCPUUsage sets the average cpu usage for the system running
 // vttablet as a percent.
-func (s *systemHealthCollector) setCPUUsage(usagePercent float64) {
-	s.cpuUsagePercent.Store(math.Float64bits(usagePercent))
+func (s *systemHealthCollector) setCPUUsage(percent float64) {
+	s.cpuUsagePercent.Store(math.Float64bits(percent))
 }
 
 // startCollection begins the collection of system health metrics.

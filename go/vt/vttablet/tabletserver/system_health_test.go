@@ -33,6 +33,7 @@ func TestSystemHealthCollector(t *testing.T) {
 		EnableSystemHealthMonitor: true,
 	}, t.Name())
 	monitor := newSystemHealthMonitor(tabletEnv)
+
 	collector := monitor.(*systemHealthCollector)
 	collector.cpuSampleWindow = time.Millisecond * 50
 	collector.interval = time.Millisecond * 100
@@ -41,12 +42,12 @@ func TestSystemHealthCollector(t *testing.T) {
 	assert.Nil(t, collector.Open())
 
 	// generate cpu load to measure
-	stopLoadGeneration := make(chan bool, 1)
+	stopCPULoad := make(chan struct{})
 	for i := 0; i < runtime.NumCPU(); i++ {
 		go func() {
 			for {
 				select {
-				case <-stopLoadGeneration:
+				case <-stopCPULoad:
 					return
 				default: // nolint:staticcheck
 				}
@@ -63,14 +64,14 @@ func TestSystemHealthCollector(t *testing.T) {
 		tries++
 		time.Sleep(collector.interval)
 	}
-	stopLoadGeneration <- true
-	close(stopLoadGeneration)
+	close(stopCPULoad)
 	assert.Less(t, tries, 10)
 
-	assert.True(t, collector.started)
+	assert.True(t, collector.running)
 	assert.NotZero(t, cpuUsage)
 
 	// test close
 	collector.Close()
-	assert.False(t, collector.started)
+	assert.False(t, collector.running)
+	assert.Nil(t, collector.stop)
 }
