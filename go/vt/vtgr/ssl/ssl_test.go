@@ -39,7 +39,7 @@ func TestNewTLSConfig(t *testing.T) {
 	fakeCA := writeFakeFile(pemCertificate)
 	defer syscall.Unlink(fakeCA)
 
-	conf, err := ssl.NewTLSConfig(fakeCA, true)
+	conf, err := ssl.NewTLSConfig(fakeCA, true, tls.VersionTLS13)
 	if err != nil {
 		t.Errorf("Could not create new TLS config: %s", err)
 	}
@@ -49,8 +49,11 @@ func TestNewTLSConfig(t *testing.T) {
 	if conf.ClientCAs == nil {
 		t.Errorf("ClientCA empty even though cert provided")
 	}
+	if conf.MinVersion != tls.VersionTLS13 {
+		t.Errorf("incorrect tls min version set")
+	}
 
-	conf, err = ssl.NewTLSConfig("", false)
+	conf, err = ssl.NewTLSConfig("", false, tls.VersionTLS12)
 	if err != nil {
 		t.Errorf("Could not create new TLS config: %s", err)
 	}
@@ -59,6 +62,9 @@ func TestNewTLSConfig(t *testing.T) {
 	}
 	if conf.ClientCAs != nil {
 		t.Errorf("Filling in ClientCA somehow without a cert")
+	}
+	if conf.MinVersion != tls.VersionTLS12 {
+		t.Errorf("incorrect tls min version set")
 	}
 }
 
@@ -145,7 +151,7 @@ func TestReadPEMData(t *testing.T) {
 }
 
 func TestAppendKeyPair(t *testing.T) {
-	c, err := ssl.NewTLSConfig("", false)
+	c, err := ssl.NewTLSConfig("", false, tls.VersionTLS12)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -160,7 +166,7 @@ func TestAppendKeyPair(t *testing.T) {
 }
 
 func TestAppendKeyPairWithPassword(t *testing.T) {
-	c, err := ssl.NewTLSConfig("", false)
+	c, err := ssl.NewTLSConfig("", false, tls.VersionTLS12)
 	if err != nil {
 		t.Fatal(err)
 	}

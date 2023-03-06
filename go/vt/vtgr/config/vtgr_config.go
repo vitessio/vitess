@@ -26,6 +26,8 @@ import (
 
 	"gopkg.in/gcfg.v1"
 
+	"vitess.io/vitess/go/vt/vttls"
+
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -103,6 +105,7 @@ type Configuration struct {
 	MySQLTopologySSLSkipVerify                  bool   // If true, do not strictly validate mutual TLS certs for Topology mysql instances
 	MySQLTopologyUseMutualTLS                   bool   // Turn on TLS authentication with the Topology MySQL instances
 	MySQLTopologyUseMixedTLS                    bool   // Mixed TLS and non-TLS authentication with the Topology MySQL instances
+	MySQLTopologyTLSMinVersion                  string // Configures the minimal required TLS version for a topology MySQL instance with TLS. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
 	TLSCacheTTLFactor                           uint   // Factor of InstancePollSeconds that we set as TLS info cache expiry
 	BackendDB                                   string // EXPERIMENTAL: type of backend db; either "mysql" or "sqlite"
 	SQLite3DataFile                             string // when BackendDB == "sqlite", full path to sqlite3 datafile
@@ -127,6 +130,7 @@ type Configuration struct {
 	MySQLOrchestratorSSLCAFile                  string   // Certificate Authority PEM file used to authenticate with the Orchestrator mysql instance with TLS
 	MySQLOrchestratorSSLSkipVerify              bool     // If true, do not strictly validate mutual TLS certs for the Orchestrator mysql instances
 	MySQLOrchestratorUseMutualTLS               bool     // Turn on TLS authentication with the Orchestrator MySQL instance
+	MySQLOrchestratorTLSMinVersion              string   // Configures the minimal required TLS version for the Orchestrator MySQL instance with TLS. Defaults to TLSv1.2. Options: TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3.
 	MySQLOrchestratorReadTimeoutSeconds         int      // Number of seconds before backend mysql read operation is aborted (driver-side)
 	MySQLOrchestratorRejectReadOnly             bool     // Reject read only connections https://github.com/go-sql-driver/mysql#rejectreadonly
 	MySQLConnectTimeoutSeconds                  int      // Number of seconds before connection is aborted (driver-side)
@@ -405,6 +409,20 @@ func newConfiguration() *Configuration {
 	}
 }
 
+func (config *Configuration) MySQLOrchestratorTLSMinVersionNumber() uint16 {
+	// We can ignore the error here, we already checked for valid options if it's set.
+	// If it's not set, we get a safe default back here.
+	minVersion, _ := vttls.TLSVersionToNumber(config.MySQLOrchestratorTLSMinVersion)
+	return minVersion
+}
+
+func (config *Configuration) MySQLTopologyTLSMinVersionNumber() uint16 {
+	// We can ignore the error here, we already checked for valid options if it's set.
+	// If it's not set, we get a safe default back here.
+	minVersion, _ := vttls.TLSVersionToNumber(config.MySQLTopologyTLSMinVersion)
+	return minVersion
+}
+
 func (config *Configuration) postReadAdjustments() error {
 	if config.MySQLOrchestratorCredentialsConfigFile != "" {
 		mySQLConfig := struct {
@@ -509,6 +527,21 @@ func (config *Configuration) postReadAdjustments() error {
 			config.BufferInstanceWrites = false
 		}
 	}
+
+	if config.MySQLOrchestratorTLSMinVersion != "" {
+		_, err := vttls.TLSVersionToNumber(config.MySQLOrchestratorTLSMinVersion)
+		if err != nil {
+			return fmt.Errorf("If specified, MySQLOrchestratorTLSMinVersion must be one of TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3")
+		}
+	}
+
+	if config.MySQLTopologyTLSMinVersion != "" {
+		_, err := vttls.TLSVersionToNumber(config.MySQLTopologyTLSMinVersion)
+		if err != nil {
+			return fmt.Errorf("If specified, MySQLTopologyTLSMinVersion must be one of TLSv1.0, TLSv1.1, TLSv1.2, TLSv1.3")
+		}
+	}
+
 	return nil
 }
 

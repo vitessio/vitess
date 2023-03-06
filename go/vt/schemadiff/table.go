@@ -437,6 +437,32 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			}
 		}
 
+		// Normalize boolean to tinyint(1). Otherwise we get a diff if the desired schema has a boolean column because
+		// "show create table" reports it as a tinyint(1).
+		if col.Type.Type == "boolean" {
+			col.Type.Type = "tinyint"
+			col.Type.Length = &sqlparser.Literal{
+				Type: sqlparser.IntVal,
+				Val:  "1",
+			}
+
+			if col.Type.Options.Default != nil {
+				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
+				if ok {
+					defaultVal := "0"
+					if val {
+						defaultVal = "1"
+					}
+					col.Type.Options.Default = &sqlparser.Literal{
+						Type: sqlparser.StrVal,
+						Val:  defaultVal,
+					}
+				} else {
+					col.Type.Options.Default = nil
+				}
+			}
+		}
+
 		if _, ok := floatTypes[col.Type.Type]; ok {
 			// First, normalize the actual type
 			switch col.Type.Type {
@@ -724,6 +750,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: c.CreateTable.Table,
 	}
+	if hints.TableQualifierHint == TableQualifierDeclared {
+		alterTable.Table.Qualifier = other.Table.Qualifier
+	}
+
 	diffedTableCharset := ""
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
@@ -775,15 +805,35 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		}
 	}
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
+
+	newAlterTableEntityDiff := func(alterTable *sqlparser.AlterTable) *AlterTableEntityDiff {
+		d := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+
+		var algorithmValue sqlparser.AlgorithmValue
+
+		switch hints.AlterTableAlgorithmStrategy {
+		case AlterTableAlgorithmStrategyCopy:
+			algorithmValue = sqlparser.AlgorithmValue("COPY")
+		case AlterTableAlgorithmStrategyInplace:
+			algorithmValue = sqlparser.AlgorithmValue("INPLACE")
+		case AlterTableAlgorithmStrategyInstant:
+			algorithmValue = sqlparser.AlgorithmValue("INSTANT")
+		}
+		if algorithmValue != "" {
+			alterTable.AlterOptions = append(alterTable.AlterOptions, algorithmValue)
+		}
+		return d
+	}
 	if tableSpecHasChanged {
-		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		parentAlterTableEntityDiff = newAlterTableEntityDiff(alterTable)
+
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
 			Table:        c.CreateTable.Table,
 			AlterOptions: []sqlparser.AlterOption{superfluousFulltextKey},
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		// if we got superfluous fulltext keys, that means the table spec has changed, ie
 		// parentAlterTableEntityDiff is not nil
 		parentAlterTableEntityDiff.addSubsequentDiff(diff)
@@ -793,7 +843,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			Table:         c.CreateTable.Table,
 			PartitionSpec: partitionSpec,
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		if parentAlterTableEntityDiff == nil {
 			parentAlterTableEntityDiff = diff
 		} else {
@@ -1990,6 +2040,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					c.TableSpec.Options = append(c.TableSpec.Options, option)
 				}()
 			}
+		case sqlparser.AlgorithmValue:
+			// silently ignore. This has an operational effect on the MySQL engine, but has no semantical effect.
 		default:
 			return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}
 		}

@@ -164,6 +164,9 @@ var (
 		input:  "create table x(location LINESTRING DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation LINESTRING default (point(7.0, 3.0))\n)",
 	}, {
+		input:  "select linestring(pt1, pt2) from geom",
+		output: "select linestring(pt1, pt2) from geom",
+	}, {
 		input:  "create table x(location POLYGON DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation POLYGON default (point(7.0, 3.0))\n)",
 	}, {
@@ -178,6 +181,12 @@ var (
 	}, {
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POINT(7.0, 3.0)))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (point(7.0, 3.0))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(7.0, 3.0))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(7.0, 3.0)))\n)",
 	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
@@ -1237,6 +1246,12 @@ var (
 		input: "alter table a convert to character set utf32",
 	}, {
 		input: "alter table `By` add column foo int, algorithm = default",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = copy",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = inplace",
+	}, {
+		input: "alter table `By` add column foo int, algorithm = INPLACE",
 	}, {
 		input: "alter table `By` add column foo int, algorithm = instant",
 	}, {

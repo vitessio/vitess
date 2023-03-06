@@ -17,6 +17,7 @@ limitations under the License.
 package onlineddl
 
 import (
+	"fmt"
 	"testing"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -28,6 +29,35 @@ import (
 func CheckCancelAllMigrationsViaVtctl(t *testing.T, vtctlclient *cluster.VtctlClientProcess, keyspace string) {
 	cancelQuery := "alter vitess_migration cancel all"
 
-	_, err := vtctlclient.ApplySchemaWithOutput(keyspace, cancelQuery, cluster.VtctlClientParams{SkipPreflight: true})
+	_, err := vtctlclient.ApplySchemaWithOutput(keyspace, cancelQuery, cluster.VtctlClientParams{})
 	assert.NoError(t, err)
+}
+
+// UpdateThrottlerTopoConfig runs vtctlclient UpdateThrottlerConfig
+func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, enable bool, disable bool, threshold float64, metricsQuery string, viaVtctldClient bool) (result string, err error) {
+	args := []string{}
+	if !viaVtctldClient {
+		args = append(args, "--")
+	}
+	args = append(args, "UpdateThrottlerConfig")
+	if enable {
+		args = append(args, "--enable")
+	}
+	if disable {
+		args = append(args, "--disable")
+	}
+	if threshold > 0 {
+		args = append(args, "--threshold", fmt.Sprintf("%f", threshold))
+	}
+	if metricsQuery != "" {
+		args = append(args, "--custom-query", metricsQuery)
+		args = append(args, "--check-as-check-self")
+	} else {
+		args = append(args, "--check-as-check-shard")
+	}
+	args = append(args, clusterInstance.Keyspaces[0].Name)
+	if viaVtctldClient {
+		return clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput(args...)
+	}
+	return clusterInstance.VtctlclientProcess.ExecuteCommandWithOutput(args...)
 }

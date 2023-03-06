@@ -281,6 +281,11 @@ func (bs *CephBackupStorage) Close() error {
 	return nil
 }
 
+func (bs *CephBackupStorage) WithParams(params backupstorage.Params) backupstorage.BackupStorage {
+	// TODO(maxeng): return a new CephBackupStorage that uses params.
+	return bs
+}
+
 // client returns the Ceph Storage client instance.
 // If there isn't one yet, it tries to create one.
 func (bs *CephBackupStorage) client() (*minio.Client, error) {

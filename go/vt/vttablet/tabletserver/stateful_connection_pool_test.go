@@ -205,7 +205,7 @@ func TestFailOnConnectionRegistering(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	pool.lastID.Set(conn.ConnID - 1)
+	pool.lastID.Store(conn.ConnID - 1)
 
 	_, err = pool.NewConn(ctx, &querypb.ExecuteOptions{}, nil)
 	require.Error(t, err, "already present")

@@ -29,6 +29,7 @@ import (
 	"sync"
 	"time"
 
+	"golang.org/x/sync/semaphore"
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/proto"
 
@@ -37,7 +38,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqlescape"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -222,7 +222,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	defer panicHandler(&err)
 
 	span.Annotate("keyspace", req.Keyspace)
-	span.Annotate("skip_preflight", req.SkipPreflight)
 	span.Annotate("ddl_strategy", req.DdlStrategy)
 
 	if len(req.Sql) == 0 {
@@ -267,9 +266,6 @@ func (s *VtctldServer) ApplySchema(ctx context.Context, req *vtctldatapb.ApplySc
 	executor := schemamanager.NewTabletExecutor(migrationContext, s.ts, s.tmc, logger, waitReplicasTimeout)
 	if req.AllowLongUnavailability {
 		executor.AllowBigSchemaChange()
-	}
-	if req.SkipPreflight {
-		executor.SkipPreflight()
 	}
 
 	if err = executor.SetDDLStrategy(req.DdlStrategy); err != nil {
@@ -2476,9 +2472,9 @@ func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.R
 
 	logger, getEvents := eventStreamLogger()
 
-	var sema *sync2.Semaphore
+	var sema *semaphore.Weighted
 	if req.Concurrency > 0 {
-		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+		sema = semaphore.NewWeighted(int64(req.Concurrency))
 	}
 
 	s.reloadSchemaShard(ctx, req, sema, logger)
@@ -2488,7 +2484,7 @@ func (s *VtctldServer) ReloadSchemaShard(ctx context.Context, req *vtctldatapb.R
 	}, nil
 }
 
-func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *sync2.Semaphore, logger logutil.Logger) {
+func (s *VtctldServer) reloadSchemaShard(ctx context.Context, req *vtctldatapb.ReloadSchemaShardRequest, sema *semaphore.Weighted, logger logutil.Logger) {
 	span, ctx := trace.NewSpan(ctx, "VtctldServer.ReloadSchemaShard")
 	defer span.Finish()
 
@@ -2526,12 +2522,12 @@ func (s *VtctldServer) ReloadSchemaKeyspace(ctx context.Context, req *vtctldatap
 
 	var (
 		wg                sync.WaitGroup
-		sema              *sync2.Semaphore
+		sema              *semaphore.Weighted
 		logger, getEvents = eventStreamLogger()
 	)
 
 	if req.Concurrency > 0 {
-		sema = sync2.NewSemaphore(int(req.Concurrency), 0)
+		sema = semaphore.NewWeighted(int64(req.Concurrency))
 	}
 
 	for _, shard := range shards {

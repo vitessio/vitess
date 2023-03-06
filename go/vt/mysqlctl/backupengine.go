@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -70,6 +71,25 @@ type BackupParams struct {
 	// Position of last known backup. If non empty, then this value indicates the backup should be incremental
 	// and as of this position
 	IncrementalFromPos string
+	// Stats let's backup engines report detailed backup timings.
+	Stats backupstats.Stats
+}
+
+func (b BackupParams) Copy() BackupParams {
+	return BackupParams{
+		b.Cnf,
+		b.Mysqld,
+		b.Logger,
+		b.Concurrency,
+		b.HookExtraEnv,
+		b.TopoServer,
+		b.Keyspace,
+		b.Shard,
+		b.TabletAlias,
+		b.BackupTime,
+		b.IncrementalFromPos,
+		b.Stats,
+	}
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore
@@ -99,6 +119,26 @@ type RestoreParams struct {
 	RestoreToPos mysql.Position
 	// When DryRun is set, no restore actually takes place; but some of its steps are validated.
 	DryRun bool
+	// Stats let's restore engines report detailed restore timings.
+	Stats backupstats.Stats
+}
+
+func (p RestoreParams) Copy() RestoreParams {
+	return RestoreParams{
+		p.Cnf,
+		p.Mysqld,
+		p.Logger,
+		p.Concurrency,
+		p.HookExtraEnv,
+		p.DeleteBeforeRestore,
+		p.DbName,
+		p.Keyspace,
+		p.Shard,
+		p.StartTime,
+		p.RestoreToPos,
+		p.DryRun,
+		p.Stats,
+	}
 }
 
 func (p *RestoreParams) IsIncrementalRecovery() bool {

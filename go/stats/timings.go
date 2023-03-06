@@ -20,16 +20,15 @@ import (
 	"encoding/json"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
-
-	"vitess.io/vitess/go/sync2"
 )
 
 // Timings is meant to tracks timing data
 // by named categories as well as histograms.
 type Timings struct {
-	totalCount sync2.AtomicInt64
-	totalTime  sync2.AtomicInt64
+	totalCount atomic.Int64
+	totalTime  atomic.Int64
 
 	mu         sync.RWMutex
 	histograms map[string]*Histogram
@@ -118,8 +117,8 @@ func (t *Timings) String() string {
 		TotalTime  int64
 		Histograms map[string]*Histogram
 	}{
-		t.totalCount.Get(),
-		t.totalTime.Get(),
+		t.totalCount.Load(),
+		t.totalTime.Load(),
 		t.histograms,
 	}
 
@@ -143,12 +142,12 @@ func (t *Timings) Histograms() (h map[string]*Histogram) {
 
 // Count returns the total count for all values.
 func (t *Timings) Count() int64 {
-	return t.totalCount.Get()
+	return t.totalCount.Load()
 }
 
 // Time returns the total time elapsed for all values.
 func (t *Timings) Time() int64 {
-	return t.totalTime.Get()
+	return t.totalTime.Load()
 }
 
 // Counts returns the total count for each value.
@@ -160,7 +159,7 @@ func (t *Timings) Counts() map[string]int64 {
 	for k, v := range t.histograms {
 		counts[k] = v.Count()
 	}
-	counts["All"] = t.totalCount.Get()
+	counts["All"] = t.totalCount.Load()
 	return counts
 }
 

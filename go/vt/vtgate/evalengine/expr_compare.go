@@ -21,6 +21,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
@@ -44,7 +45,7 @@ type (
 	InExpr struct {
 		BinaryExpr
 		Negate bool
-		Hashed map[uintptr]int
+		Hashed map[vthash.Hash]int
 	}
 
 	ComparisonOp interface {
@@ -111,7 +112,7 @@ func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 }
 
 func evalResultIsTextual(e eval) bool {
-	tt := e.sqlType()
+	tt := e.SQLType()
 	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt)
 }
 
@@ -120,8 +121,8 @@ func evalResultsAreStrings(l, r eval) bool {
 }
 
 func evalResultsAreSameNumericType(l, r eval) bool {
-	ltype := l.sqlType()
-	rtype := r.sqlType()
+	ltype := l.SQLType()
+	rtype := r.SQLType()
 	if sqltypes.IsIntegral(ltype) && sqltypes.IsIntegral(rtype) {
 		return true
 	}
@@ -135,25 +136,25 @@ func evalResultsAreSameNumericType(l, r eval) bool {
 }
 
 func needsDecimalHandling(l, r eval) bool {
-	ltype := l.sqlType()
-	rtype := r.sqlType()
+	ltype := l.SQLType()
+	rtype := r.SQLType()
 	return ltype == sqltypes.Decimal && (sqltypes.IsIntegral(rtype) || sqltypes.IsFloat(rtype)) ||
 		rtype == sqltypes.Decimal && (sqltypes.IsIntegral(ltype) || sqltypes.IsFloat(ltype))
 }
 
 func evalResultsAreDates(l, r eval) bool {
-	return sqltypes.IsDate(l.sqlType()) && sqltypes.IsDate(r.sqlType())
+	return sqltypes.IsDate(l.SQLType()) && sqltypes.IsDate(r.SQLType())
 }
 
 func evalResultsAreDateAndString(l, r eval) bool {
-	ltype := l.sqlType()
-	rtype := r.sqlType()
+	ltype := l.SQLType()
+	rtype := r.SQLType()
 	return (sqltypes.IsDate(ltype) && evalResultIsTextual(r)) || (evalResultIsTextual(l) && sqltypes.IsDate(rtype))
 }
 
 func evalResultsAreDateAndNumeric(l, r eval) bool {
-	ltype := l.sqlType()
-	rtype := r.sqlType()
+	ltype := l.SQLType()
+	rtype := r.SQLType()
 	return sqltypes.IsDate(ltype) && sqltypes.IsNumber(rtype) || sqltypes.IsNumber(ltype) && sqltypes.IsDate(rtype)
 }
 
@@ -229,7 +230,7 @@ func evalCompare(left, right eval) (comp int, err error) {
 		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
 		// 			- select 1 where 104200 = cast("10:42:00" as time)
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
-	case left.sqlType() == sqltypes.Tuple || right.sqlType() == sqltypes.Tuple:
+	case left.SQLType() == sqltypes.Tuple || right.SQLType() == sqltypes.Tuple:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
 	default:
 		// Quoting MySQL Docs:
@@ -296,18 +297,22 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var foundNull, found bool
+	var hasher = vthash.New()
 	if i.Hashed != nil {
-		hash, err := left.hash()
-		if err != nil {
-			return nil, err
-		}
-		if idx, ok := i.Hashed[hash]; ok {
-			var numeric int
-			numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
-			if err != nil {
-				return nil, err
+		if left, ok := left.(hashable); ok {
+			left.Hash(&hasher)
+
+			hash := hasher.Sum128()
+			hasher.Reset()
+
+			if idx, ok := i.Hashed[hash]; ok {
+				var numeric int
+				numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
+				if err != nil {
+					return nil, err
+				}
+				found = numeric == 0
 			}
-			found = numeric == 0
 		}
 	} else {
 		for _, rtuple := range rtuple.t {
@@ -368,11 +373,11 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 	case evalResultIsTextual(left) && evalResultIsTextual(right):
 		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col)
 	case evalResultIsTextual(right):
-		matched = l.matchWildcard(left.toRawBytes(), right.(*evalBytes).bytes, col)
+		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col)
 	case evalResultIsTextual(left):
-		matched = l.matchWildcard(left.(*evalBytes).bytes, right.toRawBytes(), col)
+		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col)
 	default:
-		matched = l.matchWildcard(left.toRawBytes(), right.toRawBytes(), collations.CollationBinaryID)
+		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
 	}
 	return newEvalBool(matched == !l.Negate), nil
 }

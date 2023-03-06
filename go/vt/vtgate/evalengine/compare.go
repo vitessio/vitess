@@ -156,7 +156,7 @@ func compareDateAndString(l, r eval) (int, error) {
 	var lTime, rTime time.Time
 	var err error
 	switch {
-	case sqltypes.IsDate(lb.sqlType()):
+	case sqltypes.IsDate(lb.SQLType()):
 		lTime, err = lb.parseDate()
 		if err != nil {
 			return 0, err
