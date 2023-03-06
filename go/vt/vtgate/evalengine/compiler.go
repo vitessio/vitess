@@ -246,6 +246,8 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 		return c.compileLength(call, byteLen)
 	case *builtinBitLength:
 		return c.compileLength(call, bitLen)
+	case *builtinASCII:
+		return c.compileASCII(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -1388,6 +1390,27 @@ func (c *compiler) compileLength(call callable, op lengthOp) (ctype, error) {
 	}
 
 	c.emitLength(op)
+	c.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileASCII(call *builtinASCII) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck1(skip)
+
+	switch {
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	default:
+		c.emitConvert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+	}
+
+	c.emitASCII()
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil

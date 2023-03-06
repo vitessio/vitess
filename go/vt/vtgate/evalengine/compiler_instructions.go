@@ -1436,3 +1436,15 @@ func (c *compiler) emitLength(op lengthOp) {
 		}, "BIT_LENGTH VARCHAR(SP-1)")
 	}
 }
+
+func (c *compiler) emitASCII() {
+	c.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalBytes)
+		if len(arg.bytes) == 0 {
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(0)
+		} else {
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(arg.bytes[0]))
+		}
+		return 1
+	}, "ASCII VARCHAR(SP-1)")
+}
