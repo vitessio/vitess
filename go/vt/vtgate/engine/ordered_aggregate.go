@@ -129,8 +129,7 @@ func (ap *AggregateParams) String() string {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if ap.CollationID != collations.Unknown {
-		collation := collations.Local().LookupByID(ap.CollationID)
-		keyCol += " COLLATE " + collation.Name()
+		keyCol += " COLLATE " + ap.CollationID.Get().Name()
 	}
 	dispOrigOp := ""
 	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {

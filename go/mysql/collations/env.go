@@ -40,21 +40,13 @@ type Environment struct {
 // LookupByName returns the collation with the given name. The collation
 // is initialized if it's the first time being accessed.
 func (env *Environment) LookupByName(name string) Collation {
-	if coll, ok := env.byName[name]; ok {
-		coll.Init()
-		return coll
-	}
-	return nil
+	return env.byName[name]
 }
 
 // LookupByID returns the collation with the given numerical identifier. The collation
 // is initialized if it's the first time being accessed.
 func (env *Environment) LookupByID(id ID) Collation {
-	if coll, ok := env.byID[id]; ok {
-		coll.Init()
-		return coll
-	}
-	return nil
+	return env.byID[id]
 }
 
 // LookupID returns the collation ID for the given name, and whether
@@ -72,10 +64,7 @@ func (env *Environment) LookupID(name string) (ID, bool) {
 // DefaultCollationForCharset returns the default collation for a charset
 func (env *Environment) DefaultCollationForCharset(charset string) Collation {
 	if defaults, ok := env.byCharset[charset]; ok {
-		if defaults.Default != nil {
-			defaults.Default.Init()
-			return defaults.Default
-		}
+		return defaults.Default
 	}
 	return nil
 }
@@ -83,10 +72,7 @@ func (env *Environment) DefaultCollationForCharset(charset string) Collation {
 // BinaryCollationForCharset returns the default binary collation for a charset
 func (env *Environment) BinaryCollationForCharset(charset string) Collation {
 	if defaults, ok := env.byCharset[charset]; ok {
-		if defaults.Binary != nil {
-			defaults.Binary.Init()
-			return defaults.Binary
-		}
+		return defaults.Binary
 	}
 	return nil
 }
@@ -97,7 +83,6 @@ func (env *Environment) BinaryCollationForCharset(charset string) Collation {
 func (env *Environment) AllCollations() (all []Collation) {
 	all = make([]Collation, 0, len(env.byID))
 	for _, col := range env.byID {
-		col.Init()
 		all = append(all, col)
 	}
 	return

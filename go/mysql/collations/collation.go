@@ -37,9 +37,7 @@ type ID uint16
 
 // Get returns the Collation identified by this ID. If the ID is invalid, this method will panic.
 func (i ID) Get() Collation {
-	coll := collationsById[i]
-	coll.Init()
-	return coll
+	return collationsById[i]
 }
 
 // Valid returns whether this Collation ID is valid (i.e. identifies a valid collation)
@@ -53,9 +51,6 @@ const Unknown ID = 0
 // Collation implements a MySQL-compatible collation. It defines how to compare
 // for sorting order and equality two strings with the same encoding.
 type Collation interface {
-	// Init initializes the internal state for the collation the first time it is used
-	Init()
-
 	// ID returns the numerical identifier for this collation. This is the same
 	// value that is returned by MySQL in a query's headers to identify the collation
 	// for a given column
