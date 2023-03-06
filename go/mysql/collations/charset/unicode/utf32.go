@@ -19,7 +19,7 @@ package unicode
 import (
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 type Charset_utf32 struct{}

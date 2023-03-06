@@ -20,7 +20,7 @@ import (
 	"unicode/utf8"
 	_ "unsafe"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 func ujisEncodeRune(dst []byte, r rune, table208, table212 *[65536]uint16) int {

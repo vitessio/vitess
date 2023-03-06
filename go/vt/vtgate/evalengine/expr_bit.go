@@ -170,6 +170,8 @@ func (o opBitAnd) binary(left, right []byte) (out []byte) {
 
 func (o opBitAnd) BitwiseOp() string { return "&" }
 
+var errBitwiseOperandsLength = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
+
 func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 	l, r, err := bit.arguments(env)
 	if l == nil || r == nil || err != nil {
@@ -192,7 +194,7 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 					b1 := l.bytes
 					b2 := r.bytes
 					if len(b1) != len(b2) {
-						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
+						return nil, errBitwiseOperandsLength
 					}
 					return newEvalBinary(op.binary(b1, b2)), nil
 				}
