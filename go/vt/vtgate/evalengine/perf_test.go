@@ -5,6 +5,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
@@ -22,7 +23,10 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 	}
 
 	for _, tc := range testCases {
-		expr := parseExpr(b, tc.expression)
+		expr, err := sqlparser.ParseExpr(tc.expression)
+		if err != nil {
+			b.Fatal(err)
+		}
 		converted, err := evalengine.TranslateEx(expr, &evalengine.LookupIntegrationTest{collations.CollationUtf8mb4ID}, true)
 		if err != nil {
 			b.Fatal(err)

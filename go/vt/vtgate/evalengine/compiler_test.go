@@ -10,12 +10,28 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
 )
+
+func makeFields(values []sqltypes.Value) (fields []*querypb.Field) {
+	for _, v := range values {
+		field := &querypb.Field{
+			Type: v.Type(),
+		}
+		if sqltypes.IsText(field.Type) {
+			field.Charset = uint32(collations.CollationUtf8mb4ID)
+		} else {
+			field.Charset = uint32(collations.CollationBinaryID)
+		}
+		fields = append(fields, field)
+	}
+	return
+}
 
 type Tracker struct {
 	buf              strings.Builder
@@ -214,7 +230,11 @@ func TestCompiler(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.expression, func(t *testing.T) {
-			expr := parseExpr(t, tc.expression)
+			expr, err := sqlparser.ParseExpr(tc.expression)
+			if err != nil {
+				t.Fatal(err)
+			}
+
 			converted, err := evalengine.TranslateEx(expr, &evalengine.LookupIntegrationTest{collations.CollationUtf8mb4ID}, false)
 			if err != nil {
 				t.Fatal(err)
