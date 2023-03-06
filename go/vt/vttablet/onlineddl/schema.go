@@ -131,6 +131,11 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
+	sqlClearSingleArtifact = `UPDATE _vt.schema_migrations
+			SET artifacts=replace(artifacts, concat(%a, ','), ''), cleanup_timestamp=NULL
+		WHERE
+			migration_uuid=%a
+	`
 	sqlClearArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=''
 		WHERE
@@ -491,13 +496,14 @@ const (
 		END,
 		COUNT_COLUMN_IN_INDEX
 	`
-	sqlDropTrigger      = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike   = "SHOW TABLES LIKE '%a'"
-	sqlDropTable        = "DROP TABLE `%a`"
-	sqlShowColumnsFrom  = "SHOW COLUMNS FROM `%a`"
-	sqlShowTableStatus  = "SHOW TABLE STATUS LIKE '%a'"
-	sqlShowCreateTable  = "SHOW CREATE TABLE `%a`"
-	sqlGetAutoIncrement = `
+	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
+	sqlDropTable         = "DROP TABLE `%a`"
+	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
+	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
+	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
+	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT
 		FROM INFORMATION_SCHEMA.TABLES
