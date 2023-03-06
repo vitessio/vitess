@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
 func init() {

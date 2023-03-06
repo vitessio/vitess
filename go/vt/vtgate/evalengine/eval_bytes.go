@@ -17,10 +17,12 @@ limitations under the License.
 package evalengine
 
 import (
+	"encoding/binary"
 	"time"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -81,7 +83,7 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 			toCollation := environment.LookupByID(col)
 
 			var err error
-			bytes, err = collations.Convert(nil, toCollation, bytes, fromCollation)
+			bytes, err = charset.Convert(nil, toCollation.Charset(), bytes, fromCollation.Charset())
 			if err != nil {
 				return nil, err
 			}
@@ -156,7 +158,7 @@ func (e *evalBytes) truncateInPlace(size int) {
 		}
 	case sqltypes.IsText(tt):
 		collation := collations.Local().LookupByID(e.col.Collation)
-		e.bytes = collations.Slice(collation, e.bytes, 0, size)
+		e.bytes = charset.Slice(collation.Charset(), e.bytes, 0, size)
 	default:
 		panic("called EvalResult.truncate on non-quoted")
 	}

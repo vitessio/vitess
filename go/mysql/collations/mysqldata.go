@@ -3,8 +3,8 @@
 package collations
 
 import (
-	charset "vitess.io/vitess/go/mysql/collations/internal/charset"
-	eightbit "vitess.io/vitess/go/mysql/collations/internal/charset/eightbit"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/mysql/collations/charset/eightbit"
 	uca "vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 

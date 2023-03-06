@@ -19,7 +19,7 @@ package collations
 import (
 	"math"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -148,7 +148,7 @@ type Collation interface {
 	Wildcard(pat []byte, matchOne, matchMany, escape rune) WildcardPattern
 
 	// Charset returns the Charset with which this collation is encoded
-	Charset() charset.Charset
+	Charset() Charset
 
 	// IsBinary returns whether this collation is a binary collation
 	IsBinary() bool
@@ -159,6 +159,8 @@ type WildcardPattern interface {
 	// Match returns whether the given string matches this pattern
 	Match(in []byte) bool
 }
+
+type Charset = charset.Charset
 
 const PadToMax = math.MaxInt32
 
@@ -176,34 +178,4 @@ func register(c Collation) {
 		panic("duplicated collation registered")
 	}
 	globalAllCollations[c.ID()] = c
-}
-
-// Slice returns the substring in `input[from:to]`, where `from` and `to`
-// are collation-aware character indices instead of bytes.
-func Slice(collation Collation, input []byte, from, to int) []byte {
-	return charset.Slice(collation.Charset(), input, from, to)
-}
-
-// Validate returns whether the given `input` is properly encoded with the
-// character set for the given collation.
-func Validate(collation Collation, input []byte) bool {
-	return charset.Validate(collation.Charset(), input)
-}
-
-// Convert converts the bytes in `src`, which are encoded in `srcCollation`'s charset,
-// into a byte slice encoded in `dstCollation`'s charset. The resulting byte slice is
-// appended to `dst` and returned.
-func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
-	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
-}
-
-// Length returns the number of codepoints in the input based on the given collation
-func Length(collation Collation, input []byte) int {
-	return charset.Length(collation.Charset(), input)
-}
-
-// ConvertForJSON behaves like Convert, but the output string is always utf8mb4 encoded,
-// as it is required for JSON strings in MySQL.
-func ConvertForJSON(dst []byte, src []byte, srcCollation Collation) ([]byte, error) {
-	return charset.Convert(dst, charset.Charset_utf8mb4{}, src, srcCollation.Charset())
 }
