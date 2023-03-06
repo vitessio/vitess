@@ -176,8 +176,11 @@ func makeEnv(version collver) *Environment {
 			continue
 		}
 
-		collation, ok := globalAllCollations[collid]
-		if !ok {
+		var collation Collation
+		if int(collid) < len(collationsById) {
+			collation = collationsById[collid]
+		}
+		if collation == nil {
 			for _, name := range ournames {
 				env.unsupported[name] = collid
 			}

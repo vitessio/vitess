@@ -40,10 +40,13 @@ var testcollationOnce sync.Once
 
 func testinit() {
 	testcollationOnce.Do(func() {
-		testcollationSlice = make([]Collation, 0, len(globalAllCollations))
+		testcollationSlice = make([]Collation, 0, len(collationsById))
 		testcollationMap = make(map[string]Collation)
 
-		for _, collation := range globalAllCollations {
+		for _, collation := range collationsById {
+			if collation == nil {
+				continue
+			}
 			collation.Init()
 			testcollationMap[collation.Name()] = collation
 			testcollationSlice = append(testcollationSlice, collation)

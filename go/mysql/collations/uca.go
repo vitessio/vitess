@@ -26,10 +26,6 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-func init() {
-	register(&Collation_utf8mb4_0900_bin{})
-}
-
 type Collation_utf8mb4_uca_0900 struct {
 	name string
 	id   ID

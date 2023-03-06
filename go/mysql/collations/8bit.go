@@ -27,8 +27,6 @@ func init() {
 	for i := range sortOrderIdentity {
 		sortOrderIdentity[i] = byte(i)
 	}
-
-	register(&Collation_binary{})
 }
 
 type simpletables struct {

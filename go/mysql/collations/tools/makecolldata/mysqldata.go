@@ -95,7 +95,7 @@ func (g *Generator) printCollationUcaLegacy(meta *CollationMetadata) {
 	tableWeightPatches := g.Tables.writeWeightPatches(meta)
 	tableContractions := g.Tables.writeContractions(meta)
 
-	g.P("register(&Collation_uca_legacy{")
+	g.P(meta.Number, ": &Collation_uca_legacy{")
 	g.P("name: ", codegen.Quote(meta.Name), ",")
 	g.P("id: ", meta.Number, ",")
 	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
@@ -114,7 +114,7 @@ func (g *Generator) printCollationUcaLegacy(meta *CollationMetadata) {
 	default:
 		g.Fail("invalid UCAVersion")
 	}
-	g.P("})")
+	g.P("},")
 }
 
 func (g *TableGenerator) writeWeightPatches(meta *CollationMetadata) string {
@@ -148,7 +148,6 @@ func (g *TableGenerator) writeWeightPatches(meta *CollationMetadata) string {
 func (g *TableGenerator) writeContractions(meta *CollationMetadata) string {
 	var tableContractions string
 	var dedup bool
-
 	if len(meta.Contractions) > 0 {
 		tableContractions, dedup = g.dedupTable("contractor", meta.Name, meta.Contractions)
 		if !dedup {
@@ -205,9 +204,10 @@ func (g *Generator) printCollationUca900(meta *CollationMetadata) {
 	tableWeightPatches := g.Tables.writeWeightPatches(meta)
 	tableContractions := g.Tables.writeContractions(meta)
 	tableReorder := g.Tables.writeReorders(meta)
+	name := codegen.Quote(meta.Name)
 
-	g.P("register(&Collation_utf8mb4_uca_0900{")
-	g.P("name: ", codegen.Quote(meta.Name), ",")
+	g.P(meta.Number, ": &Collation_utf8mb4_uca_0900{")
+	g.P("name: ", name, ",")
 	g.P("id: ", meta.Number, ",")
 
 	var levels int
@@ -235,10 +235,11 @@ func (g *Generator) printCollationUca900(meta *CollationMetadata) {
 	if tableReorder != "" {
 		g.P("reorder: ", tableReorder, ",")
 	}
+
 	if meta.UpperCaseFirst {
 		g.P("upperCaseFirst: true,")
 	}
-	g.P("})")
+	g.P("},")
 }
 
 func (g *TableGenerator) printSlice(name, coll string, slice any) string {
@@ -286,7 +287,7 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 		collation = "Collation_8bit_simple_ci"
 	}
 
-	g.P("register(&", collation, "{")
+	g.P(meta.Number, ": &", collation, "{")
 	g.P("id: ", meta.Number, ",")
 	g.P("name: ", codegen.Quote(meta.Name), ",")
 
@@ -315,7 +316,7 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 		}
 		g.P("},")
 	}
-	g.P("})")
+	g.P("},")
 }
 
 func (g *Generator) printCollationUnicode(meta *CollationMetadata) {
@@ -325,14 +326,14 @@ func (g *Generator) printCollationUnicode(meta *CollationMetadata) {
 	} else {
 		collation = "Collation_unicode_general_ci"
 	}
-	g.P("register(&", collation, "{")
+	g.P(meta.Number, ": &", collation, "{")
 	g.P("id: ", meta.Number, ",")
 	g.P("name: ", strconv.Quote(meta.Name), ",")
 	if !meta.Flags.Binary {
 		g.P("unicase: unicaseInfo_default,")
 	}
 	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
-	g.P("})")
+	g.P("},")
 }
 
 func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
@@ -341,14 +342,14 @@ func (g *Generator) printCollationMultibyte(meta *CollationMetadata) {
 		tableSortOrder = g.Tables.printSlice("sortorder", meta.Name, codegen.Array8(meta.SortOrder))
 	}
 
-	g.P("register(&Collation_multibyte{")
+	g.P(meta.Number, ": &Collation_multibyte{")
 	g.P("id: ", meta.Number, ",")
 	g.P("name: ", codegen.Quote(meta.Name), ",")
 	if tableSortOrder != "" {
 		g.P("sort: &", tableSortOrder, ",")
 	}
 	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
-	g.P("})")
+	g.P("},")
 }
 
 func makemysqldata(output string, metadata AllMetadata) {
@@ -364,12 +365,15 @@ func makemysqldata(output string, metadata AllMetadata) {
 		},
 	}
 
-	g.P("func init() {")
+	g.P("var collationsById = [...]Collation{")
 
 	for _, meta := range metadata {
 		switch {
-		case meta.Name == "utf8mb4_0900_bin" || meta.Name == "binary":
-			// hardcoded collations; nothing to export here
+		case meta.Name == "utf8mb4_0900_bin":
+			g.P(uint(309), ": &Collation_utf8mb4_0900_bin{},")
+
+		case meta.Name == "binary":
+			g.P(uint(63), ": &Collation_binary{},")
 
 		case meta.Name == "tis620_bin":
 			// explicitly unsupported for now because of not accurate results

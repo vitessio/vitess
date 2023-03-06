@@ -120,7 +120,7 @@ func XTestSupportTables(t *testing.T) {
 	fmt.Fprintf(out, " |\n|%s\n", strings.Repeat("---|", len(envs)+2))
 
 	for _, id := range all {
-		coll := globalAllCollations[id]
+		coll := collationsById[id]
 		if coll == nil {
 			vdata := globalVersionInfo[id]
 
