@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-//go:generate go run ./tools/makecolldata/ -embed=true
+//go:generate go run ./tools/makecolldata/ --embed=true
 
 // CaseAwareCollation implements lowercase and uppercase conventions for collations.
 type CaseAwareCollation interface {

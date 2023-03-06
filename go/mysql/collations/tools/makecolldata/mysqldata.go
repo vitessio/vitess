@@ -24,14 +24,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/spf13/pflag"
-
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/mysql/collations/tools/makecolldata/codegen"
 )
 
-var Print8BitData = pflag.Bool("full8bit", false, "")
+const Print8BitData = true
 
 type TableGenerator struct {
 	*codegen.Generator
@@ -264,7 +262,7 @@ func (g *TableGenerator) printUnicodeMappings(name, coll string, mappings []char
 func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	var tableCtype, tableToLower, tableToUpper, tableSortOrder, tableToUnicode, tableFromUnicode string
 
-	if *Print8BitData {
+	if Print8BitData {
 		tableCtype = g.Tables.printSlice("ctype", meta.Name, codegen.Array8(meta.CType))
 		tableToLower = g.Tables.printSlice("tolower", meta.Name, codegen.Array8(meta.ToLower))
 		tableToUpper = g.Tables.printSlice("toupper", meta.Name, codegen.Array8(meta.ToUpper))
@@ -293,7 +291,7 @@ func (g *Generator) printCollation8bit(meta *CollationMetadata) {
 	g.P("name: ", codegen.Quote(meta.Name), ",")
 
 	g.P("simpletables: simpletables{")
-	if *Print8BitData {
+	if Print8BitData {
 		g.P("ctype: &", tableCtype, ",")
 		g.P("tolower: &", tableToLower, ",")
 		g.P("toupper: &", tableToUpper, ",")
