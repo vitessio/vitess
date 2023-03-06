@@ -234,6 +234,10 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 		return c.compileJSONContainsPath(call)
 	case *builtinRepeat:
 		return c.compileRepeat(call)
+	case *builtinToBase64:
+		return c.compileToBase64(call)
+	case *builtinFromBase64:
+		return c.compileFromBase64(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -1276,4 +1280,57 @@ func (c *compiler) compileRepeat(expr *builtinRepeat) (ctype, error) {
 	c.emitRepeat(1)
 	c.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
+}
+
+func (c *compiler) compileToBase64(call *builtinToBase64) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck1(skip)
+
+	switch {
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	default:
+		c.emitConvert_xc(1, str.Type, c.defaultCollation, 0, false)
+	}
+
+	t := sqltypes.VarChar
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Text
+	}
+
+	col := collations.TypedCollation{
+		Collation:    c.defaultCollation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	c.emitToBase64(t, col)
+	c.jumpDestination(skip)
+
+	return ctype{Type: t, Col: col}, nil
+}
+
+func (c *compiler) compileFromBase64(call *builtinFromBase64) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck1(skip)
+
+	switch {
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	default:
+		c.emitConvert_xc(1, str.Type, c.defaultCollation, 0, false)
+	}
+
+	c.emitFromBase64()
+	c.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 }

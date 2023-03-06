@@ -1342,3 +1342,34 @@ func (c *compiler) emitRepeat(i int) {
 		return 1
 	}, "REPEAT VARCHAR(SP-2) INT64(SP-1)")
 }
+
+func (c *compiler) emitToBase64(t sqltypes.Type, col collations.TypedCollation) {
+	c.emit(func(vm *VirtualMachine) int {
+		str := vm.stack[vm.sp-1].(*evalBytes)
+
+		encoded := make([]byte, mysqlBase64.EncodedLen(len(str.bytes)))
+		mysqlBase64.Encode(encoded, str.bytes)
+
+		str.tt = int16(t)
+		str.col = col
+		str.bytes = encoded
+		return 1
+	}, "TO_BASE64 VARCHAR(SP-1)")
+}
+
+func (c *compiler) emitFromBase64() {
+	c.emit(func(vm *VirtualMachine) int {
+		str := vm.stack[vm.sp-1].(*evalBytes)
+
+		decoded := make([]byte, mysqlBase64.DecodedLen(len(str.bytes)))
+
+		n, err := mysqlBase64.Decode(decoded, str.bytes)
+		if err != nil {
+			vm.stack[vm.sp-1] = nil
+			return 1
+		}
+		str.tt = int16(sqltypes.VarBinary)
+		str.bytes = decoded[:n]
+		return 1
+	}, "FROM_BASE64 VARCHAR(SP-1)")
+}
