@@ -19,6 +19,7 @@ package collations
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -27,6 +28,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations/internal/charset"
 )
@@ -901,6 +903,43 @@ func TestEqualities(t *testing.T) {
 		cmp := collation.Collate([]byte(tc.left), []byte(tc.right), false)
 		assert.Equal(t, tc.equal, (cmp == 0), "expected %q == %q to be %v", tc.left, tc.right, tc.equal)
 
+	}
+}
+
+func TestUCACollationOrder(t *testing.T) {
+	var sorted = []string{
+		"aaaa",
+		"bbbb",
+		"cccc",
+		"dddd",
+		"zzzz",
+	}
+
+	var collations = []string{
+		"utf8mb4_0900_ai_ci",
+		"utf8mb4_0900_as_cs",
+	}
+
+	for _, colname := range collations {
+		col := testcollation(t, colname)
+
+		for _, a := range sorted {
+			for _, b := range sorted {
+				want := strings.Compare(a, b) < 0
+				got := col.Collate([]byte(a), []byte(b), false) < 0
+				require.Equalf(t, want, got, "failed to compare %q vs %q", a, b)
+			}
+		}
+
+		ary := slices.Clone(sorted)
+		for i := range ary {
+			j := rand.Intn(i + 1)
+			ary[i], ary[j] = ary[j], ary[i]
+		}
+		slices.SortFunc(ary, func(a, b string) bool {
+			return col.Collate([]byte(a), []byte(b), false) < 0
+		})
+		require.Equal(t, sorted, ary)
 	}
 }
 
