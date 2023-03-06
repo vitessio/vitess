@@ -1373,3 +1373,35 @@ func (c *compiler) emitFromBase64() {
 		return 1
 	}, "FROM_BASE64 VARCHAR(SP-1)")
 }
+
+func (c *compiler) emitChangeCase(upcase bool) {
+	if upcase {
+		c.emit(func(vm *VirtualMachine) int {
+			str := vm.stack[vm.sp-1].(*evalBytes)
+
+			coll := collations.Local().LookupByID(str.col.Collation)
+			csa, ok := coll.(collations.CaseAwareCollation)
+			if !ok {
+				vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
+			} else {
+				str.bytes = csa.ToUpper(nil, str.bytes)
+			}
+			str.tt = int16(sqltypes.VarChar)
+			return 1
+		}, "UPPER VARCHAR(SP-1)")
+	} else {
+		c.emit(func(vm *VirtualMachine) int {
+			str := vm.stack[vm.sp-1].(*evalBytes)
+
+			coll := collations.Local().LookupByID(str.col.Collation)
+			csa, ok := coll.(collations.CaseAwareCollation)
+			if !ok {
+				vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
+			} else {
+				str.bytes = csa.ToLower(nil, str.bytes)
+			}
+			str.tt = int16(sqltypes.VarChar)
+			return 1
+		}, "LOWER VARCHAR(SP-1)")
+	}
+}

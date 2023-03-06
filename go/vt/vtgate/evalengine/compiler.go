@@ -238,6 +238,8 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 		return c.compileToBase64(call)
 	case *builtinFromBase64:
 		return c.compileFromBase64(call)
+	case *builtinChangeCase:
+		return c.compileChangeCase(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -1273,7 +1275,7 @@ func (c *compiler) compileRepeat(expr *builtinRepeat) (ctype, error) {
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
 	default:
-		c.emitConvert_xc(2, str.Type, c.defaultCollation, 0, false)
+		c.emitConvert_xc(2, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
@@ -1291,15 +1293,15 @@ func (c *compiler) compileToBase64(call *builtinToBase64) (ctype, error) {
 	skip := c.jumpFrom()
 	c.emitNullCheck1(skip)
 
-	switch {
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
-	default:
-		c.emitConvert_xc(1, str.Type, c.defaultCollation, 0, false)
-	}
-
 	t := sqltypes.VarChar
 	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
 		t = sqltypes.Text
+	}
+
+	switch {
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	default:
+		c.emitConvert_xc(1, t, c.defaultCollation, 0, false)
 	}
 
 	col := collations.TypedCollation{
@@ -1326,11 +1328,32 @@ func (c *compiler) compileFromBase64(call *builtinFromBase64) (ctype, error) {
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
 	default:
-		c.emitConvert_xc(1, str.Type, c.defaultCollation, 0, false)
+		c.emitConvert_xc(1, sqltypes.VarBinary, c.defaultCollation, 0, false)
 	}
 
 	c.emitFromBase64()
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileChangeCase(call *builtinChangeCase) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck1(skip)
+
+	switch {
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	default:
+		c.emitConvert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+	}
+
+	c.emitChangeCase(call.upcase)
+	c.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
