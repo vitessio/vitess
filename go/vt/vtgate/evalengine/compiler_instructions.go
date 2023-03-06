@@ -1,6 +1,7 @@
 package evalengine
 
 import (
+	"bytes"
 	"math"
 	"math/bits"
 
@@ -967,6 +968,14 @@ func (c *compiler) emitBitOp_uu(op bitwiseOp) {
 	}
 }
 
+func (c *compiler) emitConvert_ui(offset int) {
+	c.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-offset].(*evalUint64)
+		vm.stack[vm.sp-offset] = vm.arena.newEvalInt64(int64(arg.u))
+		return 1
+	}, "CONV UINT64(SP-%d), INT64", offset)
+}
+
 func (c *compiler) emitConvert_iu(offset int) {
 	c.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-offset].(*evalInt64)
@@ -1308,4 +1317,28 @@ func (c *compiler) emitNeg_d() {
 		arg.dec = arg.dec.NegInPlace()
 		return 1
 	}, "NEG DECIMAL(SP-1)")
+}
+
+func (c *compiler) emitRepeat(i int) {
+	c.adjustStack(-1)
+
+	c.emit(func(vm *VirtualMachine) int {
+		str := vm.stack[vm.sp-2].(*evalBytes)
+		repeat := vm.stack[vm.sp-1].(*evalInt64)
+
+		if repeat.i < 0 {
+			repeat.i = 0
+		}
+
+		if !checkMaxLength(int64(len(str.bytes)), repeat.i) {
+			vm.stack[vm.sp-2] = nil
+			vm.sp--
+			return 1
+		}
+
+		str.tt = int16(sqltypes.VarChar)
+		str.bytes = bytes.Repeat(str.bytes, int(repeat.i))
+		vm.sp--
+		return 1
+	}, "REPEAT VARCHAR(SP-2) INT64(SP-1)")
 }

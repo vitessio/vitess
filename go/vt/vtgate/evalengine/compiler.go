@@ -13,9 +13,10 @@ import (
 type frame func(vm *VirtualMachine) int
 
 type compiler struct {
-	ins    []frame
-	log    CompilerLog
-	fields []*querypb.Field
+	ins              []frame
+	log              CompilerLog
+	fields           []*querypb.Field
+	defaultCollation collations.ID
 
 	stack struct {
 		cur int
@@ -42,9 +43,16 @@ func WithCompilerLog(log CompilerLog) CompilerOption {
 	}
 }
 
+func WithDefaultCollation(collation collations.ID) CompilerOption {
+	return func(c *compiler) {
+		c.defaultCollation = collation
+	}
+}
+
 func Compile(expr Expr, fields []*querypb.Field, options ...CompilerOption) (*Program, error) {
 	comp := compiler{
-		fields: fields,
+		fields:           fields,
+		defaultCollation: collations.Default(),
 	}
 	for _, opt := range options {
 		opt(&comp)
@@ -224,6 +232,8 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 		return c.compileJSONUnquote(call)
 	case *builtinJSONContainsPath:
 		return c.compileJSONContainsPath(call)
+	case *builtinRepeat:
+		return c.compileRepeat(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -424,6 +434,8 @@ func (c *compiler) compileToInt64(ct ctype, offset int) ctype {
 	switch ct.Type {
 	case sqltypes.Int64:
 		return ct
+	case sqltypes.Uint64:
+		c.emitConvert_ui(offset)
 	// TODO: specialization
 	default:
 		c.emitConvert_xi(offset)
@@ -1238,4 +1250,30 @@ func (c *compiler) compileMultiComparison(call *builtinMultiComparison) (ctype, 
 		skip := c.jumpFrom()
 		c.emitNullCheckn(skip, len(call.Arguments))
 	*/
+}
+
+func (c *compiler) compileRepeat(expr *builtinRepeat) (ctype, error) {
+	str, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	repeat, err := c.compileExpr(expr.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck2(skip)
+
+	switch {
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	default:
+		c.emitConvert_xc(2, str.Type, c.defaultCollation, 0, false)
+	}
+	_ = c.compileToInt64(repeat, 1)
+
+	c.emitRepeat(1)
+	c.jumpDestination(skip)
+	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
