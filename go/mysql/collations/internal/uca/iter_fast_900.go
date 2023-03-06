@@ -75,6 +75,9 @@ func (it *FastIterator900) FastForward32(it2 *FastIterator900) int {
 
 		if nonascii == 0 {
 			if dword1 != dword2 {
+				// Use the weight string fast tables for quick weight comparisons;
+				// see (*FastIterator900).NextWeightBlock64 for a description of
+				// the table format
 				table := it.fastTable
 				if w1, w2 = uint16(table[p1[0]]), uint16(table[p2[0]]); w1 != w2 {
 					goto mismatch
@@ -114,6 +117,7 @@ mismatch:
 		it.unicode++
 		return 0
 	}
+	// The weights must be byte-swapped before comparison because they're stored in big endian
 	return int(bits.ReverseBytes16(w1)) - int(bits.ReverseBytes16(w2))
 }
 
