@@ -175,3 +175,18 @@ func (e *evalBytes) parseDate() (t time.Time, err error) {
 	}
 	return
 }
+
+func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
+	raw := e.bytes
+	if len(raw) > 8 {
+		return nil, false // overflow
+	}
+
+	var number [8]byte
+	for i, b := range raw {
+		number[8-len(raw)+i] = b
+	}
+	hex := newEvalUint64(binary.BigEndian.Uint64(number[:]))
+	hex.hexLiteral = true
+	return hex, true
+}
