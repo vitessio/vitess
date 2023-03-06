@@ -1369,23 +1369,6 @@ func BenchmarkKeyRangesIntersect(b *testing.B) {
 	}
 }
 
-func BenchmarkKeyRangesOverlap(b *testing.B) {
-	kr1 := &topodatapb.KeyRange{
-		Start: []byte{0x40, 0, 0, 0, 0, 0, 0, 0},
-		End:   []byte{0x80, 0, 0, 0, 0, 0, 0, 0},
-	}
-	kr2 := &topodatapb.KeyRange{
-		Start: []byte{0x30, 0, 0, 0, 0, 0, 0, 0},
-		End:   []byte{0x50, 0, 0, 0, 0, 0, 0, 0},
-	}
-
-	for i := 0; i < b.N; i++ {
-		if _, err := KeyRangesOverlap(kr1, kr2); err != nil {
-			b.Fatal(err)
-		}
-	}
-}
-
 func TestIsValidKeyRange(t *testing.T) {
 	tests := []struct {
 		arg  string

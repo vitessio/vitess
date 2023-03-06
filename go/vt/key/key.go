@@ -241,50 +241,6 @@ func KeyRangeIntersect(a, b *topodatapb.KeyRange) bool {
 	return (Empty(a.End) || Less(b.Start, a.End)) && (Empty(b.End) || Less(a.Start, b.End))
 }
 
-// keyRangeStartMax returns the maximum value for Start for KeyRange a and b; due to the treatment of
-// an empty key as the "minimum" value, this is not exactly
-func keyRangeStartMax(a, b *topodatapb.KeyRange) []byte {
-	if Empty(a.Start) {
-		return b.Start
-	}
-	if Empty(b.Start) {
-		return a.Start
-	}
-	if Less(a.Start, b.Start) {
-		return b.Start
-	}
-	return a.Start
-}
-
-func keyRangeEndMin(a, b *topodatapb.KeyRange) []byte {
-	if Empty(a.End) {
-		return b.End
-	}
-	if Empty(b.End) {
-		return a.End
-	}
-	if Less(a.End, b.End) {
-		return a.End
-	}
-	return b.End
-}
-
-// KeyRangesOverlap returns a KeyRange representing the overlap between KeyRange a and b. If they do not overlap,
-// an error is returned.
-func KeyRangesOverlap(a, b *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
-	if !KeyRangeIntersect(a, b) {
-		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", a, b)
-	}
-	if KeyRangeIsComplete(a) {
-		return b, nil
-	}
-	if KeyRangeIsComplete(b) {
-		return a, nil
-	}
-
-	return &topodatapb.KeyRange{Start: keyRangeStartMax(a, b), End: keyRangeEndMin(a, b)}, nil
-}
-
 // KeyRangeIncludes returns true if KeyRange big fully contains KeyRange small.
 func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
 	// If big covers the entire KeyRange, it always contains small.
