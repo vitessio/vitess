@@ -1,0 +1,81 @@
+package evalengine
+
+import "vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+
+type Arena struct {
+	aInt64   []evalInt64
+	aUint64  []evalUint64
+	aFloat64 []evalFloat
+	aDecimal []evalDecimal
+	aBytes   []evalBytes
+}
+
+func (a *Arena) reset() {
+	a.aInt64 = a.aInt64[:0]
+	a.aUint64 = a.aUint64[:0]
+	a.aFloat64 = a.aFloat64[:0]
+	a.aDecimal = a.aDecimal[:0]
+	a.aBytes = a.aBytes[:0]
+}
+
+func (a *Arena) newEvalDecimalWithPrec(dec decimal.Decimal, prec int32) *evalDecimal {
+	if cap(a.aDecimal) > len(a.aDecimal) {
+		a.aDecimal = a.aDecimal[:len(a.aDecimal)+1]
+	} else {
+		a.aDecimal = append(a.aDecimal, evalDecimal{})
+	}
+	val := &a.aDecimal[len(a.aDecimal)-1]
+	val.dec = dec
+	val.length = prec
+	return val
+}
+
+func (a *Arena) newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
+	if m == 0 && d == 0 {
+		return a.newEvalDecimalWithPrec(dec, -dec.Exponent())
+	}
+	return a.newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
+}
+
+func (a *Arena) newEvalInt64(i int64) *evalInt64 {
+	if cap(a.aInt64) > len(a.aInt64) {
+		a.aInt64 = a.aInt64[:len(a.aInt64)+1]
+	} else {
+		a.aInt64 = append(a.aInt64, evalInt64{})
+	}
+	val := &a.aInt64[len(a.aInt64)-1]
+	val.i = i
+	return val
+}
+
+func (a *Arena) newEvalUint64(u uint64) *evalUint64 {
+	if cap(a.aUint64) > len(a.aUint64) {
+		a.aUint64 = a.aUint64[:len(a.aUint64)+1]
+	} else {
+		a.aUint64 = append(a.aUint64, evalUint64{})
+	}
+	val := &a.aUint64[len(a.aUint64)-1]
+	val.u = u
+	val.hexLiteral = false
+	return val
+}
+
+func (a *Arena) newEvalFloat(f float64) *evalFloat {
+	if cap(a.aFloat64) > len(a.aFloat64) {
+		a.aFloat64 = a.aFloat64[:len(a.aFloat64)+1]
+	} else {
+		a.aFloat64 = append(a.aFloat64, evalFloat{})
+	}
+	val := &a.aFloat64[len(a.aFloat64)-1]
+	val.f = f
+	return val
+}
+
+func (a *Arena) newEvalBytesEmpty() *evalBytes {
+	if cap(a.aBytes) > len(a.aBytes) {
+		a.aBytes = a.aBytes[:len(a.aBytes)+1]
+	} else {
+		a.aBytes = append(a.aBytes, evalBytes{})
+	}
+	return &a.aBytes[len(a.aBytes)-1]
+}
