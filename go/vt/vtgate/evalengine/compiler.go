@@ -240,6 +240,12 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 		return c.compileFromBase64(call)
 	case *builtinChangeCase:
 		return c.compileChangeCase(call)
+	case *builtinCharLength:
+		return c.compileLength(call, charLen)
+	case *builtinLength:
+		return c.compileLength(call, byteLen)
+	case *builtinBitLength:
+		return c.compileLength(call, bitLen)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -1356,4 +1362,33 @@ func (c *compiler) compileChangeCase(call *builtinChangeCase) (ctype, error) {
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
+}
+
+type lengthOp int
+
+const (
+	charLen lengthOp = iota
+	byteLen
+	bitLen
+)
+
+func (c *compiler) compileLength(call callable, op lengthOp) (ctype, error) {
+	str, err := c.compileExpr(call.callable()[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck1(skip)
+
+	switch {
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	default:
+		c.emitConvert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+	}
+
+	c.emitLength(op)
+	c.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }

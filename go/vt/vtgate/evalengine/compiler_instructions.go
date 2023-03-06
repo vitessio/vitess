@@ -6,6 +6,7 @@ import (
 	"math/bits"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -1403,5 +1404,35 @@ func (c *compiler) emitChangeCase(upcase bool) {
 			str.tt = int16(sqltypes.VarChar)
 			return 1
 		}, "LOWER VARCHAR(SP-1)")
+	}
+}
+
+func (c *compiler) emitLength(op lengthOp) {
+	switch op {
+	case charLen:
+		c.emit(func(vm *VirtualMachine) int {
+			arg := vm.stack[vm.sp-1].(*evalBytes)
+
+			if sqltypes.IsBinary(arg.SQLType()) {
+				vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes)))
+			} else {
+				coll := collations.Local().LookupByID(arg.col.Collation)
+				count := charset.Length(coll.Charset(), arg.bytes)
+				vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(count))
+			}
+			return 1
+		}, "CHAR_LENGTH VARCHAR(SP-1)")
+	case byteLen:
+		c.emit(func(vm *VirtualMachine) int {
+			arg := vm.stack[vm.sp-1].(*evalBytes)
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes)))
+			return 1
+		}, "LENGTH VARCHAR(SP-1)")
+	case bitLen:
+		c.emit(func(vm *VirtualMachine) int {
+			arg := vm.stack[vm.sp-1].(*evalBytes)
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes) * 8))
+			return 1
+		}, "BIT_LENGTH VARCHAR(SP-1)")
 	}
 }
