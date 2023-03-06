@@ -1105,7 +1105,7 @@ func TestKeyRangeContains(t *testing.T) {
 	}
 }
 
-func TestKeyRangesIntersect(t *testing.T) {
+func TestKeyRangeIntersect(t *testing.T) {
 	type args struct {
 		a *topodatapb.KeyRange
 		b *topodatapb.KeyRange
@@ -1253,7 +1253,7 @@ func TestKeyRangesIntersect(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equalf(t, tt.want, KeyRangesIntersect(tt.args.a, tt.args.b), "KeyRangesIntersect(%v, %v)", tt.args.a, tt.args.b)
+			assert.Equalf(t, tt.want, KeyRangeIntersect(tt.args.a, tt.args.b), "KeyRangeIntersect(%v, %v)", tt.args.a, tt.args.b)
 		})
 	}
 }
@@ -1365,7 +1365,7 @@ func BenchmarkKeyRangesIntersect(b *testing.B) {
 	}
 
 	for i := 0; i < b.N; i++ {
-		KeyRangesIntersect(kr1, kr2)
+		KeyRangeIntersect(kr1, kr2)
 	}
 }
 

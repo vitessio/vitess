@@ -139,7 +139,7 @@ func processExactKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb
 		shardnum++
 	}
 	for shardnum < len(allShards) {
-		if !KeyRangesIntersect(kr, allShards[shardnum].KeyRange) {
+		if !KeyRangeIntersect(kr, allShards[shardnum].KeyRange) {
 			// If we are over the requested keyrange, we
 			// can stop now, we won't find more.
 			break
@@ -215,7 +215,7 @@ func (d DestinationKeyRange) String() string {
 
 func processKeyRange(allShards []*topodatapb.ShardReference, kr *topodatapb.KeyRange, addShard func(shard string) error) error {
 	for _, shard := range allShards {
-		if !KeyRangesIntersect(kr, shard.KeyRange) {
+		if !KeyRangeIntersect(kr, shard.KeyRange) {
 			// We don't need that shard.
 			continue
 		}

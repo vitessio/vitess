@@ -231,9 +231,9 @@ func KeyRangeContiguous(a, b *topodatapb.KeyRange) bool {
 //   * intersects = (b > c) && (a < d)
 //   * overlap = min(b, d) - max(c, a)
 
-// KeyRangesIntersect returns true if some part of KeyRange a and b overlap, meaning that some keyspace ID values
+// KeyRangeIntersect returns true if some part of KeyRange a and b overlap, meaning that some keyspace ID values
 // exist in both a and b.
-func KeyRangesIntersect(a, b *topodatapb.KeyRange) bool {
+func KeyRangeIntersect(a, b *topodatapb.KeyRange) bool {
 	if KeyRangeIsComplete(a) || KeyRangeIsComplete(b) {
 		return true // if either KeyRange is complete, there must be an intersection
 	}
@@ -272,7 +272,7 @@ func keyRangeEndMin(a, b *topodatapb.KeyRange) []byte {
 // KeyRangesOverlap returns a KeyRange representing the overlap between KeyRange a and b. If they do not overlap,
 // an error is returned.
 func KeyRangesOverlap(a, b *topodatapb.KeyRange) (*topodatapb.KeyRange, error) {
-	if !KeyRangesIntersect(a, b) {
+	if !KeyRangeIntersect(a, b) {
 		return nil, fmt.Errorf("KeyRanges %v and %v don't overlap", a, b)
 	}
 	if KeyRangeIsComplete(a) {
