@@ -25,6 +25,7 @@ import (
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
@@ -131,11 +132,26 @@ func TestMain(m *testing.M) {
 		clusterInstance = cluster.NewCluster(Cell, "localhost")
 		defer clusterInstance.Teardown()
 
+		vtgateVer, err := cluster.GetMajorVersion("vtgate")
+		if err != nil {
+			return 1
+		}
+		vttabletVer, err := cluster.GetMajorVersion("vttablet")
+		if err != nil {
+			return 1
+		}
+
+		// For upgrade/downgrade tests.
+		if vtgateVer < 17 || vttabletVer < 17 {
+			// Then only the default sidecarDBName is supported.
+			sidecarDBName = sidecardb.DefaultName
+		}
+
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal", "--schema_change_signal_user", "userData1"}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "5", "--queryserver-config-strict-table-acl", "--queryserver-config-acl-exempt-acl", "userData1", "--table-acl-config", "dummy.json"}
 
 		// Start topo server
-		err := clusterInstance.StartTopo()
+		err = clusterInstance.StartTopo()
 		if err != nil {
 			return 1
 		}
