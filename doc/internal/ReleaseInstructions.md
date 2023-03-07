@@ -163,6 +163,7 @@ That includes:
   > - One or more Pull Requests have to be submitted in advance to create and update the release summary.
   > - The summary files are located in: `./changelog/*.0/*.*.*/*_*_*_summary.md`.
   > - The summary file for a release candidate is the same as the one for the GA release.
+  > - Make sure to run `go run ./go/tools/releases/releases.go` to update the `changelog` directory with the latest release notes.
 - **Finishing the blog post, and coordinating with the different organizations for cross-posting. Usually CNCF and PlanetScale. This step applies only for GA releases.**
   > - The blog post must be finished and reviewed.
   > - A Pull Request on the website repository of Vitess has to be created so we can easily publish the blog during the release day.
