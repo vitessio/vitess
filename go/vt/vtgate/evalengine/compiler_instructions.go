@@ -1107,7 +1107,7 @@ func (c *compiler) emitBitShiftLeft_bu() {
 
 		vm.sp--
 		return 1
-	}, "<< BINARY(SP-2), UINT64(SP-1)")
+	}, "BIT_SHL BINARY(SP-2), UINT64(SP-1)")
 }
 
 func (c *compiler) emitBitShiftRight_bu() {
@@ -1137,7 +1137,7 @@ func (c *compiler) emitBitShiftRight_bu() {
 
 		vm.sp--
 		return 1
-	}, ">> BINARY(SP-2), UINT64(SP-1)")
+	}, "BIT_SHR BINARY(SP-2), UINT64(SP-1)")
 }
 
 func (c *compiler) emitBitShiftLeft_uu() {
@@ -1150,7 +1150,7 @@ func (c *compiler) emitBitShiftLeft_uu() {
 
 		vm.sp--
 		return 1
-	}, "<< UINT64(SP-2), UINT64(SP-1)")
+	}, "BIT_SHL UINT64(SP-2), UINT64(SP-1)")
 }
 
 func (c *compiler) emitBitShiftRight_uu() {
@@ -1163,7 +1163,7 @@ func (c *compiler) emitBitShiftRight_uu() {
 
 		vm.sp--
 		return 1
-	}, ">> UINT64(SP-2), UINT64(SP-1)")
+	}, "BIT_SHR UINT64(SP-2), UINT64(SP-1)")
 }
 
 func (c *compiler) emitBitCount_b() {
@@ -1193,7 +1193,7 @@ func (c *compiler) emitBitwiseNot_b() {
 			a.bytes[i] = ^a.bytes[i]
 		}
 		return 1
-	}, "~ BINARY(SP-1)")
+	}, "BIT_NOT BINARY(SP-1)")
 }
 
 func (c *compiler) emitBitwiseNot_u() {
@@ -1201,7 +1201,7 @@ func (c *compiler) emitBitwiseNot_u() {
 		a := vm.stack[vm.sp-1].(*evalUint64)
 		a.u = ^a.u
 		return 1
-	}, "~ UINT64(SP-1)")
+	}, "BIT_NOT UINT64(SP-1)")
 }
 
 func (c *compiler) emitCmpCase(cases int, hasElse bool, tt sqltypes.Type, cc collations.TypedCollation) {
@@ -1320,7 +1320,7 @@ func (c *compiler) emitNeg_d() {
 	}, "NEG DECIMAL(SP-1)")
 }
 
-func (c *compiler) emitRepeat(i int) {
+func (c *compiler) emitFn_REPEAT(i int) {
 	c.adjustStack(-1)
 
 	c.emit(func(vm *VirtualMachine) int {
@@ -1341,10 +1341,10 @@ func (c *compiler) emitRepeat(i int) {
 		str.bytes = bytes.Repeat(str.bytes, int(repeat.i))
 		vm.sp--
 		return 1
-	}, "REPEAT VARCHAR(SP-2) INT64(SP-1)")
+	}, "FN REPEAT VARCHAR(SP-2) INT64(SP-1)")
 }
 
-func (c *compiler) emitToBase64(t sqltypes.Type, col collations.TypedCollation) {
+func (c *compiler) emitFn_TO_BASE64(t sqltypes.Type, col collations.TypedCollation) {
 	c.emit(func(vm *VirtualMachine) int {
 		str := vm.stack[vm.sp-1].(*evalBytes)
 
@@ -1355,7 +1355,7 @@ func (c *compiler) emitToBase64(t sqltypes.Type, col collations.TypedCollation) 
 		str.col = col
 		str.bytes = encoded
 		return 1
-	}, "TO_BASE64 VARCHAR(SP-1)")
+	}, "FN TO_BASE64 VARCHAR(SP-1)")
 }
 
 func (c *compiler) emitFromBase64() {
@@ -1375,7 +1375,7 @@ func (c *compiler) emitFromBase64() {
 	}, "FROM_BASE64 VARCHAR(SP-1)")
 }
 
-func (c *compiler) emitChangeCase(upcase bool) {
+func (c *compiler) emitFn_LUCASE(upcase bool) {
 	if upcase {
 		c.emit(func(vm *VirtualMachine) int {
 			str := vm.stack[vm.sp-1].(*evalBytes)
@@ -1389,7 +1389,7 @@ func (c *compiler) emitChangeCase(upcase bool) {
 			}
 			str.tt = int16(sqltypes.VarChar)
 			return 1
-		}, "UPPER VARCHAR(SP-1)")
+		}, "FN UPPER VARCHAR(SP-1)")
 	} else {
 		c.emit(func(vm *VirtualMachine) int {
 			str := vm.stack[vm.sp-1].(*evalBytes)
@@ -1403,11 +1403,11 @@ func (c *compiler) emitChangeCase(upcase bool) {
 			}
 			str.tt = int16(sqltypes.VarChar)
 			return 1
-		}, "LOWER VARCHAR(SP-1)")
+		}, "FN LOWER VARCHAR(SP-1)")
 	}
 }
 
-func (c *compiler) emitLength(op lengthOp) {
+func (c *compiler) emitFn_LENGTH(op lengthOp) {
 	switch op {
 	case charLen:
 		c.emit(func(vm *VirtualMachine) int {
@@ -1421,23 +1421,23 @@ func (c *compiler) emitLength(op lengthOp) {
 				vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(count))
 			}
 			return 1
-		}, "CHAR_LENGTH VARCHAR(SP-1)")
+		}, "FN CHAR_LENGTH VARCHAR(SP-1)")
 	case byteLen:
 		c.emit(func(vm *VirtualMachine) int {
 			arg := vm.stack[vm.sp-1].(*evalBytes)
 			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes)))
 			return 1
-		}, "LENGTH VARCHAR(SP-1)")
+		}, "FN LENGTH VARCHAR(SP-1)")
 	case bitLen:
 		c.emit(func(vm *VirtualMachine) int {
 			arg := vm.stack[vm.sp-1].(*evalBytes)
 			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes) * 8))
 			return 1
-		}, "BIT_LENGTH VARCHAR(SP-1)")
+		}, "FN BIT_LENGTH VARCHAR(SP-1)")
 	}
 }
 
-func (c *compiler) emitASCII() {
+func (c *compiler) emitFn_ASCII() {
 	c.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-1].(*evalBytes)
 		if len(arg.bytes) == 0 {
@@ -1446,7 +1446,7 @@ func (c *compiler) emitASCII() {
 			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(arg.bytes[0]))
 		}
 		return 1
-	}, "ASCII VARCHAR(SP-1)")
+	}, "FN ASCII VARCHAR(SP-1)")
 }
 
 func (c *compiler) emitLike_collate(expr *LikeExpr, collation collations.Collation) {

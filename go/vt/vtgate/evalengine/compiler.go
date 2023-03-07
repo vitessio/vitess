@@ -1290,7 +1290,7 @@ func (c *compiler) compileRepeat(expr *builtinRepeat) (ctype, error) {
 	}
 	_ = c.compileToInt64(repeat, 1)
 
-	c.emitRepeat(1)
+	c.emitFn_REPEAT(1)
 	c.jumpDestination(skip)
 	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
@@ -1321,7 +1321,7 @@ func (c *compiler) compileToBase64(call *builtinToBase64) (ctype, error) {
 		Repertoire:   collations.RepertoireASCII,
 	}
 
-	c.emitToBase64(t, col)
+	c.emitFn_TO_BASE64(t, col)
 	c.jumpDestination(skip)
 
 	return ctype{Type: t, Col: col}, nil
@@ -1363,7 +1363,7 @@ func (c *compiler) compileChangeCase(call *builtinChangeCase) (ctype, error) {
 		c.emitConvert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
 
-	c.emitChangeCase(call.upcase)
+	c.emitFn_LUCASE(call.upcase)
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
@@ -1392,7 +1392,7 @@ func (c *compiler) compileLength(call callable, op lengthOp) (ctype, error) {
 		c.emitConvert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
 
-	c.emitLength(op)
+	c.emitFn_LENGTH(op)
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
@@ -1413,7 +1413,7 @@ func (c *compiler) compileASCII(call *builtinASCII) (ctype, error) {
 		c.emitConvert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
 
-	c.emitASCII()
+	c.emitFn_ASCII()
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
