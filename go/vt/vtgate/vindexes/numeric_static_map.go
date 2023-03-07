@@ -51,6 +51,10 @@ func init() {
 	Register("numeric_static_map", NewNumericStaticMap)
 }
 
+const (
+	defaultFallbackType = "xxhash"
+)
+
 // NewNumericStaticMap creates a NumericStaticMap vindex.
 func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) {
 	jsonStr, jsok := params["json"]
@@ -82,23 +86,18 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 	}
 
 	var hashVdx Hashing
-	var useFallback bool
 
-	if s, ok := params["use_fallback"]; ok {
-		b, err := strconv.ParseBool(s)
+	if s, ok := params["fallback_type"]; ok {
 		if err != nil {
 			return nil, err
 		}
-		useFallback = b
-	}
-
-	if useFallback {
 		// We just use xxhash blindly;  we could make this configurable.
-		vindex, err := CreateVindex("xxhash", name+"_hash", map[string]string{})
+		vindex, err := CreateVindex(s, name+"_hash", map[string]string{})
 		if err != nil {
 			return nil, err
 		}
 		hashVdx, _ = vindex.(Hashing) // We know this will not fail
+
 	}
 
 	return &NumericStaticMap{

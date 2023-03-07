@@ -141,8 +141,8 @@ func TestNumericStaticMapWithJsonVdx(t *testing.T) {
 // Test mapping of vindex, both for specified map keys and underlying xxhash
 func TestNumericStaticMapWithFallback(t *testing.T) {
 	mapWithFallbackVdx, err := createVindexWithParams(map[string]string{
-		"json":         "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
-		"use_fallback": "true",
+		"json":          "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
+		"fallback_type": "xxhash",
 	})
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
@@ -184,8 +184,8 @@ func TestNumericStaticMapWithFallback(t *testing.T) {
 
 func TestNumericStaticMapWithFallbackVerify(t *testing.T) {
 	mapWithFallbackVdx, err := createVindexWithParams(map[string]string{
-		"json":         "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
-		"use_fallback": "true",
+		"json":          "{\"1\":2,\"3\":4,\"4\":5,\"5\":6,\"6\":7,\"7\":8,\"8\":9,\"10\":18446744073709551615}",
+		"fallback_type": "xxhash",
 	})
 	if err != nil {
 		t.Fatalf("failed to create vindex: %v", err)
