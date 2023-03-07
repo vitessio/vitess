@@ -4,12 +4,13 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
-    - [Deprecated Stats](#deprecated-stats)
+    - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Stats](#deprecated-stats)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -17,16 +18,32 @@
 
 #### <a id="vtgr-default-tls-version"/>Default TLS version changed for `vtgr`
 
-When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used. 
+When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used.
 
-#### <a id="deprecated-stats"/>Deprecated Stats
+#### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
 
-These stats are deprecated in v17.
+Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute and Prepare operations generate stats under independent stats keys.
 
-| Deprecated stat | Supported alternatives |
-|-|-|
-| `backup_duration_seconds` | `BackupDurationNanoseconds` |
-| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+Here is a (condensed) example of stats output:
+
+```
+{
+  "VtgateApi": {
+    "Histograms": {
+      "Execute.src.primary": {
+        "500000": 5
+      },
+      "Prepare.src.primary": {
+        "100000000": 0
+      }
+    }
+  },
+  "VtgateApiErrorCounts": {
+    "Execute.src.primary.INVALID_ARGUMENT": 3,
+    "Execute.src.primary.ALREADY_EXISTS": 1
+  }
+}
+```
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -36,15 +53,15 @@ Prior to v17 the builtin Backup Engine does not use read buffering for restores,
 
 In v17 these defaults may be tuned with, respectively `--builtinbackup-file-read-buffer-size` and `--builtinbackup-file-write-buffer-size`.
 
- - `--builtinbackup-file-read-buffer-size`:  read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
- - `--builtinbackup-file-write-buffer-size`: write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
+- `--builtinbackup-file-read-buffer-size`:  read files using an IO buffer of this many bytes. Golang defaults are used when set to 0.
+- `--builtinbackup-file-write-buffer-size`: write files using an IO buffer of this many bytes. Golang defaults are used when set to 0. (default 2097152)
 
 These flags are applicable to the following programs:
 
- - `vtbackup`
- - `vtctld`
- - `vttablet`
- - `vttestserver`
+- `vtbackup`
+- `vtctld`
+- `vttablet`
+- `vttestserver`
 
 ### <a id="new-stats"/> New stats
 
@@ -58,9 +75,9 @@ Metrics related to backup operations are available in both Vtbackup and VTTablet
 
 Depending on the Backup Engine and Backup Storage in-use, a backup may be a complex pipeline of operations, including but not limited to:
 
- * Reading files from disk.
- * Compressing files.
- * Uploading compress files to cloud object storage.
+* Reading files from disk.
+* Compressing files.
+* Uploading compress files to cloud object storage.
 
 These operations are counted and timed, and the number of bytes consumed or produced by each stage of the pipeline are counted as well.
 
@@ -72,9 +89,9 @@ Metrics related to restore operations are available in both Vtbackup and VTTable
 
 Depending on the Backup Engine and Backup Storage in-use, a restore may be a complex pipeline of operations, including but not limited to:
 
- * Downloading compressed files from cloud object storage.
- * Decompressing files.
- * Writing decompressed files to disk.
+* Downloading compressed files from cloud object storage.
+* Decompressing files.
+* Writing decompressed files to disk.
 
 These operations are counted and timed, and the number of bytes consumed or produced by each stage of the pipeline are counted as well.
 
@@ -161,10 +178,10 @@ _DurationByPhaseSeconds_ exports timings for these individual phases.
 
 Some notes to help understand these metrics:
 
- * `BackupBytes["BackupStorage.File.File:Write"]` measures how many bytes were read from disk by the `file` Backup Storage implementation during the backup phase.
- * `DurationByPhaseSeconds["CatchUpReplication"]` measures how long it took to catch-up replication after the restore phase.
- * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
- * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
+* `BackupBytes["BackupStorage.File.File:Write"]` measures how many bytes were read from disk by the `file` Backup Storage implementation during the backup phase.
+* `DurationByPhaseSeconds["CatchUpReplication"]` measures how long it took to catch-up replication after the restore phase.
+* `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
+* `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
 
 ## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
@@ -172,3 +189,12 @@ Some notes to help understand these metrics:
 * Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+
+### <a id="deprecated-stats"/>Deprecated Stats
+
+These stats are deprecated in v17.
+
+| Deprecated stat | Supported alternatives |
+|-|-|
+| `backup_duration_seconds` | `BackupDurationNanoseconds` |
+| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
