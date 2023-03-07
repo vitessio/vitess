@@ -227,17 +227,27 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch viewDDL := stmt.(type) {
 	case *sqlparser.CreateView:
-		query := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier())
+		query := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query
 		if viewDDL.IsReplace {
-			query = sqlparser.BuildParsedQuery(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier())
+			query = sqlparser.BuildParsedQuery(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier()).Query
 		}
-		return &Plan{PlanID: PlanViewDDL, FullQuery: query, FullStmt: viewDDL}, nil
+		insert, err := sqlparser.Parse(query)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
 	case *sqlparser.AlterView:
-		update := sqlparser.BuildParsedQuery(mysql.UpdateViewsTable, sidecardb.GetIdentifier())
-		return &Plan{PlanID: PlanViewDDL, FullQuery: update, FullStmt: viewDDL}, nil
+		update, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.UpdateViewsTable, sidecardb.GetIdentifier()).Query)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
 	case *sqlparser.DropView:
-		del := sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier())
-		return &Plan{PlanID: PlanViewDDL, FullQuery: del, FullStmt: viewDDL}, nil
+		del, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query)
+		if err != nil {
+			return nil, err
+		}
+		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(del), FullStmt: viewDDL}, nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] unknown view DDL type: %T", stmt)
 }

@@ -231,8 +231,8 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		}
 	}
 
+	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	if !cluster.ReusingVTDATAROOT {
-		cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 		if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 			log.Error(err)
 			return
@@ -250,6 +250,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 
 	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
+	cluster.VtctldClientProcess = *VtctldClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
 	return
 }
 
@@ -329,9 +330,8 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	if keyspace.SidecarDBName == "" {
 		keyspace.SidecarDBName = sidecardb.DefaultName
 	}
-	if !cluster.ReusingVTDATAROOT {
-		_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
-	}
+	// Create the keyspace if it doesn't already exist.
+	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -479,9 +479,8 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 	if keyspace.SidecarDBName == "" {
 		keyspace.SidecarDBName = sidecardb.DefaultName
 	}
-	if !cluster.ReusingVTDATAROOT {
-		_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
-	}
+	// Create the keyspace if it doesn't already exist.
+	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -614,9 +613,13 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Shard) (err error) {
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
+	if keyspace.SidecarDBName == "" {
+		keyspace.SidecarDBName = sidecardb.DefaultName
+	}
+
 	if !cluster.ReusingVTDATAROOT {
 		// Create Keyspace
-		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 		if err != nil {
 			log.Error(err)
 			return

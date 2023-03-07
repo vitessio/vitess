@@ -40,6 +40,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
+	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
 	Cell            = "test"
 	//go:embed schema.sql
 	SchemaSQL string
@@ -64,9 +65,10 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:          KeyspaceName,
+			SchemaSQL:     SchemaSQL,
+			VSchema:       VSchema,
+			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtGateExtraArgs = []string{"--schema_change_signal",
 			"--vschema_ddl_authorized_users", "%",
