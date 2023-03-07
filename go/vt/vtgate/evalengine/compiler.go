@@ -297,7 +297,7 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 		}
 
 		if coerceLeft == nil && coerceRight == nil {
-			c.emitCmpString_collate(env.LookupByID(merged.Collation))
+			c.emitCmpString_collate(merged.Collation.Get())
 		} else {
 			if coerceLeft == nil {
 				coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
@@ -306,7 +306,7 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 				coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
 			}
 			c.emitCmpString_coerce(&compiledCoercion{
-				col:   env.LookupByID(merged.Collation),
+				col:   merged.Collation.Get(),
 				left:  coerceLeft,
 				right: coerceRight,
 			})
@@ -1469,7 +1469,7 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 	}
 
 	if coerceLeft == nil && coerceRight == nil {
-		c.emitLike_collate(expr, env.LookupByID(merged.Collation))
+		c.emitLike_collate(expr, merged.Collation.Get())
 	} else {
 		if coerceLeft == nil {
 			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
@@ -1478,7 +1478,7 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
 		}
 		c.emitLike_coerce(expr, &compiledCoercion{
-			col:   env.LookupByID(merged.Collation),
+			col:   merged.Collation.Get(),
 			left:  coerceLeft,
 			right: coerceRight,
 		})

@@ -1380,7 +1380,7 @@ func (c *compiler) emitFn_LUCASE(upcase bool) {
 		c.emit(func(vm *VirtualMachine) int {
 			str := vm.stack[vm.sp-1].(*evalBytes)
 
-			coll := collations.Local().LookupByID(str.col.Collation)
+			coll := str.col.Collation.Get()
 			csa, ok := coll.(collations.CaseAwareCollation)
 			if !ok {
 				vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
@@ -1394,7 +1394,7 @@ func (c *compiler) emitFn_LUCASE(upcase bool) {
 		c.emit(func(vm *VirtualMachine) int {
 			str := vm.stack[vm.sp-1].(*evalBytes)
 
-			coll := collations.Local().LookupByID(str.col.Collation)
+			coll := str.col.Collation.Get()
 			csa, ok := coll.(collations.CaseAwareCollation)
 			if !ok {
 				vm.err = vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
@@ -1416,7 +1416,7 @@ func (c *compiler) emitFn_LENGTH(op lengthOp) {
 			if sqltypes.IsBinary(arg.SQLType()) {
 				vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes)))
 			} else {
-				coll := collations.Local().LookupByID(arg.col.Collation)
+				coll := arg.col.Collation.Get()
 				count := charset.Length(coll.Charset(), arg.bytes)
 				vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(count))
 			}
