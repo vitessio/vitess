@@ -35,7 +35,7 @@ func (tm *TabletManager) VExec(ctx context.Context, query, workflow, keyspace st
 		return nil, err
 	}
 	switch vx.TableName {
-	case fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), sqlparser.NewIdentifierCS(schema.SchemaMigrationsTableName).String()):
+	case fmt.Sprintf("%s.%s", sidecardb.GetIdentifier(), sqlparser.String(sqlparser.NewIdentifierCS(schema.SchemaMigrationsTableName))):
 		return tm.QueryServiceControl.OnlineDDLExecutor().VExec(ctx, vx)
 	default:
 		return nil, fmt.Errorf("table not supported by vexec: %v", vx.TableName)

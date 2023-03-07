@@ -361,7 +361,7 @@ func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb
 	if t.sidecarDBIdentifiers == nil {
 		t.sidecarDBIdentifiers = map[keyspaceStr]sidcarDBIdentifierStr{}
 	}
-	t.sidecarDBIdentifiers[target.Keyspace] = sqlparser.NewIdentifierCS(sidecarDBName).String()
+	t.sidecarDBIdentifiers[target.Keyspace] = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	err := t.LoadKeyspace(conn, target)
 	if err != nil {
 		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))

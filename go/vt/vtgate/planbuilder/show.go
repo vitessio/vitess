@@ -780,7 +780,7 @@ func getSidecarDBIdentifierForKeyspace(vschema plancontext.VSchema, keyspace str
 		if err != nil {
 			return sdbname, err
 		}
-		sdbid = sqlparser.NewIdentifierCS(sdbname).String()
+		sdbid = sqlparser.String(sqlparser.NewIdentifierCS(sdbname))
 		sidecarDBIdentifiers.Store(keyspace, sdbid)
 	}
 	return sdbid.(string), nil

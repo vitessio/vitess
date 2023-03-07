@@ -470,7 +470,7 @@ func recordDDLError(tableName string, err error) {
 }
 
 func (t *sidecarTable) String() string {
-	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), sqlparser.NewIdentifierCS(t.name).String(), t.module)
+	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), sqlparser.String(sqlparser.NewIdentifierCS(t.name)), t.module)
 }
 
 // region unit-test-only
@@ -518,7 +518,7 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 			)
 		}
 		db.AddQuery(sqlparser.BuildParsedQuery(showCreateTableQuery, GetIdentifier(),
-			sqlparser.NewIdentifierCS(table.name).String()).Query, result)
+			sqlparser.String(sqlparser.NewIdentifierCS(table.name))).Query, result)
 	}
 
 	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
