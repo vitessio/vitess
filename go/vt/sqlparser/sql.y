@@ -4092,6 +4092,10 @@ constraint_symbol_opt:
   {
     $$ = ""
   }
+| CONSTRAINT
+  {
+    $$ = ""
+  }
 | CONSTRAINT ID
   {
     $$ = string($2)
@@ -4177,7 +4181,11 @@ alter_table_statement_part:
   }
 | ADD constraint_symbol_opt key_type index_or_key_opt name_opt using_opt '(' index_column_list ')' index_option_list_opt
   {
-    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent($5), Type: $3, Using: $6, Columns: $8, Options: $10}}
+    idxName := $5
+    if len(idxName) == 0 {
+      idxName = $2
+    }
+    $$ = &DDL{Action: AlterStr, IndexSpec: &IndexSpec{Action: CreateStr, ToName: NewColIdent(idxName), Type: $3, Using: $6, Columns: $8, Options: $10}}
   }
 | DROP CONSTRAINT ID
   {
