@@ -210,7 +210,7 @@ func (ts *Server) GetShard(ctx context.Context, keyspace, shard string) (*ShardI
 	}
 
 	value := &topodatapb.Shard{}
-	if err = proto.Unmarshal(data, value); err != nil {
+	if err = value.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrapf(err, "GetShard(%v,%v): bad shard data", keyspace, shard)
 	}
 	return &ShardInfo{
@@ -229,7 +229,7 @@ func (ts *Server) updateShard(ctx context.Context, si *ShardInfo) error {
 	span.Annotate("shard", si.shardName)
 	defer span.Finish()
 
-	data, err := proto.Marshal(si.Shard)
+	data, err := si.Shard.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -312,7 +312,7 @@ func (ts *Server) CreateShard(ctx context.Context, keyspace, shard string) (err 
 	}
 
 	// Marshal and save.
-	data, err := proto.Marshal(value)
+	data, err := value.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -674,7 +674,7 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 		return nil, nil, err
 	}
 	value := &topodatapb.Shard{}
-	if err := proto.Unmarshal(current.Contents, value); err != nil {
+	if err := value.UnmarshalVT(current.Contents); err != nil {
 		// Cancel the watch, drain channel.
 		cancel()
 		for range wdChannel {
@@ -702,7 +702,7 @@ func (ts *Server) WatchShard(ctx context.Context, keyspace, shard string) (*Watc
 			}
 
 			value := &topodatapb.Shard{}
-			if err := proto.Unmarshal(wd.Contents, value); err != nil {
+			if err := value.UnmarshalVT(wd.Contents); err != nil {
 				cancel()
 				for range wdChannel {
 				}

@@ -141,7 +141,7 @@ func (obp OrderByParams) String() string {
 		val += " ASC"
 	}
 	if obp.CollationID != collations.Unknown {
-		collation := collations.Local().LookupByID(obp.CollationID)
+		collation := obp.CollationID.Get()
 		val += " COLLATE " + collation.Name()
 	}
 	return val

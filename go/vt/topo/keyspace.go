@@ -19,8 +19,6 @@ package topo
 import (
 	"path"
 
-	"google.golang.org/protobuf/proto"
-
 	"context"
 
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -162,7 +160,7 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 // CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
-	data, err := proto.Marshal(value)
+	data, err := value.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -189,7 +187,7 @@ func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceIn
 	}
 
 	k := &topodatapb.Keyspace{}
-	if err = proto.Unmarshal(data, k); err != nil {
+	if err = k.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrap(err, "bad keyspace data")
 	}
 
@@ -232,7 +230,7 @@ func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 		return err
 	}
 
-	data, err := proto.Marshal(ki.Keyspace)
+	data, err := ki.Keyspace.MarshalVT()
 	if err != nil {
 		return err
 	}

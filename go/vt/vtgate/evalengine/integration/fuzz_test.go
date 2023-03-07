@@ -310,11 +310,10 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal string, localC
 
 	var localCollationName string
 	var remoteCollationName string
-	env := collations.Local()
-	if coll := env.LookupByID(localCollation); coll != nil {
+	if coll := localCollation.Get(); coll != nil {
 		localCollationName = coll.Name()
 	}
-	if coll := env.LookupByID(remoteCollation); coll != nil {
+	if coll := remoteCollation.Get(); coll != nil {
 		remoteCollationName = coll.Name()
 	}
 

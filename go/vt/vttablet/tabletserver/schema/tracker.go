@@ -23,8 +23,6 @@ import (
 	"sync"
 	"time"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/sidecardb"
 
@@ -229,7 +227,7 @@ func (tr *Tracker) saveCurrentSchemaToDb(ctx context.Context, gtid, ddl string, 
 	for _, table := range tables {
 		dbSchema.Tables = append(dbSchema.Tables, newMinimalTable(table))
 	}
-	blob, _ := proto.Marshal(dbSchema)
+	blob, _ := dbSchema.MarshalVT()
 
 	conn, err := tr.engine.GetConnection(ctx)
 	if err != nil {

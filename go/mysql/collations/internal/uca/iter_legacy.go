@@ -22,7 +22,7 @@ import (
 
 type WeightIteratorLegacy struct {
 	// Constant
-	CollationLegacy
+	*CollationLegacy
 
 	// Internal state
 	codepoint codepointIteratorLegacy
@@ -66,11 +66,6 @@ func (it *WeightIteratorLegacy) reset(input []byte) {
 	it.input = input
 	it.length = 0
 	it.codepoint.weights = nil
-}
-
-func (it *WeightIteratorLegacy) Done() {
-	it.input = nil
-	it.iterpool.Put(it)
 }
 
 func (it *WeightIteratorLegacy) DebugCodepoint() (rune, int) {
