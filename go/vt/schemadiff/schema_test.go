@@ -532,7 +532,7 @@ func TestViewReferences(t *testing.T) {
 				"create table t2(id int primary key, c char(5))",
 				"create view v1 as select c from t1, t2 where t2.id=3",
 			},
-			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "c", NonUnique: true},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "c", Ambiguous: true},
 		},
 		{
 			name: "invalid unqualified in WHERE clause, multiple tables",
@@ -541,7 +541,7 @@ func TestViewReferences(t *testing.T) {
 				"create table t2(id int primary key, c char(5))",
 				"create view v1 as select t2.c from t1, t2 where id=3",
 			},
-			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "id", NonUnique: true},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "id", Ambiguous: true},
 		},
 		{
 			name: "valid unqualified, multiple tables",
@@ -626,6 +626,29 @@ func TestViewReferences(t *testing.T) {
 				"create view v2 as select n as num, info from t2",
 				"create view v3 as select num, v1.id, ch from v1 join v2 using (id) where info > 5",
 			},
+		},
+		{
+			name: "valid dual",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select 1 from dual",
+			},
+		},
+		{
+			name: "invalid dual column",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select id from dual",
+			},
+			expectErr: &InvalidColumnReferencedInViewError{View: "v1", Column: "id"},
+		},
+		{
+			name: "invalid dual star",
+			queries: []string{
+				"create table t1(id int primary key, c char(5))",
+				"create view v1 as select * from dual",
+			},
+			expectErr: &InvalidStarExprInViewError{View: "v1"},
 		},
 		{
 			name: "valid star",
