@@ -118,7 +118,7 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 
 ## Release Cutover 
 
-In this section we describe our current release process. We begin with a list of [**pre-requisite for the release team**](#pre-requisites) and with a short [**overview**](#overview).
+In this section we describe our current release process. We begin with a list of [**pre-requisites for the release team**](#pre-requisites) and with a short [**overview**](#overview).
 The release process is divided into three parts: [**Pre-Release**](#pre-release), [**Release**](#release), [**Post-Release**](#post-release), which are detailed after the overview.
 
 ### Pre-Requisites
