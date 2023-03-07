@@ -84,8 +84,6 @@ func (c *Collation) LastError() error {
 	return c.err
 }
 
-func (c *Collation) Init() {}
-
 func (c *Collation) ID() collations.ID {
 	return c.id
 }

@@ -30,8 +30,6 @@ type Collation_multibyte struct {
 	charset charset.Charset
 }
 
-func (c *Collation_multibyte) Init() {}
-
 func (c *Collation_multibyte) ID() ID {
 	return c.id
 }

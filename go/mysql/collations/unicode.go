@@ -32,8 +32,6 @@ type Collation_unicode_general_ci struct {
 	charset charset.Charset
 }
 
-func (c *Collation_unicode_general_ci) Init() {}
-
 func (c *Collation_unicode_general_ci) ID() ID {
 	return c.id
 }
@@ -170,8 +168,6 @@ type Collation_unicode_bin struct {
 	name    string
 	charset charset.Charset
 }
-
-func (c *Collation_unicode_bin) Init() {}
 
 func (c *Collation_unicode_bin) ID() ID {
 	return c.id

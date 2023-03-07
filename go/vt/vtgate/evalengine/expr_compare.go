@@ -345,7 +345,7 @@ func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 	if l.Match != nil && l.MatchCollation == coll {
 		return l.Match.Match(left)
 	}
-	fullColl := collations.Local().LookupByID(coll)
+	fullColl := coll.Get()
 	wc := fullColl.Wildcard(right, 0, 0, 0)
 	return wc.Match(left)
 }
