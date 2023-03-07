@@ -1035,8 +1035,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 		case *sqlparser.StarExpr:
 			if tableName := node.TableName.Name.String(); tableName != "" {
 				for _, col := range schemaInformation.Tables[tableName].Columns {
-					name := sqlparser.NewIdentifierCI(col.Name.String())
-					columnNames = append(columnNames, &name)
+					name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
+					columnNames = append(columnNames, name)
 				}
 			} else {
 				dependentNames, err := getViewDependentTableNames(v.CreateView)
@@ -1046,8 +1046,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 				// add all columns from all referenced tables and views
 				for _, entityName := range dependentNames {
 					for _, col := range schemaInformation.Tables[entityName].Columns {
-						name := sqlparser.NewIdentifierCI(col.Name.String())
-						columnNames = append(columnNames, &name)
+						name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
+						columnNames = append(columnNames, name)
 					}
 				}
 			}
