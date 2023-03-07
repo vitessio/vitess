@@ -450,7 +450,11 @@ func (vc *VitessCluster) AddTablet(t testing.TB, cell *Cell, keyspace *Keyspace,
 	require.NotNil(t, vttablet)
 	vttablet.SupportsBackup = false
 
-	tablet.DbServer = cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tabletID, vc.ClusterConfig.tabletMysqlPortBase+tabletID, vc.ClusterConfig.tmpDir)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	tablet.DbServer = mysqlctlProcess
 	require.NotNil(t, tablet.DbServer)
 	tablet.DbServer.InitMysql = true
 	proc, err := tablet.DbServer.StartProcess()

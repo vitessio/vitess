@@ -352,7 +352,11 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 			}
 			// Start Mysqlctl process
 			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
@@ -499,7 +503,11 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 			}
 			// Start Mysqlctl process
 			log.Infof("Starting mysqlctl for table uid %d, mysql port %d", tablet.TabletUID, tablet.MySQLPort)
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			mysqlctlProcess, err := MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory, !cluster.ReusingVTDATAROOT)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			proc, err := tablet.MysqlctlProcess.StartProcess()
 			if err != nil {
 				log.Errorf("error starting mysqlctl process: %v, %v", tablet.MysqlctldProcess, err)
@@ -619,7 +627,11 @@ func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Sh
 	for _, shard := range shards {
 		for _, tablet := range shard.Vttablets {
 			// Setup MysqlctlProcess
-			tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
+			mysqlctlProcess, err := MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, cluster.TmpDirectory)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			// Setup VttabletProcess
 			tablet.VttabletProcess = VttabletProcessInstance(
 				tablet.HTTPPort,

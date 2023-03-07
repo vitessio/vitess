@@ -193,7 +193,11 @@ func StartNewVTTablet(t *testing.T, clusterInstance *cluster.LocalProcessCluster
 	shard := keyspace.Shards[0]
 
 	// Setup MysqlctlProcess
-	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
 	// Setup VttabletProcess
 	tablet.VttabletProcess = cluster.VttabletProcessInstance(
 		tablet.HTTPPort,

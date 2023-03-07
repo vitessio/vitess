@@ -496,21 +496,6 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
-	if !strings.Contains(query, "1 != 1") {
-		t.mysqlQueries = append(t.mysqlQueries, &MysqlQuery{
-			Time: t.currentTime,
-			SQL:  query,
-		})
-	}
-
-	// return the pre-computed results for any schema introspection queries
-	tEnv := t.vte.getGlobalTabletEnv()
-	result := tEnv.getResult(query)
-
-	if result != nil {
-		return callback(result)
-	}
-
 	// If query is part of rejected list then return error right away.
 	if err := t.db.GetRejectedQueryResult(query); err != nil {
 		return err
@@ -533,6 +518,21 @@ func (t *explainTablet) HandleQuery(c *mysql.Conn, query string, callback func(*
 			return err
 		}
 		return callback(expResult.Result)
+	}
+
+	if !strings.Contains(query, "1 != 1") {
+		t.mysqlQueries = append(t.mysqlQueries, &MysqlQuery{
+			Time: t.currentTime,
+			SQL:  query,
+		})
+	}
+
+	// return the pre-computed results for any schema introspection queries
+	tEnv := t.vte.getGlobalTabletEnv()
+	result := tEnv.getResult(query)
+
+	if result != nil {
+		return callback(result)
 	}
 
 	switch sqlparser.Preview(query) {

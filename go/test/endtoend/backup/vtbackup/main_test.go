@@ -88,8 +88,7 @@ func TestMain(m *testing.M) {
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
 		// We could have operated with empty password (which is default) here as well.
-		// TODO: Create a separate test to test --db-credentials-file functionality (@rsajwani)
-		// TODO: Create a separate test to test --db-credentials-file functionality (@rsajwani)
+		// TODO: Create a separate test for --db-credentials-file functionality (@rsajwani)
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)
@@ -120,7 +119,11 @@ func TestMain(m *testing.M) {
 			tablet.VttabletProcess.ExtraArgs = commonTabletArg
 			tablet.VttabletProcess.SupportsBackup = true
 
-			tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			if err != nil {
+				return 1, err
+			}
+			tablet.MysqlctlProcess = *mysqlctlProcess
 			tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctlProcess.ExtraArgs = extraArgs
 			proc, err := tablet.MysqlctlProcess.StartProcess()

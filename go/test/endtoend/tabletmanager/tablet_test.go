@@ -34,8 +34,12 @@ func TestEnsureDB(t *testing.T) {
 
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	if err != nil {
+		return
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", tablet))
@@ -67,8 +71,12 @@ func TestResetReplicationParameters(t *testing.T) {
 
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
-	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)
 
 	log.Info(fmt.Sprintf("Started vttablet %v", tablet))

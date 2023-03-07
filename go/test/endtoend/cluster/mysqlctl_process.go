@@ -236,11 +236,10 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
-func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) *MysqlctlProcess {
-	var initFile = path.Join(os.Getenv("VTROOT"), "/config/init_db.sql") //default value
-	updatedInitFile, err := getInitDBFile()
-	if err == nil {
-		initFile = updatedInitFile
+func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) (*MysqlctlProcess, error) {
+	initFile, err := getInitDBFile()
+	if err != nil {
+		return nil, err
 	}
 	mysqlctl := &MysqlctlProcess{
 		Name:         "mysqlctl",
@@ -252,7 +251,7 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 	mysqlctl.TabletUID = tabletUID
 	mysqlctl.InitMysql = initMySQL
 	mysqlctl.SecureTransport = false
-	return mysqlctl
+	return mysqlctl, nil
 }
 
 func getInitDBFile() (string, error) {
@@ -272,20 +271,28 @@ func getInitDBFile() (string, error) {
 
 // MysqlCtlProcessInstance returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
-func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) *MysqlctlProcess {
+func MysqlCtlProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) (*MysqlctlProcess, error) {
 	return MysqlCtlProcessInstanceOptionalInit(tabletUID, mySQLPort, tmpDirectory, true)
 }
 
 // StartMySQL starts mysqlctl process
 func StartMySQL(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) error {
-	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	mysqlctlProcess, err := MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	if err != nil {
+		return err
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
 	return tablet.MysqlctlProcess.Start()
 }
 
 // StartMySQLAndGetConnection create a connection to tablet mysql
 func StartMySQLAndGetConnection(ctx context.Context, tablet *Vttablet, username string, tmpDirectory string) (*mysql.Conn, error) {
-	tablet.MysqlctlProcess = *MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
-	err := tablet.MysqlctlProcess.Start()
+	mysqlctlProcess, err := MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, tmpDirectory)
+	if err != nil {
+		return nil, err
+	}
+	tablet.MysqlctlProcess = *mysqlctlProcess
+	err = tablet.MysqlctlProcess.Start()
 	if err != nil {
 		return nil, err
 	}
