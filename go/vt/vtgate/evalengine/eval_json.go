@@ -22,7 +22,7 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -64,13 +64,39 @@ func intoJSONPath(e eval) (*json.Path, error) {
 	}
 }
 
-func evalBinaryToJSON(e *evalBytes) *evalJSON {
+func evalConvert_bj(e *evalBytes) *evalJSON {
 	const prefix = "base64:type15:"
 
 	dst := make([]byte, len(prefix)+mysqlBase64.EncodedLen(len(e.bytes)))
 	copy(dst, prefix)
 	base64.StdEncoding.Encode(dst[len(prefix):], e.bytes)
 	return json.NewString(dst)
+}
+
+func evalConvert_fj(e *evalFloat) *evalJSON {
+	f := e.ToRawBytes()
+	if bytes.IndexByte(f, '.') < 0 {
+		f = append(f, '.', '0')
+	}
+	return json.NewNumber(f)
+}
+
+func evalConvert_nj(e evalNumeric) *evalJSON {
+	if e == evalBoolTrue {
+		return json.ValueTrue
+	}
+	if e == evalBoolFalse {
+		return json.ValueFalse
+	}
+	return json.NewNumber(e.ToRawBytes())
+}
+
+func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
+	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, e.col.Collation.Get().Charset())
+	if err != nil {
+		return nil, err
+	}
+	return json.NewString(jsonText), nil
 }
 
 func evalToJSON(e eval) (*evalJSON, error) {
@@ -80,28 +106,14 @@ func evalToJSON(e eval) (*evalJSON, error) {
 	case *evalJSON:
 		return e, nil
 	case *evalFloat:
-		f := e.ToRawBytes()
-		if bytes.IndexByte(f, '.') < 0 {
-			f = append(f, '.', '0')
-		}
-		return json.NewNumber(f), nil
+		return evalConvert_fj(e), nil
 	case evalNumeric:
-		if e == evalBoolTrue {
-			return json.ValueTrue, nil
-		}
-		if e == evalBoolFalse {
-			return json.ValueFalse, nil
-		}
-		return json.NewNumber(e.ToRawBytes()), nil
+		return evalConvert_nj(e), nil
 	case *evalBytes:
 		if sqltypes.IsBinary(e.SQLType()) {
-			return evalBinaryToJSON(e), nil
+			return evalConvert_bj(e), nil
 		}
-		jsonText, err := collations.ConvertForJSON(nil, e.bytes, collations.Local().LookupByID(e.col.Collation))
-		if err != nil {
-			return nil, err
-		}
-		return json.NewString(jsonText), nil
+		return evalConvert_cj(e)
 	default:
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", e.SQLType())
 	}

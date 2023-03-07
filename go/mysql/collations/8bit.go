@@ -17,7 +17,7 @@ limitations under the License.
 package collations
 
 import (
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -27,8 +27,6 @@ func init() {
 	for i := range sortOrderIdentity {
 		sortOrderIdentity[i] = byte(i)
 	}
-
-	register(&Collation_binary{})
 }
 
 type simpletables struct {
@@ -49,8 +47,6 @@ type Collation_8bit_bin struct {
 	simpletables
 	charset charset.Charset
 }
-
-func (c *Collation_8bit_bin) Init() {}
 
 func (c *Collation_8bit_bin) Name() string {
 	return c.name
@@ -137,12 +133,6 @@ type Collation_8bit_simple_ci struct {
 	name string
 	simpletables
 	charset charset.Charset
-}
-
-func (c *Collation_8bit_simple_ci) Init() {
-	if c.sort == nil {
-		panic("8bit_simple_ci collation without sort table")
-	}
 }
 
 func (c *Collation_8bit_simple_ci) Name() string {
@@ -260,8 +250,6 @@ func (c *Collation_8bit_simple_ci) ToUpper(dst, src []byte) []byte {
 }
 
 type Collation_binary struct{}
-
-func (c *Collation_binary) Init() {}
 
 func (c *Collation_binary) ID() ID {
 	return CollationBinaryID

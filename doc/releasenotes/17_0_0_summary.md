@@ -4,12 +4,13 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
-    - [Deprecated Stats](#deprecated-stats)
+    - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Stats](#deprecated-stats)
   - **[VTTablet](#vttablet)**
     - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
     - [Deprecated Flags](#deprecated-flags)
@@ -22,14 +23,30 @@
 
 When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used. 
 
-#### <a id="deprecated-stats"/>Deprecated Stats
+#### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
 
-These stats are deprecated in v17.
+Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute and Prepare operations generate stats under independent stats keys.
 
-| Deprecated stat | Supported alternatives |
-|-|-|
-| `backup_duration_seconds` | `BackupDurationNanoseconds` |
-| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+Here is a (condensed) example of stats output:
+
+```
+{
+  "VtgateApi": {
+    "Histograms": {
+      "Execute.src.primary": {
+        "500000": 5
+      },
+      "Prepare.src.primary": {
+        "100000000": 0
+      }
+    }
+  },
+  "VtgateApiErrorCounts": {
+    "Execute.src.primary.INVALID_ARGUMENT": 3,
+    "Execute.src.primary.ALREADY_EXISTS": 1
+  }
+}
+```
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -176,6 +193,14 @@ Some notes to help understand these metrics:
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
 
+### <a id="deprecated-stats"/>Deprecated Stats
+
+These stats are deprecated in v17.
+
+| Deprecated stat | Supported alternatives |
+|-|-|
+| `backup_duration_seconds` | `BackupDurationNanoseconds` |
+| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL

@@ -111,50 +111,41 @@ func (compareNullSafeEQ) compare(left, right eval) (boolean, error) {
 	return makeboolean(cmp), err
 }
 
-func evalResultIsTextual(e eval) bool {
-	tt := e.SQLType()
+func typeIsTextual(tt sqltypes.Type) bool {
 	return sqltypes.IsText(tt) || sqltypes.IsBinary(tt)
 }
 
-func evalResultsAreStrings(l, r eval) bool {
-	return evalResultIsTextual(l) && evalResultIsTextual(r)
+func compareAsStrings(l, r sqltypes.Type) bool {
+	return typeIsTextual(l) && typeIsTextual(r)
 }
 
-func evalResultsAreSameNumericType(l, r eval) bool {
-	ltype := l.SQLType()
-	rtype := r.SQLType()
-	if sqltypes.IsIntegral(ltype) && sqltypes.IsIntegral(rtype) {
+func compareAsSameNumericType(l, r sqltypes.Type) bool {
+	if sqltypes.IsIntegral(l) && sqltypes.IsIntegral(r) {
 		return true
 	}
-	if sqltypes.IsFloat(ltype) && sqltypes.IsFloat(rtype) {
+	if sqltypes.IsFloat(l) && sqltypes.IsFloat(r) {
 		return true
 	}
-	if ltype == sqltypes.Decimal && rtype == sqltypes.Decimal {
+	if sqltypes.IsDecimal(l) && sqltypes.IsDecimal(r) {
 		return true
 	}
 	return false
 }
 
-func needsDecimalHandling(l, r eval) bool {
-	ltype := l.SQLType()
-	rtype := r.SQLType()
-	return ltype == sqltypes.Decimal && (sqltypes.IsIntegral(rtype) || sqltypes.IsFloat(rtype)) ||
-		rtype == sqltypes.Decimal && (sqltypes.IsIntegral(ltype) || sqltypes.IsFloat(ltype))
+func compareAsDecimal(ltype, rtype sqltypes.Type) bool {
+	return sqltypes.IsDecimal(ltype) && (sqltypes.IsIntegral(rtype) || sqltypes.IsFloat(rtype)) ||
+		sqltypes.IsDecimal(rtype) && (sqltypes.IsIntegral(ltype) || sqltypes.IsFloat(ltype))
 }
 
-func evalResultsAreDates(l, r eval) bool {
-	return sqltypes.IsDate(l.SQLType()) && sqltypes.IsDate(r.SQLType())
+func compareAsDates(l, r sqltypes.Type) bool {
+	return sqltypes.IsDate(l) && sqltypes.IsDate(r)
 }
 
-func evalResultsAreDateAndString(l, r eval) bool {
-	ltype := l.SQLType()
-	rtype := r.SQLType()
-	return (sqltypes.IsDate(ltype) && evalResultIsTextual(r)) || (evalResultIsTextual(l) && sqltypes.IsDate(rtype))
+func compareAsDateAndString(l, r sqltypes.Type) bool {
+	return (sqltypes.IsDate(l) && typeIsTextual(r)) || (typeIsTextual(l) && sqltypes.IsDate(r))
 }
 
-func evalResultsAreDateAndNumeric(l, r eval) bool {
-	ltype := l.SQLType()
-	rtype := r.SQLType()
+func compareAsDateAndNumeric(ltype, rtype sqltypes.Type) bool {
 	return sqltypes.IsDate(ltype) && sqltypes.IsNumber(rtype) || sqltypes.IsNumber(ltype) && sqltypes.IsDate(rtype)
 }
 
@@ -214,23 +205,26 @@ func evalCompareAll(lVal, rVal eval, fulleq bool) (int, bool, error) {
 // For more details on comparison expression evaluation and type conversion:
 //   - https://dev.mysql.com/doc/refman/8.0/en/type-conversion.html
 func evalCompare(left, right eval) (comp int, err error) {
+	lt := left.SQLType()
+	rt := right.SQLType()
+
 	switch {
-	case evalResultsAreStrings(left, right):
+	case compareAsStrings(lt, rt):
 		return compareStrings(left, right)
-	case evalResultsAreSameNumericType(left, right), needsDecimalHandling(left, right):
+	case compareAsSameNumericType(lt, rt) || compareAsDecimal(lt, rt):
 		return compareNumeric(left, right)
-	case evalResultsAreDates(left, right):
+	case compareAsDates(lt, rt):
 		return compareDates(left, right)
-	case evalResultsAreDateAndString(left, right):
+	case compareAsDateAndString(lt, rt):
 		return compareDateAndString(left, right)
-	case evalResultsAreDateAndNumeric(left, right):
+	case compareAsDateAndNumeric(lt, rt):
 		// TODO: support comparison between a date and a numeric value
 		// 		queries like the ones below should be supported:
 		// 			- select 1 where 20210101 = cast("2021-01-01" as date)
 		// 			- select 1 where 2021210101 = cast("2021-01-01" as date)
 		// 			- select 1 where 104200 = cast("10:42:00" as time)
 		return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot compare a date with a numeric value")
-	case left.SQLType() == sqltypes.Tuple || right.SQLType() == sqltypes.Tuple:
+	case lt == sqltypes.Tuple || rt == sqltypes.Tuple:
 		return 0, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "BUG: evalCompare: tuple comparison should be handled early")
 	default:
 		// Quoting MySQL Docs:
@@ -351,7 +345,7 @@ func (l *LikeExpr) matchWildcard(left, right []byte, coll collations.ID) bool {
 	if l.Match != nil && l.MatchCollation == coll {
 		return l.Match.Match(left)
 	}
-	fullColl := collations.Local().LookupByID(coll)
+	fullColl := coll.Get()
 	wc := fullColl.Wildcard(right, 0, 0, 0)
 	return wc.Match(left)
 }
@@ -370,11 +364,11 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 
 	var matched bool
 	switch {
-	case evalResultIsTextual(left) && evalResultIsTextual(right):
+	case typeIsTextual(left.SQLType()) && typeIsTextual(right.SQLType()):
 		matched = l.matchWildcard(left.(*evalBytes).bytes, right.(*evalBytes).bytes, col)
-	case evalResultIsTextual(right):
+	case typeIsTextual(right.SQLType()):
 		matched = l.matchWildcard(left.ToRawBytes(), right.(*evalBytes).bytes, col)
-	case evalResultIsTextual(left):
+	case typeIsTextual(left.SQLType()):
 		matched = l.matchWildcard(left.(*evalBytes).bytes, right.ToRawBytes(), col)
 	default:
 		matched = l.matchWildcard(left.ToRawBytes(), right.ToRawBytes(), collations.CollationBinaryID)
