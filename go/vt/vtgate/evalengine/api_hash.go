@@ -181,9 +181,8 @@ func NullsafeHashcode128(hash *vthash.Hasher, v sqltypes.Value, collation collat
 		hash.Write64(u)
 
 	case sqltypes.IsBinary(coerceTo):
-		coll := collations.CollationBinaryID.Get()
 		hash.Write16(hashPrefixBytes)
-		coll.Hash(hash, v.Raw(), 0)
+		collations.Binary.Hash(hash, v.Raw(), 0)
 
 	case sqltypes.IsText(coerceTo):
 		coll := collation.Get()

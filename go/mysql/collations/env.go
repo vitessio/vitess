@@ -194,10 +194,13 @@ func makeEnv(version collver) *Environment {
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
-	CollationUtf8ID    ID = 33
-	CollationUtf8mb4ID ID = 255
-	CollationBinaryID  ID = 63
+	CollationUtf8ID    = 33
+	CollationUtf8mb4ID = 255
+	CollationBinaryID  = 63
 )
+
+// Binary is the default Binary collation
+var Binary = ID(CollationBinaryID).Get()
 
 // CharsetAlias returns the internal charset name for the given charset.
 // For now, this only maps `utf8` to `utf8mb3`; in future versions of MySQL,
