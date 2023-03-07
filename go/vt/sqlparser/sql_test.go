@@ -71,13 +71,64 @@ func TestAlterCreateIndex(t *testing.T) {
 			},
 		},
 		{
-			"ALTER TABLE asdf ADD CONSTRAINT abc UNIQUE (w,X, y , z)",
+			"ALTER TABLE asdf ADD CONSTRAINT UNIQUE (w,X, y , z)",
 			TableName{
 				Name: TableIdent{"asdf"},
 			},
 			&IndexSpec{
 				Action: CreateStr,
 				ToName: ColIdent{},
+				Type:   "unique",
+				Columns: []*IndexColumn{
+					{Column: ColIdent{val: "w"}, Order: AscScr},
+					{Column: ColIdent{val: "X"}, Order: AscScr},
+					{Column: ColIdent{val: "y"}, Order: AscScr},
+					{Column: ColIdent{val: "z"}, Order: AscScr},
+				},
+			},
+		},
+		{
+			"ALTER TABLE asdf ADD CONSTRAINT abc UNIQUE (w,X, y , z)",
+			TableName{
+				Name: TableIdent{"asdf"},
+			},
+			&IndexSpec{
+				Action: CreateStr,
+				ToName: ColIdent{val: "abc"},
+				Type:   "unique",
+				Columns: []*IndexColumn{
+					{Column: ColIdent{val: "w"}, Order: AscScr},
+					{Column: ColIdent{val: "X"}, Order: AscScr},
+					{Column: ColIdent{val: "y"}, Order: AscScr},
+					{Column: ColIdent{val: "z"}, Order: AscScr},
+				},
+			},
+		},
+		{
+			"ALTER TABLE asdf ADD CONSTRAINT UNIQUE abc (w,X, y , z)",
+			TableName{
+				Name: TableIdent{"asdf"},
+			},
+			&IndexSpec{
+				Action: CreateStr,
+				ToName: ColIdent{val: "abc"},
+				Type:   "unique",
+				Columns: []*IndexColumn{
+					{Column: ColIdent{val: "w"}, Order: AscScr},
+					{Column: ColIdent{val: "X"}, Order: AscScr},
+					{Column: ColIdent{val: "y"}, Order: AscScr},
+					{Column: ColIdent{val: "z"}, Order: AscScr},
+				},
+			},
+		},
+		{
+			"ALTER TABLE asdf ADD CONSTRAINT abc UNIQUE def (w,X, y , z)",
+			TableName{
+				Name: TableIdent{"asdf"},
+			},
+			&IndexSpec{
+				Action: CreateStr,
+				ToName: ColIdent{val: "def"},
 				Type:   "unique",
 				Columns: []*IndexColumn{
 					{Column: ColIdent{val: "w"}, Order: AscScr},
