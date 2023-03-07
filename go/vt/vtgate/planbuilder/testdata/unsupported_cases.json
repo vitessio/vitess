@@ -466,5 +466,11 @@
     "comment": "mix lock with other expr",
     "query": "select get_lock('xyz', 10), 1 from dual",
     "plan": "unsupported: lock function and other expression in same select query"
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (star projection)",
+    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
+    "v3-plan": "symbol constraint_name not found in table or subquery",
+    "gen4-plan": "unsupported: pushing projection 'constraint_name' on *sqlparser.Union"
   }
 ]
