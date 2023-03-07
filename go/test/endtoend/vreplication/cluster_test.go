@@ -47,15 +47,12 @@ var (
 	vtdataroot         string
 	// If you query the sidecar database directly against mysqld then you will need to specify the
 	// sidecarDBIdentifier
-	sidecarDBName         = "__vt_e2e-test" // test a non-default sidecar db name that also needs to be escaped
+	sidecarDBName         = "__vt_e2e-test" // test a non-default sidecar database name that also needs to be escaped
 	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
 	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}
-	extraVtctldArgs       = []string{
-		"--remote_operation_timeout", "600s",
-		"--topo_etcd_lease_ttl", "120",
-	}
+	extraVtctldArgs       = []string{"--remote_operation_timeout", "600s", "--topo_etcd_lease_ttl", "120"}
 	// This variable can be used within specific tests to alter vttablet behavior
 	extraVTTabletArgs = []string{}
 

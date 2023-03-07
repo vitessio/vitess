@@ -48,7 +48,7 @@ type dbClientImpl struct {
 // dbClientImplWithSidecarDBReplacement is a DBClient implementation
 // that serves primarily as a pass-through to dbClientImpl, with the
 // exception of ExecuteFetch, where it first replaces any default
-// SidecarDB name with the actual one in use on the tablet.
+// sidecar database qualifiers with the actual one in use on the tablet.
 type dbClientImplWithSidecarDBReplacement struct {
 	dbClientImpl
 }
@@ -140,7 +140,7 @@ func (dc *dbClientImpl) ExecuteFetch(query string, maxrows int) (*sqltypes.Resul
 }
 
 func (dcr *dbClientImplWithSidecarDBReplacement) ExecuteFetch(query string, maxrows int) (*sqltypes.Result, error) {
-	// Replace any provided sidecar DB qualifiers with the correct one.
+	// Replace any provided sidecar database qualifiers with the correct one.
 	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
 	if err != nil {
 		return nil, err

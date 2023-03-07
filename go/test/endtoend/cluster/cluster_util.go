@@ -385,7 +385,7 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
 }
 
-// GetSidecarDBName returns the sidecar db name configured for
+// GetSidecarDBName returns the sidecar database name configured for
 // the keyspace in the topo server.
 func (cluster LocalProcessCluster) GetSidecarDBName(keyspace string) (string, error) {
 	res, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspace)

@@ -65,7 +65,7 @@ func (tm *TabletManager) ExecuteFetchAsDba(ctx context.Context, req *tabletmanag
 		}
 	}
 
-	// Replace any provided sidecar DB qualifiers with the correct one.
+	// Replace any provided sidecar database qualifiers with the correct one.
 	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
 	if err != nil {
 		return nil, err
@@ -106,7 +106,7 @@ func (tm *TabletManager) ExecuteFetchAsAllPrivs(ctx context.Context, req *tablet
 		_, _ = conn.ExecuteFetch("USE "+sqlescape.EscapeID(req.DbName), 1, false)
 	}
 
-	// Replace any provided sidecar DB qualifiers with the correct one.
+	// Replace any provided sidecar database qualifiers with the correct one.
 	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
 	if err != nil {
 		return nil, err
@@ -130,7 +130,7 @@ func (tm *TabletManager) ExecuteFetchAsApp(ctx context.Context, req *tabletmanag
 		return nil, err
 	}
 	defer conn.Recycle()
-	// Replace any provided sidecar DB qualifiers with the correct one.
+	// Replace any provided sidecar database qualifiers with the correct one.
 	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
 	if err != nil {
 		return nil, err
@@ -144,7 +144,7 @@ func (tm *TabletManager) ExecuteQuery(ctx context.Context, req *tabletmanagerdat
 	// get the db name from the tablet
 	tablet := tm.Tablet()
 	target := &querypb.Target{Keyspace: tablet.Keyspace, Shard: tablet.Shard, TabletType: tablet.Type}
-	// Replace any provided sidecar DB qualifiers with the correct one.
+	// Replace any provided sidecar database qualifiers with the correct one.
 	uq, err := sqlparser.ReplaceTableQualifiers(string(req.Query), sidecardb.DefaultName, sidecardb.GetName())
 	if err != nil {
 		return nil, err

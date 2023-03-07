@@ -340,12 +340,13 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 		return
 	}
 
-	// Create the keyspace, maybe it already exists.
+	// Create the keyspace, if it does not already exist.
 	// We store the sidecar database name in the keyspace record.
-	// This is set by the first tablet and is then immutable. Any
-	// other tablets that try to come up in this keyspace will fail
-	// to initialize if they are trying to use a different sidecar
-	// database name.
+	// If not already set, then it is set to the default (_vt) by
+	// the first tablet to start in the keyspace and is from
+	// then on immutable. Any other tablets that try to come up in
+	// this keyspace will fail to initialize if they are trying to
+	// use a different sidecar database name.
 	ksi := topodatapb.Keyspace{SidecarDbName: sidecardb.GetName()}
 	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {
 		return nil, vterrors.Wrapf(err, "CreateKeyspace(%v) failed", keyspace)

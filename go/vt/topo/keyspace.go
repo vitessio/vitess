@@ -23,6 +23,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -221,7 +222,7 @@ func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string
 	if keyspaceInfo.SidecarDbName != "" {
 		return keyspaceInfo.SidecarDbName, nil
 	}
-	return "_vt", nil
+	return sidecardb.DefaultName, nil
 }
 
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.

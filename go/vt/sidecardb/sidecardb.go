@@ -226,7 +226,7 @@ func GetIdentifier() string {
 // GetCreateQuery returns the CREATE DATABASE SQL statement
 // used to create the sidecar database.
 func GetCreateQuery() string {
-	return fmt.Sprintf(createSidecarDBQuery, GetIdentifier())
+	return sqlparser.BuildParsedQuery(createSidecarDBQuery, GetIdentifier()).Query
 }
 
 // GetDDLCount metric returns the count of sidecardb DDLs that
@@ -368,7 +368,7 @@ func (si *schemaInit) setCurrentDatabase(dbName string) error {
 func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	var currentTableSchema string
 
-	rs, err := si.exec(si.ctx, fmt.Sprintf(showCreateTableQuery, GetIdentifier(), tableName), 1, false)
+	rs, err := si.exec(si.ctx, sqlparser.BuildParsedQuery(showCreateTableQuery, GetIdentifier(), tableName).Query, 1, false)
 	if err != nil {
 		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERNoSuchTable {
 			// table does not exist in the sidecar database
@@ -402,9 +402,6 @@ func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (s
 	if diff != nil {
 		ddl = diff.CanonicalStatementString()
 
-		// Temporary logging to debug any eventual issues around
-		// the new schema init, should be removed in v17.
-		log.Infof("Current schema for table %s:\n%s", tableName, current)
 		if ddl == "" {
 			log.Infof("No changes needed for table %s", tableName)
 		} else {
@@ -473,7 +470,7 @@ func recordDDLError(tableName string, err error) {
 }
 
 func (t *sidecarTable) String() string {
-	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), t.name, t.module)
+	return fmt.Sprintf("%s.%s (%s)", GetIdentifier(), sqlparser.NewIdentifierCS(t.name).String(), t.module)
 }
 
 // region unit-test-only
@@ -507,7 +504,7 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 		db.AddQueryPattern(q, result)
 	}
 	for _, q := range sidecarDBInitQueries {
-		db.AddQuery(fmt.Sprintf(q, GetIdentifier()), result)
+		db.AddQuery(sqlparser.BuildParsedQuery(q, GetIdentifier()).Query, result)
 	}
 	sdbe, _ := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
 	db.AddQuery(sdbe, result)
@@ -520,7 +517,8 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 				fmt.Sprintf("%s|%s", table.name, table.schema),
 			)
 		}
-		db.AddQuery(fmt.Sprintf(showCreateTableQuery, GetIdentifier(), table.name), result)
+		db.AddQuery(sqlparser.BuildParsedQuery(showCreateTableQuery, GetIdentifier(),
+			sqlparser.NewIdentifierCS(table.name).String()).Query, result)
 	}
 
 	sqlModeResult := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
@@ -539,7 +537,7 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 func MatchesInitQuery(query string) bool {
 	query = strings.ToLower(query)
 	for _, q := range sidecarDBInitQueries {
-		if strings.EqualFold(fmt.Sprintf(q, GetIdentifier()), query) {
+		if strings.EqualFold(sqlparser.BuildParsedQuery(q, GetIdentifier()).Query, query) {
 			return true
 		}
 	}

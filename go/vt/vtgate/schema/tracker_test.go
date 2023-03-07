@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/discovery"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
@@ -260,9 +261,9 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	}
 
 	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
-	require.Equal(t, []string{fmt.Sprintf(mysql.FetchTables, "_vt"),
-		fmt.Sprintf(mysql.FetchUpdatedTables, "_vt"),
-		fmt.Sprintf(mysql.FetchTables, "_vt")}, sbc.StringQueries())
+	require.Equal(t, []string{sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query,
+		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, "_vt").Query,
+		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query}, sbc.StringQueries())
 }
 
 func waitTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {

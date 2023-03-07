@@ -19,7 +19,6 @@ package tabletserver
 import (
 	"context"
 	"errors"
-	"fmt"
 	"sort"
 	"sync"
 	"sync/atomic"
@@ -35,6 +34,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
@@ -176,12 +176,12 @@ func TestReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQueryPattern(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
-	db.AddQueryPattern(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"table_name",
@@ -190,7 +190,7 @@ func TestReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -289,12 +289,12 @@ func TestInitialReloadSchema(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQueryPattern(fmt.Sprintf(mysql.ClearSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
-	db.AddQueryPattern(fmt.Sprintf(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier())+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
+	db.AddQueryPattern(sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query+".*", &sqltypes.Result{})
 	db.AddQuery("begin", &sqltypes.Result{})
 	db.AddQuery("commit", &sqltypes.Result{})
 	db.AddQuery("rollback", &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChange, sidecardb.GetIdentifier()),
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query,
 		sqltypes.MakeTestResult(
 			sqltypes.MakeTestFields(
 				"table_name",
@@ -303,7 +303,7 @@ func TestInitialReloadSchema(t *testing.T) {
 			"product",
 			"users",
 		))
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -348,8 +348,8 @@ func TestReloadView(t *testing.T) {
 	target := &querypb.Target{TabletType: topodatapb.TabletType_PRIMARY}
 	configs := config.DB
 
-	db.AddQuery(fmt.Sprintf(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()), &sqltypes.Result{})
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, &sqltypes.Result{})
 
 	hs.InitDBConfig(target, configs.DbaWithDB())
 	hs.Open()
@@ -376,7 +376,7 @@ func TestReloadView(t *testing.T) {
 	}}
 
 	// setting first test case result.
-	db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), tcases[0].res)
+	db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, tcases[0].res)
 
 	var tcCount atomic.Int32
 	ch := make(chan struct{})
@@ -399,7 +399,7 @@ func TestReloadView(t *testing.T) {
 			if tcCount.Load() == int32(len(tcases)) {
 				return
 			}
-			db.AddQuery(fmt.Sprintf(mysql.SelectAllViews, sidecardb.GetIdentifier()), tcases[tcCount.Load()].res)
+			db.AddQuery(sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query, tcases[tcCount.Load()].res)
 		case <-time.After(1000 * time.Second):
 			t.Fatalf("timed out")
 		}

@@ -18,11 +18,11 @@ package schema
 
 import (
 	"context"
-	"fmt"
 	"sync"
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -111,7 +111,7 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
-	ftRes, err := conn.Execute(t.ctx, target, fmt.Sprintf(mysql.FetchTables, "_vt"),
+	ftRes, err := conn.Execute(t.ctx, target, sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query, // FIXME! This needs to use the correct sidecar db name
 		nil, 0, 0, nil)
 	if err != nil {
 		return err
@@ -264,7 +264,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 		return false
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
-	res, err := th.Conn.Execute(t.ctx, th.Target, fmt.Sprintf(mysql.FetchUpdatedTables, "_vt"),
+	res, err := th.Conn.Execute(t.ctx, th.Target, sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecardb.DefaultName).Query, // FIXME! This needs to use the correct sidecar db name
 		bv, 0, 0, nil)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)

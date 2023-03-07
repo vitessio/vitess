@@ -228,9 +228,9 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch viewDDL := stmt.(type) {
 	case *sqlparser.CreateView:
-		query := fmt.Sprintf(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier())
+		query := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query
 		if viewDDL.IsReplace {
-			query = fmt.Sprintf(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier())
+			query = sqlparser.BuildParsedQuery(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier()).Query
 		}
 		insert, err := sqlparser.Parse(query)
 		if err != nil {

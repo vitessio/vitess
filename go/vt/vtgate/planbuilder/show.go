@@ -48,7 +48,7 @@ const (
 	charset = "charset"
 )
 
-// Lazily loaded cache of sidecardb identifiers by keyspace.
+// Lazily loaded cache of sidecar database identifiers by keyspace.
 // The key is a keyspace name string and the val is an sqlparser
 // string built from an IdentifierCS using the sidecar database
 // name stored in the global topo Keyspace record for the given
@@ -258,8 +258,8 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 }
 
 // buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
-// It invokes queries on _vt.schema_migrations on all PRIMARY tablets on
-// keyspace's shards.
+// It invokes queries on the sidecar database's schema_migrations table
+// on all PRIMARY tablets in the keyspace's shards.
 func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {
@@ -277,7 +277,7 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecarDBID, err := getSidecarDBIDForKeyspace(vschema, ks.Name)
+	sidecarDBID, err := getSidecarDBIdentifierForKeyspace(vschema, ks.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -764,14 +764,14 @@ func buildVschemaVindexesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 
 }
 
-// getSidecarDBIDForKeyspace is a helper function that can be used
-// to get the configured sidecar database identifier to use for a
-// given keyspace when generating raw SQL queries targeted at any
-// of tablet's sidecardb tables.
+// getSidecarDBIdentifierForKeyspace is a helper function that can be
+// used to get the configured sidecar database identifier to use for
+// a given keyspace when generating raw SQL queries targeted at any
+// of tablet's sidecar database tables.
 // NOTE: this should be avoided whenever possible, preferring instead
 // to use a well defined vtgate->vttablet RPC that hides the
 // implementation details (so that the schema is not the interface).
-func getSidecarDBIDForKeyspace(vschema plancontext.VSchema, keyspace string) (string, error) {
+func getSidecarDBIdentifierForKeyspace(vschema plancontext.VSchema, keyspace string) (string, error) {
 	sdbid, ok := sidecarDBIdentifiers.Load(keyspace)
 	if !ok || sdbid == nil || sdbid == "" {
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
@@ -780,7 +780,7 @@ func getSidecarDBIDForKeyspace(vschema plancontext.VSchema, keyspace string) (st
 		if err != nil {
 			return sdbname, err
 		}
-		sdbid = sqlparser.String(sqlparser.NewIdentifierCS(sdbname))
+		sdbid = sqlparser.NewIdentifierCS(sdbname).String()
 		sidecarDBIdentifiers.Store(keyspace, sdbid)
 	}
 	return sdbid.(string), nil

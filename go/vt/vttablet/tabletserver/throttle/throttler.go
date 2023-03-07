@@ -30,6 +30,7 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -332,7 +333,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		return
 	}
 	if throttlerConfig.CustomQuery == "" {
-		throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier()))
+		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
 	} else {
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
@@ -403,7 +404,7 @@ func (throttler *Throttler) Open() error {
 	throttlerConfig, err := throttler.readThrottlerConfig(ctx)
 	// The query needs to be dynamically built because the sidecar db name is not known
 	// when the TabletServer is created, which in turn creates the Throttler.
-	throttler.metricsQuery.Store(fmt.Sprintf(defaultReplicationLagQuery, sidecardb.GetIdentifier())) // default
+	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
 	if throttleMetricQuery != "" {
 		throttler.metricsQuery.Store(throttleMetricQuery) // override
 	}

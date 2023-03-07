@@ -164,7 +164,7 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from _vt.%s%v", vreplicationTableName, upd.Where)
+	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, upd.Where)
 	upd.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -217,7 +217,7 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 	}
 
 	buf1 := sqlparser.NewTrackedBuffer(nil)
-	buf1.Myprintf("select id from _vt.%s%v", vreplicationTableName, del.Where)
+	buf1.Myprintf("select id from %s.%s%v", sidecardb.GetIdentifier(), vreplicationTableName, del.Where)
 	del.Where = &sqlparser.Where{
 		Type: sqlparser.WhereClause,
 		Expr: &sqlparser.ComparisonExpr{
@@ -239,10 +239,10 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 		},
 	}
 	buf3 := sqlparser.NewTrackedBuffer(nil)
-	buf3.Myprintf("delete from _vt.%s%v", copyStateTableName, copyStateWhere)
+	buf3.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), copyStateTableName, copyStateWhere)
 
 	buf4 := sqlparser.NewTrackedBuffer(nil)
-	buf4.Myprintf("delete from _vt.%s%v", postCopyActionTableName, copyStateWhere)
+	buf4.Myprintf("delete from %s.%s%v", sidecardb.GetIdentifier(), postCopyActionTableName, copyStateWhere)
 
 	return &controllerPlan{
 		opcode:            deleteQuery,

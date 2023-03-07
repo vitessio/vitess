@@ -19,6 +19,7 @@ package command
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -178,6 +179,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		snapshotTime = logutil.TimeToProto(t)
 	}
 
+	createKeyspaceOptions.SidecarDBName = strings.TrimSpace(createKeyspaceOptions.SidecarDBName)
 	if createKeyspaceOptions.SidecarDBName == "" {
 		return errors.New("--sidecar-db-name cannot be empty when creating a keyspace")
 	}

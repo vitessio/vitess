@@ -21,10 +21,10 @@ This file contains the reparenting methods for mysqlctl.
 */
 
 import (
-	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -48,17 +48,17 @@ func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias strin
 	if len(posStr) > mysql.MaximumPositionSize {
 		posStr = posStr[:mysql.MaximumPositionSize]
 	}
-	return fmt.Sprintf("INSERT INTO %s.reparent_journal "+
+	return sqlparser.BuildParsedQuery("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%v, '%v', '%v', '%v')", sidecardb.GetIdentifier(),
-		timeCreatedNS, actionName, primaryAlias, posStr)
+		"VALUES (%d, '%s', '%s', '%s')", sidecardb.GetIdentifier(),
+		timeCreatedNS, actionName, primaryAlias, posStr).Query
 }
 
 // queryReparentJournal returns the SQL query to use to query the database
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
-	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%v",
-		sidecardb.GetIdentifier(), timeCreatedNS)
+	return sqlparser.BuildParsedQuery("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%d",
+		sidecardb.GetIdentifier(), timeCreatedNS).Query
 }
 
 // WaitForReparentJournal will wait until the context is done for

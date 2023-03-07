@@ -30,6 +30,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 
 	"github.com/stretchr/testify/assert"
@@ -1420,9 +1421,9 @@ func printSwitchWritesExtraDebug(t *testing.T, ksWorkflow, msg string) {
 		productTab := productKs.Shards["0"].Tablets["zone1-100"].Vttablet
 		tabs := []*cluster.VttabletProcess{productTab, customerTab1, customerTab2}
 		queries := []string{
-			fmt.Sprintf("select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from %s.vreplication", sidecarDBIdentifier),
-			fmt.Sprintf("select * from %s.copy_state", sidecarDBIdentifier),
-			fmt.Sprintf("select * from %s.resharding_journal", sidecarDBIdentifier),
+			sqlparser.BuildParsedQuery("select  id, workflow, pos, stop_pos, cell, tablet_types, time_updated, transaction_timestamp, state, message from %s.vreplication", sidecarDBIdentifier).Query,
+			sqlparser.BuildParsedQuery("select * from %s.copy_state", sidecarDBIdentifier).Query,
+			sqlparser.BuildParsedQuery("select * from %s.resharding_journal", sidecarDBIdentifier).Query,
 		}
 		for _, tab := range tabs {
 			for _, query := range queries {
