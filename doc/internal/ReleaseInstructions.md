@@ -382,6 +382,8 @@ Finally, let's run the code freeze script:
 
 The script will prompt the command that will allow you to push the code freeze change. Once pushed, open a PR that will be merged on `release-15.0`.
 
+Remember, you should also disable the Launchable integration from the newly created release branch.
+
 ### How To Merge During Code Freeze
 
 > **Warning:** It is not advised to merge a PR during code-freeze. If it is deemed absolutely necessary, then the following steps can be followed.
