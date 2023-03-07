@@ -35,6 +35,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	keyspaceName    = "ks"
+	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
 	cell            = "zone1"
 	sqlSchema       = `
 		create table main (
@@ -61,8 +62,9 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      keyspaceName,
-			SchemaSQL: sqlSchema,
+			Name:          keyspaceName,
+			SchemaSQL:     sqlSchema,
+			SidecarDBName: sidecarDBName,
 		}
 		clusterInstance.VtTabletExtraArgs = []string{"--queryserver-config-schema-change-signal", "--queryserver-config-schema-change-signal-interval", "0.1"}
 		err = clusterInstance.StartUnshardedKeyspace(*keyspace, 0, false)

@@ -42,6 +42,7 @@ import (
 	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
@@ -147,10 +148,11 @@ type Vttablet struct {
 
 // Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
-	Name      string
-	SchemaSQL string
-	VSchema   string
-	Shards    []Shard
+	Name          string
+	SchemaSQL     string
+	VSchema       string
+	SidecarDBName string
+	Shards        []Shard
 }
 
 // Shard with associated vttablets
@@ -324,8 +326,11 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
+	if keyspace.SidecarDBName == "" {
+		keyspace.SidecarDBName = sidecardb.DefaultName
+	}
 	if !cluster.ReusingVTDATAROOT {
-		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+		_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 	}
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
@@ -471,8 +476,11 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 	}
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
+	if keyspace.SidecarDBName == "" {
+		keyspace.SidecarDBName = sidecardb.DefaultName
+	}
 	if !cluster.ReusingVTDATAROOT {
-		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+		_ = cluster.VtctldClientProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 	}
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {

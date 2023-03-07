@@ -39,6 +39,7 @@ var (
 	clusterInstance *cluster.LocalProcessCluster
 	vtParams        mysql.ConnParams
 	KeyspaceName    = "ks"
+	sidecarDBName   = "_vt_schema_tracker_metadata" // custom sidecar database name for testing
 	Cell            = "test"
 	SchemaSQL       = `
 create table t2(
@@ -141,9 +142,10 @@ func TestMain(m *testing.M) {
 
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
-			Name:      KeyspaceName,
-			SchemaSQL: SchemaSQL,
-			VSchema:   VSchema,
+			Name:          KeyspaceName,
+			SchemaSQL:     SchemaSQL,
+			VSchema:       VSchema,
+			SidecarDBName: sidecarDBName,
 		}
 		err = clusterInstance.StartKeyspace(*keyspace, []string{"-80", "80-"}, 2, false)
 		if err != nil {
