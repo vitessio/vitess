@@ -72,7 +72,7 @@ function wait_for_healthy_shard_primary() {
 # to check the VReplication engine's status (no vars in /debug/vars etc. either).
 # So we use the Workflow listall client command as the method to check for that
 # as it will return an error when the engine is closed -- even when there are
-# no workflows).
+# no workflows.
 function wait_for_shard_vreplication_engine() {
         if [[ -z ${1} || -z ${2} ]]; then
                 fail "A keyspace and shard must be specified when waiting for the shard primary tablet's VReplication engine to open"
@@ -96,9 +96,8 @@ function wait_for_shard_vreplication_engine() {
 # Wait for a specified number of the keyspace/shard's tablets to show up
 # in the topology server (3 is the default if no value is specified) and
 # then wait for one of the tablets to be promoted to primary and become
-# healthy and serving.
-# Lastly, wait for the new primary tablet's VReplication engine to fully
-# open. Example:
+# healthy and serving. Lastly, wait for the new primary tablet's
+# VReplication engine to fully open. Example:
 #  wait_for_healthy_shard commerce 0
 function wait_for_healthy_shard() {
 	if [[ -z ${1} || -z ${2} ]]; then
