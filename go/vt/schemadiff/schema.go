@@ -819,39 +819,39 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 
 func (s *Schema) ValidateViewReferences() error {
 	errs := &concurrency.AllErrorRecorder{}
-	availableColumns := newDeclarativeSchemaInformation()
+	schemaInformation := newDeclarativeSchemaInformation()
 
 	for _, e := range s.Entities() {
-		entityColumns, err := s.getEntityColumnNames(e.Name(), availableColumns)
+		entityColumns, err := s.getEntityColumnNames(e.Name(), schemaInformation)
 		if err != nil {
 			errs.RecordError(err)
 			continue
 		}
-		availableColumns.addTable(e.Name())
+		schemaInformation.addTable(e.Name())
 		for _, col := range entityColumns {
-			availableColumns.addColumn(e.Name(), col.Lowered())
+			schemaInformation.addColumn(e.Name(), col.Lowered())
 		}
 	}
 
 	// Add dual table with no explicit columns for dual style expressions in views.
-	availableColumns.addTable("dual")
+	schemaInformation.addTable("dual")
 
 	for _, view := range s.Views() {
 		// First gather all referenced tables and table aliases
 		tableAliases := map[string]string{}
 		tableReferences := map[string]struct{}{}
-		err := gatherTableInformationForView(view, availableColumns, tableReferences, tableAliases)
+		err := gatherTableInformationForView(view, schemaInformation, tableReferences, tableAliases)
 		errs.RecordError(err)
 
 		// Now we can walk the view again and check each column expression
 		// to see if there's an existing column referenced.
-		err = gatherColumnReferenceInformationForView(view, availableColumns, tableReferences, tableAliases)
+		err = gatherColumnReferenceInformationForView(view, schemaInformation, tableReferences, tableAliases)
 		errs.RecordError(err)
 	}
 	return errs.AggrError(vterrors.Aggregate)
 }
 
-func gatherTableInformationForView(view *CreateViewEntity, availableColumns *declarativeSchemaInformation, tableReferences map[string]struct{}, tableAliases map[string]string) error {
+func gatherTableInformationForView(view *CreateViewEntity, schemaInformation *declarativeSchemaInformation, tableReferences map[string]struct{}, tableAliases map[string]string) error {
 	errs := &concurrency.AllErrorRecorder{}
 	tableErrors := make(map[string]struct{})
 	err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
@@ -862,7 +862,7 @@ func gatherTableInformationForView(view *CreateViewEntity, availableColumns *dec
 				return true, nil
 			}
 
-			if !availableColumns.hasTable(aliased) {
+			if !schemaInformation.hasTable(aliased) {
 				if _, ok := tableErrors[aliased]; ok {
 					// Only show a missing table reference once per view.
 					return true, nil
@@ -889,7 +889,7 @@ func gatherTableInformationForView(view *CreateViewEntity, availableColumns *dec
 	return errs.AggrError(vterrors.Aggregate)
 }
 
-func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableColumns *declarativeSchemaInformation, tableReferences map[string]struct{}, tableAliases map[string]string) error {
+func gatherColumnReferenceInformationForView(view *CreateViewEntity, schemaInformation *declarativeSchemaInformation, tableReferences map[string]struct{}, tableAliases map[string]string) error {
 	errs := &concurrency.AllErrorRecorder{}
 	qualifiedColumnErrors := make(map[string]map[string]struct{})
 	unqualifiedColumnErrors := make(map[string]struct{})
@@ -898,10 +898,10 @@ func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableCo
 		switch node := node.(type) {
 		case *sqlparser.ColName:
 			if node.Qualifier.IsEmpty() {
-				err := verifyUnqualifiedColumn(view, availableColumns, tableReferences, node.Name, unqualifiedColumnErrors)
+				err := verifyUnqualifiedColumn(view, schemaInformation, tableReferences, node.Name, unqualifiedColumnErrors)
 				errs.RecordError(err)
 			} else {
-				err := verifyQualifiedColumn(view, availableColumns, tableAliases, node, qualifiedColumnErrors)
+				err := verifyQualifiedColumn(view, schemaInformation, tableAliases, node, qualifiedColumnErrors)
 				errs.RecordError(err)
 			}
 		}
@@ -914,18 +914,18 @@ func gatherColumnReferenceInformationForView(view *CreateViewEntity, availableCo
 	return errs.AggrError(vterrors.Aggregate)
 }
 
-func verifyUnqualifiedColumn(view *CreateViewEntity, availableColumns *declarativeSchemaInformation, tableReferences map[string]struct{}, nodeName sqlparser.IdentifierCI, unqualifiedColumnErrors map[string]struct{}) error {
+func verifyUnqualifiedColumn(view *CreateViewEntity, schemaInformation *declarativeSchemaInformation, tableReferences map[string]struct{}, nodeName sqlparser.IdentifierCI, unqualifiedColumnErrors map[string]struct{}) error {
 	// In case we have a non-qualified column reference, it needs
 	// to be unique across all referenced tables if it is supposed
 	// to work.
 	columnFound := false
 	for table := range tableReferences {
-		if !availableColumns.hasTable(table) {
+		if !schemaInformation.hasTable(table) {
 			// We already dealt with an error for a missing table reference
 			// earlier, so we can ignore it at this point here.
 			return nil
 		}
-		if !availableColumns.hasColumn(table, nodeName.Lowered()) {
+		if !schemaInformation.hasColumn(table, nodeName.Lowered()) {
 			continue
 		}
 		if columnFound {
@@ -961,7 +961,7 @@ func verifyUnqualifiedColumn(view *CreateViewEntity, availableColumns *declarati
 
 func verifyQualifiedColumn(
 	view *CreateViewEntity,
-	availableColumns *declarativeSchemaInformation,
+	schemaInformation *declarativeSchemaInformation,
 	tableAliases map[string]string, node *sqlparser.ColName,
 	columnErrors map[string]map[string]struct{},
 ) error {
@@ -969,12 +969,12 @@ func verifyQualifiedColumn(
 	if aliased, ok := tableAliases[tableName]; ok {
 		tableName = aliased
 	}
-	if !availableColumns.hasTable(tableName) {
+	if !schemaInformation.hasTable(tableName) {
 		// Already dealt with missing tables earlier on, we don't have
 		// any error to add here.
 		return nil
 	}
-	if availableColumns.hasColumn(tableName, node.Name.Lowered()) {
+	if schemaInformation.hasColumn(tableName, node.Name.Lowered()) {
 		// Found the column in the table, all good.
 		return nil
 	}
@@ -995,7 +995,7 @@ func verifyQualifiedColumn(
 }
 
 // getTableColumnNames returns the names of columns in given table.
-func (s *Schema) getEntityColumnNames(entityName string, availableColumns *declarativeSchemaInformation) (
+func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *declarativeSchemaInformation) (
 	columnNames []*sqlparser.IdentifierCI,
 	err error,
 ) {
@@ -1012,7 +1012,7 @@ func (s *Schema) getEntityColumnNames(entityName string, availableColumns *decla
 	case *CreateTableEntity:
 		return s.getTableColumnNames(entity), nil
 	case *CreateViewEntity:
-		return s.getViewColumnNames(entity, availableColumns)
+		return s.getViewColumnNames(entity, schemaInformation)
 	}
 	return nil, &EntityNotFoundError{Name: entityName}
 }
@@ -1026,7 +1026,7 @@ func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlpa
 }
 
 // getViewColumnNames returns the names of aliased columns returned by a given view.
-func (s *Schema) getViewColumnNames(v *CreateViewEntity, availableColumns *declarativeSchemaInformation) (
+func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) (
 	columnNames []*sqlparser.IdentifierCI,
 	err error,
 ) {
@@ -1034,7 +1034,7 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, availableColumns *decla
 		switch node := node.(type) {
 		case *sqlparser.StarExpr:
 			if tableName := node.TableName.Name.String(); tableName != "" {
-				for _, col := range availableColumns.Tables[tableName].Columns {
+				for _, col := range schemaInformation.Tables[tableName].Columns {
 					name := sqlparser.NewIdentifierCI(col.Name.String())
 					columnNames = append(columnNames, &name)
 				}
@@ -1045,7 +1045,7 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, availableColumns *decla
 				}
 				// add all columns from all referenced tables and views
 				for _, entityName := range dependentNames {
-					for _, col := range availableColumns.Tables[entityName].Columns {
+					for _, col := range schemaInformation.Tables[entityName].Columns {
 						name := sqlparser.NewIdentifierCI(col.Name.String())
 						columnNames = append(columnNames, &name)
 					}
