@@ -439,7 +439,7 @@ func TestGetEntityColumnNames(t *testing.T) {
 	entities := schema.Entities()
 	require.Equal(t, len(entities), len(expectedColNames))
 
-	tcmap := tablesColumnsMap{}
+	tcmap := newDeclarativeSchemaInformation()
 	// we test by order of dependency:
 	for _, e := range entities {
 		tbl := e.Name()
@@ -456,9 +456,9 @@ func TestGetEntityColumnNames(t *testing.T) {
 			sort.Strings(expectNames)
 			assert.Equal(t, expectNames, names)
 			// emulate the logic that fills known columns for known entities:
-			tcmap[tbl] = map[string]struct{}{}
+			tcmap.addTable(tbl)
 			for _, name := range names {
-				tcmap[tbl][name] = struct{}{}
+				tcmap.addColumn(tbl, name)
 			}
 		})
 	}
