@@ -165,7 +165,7 @@ func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
 
 func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
 	if c.HasLength {
-		col := collations.Local().LookupByID(c.Collation)
+		col := c.Collation.Get()
 		length := c.Length * col.Charset().MaxWidth()
 		if length > 64*1024 {
 			return sqltypes.Text

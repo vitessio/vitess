@@ -27,7 +27,7 @@ import (
 )
 
 func (ast *astCompiler) binaryCollationForCollation(collation collations.ID) collations.ID {
-	binary := collations.Local().LookupByID(collation)
+	binary := collation.Get()
 	if binary == nil {
 		return collations.Unknown
 	}

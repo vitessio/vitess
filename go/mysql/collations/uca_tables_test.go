@@ -131,7 +131,7 @@ func TestTailoringPatchApplication(t *testing.T) {
 
 		switch col := col.(type) {
 		case *Collation_uca_legacy:
-			if _, utf8 := col.charset.(charset.Charset_utf8mb4); !utf8 {
+			if _, utf8 := col.Charset().(charset.Charset_utf8mb4); !utf8 {
 				continue
 			}
 			weightTable, tableLayout = col.uca.Weights()

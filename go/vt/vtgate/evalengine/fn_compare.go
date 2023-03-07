@@ -195,11 +195,11 @@ func compareAllText(args []eval, cmp int) (eval, error) {
 		if err := ca.add(env, col); err != nil {
 			return nil, err
 		}
-		charsets = append(charsets, env.LookupByID(col.Collation).Charset())
+		charsets = append(charsets, col.Collation.Get().Charset())
 	}
 
 	tc := ca.result()
-	col := env.LookupByID(tc.Collation)
+	col := tc.Collation.Get()
 	cs := col.Charset()
 
 	b1, err := charset.Convert(nil, cs, args[0].ToRawBytes(), charsets[0])

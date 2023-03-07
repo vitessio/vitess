@@ -78,9 +78,8 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 		typedcol.Collation = col
 
 		if col != collations.CollationBinaryID {
-			environment := collations.Local()
-			fromCollation := environment.LookupByID(b.col.Collation)
-			toCollation := environment.LookupByID(col)
+			fromCollation := b.col.Collation.Get()
+			toCollation := col.Get()
 
 			var err error
 			bytes, err = charset.Convert(nil, toCollation.Charset(), bytes, fromCollation.Charset())
@@ -113,7 +112,7 @@ func (e *evalBytes) Hash(h *vthash.Hasher) {
 		_, _ = h.Write(e.bytes)
 	default:
 		h.Write16(hashPrefixBytes)
-		col := collations.Local().LookupByID(e.col.Collation)
+		col := e.col.Collation.Get()
 		col.Hash(h, e.bytes, 0)
 	}
 }
@@ -157,7 +156,7 @@ func (e *evalBytes) truncateInPlace(size int) {
 			e.bytes = e.bytes[:size]
 		}
 	case sqltypes.IsText(tt):
-		collation := collations.Local().LookupByID(e.col.Collation)
+		collation := e.col.Collation.Get()
 		e.bytes = charset.Slice(collation.Charset(), e.bytes, 0, size)
 	default:
 		panic("called EvalResult.truncate on non-quoted")

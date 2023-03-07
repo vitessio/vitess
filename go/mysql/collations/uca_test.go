@@ -40,11 +40,13 @@ var testcollationOnce sync.Once
 
 func testinit() {
 	testcollationOnce.Do(func() {
-		testcollationSlice = make([]Collation, 0, len(globalAllCollations))
+		testcollationSlice = make([]Collation, 0, len(collationsById))
 		testcollationMap = make(map[string]Collation)
 
-		for _, collation := range globalAllCollations {
-			collation.Init()
+		for _, collation := range collationsById {
+			if collation == nil {
+				continue
+			}
 			testcollationMap[collation.Name()] = collation
 			testcollationSlice = append(testcollationSlice, collation)
 		}
@@ -192,7 +194,6 @@ func TestIsPrefix(t *testing.T) {
 func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected []byte) {
 	coll := testcollation(t, collname).(*Collation_uca_legacy)
 	iter := coll.uca.Iterator(input)
-	defer iter.Done()
 
 	for {
 		curcp, _ := iter.DebugCodepoint()

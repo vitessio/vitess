@@ -22,7 +22,6 @@ import (
 	"errors"
 	"fmt"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -93,7 +92,7 @@ func evalConvert_nj(e evalNumeric) *evalJSON {
 }
 
 func evalConvert_cj(e *evalBytes) (*evalJSON, error) {
-	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, collations.Local().LookupByID(e.col.Collation).Charset())
+	jsonText, err := charset.Convert(nil, charset.Charset_utf8mb4{}, e.bytes, e.col.Collation.Get().Charset())
 	if err != nil {
 		return nil, err
 	}

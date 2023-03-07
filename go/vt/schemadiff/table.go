@@ -342,7 +342,7 @@ const mysqlCollationVersion = "8.0.0"
 var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
 
 func defaultCharset() string {
-	collation := collationEnv.LookupByID(collations.ID(collationEnv.DefaultConnectionCharset()))
+	collation := collations.ID(collationEnv.DefaultConnectionCharset()).Get()
 	if collation == nil {
 		return ""
 	}

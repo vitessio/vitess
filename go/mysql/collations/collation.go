@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-//go:generate go run ./tools/makecolldata/ -embed=true
+//go:generate go run ./tools/makecolldata/ --embed=true
 
 // CaseAwareCollation implements lowercase and uppercase conventions for collations.
 type CaseAwareCollation interface {
@@ -35,15 +35,25 @@ type CaseAwareCollation interface {
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
+// Get returns the Collation identified by this ID. If the ID is invalid, this returns nil
+func (i ID) Get() Collation {
+	if int(i) < len(collationsById) {
+		return collationsById[i]
+	}
+	return nil
+}
+
+// Valid returns whether this Collation ID is valid (i.e. identifies a valid collation)
+func (i ID) Valid() bool {
+	return int(i) < len(collationsById) && collationsById[i] != nil
+}
+
 // Unknown is the default ID for an unknown collation.
 const Unknown ID = 0
 
 // Collation implements a MySQL-compatible collation. It defines how to compare
 // for sorting order and equality two strings with the same encoding.
 type Collation interface {
-	// Init initializes the internal state for the collation the first time it is used
-	Init()
-
 	// ID returns the numerical identifier for this collation. This is the same
 	// value that is returned by MySQL in a query's headers to identify the collation
 	// for a given column
@@ -169,13 +179,4 @@ func minInt(i1, i2 int) int {
 		return i1
 	}
 	return i2
-}
-
-var globalAllCollations = make(map[ID]Collation)
-
-func register(c Collation) {
-	if _, found := globalAllCollations[c.ID()]; found {
-		panic("duplicated collation registered")
-	}
-	globalAllCollations[c.ID()] = c
 }
