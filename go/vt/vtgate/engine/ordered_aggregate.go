@@ -87,7 +87,7 @@ func (gbp GroupByParams) String() string {
 	}
 
 	if gbp.CollationID != collations.Unknown {
-		collation := collations.Local().LookupByID(gbp.CollationID)
+		collation := gbp.CollationID.Get()
 		out += " COLLATE " + collation.Name()
 	}
 

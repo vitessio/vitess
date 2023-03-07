@@ -24,7 +24,7 @@ import (
 
 type iterator900 struct {
 	// Constant
-	Collation900
+	*Collation900
 	original []byte
 
 	// Internal state

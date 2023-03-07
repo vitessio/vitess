@@ -35,9 +35,12 @@ type CaseAwareCollation interface {
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
-// Get returns the Collation identified by this ID. If the ID is invalid, this method will panic.
+// Get returns the Collation identified by this ID. If the ID is invalid, this returns nil
 func (i ID) Get() Collation {
-	return collationsById[i]
+	if int(i) < len(collationsById) {
+		return collationsById[i]
+	}
+	return nil
 }
 
 // Valid returns whether this Collation ID is valid (i.e. identifies a valid collation)

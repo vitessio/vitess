@@ -49,10 +49,10 @@ func findContractedCollations(t testing.TB, unique bool) (result []CollationWith
 	for _, collation := range testall() {
 		var contract uca.Contractor
 		if uca, ok := collation.(*Collation_utf8mb4_uca_0900); ok {
-			contract = uca.contract
+			contract = uca.uca.Contractor()
 		}
 		if uca, ok := collation.(*Collation_uca_legacy); ok {
-			contract = uca.contract
+			contract = uca.uca.Contractor()
 		}
 		if contract == nil {
 			continue

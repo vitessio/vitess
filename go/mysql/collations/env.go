@@ -32,21 +32,13 @@ type colldefaults struct {
 type Environment struct {
 	version     collver
 	byName      map[string]Collation
-	byID        map[ID]Collation
 	byCharset   map[string]*colldefaults
 	unsupported map[string]ID
 }
 
-// LookupByName returns the collation with the given name. The collation
-// is initialized if it's the first time being accessed.
+// LookupByName returns the collation with the given name.
 func (env *Environment) LookupByName(name string) Collation {
 	return env.byName[name]
-}
-
-// LookupByID returns the collation with the given numerical identifier. The collation
-// is initialized if it's the first time being accessed.
-func (env *Environment) LookupByID(id ID) Collation {
-	return env.byID[id]
 }
 
 // LookupID returns the collation ID for the given name, and whether
@@ -77,12 +69,10 @@ func (env *Environment) BinaryCollationForCharset(charset string) Collation {
 	return nil
 }
 
-// AllCollations returns a slice with all known collations in Vitess. This is an expensive call because
-// it will initialize the internal state of all the collations before returning them.
-// Used for testing/debugging.
+// AllCollations returns a slice with all known collations in Vitess.
 func (env *Environment) AllCollations() (all []Collation) {
-	all = make([]Collation, 0, len(env.byID))
-	for _, col := range env.byID {
+	all = make([]Collation, 0, len(env.byName))
+	for _, col := range env.byName {
 		all = append(all, col)
 	}
 	return
@@ -145,7 +135,6 @@ func makeEnv(version collver) *Environment {
 	env := &Environment{
 		version:     version,
 		byName:      make(map[string]Collation),
-		byID:        make(map[ID]Collation),
 		byCharset:   make(map[string]*colldefaults),
 		unsupported: make(map[string]ID),
 	}
@@ -175,7 +164,6 @@ func makeEnv(version collver) *Environment {
 		for _, name := range ournames {
 			env.byName[name] = collation
 		}
-		env.byID[collid] = collation
 
 		csname := collation.Charset().Name()
 		if _, ok := env.byCharset[csname]; !ok {
@@ -206,9 +194,9 @@ func makeEnv(version collver) *Environment {
 // A few interesting character set values.
 // See http://dev.mysql.com/doc/internals/en/character-set.html#packet-Protocol::CharacterSet
 const (
-	CollationUtf8ID    = 33
-	CollationUtf8mb4ID = 255
-	CollationBinaryID  = 63
+	CollationUtf8ID    ID = 33
+	CollationUtf8mb4ID ID = 255
+	CollationBinaryID  ID = 63
 )
 
 // CharsetAlias returns the internal charset name for the given charset.
@@ -255,7 +243,7 @@ func (env *Environment) CollationAlias(collation string) (string, bool) {
 func (env *Environment) DefaultConnectionCharset() uint8 {
 	switch env.version {
 	case collverMySQL80:
-		return CollationUtf8mb4ID
+		return uint8(CollationUtf8mb4ID)
 	default:
 		return 45
 	}

@@ -98,22 +98,24 @@ func (g *Generator) printCollationUcaLegacy(meta *CollationMetadata) {
 	g.P(meta.Number, ": &Collation_uca_legacy{")
 	g.P("name: ", codegen.Quote(meta.Name), ",")
 	g.P("id: ", meta.Number, ",")
-	g.P("charset: ", PkgCharset, ".Charset_", meta.Charset, "{},")
-	g.P("weights: weightTable_uca", meta.UCAVersion, ",")
-	if tableWeightPatches != "" {
-		g.P("tailoring: ", tableWeightPatches, ",")
-	}
-	if tableContractions != "" {
-		g.P("contract: ", tableContractions, "{},")
-	}
+
+	var maxCodepoint uint
 	switch meta.UCAVersion {
 	case 400:
-		g.P("maxCodepoint: 0xFFFF,")
+		maxCodepoint = 0xFFFF
 	case 520:
-		g.P("maxCodepoint: 0x10FFFF,")
+		maxCodepoint = 0x10FFFF
 	default:
 		g.Fail("invalid UCAVersion")
 	}
+
+	g.P("uca: uca.NewCollationLegacy(",
+		PkgCharset, ".Charset_", meta.Charset, "{},",
+		"weightTable_uca", meta.UCAVersion, ",",
+		or(tableWeightPatches, "nil"), ",",
+		or(tableContractions, "nil"), ",",
+		maxCodepoint, "),",
+	)
 	g.P("},")
 }
 
@@ -146,16 +148,15 @@ func (g *TableGenerator) writeWeightPatches(meta *CollationMetadata) string {
 }
 
 func (g *TableGenerator) writeContractions(meta *CollationMetadata) string {
-	var tableContractions string
-	var dedup bool
 	if len(meta.Contractions) > 0 {
-		tableContractions, dedup = g.dedupTable("contractor", meta.Name, meta.Contractions)
+		tableContractions, dedup := g.dedupTable("contractor", meta.Name, meta.Contractions)
 		if !dedup {
 			g.printContractionsFast(tableContractions, meta.Contractions)
 			g.P()
 		}
+		return tableContractions + "{}"
 	}
-	return tableContractions
+	return ""
 }
 
 func (g *TableGenerator) writeReorders(meta *CollationMetadata) string {
@@ -223,23 +224,23 @@ func (g *Generator) printCollationUca900(meta *CollationMetadata) {
 	default:
 		g.Fail(fmt.Sprintf("unknown levelsForCompare: %q", meta.Name))
 	}
-
-	g.P("levelsForCompare: ", levels, ",")
-	g.P("weights: ", tableWeights, ",")
-	if tableWeightPatches != "" {
-		g.P("tailoring: ", tableWeightPatches, ",")
-	}
-	if tableContractions != "" {
-		g.P("contract: ", tableContractions, "{},")
-	}
-	if tableReorder != "" {
-		g.P("reorder: ", tableReorder, ",")
-	}
-
-	if meta.UpperCaseFirst {
-		g.P("upperCaseFirst: true,")
-	}
+	g.P("uca: uca.NewCollation(",
+		name, ",",
+		tableWeights, ",",
+		or(tableWeightPatches, "nil"), ",",
+		or(tableReorder, "nil"), ",",
+		or(tableContractions, "nil"), ",",
+		meta.UpperCaseFirst, ",",
+		levels, "),",
+	)
 	g.P("},")
+}
+
+func or(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func (g *TableGenerator) printSlice(name, coll string, slice any) string {

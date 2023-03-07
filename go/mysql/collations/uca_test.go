@@ -76,14 +76,14 @@ func TestWeightsForSpace(t *testing.T) {
 		var actual, expected uint16
 		switch coll := coll.(type) {
 		case *Collation_uca_legacy:
-			actual = coll.load().WeightForSpace()
+			actual = coll.uca.WeightForSpace()
 			if strings.Contains(coll.name, "_520_") {
 				expected = 0x20A
 			} else {
 				expected = 0x209
 			}
 		case *Collation_utf8mb4_uca_0900:
-			actual = coll.load().WeightForSpace()
+			actual = coll.uca.WeightForSpace()
 			expected = 0x209
 		default:
 			continue
@@ -193,8 +193,7 @@ func TestIsPrefix(t *testing.T) {
 
 func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected []byte) {
 	coll := testcollation(t, collname).(*Collation_uca_legacy)
-	iter := coll.load().Iterator(input)
-	defer iter.Done()
+	iter := coll.uca.Iterator(input)
 
 	for {
 		curcp, _ := iter.DebugCodepoint()

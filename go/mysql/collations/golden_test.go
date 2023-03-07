@@ -150,7 +150,7 @@ func XTestSupportTables(t *testing.T) {
 		} else {
 			fmt.Fprintf(out, "| %s | %s", coll.Name(), coll.Charset().Name())
 			for _, env := range envs {
-				_, supported := env.byID[coll.ID()]
+				_, supported := env.byName[coll.Name()]
 				if supported {
 					fmt.Fprintf(out, " | ✅")
 				} else {

@@ -105,9 +105,9 @@ func TestWeightTablesAreDeduplicated(t *testing.T) {
 		var weights uca.Weights
 		switch col := col.(type) {
 		case *Collation_uca_legacy:
-			weights, _ = col.load().Weights()
+			weights, _ = col.uca.Weights()
 		case *Collation_utf8mb4_uca_0900:
-			weights, _ = col.load().Weights()
+			weights, _ = col.uca.Weights()
 		default:
 			continue
 		}
@@ -131,12 +131,12 @@ func TestTailoringPatchApplication(t *testing.T) {
 
 		switch col := col.(type) {
 		case *Collation_uca_legacy:
-			if _, utf8 := col.charset.(charset.Charset_utf8mb4); !utf8 {
+			if _, utf8 := col.Charset().(charset.Charset_utf8mb4); !utf8 {
 				continue
 			}
-			weightTable, tableLayout = col.load().Weights()
+			weightTable, tableLayout = col.uca.Weights()
 		case *Collation_utf8mb4_uca_0900:
-			weightTable, tableLayout = col.load().Weights()
+			weightTable, tableLayout = col.uca.Weights()
 		default:
 			continue
 		}
