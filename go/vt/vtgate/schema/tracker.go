@@ -22,7 +22,6 @@ import (
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -40,9 +39,10 @@ import (
 )
 
 type (
-	keyspaceStr  = string
-	tableNameStr = string
-	viewNameStr  = string
+	keyspaceStr           = string
+	tableNameStr          = string
+	viewNameStr           = string
+	sidcarDBIdentifierStr = string
 
 	// Tracker contains the required fields to perform schema tracking.
 	Tracker struct {
@@ -58,6 +58,13 @@ type (
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
+
+		// A map of the sidecar database identifier for each keyspace.
+		// The key is a keyspace name string and the val is an sqlparser
+		// string built from an IdentifierCS using the sidecar database
+		// name stored in the global topo Keyspace record for the given
+		// keyspace.
+		sidecarDBIdentifiers map[keyspaceStr]sidcarDBIdentifierStr
 	}
 )
 
@@ -77,11 +84,12 @@ func NewTracker(ch chan *discovery.TabletHealth, user string, enableViews bool) 
 	}
 
 	t := &Tracker{
-		ctx:          ctx,
-		ch:           ch,
-		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
-		tracked:      map[keyspaceStr]*updateController{},
-		consumeDelay: defaultConsumeDelay,
+		ctx:                  ctx,
+		ch:                   ch,
+		tables:               &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
+		tracked:              map[keyspaceStr]*updateController{},
+		consumeDelay:         defaultConsumeDelay,
+		sidecarDBIdentifiers: map[keyspaceStr]sidcarDBIdentifierStr{},
 	}
 
 	if enableViews {
@@ -111,7 +119,8 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
-	ftRes, err := conn.Execute(t.ctx, target, sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query, // FIXME! This needs to use the correct sidecar db name
+	ftRes, err := conn.Execute(t.ctx, target,
+		sqlparser.BuildParsedQuery(mysql.FetchTables, t.sidecarDBIdentifiers[target.Keyspace]).Query,
 		nil, 0, 0, nil)
 	if err != nil {
 		return err
@@ -264,7 +273,8 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 		return false
 	}
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
-	res, err := th.Conn.Execute(t.ctx, th.Target, sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecardb.DefaultName).Query, // FIXME! This needs to use the correct sidecar db name
+	res, err := th.Conn.Execute(t.ctx, th.Target,
+		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, t.sidecarDBIdentifiers[th.Target.Keyspace]).Query,
 		bv, 0, 0, nil)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
@@ -345,9 +355,13 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 }
 
 // AddNewKeyspace adds keyspace to the tracker.
-func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
+func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target, sidecarDBName string) error {
 	updateController := t.newUpdateController()
 	t.tracked[target.Keyspace] = updateController
+	if t.sidecarDBIdentifiers == nil {
+		t.sidecarDBIdentifiers = map[keyspaceStr]sidcarDBIdentifierStr{}
+	}
+	t.sidecarDBIdentifiers[target.Keyspace] = sqlparser.NewIdentifierCS(sidecarDBName).String()
 	err := t.LoadKeyspace(conn, target)
 	if err != nil {
 		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))

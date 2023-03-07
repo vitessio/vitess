@@ -262,7 +262,7 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 
 	require.False(t, waitTimeout(&wg, 5*time.Second), "schema was updated but received no signal")
 	require.Equal(t, []string{sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query,
-		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, "_vt").Query,
+		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecardb.DefaultName).Query,
 		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecardb.DefaultName).Query}, sbc.StringQueries())
 }
 
