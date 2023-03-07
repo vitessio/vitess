@@ -1258,55 +1258,168 @@ func TestKeyRangeIntersect(t *testing.T) {
 	}
 }
 
-func TestKeyRangeIncludes(t *testing.T) {
-	var table = []struct {
-		name     string
-		big      string
-		small    string
-		expected bool
+func TestKeyRangeContainsKeyRange(t *testing.T) {
+	type args struct {
+		a *topodatapb.KeyRange
+		b *topodatapb.KeyRange
+	}
+	var tests = []struct {
+		name string
+		args args
+		want bool
 	}{
-		{"big nil, small nil", "nil", "nil", true},
-		{"big nil, small non nil, fully partial", "nil", "80-c0", true},
-		{"big nil, small non nil, full start", "nil", "-c0", true},
-		{"big nil, small non nil, full end", "nil", "80-", true},
-		{"big non-nil, fully partial, small nil", "80-c0", "nil", false},
-		{"big non-nil, full start, small nil", "-c0", "nil", false},
-		{"big non-nil, full end, small nil", "80-", "nil", false},
-		{"big full, small full", "-", "-", true},
-		{"big full, small partial", "-", "40-60", true},
-		{"big partial, small full", "40-60", "-", false},
+		// full range contains itself
+		{
+			name: "both full range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("-")},
+			want: true,
+		},
 
-		{"big partial, small to the end", "40-60", "40-", false},
-		{"big partial, small bigger to the right", "40-60", "40-80", false},
-		{"big partial, small equal", "40-60", "40-60", true},
-		{"big partial, small smaller right", "40-60", "40-50", true},
+		// full range always contains a partial range
+		{
+			name: "full range, partial range from minimum key",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("-c0")},
+			want: true,
+		},
+		{
+			name: "full range, partial range to maximum key",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("80-")},
+			want: true,
+		},
+		{
+			name: "full range, partial mid-key range",
+			args: args{a: stringToKeyRange("-"), b: stringToKeyRange("80-c0")},
+			want: true,
+		},
 
-		{"big partial, small to the beginning", "40-60", "-60", false},
-		{"big partial, small smaller to the left", "40-60", "20-60", false},
-		{"big partial, small bigger left", "40-60", "50-60", true},
+		// equal partial ranges contain each other
+		{
+			name: "equal partial ranges",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("40-60")},
+			want: true,
+		},
+		{
+			name: "equal partial ranges, different size keys",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("4000-6000")},
+			want: true,
+		},
+		{
+			name: "equal partial ranges, different size keys",
+			args: args{a: stringToKeyRange("4000-6000"), b: stringToKeyRange("40-60")},
+			want: true,
+		},
+
+		// partial ranges may contain smaller partial ranges
+		{
+			name: "partial range, partial touching start",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("40-50")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching start, different size keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("4000-5000")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching start, different size keys",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("40-50")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching end",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("70-80")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching end, different size keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("7000-8000")},
+			want: true,
+		},
+		{
+			name: "partial range, partial touching end, different size keys",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("70-80")},
+			want: true,
+		},
+		{
+			name: "partial range, partial in the middle",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("50-70")},
+			want: true,
+		},
+		{
+			name: "partial range, partial in the middle, different size keys",
+			args: args{a: stringToKeyRange("40-80"), b: stringToKeyRange("5000-7000")},
+			want: true,
+		},
+		{
+			name: "partial range, partial in the middle, different size keys",
+			args: args{a: stringToKeyRange("4000-8000"), b: stringToKeyRange("50-70")},
+			want: true,
+		},
+
+		// partial ranges do not contain the full range
+		{
+			name: "partial range from minimum key, full range",
+			args: args{a: stringToKeyRange("-c0"), b: stringToKeyRange("-")},
+			want: false,
+		},
+		{
+			name: "partial range to maximum key, full range",
+			args: args{a: stringToKeyRange("80-"), b: stringToKeyRange("-")},
+			want: false,
+		},
+		{
+			name: "partial mid-key range, full range",
+			args: args{a: stringToKeyRange("80-c0"), b: stringToKeyRange("-")},
+			want: false,
+		},
+
+		// partial ranges do not contain overlapping but boundary-crossing partial ranges
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("50-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("5000-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key, different size keys",
+			args: args{a: stringToKeyRange("4000-6000"), b: stringToKeyRange("50-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range to maximum key, different size keys",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("5000-")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("-50")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("-5000")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key, different size keys",
+			args: args{a: stringToKeyRange("4000-6000"), b: stringToKeyRange("-50")},
+			want: false,
+		},
+		{
+			name: "partial range mid-key range, overlapping partial range from minimum key, different size keys",
+			args: args{a: stringToKeyRange("40-60"), b: stringToKeyRange("-5000")},
+			want: false,
+		},
 	}
 
-	var err error
-	for _, tc := range table {
-		var big, small *topodatapb.KeyRange
-		if tc.big != "nil" {
-			parts := strings.Split(tc.big, "-")
-			big, err = ParseKeyRangeParts(parts[0], parts[1])
-			if err != nil {
-				t.Fatalf("test data error in %v: %v", tc.big, err)
-			}
-		}
-		if tc.small != "nil" {
-			parts := strings.Split(tc.small, "-")
-			small, err = ParseKeyRangeParts(parts[0], parts[1])
-			if err != nil {
-				t.Fatalf("test data error in %v: %v", tc.small, err)
-			}
-		}
-		got := KeyRangeIncludes(big, small)
-		if got != tc.expected {
-			t.Errorf("KeyRangeIncludes for test case '%v' returned %v but expected %v", tc.name, got, tc.expected)
-		}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equalf(t, tt.want, KeyRangeContainsKeyRange(tt.args.a, tt.args.b), "KeyRangeContainsKeyRange(%v, %v)", tt.args.a, tt.args.b)
+		})
 	}
 }
 

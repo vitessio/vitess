@@ -241,20 +241,20 @@ func KeyRangeIntersect(a, b *topodatapb.KeyRange) bool {
 	return (Empty(a.End) || Less(b.Start, a.End)) && (Empty(b.End) || Less(a.Start, b.End))
 }
 
-// KeyRangeIncludes returns true if KeyRange big fully contains KeyRange small.
-func KeyRangeIncludes(big, small *topodatapb.KeyRange) bool {
-	// If big covers the entire KeyRange, it always contains small.
-	if KeyRangeIsComplete(big) {
+// KeyRangeContainsKeyRange returns true if KeyRange a fully contains KeyRange b.
+func KeyRangeContainsKeyRange(a, b *topodatapb.KeyRange) bool {
+	// If a covers the entire KeyRange, it always contains b.
+	if KeyRangeIsComplete(a) {
 		return true
 	}
 
-	// If small covers the entire KeyRange, big must also cover the entire KeyRange.
-	if KeyRangeIsComplete(small) {
-		return KeyRangeIsComplete(big)
+	// If b covers the entire KeyRange, a must also cover the entire KeyRange.
+	if KeyRangeIsComplete(b) {
+		return KeyRangeIsComplete(a)
 	}
 
-	// Ensure small.Start >= big.Start and small.End <= big.End.
-	if KeyRangeStartCompare(small, big) >= 0 && KeyRangeEndCompare(small, big) <= 0 {
+	// Ensure b.Start >= a.Start and b.End <= a.End.
+	if KeyRangeStartCompare(b, a) >= 0 && KeyRangeEndCompare(b, a) <= 0 {
 		return true
 	}
 
