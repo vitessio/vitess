@@ -1448,3 +1448,49 @@ func (c *compiler) emitASCII() {
 		return 1
 	}, "ASCII VARCHAR(SP-1)")
 }
+
+func (c *compiler) emitLike_collate(expr *LikeExpr, collation collations.Collation) {
+	c.adjustStack(-1)
+
+	c.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalBytes)
+		r := vm.stack[vm.sp-1].(*evalBytes)
+		vm.sp--
+
+		match := expr.matchWildcard(l.bytes, r.bytes, collation.ID())
+		if match {
+			vm.stack[vm.sp-1] = evalBoolTrue
+		} else {
+			vm.stack[vm.sp-1] = evalBoolFalse
+		}
+		return 1
+	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
+}
+
+func (c *compiler) emitLike_coerce(expr *LikeExpr, coercion *compiledCoercion) {
+	c.adjustStack(-1)
+
+	c.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalBytes)
+		r := vm.stack[vm.sp-1].(*evalBytes)
+		vm.sp--
+
+		var bl, br []byte
+		bl, vm.err = coercion.left(nil, l.bytes)
+		if vm.err != nil {
+			return 0
+		}
+		br, vm.err = coercion.right(nil, r.bytes)
+		if vm.err != nil {
+			return 0
+		}
+
+		match := expr.matchWildcard(bl, br, coercion.col.ID())
+		if match {
+			vm.stack[vm.sp-1] = evalBoolTrue
+		} else {
+			vm.stack[vm.sp-1] = evalBoolFalse
+		}
+		return 1
+	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COERCE AND COLLATE '%s'", coercion.col.Name())
+}

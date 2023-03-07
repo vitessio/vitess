@@ -214,6 +214,9 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	case *CaseExpr:
 		return c.compileCase(expr)
 
+	case *LikeExpr:
+		return c.compileLike(expr)
+
 	case callable:
 		return c.compileCallable(expr)
 
@@ -1411,6 +1414,76 @@ func (c *compiler) compileASCII(call *builtinASCII) (ctype, error) {
 	}
 
 	c.emitASCII()
+	c.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
+	lt, err := c.compileExpr(expr.Left)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	rt, err := c.compileExpr(expr.Right)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck2(skip)
+
+	if !sqltypes.IsText(lt.Type) && !sqltypes.IsBinary(lt.Type) {
+		c.emitConvert_xc(2, sqltypes.VarChar, c.defaultCollation, 0, false)
+		lt.Col = collations.TypedCollation{
+			Collation:    c.defaultCollation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	if !sqltypes.IsText(rt.Type) && !sqltypes.IsBinary(rt.Type) {
+		c.emitConvert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+		rt.Col = collations.TypedCollation{
+			Collation:    c.defaultCollation,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireASCII,
+		}
+	}
+
+	var merged collations.TypedCollation
+	var coerceLeft collations.Coercion
+	var coerceRight collations.Coercion
+	var env = collations.Local()
+
+	if lt.Col.Collation != rt.Col.Collation {
+		merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
+			ConvertToSuperset:   true,
+			ConvertWithCoercion: true,
+		})
+	} else {
+		merged = lt.Col
+	}
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if coerceLeft == nil && coerceRight == nil {
+		c.emitLike_collate(expr, env.LookupByID(merged.Collation))
+	} else {
+		if coerceLeft == nil {
+			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		if coerceRight == nil {
+			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		c.emitLike_coerce(expr, &compiledCoercion{
+			col:   env.LookupByID(merged.Collation),
+			left:  coerceLeft,
+			right: coerceRight,
+		})
+	}
+
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
