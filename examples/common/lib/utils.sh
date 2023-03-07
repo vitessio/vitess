@@ -24,10 +24,10 @@ function wait_for_shard_tablets() {
 	if [[ -z ${1} || -z ${2} || -z ${3} ]]; then
 		fail "A keyspace, shard, and number of tablets must be specified when waiting for tablets to come up"
 	fi
-	keyspace=${1}
-	shard=${2}
-	num_tablets=${3}
-	wait_secs=180
+	local keyspace=${1}
+	local shard=${2}
+	local num_tablets=${3}
+	local wait_secs=180
 
 	for _ in $(seq 1 ${wait_secs}); do
 		cur_tablets=$(vtctldclient GetTablets --keyspace "${keyspace}" --shard "${shard}" | wc -l)
@@ -50,10 +50,10 @@ function wait_for_healthy_shard_primary() {
 	if [[ -z ${1} || -z ${2} ]]; then
 		fail "A keyspace and shard must be specified when waiting for the shard's primary to be healthy"
 	fi
-	keyspace=${1}
-	shard=${2}
-	unhealthy_indicator='"primary_alias": null'
-	wait_secs=180
+	local keyspace=${1}
+	local shard=${2}
+	local unhealthy_indicator='"primary_alias": null'
+	local wait_secs=180
 
 	for _ in $(seq 1 ${wait_secs}); do
                 if ! vtctldclient --server=localhost:15999 GetShard "${keyspace}/${shard}" | grep -qi "${unhealthy_indicator}"; then
@@ -67,21 +67,49 @@ function wait_for_healthy_shard_primary() {
 	fi
 }
 
+# Wait for the shard primary tablet's VReplication engine to open.
+# There is currently no API call or client command that can be specifically used
+# to check the VReplication engine's status (no vars in /debug/vars etc. either).
+# So we use the Workflow listall client command as the method to check for that
+# as it will return an error when the engine is closed -- even when there are
+# no workflows.
+function wait_for_shard_vreplication_engine() {
+        if [[ -z ${1} || -z ${2} ]]; then
+                fail "A keyspace and shard must be specified when waiting for the shard primary tablet's VReplication engine to open"
+        fi
+        local keyspace=${1}
+        local shard=${2}
+        local wait_secs=90
+
+        for _ in $(seq 1 ${wait_secs}); do
+                if vtctlclient --server=localhost:15999 Workflow -- "${keyspace}" listall &>/dev/null; then
+                        break
+                fi
+                sleep 1
+        done;
+
+        if ! vtctlclient --server=localhost:15999 Workflow -- "${keyspace}" listall &>/dev/null; then
+                fail "Timed out after ${wait_secs} seconds waiting for the primary tablet's VReplication engine to open in ${keyspace}/${shard}"
+        fi
+}
+
 # Wait for a specified number of the keyspace/shard's tablets to show up
 # in the topology server (3 is the default if no value is specified) and
 # then wait for one of the tablets to be promoted to primary and become
-# healthy and serving. Example:
+# healthy and serving. Lastly, wait for the new primary tablet's
+# VReplication engine to fully open. Example:
 #  wait_for_healthy_shard commerce 0
 function wait_for_healthy_shard() {
 	if [[ -z ${1} || -z ${2} ]]; then
 		fail "A keyspace and shard must be specified when waiting for tablets to come up"
 	fi
-	keyspace=${1}
-	shard=${2}
-	num_tablets=${3:-3}
+	local keyspace=${1}
+	local shard=${2}
+	local num_tablets=${3:-3}
 
 	wait_for_shard_tablets "${keyspace}" "${shard}" "${num_tablets}"
 	wait_for_healthy_shard_primary "${keyspace}" "${shard}"
+	wait_for_shard_vreplication_engine "${keyspace}" "${shard}"
 }
 
 # Print error message and exit with error code.
