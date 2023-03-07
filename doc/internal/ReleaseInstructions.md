@@ -118,8 +118,16 @@ Create the `settings.xml` in the `$HOME/.m2/` directory as described in their [i
 
 ## Release Cutover 
 
-In this section we describe our current release process. We begin with a short [**overview**](#overview).
+In this section we describe our current release process. We begin with a list of [**pre-requisites for the release team**](#pre-requisites) and with a short [**overview**](#overview).
 The release process is divided into three parts: [**Pre-Release**](#pre-release), [**Release**](#release), [**Post-Release**](#post-release), which are detailed after the overview.
+
+### Pre-Requisites
+
+This section highlights the different pre-requisites the release team has to meet before releasing.
+
+- The tool `gh` must be installed locally and ready to be used.
+- You must have access to the Java release, more information in the [**Java Packages**](#java-packages) section.
+- You must be able to create branches and have admin right on the `vitessio/vitess` and `planetscale/vitess-operator` repositories.
 
 ### Overview
 
