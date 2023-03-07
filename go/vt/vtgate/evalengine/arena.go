@@ -1,6 +1,10 @@
 package evalengine
 
-import "vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
+)
 
 type Arena struct {
 	aInt64   []evalInt64
@@ -78,4 +82,20 @@ func (a *Arena) newEvalBytesEmpty() *evalBytes {
 		a.aBytes = append(a.aBytes, evalBytes{})
 	}
 	return &a.aBytes[len(a.aBytes)-1]
+}
+
+func (a *Arena) newEvalBinary(raw []byte) *evalBytes {
+	b := a.newEvalBytesEmpty()
+	b.tt = int16(sqltypes.VarBinary)
+	b.col = collationBinary
+	b.bytes = raw
+	return b
+}
+
+func (a *Arena) newEvalText(raw []byte, tc collations.TypedCollation) eval {
+	b := a.newEvalBytesEmpty()
+	b.tt = int16(sqltypes.VarChar)
+	b.col = tc
+	b.bytes = raw
+	return b
 }

@@ -1196,12 +1196,13 @@ func (c *compiler) compileNegate(expr *NegateExpr) (ctype, error) {
 
 func (c *compiler) compileMultiComparison(call *builtinMultiComparison) (ctype, error) {
 	var (
-		integers int
-		floats   int
-		decimals int
-		text     int
-		binary   int
-		args     []ctype
+		integersI int
+		integersU int
+		floats    int
+		decimals  int
+		text      int
+		binary    int
+		args      []ctype
 	)
 
 	/*
@@ -1223,9 +1224,9 @@ func (c *compiler) compileMultiComparison(call *builtinMultiComparison) (ctype, 
 
 		switch tt.Type {
 		case sqltypes.Int64:
-			integers++
+			integersI++
 		case sqltypes.Uint64:
-			integers++
+			integersU++
 		case sqltypes.Float64:
 			floats++
 		case sqltypes.Decimal:
@@ -1239,34 +1240,59 @@ func (c *compiler) compileMultiComparison(call *builtinMultiComparison) (ctype, 
 		}
 	}
 
-	return ctype{}, c.unsupported(call)
-
-	/*
-		if integers == len(args) {
+	if integersI+integersU == len(args) {
+		if integersI == len(args) {
+			c.emitFn_MULTICMP_i(len(args), call.cmp < 0)
+			return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+		}
+		if integersU == len(args) {
+			c.emitFn_MULTICMP_u(len(args), call.cmp < 0)
+			return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
+		}
+		return c.compileMultiComparison_d(args, call.cmp < 0)
+	}
+	if binary > 0 || text > 0 {
+		if text > 0 {
+			return c.compileMultiComparison_c(args, call.cmp < 0)
+		}
+		c.emitFn_MULTICMP_b(len(args), call.cmp < 0)
+		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+	} else {
+		if floats > 0 {
 			for i, tt := range args {
-				c.compileToInt64(tt, len(args)-i)
+				c.compileToFloat(tt, len(args)-i)
 			}
-			return c.emitFn_MULTICMP_i(len(args))
+			c.emitFn_MULTICMP_f(len(args), call.cmp < 0)
+			return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
 		}
-		if binary > 0 || text > 0 {
-			if binary > 0 {
-				return c.emitFn_MULTICMP_b(len(args))
-			}
-
-			return c.compileMultiComparison_c()
-		} else {
-			if floats > 0 {
-				return c.compileMultiComparison_f()
-			}
-			if decimals > 0 {
-				return c.compileMultiComparison_d()
-			}
+		if decimals > 0 {
+			return c.compileMultiComparison_d(args, call.cmp < 0)
 		}
-		return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected argument for GREATEST/LEAST")
+	}
+	return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected argument for GREATEST/LEAST")
+}
 
-		skip := c.jumpFrom()
-		c.emitNullCheckn(skip, len(call.Arguments))
-	*/
+func (c *compiler) compileMultiComparison_c(args []ctype, lessThan bool) (ctype, error) {
+	env := collations.Local()
+
+	var ca collationAggregation
+	for _, arg := range args {
+		if err := ca.add(env, arg.Col); err != nil {
+			return ctype{}, err
+		}
+	}
+
+	tc := ca.result()
+	c.emitFn_MULTICMP_c(len(args), lessThan, tc)
+	return ctype{Type: sqltypes.VarChar, Col: tc}, nil
+}
+
+func (c *compiler) compileMultiComparison_d(args []ctype, lessThan bool) (ctype, error) {
+	for i, tt := range args {
+		c.compileToDecimal(tt, len(args)-i)
+	}
+	c.emitFn_MULTICMP_d(len(args), lessThan)
+	return ctype{Type: sqltypes.Decimal, Col: collationNumeric}, nil
 }
 
 func (c *compiler) compileRepeat(expr *builtinRepeat) (ctype, error) {

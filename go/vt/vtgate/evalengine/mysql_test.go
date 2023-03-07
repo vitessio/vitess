@@ -127,6 +127,6 @@ func TestMySQLGolden(t *testing.T) {
 
 func TestDebug1(t *testing.T) {
 	// Debug
-	eval, err := testSingle(t, `SELECT 12.0 * 0`)
+	eval, err := testSingle(t, `SELECT LEAST(18446744073709551615, CAST(0 AS UNSIGNED), CAST(1 AS UNSIGNED))`)
 	t.Logf("eval=%s err=%v coll=%s", eval.String(), err, eval.Collation().Get().Name())
 }

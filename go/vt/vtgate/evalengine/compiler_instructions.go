@@ -1494,3 +1494,111 @@ func (c *compiler) emitLike_coerce(expr *LikeExpr, coercion *compiledCoercion) {
 		return 1
 	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COERCE AND COLLATE '%s'", coercion.col.Name())
 }
+
+func (c *compiler) emitFn_MULTICMP_i(args int, lessThan bool) {
+	c.adjustStack(-(args - 1))
+
+	c.emit(func(vm *VirtualMachine) int {
+		x := vm.stack[vm.sp-args].(*evalInt64)
+		for sp := vm.sp - args + 1; sp < vm.sp; sp++ {
+			y := vm.stack[sp].(*evalInt64)
+			if lessThan == (y.i < x.i) {
+				x = y
+			}
+		}
+		vm.stack[vm.sp-args] = x
+		vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP INT64(SP-%d)...INT64(SP-1)", args)
+}
+
+func (c *compiler) emitFn_MULTICMP_u(args int, lessThan bool) {
+	c.adjustStack(-(args - 1))
+
+	c.emit(func(vm *VirtualMachine) int {
+		x := vm.stack[vm.sp-args].(*evalUint64)
+		for sp := vm.sp - args + 1; sp < vm.sp; sp++ {
+			y := vm.stack[sp].(*evalUint64)
+			if lessThan == (y.u < x.u) {
+				x = y
+			}
+		}
+		vm.stack[vm.sp-args] = x
+		vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP UINT64(SP-%d)...UINT64(SP-1)", args)
+}
+
+func (c *compiler) emitFn_MULTICMP_f(args int, lessThan bool) {
+	c.adjustStack(-(args - 1))
+
+	c.emit(func(vm *VirtualMachine) int {
+		x := vm.stack[vm.sp-args].(*evalFloat)
+		for sp := vm.sp - args + 1; sp < vm.sp; sp++ {
+			y := vm.stack[sp].(*evalFloat)
+			if lessThan == (y.f < x.f) {
+				x = y
+			}
+		}
+		vm.stack[vm.sp-args] = x
+		vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP FLOAT64(SP-%d)...FLOAT64(SP-1)", args)
+}
+
+func (c *compiler) emitFn_MULTICMP_d(args int, lessThan bool) {
+	c.adjustStack(-(args - 1))
+
+	c.emit(func(vm *VirtualMachine) int {
+		x := vm.stack[vm.sp-args].(*evalDecimal)
+		xprec := x.length
+
+		for sp := vm.sp - args + 1; sp < vm.sp; sp++ {
+			y := vm.stack[sp].(*evalDecimal)
+			if lessThan == (y.dec.Cmp(x.dec) < 0) {
+				x = y
+			}
+			if y.length > xprec {
+				xprec = y.length
+			}
+		}
+		vm.stack[vm.sp-args] = vm.arena.newEvalDecimalWithPrec(x.dec, xprec)
+		vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP DECIMAL(SP-%d)...DECIMAL(SP-1)", args)
+}
+
+func (c *compiler) emitFn_MULTICMP_b(args int, lessThan bool) {
+	c.adjustStack(-(args - 1))
+
+	c.emit(func(vm *VirtualMachine) int {
+		x := vm.stack[vm.sp-args].ToRawBytes()
+		for sp := vm.sp - args + 1; sp < vm.sp; sp++ {
+			y := vm.stack[sp].ToRawBytes()
+			if lessThan == (bytes.Compare(y, x) < 0) {
+				x = y
+			}
+		}
+		vm.stack[vm.sp-args] = vm.arena.newEvalBinary(x)
+		vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP VARBINARY(SP-%d)...VARBINARY(SP-1)", args)
+}
+
+func (c *compiler) emitFn_MULTICMP_c(args int, lessThan bool, tc collations.TypedCollation) {
+	col := tc.Collation.Get()
+
+	c.adjustStack(-(args - 1))
+	c.emit(func(vm *VirtualMachine) int {
+		x := vm.stack[vm.sp-args].ToRawBytes()
+		for sp := vm.sp - args + 1; sp < vm.sp; sp++ {
+			y := vm.stack[sp].ToRawBytes()
+			if lessThan == (col.Collate(y, x, false) < 0) {
+				x = y
+			}
+		}
+		vm.stack[vm.sp-args] = vm.arena.newEvalText(x, tc)
+		vm.sp -= args - 1
+		return 1
+	}, "FN MULTICMP FLOAT64(SP-%d)...FLOAT64(SP-1)", args)
+}
