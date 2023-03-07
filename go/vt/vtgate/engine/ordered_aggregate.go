@@ -25,8 +25,6 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -401,7 +399,7 @@ func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregatePa
 				Shard:    row[aggr.Col+1].ToString(),
 				Gtid:     row[aggr.Col].ToString(),
 			})
-			data, _ := proto.Marshal(vgtid)
+			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			newRow[aggr.Col] = val
 		}
@@ -515,7 +513,7 @@ func merge(
 			if err != nil {
 				return nil, nil, err
 			}
-			err = proto.Unmarshal(rowBytes, vgtid)
+			err = vgtid.UnmarshalVT(rowBytes)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -524,7 +522,7 @@ func merge(
 				Shard:    row2[aggr.Col+1].ToString(),
 				Gtid:     row2[aggr.Col].ToString(),
 			})
-			data, _ := proto.Marshal(vgtid)
+			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
 		case AggregateRandom:
@@ -574,7 +572,7 @@ func convertFinal(current []sqltypes.Value, aggregates []*AggregateParams) ([]sq
 			if err != nil {
 				return nil, err
 			}
-			err = proto.Unmarshal(currentBytes, vgtid)
+			err = vgtid.UnmarshalVT(currentBytes)
 			if err != nil {
 				return nil, err
 			}
