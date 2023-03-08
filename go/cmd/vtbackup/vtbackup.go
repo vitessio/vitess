@@ -346,9 +346,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	var restorePos mysql.Position
 	switch err {
 	case nil:
-		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 		// if err is nil, we expect backupManifest to be non-nil
 		restorePos = backupManifest.Position
+		log.Infof("Successfully restored from backup at replication position %v", restorePos)
 	case mysqlctl.ErrNoBackup:
 		// There is no backup found, but we may be taking the initial backup of a shard
 		if !allowFirstBackup {
@@ -378,6 +378,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return fmt.Errorf("error starting replication: %v", err)
 	}
 
+	log.Info("get the current primary replication position, and wait until we catch up")
 	// Get the current primary replication position, and wait until we catch up
 	// to that point. We do this instead of looking at ReplicationLag
 	// because that value can
@@ -401,7 +402,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		return nil
 	})
 	if err != nil {
-		return err
+		return fmt.Errorf("can't get the primary replication position after all retries: %v", err)
 	}
 
 	// Remember the time when we fetched the primary position, not when we caught
@@ -414,7 +415,7 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return fmt.Errorf("error in replication catch up: %v", ctx.Err())
 		case <-time.After(time.Second):
 		}
 
