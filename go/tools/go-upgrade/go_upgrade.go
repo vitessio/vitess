@@ -41,7 +41,6 @@ type latestGolangRelease struct {
 }
 
 func main() {
-	failIfNoUpdate := false
 	allowMajorUpgrade := false
 	isMainBranch := true
 
@@ -57,9 +56,6 @@ func main() {
 
 	upgradeTo := chooseNewVersion(currentVersion, availableVersions, allowMajorUpgrade)
 	if upgradeTo == nil {
-		if failIfNoUpdate {
-			os.Exit(1)
-		}
 		return
 	}
 

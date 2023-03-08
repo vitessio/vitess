@@ -5,6 +5,7 @@ on:
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
+  pull_request:
 
 jobs:
   update_golang_version:
@@ -20,16 +21,28 @@ jobs:
         uses: actions/checkout@v3
 
       - name: Detect new version and update codebase
-        run:
+        id: detect-and-update
+        run: |
+          if [ ${{github.ref}} == "main" ]; then
+            go run ./go/tools/go-upgrade/go_upgrade.go --main --allow-major-upgrade
+          else
+            go run ./go/tools/go-upgrade/go_upgrade.go
+          fi
+          
+          output=$(git status -s)
+          if [ -z "${output}" ]; then
+            exit 0
+          fi
+          echo "create-pr=true" >> $GITHUB_OUTPUT
 
       - name: Create Pull Request
+        if: steps.detect-and-update.outputs.create-pr == 'true'
         uses: peter-evans/create-pull-request@v4
         with:
-          commit-message: "upgrade vitess dependency to latest"
+          commit-message: "Upgrade the Golang version"
           signoff: true
           delete-branch: true
-          title: "Upgrade Vitess Dependency to Latest"
-          body: "Weekly Vitess dependency upgrade running on a cron schedule"
+          title: "Bump the Golang version"
+          body: "test"
           reviewers: |
             frouioui
-            GuptaManan100
