@@ -36,9 +36,9 @@ vtctld \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 
 for i in $(seq 0 300); do
- curl -I "http://$hostname:$vtctld_web_port/debug/status" &>/dev/null && break
+ curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null && break
  sleep 0.1
 done
 
 # check one last time
-curl -I "http://$hostname:$vtctld_web_port/debug/status" || fail "vtctld could not be started!"
+curl -I "http://${hostname}:${vtctld_web_port}/debug/status" || fail "vtctld could not be started"
