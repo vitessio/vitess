@@ -477,6 +477,21 @@ func (c *compiler) compileToUint64(ct ctype, offset int) ctype {
 	return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
 }
 
+func (c *compiler) compileToBitwiseUint64(ct ctype, offset int) ctype {
+	switch ct.Type {
+	case sqltypes.Uint64:
+		return ct
+	case sqltypes.Int64:
+		c.emitConvert_iu(offset)
+	case sqltypes.Decimal:
+		c.emitConvert_dbit(offset)
+	// TODO: specialization
+	default:
+		c.emitConvert_xu(offset)
+	}
+	return ctype{sqltypes.Uint64, ct.Flag, collationNumeric}
+}
+
 func (c *compiler) compileToFloat(ct ctype, offset int) ctype {
 	if sqltypes.IsFloat(ct.Type) {
 		return ct
@@ -957,8 +972,8 @@ func (c *compiler) compileBitwiseOp(left Expr, right Expr, op bitwiseOp) (ctype,
 		}
 	}
 
-	lt = c.compileToUint64(lt, 2)
-	rt = c.compileToUint64(rt, 1)
+	lt = c.compileToBitwiseUint64(lt, 2)
+	rt = c.compileToBitwiseUint64(rt, 1)
 
 	c.emitBitOp_uu(op)
 	c.jumpDestination(skip)
@@ -990,7 +1005,7 @@ func (c *compiler) compileBitwiseShift(left Expr, right Expr, i int) (ctype, err
 		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 	}
 
-	_ = c.compileToUint64(lt, 2)
+	_ = c.compileToBitwiseUint64(lt, 2)
 	_ = c.compileToUint64(rt, 1)
 
 	if i < 0 {
@@ -1018,7 +1033,7 @@ func (c *compiler) compileBitCount(expr *builtinBitCount) (ctype, error) {
 		return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
 	}
 
-	_ = c.compileToUint64(ct, 1)
+	_ = c.compileToBitwiseUint64(ct, 1)
 	c.emitBitCount_u()
 	c.jumpDestination(skip)
 	return ctype{Type: sqltypes.Int64, Col: collationBinary}, nil
@@ -1039,7 +1054,7 @@ func (c *compiler) compileBitwiseNot(expr *BitwiseNotExpr) (ctype, error) {
 		return ct, nil
 	}
 
-	ct = c.compileToUint64(ct, 1)
+	ct = c.compileToBitwiseUint64(ct, 1)
 	c.emitBitwiseNot_u()
 	c.jumpDestination(skip)
 	return ct, nil

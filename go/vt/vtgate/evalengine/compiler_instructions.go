@@ -1014,6 +1014,18 @@ func (c *compiler) emitConvert_xu(offset int) {
 	}, "CONV (SP-%d), UINT64", offset)
 }
 
+// emitConvert_dbit is a special instruction emission for converting
+// a bigdecimal in preparation for a bitwise operation. In that case
+// we need to convert the bigdecimal to an int64 and then cast to
+// uint64 to ensure we match the behavior of MySQL.
+func (c *compiler) emitConvert_dbit(offset int) {
+	c.emit(func(vm *VirtualMachine) int {
+		arg := evalToNumeric(vm.stack[vm.sp-offset])
+		vm.stack[vm.sp-offset] = vm.arena.newEvalUint64(uint64(arg.toInt64().i))
+		return 1
+	}, "CONV DECIMAL_BITWISE(SP-%d), UINT64", offset)
+}
+
 func (c *compiler) emitConvert_xb(offset int, t sqltypes.Type, length int, hasLength bool) {
 	if hasLength {
 		c.emit(func(vm *VirtualMachine) int {
@@ -1328,7 +1340,7 @@ func (c *compiler) emitNeg_f() {
 func (c *compiler) emitNeg_d() {
 	c.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-1].(*evalDecimal)
-		arg.dec = arg.dec.NegInPlace()
+		arg.dec = arg.dec.Neg()
 		return 1
 	}, "NEG DECIMAL(SP-1)")
 }
