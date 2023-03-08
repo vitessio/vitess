@@ -92,7 +92,7 @@ func (a *Arena) newEvalBinary(raw []byte) *evalBytes {
 	return b
 }
 
-func (a *Arena) newEvalText(raw []byte, tc collations.TypedCollation) eval {
+func (a *Arena) newEvalText(raw []byte, tc collations.TypedCollation) *evalBytes {
 	b := a.newEvalBytesEmpty()
 	b.tt = int16(sqltypes.VarChar)
 	b.col = tc

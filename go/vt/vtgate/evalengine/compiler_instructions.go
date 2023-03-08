@@ -1474,6 +1474,24 @@ func (c *compiler) emitFn_ASCII() {
 	}, "FN ASCII VARCHAR(SP-1)")
 }
 
+func (c *compiler) emitFn_HEXc(t sqltypes.Type, col collations.TypedCollation) {
+	c.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalBytes)
+		encoded := vm.arena.newEvalText(hexEncodeBytes(arg.bytes), col)
+		encoded.tt = int16(t)
+		vm.stack[vm.sp-1] = encoded
+		return 1
+	}, "FN HEX VARCHAR(SP-1)")
+}
+
+func (c *compiler) emitFn_HEXd(col collations.TypedCollation) {
+	c.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(evalNumeric)
+		vm.stack[vm.sp-1] = vm.arena.newEvalText(hexEncodeUint(uint64(arg.toInt64().i)), col)
+		return 1
+	}, "FN HEX NUMERIC(SP-1)")
+}
+
 func (c *compiler) emitLike_collate(expr *LikeExpr, collation collations.Collation) {
 	c.adjustStack(-1)
 

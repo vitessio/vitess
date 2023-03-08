@@ -211,6 +211,9 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	case *ConvertExpr:
 		return c.compileConvert(expr)
 
+	case *ConvertUsingExpr:
+		return c.compileConvertUsing(expr)
+
 	case *CaseExpr:
 		return c.compileCase(expr)
 
@@ -255,6 +258,8 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 		return c.compileLength(call, bitLen)
 	case *builtinASCII:
 		return c.compileASCII(call)
+	case *builtinHex:
+		return c.compileHex(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -1110,6 +1115,26 @@ func (c *compiler) compileConvert(conv *ConvertExpr) (ctype, error) {
 
 	c.jumpDestination(skip)
 	return convt, nil
+
+}
+
+func (c *compiler) compileConvertUsing(conv *ConvertUsingExpr) (ctype, error) {
+	_, err := c.compileExpr(conv.Inner)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck1(skip)
+	c.emitConvert_xc(1, sqltypes.VarChar, conv.Collation, 0, false)
+	c.jumpDestination(skip)
+
+	col := collations.TypedCollation{
+		Collation:    conv.Collation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+	return ctype{Type: sqltypes.VarChar, Col: col}, nil
 }
 
 func (c *compiler) compileCase(cs *CaseExpr) (ctype, error) {
@@ -1464,6 +1489,41 @@ func (c *compiler) compileASCII(call *builtinASCII) (ctype, error) {
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }
 
+func (c *compiler) compileHex(call *builtinHex) (ctype, error) {
+	str, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.jumpFrom()
+	c.emitNullCheck1(skip)
+
+	col := collations.TypedCollation{
+		Collation:    c.defaultCollation,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	t := sqltypes.VarChar
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Text
+	}
+
+	switch {
+	case sqltypes.IsNumber(str.Type), sqltypes.IsDecimal(str.Type):
+		c.emitFn_HEXd(col)
+	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+		c.emitFn_HEXc(t, col)
+	default:
+		c.emitConvert_xc(1, t, c.defaultCollation, 0, false)
+		c.emitFn_HEXc(t, col)
+	}
+
+	c.jumpDestination(skip)
+
+	return ctype{Type: t, Col: col}, nil
+}
+
 func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 	lt, err := c.compileExpr(expr.Left)
 	if err != nil {
@@ -1541,7 +1601,7 @@ func (c *compiler) compileJSONArray(call *builtinJSONArray) (ctype, error) {
 			return ctype{}, err
 		}
 
-		tt, err = c.compileToJSON(tt, 1)
+		_, err = c.compileToJSON(tt, 1)
 		if err != nil {
 			return ctype{}, err
 		}
