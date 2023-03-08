@@ -481,6 +481,11 @@ func (v Value) IsDateTime() bool {
 	return int(v.typ)&dt == dt
 }
 
+// IsDecimal returns true if Value is a decimal.
+func (v Value) IsDecimal() bool {
+	return IsDecimal(v.typ)
+}
+
 // IsComparable returns true if the Value is null safe comparable without collation information.
 func (v *Value) IsComparable() bool {
 	if v.typ == Null || IsNumber(v.typ) || IsBinary(v.typ) {

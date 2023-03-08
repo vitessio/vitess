@@ -20,6 +20,7 @@ import (
 	"bytes"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -81,7 +82,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return evalToVarchar(e, env.DefaultCollation, false)
 
 	case *evalBytes:
-		coll := collations.Local().LookupByID(e.col.Collation)
+		coll := e.col.Collation.Get()
 		csa, ok := coll.(collations.CaseAwareCollation)
 		if !ok {
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "not implemented")
@@ -116,8 +117,8 @@ func (call *builtinCharLength) eval(env *ExpressionEnv) (eval, error) {
 		if sqltypes.IsBinary(e.SQLType()) {
 			return newEvalInt64(int64(len(e.bytes))), nil
 		}
-		coll := collations.Local().LookupByID(e.col.Collation)
-		count := collations.Length(coll, e.bytes)
+		coll := e.col.Collation.Get()
+		count := charset.Length(coll.Charset(), e.bytes)
 		return newEvalInt64(int64(count)), nil
 	default:
 		return newEvalInt64(int64(len(e.ToRawBytes()))), nil
@@ -226,7 +227,7 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	col := collations.Local().LookupByID(evalCollation(arg).Collation)
+	col := evalCollation(arg).Collation.Get()
 
 	// the collation of a `COLLATION` expr is hardcoded to `utf8_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
@@ -282,7 +283,7 @@ func (c *builtinWeightString) eval(env *ExpressionEnv) (eval, error) {
 		length = collations.PadToMax
 	}
 
-	collation := collations.Local().LookupByID(tc.Collation)
+	collation := tc.Collation.Get()
 	weights = collation.WeightString(weights, text, length)
 	return newEvalBinary(weights), nil
 }

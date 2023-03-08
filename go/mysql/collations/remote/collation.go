@@ -27,8 +27,9 @@ import (
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 // Collation is a generic implementation of the Collation interface
@@ -82,8 +83,6 @@ func (c *Collation) LastError() error {
 	defer c.mu.Unlock()
 	return c.err
 }
-
-func (c *Collation) Init() {}
 
 func (c *Collation) ID() collations.ID {
 	return c.id
@@ -170,7 +169,7 @@ func (c *Collation) WeightString(dst, src []byte, numCodepoints int) []byte {
 	return dst
 }
 
-func (c *Collation) Hash(_ []byte, _ int) collations.HashCode {
+func (c *Collation) Hash(_ *vthash.Hasher, _ []byte, _ int) {
 	panic("unsupported: Hash for remote collations")
 }
 

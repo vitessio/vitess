@@ -104,6 +104,32 @@ text-align: right;
 
 <h1>Status for {{.BinaryName}}</h1>
 
+<script>
+function refreshTablesHaveClassRefreshRequired() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/debug/status", true);
+  xhr.onreadystatechange = function() {
+    if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+  	  var data = this.responseText;
+  	  var parser = new DOMParser();
+  	  var htmlDoc = parser.parseFromString(data, "text/html");
+  	  var tables = document.getElementsByClassName("refreshRequired");
+  	  var counter = 0;
+  	  for (var i = 0; i < tables.length; i++) {
+  	    var newTable = htmlDoc.querySelectorAll("table.refreshRequired")[counter];
+  	    if (newTable) {
+  	  	tables[i].innerHTML = newTable.innerHTML;
+  	    }
+  	    counter++;
+  	  }
+    }
+  };
+  xhr.send();
+}
+if (` + strconv.Itoa(tableRefreshInterval) + ` !== 0) {
+	setInterval(refreshTablesHaveClassRefreshRequired, ` + strconv.Itoa(tableRefreshInterval) + `);
+}
+</script>
 <div>
 <div class=lefthand>
 Started: {{.StartTime}}<br>

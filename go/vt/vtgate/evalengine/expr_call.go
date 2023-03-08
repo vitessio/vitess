@@ -18,6 +18,7 @@ package evalengine
 
 type (
 	callable interface {
+		Expr
 		callable() []Expr
 	}
 

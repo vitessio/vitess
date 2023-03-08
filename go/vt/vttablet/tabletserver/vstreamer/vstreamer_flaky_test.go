@@ -279,7 +279,7 @@ func TestVersion(t *testing.T) {
 			Name: "t1",
 		}},
 	}
-	blob, _ := proto.Marshal(dbSchema)
+	blob, _ := dbSchema.MarshalVT()
 	engine.se.Reload(context.Background())
 	gtid := "MariaDB/0-41983-20"
 	testcases := []testcase{{

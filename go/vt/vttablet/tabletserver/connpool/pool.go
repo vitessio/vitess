@@ -22,11 +22,11 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/netutil"
 	"vitess.io/vitess/go/pools"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/callerid"
 	"vitess.io/vitess/go/vt/dbconfigs"
@@ -65,8 +65,8 @@ type Pool struct {
 	idleTimeout        time.Duration
 	maxLifetime        time.Duration
 	waiterCap          int64
-	waiterCount        sync2.AtomicInt64
-	waiterQueueFull    sync2.AtomicInt64
+	waiterCount        atomic.Int64
+	waiterQueueFull    atomic.Int64
 	dbaPool            *dbconnpool.ConnectionPool
 	appDebugParams     dbconfigs.Connector
 	getConnTime        *servenv.TimingsWrapper
@@ -102,7 +102,7 @@ func NewPool(env tabletenv.Env, name string, cfg tabletenv.ConnPoolConfig) *Pool
 	env.Exporter().NewCounterFunc(name+"IdleClosed", "Tablet server conn pool idle closed", cp.IdleClosed)
 	env.Exporter().NewCounterFunc(name+"MaxLifetimeClosed", "Tablet server conn pool refresh closed", cp.MaxLifetimeClosed)
 	env.Exporter().NewCounterFunc(name+"Exhausted", "Number of times pool had zero available slots", cp.Exhausted)
-	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Get)
+	env.Exporter().NewCounterFunc(name+"WaiterQueueFull", "Number of times the waiter queue was full", cp.waiterQueueFull.Load)
 	env.Exporter().NewCounterFunc(name+"Get", "Tablet server conn pool get count", cp.GetCount)
 	env.Exporter().NewCounterFunc(name+"GetSetting", "Tablet server conn pool get with setting count", cp.GetSettingCount)
 	env.Exporter().NewCounterFunc(name+"DiffSetting", "Number of times pool applied different setting", cp.DiffSettingCount)
@@ -274,7 +274,7 @@ func (cp *Pool) StatsJSON() string {
 	if closingBraceIndex == -1 { // unexpected...
 		return res
 	}
-	return fmt.Sprintf(`%s, "WaiterQueueFull": %v}`, res[:closingBraceIndex], cp.waiterQueueFull.Get())
+	return fmt.Sprintf(`%s, "WaiterQueueFull": %v}`, res[:closingBraceIndex], cp.waiterQueueFull.Load())
 }
 
 // Capacity returns the pool capacity.

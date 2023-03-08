@@ -132,10 +132,7 @@ func NullsafeCompare(v1, v2 sqltypes.Value, collationID collations.ID) (int, err
 
 	switch {
 	case sqltypes.IsText(typ):
-		if collationID == collations.Unknown {
-			return 0, UnsupportedCollationError{ID: collationID}
-		}
-		collation := collations.Local().LookupByID(collationID)
+		collation := collationID.Get()
 		if collation == nil {
 			return 0, UnsupportedCollationError{ID: collationID}
 		}

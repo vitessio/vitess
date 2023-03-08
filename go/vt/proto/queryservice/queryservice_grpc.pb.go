@@ -81,6 +81,8 @@ type QueryClient interface {
 	VStreamRows(ctx context.Context, in *binlogdata.VStreamRowsRequest, opts ...grpc.CallOption) (Query_VStreamRowsClient, error)
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(ctx context.Context, in *binlogdata.VStreamResultsRequest, opts ...grpc.CallOption) (Query_VStreamResultsClient, error)
+	// GetSchema returns the schema information.
+	GetSchema(ctx context.Context, in *query.GetSchemaRequest, opts ...grpc.CallOption) (Query_GetSchemaClient, error)
 }
 
 type queryClient struct {
@@ -532,6 +534,38 @@ func (x *queryVStreamResultsClient) Recv() (*binlogdata.VStreamResultsResponse, 
 	return m, nil
 }
 
+func (c *queryClient) GetSchema(ctx context.Context, in *query.GetSchemaRequest, opts ...grpc.CallOption) (Query_GetSchemaClient, error) {
+	stream, err := c.cc.NewStream(ctx, &Query_ServiceDesc.Streams[9], "/queryservice.Query/GetSchema", opts...)
+	if err != nil {
+		return nil, err
+	}
+	x := &queryGetSchemaClient{stream}
+	if err := x.ClientStream.SendMsg(in); err != nil {
+		return nil, err
+	}
+	if err := x.ClientStream.CloseSend(); err != nil {
+		return nil, err
+	}
+	return x, nil
+}
+
+type Query_GetSchemaClient interface {
+	Recv() (*query.GetSchemaResponse, error)
+	grpc.ClientStream
+}
+
+type queryGetSchemaClient struct {
+	grpc.ClientStream
+}
+
+func (x *queryGetSchemaClient) Recv() (*query.GetSchemaResponse, error) {
+	m := new(query.GetSchemaResponse)
+	if err := x.ClientStream.RecvMsg(m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
 // QueryServer is the server API for Query service.
 // All implementations must embed UnimplementedQueryServer
 // for forward compatibility
@@ -593,6 +627,8 @@ type QueryServer interface {
 	VStreamRows(*binlogdata.VStreamRowsRequest, Query_VStreamRowsServer) error
 	// VStreamResults streams results along with the gtid of the snapshot.
 	VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error
+	// GetSchema returns the schema information.
+	GetSchema(*query.GetSchemaRequest, Query_GetSchemaServer) error
 	mustEmbedUnimplementedQueryServer()
 }
 
@@ -677,6 +713,9 @@ func (UnimplementedQueryServer) VStreamRows(*binlogdata.VStreamRowsRequest, Quer
 }
 func (UnimplementedQueryServer) VStreamResults(*binlogdata.VStreamResultsRequest, Query_VStreamResultsServer) error {
 	return status.Errorf(codes.Unimplemented, "method VStreamResults not implemented")
+}
+func (UnimplementedQueryServer) GetSchema(*query.GetSchemaRequest, Query_GetSchemaServer) error {
+	return status.Errorf(codes.Unimplemented, "method GetSchema not implemented")
 }
 func (UnimplementedQueryServer) mustEmbedUnimplementedQueryServer() {}
 
@@ -1186,6 +1225,27 @@ func (x *queryVStreamResultsServer) Send(m *binlogdata.VStreamResultsResponse) e
 	return x.ServerStream.SendMsg(m)
 }
 
+func _Query_GetSchema_Handler(srv interface{}, stream grpc.ServerStream) error {
+	m := new(query.GetSchemaRequest)
+	if err := stream.RecvMsg(m); err != nil {
+		return err
+	}
+	return srv.(QueryServer).GetSchema(m, &queryGetSchemaServer{stream})
+}
+
+type Query_GetSchemaServer interface {
+	Send(*query.GetSchemaResponse) error
+	grpc.ServerStream
+}
+
+type queryGetSchemaServer struct {
+	grpc.ServerStream
+}
+
+func (x *queryGetSchemaServer) Send(m *query.GetSchemaResponse) error {
+	return x.ServerStream.SendMsg(m)
+}
+
 // Query_ServiceDesc is the grpc.ServiceDesc for Query service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1306,6 +1366,11 @@ var Query_ServiceDesc = grpc.ServiceDesc{
 		{
 			StreamName:    "VStreamResults",
 			Handler:       _Query_VStreamResults_Handler,
+			ServerStreams: true,
+		},
+		{
+			StreamName:    "GetSchema",
+			Handler:       _Query_GetSchema_Handler,
 			ServerStreams: true,
 		},
 	},

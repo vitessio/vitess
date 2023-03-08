@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-ARG bootstrap_version=14
+ARG bootstrap_version=15
 ARG image="vitess/bootstrap:${bootstrap_version}-mysql80"
 
 FROM "${image}"
@@ -30,12 +30,9 @@ ARG BUILD_GIT_BRANCH
 ARG BUILD_GIT_REV
 
 # Re-copy sources from working tree
-USER root
-COPY . /vt/src/vitess.io/vitess
+COPY --chown=vitess:vitess . /vt/src/vitess.io/vitess
+
+USER vitess
 
 # Build Vitess
 RUN make build
-
-# Fix permissions
-RUN chown -R vitess:vitess /vt
-USER vitess

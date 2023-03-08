@@ -17,6 +17,7 @@ limitations under the License.
 package sync2
 
 import (
+	"sync/atomic"
 	"time"
 )
 
@@ -30,8 +31,8 @@ import (
 type Batcher struct {
 	interval time.Duration
 	queue    chan int
-	waiters  AtomicInt32
-	nextID   AtomicInt32
+	waiters  atomic.Int32
+	nextID   atomic.Int32
 	after    func(time.Duration) <-chan time.Time
 }
 
@@ -40,8 +41,6 @@ func NewBatcher(interval time.Duration) *Batcher {
 	return &Batcher{
 		interval: interval,
 		queue:    make(chan int),
-		waiters:  NewAtomicInt32(0),
-		nextID:   NewAtomicInt32(0),
 		after:    time.After,
 	}
 }
@@ -52,8 +51,6 @@ func newBatcherForTest(interval time.Duration, after func(time.Duration) <-chan 
 	return &Batcher{
 		interval: interval,
 		queue:    make(chan int),
-		waiters:  NewAtomicInt32(0),
-		nextID:   NewAtomicInt32(0),
 		after:    after,
 	}
 }
@@ -77,9 +74,9 @@ func (b *Batcher) newBatch() {
 		// Make sure to atomically reset the number of waiters to make
 		// sure that all incoming requests either make it into the
 		// current batch or the next one.
-		waiters := b.waiters.Get()
+		waiters := b.waiters.Load()
 		for !b.waiters.CompareAndSwap(waiters, 0) {
-			waiters = b.waiters.Get()
+			waiters = b.waiters.Load()
 		}
 
 		for i := int32(0); i < waiters; i++ {

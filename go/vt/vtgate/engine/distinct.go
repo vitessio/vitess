@@ -161,7 +161,7 @@ func newProbeTable(checkCols []CheckCol) *probeTable {
 	cols := make([]CheckCol, len(checkCols))
 	copy(cols, checkCols)
 	return &probeTable{
-		seenRows:  map[uintptr][]sqltypes.Row{},
+		seenRows:  map[evalengine.HashCode][]sqltypes.Row{},
 		checkCols: cols,
 	}
 }
@@ -279,7 +279,7 @@ func (cc CheckCol) SwitchToWeightString() CheckCol {
 }
 
 func (cc CheckCol) String() string {
-	coll := collations.Local().LookupByID(cc.Collation)
+	coll := cc.Collation.Get()
 	var collation string
 	if coll != nil {
 		collation = ": " + coll.Name()

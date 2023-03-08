@@ -21,7 +21,6 @@
 package db
 
 import (
-	"crypto/tls"
 	"fmt"
 	"strings"
 	"time"
@@ -95,14 +94,12 @@ func requiresTLS(host string, port int, uri string) bool {
 	return required
 }
 
-// Create a TLS configuration from the config supplied CA, Certificate, and Private key.
+// SetupMySQLTopologyTLS creates a TLS configuration from the config supplied CA, Certificate, and Private key.
 // Register the TLS config with the mysql drivers as the "topology" config
 // Modify the supplied URI to call the TLS config
 func SetupMySQLTopologyTLS(uri string) (string, error) {
 	if !topologyTLSConfigured {
-		tlsConfig, err := ssl.NewTLSConfig(config.Config.MySQLTopologySSLCAFile, !config.Config.MySQLTopologySSLSkipVerify)
-		// Drop to TLS 1.0 for talking to MySQL
-		tlsConfig.MinVersion = tls.VersionTLS10
+		tlsConfig, err := ssl.NewTLSConfig(config.Config.MySQLTopologySSLCAFile, !config.Config.MySQLTopologySSLSkipVerify, config.Config.MySQLTopologyTLSMinVersionNumber())
 		if err != nil {
 			log.Errorf("Can't create TLS configuration for Topology connection %s: %s", uri, err)
 			return "", err
@@ -126,14 +123,12 @@ func SetupMySQLTopologyTLS(uri string) (string, error) {
 	return fmt.Sprintf("%s&tls=topology", uri), nil
 }
 
-// Create a TLS configuration from the config supplied CA, Certificate, and Private key.
+// SetupMySQLOrchestratorTLS creates a TLS configuration from the config supplied CA, Certificate, and Private key.
 // Register the TLS config with the mysql drivers as the "orchestrator" config
 // Modify the supplied URI to call the TLS config
 func SetupMySQLOrchestratorTLS(uri string) (string, error) {
 	if !orchestratorTLSConfigured {
-		tlsConfig, err := ssl.NewTLSConfig(config.Config.MySQLOrchestratorSSLCAFile, !config.Config.MySQLOrchestratorSSLSkipVerify)
-		// Drop to TLS 1.0 for talking to MySQL
-		tlsConfig.MinVersion = tls.VersionTLS10
+		tlsConfig, err := ssl.NewTLSConfig(config.Config.MySQLOrchestratorSSLCAFile, !config.Config.MySQLOrchestratorSSLSkipVerify, config.Config.MySQLOrchestratorTLSMinVersionNumber())
 		if err != nil {
 			log.Fatalf("Can't create TLS configuration for Orchestrator connection %s: %s", uri, err)
 			return "", err

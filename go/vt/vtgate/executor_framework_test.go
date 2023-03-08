@@ -315,7 +315,7 @@ func assertQueriesWithSavepoint(t *testing.T, sbc *sandboxconn.SandboxConn, want
 
 func testCommitCount(t *testing.T, sbcName string, sbc *sandboxconn.SandboxConn, want int) {
 	t.Helper()
-	if got, want := sbc.CommitCount.Get(), int64(want); got != want {
+	if got, want := sbc.CommitCount.Load(), int64(want); got != want {
 		t.Errorf("%s.CommitCount: %d, want %d\n", sbcName, got, want)
 	}
 }
@@ -328,12 +328,10 @@ func testNonZeroDuration(t *testing.T, what, d string) {
 	}
 }
 
-func getQueryLog(logChan chan any) *logstats.LogStats {
-	var log any
-
+func getQueryLog(logChan chan *logstats.LogStats) *logstats.LogStats {
 	select {
-	case log = <-logChan:
-		return log.(*logstats.LogStats)
+	case log := <-logChan:
+		return log
 	default:
 		return nil
 	}
@@ -346,7 +344,7 @@ func getQueryLog(logChan chan any) *logstats.LogStats {
 // is a repeat query.
 var testPlannedQueries = map[string]bool{}
 
-func testQueryLog(t *testing.T, logChan chan any, method, stmtType, sql string, shardQueries int) *logstats.LogStats {
+func testQueryLog(t *testing.T, logChan chan *logstats.LogStats, method, stmtType, sql string, shardQueries int) *logstats.LogStats {
 	t.Helper()
 
 	logStats := getQueryLog(logChan)

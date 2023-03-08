@@ -18,13 +18,11 @@ package main
 
 import (
 	"log"
-	"os"
 
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/tools/asthelpergen"
-
-	"vitess.io/vitess/go/tools/goimports"
+	"vitess.io/vitess/go/tools/codegen"
 )
 
 func main() {
@@ -50,15 +48,9 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			content, err := goimports.FormatJenFile(file)
-			if err != nil {
-				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
+			if err := codegen.SaveJenFile(fullPath, file); err != nil {
+				log.Fatal(err)
 			}
-			err = os.WriteFile(fullPath, content, 0664)
-			if err != nil {
-				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
-			}
-			log.Printf("saved '%s'", fullPath)
 		}
 	}
 }

@@ -218,7 +218,6 @@ func DeleteTablet(ctx context.Context, ts *topo.Server, tablet *topodatapb.Table
 	// try to remove replication data, no fatal if we fail
 	if err := topo.DeleteTabletReplicationData(ctx, ts, tablet); err != nil {
 		if topo.IsErrType(err, topo.NoNode) {
-			log.V(6).Infof("no ShardReplication object for cell %v", tablet.Alias.Cell)
 			err = nil
 		}
 		if err != nil {

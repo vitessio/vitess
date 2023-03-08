@@ -26,8 +26,8 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
-func binaryCollationForCollation(collation collations.ID) collations.ID {
-	binary := collations.Local().LookupByID(collation)
+func (ast *astCompiler) binaryCollationForCollation(collation collations.ID) collations.ID {
+	binary := collation.Get()
 	if binary == nil {
 		return collations.Unknown
 	}
@@ -38,11 +38,11 @@ func binaryCollationForCollation(collation collations.ID) collations.ID {
 	return binaryCollation.ID()
 }
 
-func translateConvertCharset(charset string, binary bool, lookup TranslationLookup) (collations.ID, error) {
+func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (collations.ID, error) {
 	if charset == "" {
-		collation := lookup.DefaultCollation()
+		collation := ast.lookup.DefaultCollation()
 		if binary {
-			collation = binaryCollationForCollation(collation)
+			collation = ast.binaryCollationForCollation(collation)
 		}
 		if collation == collations.Unknown {
 			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No default character set specified")
@@ -56,7 +56,7 @@ func translateConvertCharset(charset string, binary bool, lookup TranslationLook
 	}
 	collationID := collation.ID()
 	if binary {
-		collationID = binaryCollationForCollation(collationID)
+		collationID = ast.binaryCollationForCollation(collationID)
 		if collationID == collations.Unknown {
 			return collations.Unknown, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "No binary collation found for character set: %s ", charset)
 		}
@@ -64,23 +64,23 @@ func translateConvertCharset(charset string, binary bool, lookup TranslationLook
 	return collationID, nil
 }
 
-func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType, lookup TranslationLookup) (Expr, error) {
+func (ast *astCompiler) translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertType) (Expr, error) {
 	var (
 		convert ConvertExpr
 		err     error
 	)
 
-	convert.Inner, err = translateExpr(expr, lookup)
+	convert.Inner, err = ast.translateExpr(expr)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Length, convert.HasLength, err = translateIntegral(convertType.Length, lookup)
+	convert.Length, convert.HasLength, err = ast.translateIntegral(convertType.Length)
 	if err != nil {
 		return nil, err
 	}
 
-	convert.Scale, convert.HasScale, err = translateIntegral(convertType.Scale, lookup)
+	convert.Scale, convert.HasScale, err = ast.translateIntegral(convertType.Scale)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertTyp
 	case "NCHAR":
 		convert.Collation = collations.CollationUtf8ID
 	case "CHAR":
-		convert.Collation, err = translateConvertCharset(convertType.Charset.Name, convertType.Charset.Binary, lookup)
+		convert.Collation, err = ast.translateConvertCharset(convertType.Charset.Name, convertType.Charset.Binary)
 		if err != nil {
 			return nil, err
 		}
@@ -121,18 +121,18 @@ func translateConvertExpr(expr sqlparser.Expr, convertType *sqlparser.ConvertTyp
 	return &convert, nil
 }
 
-func translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr, lookup TranslationLookup) (Expr, error) {
+func (ast *astCompiler) translateConvertUsingExpr(expr *sqlparser.ConvertUsingExpr) (Expr, error) {
 	var (
 		using ConvertUsingExpr
 		err   error
 	)
 
-	using.Inner, err = translateExpr(expr.Expr, lookup)
+	using.Inner, err = ast.translateExpr(expr.Expr)
 	if err != nil {
 		return nil, err
 	}
 
-	using.Collation, err = translateConvertCharset(expr.Type, false, lookup)
+	using.Collation, err = ast.translateConvertCharset(expr.Type, false)
 	if err != nil {
 		return nil, err
 	}
