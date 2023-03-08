@@ -300,17 +300,17 @@ func TestAPI(t *testing.T) {
 			}`, http.StatusOK},
 
 		// Tablet Updates
-		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", "", "can't get tablet_statuses: healthcheck not initialized", http.StatusInternalServerError},
-		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", http.StatusInternalServerError},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello", http.StatusInternalServerError},
+		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "404 page not found", http.StatusNotFound},
 
 		// Tablet Health
-		{"GET", "tablet_health/cell1/100", "", "can't get tablet_health: healthcheck not initialized", http.StatusInternalServerError},
-		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>", http.StatusInternalServerError},
-		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: healthcheck not initialized", http.StatusInternalServerError},
+		{"GET", "tablet_health/cell1/100", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_health/cell1", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_health/cell1/gh", "", "404 page not found", http.StatusNotFound},
 
 		// Topology Info
-		{"GET", "topology_info/?keyspace=all&cell=all", "", "can't get topology_info: realtimeStats not initialized", http.StatusInternalServerError},
+		{"GET", "topology_info/?keyspace=all&cell=all", "", "404 page not found", http.StatusNotFound},
 
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{

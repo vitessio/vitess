@@ -458,51 +458,19 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
-	handleCollection("tablet_statuses", func(r *http.Request) (any, error) {
-		targetPath := getItemPath(r.URL.Path)
-
-		// Get the heatmap data based on query parameters.
-		if targetPath == "" {
-			if err := r.ParseForm(); err != nil {
-				return nil, err
-			}
-			tabletType := r.FormValue("type")
-			_, err := topoproto.ParseTabletType(tabletType)
-			// Excluding the case where parse fails because all tabletTypes was chosen.
-			if err != nil && tabletType != "all" {
-				return nil, fmt.Errorf("invalid tablet type: %v ", err)
-			}
-
-			return nil, fmt.Errorf("healthcheck not initialized")
-		}
-
-		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", targetPath)
+	handleAPI("tablet_statuses/", func(w http.ResponseWriter, r *http.Request) error {
+		http.NotFound(w, r)
+		return nil
 	})
 
-	handleCollection("tablet_health", func(r *http.Request) (any, error) {
-		tabletPath := getItemPath(r.URL.Path)
-		parts := strings.SplitN(tabletPath, "/", 2)
-
-		// Request was incorrectly formatted.
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid tablet_health path: %q  expected path: /tablet_health/<cell>/<uid>", tabletPath)
-		}
-
-		return nil, fmt.Errorf("healthcheck not initialized")
+	handleAPI("tablet_health/", func(w http.ResponseWriter, r *http.Request) error {
+		http.NotFound(w, r)
+		return nil
 	})
 
-	handleCollection("topology_info", func(r *http.Request) (any, error) {
-		targetPath := getItemPath(r.URL.Path)
-
-		// Retrieving topology information (keyspaces, cells, and types) based on query params.
-		if targetPath == "" {
-			if err := r.ParseForm(); err != nil {
-				return nil, err
-			}
-
-			return nil, fmt.Errorf("realtimeStats not initialized")
-		}
-		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>", targetPath)
+	handleAPI("topology_info/", func(w http.ResponseWriter, r *http.Request) error {
+		http.NotFound(w, r)
+		return nil
 	})
 
 	// Vtctl Command
