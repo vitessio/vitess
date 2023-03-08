@@ -54,7 +54,6 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	JSONTables
 	Buggy
 	ColumnNotFound
 	AmbiguousColumn
@@ -68,10 +67,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	JSONTables: {
-		format: "json_table expressions",
-		typ:    UnsupportedErrorType,
-	},
 	Buggy: {
 		format: "%s",
 		typ:    BugErrorType,
@@ -337,4 +332,17 @@ func (e *QualifiedOrderInUnionError) Error() string {
 
 func (e *QualifiedOrderInUnionError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{}
+}
+
+// JSONTablesError
+type JSONTablesError struct {
+	Table string
+}
+
+func (e *JSONTablesError) Error() string {
+	return printf(e, "json_table expressions")
+}
+
+func (e *JSONTablesError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
 }

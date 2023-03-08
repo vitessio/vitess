@@ -912,6 +912,9 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql:  "select is_free_lock('xyz') from user",
 		serr: "is_free_lock('xyz') allowed only with dual",
+	}, {
+		sql: "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt",
+		err: &JSONTablesError{},
 	}}
 
 	for _, tc := range tcases {

@@ -333,7 +333,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return err
 		}
 	case *sqlparser.JSONTableExpr:
-		return NewError(JSONTables)
+		return &JSONTablesError{}
 	}
 
 	return nil
