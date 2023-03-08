@@ -904,12 +904,8 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 				return false, &InvalidStarExprInViewError{View: v.Name()}
 			}
 		case *sqlparser.AliasedExpr:
-			if node.As.String() != "" {
-				columnNames = append(columnNames, &node.As)
-			} else {
-				name := sqlparser.NewIdentifierCI(sqlparser.String(node.Expr))
-				columnNames = append(columnNames, &name)
-			}
+			ci := sqlparser.NewIdentifierCI(node.ColumnName())
+			columnNames = append(columnNames, &ci)
 		}
 		return true, nil
 	}, v.Select.GetColumns())
