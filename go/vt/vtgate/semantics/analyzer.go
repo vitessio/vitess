@@ -318,7 +318,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			switch node := node.(type) {
 			case *sqlparser.ColName:
 				if !node.Qualifier.IsEmpty() {
-					return false, NewError(QualifiedOrderInUnion, node.Qualifier.Name)
+					return false, &QualifiedOrderInUnionError{Table: node.Qualifier.Name.String()}
 				}
 			case *sqlparser.Subquery:
 				return false, nil

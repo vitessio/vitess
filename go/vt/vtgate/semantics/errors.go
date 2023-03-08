@@ -54,7 +54,6 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	QualifiedOrderInUnion
 	JSONTables
 	Buggy
 	ColumnNotFound
@@ -69,9 +68,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	QualifiedOrderInUnion: {
-		format: "Table %s from one of the SELECTs cannot be used in global ORDER clause",
-	},
 	JSONTables: {
 		format: "json_table expressions",
 		typ:    UnsupportedErrorType,
@@ -328,4 +324,17 @@ func (e *LockOnlyWithDualError) Error() string {
 
 func (e *LockOnlyWithDualError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_UNIMPLEMENTED)}
+}
+
+// QualifiedOrderInUnionError
+type QualifiedOrderInUnionError struct {
+	Table string
+}
+
+func (e *QualifiedOrderInUnionError) Error() string {
+	return printf(e, "Table %s from one of the SELECTs cannot be used in global ORDER clause", e.Table)
+}
+
+func (e *QualifiedOrderInUnionError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{}
 }

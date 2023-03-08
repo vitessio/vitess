@@ -888,6 +888,7 @@ func TestInvalidQueries(t *testing.T) {
 		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
 	}, {
 		sql:  "select id from a union select 3 order by a.id",
+		err:  &QualifiedOrderInUnionError{Table: "a"},
 		serr: "Table a from one of the SELECTs cannot be used in global ORDER clause",
 	}, {
 		sql:  "select a.id, b.id from a, b union select 1, 2 order by id",
