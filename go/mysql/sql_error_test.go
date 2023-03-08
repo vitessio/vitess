@@ -188,6 +188,7 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			err, ok := NewSQLErrorFromError(tc.err)
 			require.Equal(t, tc.isSql, ok)
 			if tc.isSql {
+				require.Error(t, err)
 				assert.Equal(t, tc.num, err.Number())
 				assert.Equal(t, tc.ss, err.SQLState())
 			}
