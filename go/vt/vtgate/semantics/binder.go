@@ -143,7 +143,7 @@ func (b *binder) bindCountStar(node *sqlparser.CountStar) {
 func (b *binder) rewriteJoinUsingColName(deps dependency, node *sqlparser.ColName, currentScope *scope) (dependency, error) {
 	constituents := deps.recursive.Constituents()
 	if len(constituents) < 1 {
-		return dependency{}, NewError(Buggy, "we should not have a *ColName that depends on nothing")
+		return dependency{}, &BuggyError{Msg: "we should not have a *ColName that depends on nothing"}
 	}
 	newTbl := constituents[0]
 	infoFor, err := b.tc.tableInfoFor(newTbl)
@@ -205,7 +205,7 @@ func (b *binder) setSubQueryDependencies(subq *sqlparser.Subquery, currScope *sc
 
 func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *scope, subq *sqlparser.Subquery) (*sqlparser.ExtractedSubquery, error) {
 	if currScope.stmt == nil {
-		return nil, NewError(Buggy, "unable to bind subquery to select statement")
+		return nil, &BuggyError{Msg: "unable to bind subquery to select statement"}
 	}
 
 	sq := &sqlparser.ExtractedSubquery{

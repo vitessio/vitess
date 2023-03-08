@@ -54,7 +54,6 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	Buggy
 	ColumnNotFound
 	AmbiguousColumn
 )
@@ -67,10 +66,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	Buggy: {
-		format: "%s",
-		typ:    BugErrorType,
-	},
 	ColumnNotFound: {
 		format: "symbol %s not found",
 		state:  vterrors.BadFieldError,
@@ -345,4 +340,18 @@ func (e *JSONTablesError) Error() string {
 
 func (e *JSONTablesError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+}
+
+// TODO: untested
+// BuggyError
+type BuggyError struct {
+	Msg string
+}
+
+func (e *BuggyError) Error() string {
+	return printf(e, e.Msg)
+}
+
+func (e *BuggyError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Typ: BugErrorType}
 }
