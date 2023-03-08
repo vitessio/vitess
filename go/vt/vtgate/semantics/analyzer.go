@@ -298,14 +298,14 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return &CantUseOptionHereError{Msg: "Incorrect usage/placement of 'INTO'"}
 		}
 		if len(currScope.tables) != 1 {
-			return NewError(NextWithMultipleTables)
+			return &NextWithMultipleTablesError{CountTables: len(currScope.tables)}
 		}
 		vindexTbl := currScope.tables[0].GetVindexTable()
 		if vindexTbl == nil {
 			return &MissingInVSchemaError{}
 		}
 		if vindexTbl.Type != vindexes.TypeSequence {
-			return NewError(NotSequenceTable)
+			return &NotSequenceTableError{Table: vindexTbl.Name.String()}
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {

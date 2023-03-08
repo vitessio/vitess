@@ -54,8 +54,6 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	NotSequenceTable
-	NextWithMultipleTables
 	LockOnlyWithDual
 	QualifiedOrderInUnion
 	JSONTables
@@ -72,14 +70,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	NotSequenceTable: {
-		format: "NEXT used on a non-sequence table",
-		code:   vtrpcpb.Code_INVALID_ARGUMENT,
-	},
-	NextWithMultipleTables: {
-		format: "Next statement should not contain multiple tables",
-		typ:    BugErrorType,
-	},
 	LockOnlyWithDual: {
 		format: "%v allowed only with dual",
 		code:   vtrpcpb.Code_UNIMPLEMENTED,
@@ -302,4 +292,32 @@ func (e *MissingInVSchemaError) Error() string {
 
 func (e *MissingInVSchemaError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+}
+
+// TODO: untested
+// NotSequenceTableError
+type NotSequenceTableError struct {
+	Table string
+}
+
+func (e *NotSequenceTableError) Error() string {
+	return printf(e, "NEXT used on a non-sequence table %s", e.Table)
+}
+
+func (e *NotSequenceTableError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+}
+
+// TODO: untested
+// NextWithMultipleTablesError
+type NextWithMultipleTablesError struct {
+	CountTables int
+}
+
+func (e *NextWithMultipleTablesError) Error() string {
+	return printf(e, "Next statement should not contain multiple tables: found %d tables", e.CountTables)
+}
+
+func (e *NextWithMultipleTablesError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Typ: BugErrorType}
 }
