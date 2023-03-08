@@ -197,10 +197,12 @@ func (e *CantUseOptionHereError) Info() *SemanticsErrorInfo {
 // TODO: untested
 // MissingInVSchemaError
 type MissingInVSchemaError struct {
+	Table TableInfo
 }
 
 func (e *MissingInVSchemaError) Error() string {
-	return printf(e, "Table information is not provided in vschema")
+	tableName, _ := e.Table.Name()
+	return printf(e, "Table information is not provided in vschema for table `%s`", sqlparser.String(tableName))
 }
 
 func (e *MissingInVSchemaError) Info() *SemanticsErrorInfo {
