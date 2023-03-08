@@ -292,11 +292,11 @@ func (e *BuggyError) Info() *SemanticsErrorInfo {
 
 // ColumnNotFoundError
 type ColumnNotFoundError struct {
-	Column string
+	Column *sqlparser.ColName
 }
 
 func (e *ColumnNotFoundError) Error() string {
-	return printf(e, "symbol %s not found", e.Column)
+	return printf(e, "symbol %s not found", sqlparser.String(e.Column))
 }
 
 func (e *ColumnNotFoundError) Info() *SemanticsErrorInfo {
