@@ -24,6 +24,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/go-version"
@@ -40,7 +41,8 @@ type latestGolangRelease struct {
 
 func main() {
 	failIfNoUpdate := false
-	allowMajorUpgrade := true
+	allowMajorUpgrade := false
+	isMainBranch := true
 
 	currentVersion, err := currentGolangVersion()
 	if err != nil {
@@ -65,6 +67,21 @@ func main() {
 		log.Fatal(err)
 	}
 
+	currentBootstrapVersionF, err := currentBootstrapVersion()
+	if err != nil {
+		log.Fatal(err)
+	}
+	nextBootstrapVersionF := currentBootstrapVersionF
+	if isMainBranch {
+		nextBootstrapVersionF += 1
+	} else {
+		nextBootstrapVersionF += 0.1
+	}
+	err = updateBootstrapVersionInCodebase(currentBootstrapVersionF, nextBootstrapVersionF, upgradeTo)
+	if err != nil {
+		log.Fatal(err)
+	}
+
 }
 
 // currentGolangVersion gets the running version of Golang in Vitess
@@ -84,6 +101,22 @@ func currentGolangVersion() (*version.Version, error) {
 	idxFinish := strings.Index(content[idxBegin:], "||") + idxBegin
 	versionStr := strings.TrimSpace(content[idxBegin:idxFinish])
 	return version.NewVersion(versionStr)
+}
+
+func currentBootstrapVersion() (float64, error) {
+	contentRaw, err := os.ReadFile("Makefile")
+	if err != nil {
+		return 0, err
+	}
+	content := string(contentRaw)
+	idxBegin := strings.Index(content, "BOOTSTRAP_VERSION=") + len("BOOTSTRAP_VERSION=")
+	idxFinish := strings.IndexByte(content[idxBegin:], '\n') + idxBegin
+	versionStr := strings.TrimSpace(content[idxBegin:idxFinish])
+	f, err := strconv.ParseFloat(versionStr, 64)
+	if err != nil {
+		return 0, err
+	}
+	return f, nil
 }
 
 // getLatestStableGolangReleases fetches the latest stable releases of Golang from
@@ -147,97 +180,85 @@ func chooseNewVersion(curVersion *version.Version, latestVersions version.Collec
 // replaceGoVersionInCodebase goes through all the files in the codebase where the
 // Golang version must be updated
 func replaceGoVersionInCodebase(old, new *version.Version) error {
-	filesToChange, err := getListOfFilesWhereGoVersionMustBeUpdated()
-	if err != nil {
-		return err
-	}
-	err = writeNewGolangVersionToFiles(old, new, filesToChange)
-	if err != nil {
-		return err
-	}
-
-	if !isSameMajorVersion(old, new) {
-		err = writeNewMajorGolangVersionToGoMod(old, new)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// writeNewGolangVersionToFiles goes through all the given file and call
-// writeNewGolangVersionToSingleFile to replace one by one the files with
-// the new Golang version.
-func writeNewGolangVersionToFiles(old, new *version.Version, filesToChange []string) error {
-	for _, fileToChange := range filesToChange {
-		err := writeNewGolangVersionToSingleFile(old, new, fileToChange)
-		if err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// writeNewGolangVersionToSingleFile replaces old with new in the given file.
-func writeNewGolangVersionToSingleFile(old, new *version.Version, fileToChange string) error {
-	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	content, err := io.ReadAll(f)
-	if err != nil {
-		return err
-	}
-	contentStr := string(content)
-
-	newContent := strings.ReplaceAll(contentStr, old.String(), new.String())
-
-	_, err = f.WriteAt([]byte(newContent), 0)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// writeNewMajorGolangVersionToGoMod bumps the major version of Golang found in the go.mod file.
-func writeNewMajorGolangVersionToGoMod(old, new *version.Version) error {
-	f, err := os.OpenFile("./go.mod", os.O_RDWR, 0600)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
-
-	content, err := io.ReadAll(f)
-	if err != nil {
-		return err
-	}
-	contentStr := string(content)
-
-	newContent := strings.ReplaceAll(
-		contentStr,
-		fmt.Sprintf("%d.%d", old.Segments()[0], old.Segments()[1]),
-		fmt.Sprintf("%d.%d", new.Segments()[0], new.Segments()[1]),
-	)
-
-	_, err = f.WriteAt([]byte(newContent), 0)
-	if err != nil {
-		return err
-	}
-	return nil
-}
-
-// getListOfFilesWhereGoVersionMustBeUpdated returns the list of all the files where
-// the Golang version must be updated, excluding go.mod which uses a different format.
-func getListOfFilesWhereGoVersionMustBeUpdated() ([]string, error) {
-	pathsToExplore := []string{
+	filesToChange, err := getListOfFilesInPaths([]string{
 		"./.github/workflows",
 		"./test/templates",
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
+	})
+	if err != nil {
+		return err
 	}
 
+	for _, fileToChange := range filesToChange {
+		err = replaceInFile(
+			[]string{old.String()},
+			[]string{new.String()},
+			fileToChange,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	if !isSameMajorVersion(old, new) {
+		err = replaceInFile(
+			[]string{fmt.Sprintf("%d.%d", old.Segments()[0], old.Segments()[1])},
+			[]string{fmt.Sprintf("%d.%d", new.Segments()[0], new.Segments()[1])},
+			"./go.mod",
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Version) error {
+	files, err := getListOfFilesInPaths([]string{
+		"./docker/base",
+		"./docker/lite",
+		"./docker/local",
+		"./docker/vttestserver",
+		"./Makefile",
+		"./test/templates",
+	})
+	if err != nil {
+		return err
+	}
+
+	const btv = "bootstrap_version="
+	oldReplace := fmt.Sprintf("%s%-1g", btv, old)
+	newReplace := fmt.Sprintf("%s%-1g", btv, new)
+	for _, file := range files {
+		err = replaceInFile(
+			[]string{oldReplace, strings.ToUpper(oldReplace)},
+			[]string{newReplace, strings.ToUpper(newReplace)},
+			file,
+		)
+		if err != nil {
+			return err
+		}
+	}
+
+	oldReplace = fmt.Sprintf("\"bootstrap-version\", \"%-1g\"", old)
+	newReplace = fmt.Sprintf("\"bootstrap-version\", \"%-1g\"", new)
+	err = replaceInFile(
+		[]string{oldReplace},
+		[]string{newReplace},
+		"./test.go",
+	)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func isSameMajorVersion(a, b *version.Version) bool {
+	return a.Segments()[1] == b.Segments()[1]
+}
+
+func getListOfFilesInPaths(pathsToExplore []string) ([]string, error) {
 	var filesToChange []string
 	for _, pathToExplore := range pathsToExplore {
 		stat, err := os.Stat(pathToExplore)
@@ -262,6 +283,31 @@ func getListOfFilesWhereGoVersionMustBeUpdated() ([]string, error) {
 	return filesToChange, nil
 }
 
-func isSameMajorVersion(a, b *version.Version) bool {
-	return a.Segments()[1] == b.Segments()[1]
+// replaceInFile replaces old with new in the given file.
+func replaceInFile(old, new []string, fileToChange string) error {
+	if len(old) != len(new) {
+		panic("old and new should be of the same length")
+	}
+
+	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	contentStr := string(content)
+
+	for i := range old {
+		contentStr = strings.ReplaceAll(contentStr, old[i], new[i])
+	}
+
+	_, err = f.WriteAt([]byte(contentStr), 0)
+	if err != nil {
+		return err
+	}
+	return nil
 }
