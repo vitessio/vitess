@@ -185,7 +185,6 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
 
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
-	flagutil.DualFormatStringVar(fs, &currentConfig.WorkloadLabel, "workload-label", defaultConfig.WorkloadLabel, "The label looked for in query comments to identify the workload. Used in conjunction with enable-per-workload-table-metrics")
 }
 
 var (

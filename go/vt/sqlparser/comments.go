@@ -21,7 +21,6 @@ import (
 	"strings"
 	"unicode"
 
-	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
@@ -49,6 +48,8 @@ const (
 	DirectiveVExplainRunDMLQueries = "EXECUTE_DML_QUERIES"
 	// DirectiveConsolidator enables the query consolidator.
 	DirectiveConsolidator = "CONSOLIDATOR"
+
+	UnspecifiedWorkloadName = "unspecified"
 )
 
 func isNonSpace(r rune) bool {
@@ -398,48 +399,24 @@ func Consolidator(stmt Statement) querypb.ExecuteOptions_Consolidator {
 	return querypb.ExecuteOptions_CONSOLIDATOR_UNSPECIFIED
 }
 
-// GetWorkloadFromComments returns the value of the workload as specified in the query comments. It assumes the presence
-// of a comment that includes a string in the form `workloadLabel=workloadname;` (including the semicolon). The function
-// returns `unspecified` if it fails to obtain the workload from the query comments. If there are multiple comments that
-// specify the workload, or multiple workload specifications in the same comment, it returns the first one. It trims
-// whitespaces both at the beginning and end of the workload name.
-func GetWorkloadFromComments(query string, workloadLabel string) string {
-	const unspecified = "unspecified"
-
-	statement, _, err := Parse2(query)
-	if err != nil {
-		log.Warningf("Failed to parse statement while attempting to retrieve workload from SQL string")
-
-		return unspecified
-	}
-
+// GetWorkloadNameFromStatement gets the workload name from the provided Statement, using workloadLabel as the name of
+// the query directive that specifies it.
+func GetWorkloadNameFromStatement(statement Statement, workloadLabel string) string {
 	commentedStatement, ok := statement.(Commented)
 	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
 	// unspecified workload
 	if !ok {
-		return unspecified
+		return UnspecifiedWorkloadName
 	}
 
-	parsedComments := commentedStatement.GetParsedComments()
+	directives := commentedStatement.GetParsedComments().Directives()
+	workloadName, _ := directives.GetString(workloadLabel, UnspecifiedWorkloadName)
 
-	if parsedComments != nil {
-		for _, comment := range parsedComments.comments {
-
-			workloadLabelStart := strings.Index(comment, workloadLabel)
-			if workloadLabelStart == -1 {
-				continue
-			}
-
-			workloadLabelEnd := strings.Index(comment[workloadLabelStart:], ";")
-			if workloadLabelEnd == -1 {
-				continue
-			}
-
-			workloadLabelEnd += workloadLabelStart
-			return strings.TrimSpace(comment[workloadLabelStart+len(workloadLabel)+1 : workloadLabelEnd])
-
-		}
+	// CommentDirectives.GetString() can return empty instead of the default passed to it, so override that if empty
+	// string
+	if workloadName == "" {
+		workloadName = UnspecifiedWorkloadName
 	}
 
-	return unspecified
+	return workloadName
 }

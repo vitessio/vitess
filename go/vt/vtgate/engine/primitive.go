@@ -145,6 +145,7 @@ type (
 		SetWorkload(querypb.ExecuteOptions_Workload)
 		SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion)
 		SetConsolidator(querypb.ExecuteOptions_Consolidator)
+		SetWorkloadName(string)
 		SetFoundRows(uint64)
 
 		SetDDLStrategy(string)
