@@ -224,6 +224,9 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	case callable:
 		return c.compileCallable(expr)
 
+	case TupleExpr:
+		return c.compileTuple(expr)
+
 	default:
 		return ctype{}, c.unsupported(expr)
 	}
@@ -266,6 +269,36 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 	}
 }
 
+func (c *compiler) compileComparisonTuple(expr *ComparisonExpr) (ctype, error) {
+
+	switch expr.Op.(type) {
+	case compareNullSafeEQ:
+		c.emitCmpTupleNullsafe()
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	case compareEQ:
+		c.emitCmpTuple(true)
+		c.emitCmp_eq_n()
+	case compareNE:
+		c.emitCmpTuple(true)
+		c.emitCmp_ne_n()
+	case compareLT:
+		c.emitCmpTuple(false)
+		c.emitCmp_lt_n()
+	case compareLE:
+		c.emitCmpTuple(false)
+		c.emitCmp_le_n()
+	case compareGT:
+		c.emitCmpTuple(false)
+		c.emitCmp_gt_n()
+	case compareGE:
+		c.emitCmpTuple(false)
+		c.emitCmp_ge_n()
+	default:
+		panic("invalid comparison operator")
+	}
+	return ctype{Type: sqltypes.Int64, Flag: flagNullable, Col: collationNumeric}, nil
+}
+
 func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 	lt, err := c.compileExpr(expr.Left)
 	if err != nil {
@@ -275,6 +308,13 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 	rt, err := c.compileExpr(expr.Right)
 	if err != nil {
 		return ctype{}, err
+	}
+
+	if lt.Type == sqltypes.Tuple || rt.Type == sqltypes.Tuple {
+		if lt.Type != rt.Type {
+			return ctype{}, vterrors.Errorf(vtrpc.Code_INTERNAL, "did not typecheck tuples during comparison")
+		}
+		return c.compileComparisonTuple(expr)
 	}
 
 	swapped := false
@@ -1650,4 +1690,15 @@ func (c *compiler) compileToJSONKey(key ctype) {
 		return
 	}
 	c.emitConvert_xc(1, sqltypes.VarChar, collations.CollationUtf8mb4ID, 0, false)
+}
+
+func (c *compiler) compileTuple(tuple TupleExpr) (ctype, error) {
+	for _, arg := range tuple {
+		_, err := c.compileExpr(arg)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.emitPackTuple(len(tuple))
+	return ctype{Type: sqltypes.Tuple, Col: collationBinary}, nil
 }

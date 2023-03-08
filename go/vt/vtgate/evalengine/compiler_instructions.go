@@ -576,7 +576,6 @@ func (c *compiler) emitNullCheck2(j *jump) {
 
 func (c *compiler) emitCmp_eq() {
 	c.adjustStack(1)
-
 	c.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp == 0)
 		vm.sp++
@@ -586,7 +585,6 @@ func (c *compiler) emitCmp_eq() {
 
 func (c *compiler) emitCmp_ne() {
 	c.adjustStack(1)
-
 	c.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp != 0)
 		vm.sp++
@@ -596,7 +594,6 @@ func (c *compiler) emitCmp_ne() {
 
 func (c *compiler) emitCmp_lt() {
 	c.adjustStack(1)
-
 	c.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp < 0)
 		vm.sp++
@@ -606,7 +603,6 @@ func (c *compiler) emitCmp_lt() {
 
 func (c *compiler) emitCmp_le() {
 	c.adjustStack(1)
-
 	c.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp <= 0)
 		vm.sp++
@@ -616,7 +612,6 @@ func (c *compiler) emitCmp_le() {
 
 func (c *compiler) emitCmp_gt() {
 	c.adjustStack(1)
-
 	c.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp > 0)
 		vm.sp++
@@ -626,12 +621,126 @@ func (c *compiler) emitCmp_gt() {
 
 func (c *compiler) emitCmp_ge() {
 	c.adjustStack(1)
-
 	c.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp >= 0)
 		vm.sp++
 		return 1
 	}, "CMPFLAG GE")
+}
+
+func (c *compiler) emitCmp_eq_n() {
+	c.adjustStack(1)
+	c.emit(func(vm *VirtualMachine) int {
+		if vm.flags.null {
+			vm.stack[vm.sp] = nil
+		} else {
+			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp == 0)
+		}
+		vm.sp++
+		return 1
+	}, "CMPFLAG EQ [NULL]")
+}
+
+func (c *compiler) emitCmp_ne_n() {
+	c.adjustStack(1)
+	c.emit(func(vm *VirtualMachine) int {
+		if vm.flags.null {
+			vm.stack[vm.sp] = nil
+		} else {
+			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp != 0)
+		}
+		vm.sp++
+		return 1
+	}, "CMPFLAG NE [NULL]")
+}
+
+func (c *compiler) emitCmp_lt_n() {
+	c.adjustStack(1)
+	c.emit(func(vm *VirtualMachine) int {
+		if vm.flags.null {
+			vm.stack[vm.sp] = nil
+		} else {
+			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp < 0)
+		}
+		vm.sp++
+		return 1
+	}, "CMPFLAG LT [NULL]")
+}
+
+func (c *compiler) emitCmp_le_n() {
+	c.adjustStack(1)
+	c.emit(func(vm *VirtualMachine) int {
+		if vm.flags.null {
+			vm.stack[vm.sp] = nil
+		} else {
+			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp <= 0)
+		}
+		vm.sp++
+		return 1
+	}, "CMPFLAG LE [NULL]")
+}
+
+func (c *compiler) emitCmp_gt_n() {
+	c.adjustStack(1)
+	c.emit(func(vm *VirtualMachine) int {
+		if vm.flags.null {
+			vm.stack[vm.sp] = nil
+		} else {
+			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp > 0)
+		}
+		vm.sp++
+		return 1
+	}, "CMPFLAG GT [NULL]")
+}
+
+func (c *compiler) emitCmp_ge_n() {
+	c.adjustStack(1)
+	c.emit(func(vm *VirtualMachine) int {
+		if vm.flags.null {
+			vm.stack[vm.sp] = nil
+		} else {
+			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp >= 0)
+		}
+		vm.sp++
+		return 1
+	}, "CMPFLAG GE [NULL]")
+}
+
+func (c *compiler) emitPackTuple(tlen int) {
+	c.adjustStack(-(tlen - 1))
+	c.emit(func(vm *VirtualMachine) int {
+		tuple := make([]eval, tlen)
+		copy(tuple, vm.stack[vm.sp-tlen:])
+		vm.stack[vm.sp-tlen] = &evalTuple{tuple}
+		vm.sp -= tlen - 1
+		return 1
+	}, "TUPLE (SP-%d)...(SP-1)", tlen)
+}
+
+func (c *compiler) emitCmpTuple(fullEquality bool) {
+	c.adjustStack(-2)
+	c.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalTuple)
+		r := vm.stack[vm.sp-1].(*evalTuple)
+		vm.sp -= 2
+		vm.flags.cmp, vm.flags.null, vm.err = evalCompareMany(l.t, r.t, fullEquality)
+		return 1
+	}, "CMP TUPLE(SP-2), TUPLE(SP-1)")
+}
+
+func (c *compiler) emitCmpTupleNullsafe() {
+	c.adjustStack(-1)
+	c.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalTuple)
+		r := vm.stack[vm.sp-1].(*evalTuple)
+
+		var equals bool
+		equals, vm.err = evalCompareTuplesNullSafe(l.t, r.t)
+
+		vm.stack[vm.sp-2] = newEvalBool(equals)
+		vm.sp -= 1
+		return 1
+	}, "CMP NULLSAFE TUPLE(SP-2), TUPLE(SP-1)")
 }
 
 func (c *compiler) emitCmpNum_ii() {
