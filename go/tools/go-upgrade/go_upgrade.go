@@ -26,6 +26,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/hashicorp/go-version"
 )
@@ -62,10 +63,10 @@ func main() {
 		return
 	}
 
-	err = replaceGoVersionInCodebase(currentVersion, upgradeTo)
-	if err != nil {
-		log.Fatal(err)
-	}
+	// err = replaceGoVersionInCodebase(currentVersion, upgradeTo)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
 
 	currentBootstrapVersionF, err := currentBootstrapVersion()
 	if err != nil {
@@ -248,6 +249,36 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 		[]string{newReplace},
 		"./test.go",
 	)
+	if err != nil {
+		return err
+	}
+
+	err = updateBootstrapChangelog(new, newGoVersion)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func updateBootstrapChangelog(new float64, goVersion *version.Version) error {
+	file, err := os.OpenFile("./docker/bootstrap/CHANGELOG.md", os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	s, err := file.Stat()
+	if err != nil {
+		return err
+	}
+	newContent := fmt.Sprintf(`
+
+## [%-1g] - %s
+### Changes
+- Update build to golang %s`, new, time.Now().Format(time.DateOnly), goVersion.String())
+
+	_, err = file.WriteAt([]byte(newContent), s.Size())
 	if err != nil {
 		return err
 	}
