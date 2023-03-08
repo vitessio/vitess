@@ -64,18 +64,22 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 		args = append(args, "--check-as-check-shard")
 	}
 	args = append(args, clusterInstance.Keyspaces[0].Name)
-	tmr := time.NewTimer(throttlerConfigTimeout)
-	defer tmr.Stop()
+	ctx, cancel := context.WithTimeout(context.Background(), throttlerConfigTimeout)
+	defer cancel()
+
+	ticker := time.NewTicker(time.Second)
+	defer ticker.Stop()
+
 	for {
 		result, err = clientfunc(args...)
 		if err == nil {
 			return result, nil
 		}
 		select {
-		case <-tmr.C:
+		case <-ctx.Done():
 			return "", fmt.Errorf("timed out waiting for UpdateThrottlerConfig to succeed after %v. Last seen value: %+v, error: %v", throttlerConfigTimeout, result, err)
-		default:
+		case <-ticker.C:
 		}
-		time.Sleep(1 * time.Second)
+	}
 	}
 }
