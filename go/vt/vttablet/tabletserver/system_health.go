@@ -29,11 +29,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-const (
-	systemHealthMonitorCPUSampleWindow = time.Millisecond * 200
-	// systemHealthMonitorInterval must be > 2 * systemHealthMonitorCPUSampleWindow
-	systemHealthMonitorInterval = time.Millisecond * 1000
-)
+// systemHealthMonitorCPUSampleWindow is the sample window used to calculate cpu usage.
+const systemHealthMonitorCPUSampleWindow = time.Millisecond * 200
+
+// systemHealthMonitorInterval must be > 2 * systemHealthMonitorCPUSampleWindow.
+const systemHealthMonitorInterval = time.Millisecond * 1000
 
 // systemHealthCollector is a collector for system health.
 type systemHealthCollector struct {
@@ -56,7 +56,7 @@ func newSystemHealthMonitor(env tabletenv.Env) systemHealthMonitor {
 	}
 }
 
-// Open start the collection of system health metrics.
+// Open starts the collection of system health metrics.
 func (s *systemHealthCollector) Open() error {
 	if !s.config.EnableSystemHealthMonitor {
 		return nil

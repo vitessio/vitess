@@ -27,51 +27,62 @@ import (
 )
 
 // TestSystemHealthCollector generates load on all available CPUs and
-// checks that systemHealthCollector measures the activity.
+// checks that systemHealthCollector measures the activity. It also
+// tests the disabled state of the collector.
 func TestSystemHealthCollector(t *testing.T) {
-	tabletEnv := tabletenv.NewEnv(&tabletenv.TabletConfig{
-		EnableSystemHealthMonitor: true,
-	}, t.Name())
-	monitor := newSystemHealthMonitor(tabletEnv)
+	// disabled
+	{
+		tabletEnv := tabletenv.NewEnv(&tabletenv.TabletConfig{}, t.Name())
+		monitor := newSystemHealthMonitor(tabletEnv)
+		assert.Nil(t, monitor.Open())
+		assert.Zero(t, monitor.GetCPUUsage())
+	}
+	// enabled
+	{
+		tabletEnv := tabletenv.NewEnv(&tabletenv.TabletConfig{
+			EnableSystemHealthMonitor: true,
+		}, t.Name())
+		monitor := newSystemHealthMonitor(tabletEnv)
 
-	collector := monitor.(*systemHealthCollector)
-	collector.cpuSampleWindow = time.Millisecond * 50
-	collector.interval = time.Millisecond * 100
+		collector := monitor.(*systemHealthCollector)
+		collector.cpuSampleWindow = time.Millisecond * 50
+		collector.interval = time.Millisecond * 100
 
-	// open
-	assert.Nil(t, collector.Open())
+		// open
+		assert.Nil(t, collector.Open())
 
-	// generate cpu load to measure
-	stopCPULoad := make(chan struct{})
-	for i := 0; i < runtime.NumCPU(); i++ {
-		go func() {
-			for {
-				select {
-				case <-stopCPULoad:
-					return
-				default: // nolint:staticcheck
+		// generate cpu load to measure
+		stopCPULoad := make(chan struct{})
+		for i := 0; i < runtime.NumCPU(); i++ {
+			go func() {
+				for {
+					select {
+					case <-stopCPULoad:
+						return
+					default: // nolint:staticcheck
+					}
 				}
-			}
-		}()
+			}()
+		}
+		time.Sleep(collector.interval * 2)
+
+		// try 10 times in case CPU usage is still 0.00%
+		var tries int
+		cpuUsage := collector.GetCPUUsage()
+		for cpuUsage == 0 && tries < 10 {
+			cpuUsage = collector.GetCPUUsage()
+			tries++
+			time.Sleep(collector.interval)
+		}
+		close(stopCPULoad)
+		assert.Less(t, tries, 10)
+
+		assert.True(t, collector.running)
+		assert.NotZero(t, cpuUsage)
+
+		// test close
+		collector.Close()
+		assert.False(t, collector.running)
+		assert.Nil(t, collector.stop)
 	}
-	time.Sleep(collector.interval * 2)
-
-	// try 10 times in case CPU usage is still 0.00%
-	var tries int
-	cpuUsage := collector.GetCPUUsage()
-	for cpuUsage == 0 && tries < 10 {
-		cpuUsage = collector.GetCPUUsage()
-		tries++
-		time.Sleep(collector.interval)
-	}
-	close(stopCPULoad)
-	assert.Less(t, tries, 10)
-
-	assert.True(t, collector.running)
-	assert.NotZero(t, cpuUsage)
-
-	// test close
-	collector.Close()
-	assert.False(t, collector.running)
-	assert.Nil(t, collector.stop)
 }
