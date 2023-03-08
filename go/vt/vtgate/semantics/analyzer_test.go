@@ -871,44 +871,53 @@ func TestUnionOrderByRewrite(t *testing.T) {
 
 func TestInvalidQueries(t *testing.T) {
 	tcases := []struct {
-		sql string
-		err string
+		sql  string
+		serr string
+		err  error
 	}{{
 		sql: "select t1.id, t1.col1 from t1 union select t2.uid from t2",
-		err: "The used SELECT statements have a different number of columns: 2, 1",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
 	}, {
 		sql: "select t1.id from t1 union select t2.uid, t2.price from t2",
-		err: "The used SELECT statements have a different number of columns: 1, 2",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 1, SecondProj: 2},
 	}, {
 		sql: "select t1.id from t1 union select t2.uid, t2.price from t2",
-		err: "The used SELECT statements have a different number of columns: 1, 2",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 1, SecondProj: 2},
 	}, {
 		sql: "(select 1,2 union select 3,4) union (select 5,6 union select 7)",
-		err: "The used SELECT statements have a different number of columns: 2, 1",
+		err: &UnionColumnsDoNotMatchError{FirstProj: 2, SecondProj: 1},
 	}, {
-		sql: "select id from a union select 3 order by a.id",
-		err: "Table a from one of the SELECTs cannot be used in global ORDER clause",
+		sql:  "select id from a union select 3 order by a.id",
+		serr: "Table a from one of the SELECTs cannot be used in global ORDER clause",
 	}, {
-		sql: "select a.id, b.id from a, b union select 1, 2 order by id",
-		err: "Column 'id' in field list is ambiguous",
+		sql:  "select a.id, b.id from a, b union select 1, 2 order by id",
+		serr: "Column 'id' in field list is ambiguous",
 	}, {
-		sql: "select sql_calc_found_rows id from a union select 1 limit 109",
-		err: "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union",
+		sql:  "select sql_calc_found_rows id from a union select 1 limit 109",
+		serr: "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union",
 	}, {
-		sql: "select * from (select sql_calc_found_rows id from a) as t",
-		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+		sql:  "select * from (select sql_calc_found_rows id from a) as t",
+		serr: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
 	}, {
-		sql: "select (select sql_calc_found_rows id from a) as t",
-		err: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+		sql:  "select (select sql_calc_found_rows id from a) as t",
+		serr: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
+	}, {
+		sql: "select id from t1 natural join t2",
+		err: &UnsupportedNaturalJoinError{Join: "natural join"},
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			parse, err := sqlparser.Parse(tc.sql)
 			require.NoError(t, err)
 
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "dbName", fakeSchemaInfo())
+			_, err = Analyze(parse, "dbName", fakeSchemaInfo())
 			require.Error(t, err)
-			require.Equal(t, tc.err, err.Error())
+			if tc.err != nil {
+				require.Equal(t, tc.err, err)
+			}
+			if tc.serr != "" {
+				require.Equal(t, tc.serr, err.Error())
+			}
 		})
 	}
 }

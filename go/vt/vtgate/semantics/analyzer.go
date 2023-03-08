@@ -259,11 +259,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
+			return UnshardedError{Inner: &UnsupportedMultiTablesInUpdateError{ExprCount: len(node.TableExprs)}}
 		}
 		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
+			return UnshardedError{Inner: &UnsupportedMultiTablesInUpdateError{NotAlias: true}}
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
@@ -308,7 +308,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-			return NewError(UnsupportedNaturalJoin, node.Join.ToString())
+			return &UnsupportedNaturalJoinError{Join: node.Join.ToString()}
 		}
 	case *sqlparser.LockingFunc:
 		return NewError(LockOnlyWithDual, node)

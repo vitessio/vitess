@@ -43,14 +43,17 @@ type (
 )
 
 const (
+	UndefinedErrorCode = 0
+)
+
+const (
 	UndefinedErrorType ErrType = iota
 	UnsupportedErrorType
 	BugErrorType
 )
 
 const (
-	UnionColumnsDoNotMatch ErrorCode = iota
-	UnsupportedMultiTablesInUpdate
+	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
 	UnsupportedNaturalJoin
 	TableNotUpdatable
 	UnionWithSQLCalcFoundRows
@@ -75,15 +78,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	UnionColumnsDoNotMatch: {
-		format: "The used SELECT statements have a different number of columns",
-		state:  vterrors.WrongNumberOfColumnsInSelect,
-		code:   vtrpcpb.Code_FAILED_PRECONDITION,
-	},
-	UnsupportedMultiTablesInUpdate: {
-		format: "multiple tables in update",
-		typ:    UnsupportedErrorType,
-	},
 	TableNotUpdatable: {
 		format: "The target table %s of the UPDATE is not updatable",
 		state:  vterrors.NonUpdateableTable,
@@ -204,9 +198,16 @@ func (n *Error) ErrorCode() vtrpcpb.Code {
 
 type SemanticsError interface {
 	Error() string
-	Classify() (code int, state vterrors.State, typ ErrType)
+	Classify() *SemanticsErrorClassification
 }
 
+type SemanticsErrorClassification struct {
+	Code  int
+	State vterrors.State
+	Typ   ErrType
+}
+
+// UnionColumnsDoNotMatchError
 type UnionColumnsDoNotMatchError struct {
 	FirstProj  int
 	SecondProj int
@@ -216,6 +217,38 @@ func (e *UnionColumnsDoNotMatchError) Error() string {
 	return fmt.Sprintf("The used SELECT statements have a different number of columns: %v, %v", e.FirstProj, e.SecondProj)
 }
 
-func (e *UnionColumnsDoNotMatchError) Classify() (code int, state vterrors.State, typ ErrType) {
-	return int(vtrpcpb.Code_FAILED_PRECONDITION), vterrors.WrongNumberOfColumnsInSelect, UndefinedErrorType
+func (e *UnionColumnsDoNotMatchError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_FAILED_PRECONDITION), State: vterrors.WrongNumberOfColumnsInSelect}
+}
+
+// TODO: missing test
+// UnsupportedMultiTablesInUpdateError
+type UnsupportedMultiTablesInUpdateError struct {
+	ExprCount int
+	NotAlias  bool
+}
+
+func (e *UnsupportedMultiTablesInUpdateError) Error() string {
+	switch {
+	case e.NotAlias:
+		return "unaliased multiple tables in update"
+	default:
+		return fmt.Sprintf("multiple (%d) tables in update", e.ExprCount)
+	}
+}
+
+func (e *UnsupportedMultiTablesInUpdateError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+}
+
+type UnsupportedNaturalJoinError struct {
+	Join string
+}
+
+func (e *UnsupportedNaturalJoinError) Error() string {
+	return fmt.Sprintf("Unsupported: %s", e.Join)
+}
+
+func (e *UnsupportedNaturalJoinError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
 }
