@@ -28,7 +28,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/testutil"
 )
 
@@ -120,7 +120,7 @@ func XTestSupportTables(t *testing.T) {
 	fmt.Fprintf(out, " |\n|%s\n", strings.Repeat("---|", len(envs)+2))
 
 	for _, id := range all {
-		coll := globalAllCollations[id]
+		coll := collationsById[id]
 		if coll == nil {
 			vdata := globalVersionInfo[id]
 
@@ -150,7 +150,7 @@ func XTestSupportTables(t *testing.T) {
 		} else {
 			fmt.Fprintf(out, "| %s | %s", coll.Name(), coll.Charset().Name())
 			for _, env := range envs {
-				_, supported := env.byID[coll.ID()]
+				_, supported := env.byName[coll.Name()]
 				if supported {
 					fmt.Fprintf(out, " | ✅")
 				} else {

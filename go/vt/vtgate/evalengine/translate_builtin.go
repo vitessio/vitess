@@ -31,10 +31,10 @@ func (err argError) Error() string {
 	return fmt.Sprintf("Incorrect parameter count in the call to native function '%s'", string(err))
 }
 
-func translateFuncArgs(fnargs []sqlparser.Expr, lookup TranslationLookup) ([]Expr, error) {
+func (ast *astCompiler) translateFuncArgs(fnargs []sqlparser.Expr) ([]Expr, error) {
 	var args TupleExpr
 	for _, expr := range fnargs {
-		convertedExpr, err := translateExpr(expr, lookup)
+		convertedExpr, err := ast.translateExpr(expr)
 		if err != nil {
 			return nil, err
 		}
@@ -43,14 +43,14 @@ func translateFuncArgs(fnargs []sqlparser.Expr, lookup TranslationLookup) ([]Exp
 	return args, nil
 }
 
-func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, error) {
+func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) {
 	var args TupleExpr
 	for _, expr := range fn.Exprs {
 		aliased, ok := expr.(*sqlparser.AliasedExpr)
 		if !ok {
 			return nil, translateExprNotSupported(fn)
 		}
-		convertedExpr, err := translateExpr(aliased.Expr, lookup)
+		convertedExpr, err := ast.translateExpr(aliased.Expr)
 		if err != nil {
 			return nil, err
 		}
@@ -164,28 +164,28 @@ func translateFuncExpr(fn *sqlparser.FuncExpr, lookup TranslationLookup) (Expr, 
 	}
 }
 
-func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr, error) {
+func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error) {
 	switch call := call.(type) {
 	case *sqlparser.FuncExpr:
-		return translateFuncExpr(call, lookup)
+		return ast.translateFuncExpr(call)
 
 	case *sqlparser.ConvertExpr:
-		return translateConvertExpr(call.Expr, call.Type, lookup)
+		return ast.translateConvertExpr(call.Expr, call.Type)
 
 	case *sqlparser.ConvertUsingExpr:
-		return translateConvertUsingExpr(call, lookup)
+		return ast.translateConvertUsingExpr(call)
 
 	case *sqlparser.WeightStringFuncExpr:
 		var ws builtinWeightString
 		var err error
 
-		ws.String, err = translateExpr(call.Expr, lookup)
+		ws.String, err = ast.translateExpr(call.Expr)
 		if err != nil {
 			return nil, err
 		}
 		if call.As != nil {
 			ws.Cast = strings.ToLower(call.As.Type)
-			ws.Len, ws.HasLen, err = translateIntegral(call.As.Length, lookup)
+			ws.Len, ws.HasLen, err = ast.translateIntegral(call.As.Length)
 			if err != nil {
 				return nil, err
 			}
@@ -193,7 +193,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 		return &ws, nil
 
 	case *sqlparser.JSONExtractExpr:
-		args, err := translateFuncArgs(append([]sqlparser.Expr{call.JSONDoc}, call.PathList...), lookup)
+		args, err := ast.translateFuncArgs(append([]sqlparser.Expr{call.JSONDoc}, call.PathList...))
 		if err != nil {
 			return nil, err
 		}
@@ -205,7 +205,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 		}, nil
 
 	case *sqlparser.JSONUnquoteExpr:
-		arg, err := translateExpr(call.JSONValue, lookup)
+		arg, err := ast.translateExpr(call.JSONValue)
 		if err != nil {
 			return nil, err
 		}
@@ -219,11 +219,11 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 	case *sqlparser.JSONObjectExpr:
 		var args []Expr
 		for _, param := range call.Params {
-			key, err := translateExpr(param.Key, lookup)
+			key, err := ast.translateExpr(param.Key)
 			if err != nil {
 				return nil, err
 			}
-			val, err := translateExpr(param.Value, lookup)
+			val, err := ast.translateExpr(param.Value)
 			if err != nil {
 				return nil, err
 			}
@@ -237,7 +237,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 		}, nil
 
 	case *sqlparser.JSONArrayExpr:
-		args, err := translateFuncArgs(call.Params, lookup)
+		args, err := ast.translateFuncArgs(call.Params)
 		if err != nil {
 			return nil, err
 		}
@@ -249,7 +249,7 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 	case *sqlparser.JSONContainsPathExpr:
 		exprs := []sqlparser.Expr{call.JSONDoc, call.OneOrAll}
 		exprs = append(exprs, call.PathList...)
-		args, err := translateFuncArgs(exprs, lookup)
+		args, err := ast.translateFuncArgs(exprs)
 		if err != nil {
 			return nil, err
 		}
@@ -260,14 +260,14 @@ func translateCallable(call sqlparser.Callable, lookup TranslationLookup) (Expr,
 
 	case *sqlparser.JSONKeysExpr:
 		var args []Expr
-		doc, err := translateExpr(call.JSONDoc, lookup)
+		doc, err := ast.translateExpr(call.JSONDoc)
 		if err != nil {
 			return nil, err
 		}
 		args = append(args, doc)
 
 		if call.Path != nil {
-			path, err := translateExpr(call.Path, lookup)
+			path, err := ast.translateExpr(call.Path)
 			if err != nil {
 				return nil, err
 			}

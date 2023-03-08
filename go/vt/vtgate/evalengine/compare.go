@@ -19,7 +19,6 @@ package evalengine
 import (
 	"time"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -165,7 +164,7 @@ func compareDateAndString(l, r eval) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-	case evalResultIsTextual(lb):
+	case typeIsTextual(lb.SQLType()):
 		lTime, err = matchExprWithAnyDateFormat(l)
 		if err != nil {
 			return 0, err
@@ -195,7 +194,7 @@ func compareStrings(l, r eval) (int, error) {
 	if err != nil {
 		return 0, err
 	}
-	collation := collations.Local().LookupByID(col)
+	collation := col.Get()
 	if collation == nil {
 		panic("unknown collation after coercion")
 	}

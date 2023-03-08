@@ -21,8 +21,6 @@ import (
 	"encoding/json"
 	"strings"
 
-	"vitess.io/vitess/go/vt/topo/topoproto"
-
 	"vitess.io/vitess/go/vt/vttablet/queryservice"
 
 	"google.golang.org/protobuf/proto"
@@ -46,38 +44,19 @@ type TabletHealth struct {
 
 func (th *TabletHealth) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
-		Key                                 string
-		Tablet                              *topodata.Tablet
-		Name                                string
-		Target                              *query.Target
-		Up                                  bool
-		Serving                             bool
-		PrimaryTermStartTime                int64
-		TabletExternallyReparentedTimestamp int64
-		Stats                               *query.RealtimeStats
-		LastError                           error
+		Tablet               *topodata.Tablet
+		Target               *query.Target
+		Serving              bool
+		PrimaryTermStartTime int64
+		Stats                *query.RealtimeStats
+		LastError            error
 	}{
-		// The Key and Name fields are fields that used to live in the legacy tablet health
-		// TODO: remove Key and Name in v15
-		Key:    TabletToMapKey(th.Tablet),
-		Tablet: th.Tablet,
-		Name:   topoproto.TabletAliasString(th.Tablet.Alias),
-		Target: th.Target,
-
-		// Setting Up to true to ensure backward compatibility
-		// TODO: remove Up in v15
-		Up: true,
-
-		Serving: th.Serving,
-
-		// We copy the PrimaryTermStartTime value onto TabletExternallyReparentedTimestamp to
-		// ensure backward compatibility.
-		// TODO: remove Up in v15
-		PrimaryTermStartTime:                th.PrimaryTermStartTime,
-		TabletExternallyReparentedTimestamp: th.PrimaryTermStartTime,
-
-		Stats:     th.Stats,
-		LastError: th.LastError,
+		Tablet:               th.Tablet,
+		Target:               th.Target,
+		Serving:              th.Serving,
+		PrimaryTermStartTime: th.PrimaryTermStartTime,
+		Stats:                th.Stats,
+		LastError:            th.LastError,
 	})
 }
 

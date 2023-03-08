@@ -21,6 +21,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -114,11 +115,11 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 		return compareAllInteger
 	}
 	if binary > 0 || text > 0 {
-		if binary > 0 {
-			return compareAllBinary
-		}
 		if text > 0 {
 			return compareAllText
+		}
+		if binary > 0 {
+			return compareAllBinary
 		}
 	} else {
 		if floats > 0 {
@@ -186,42 +187,37 @@ func compareAllDecimal(args []eval, cmp int) (eval, error) {
 
 func compareAllText(args []eval, cmp int) (eval, error) {
 	env := collations.Local()
-	candidateB := args[0].ToRawBytes()
-	collationB := evalCollation(args[0])
 
+	var charsets = make([]charset.Charset, 0, len(args))
 	var ca collationAggregation
-	if err := ca.add(env, collationB); err != nil {
+	for _, arg := range args {
+		col := evalCollation(arg)
+		if err := ca.add(env, col); err != nil {
+			return nil, err
+		}
+		charsets = append(charsets, col.Collation.Get().Charset())
+	}
+
+	tc := ca.result()
+	col := tc.Collation.Get()
+	cs := col.Charset()
+
+	b1, err := charset.Convert(nil, cs, args[0].ToRawBytes(), charsets[0])
+	if err != nil {
 		return nil, err
 	}
 
-	for _, arg := range args[1:] {
-		thisB := arg.ToRawBytes()
-		thisColl := evalCollation(arg)
-		if err := ca.add(env, thisColl); err != nil {
-			return nil, err
-		}
-
-		thisTC, coerceLeft, coerceRight, err := env.MergeCollations(thisColl, collationB, collations.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
+	for i, arg := range args[1:] {
+		b2, err := charset.Convert(nil, cs, arg.ToRawBytes(), charsets[i+1])
 		if err != nil {
 			return nil, err
 		}
-
-		collation := env.LookupByID(thisTC.Collation)
-
-		var leftB = thisB
-		var rightB = candidateB
-		if coerceLeft != nil {
-			leftB, _ = coerceLeft(nil, leftB)
-		}
-		if coerceRight != nil {
-			rightB, _ = coerceRight(nil, rightB)
-		}
-		if (cmp < 0) == (collation.Collate(leftB, rightB, false) < 0) {
-			candidateB = thisB
+		if (cmp < 0) == (col.Collate(b2, b1, false) < 0) {
+			b1 = b2
 		}
 	}
 
-	return newEvalText(candidateB, ca.result()), nil
+	return newEvalText(b1, tc), nil
 }
 
 func compareAllBinary(args []eval, cmp int) (eval, error) {
@@ -286,11 +282,11 @@ func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, t
 		return sqltypes.Int64, flags
 	}
 	if binary > 0 || text > 0 {
-		if binary > 0 {
-			return sqltypes.VarBinary, flags
-		}
 		if text > 0 {
 			return sqltypes.VarChar, flags
+		}
+		if binary > 0 {
+			return sqltypes.VarBinary, flags
 		}
 	} else {
 		if floats > 0 {

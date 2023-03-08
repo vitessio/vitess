@@ -342,7 +342,7 @@ const mysqlCollationVersion = "8.0.0"
 var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
 
 func defaultCharset() string {
-	collation := collationEnv.LookupByID(collations.ID(collationEnv.DefaultConnectionCharset()))
+	collation := collations.ID(collationEnv.DefaultConnectionCharset()).Get()
 	if collation == nil {
 		return ""
 	}
@@ -782,7 +782,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered constraints for both tables:
 		t1Constraints := c.CreateTable.TableSpec.Constraints
 		t2Constraints := other.CreateTable.TableSpec.Constraints
-		c.diffConstraints(alterTable, t1Constraints, t2Constraints, hints)
+		c.diffConstraints(alterTable, c.Name(), t1Constraints, other.Name(), t2Constraints, hints)
 	}
 	{
 		// diff partitions
@@ -1208,14 +1208,16 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 }
 
 func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
+	t1Name string,
 	t1Constraints []*sqlparser.ConstraintDefinition,
+	t2Name string,
 	t2Constraints []*sqlparser.ConstraintDefinition,
 	hints *DiffHints,
 ) {
-	normalizeConstraintName := func(constraint *sqlparser.ConstraintDefinition) string {
+	normalizeConstraintName := func(tableName string, constraint *sqlparser.ConstraintDefinition) string {
 		switch hints.ConstraintNamesStrategy {
 		case ConstraintNamesIgnoreVitess:
-			return ExtractConstraintOriginalName(constraint.Name.String())
+			return ExtractConstraintOriginalName(tableName, constraint.Name.String())
 		case ConstraintNamesIgnoreAll:
 			return sqlparser.CanonicalString(constraint.Details)
 		case ConstraintNamesStrict:
@@ -1228,10 +1230,10 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	for _, constraint := range t1Constraints {
-		t1ConstraintsMap[normalizeConstraintName(constraint)] = constraint
+		t1ConstraintsMap[normalizeConstraintName(t1Name, constraint)] = constraint
 	}
 	for _, constraint := range t2Constraints {
-		t2ConstraintsMap[normalizeConstraintName(constraint)] = constraint
+		t2ConstraintsMap[normalizeConstraintName(t2Name, constraint)] = constraint
 	}
 
 	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
@@ -1244,7 +1246,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	// evaluate dropped constraints
 	//
 	for _, t1Constraint := range t1Constraints {
-		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Constraint)]; !ok {
+		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Name, t1Constraint)]; !ok {
 			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
@@ -1252,7 +1254,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	}
 
 	for _, t2Constraint := range t2Constraints {
-		normalizedT2ConstraintName := normalizeConstraintName(t2Constraint)
+		normalizedT2ConstraintName := normalizeConstraintName(t2Name, t2Constraint)
 		// evaluate modified & added constraints:
 		//
 		if t1Constraint, ok := t1ConstraintsMap[normalizedT2ConstraintName]; ok {

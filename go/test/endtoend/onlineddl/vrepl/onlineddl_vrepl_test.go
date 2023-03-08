@@ -253,10 +253,22 @@ func TestSchemaChange(t *testing.T) {
 	providedUUID := ""
 	providedMigrationContext := ""
 
-	t.Run("enabling throttler with default threshold", func(t *testing.T) {
-		_, err := onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
-		assert.NoError(t, err)
-	})
+	// We execute the throttler commands via vtgate, which in turn
+	// executes them via vttablet. So let's wait until vtgate's view
+	// is updated.
+	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
+	require.NoError(t, err)
+
+	_, err = onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+	require.NoError(t, err)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				onlineddl.WaitForThrottlerStatusEnabled(t, tablet, extendedMigrationWait)
+			}
+		}
+	}
 
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
@@ -279,6 +291,9 @@ func TestSchemaChange(t *testing.T) {
 		for _, row := range rs.Named().Rows {
 			retainArtifactSeconds := row.AsInt64("retain_artifacts_seconds", 0)
 			assert.Equal(t, int64(86400), retainArtifactSeconds)
+
+			artifacts := row.AsString("artifacts", "")
+			assert.NotContains(t, artifacts, "_vt_HOLD_") // _vt_HOLD table removed at cut-over time
 		}
 
 		onlineddl.CheckCleanupMigration(t, &vtParams, shards, uuid)
@@ -328,6 +343,7 @@ func TestSchemaChange(t *testing.T) {
 		insertRows(t, 2)
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess -postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
 		// Should be still running!
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)

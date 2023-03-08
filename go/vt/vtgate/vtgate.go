@@ -207,6 +207,7 @@ type VTGate struct {
 
 	// the throttled loggers for all errors, one per API entry
 	logExecute       *logutil.ThrottledLogger
+	logPrepare       *logutil.ThrottledLogger
 	logStreamExecute *logutil.ThrottledLogger
 }
 
@@ -315,6 +316,7 @@ func Init(
 			[]string{"Operation", "Keyspace", "DbType"}),
 
 		logExecute:       logutil.NewThrottledLogger("Execute", 5*time.Second),
+		logPrepare:       logutil.NewThrottledLogger("Prepare", 5*time.Second),
 		logStreamExecute: logutil.NewThrottledLogger("StreamExecute", 5*time.Second),
 	}
 
@@ -533,7 +535,7 @@ func (vtg *VTGate) ResolveTransaction(ctx context.Context, dtid string) error {
 func (vtg *VTGate) Prepare(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable) (newSession *vtgatepb.Session, fld []*querypb.Field, err error) {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
-	statsKey := []string{"Execute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
+	statsKey := []string{"Prepare", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 	defer vtg.timings.Record(statsKey, time.Now())
 
 	if bvErr := sqltypes.ValidateBindVariables(bindVariables); bvErr != nil {
@@ -552,7 +554,7 @@ handleError:
 		"BindVariables": bindVariables,
 		"Session":       session,
 	}
-	err = recordAndAnnotateError(err, statsKey, query, vtg.logExecute)
+	err = recordAndAnnotateError(err, statsKey, query, vtg.logPrepare)
 	return session, nil, err
 }
 

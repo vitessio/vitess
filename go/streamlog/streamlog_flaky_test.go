@@ -53,7 +53,7 @@ func TestHTTP(t *testing.T) {
 
 	go http.Serve(l, nil)
 
-	logger := New("logger", 1)
+	logger := New[*logMessage]("logger", 1)
 	logger.ServeLogs("/log", testLogf)
 
 	// This should not block - there are no subscribers yet.
@@ -122,7 +122,7 @@ func TestHTTP(t *testing.T) {
 }
 
 func TestChannel(t *testing.T) {
-	logger := New("logger", 1)
+	logger := New[*logMessage]("logger", 1)
 
 	// Subscribe.
 	ch := logger.Subscribe("test")
@@ -140,7 +140,7 @@ func TestChannel(t *testing.T) {
 		msg := fmt.Sprint("msg", i)
 		done := make(chan struct{})
 		go func() {
-			if want, got := msg+"\n", (<-ch).(*logMessage).Format(nil); got != want {
+			if want, got := msg+"\n", (<-ch).Format(nil); got != want {
 				t.Errorf("Unexpected message in log. got: %q, want: %q", got, want)
 			}
 			close(done)
@@ -158,7 +158,7 @@ func TestChannel(t *testing.T) {
 		for {
 			select {
 			case msg := <-ch:
-				got = append(got, msg.(*logMessage).Format(nil))
+				got = append(got, msg.Format(nil))
 			case <-writeDone:
 				close(readDone)
 				return
@@ -191,7 +191,7 @@ func TestChannel(t *testing.T) {
 }
 
 func TestFile(t *testing.T) {
-	logger := New("logger", 10)
+	logger := New[*logMessage]("logger", 10)
 
 	dir := t.TempDir()
 
