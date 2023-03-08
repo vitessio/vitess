@@ -214,7 +214,7 @@ type NotSequenceTableError struct {
 }
 
 func (e *NotSequenceTableError) Error() string {
-	return printf(e, "NEXT used on a non-sequence table %s", e.Table)
+	return printf(e, "NEXT used on a non-sequence table `%s`", e.Table)
 }
 
 func (e *NotSequenceTableError) Info() *SemanticsErrorInfo {
@@ -254,7 +254,7 @@ type QualifiedOrderInUnionError struct {
 }
 
 func (e *QualifiedOrderInUnionError) Error() string {
-	return printf(e, "Table %s from one of the SELECTs cannot be used in global ORDER clause", e.Table)
+	return printf(e, "Table `%s` from one of the SELECTs cannot be used in global ORDER clause", e.Table)
 }
 
 func (e *QualifiedOrderInUnionError) Info() *SemanticsErrorInfo {
