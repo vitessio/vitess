@@ -54,9 +54,10 @@ func TestDumuxResourceExhaustedErrors(t *testing.T) {
 
 func TestNewSQLErrorFromError(t *testing.T) {
 	var tCases = []struct {
-		err error
-		num ErrorCode
-		ss  string
+		err   error
+		isSql bool
+		num   ErrorCode
+		ss    string
 	}{
 		{
 			err: vterrors.Errorf(vtrpc.Code_OK, "ok"),
@@ -64,9 +65,10 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSUnknownSQLState,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_CANCELED, "cancelled"),
-			num: ERQueryInterrupted,
-			ss:  SSQueryInterrupted,
+			err:   vterrors.Errorf(vtrpc.Code_CANCELED, "cancelled"),
+			isSql: true,
+			num:   ERQueryInterrupted,
+			ss:    SSQueryInterrupted,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_UNKNOWN, "unknown"),
@@ -79,9 +81,10 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSUnknownSQLState,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
-			num: ERQueryInterrupted,
-			ss:  SSQueryInterrupted,
+			err:   vterrors.Errorf(vtrpc.Code_DEADLINE_EXCEEDED, "deadline exceeded"),
+			isSql: true,
+			num:   ERQueryInterrupted,
+			ss:    SSQueryInterrupted,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_NOT_FOUND, "code not found"),
@@ -94,19 +97,22 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSUnknownSQLState,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_PERMISSION_DENIED, "permission denied"),
-			num: ERAccessDeniedError,
-			ss:  SSAccessDeniedError,
+			err:   vterrors.Errorf(vtrpc.Code_PERMISSION_DENIED, "permission denied"),
+			isSql: true,
+			num:   ERAccessDeniedError,
+			ss:    SSAccessDeniedError,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "unauthenticated"),
-			num: ERAccessDeniedError,
-			ss:  SSAccessDeniedError,
+			err:   vterrors.Errorf(vtrpc.Code_UNAUTHENTICATED, "unauthenticated"),
+			isSql: true,
+			num:   ERAccessDeniedError,
+			ss:    SSAccessDeniedError,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "resource exhausted"),
-			num: ERTooManyUserConnections,
-			ss:  SSClientError,
+			err:   vterrors.Errorf(vtrpc.Code_RESOURCE_EXHAUSTED, "resource exhausted"),
+			isSql: true,
+			num:   ERTooManyUserConnections,
+			ss:    SSClientError,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_FAILED_PRECONDITION, "failed precondition"),
@@ -124,14 +130,16 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSUnknownSQLState,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unimplemented"),
-			num: ERNotSupportedYet,
-			ss:  SSClientError,
+			err:   vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unimplemented"),
+			isSql: true,
+			num:   ERNotSupportedYet,
+			ss:    SSClientError,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_INTERNAL, "internal"),
-			num: ERInternalError,
-			ss:  SSUnknownSQLState,
+			err:   vterrors.Errorf(vtrpc.Code_INTERNAL, "internal"),
+			isSql: true,
+			num:   ERInternalError,
+			ss:    SSUnknownSQLState,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_UNAVAILABLE, "unavailable"),
@@ -144,38 +152,45 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSUnknownSQLState,
 		},
 		{
-			err: vterrors.NewErrorf(vtrpc.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "create db exists"),
-			num: ERDbCreateExists,
-			ss:  SSUnknownSQLState,
+			err:   vterrors.NewErrorf(vtrpc.Code_ALREADY_EXISTS, vterrors.DbCreateExists, "create db exists"),
+			isSql: true,
+			num:   ERDbCreateExists,
+			ss:    SSUnknownSQLState,
 		},
 		{
-			err: vterrors.NewErrorf(vtrpc.Code_FAILED_PRECONDITION, vterrors.NoDB, "no db selected"),
-			num: ERNoDb,
-			ss:  SSNoDB,
+			err:   vterrors.NewErrorf(vtrpc.Code_FAILED_PRECONDITION, vterrors.NoDB, "no db selected"),
+			isSql: true,
+			num:   ERNoDb,
+			ss:    SSNoDB,
 		},
 		{
-			err: fmt.Errorf("just some random text here"),
-			num: ERUnknownError,
-			ss:  SSUnknownSQLState,
+			err:   fmt.Errorf("just some random text here"),
+			isSql: true,
+			num:   ERUnknownError,
+			ss:    SSUnknownSQLState,
 		},
 		{
-			err: fmt.Errorf("task error: Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"),
-			num: ERBadNullError,
-			ss:  SSConstraintViolation,
+			err:   fmt.Errorf("task error: Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"),
+			isSql: true,
+			num:   ERBadNullError,
+			ss:    SSConstraintViolation,
 		},
 		{
-			err: vterrors.Wrapf(fmt.Errorf("Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"), "task error: %d", 17),
-			num: ERBadNullError,
-			ss:  SSConstraintViolation,
+			err:   vterrors.Wrapf(fmt.Errorf("Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"), "task error: %d", 17),
+			isSql: true,
+			num:   ERBadNullError,
+			ss:    SSConstraintViolation,
 		},
 	}
 
 	for _, tc := range tCases {
 		t.Run(tc.err.Error(), func(t *testing.T) {
 			err, ok := NewSQLErrorFromError(tc.err)
-			require.True(t, ok)
-			assert.Equal(t, tc.num, err.Number())
-			assert.Equal(t, tc.ss, err.SQLState())
+			require.Equal(t, tc.isSql, ok)
+			if tc.isSql {
+				assert.Equal(t, tc.num, err.Number())
+				assert.Equal(t, tc.ss, err.SQLState())
+			}
 		})
 	}
 }
