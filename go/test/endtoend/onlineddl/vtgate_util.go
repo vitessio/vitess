@@ -349,11 +349,8 @@ func WaitForThrottledTimestamp(t *testing.T, vtParams *mysql.ConnParams, uuid st
 	return
 }
 
-// WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as
-// enabled.
+// WaitForThrottlerStatusEnabled waits for a tablet to report its throttler status as enabled.
 func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, timeout time.Duration) {
-	var val bool
-	var err error
 	jsonPath := "IsEnabled"
 	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
 
@@ -365,7 +362,7 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, timeo
 
 	for {
 		body := getHTTPBody(url)
-		val, err = jsonparser.GetBoolean([]byte(body), jsonPath)
+		val, err := jsonparser.GetBoolean([]byte(body), jsonPath)
 		require.NoError(t, err)
 		if val {
 			return
