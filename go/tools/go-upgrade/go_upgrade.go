@@ -40,7 +40,7 @@ type latestGolangRelease struct {
 
 func main() {
 	failIfNoUpdate := false
-	allowMajorUpgrade := false
+	allowMajorUpgrade := true
 
 	currentVersion, err := currentGolangVersion()
 	if err != nil {
@@ -130,10 +130,10 @@ func getLatestStableGolangReleases() (version.Collection, error) {
 func chooseNewVersion(curVersion *version.Version, latestVersions version.Collection, allowMajorUpgrade bool) *version.Version {
 	selectedVersion := curVersion
 	for _, latestVersion := range latestVersions {
-		if !allowMajorUpgrade && latestVersion.Segments()[0] != selectedVersion.Segments()[0] {
+		if !allowMajorUpgrade && !isSameMajorVersion(latestVersion, selectedVersion) {
 			continue
 		}
-		if latestVersion.GreaterThan(curVersion) {
+		if latestVersion.GreaterThan(selectedVersion) {
 			selectedVersion = latestVersion
 		}
 	}
@@ -156,7 +156,7 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 		return err
 	}
 
-	if old.Segments()[0] != new.Segments()[0] {
+	if !isSameMajorVersion(old, new) {
 		err = writeNewMajorGolangVersionToGoMod(old, new)
 		if err != nil {
 			return err
@@ -260,4 +260,8 @@ func getListOfFilesWhereGoVersionMustBeUpdated() ([]string, error) {
 		}
 	}
 	return filesToChange, nil
+}
+
+func isSameMajorVersion(a, b *version.Version) bool {
+	return a.Segments()[1] == b.Segments()[1]
 }
