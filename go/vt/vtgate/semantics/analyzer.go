@@ -309,7 +309,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 	case *sqlparser.JoinTableExpr:
 		if node.Join == sqlparser.NaturalJoinType || node.Join == sqlparser.NaturalRightJoinType || node.Join == sqlparser.NaturalLeftJoinType {
-			return &UnsupportedNaturalJoinError{Join: node.Join.ToString()}
+			return &UnsupportedNaturalJoinError{JoinExpr: node}
 		}
 	case *sqlparser.LockingFunc:
 		return &LockOnlyWithDualError{Node: node}

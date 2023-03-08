@@ -131,11 +131,11 @@ func (e *UnsupportedMultiTablesInUpdateError) Info() *SemanticsErrorInfo {
 
 // UnsupportedNaturalJoinError
 type UnsupportedNaturalJoinError struct {
-	Join string
+	JoinExpr *sqlparser.JoinTableExpr
 }
 
 func (e *UnsupportedNaturalJoinError) Error() string {
-	return printf(e, "%s", e.Join)
+	return printf(e, "%s", e.JoinExpr.Join.ToString())
 }
 
 func (e *UnsupportedNaturalJoinError) Info() *SemanticsErrorInfo {

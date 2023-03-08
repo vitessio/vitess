@@ -904,8 +904,8 @@ func TestInvalidQueries(t *testing.T) {
 		sql:  "select (select sql_calc_found_rows id from a) as t",
 		serr: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
 	}, {
-		sql: "select id from t1 natural join t2",
-		err: &UnsupportedNaturalJoinError{Join: "natural join"},
+		sql:  "select id from t1 natural join t2",
+		serr: "VT12001: unsupported: natural join",
 	}, {
 		sql: "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
 		err: &SQLCalcFoundRowsUsageError{},
