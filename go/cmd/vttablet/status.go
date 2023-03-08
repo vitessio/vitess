@@ -53,9 +53,9 @@ var (
   <tr border="">
     <td width="25%" border="">
       Alias: {{.Tablet.AliasString}}<br>
-      Keyspace: {{.Tablet.Keyspace}}<br> 
-	  Shard: {{.Tablet.Shard}}<br>
-	  Tablet Type: {{.Tablet.Type}}<br>
+      Keyspace: {{.Tablet.Keyspace}}<br>
+      Shard: {{.Tablet.Shard}}<br>
+      Tablet Type: {{.Tablet.Type}}<br>
       {{if .DeniedTables}}
         DeniedTables: {{range .DeniedTables}}{{.}} {{end}}<br>
       {{end}}
