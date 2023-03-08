@@ -155,6 +155,13 @@ func replaceGoVersionInCodebase(old, new *version.Version) error {
 	if err != nil {
 		return err
 	}
+
+	if old.Segments()[0] != new.Segments()[0] {
+		err = writeNewMajorGolangVersionToGoMod(old, new)
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -172,7 +179,7 @@ func writeNewGolangVersionToFiles(old, new *version.Version, filesToChange []str
 }
 
 // writeNewGolangVersionToSingleFile replaces old with new in the given file.
-func writeNewGolangVersionToSingleFile(old *version.Version, new *version.Version, fileToChange string) error {
+func writeNewGolangVersionToSingleFile(old, new *version.Version, fileToChange string) error {
 	f, err := os.OpenFile(fileToChange, os.O_RDWR, 0600)
 	if err != nil {
 		return err
@@ -186,6 +193,33 @@ func writeNewGolangVersionToSingleFile(old *version.Version, new *version.Versio
 	contentStr := string(content)
 
 	newContent := strings.ReplaceAll(contentStr, old.String(), new.String())
+
+	_, err = f.WriteAt([]byte(newContent), 0)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+// writeNewMajorGolangVersionToGoMod bumps the major version of Golang found in the go.mod file.
+func writeNewMajorGolangVersionToGoMod(old, new *version.Version) error {
+	f, err := os.OpenFile("./go.mod", os.O_RDWR, 0600)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+
+	content, err := io.ReadAll(f)
+	if err != nil {
+		return err
+	}
+	contentStr := string(content)
+
+	newContent := strings.ReplaceAll(
+		contentStr,
+		fmt.Sprintf("%d.%d", old.Segments()[0], old.Segments()[1]),
+		fmt.Sprintf("%d.%d", new.Segments()[0], new.Segments()[1]),
+	)
 
 	_, err = f.WriteAt([]byte(newContent), 0)
 	if err != nil {
