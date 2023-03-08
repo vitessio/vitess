@@ -125,7 +125,7 @@ func findPositionForTablet(ctx context.Context, tablet *topodatapb.Tablet, logge
 
 	status, err := tmc.ReplicationStatus(ctx, tablet)
 	if err != nil {
-		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err)
 		if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
 			logger.Warningf("no replication statue from %v, using empty gtid set", topoproto.TabletAliasString(tablet.Alias))
 			return mysql.Position{}, nil

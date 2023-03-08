@@ -24,6 +24,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDumuxResourceExhaustedErrors(t *testing.T) {
@@ -171,7 +172,8 @@ func TestNewSQLErrorFromError(t *testing.T) {
 
 	for _, tc := range tCases {
 		t.Run(tc.err.Error(), func(t *testing.T) {
-			err := NewSQLErrorFromError(tc.err).(*SQLError)
+			err, ok := NewSQLErrorFromError(tc.err)
+			require.True(t, ok)
 			assert.Equal(t, tc.num, err.Number())
 			assert.Equal(t, tc.ss, err.SQLState())
 		})

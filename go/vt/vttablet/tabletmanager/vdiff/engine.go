@@ -332,7 +332,7 @@ func (vde *Engine) retryVDiffs(ctx context.Context) error {
 			return ctx.Err()
 		default:
 		}
-		lastError := mysql.NewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
+		lastError := mysql.ForceNewSQLErrorFromError(errors.New(row.AsString("last_error", "")))
 		if !mysql.IsEphemeralError(lastError) {
 			continue
 		}

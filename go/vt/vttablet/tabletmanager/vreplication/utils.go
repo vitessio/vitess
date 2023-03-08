@@ -124,11 +124,8 @@ func isUnrecoverableError(err error) bool {
 	if err == nil {
 		return false
 	}
-	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
-	if !isSQLErr {
-		return false
-	}
-	if sqlErr.Num == mysql.ERUnknownError {
+	sqlErr, ok := mysql.NewSQLErrorFromError(err)
+	if !ok {
 		return false
 	}
 	switch sqlErr.Num {

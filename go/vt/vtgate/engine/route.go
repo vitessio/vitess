@@ -259,7 +259,7 @@ func (route *Route) executeShards(
 		partialSuccessScatterQueries.Add(1)
 
 		for _, err := range errs {
-			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			serr := mysql.ForceNewSQLErrorFromError(err)
 			vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(serr.Num), Message: err.Error()})
 		}
 	}
@@ -348,7 +348,7 @@ func (route *Route) streamExecuteShards(
 			}
 			partialSuccessScatterQueries.Add(1)
 			for _, err := range errs {
-				sErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				sErr := mysql.ForceNewSQLErrorFromError(err)
 				vcursor.Session().RecordWarning(&querypb.QueryWarning{Code: uint32(sErr.Num), Message: err.Error()})
 			}
 		}

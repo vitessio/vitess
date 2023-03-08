@@ -248,7 +248,7 @@ func stopReplicationAndBuildStatusMaps(
 
 		stopReplicationStatus, err := tmc.StopReplicationAndGetStatus(groupCtx, tabletInfo.Tablet, replicationdatapb.StopReplicationMode_IOTHREADONLY)
 		if err != nil {
-			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err)
 			if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNotReplica {
 				var primaryStatus *replicationdatapb.PrimaryStatus
 

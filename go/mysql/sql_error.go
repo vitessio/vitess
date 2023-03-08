@@ -50,6 +50,15 @@ func NewSQLError(number ErrorCode, sqlState string, format string, args ...any) 
 	}
 }
 
+// NewUnknownSQLError creates a new SQLError with no specific error code or state
+func NewUnknownSQLError(format string, args ...any) *SQLError {
+	return &SQLError{
+		Num:     ERUnknownError,
+		State:   SSUnknownSQLState,
+		Message: fmt.Sprintf(format, args...),
+	}
+}
+
 // Error implements the error interface
 func (se *SQLError) Error() string {
 	buf := &bytes.Buffer{}
@@ -82,18 +91,24 @@ var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
 // If it's not the right type, it still tries to get it from a regexp.
-func NewSQLErrorFromError(err error) error {
+func NewSQLErrorFromError(err error) (sqlError *SQLError, ok bool) {
 	if err == nil {
-		return nil
+		return nil, false
 	}
 
 	if serr, ok := err.(*SQLError); ok {
-		return serr
+		return serr, true
 	}
 
-	sErr := convertToMysqlError(err)
-	if serr, ok := sErr.(*SQLError); ok {
-		return serr
+	unwrapped := vterrors.UnwrapAll(err)
+	if serr, ok := unwrapped.(*SQLError); ok {
+		// we don't just return 'unwrapped' because the wrapping errors decorate the message with
+		// important details. So we use the unwrapped info, and the outer error's message
+		return NewSQLError(serr.Num, serr.State, err.Error()), true
+	}
+
+	if sqlErr, ok := convertToMysqlError(err); ok {
+		return sqlErr, true
 	}
 
 	msg := err.Error()
@@ -105,27 +120,34 @@ func NewSQLErrorFromError(err error) error {
 	return mapToSQLErrorFromErrorCode(err, msg)
 }
 
-func extractSQLErrorFromMessage(match []string, msg string) *SQLError {
+func ForceNewSQLErrorFromError(err error) *SQLError {
+	if err == nil {
+		return nil
+	}
+	if sqlErr, ok := NewSQLErrorFromError(err); ok {
+		return sqlErr
+	}
+	return NewUnknownSQLError(err.Error())
+}
+
+func extractSQLErrorFromMessage(match []string, msg string) (sqlError *SQLError, ok bool) {
 	num, err := strconv.ParseUint(match[1], 10, 16)
 	if err != nil {
-		return &SQLError{
-			Num:     ERUnknownError,
-			State:   SSUnknownSQLState,
-			Message: msg,
-		}
+		return nil, false
 	}
 
 	return &SQLError{
 		Num:     ErrorCode(num),
 		State:   match[2],
 		Message: msg,
-	}
+	}, true
 }
 
-func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
+func mapToSQLErrorFromErrorCode(err error, msg string) (sqlError *SQLError, ok bool) {
 	// Map vitess error codes into the mysql equivalent
-	num := ERUnknownError
-	ss := SSUnknownSQLState
+	var num ErrorCode
+	var ss string
+
 	switch vterrors.Code(err) {
 	case vtrpcpb.Code_CANCELED, vtrpcpb.Code_DEADLINE_EXCEEDED, vtrpcpb.Code_ABORTED:
 		num = ERQueryInterrupted
@@ -142,6 +164,8 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 	case vtrpcpb.Code_INTERNAL:
 		num = ERInternalError
 		ss = SSUnknownSQLState
+	default:
+		return nil, false
 	}
 
 	// Not found, build a generic SQLError.
@@ -149,7 +173,7 @@ func mapToSQLErrorFromErrorCode(err error, msg string) *SQLError {
 		Num:     num,
 		State:   ss,
 		Message: msg,
-	}
+	}, true
 }
 
 type mysqlCode struct {
@@ -229,16 +253,16 @@ func init() {
 	}
 }
 
-func convertToMysqlError(err error) error {
+func convertToMysqlError(err error) (sqlError *SQLError, ok bool) {
 	errState := vterrors.ErrState(err)
 	if errState == vterrors.Undefined {
-		return err
+		return nil, false
 	}
 	mysqlCode, ok := stateToMysqlCode[errState]
 	if !ok {
-		return err
+		return nil, false
 	}
-	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error())
+	return NewSQLError(mysqlCode.num, mysqlCode.state, err.Error()), true
 }
 
 var isGRPCOverflowRE = regexp.MustCompile(`.*?grpc: (received|trying to send) message larger than max \(\d+ vs. \d+\)`)

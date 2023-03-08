@@ -755,7 +755,10 @@ func (stc *ScatterConn) ExecuteLock(ctx context.Context, rs *srvtopo.ResolvedSha
 }
 
 func wasConnectionClosed(err error) bool {
-	sqlErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+	sqlErr, ok := mysql.NewSQLErrorFromError(err)
+	if !ok {
+		return false
+	}
 	message := sqlErr.Error()
 
 	switch sqlErr.Number() {

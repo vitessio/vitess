@@ -323,7 +323,7 @@ func (lu *clCommon) Create(ctx context.Context, vcursor VCursor, rowsColValues [
 		return nil
 	}
 	// Try and convert the error to a MySQL error
-	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(origErr).(*mysql.SQLError)
+	sqlErr, isSQLErr := mysql.NewSQLErrorFromError(origErr)
 	// If it is a MySQL error and its code is of duplicate entry, then we would like to continue
 	// Otherwise, we return the error
 	if !(isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERDupEntry) {

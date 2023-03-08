@@ -330,7 +330,7 @@ func (qre *QueryExecutor) execCreateViewDDL(conn *StatefulConnection, stmt *sqlp
 	}
 	qr, err := execWithDDLView(qre.ctx, conn, sql)
 	if err != nil {
-		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+		sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err)
 		// If it is a MySQL error and its code is of duplicate entry,
 		// then we would return duplicate create view error.
 		if isSQLErr && sqlErr.Number() == mysql.ERDupEntry {

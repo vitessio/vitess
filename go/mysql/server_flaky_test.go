@@ -1279,7 +1279,7 @@ func TestErrorCodes(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.err.Error(), func(t *testing.T) {
-			th.SetErr(NewSQLErrorFromError(test.err))
+			th.SetErr(ForceNewSQLErrorFromError(test.err))
 			rs, err := client.ExecuteFetch("error", 100, false)
 			require.Error(t, err, "mysql should have failed but returned: %v", rs)
 			serr, ok := err.(*SQLError)

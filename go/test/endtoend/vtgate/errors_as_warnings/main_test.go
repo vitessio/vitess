@@ -147,7 +147,8 @@ func TestScatterErrsAsWarns(t *testing.T) {
 			// invalid_field should throw error and not warning
 			_, err = mode.conn.ExecuteFetch("SELECT /*vt+ PLANNER=Gen4 SCATTER_ERRORS_AS_WARNINGS */ invalid_field from t1;", 1, false)
 			require.Error(t, err)
-			serr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+			serr, ok := mysql.NewSQLErrorFromError(err)
+			require.True(t, ok)
 			require.Equal(t, mysql.ERBadFieldError, serr.Number(), serr.Error())
 		})
 	}
