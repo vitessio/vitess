@@ -64,7 +64,7 @@ func (b *builtinCoalesce) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 
 func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 	var (
-b		integersI int
+		integersI int
 		integersU int
 		floats    int
 		decimals  int

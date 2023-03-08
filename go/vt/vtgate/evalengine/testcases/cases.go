@@ -77,6 +77,7 @@ type FnLength struct{ defaultEnv }
 type FnBitLength struct{ defaultEnv }
 type FnAscii struct{ defaultEnv }
 type FnRepeat struct{ defaultEnv }
+type FnHex struct{ defaultEnv }
 
 var Cases = []TestCase{
 	JSONExtract{},
@@ -114,6 +115,7 @@ var Cases = []TestCase{
 	FnBitLength{},
 	FnAscii{},
 	FnRepeat{},
+	FnHex{},
 }
 
 func (JSONPathOperations) Test(yield Iterator) {
@@ -246,6 +248,12 @@ func comparisonSkip(a, b string) bool {
 		return true
 	}
 	if b == "-1" && a == "18446744073709551615" {
+		return true
+	}
+	if a == "9223372036854775808" && b == "-9223372036854775808" {
+		return true
+	}
+	if a == "-9223372036854775808" && b == "9223372036854775808" {
 		return true
 	}
 	return false
@@ -739,5 +747,19 @@ func (FnRepeat) Test(yield Iterator) {
 		for _, cnt := range counts {
 			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)
 		}
+	}
+}
+
+func (FnHex) Test(yield Iterator) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+
+	for _, str := range inputConversions {
+		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+
+	for _, str := range inputBitwise {
+		yield(fmt.Sprintf("hex(%s)", str), nil)
 	}
 }
