@@ -373,13 +373,13 @@ func TestExecutorAddSequenceDDL(t *testing.T) {
 	}
 	time.Sleep(10 * time.Millisecond)
 
-	stmt = "alter vschema on test_table add auto_increment id using test_seq"
+	stmt = "alter vschema on test_table add auto_increment id using `db-name`.`test_seq`"
 	if _, err = executor.Execute(context.Background(), "TestExecute", session, stmt, nil); err != nil {
 		t.Error(err)
 	}
 	time.Sleep(10 * time.Millisecond)
 
-	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "test_seq"}
+	wantAutoInc := &vschemapb.AutoIncrement{Column: "id", Sequence: "`db-name`.test_seq"}
 	gotAutoInc := executor.vm.GetCurrentSrvVschema().Keyspaces[ksSharded].Tables["test_table"].AutoIncrement
 
 	if !reflect.DeepEqual(wantAutoInc, gotAutoInc) {
