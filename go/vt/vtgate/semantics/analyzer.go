@@ -267,7 +267,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
-			return NewError(TableNotUpdatable, alias.As.String())
+			return &TableNotUpdatableError{Table: alias.As.String()}
 		}
 	case *sqlparser.Select:
 		parent := cursor.Parent()
@@ -275,7 +275,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return &UnionWithSQLCalcFoundRowsError{}
 		}
 		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
-			return NewError(SQLCalcFoundRowsUsage)
+			return &SQLCalcFoundRowsUsageError{}
 		}
 		errMsg := "INTO"
 		nextVal := false
@@ -289,19 +289,20 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return nil
 		}
 		if a.scoper.currentScope().parent != nil {
-			return NewError(CantUseOptionHere, errMsg)
+			return &CantUseOptionHereError{Msg: errMsg}
 		}
 	case *sqlparser.Nextval:
 		currScope := a.scoper.currentScope()
 		if currScope.parent != nil {
-			return NewError(CantUseOptionHere, "Incorrect usage/placement of 'INTO'")
+			// TODO: untested
+			return &CantUseOptionHereError{Msg: "Incorrect usage/placement of 'INTO'"}
 		}
 		if len(currScope.tables) != 1 {
 			return NewError(NextWithMultipleTables)
 		}
 		vindexTbl := currScope.tables[0].GetVindexTable()
 		if vindexTbl == nil {
-			return NewError(MissingInVSchema)
+			return &MissingInVSchemaError{}
 		}
 		if vindexTbl.Type != vindexes.TypeSequence {
 			return NewError(NotSequenceTable)

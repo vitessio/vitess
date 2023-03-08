@@ -54,10 +54,6 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	TableNotUpdatable
-	SQLCalcFoundRowsUsage
-	CantUseOptionHere
-	MissingInVSchema
 	NotSequenceTable
 	NextWithMultipleTables
 	LockOnlyWithDual
@@ -76,24 +72,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	TableNotUpdatable: {
-		format: "The target table %s of the UPDATE is not updatable",
-		state:  vterrors.NonUpdateableTable,
-		code:   vtrpcpb.Code_INVALID_ARGUMENT,
-	},
-	SQLCalcFoundRowsUsage: {
-		format: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
-		code:   vtrpcpb.Code_INVALID_ARGUMENT,
-	},
-	CantUseOptionHere: {
-		format: "Incorrect usage/placement of '%s'",
-		state:  vterrors.CantUseOptionHere,
-		code:   vtrpcpb.Code_INVALID_ARGUMENT,
-	},
-	MissingInVSchema: {
-		format: "Table information is not provided in vschema",
-		code:   vtrpcpb.Code_INVALID_ARGUMENT,
-	},
 	NotSequenceTable: {
 		format: "NEXT used on a non-sequence table",
 		code:   vtrpcpb.Code_INVALID_ARGUMENT,
@@ -228,7 +206,7 @@ func (e *UnionColumnsDoNotMatchError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_FAILED_PRECONDITION), State: vterrors.WrongNumberOfColumnsInSelect}
 }
 
-// TODO: missing test
+// TODO: untested
 // UnsupportedMultiTablesInUpdateError
 type UnsupportedMultiTablesInUpdateError struct {
 	ExprCount int
@@ -261,7 +239,7 @@ func (e *UnsupportedNaturalJoinError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
 }
 
-// UnionWithSQLCalcFoundRows
+// UnionWithSQLCalcFoundRowsError
 type UnionWithSQLCalcFoundRowsError struct {
 }
 
@@ -271,4 +249,57 @@ func (e *UnionWithSQLCalcFoundRowsError) Error() string {
 
 func (e *UnionWithSQLCalcFoundRowsError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+}
+
+// TODO: untested
+// TableNotUpdatableError
+type TableNotUpdatableError struct {
+	Table string
+}
+
+func (e *TableNotUpdatableError) Error() string {
+	return printf(e, "The target table %s of the UPDATE is not updatable", e.Table)
+}
+
+func (e *TableNotUpdatableError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{State: vterrors.NonUpdateableTable, Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+}
+
+// SQLCalcFoundRowsUsageError
+type SQLCalcFoundRowsUsageError struct {
+}
+
+func (e *SQLCalcFoundRowsUsageError) Error() string {
+	return printf(e, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+}
+
+func (e *SQLCalcFoundRowsUsageError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+}
+
+// TODO: untested
+// CantUseOptionHereError
+type CantUseOptionHereError struct {
+	Msg string
+}
+
+func (e *CantUseOptionHereError) Error() string {
+	return printf(e, "Incorrect usage/placement of '%s'", e.Msg)
+}
+
+func (e *CantUseOptionHereError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{State: vterrors.CantUseOptionHere, Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+}
+
+// TODO: untested
+// MissingInVSchemaError
+type MissingInVSchemaError struct {
+}
+
+func (e *MissingInVSchemaError) Error() string {
+	return printf(e, "Table information is not provided in vschema")
+}
+
+func (e *MissingInVSchemaError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
 }

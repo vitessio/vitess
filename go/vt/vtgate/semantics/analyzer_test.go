@@ -894,6 +894,7 @@ func TestInvalidQueries(t *testing.T) {
 		serr: "Column 'id' in field list is ambiguous",
 	}, {
 		sql:  "select sql_calc_found_rows id from a union select 1 limit 109",
+		err:  &UnionWithSQLCalcFoundRowsError{},
 		serr: "VT12001: unsupported: SQL_CALC_FOUND_ROWS not supported with union",
 	}, {
 		sql:  "select * from (select sql_calc_found_rows id from a) as t",
@@ -904,7 +905,11 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql: "select id from t1 natural join t2",
 		err: &UnsupportedNaturalJoinError{Join: "natural join"},
+	}, {
+		sql: "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
+		err: &SQLCalcFoundRowsUsageError{},
 	}}
+
 	for _, tc := range tcases {
 		t.Run(tc.sql, func(t *testing.T) {
 			parse, err := sqlparser.Parse(tc.sql)
