@@ -889,6 +889,19 @@ func (c *compiler) emitFn_JSON_CONTAINS_PATH(match jsonMatch, paths []*json.Path
 	}
 }
 
+func (c *compiler) emitFn_JSON_ARRAY(args int) {
+	c.adjustStack(-(args - 1))
+	c.emit(func(vm *VirtualMachine) int {
+		ary := make([]*json.Value, 0, args)
+		for sp := vm.sp - args; sp < vm.sp; sp++ {
+			ary = append(ary, vm.stack[sp].(*json.Value))
+		}
+		vm.stack[vm.sp-args] = json.NewArray(ary)
+		vm.sp -= args - 1
+		return 1
+	}, "FN JSON_ARRAY (SP-%d)...(SP-1)", args)
+}
+
 func (c *compiler) emitBitOp_bb(op bitwiseOp) {
 	c.adjustStack(-1)
 

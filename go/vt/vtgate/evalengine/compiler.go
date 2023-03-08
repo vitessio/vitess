@@ -235,6 +235,10 @@ func (c *compiler) compileCallable(call callable) (ctype, error) {
 		return c.compileJSONUnquote(call)
 	case *builtinJSONContainsPath:
 		return c.compileJSONContainsPath(call)
+	case *builtinJSONArray:
+		return c.compileJSONArray(call)
+	case *builtinJSONObject:
+		return c.compileJSONObject(call)
 	case *builtinRepeat:
 		return c.compileRepeat(call)
 	case *builtinToBase64:
@@ -1513,4 +1517,24 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 	c.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileJSONArray(call *builtinJSONArray) (ctype, error) {
+	for _, arg := range call.Arguments {
+		tt, err := c.compileExpr(arg)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		tt, err = c.compileToJSON(tt, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.emitFn_JSON_ARRAY(len(call.Arguments))
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileJSONObject(call *builtinJSONObject) (ctype, error) {
+	return ctype{}, c.unsupported(call)
 }
