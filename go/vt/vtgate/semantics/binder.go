@@ -275,14 +275,14 @@ func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, a
 	}
 	if deps, isUncertain := deps.(*uncertain); isUncertain && deps.fail {
 		// if we have a failure from uncertain, we matched the column to multiple non-authoritative tables
-		return nil, ProjError{Inner: NewError(AmbiguousColumn, expr)}
+		return nil, ProjError{Inner: &AmbiguousColumnError{Column: sqlparser.String(expr)}}
 	}
 	return deps, nil
 }
 
 func makeAmbiguousError(colName *sqlparser.ColName, err error) error {
 	if err == ambigousErr {
-		err = NewError(AmbiguousColumn, colName)
+		err = &AmbiguousColumnError{Column: sqlparser.String(colName)}
 	}
 	return err
 }
