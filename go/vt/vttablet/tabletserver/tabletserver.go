@@ -1441,7 +1441,11 @@ func (tsv *TabletServer) execRequest(
 		span.Annotate("shard", target.Shard)
 		span.Annotate("keyspace", target.Keyspace)
 	}
-	span.Annotate("workload_name", options.WorkloadName)
+	workloadName := sqlparser.UnspecifiedWorkloadName
+	if options != nil {
+		workloadName = options.WorkloadName
+	}
+	span.Annotate("workload_name", workloadName)
 	defer span.Finish()
 
 	logStats := tabletenv.NewLogStats(ctx, requestName)
