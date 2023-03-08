@@ -87,8 +87,7 @@ func TestMain(m *testing.M) {
 
 		// Create a new init_db.sql file that sets up passwords for all users.
 		// Then we use a db-credentials-file with the passwords.
-		// We could have operated with empty password (which is default) here as well.
-		// TODO: Create a separate test for --db-credentials-file functionality (@rsajwani)
+		// TODO: We could have operated with empty password here. Create a separate test for --db-credentials-file functionality (@rsajwani)
 		dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 		initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 		sql := string(initDb)

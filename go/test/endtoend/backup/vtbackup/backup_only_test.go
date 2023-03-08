@@ -73,7 +73,7 @@ func TestTabletInitialBackup(t *testing.T) {
 		require.ErrorContains(t, err, "The MySQL server is running with the --super-read-only option so it cannot execute this statement")
 	}
 
-	// Restore the Tablets
+	// Restore the Tablet
 	restore(t, primary, "replica", "NOT_SERVING")
 	// Vitess expects that the user has set the database into ReadWrite mode before calling
 	// TabletExternallyReparented

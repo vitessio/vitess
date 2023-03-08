@@ -112,7 +112,7 @@ func (tm *TabletManager) FullStatus(ctx context.Context) (*replicationdatapb.Ful
 		return nil, err
 	}
 
-	// Super read only - "SELECT @@global.super_read_only"
+	// superReadOnly - "SELECT @@global.super_read_only"
 	superReadOnly, err := tm.MysqlDaemon.IsSuperReadOnly()
 	if err != nil {
 		return nil, err
@@ -304,7 +304,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 	}
 	defer tm.unlock()
 
-	// Setting super_read_only off so that we can run the DDL commands
+	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
 		if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")

@@ -283,7 +283,6 @@ func initializeClusterLate(t *testing.T) {
 		require.NoError(t, err)
 	}
 
-	// TODO: may be put them in init_db at runtime, then we don't need superReadOnly handling
 	for _, tablet := range []*cluster.Vttablet{primary, replica} {
 		err = tablet.VttabletProcess.Setup()
 		require.NoError(t, err)

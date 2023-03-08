@@ -784,8 +784,8 @@ func (db *DB) MockQueriesForTable(table string, result *sqltypes.Result) {
 	))
 }
 
+// GetRejectedQueryResult checks if we should reject the query.
 func (db *DB) GetRejectedQueryResult(key string) error {
-	// check if we should reject it.
 	if err, ok := db.rejectedData[key]; ok {
 		return err
 	}
@@ -793,8 +793,9 @@ func (db *DB) GetRejectedQueryResult(key string) error {
 	return nil
 }
 
+// GetQueryResult checks for explicit queries add through AddQuery().
 func (db *DB) GetQueryResult(key string) *ExpectedResult {
-	// Check explicit queries from AddQuery().
+
 	result, ok := db.data[key]
 	if ok {
 		return result
@@ -802,6 +803,7 @@ func (db *DB) GetQueryResult(key string) *ExpectedResult {
 	return nil
 }
 
+// GetQueryPatternResult checks if query matches ay pattern from AddQueryPattern().
 func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, bool, error) {
 	for _, pat := range db.patternData {
 		if pat.expr.MatchString(key) {
