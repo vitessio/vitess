@@ -902,6 +902,29 @@ func (c *compiler) emitFn_JSON_ARRAY(args int) {
 	}, "FN JSON_ARRAY (SP-%d)...(SP-1)", args)
 }
 
+func (c *compiler) emitFn_JSON_OBJECT(args int) {
+	c.adjustStack(-(args - 1))
+	c.emit(func(vm *VirtualMachine) int {
+		j := json.NewObject()
+		obj, _ := j.Object()
+
+		for sp := vm.sp - args; sp < vm.sp; sp += 2 {
+			key := vm.stack[sp]
+			val := vm.stack[sp+1]
+
+			if key == nil {
+				vm.err = errJSONKeyIsNil
+				return 0
+			}
+
+			obj.Set(key.(*evalBytes).string(), val.(*evalJSON), json.Set)
+		}
+		vm.stack[vm.sp-args] = j
+		vm.sp -= args - 1
+		return 1
+	}, "FN JSON_ARRAY (SP-%d)...(SP-1)", args)
+}
+
 func (c *compiler) emitBitOp_bb(op bitwiseOp) {
 	c.adjustStack(-1)
 
@@ -1075,6 +1098,13 @@ func (c *compiler) emitConvert_bj(offset int) {
 		vm.stack[vm.sp-offset] = evalConvert_bj(arg)
 		return 1
 	}, "CONV VARBINARY(SP-%d), JSON")
+}
+
+func (c *compiler) emitConvert_Nj(offset int) {
+	c.emit(func(vm *VirtualMachine) int {
+		vm.stack[vm.sp-offset] = json.ValueNull
+		return 1
+	}, "CONV NULL(SP-%d), JSON")
 }
 
 func (c *compiler) emitConvert_xc(offset int, t sqltypes.Type, collation collations.ID, length int, hasLength bool) {

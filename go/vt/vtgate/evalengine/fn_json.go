@@ -146,6 +146,8 @@ func (call *builtinJSONUnquote) typeof(env *ExpressionEnv) (sqltypes.Type, typeF
 	return sqltypes.Blob, f
 }
 
+var errJSONKeyIsNil = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+
 func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 	j := json.NewObject()
 	obj, _ := j.Object()
@@ -156,7 +158,7 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		if key == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+			return nil, errJSONKeyIsNil
 		}
 		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
 		if err != nil {

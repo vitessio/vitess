@@ -2,6 +2,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -924,6 +925,8 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		c.emitConvert_cj(offset)
 	case sqltypes.VarBinary:
 		c.emitConvert_bj(offset)
+	case sqltypes.Null:
+		c.emitConvert_Nj(offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}
@@ -1611,5 +1614,40 @@ func (c *compiler) compileJSONArray(call *builtinJSONArray) (ctype, error) {
 }
 
 func (c *compiler) compileJSONObject(call *builtinJSONObject) (ctype, error) {
-	return ctype{}, c.unsupported(call)
+	for i := 0; i < len(call.Arguments); i += 2 {
+		key, err := c.compileExpr(call.Arguments[i])
+		if err != nil {
+			return ctype{}, err
+		}
+		c.compileToJSONKey(key)
+		val, err := c.compileExpr(call.Arguments[i+1])
+		if err != nil {
+			return ctype{}, err
+		}
+		val, err = c.compileToJSON(val, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.emitFn_JSON_OBJECT(len(call.Arguments))
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func isEncodingJSONSafe(col collations.ID) bool {
+	switch col.Get().Charset().(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3, charset.Charset_binary:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *compiler) compileToJSONKey(key ctype) {
+	if key.Type == sqltypes.VarChar && isEncodingJSONSafe(key.Col.Collation) {
+		return
+	}
+	if key.Type == sqltypes.VarBinary {
+		return
+	}
+	c.emitConvert_xc(1, sqltypes.VarChar, collations.CollationUtf8mb4ID, 0, false)
 }
