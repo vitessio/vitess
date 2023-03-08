@@ -258,7 +258,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		}
 		current = current.parent
 	}
-	return dependency{}, NewError(ColumnNotFound, colName)
+	return dependency{}, &ColumnNotFoundError{Column: sqlparser.String(colName)}
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {

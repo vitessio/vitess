@@ -54,7 +54,7 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	ColumnNotFound
+
 	AmbiguousColumn
 )
 
@@ -66,11 +66,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	ColumnNotFound: {
-		format: "symbol %s not found",
-		state:  vterrors.BadFieldError,
-		code:   vtrpcpb.Code_INVALID_ARGUMENT,
-	},
 	AmbiguousColumn: {
 		format: "Column '%s' in field list is ambiguous",
 		state:  vterrors.BadFieldError,
@@ -354,4 +349,17 @@ func (e *BuggyError) Error() string {
 
 func (e *BuggyError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Typ: BugErrorType}
+}
+
+// ColumnNotFoundError
+type ColumnNotFoundError struct {
+	Column string
+}
+
+func (e *ColumnNotFoundError) Error() string {
+	return printf(e, "symbol %s not found", e.Column)
+}
+
+func (e *ColumnNotFoundError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{State: vterrors.BadFieldError, Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
 }
