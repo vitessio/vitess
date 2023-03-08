@@ -54,9 +54,7 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	UnsupportedNaturalJoin
 	TableNotUpdatable
-	UnionWithSQLCalcFoundRows
 	SQLCalcFoundRowsUsage
 	CantUseOptionHere
 	MissingInVSchema
@@ -82,14 +80,6 @@ var errors = map[ErrorCode]info{
 		format: "The target table %s of the UPDATE is not updatable",
 		state:  vterrors.NonUpdateableTable,
 		code:   vtrpcpb.Code_INVALID_ARGUMENT,
-	},
-	UnsupportedNaturalJoin: {
-		format: "%s",
-		typ:    UnsupportedErrorType,
-	},
-	UnionWithSQLCalcFoundRows: {
-		format: "SQL_CALC_FOUND_ROWS not supported with union",
-		typ:    UnsupportedErrorType,
 	},
 	SQLCalcFoundRowsUsage: {
 		format: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
@@ -196,6 +186,22 @@ func (n *Error) ErrorCode() vtrpcpb.Code {
 	}
 }
 
+func printf(e SemanticsError, msg string, args ...any) string {
+	format := msg
+
+	if e.Classify().Id != "" {
+		format = fmt.Sprintf("%s: %s", e.Classify().Id, format)
+	}
+
+	switch e.Classify().Typ {
+	case UnsupportedErrorType:
+		format = "VT12001: unsupported: " + format
+	case BugErrorType:
+		format = "VT13001: [BUG] " + format
+	}
+	return fmt.Sprintf(format, args...)
+}
+
 type SemanticsError interface {
 	Error() string
 	Classify() *SemanticsErrorClassification
@@ -205,6 +211,7 @@ type SemanticsErrorClassification struct {
 	Code  int
 	State vterrors.State
 	Typ   ErrType
+	Id    string
 }
 
 // UnionColumnsDoNotMatchError
@@ -214,7 +221,7 @@ type UnionColumnsDoNotMatchError struct {
 }
 
 func (e *UnionColumnsDoNotMatchError) Error() string {
-	return fmt.Sprintf("The used SELECT statements have a different number of columns: %v, %v", e.FirstProj, e.SecondProj)
+	return printf(e, "The used SELECT statements have a different number of columns: %v, %v", e.FirstProj, e.SecondProj)
 }
 
 func (e *UnionColumnsDoNotMatchError) Classify() *SemanticsErrorClassification {
@@ -231,9 +238,9 @@ type UnsupportedMultiTablesInUpdateError struct {
 func (e *UnsupportedMultiTablesInUpdateError) Error() string {
 	switch {
 	case e.NotAlias:
-		return "unaliased multiple tables in update"
+		return printf(e, "unaliased multiple tables in update")
 	default:
-		return fmt.Sprintf("multiple (%d) tables in update", e.ExprCount)
+		return printf(e, "multiple (%d) tables in update", e.ExprCount)
 	}
 }
 
@@ -241,14 +248,27 @@ func (e *UnsupportedMultiTablesInUpdateError) Classify() *SemanticsErrorClassifi
 	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
 }
 
+// UnsupportedNaturalJoinError
 type UnsupportedNaturalJoinError struct {
 	Join string
 }
 
 func (e *UnsupportedNaturalJoinError) Error() string {
-	return fmt.Sprintf("Unsupported: %s", e.Join)
+	return printf(e, "", e.Join)
 }
 
 func (e *UnsupportedNaturalJoinError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+}
+
+// UnionWithSQLCalcFoundRows
+type UnionWithSQLCalcFoundRowsError struct {
+}
+
+func (e *UnionWithSQLCalcFoundRowsError) Error() string {
+	return printf(e, "SQL_CALC_FOUND_ROWS not supported with union")
+}
+
+func (e *UnionWithSQLCalcFoundRowsError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
 }

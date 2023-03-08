@@ -272,7 +272,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	case *sqlparser.Select:
 		parent := cursor.Parent()
 		if _, isUnion := parent.(*sqlparser.Union); isUnion && node.SQLCalcFoundRows {
-			return NewError(UnionWithSQLCalcFoundRows)
+			return &UnionWithSQLCalcFoundRowsError{}
 		}
 		if _, isRoot := parent.(*sqlparser.RootNode); !isRoot && node.SQLCalcFoundRows {
 			return NewError(SQLCalcFoundRowsUsage)
