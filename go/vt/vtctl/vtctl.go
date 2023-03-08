@@ -1833,7 +1833,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
 	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
 	durabilityPolicy := subFlags.String("durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
-	sidecarDBName := subFlags.String("sidecar-db-name", sidecardb.DefaultName, "Vitess sidecar database used for internal metadata.")
+	sidecarDBName := subFlags.String("sidecar-db-name", sidecardb.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
