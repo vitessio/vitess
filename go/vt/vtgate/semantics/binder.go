@@ -238,6 +238,7 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	var thisDeps dependencies
+	first := true
 	for current != nil {
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
@@ -256,6 +257,18 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		} else if err != nil {
 			return dependency{}, err
 		}
+		if current.parent == nil && len(current.tables) == 1 && first {
+			// if this is the top scope, and we still haven't been able to find a match, we know we are about to fail
+			// we can check this last scope and see if there is a single table. if there is just one table in the scope
+			// we assume that the column is meant to come from this table.
+			// we also check that this is the first scope we are looking in.
+			// If there are more scopes the column could come from, we can't assume anything
+			name, err := current.tables[0].Name()
+			if err == nil {
+				colName.Qualifier = name
+			}
+		}
+		first = false
 		current = current.parent
 	}
 	return dependency{}, &ColumnNotFoundError{Column: colName}

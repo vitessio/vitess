@@ -915,6 +915,12 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql: "SELECT * FROM JSON_TABLE('[ {\"c1\": null} ]','$[*]' COLUMNS( c1 INT PATH '$.c1' ERROR ON ERROR )) as jt",
 		err: &JSONTablesError{},
+	}, {
+		sql:  "select does_not_exist from t1",
+		serr: "symbol t1.does_not_exist not found",
+	}, {
+		sql:  "select t1.does_not_exist from t1, t2",
+		serr: "symbol t1.does_not_exist not found",
 	}}
 
 	for _, tc := range tcases {
