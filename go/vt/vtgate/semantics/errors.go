@@ -43,9 +43,9 @@ type (
 )
 
 const (
-	Other ErrType = iota
-	Unsupported
-	Bug
+	UndefinedErrorType ErrType = iota
+	UnsupportedErrorType
+	BugErrorType
 )
 
 const (
@@ -82,7 +82,7 @@ var errors = map[ErrorCode]info{
 	},
 	UnsupportedMultiTablesInUpdate: {
 		format: "multiple tables in update",
-		typ:    Unsupported,
+		typ:    UnsupportedErrorType,
 	},
 	TableNotUpdatable: {
 		format: "The target table %s of the UPDATE is not updatable",
@@ -91,11 +91,11 @@ var errors = map[ErrorCode]info{
 	},
 	UnsupportedNaturalJoin: {
 		format: "%s",
-		typ:    Unsupported,
+		typ:    UnsupportedErrorType,
 	},
 	UnionWithSQLCalcFoundRows: {
 		format: "SQL_CALC_FOUND_ROWS not supported with union",
-		typ:    Unsupported,
+		typ:    UnsupportedErrorType,
 	},
 	SQLCalcFoundRowsUsage: {
 		format: "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'",
@@ -116,7 +116,7 @@ var errors = map[ErrorCode]info{
 	},
 	NextWithMultipleTables: {
 		format: "Next statement should not contain multiple tables",
-		typ:    Bug,
+		typ:    BugErrorType,
 	},
 	LockOnlyWithDual: {
 		format: "%v allowed only with dual",
@@ -127,11 +127,11 @@ var errors = map[ErrorCode]info{
 	},
 	JSONTables: {
 		format: "json_table expressions",
-		typ:    Unsupported,
+		typ:    UnsupportedErrorType,
 	},
 	Buggy: {
 		format: "%s",
-		typ:    Bug,
+		typ:    BugErrorType,
 	},
 	ColumnNotFound: {
 		format: "symbol %s not found",
@@ -158,9 +158,9 @@ func (n *Error) Error() string {
 	}
 
 	switch f.typ {
-	case Unsupported:
+	case UnsupportedErrorType:
 		format = "VT12001: unsupported: " + format
-	case Bug:
+	case BugErrorType:
 		format = "VT13001: [BUG] " + format
 	}
 
@@ -193,11 +193,29 @@ func (n *Error) ErrorCode() vtrpcpb.Code {
 	}
 
 	switch f.typ {
-	case Unsupported:
+	case UnsupportedErrorType:
 		return vtrpcpb.Code_UNIMPLEMENTED
-	case Bug:
+	case BugErrorType:
 		return vtrpcpb.Code_INTERNAL
 	default:
 		return f.code
 	}
+}
+
+type SemanticsError interface {
+	Error() string
+	Classify() (code int, state vterrors.State, typ ErrType)
+}
+
+type UnionColumnsDoNotMatchError struct {
+	FirstProj  int
+	SecondProj int
+}
+
+func (e *UnionColumnsDoNotMatchError) Error() string {
+	return fmt.Sprintf("The used SELECT statements have a different number of columns: %v, %v", e.FirstProj, e.SecondProj)
+}
+
+func (e *UnionColumnsDoNotMatchError) Classify() (code int, state vterrors.State, typ ErrType) {
+	return int(vtrpcpb.Code_FAILED_PRECONDITION), vterrors.WrongNumberOfColumnsInSelect, UndefinedErrorType
 }

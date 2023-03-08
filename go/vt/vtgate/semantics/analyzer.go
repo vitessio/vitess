@@ -193,15 +193,14 @@ func checkUnionColumns(union *sqlparser.Union) error {
 		// we'll fail it at run time instead
 		return nil
 	}
-	count := len(firstProj)
 
 	secondProj := sqlparser.GetFirstSelect(union.Right).SelectExprs
 	if containsStar(secondProj) {
 		return nil
 	}
 
-	if len(secondProj) != count {
-		return NewError(UnionColumnsDoNotMatch)
+	if len(secondProj) != len(firstProj) {
+		return &UnionColumnsDoNotMatchError{FirstProj: len(firstProj), SecondProj: len(secondProj)}
 	}
 
 	return nil

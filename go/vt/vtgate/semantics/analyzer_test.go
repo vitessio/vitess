@@ -875,16 +875,16 @@ func TestInvalidQueries(t *testing.T) {
 		err string
 	}{{
 		sql: "select t1.id, t1.col1 from t1 union select t2.uid from t2",
-		err: "The used SELECT statements have a different number of columns",
+		err: "The used SELECT statements have a different number of columns: 2, 1",
 	}, {
 		sql: "select t1.id from t1 union select t2.uid, t2.price from t2",
-		err: "The used SELECT statements have a different number of columns",
+		err: "The used SELECT statements have a different number of columns: 1, 2",
 	}, {
 		sql: "select t1.id from t1 union select t2.uid, t2.price from t2",
-		err: "The used SELECT statements have a different number of columns",
+		err: "The used SELECT statements have a different number of columns: 1, 2",
 	}, {
 		sql: "(select 1,2 union select 3,4) union (select 5,6 union select 7)",
-		err: "The used SELECT statements have a different number of columns",
+		err: "The used SELECT statements have a different number of columns: 2, 1",
 	}, {
 		sql: "select id from a union select 3 order by a.id",
 		err: "Table a from one of the SELECTs cannot be used in global ORDER clause",
