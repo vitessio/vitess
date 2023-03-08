@@ -1,6 +1,18 @@
 package evalengine
 
-import "vitess.io/vitess/go/mysql/collations"
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
+)
+
+func (c *compiler) compileIs(is *IsExpr) (ctype, error) {
+	_, err := c.compileExpr(is.Inner)
+	if err != nil {
+		return ctype{}, err
+	}
+	c.asm.Is(is.Check)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
 
 func (c *compiler) compileCase(cs *CaseExpr) (ctype, error) {
 	var ca collationAggregation

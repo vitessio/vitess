@@ -706,7 +706,7 @@ func (asm *assembler) Convert_bj(offset int) {
 		arg := vm.stack[vm.sp-offset].(*evalBytes)
 		vm.stack[vm.sp-offset] = evalConvert_bj(arg)
 		return 1
-	}, "CONV VARBINARY(SP-%d), JSON")
+	}, "CONV VARBINARY(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_cj(offset int) {
@@ -714,7 +714,7 @@ func (asm *assembler) Convert_cj(offset int) {
 		arg := vm.stack[vm.sp-offset].(*evalBytes)
 		vm.stack[vm.sp-offset], vm.err = evalConvert_cj(arg)
 		return 1
-	}, "CONV VARCHAR(SP-%d), JSON")
+	}, "CONV VARCHAR(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_dB(offset int) {
@@ -1325,6 +1325,13 @@ func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollatio
 	}, "FN TO_BASE64 VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Is(check func(eval) bool) {
+	asm.emit(func(vm *VirtualMachine) int {
+		vm.stack[vm.sp-1] = newEvalBool(check(vm.stack[vm.sp-1]))
+		return 1
+	}, "IS (SP-1)")
+}
+
 func (asm *assembler) Like_coerce(expr *LikeExpr, coercion *compiledCoercion) {
 	asm.adjustStack(-1)
 
@@ -1808,6 +1815,49 @@ func (asm *assembler) Sub_uu() {
 		vm.sp--
 		return 1
 	}, "SUB UINT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
+	if jp == nil {
+		asm.emit(func(vm *VirtualMachine) int {
+			doc := vm.stack[vm.sp-1]
+			if doc == nil {
+				return 1
+			}
+			j := doc.(*evalJSON)
+			if obj, ok := j.Object(); ok {
+				var keys []*json.Value
+				obj.Visit(func(key []byte, _ *json.Value) {
+					keys = append(keys, json.NewString(key))
+				})
+				vm.stack[vm.sp-1] = json.NewArray(keys)
+			} else {
+				vm.stack[vm.sp-1] = nil
+			}
+			return 1
+		}, "FN JSON_KEYS (SP-1)")
+	} else {
+		asm.emit(func(vm *VirtualMachine) int {
+			doc := vm.stack[vm.sp-1]
+			if doc == nil {
+				return 1
+			}
+			var obj *json.Object
+			jp.Match(doc.(*evalJSON), false, func(value *json.Value) {
+				obj, _ = value.Object()
+			})
+			if obj != nil {
+				var keys []*json.Value
+				obj.Visit(func(key []byte, _ *json.Value) {
+					keys = append(keys, json.NewString(key))
+				})
+				vm.stack[vm.sp-1] = json.NewArray(keys)
+			} else {
+				vm.stack[vm.sp-1] = nil
+			}
+			return 1
+		}, "FN JSON_KEYS (SP-1), %q", jp.String())
+	}
 }
 
 func (asm *assembler) Collation(col collations.TypedCollation) {

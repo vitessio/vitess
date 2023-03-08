@@ -126,6 +126,9 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	case *LikeExpr:
 		return c.compileLike(expr)
 
+	case *IsExpr:
+		return c.compileIs(expr)
+
 	case callable:
 		return c.compileFn(expr)
 

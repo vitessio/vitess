@@ -21,6 +21,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_JSON_ARRAY(call)
 	case *builtinJSONObject:
 		return c.compileFn_JSON_OBJECT(call)
+	case *builtinJSONKeys:
+		return c.compileFn_JSON_KEYS(call)
 	case *builtinRepeat:
 		return c.compileFn_REPEAT(call)
 	case *builtinToBase64:

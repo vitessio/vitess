@@ -111,6 +111,7 @@ func TestCompilerReference(t *testing.T) {
 					if vterrors.Code(err) != vtrpcpb.Code_UNIMPLEMENTED {
 						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, err)
 					}
+					t.Logf("unsupported: %s", query)
 					return
 				}
 

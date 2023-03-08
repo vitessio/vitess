@@ -206,3 +206,29 @@ func (c *compiler) compileFn_JSON_CONTAINS_PATH(call *builtinJSONContainsPath) (
 	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }
+
+func (c *compiler) compileFn_JSON_KEYS(call *builtinJSONKeys) (ctype, error) {
+	doc, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	doc, err = c.compileParseJSON("JSON_KEYS", doc, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	var jp *json.Path
+	if len(call.Arguments) == 2 {
+		jp, err = c.jsonExtractPath(call.Arguments[1])
+		if err != nil {
+			return ctype{}, err
+		}
+		if jp.ContainsWildcards() {
+			return ctype{}, errInvalidPathForTransform
+		}
+	}
+
+	c.asm.Fn_JSON_KEYS(jp)
+	return ctype{Type: sqltypes.TypeJSON, Flag: flagNullable, Col: collationJSON}, nil
+}
