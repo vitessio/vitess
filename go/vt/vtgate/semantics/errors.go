@@ -54,7 +54,6 @@ const (
 
 const (
 	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-	LockOnlyWithDual
 	QualifiedOrderInUnion
 	JSONTables
 	Buggy
@@ -70,10 +69,6 @@ func NewError(code ErrorCode, args ...any) *Error {
 }
 
 var errors = map[ErrorCode]info{
-	LockOnlyWithDual: {
-		format: "%v allowed only with dual",
-		code:   vtrpcpb.Code_UNIMPLEMENTED,
-	},
 	QualifiedOrderInUnion: {
 		format: "Table %s from one of the SELECTs cannot be used in global ORDER clause",
 	},
@@ -320,4 +315,17 @@ func (e *NextWithMultipleTablesError) Error() string {
 
 func (e *NextWithMultipleTablesError) Classify() *SemanticsErrorClassification {
 	return &SemanticsErrorClassification{Typ: BugErrorType}
+}
+
+// LockOnlyWithDualError
+type LockOnlyWithDualError struct {
+	Node *sqlparser.LockingFunc
+}
+
+func (e *LockOnlyWithDualError) Error() string {
+	return printf(e, "%v allowed only with dual", sqlparser.String(e.Node))
+}
+
+func (e *LockOnlyWithDualError) Classify() *SemanticsErrorClassification {
+	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_UNIMPLEMENTED)}
 }

@@ -312,7 +312,7 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 			return &UnsupportedNaturalJoinError{Join: node.Join.ToString()}
 		}
 	case *sqlparser.LockingFunc:
-		return NewError(LockOnlyWithDual, node)
+		return &LockOnlyWithDualError{Node: node}
 	case *sqlparser.Union:
 		err := sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
 			switch node := node.(type) {

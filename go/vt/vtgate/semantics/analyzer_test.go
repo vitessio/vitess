@@ -908,6 +908,9 @@ func TestInvalidQueries(t *testing.T) {
 	}, {
 		sql: "select * from music where user_id IN (select sql_calc_found_rows * from music limit 10)",
 		err: &SQLCalcFoundRowsUsageError{},
+	}, {
+		sql:  "select is_free_lock('xyz') from user",
+		serr: "is_free_lock('xyz') allowed only with dual",
 	}}
 
 	for _, tc := range tcases {
