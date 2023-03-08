@@ -24,27 +24,11 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type (
-	ErrorCode int
-
-	Error struct {
-		Code ErrorCode
-		args []any
-	}
-	ErrType int
-
-	info struct {
-		format string
-		state  vterrors.State
-		code   vtrpcpb.Code
-		id     string
-		typ    ErrType
-	}
-)
-
 const (
 	UndefinedErrorCode = 0
 )
+
+type ErrType int
 
 const (
 	UndefinedErrorType ErrType = iota
@@ -52,84 +36,14 @@ const (
 	BugErrorType
 )
 
-const (
-	deprecatedUnionColumnsDoNotMatch ErrorCode = iota
-)
-
-func NewError(code ErrorCode, args ...any) *Error {
-	return &Error{
-		Code: code,
-		args: args,
-	}
-}
-
-var errors = map[ErrorCode]info{}
-
-func (n *Error) Error() string {
-	f, ok := errors[n.Code]
-	if !ok {
-		return "unknown error"
-	}
-
-	format := f.format
-
-	if f.id != "" {
-		format = fmt.Sprintf("%s: %s", f.id, format)
-	}
-
-	switch f.typ {
-	case UnsupportedErrorType:
-		format = "VT12001: unsupported: " + format
-	case BugErrorType:
-		format = "VT13001: [BUG] " + format
-	}
-
-	var args []any
-	for _, arg := range n.args {
-		ast, isAST := arg.(sqlparser.SQLNode)
-		if isAST {
-			args = append(args, sqlparser.String(ast))
-		} else {
-			args = append(args, arg)
-		}
-	}
-
-	return fmt.Sprintf(format, args...)
-}
-
-func (n *Error) ErrorState() vterrors.State {
-	f, ok := errors[n.Code]
-	if !ok {
-		return vterrors.Undefined
-	}
-
-	return f.state
-}
-
-func (n *Error) ErrorCode() vtrpcpb.Code {
-	f, ok := errors[n.Code]
-	if !ok {
-		return vtrpcpb.Code_UNKNOWN
-	}
-
-	switch f.typ {
-	case UnsupportedErrorType:
-		return vtrpcpb.Code_UNIMPLEMENTED
-	case BugErrorType:
-		return vtrpcpb.Code_INTERNAL
-	default:
-		return f.code
-	}
-}
-
 func printf(e SemanticsError, msg string, args ...any) string {
 	format := msg
 
-	if e.Classify().Id != "" {
-		format = fmt.Sprintf("%s: %s", e.Classify().Id, format)
+	if e.Classify().id != "" {
+		format = fmt.Sprintf("%s: %s", e.Classify().id, format)
 	}
 
-	switch e.Classify().Typ {
+	switch e.Classify().typ {
 	case UnsupportedErrorType:
 		format = "VT12001: unsupported: " + format
 	case BugErrorType:
@@ -144,10 +58,37 @@ type SemanticsError interface {
 }
 
 type SemanticsErrorClassification struct {
-	Code  int
-	State vterrors.State
-	Typ   ErrType
-	Id    string
+	code  vtrpcpb.Code
+	state vterrors.State
+	typ   ErrType
+	id    string
+}
+
+func (c *SemanticsErrorClassification) ErrorCode() vtrpcpb.Code {
+	if c.code == UndefinedErrorCode {
+		return vtrpcpb.Code_UNKNOWN
+	}
+
+	switch c.typ {
+	case UnsupportedErrorType:
+		return vtrpcpb.Code_UNIMPLEMENTED
+	case BugErrorType:
+		return vtrpcpb.Code_INTERNAL
+	default:
+		return c.code
+	}
+}
+
+func (c *SemanticsErrorClassification) State() vterrors.State {
+	return c.state
+}
+
+func (c *SemanticsErrorClassification) ErrorType() ErrType {
+	return c.typ
+}
+
+func (c *SemanticsErrorClassification) Id() string {
+	return c.id
 }
 
 // UnionColumnsDoNotMatchError
@@ -161,7 +102,7 @@ func (e *UnionColumnsDoNotMatchError) Error() string {
 }
 
 func (e *UnionColumnsDoNotMatchError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_FAILED_PRECONDITION), State: vterrors.WrongNumberOfColumnsInSelect}
+	return &SemanticsErrorClassification{code: vtrpcpb.Code_FAILED_PRECONDITION, state: vterrors.WrongNumberOfColumnsInSelect}
 }
 
 // TODO: untested
@@ -181,7 +122,7 @@ func (e *UnsupportedMultiTablesInUpdateError) Error() string {
 }
 
 func (e *UnsupportedMultiTablesInUpdateError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+	return &SemanticsErrorClassification{typ: UnsupportedErrorType}
 }
 
 // UnsupportedNaturalJoinError
@@ -194,7 +135,7 @@ func (e *UnsupportedNaturalJoinError) Error() string {
 }
 
 func (e *UnsupportedNaturalJoinError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+	return &SemanticsErrorClassification{typ: UnsupportedErrorType}
 }
 
 // UnionWithSQLCalcFoundRowsError
@@ -206,7 +147,7 @@ func (e *UnionWithSQLCalcFoundRowsError) Error() string {
 }
 
 func (e *UnionWithSQLCalcFoundRowsError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+	return &SemanticsErrorClassification{typ: UnsupportedErrorType}
 }
 
 // TODO: untested
@@ -220,7 +161,7 @@ func (e *TableNotUpdatableError) Error() string {
 }
 
 func (e *TableNotUpdatableError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{State: vterrors.NonUpdateableTable, Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+	return &SemanticsErrorClassification{state: vterrors.NonUpdateableTable, code: vtrpcpb.Code_INVALID_ARGUMENT}
 }
 
 // SQLCalcFoundRowsUsageError
@@ -232,7 +173,7 @@ func (e *SQLCalcFoundRowsUsageError) Error() string {
 }
 
 func (e *SQLCalcFoundRowsUsageError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+	return &SemanticsErrorClassification{code: vtrpcpb.Code_INVALID_ARGUMENT}
 }
 
 // TODO: untested
@@ -246,7 +187,7 @@ func (e *CantUseOptionHereError) Error() string {
 }
 
 func (e *CantUseOptionHereError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{State: vterrors.CantUseOptionHere, Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+	return &SemanticsErrorClassification{state: vterrors.CantUseOptionHere, code: vtrpcpb.Code_INVALID_ARGUMENT}
 }
 
 // TODO: untested
@@ -259,7 +200,7 @@ func (e *MissingInVSchemaError) Error() string {
 }
 
 func (e *MissingInVSchemaError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+	return &SemanticsErrorClassification{code: vtrpcpb.Code_INVALID_ARGUMENT}
 }
 
 // TODO: untested
@@ -273,7 +214,7 @@ func (e *NotSequenceTableError) Error() string {
 }
 
 func (e *NotSequenceTableError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+	return &SemanticsErrorClassification{code: vtrpcpb.Code_INVALID_ARGUMENT}
 }
 
 // TODO: untested
@@ -287,7 +228,7 @@ func (e *NextWithMultipleTablesError) Error() string {
 }
 
 func (e *NextWithMultipleTablesError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Typ: BugErrorType}
+	return &SemanticsErrorClassification{typ: BugErrorType}
 }
 
 // LockOnlyWithDualError
@@ -300,7 +241,7 @@ func (e *LockOnlyWithDualError) Error() string {
 }
 
 func (e *LockOnlyWithDualError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Code: int(vtrpcpb.Code_UNIMPLEMENTED)}
+	return &SemanticsErrorClassification{code: vtrpcpb.Code_UNIMPLEMENTED}
 }
 
 // QualifiedOrderInUnionError
@@ -326,7 +267,7 @@ func (e *JSONTablesError) Error() string {
 }
 
 func (e *JSONTablesError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Typ: UnsupportedErrorType}
+	return &SemanticsErrorClassification{typ: UnsupportedErrorType}
 }
 
 // TODO: untested
@@ -340,7 +281,7 @@ func (e *BuggyError) Error() string {
 }
 
 func (e *BuggyError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{Typ: BugErrorType}
+	return &SemanticsErrorClassification{typ: BugErrorType}
 }
 
 // ColumnNotFoundError
@@ -353,7 +294,7 @@ func (e *ColumnNotFoundError) Error() string {
 }
 
 func (e *ColumnNotFoundError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{State: vterrors.BadFieldError, Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+	return &SemanticsErrorClassification{state: vterrors.BadFieldError, code: vtrpcpb.Code_INVALID_ARGUMENT}
 }
 
 // AmbiguousColumnError
@@ -366,5 +307,5 @@ func (e *AmbiguousColumnError) Error() string {
 }
 
 func (e *AmbiguousColumnError) Classify() *SemanticsErrorClassification {
-	return &SemanticsErrorClassification{State: vterrors.BadFieldError, Code: int(vtrpcpb.Code_INVALID_ARGUMENT)}
+	return &SemanticsErrorClassification{state: vterrors.BadFieldError, code: vtrpcpb.Code_INVALID_ARGUMENT}
 }
