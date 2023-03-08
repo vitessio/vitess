@@ -64,7 +64,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/throttle"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
-	"vitess.io/vitess/go/vt/vttablet/vexec"
 )
 
 var (
@@ -75,31 +74,6 @@ var (
 	// ErrMigrationNotFound is returned by readMigration when given UUI cannot be found
 	ErrMigrationNotFound = errors.New("migration not found")
 )
-
-var vexecUpdateTemplates = []string{
-	`update _vt.schema_migrations set migration_status='val1' where mysql_schema='val2'`,
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3'`,
-	`update _vt.schema_migrations set migration_status='val1' where migration_uuid='val2' and mysql_schema='val3' and shard='val4'`,
-}
-
-var vexecInsertTemplates = []string{
-	`INSERT IGNORE INTO _vt.schema_migrations (
-		migration_uuid,
-		keyspace,
-		shard,
-		mysql_schema,
-		mysql_table,
-		migration_statement,
-		strategy,
-		options,
-		ddl_action,
-		requested_timestamp,
-		migration_context,
-		migration_status
-	) VALUES (
-		'val1', 'val2', 'val3', 'val4', 'val5', 'val6', 'val7', 'val8', 'val9', FROM_UNIXTIME(0), 'vala', 'valb'
-	)`,
-}
 
 var emptyResult = &sqltypes.Result{}
 var acceptableDropTableIfExistsErrorCodes = []mysql.ErrorCode{mysql.ERCantFindFile, mysql.ERNoSuchTable}
@@ -353,10 +327,6 @@ func (e *Executor) Open() error {
 	e.ticks.Start(e.onMigrationCheckTick)
 	e.triggerNextCheckInterval()
 
-	if _, err := sqlparser.QueryMatchesTemplates("select 1 from dual", vexecUpdateTemplates); err != nil {
-		// this validates vexecUpdateTemplates
-		return err
-	}
 	atomic.StoreInt64(&e.isOpen, 1)
 
 	return nil
@@ -4864,89 +4834,4 @@ func (e *Executor) OnSchemaMigrationStatus(ctx context.Context,
 	}
 
 	return e.onSchemaMigrationStatus(ctx, uuidParam, status, dryRun, progressPct, etaSeconds, rowsCopied, hint)
-}
-
-// VExec is called by a VExec invocation
-// Implements vitess.io/vitess/go/vt/vttablet/vexec.Executor interface
-func (e *Executor) VExec(ctx context.Context, vx *vexec.TabletVExec) (qr *querypb.QueryResult, err error) {
-	response := func(result *sqltypes.Result, err error) (*querypb.QueryResult, error) {
-		if err != nil {
-			return nil, err
-		}
-		return sqltypes.ResultToProto3(result), nil
-	}
-
-	switch stmt := vx.Stmt.(type) {
-	case *sqlparser.Delete:
-		return nil, fmt.Errorf("DELETE statements not supported for this table. query=%s", vx.Query)
-	case *sqlparser.Select:
-		return response(e.execQuery(ctx, vx.Query))
-	case *sqlparser.Insert:
-		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecInsertTemplates)
-		if err != nil {
-			return nil, err
-		}
-		if !match {
-			return nil, fmt.Errorf("Query must match one of these templates: %s", strings.Join(vexecInsertTemplates, "; "))
-		}
-		// Vexec naturally runs outside shard/schema context. It does not supply values for those columns.
-		// We can fill them in.
-		vx.ReplaceInsertColumnVal("shard", vx.ToStringVal(e.shard))
-		vx.ReplaceInsertColumnVal("mysql_schema", vx.ToStringVal(e.dbName))
-		vx.AddOrReplaceInsertColumnVal("tablet", vx.ToStringVal(e.TabletAliasString()))
-		e.triggerNextCheckInterval()
-		return response(e.execQuery(ctx, vx.Query))
-	case *sqlparser.Update:
-		match, err := sqlparser.QueryMatchesTemplates(vx.Query, vexecUpdateTemplates)
-		if err != nil {
-			return nil, err
-		}
-		if !match {
-			return nil, fmt.Errorf("Query must match one of these templates: %s; query=%s", strings.Join(vexecUpdateTemplates, "; "), vx.Query)
-		}
-		if shard, _ := vx.ColumnStringVal(vx.WhereCols, "shard"); shard != "" {
-			// shard is specified.
-			if shard != e.shard {
-				// specified shard is not _this_ shard. So we're skipping this UPDATE
-				return sqltypes.ResultToProto3(emptyResult), nil
-			}
-		}
-		statusVal, err := vx.ColumnStringVal(vx.UpdateCols, "migration_status")
-		if err != nil {
-			return nil, err
-		}
-		switch statusVal {
-		case retryMigrationHint:
-			return response(e.retryMigrationWhere(ctx, sqlparser.String(stmt.Where.Expr)))
-		case completeMigrationHint:
-			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
-			if err != nil {
-				return nil, err
-			}
-			if !schema.IsOnlineDDLUUID(uuid) {
-				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
-			}
-			return response(e.CompleteMigration(ctx, uuid))
-		case cancelMigrationHint:
-			uuid, err := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
-			if err != nil {
-				return nil, err
-			}
-			if !schema.IsOnlineDDLUUID(uuid) {
-				return nil, fmt.Errorf("Not an Online DDL UUID: %s", uuid)
-			}
-			return response(e.CancelMigration(ctx, uuid, "cancel by user", true))
-		case cancelAllMigrationHint:
-			uuid, _ := vx.ColumnStringVal(vx.WhereCols, "migration_uuid")
-			if uuid != "" {
-				return nil, fmt.Errorf("Unexpetced UUID: %s", uuid)
-			}
-			return response(e.CancelPendingMigrations(ctx, "cancel-all by user", true))
-		default:
-			return nil, fmt.Errorf("Unexpected value for migration_status: %v. Supported values are: %s, %s",
-				statusVal, retryMigrationHint, cancelMigrationHint)
-		}
-	default:
-		return nil, fmt.Errorf("No handler for this query: %s", vx.Query)
-	}
 }
