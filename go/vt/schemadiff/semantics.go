@@ -53,7 +53,7 @@ func (si *declarativeSchemaInformation) addTable(tableName string) {
 	si.Tables[tableName] = tbl
 }
 
-// addColumn adds a fake column with n otype. It assumes the table already exists
+// addColumn adds a fake column with no type. It assumes the table already exists
 func (si *declarativeSchemaInformation) addColumn(tableName string, columnName string) {
 	col := &vindexes.Column{
 		Name: sqlparser.NewIdentifierCI(columnName),
