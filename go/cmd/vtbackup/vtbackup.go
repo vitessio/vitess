@@ -274,9 +274,9 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	defer func() {
 		// Be careful not to use the original context, because we don't want to
 		// skip shutdown just because we timed out waiting for other things.
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := mysqld.Shutdown(ctx, mycnf, false); err != nil {
+		mysqlShutdownCtx, mysqlShutdownCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer mysqlShutdownCancel()
+		if err := mysqld.Shutdown(mysqlShutdownCtx, mycnf, false); err != nil {
 			log.Errorf("failed to shutdown mysqld: %v", err)
 		}
 	}()
@@ -392,8 +392,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	var primaryPos mysql.Position
 	err = retryOnError(ctx, func() error {
 		// Add a per-operation timeout so we re-read topo if the primary is unreachable.
-		opCtx, cancel := context.WithTimeout(ctx, operationTimeout)
-		defer cancel()
+		opCtx, optCancel := context.WithTimeout(ctx, operationTimeout)
+		defer optCancel()
 		pos, err := getPrimaryPosition(opCtx, tmc, topoServer)
 		if err != nil {
 			return fmt.Errorf("can't get the primary replication position: %v", err)
