@@ -152,7 +152,7 @@ type debugCompiler struct {
 	t testing.TB
 }
 
-func (d *debugCompiler) Disasm(ins string, args ...any) {
+func (d *debugCompiler) Instruction(ins string, args ...any) {
 	ins = fmt.Sprintf(ins, args...)
 	d.t.Logf("> %s", ins)
 }
@@ -240,7 +240,7 @@ func TestCompiler(t *testing.T) {
 				t.Fatal(err)
 			}
 
-			compiled, err := evalengine.Compile(converted, makeFields(tc.values), evalengine.WithCompilerLog(&debugCompiler{t}))
+			compiled, err := evalengine.Compile(converted, makeFields(tc.values), evalengine.WithAssemblerLog(&debugCompiler{t}))
 			if err != nil {
 				t.Fatal(err)
 			}

@@ -1,0 +1,208 @@
+package evalengine
+
+import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/slices2"
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
+)
+
+func isEncodingJSONSafe(col collations.ID) bool {
+	switch col.Get().Charset().(type) {
+	case charset.Charset_utf8mb4, charset.Charset_utf8mb3, charset.Charset_binary:
+		return true
+	default:
+		return false
+	}
+}
+
+func (c *compiler) compileParseJSON(fn string, doct ctype, offset int) (ctype, error) {
+	switch doct.Type {
+	case sqltypes.TypeJSON:
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		c.asm.Parse_j(offset)
+	default:
+		return ctype{}, errJSONType(fn)
+	}
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
+	switch doct.Type {
+	case sqltypes.TypeJSON:
+		return doct, nil
+	case sqltypes.Float64:
+		c.asm.Convert_fj(offset)
+	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Decimal:
+		c.asm.Convert_nj(offset)
+	case sqltypes.VarChar:
+		c.asm.Convert_cj(offset)
+	case sqltypes.VarBinary:
+		c.asm.Convert_bj(offset)
+	case sqltypes.Null:
+		c.asm.Convert_Nj(offset)
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
+	}
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileFn_JSON_ARRAY(call *builtinJSONArray) (ctype, error) {
+	for _, arg := range call.Arguments {
+		tt, err := c.compileExpr(arg)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		_, err = c.compileToJSON(tt, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.asm.Fn_JSON_ARRAY(len(call.Arguments))
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileFn_JSON_OBJECT(call *builtinJSONObject) (ctype, error) {
+	for i := 0; i < len(call.Arguments); i += 2 {
+		key, err := c.compileExpr(call.Arguments[i])
+		if err != nil {
+			return ctype{}, err
+		}
+		c.compileToJSONKey(key)
+		val, err := c.compileExpr(call.Arguments[i+1])
+		if err != nil {
+			return ctype{}, err
+		}
+		val, err = c.compileToJSON(val, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+	}
+	c.asm.Fn_JSON_OBJECT(len(call.Arguments))
+	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileToJSONKey(key ctype) {
+	if key.Type == sqltypes.VarChar && isEncodingJSONSafe(key.Col.Collation) {
+		return
+	}
+	if key.Type == sqltypes.VarBinary {
+		return
+	}
+	c.asm.Convert_xc(1, sqltypes.VarChar, collations.CollationUtf8mb4ID, 0, false)
+}
+
+func (c *compiler) jsonExtractPath(expr Expr) (*json.Path, error) {
+	path, ok := expr.(*Literal)
+	if !ok {
+		return nil, errJSONPath
+	}
+	pathBytes, ok := path.inner.(*evalBytes)
+	if !ok {
+		return nil, errJSONPath
+	}
+	var parser json.PathParser
+	return parser.ParseBytes(pathBytes.bytes)
+}
+
+func (c *compiler) jsonExtractOneOrAll(fname string, expr Expr) (jsonMatch, error) {
+	lit, ok := expr.(*Literal)
+	if !ok {
+		return jsonMatchInvalid, errOneOrAll(fname)
+	}
+	b, ok := lit.inner.(*evalBytes)
+	if !ok {
+		return jsonMatchInvalid, errOneOrAll(fname)
+	}
+	return intoOneOrAll(fname, b.string())
+}
+
+func (c *compiler) compileFn_JSON_EXTRACT(call *builtinJSONExtract) (ctype, error) {
+	doct, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if slices2.All(call.Arguments[1:], func(expr Expr) bool { return expr.constant() }) {
+		paths := make([]*json.Path, 0, len(call.Arguments[1:]))
+
+		for _, arg := range call.Arguments[1:] {
+			jp, err := c.jsonExtractPath(arg)
+			if err != nil {
+				return ctype{}, err
+			}
+			paths = append(paths, jp)
+		}
+
+		jt, err := c.compileParseJSON("JSON_EXTRACT", doct, 1)
+		if err != nil {
+			return ctype{}, err
+		}
+
+		c.asm.Fn_JSON_EXTRACT0(paths)
+		return jt, nil
+	}
+
+	return ctype{}, c.unsupported(call)
+}
+
+func (c *compiler) compileFn_JSON_UNQUOTE(call *builtinJSONUnquote) (ctype, error) {
+	arg, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.asm.jumpFrom()
+	c.asm.NullCheck1(skip)
+
+	_, err = c.compileParseJSON("JSON_UNQUOTE", arg, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	c.asm.Fn_JSON_UNQUOTE()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Blob, Col: collationJSON}, nil
+}
+
+func (c *compiler) compileFn_JSON_CONTAINS_PATH(call *builtinJSONContainsPath) (ctype, error) {
+	doct, err := c.compileExpr(call.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	if !call.Arguments[1].constant() {
+		return ctype{}, c.unsupported(call)
+	}
+
+	if !slices2.All(call.Arguments[2:], func(expr Expr) bool { return expr.constant() }) {
+		return ctype{}, c.unsupported(call)
+	}
+
+	match, err := c.jsonExtractOneOrAll("JSON_CONTAINS_PATH", call.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	paths := make([]*json.Path, 0, len(call.Arguments[2:]))
+
+	for _, arg := range call.Arguments[2:] {
+		jp, err := c.jsonExtractPath(arg)
+		if err != nil {
+			return ctype{}, err
+		}
+		paths = append(paths, jp)
+	}
+
+	_, err = c.compileParseJSON("JSON_CONTAINS_PATH", doct, 1)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
