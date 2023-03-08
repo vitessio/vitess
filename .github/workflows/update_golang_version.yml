@@ -44,5 +44,6 @@ jobs:
           delete-branch: true
           title: "Bump the Golang version"
           body: "test"
+          base: "main" # TODO: remove, this is for test purposes
           reviewers: |
             frouioui
