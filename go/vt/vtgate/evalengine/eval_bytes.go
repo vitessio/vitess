@@ -57,15 +57,15 @@ func evalToBinary(e eval) *evalBytes {
 	if e, ok := e.(*evalBytes); ok && e.isBinary() && !e.isHexOrBitLiteral() {
 		return e
 	}
-	return newEvalBinary(e.toRawBytes())
+	return newEvalBinary(e.ToRawBytes())
 }
 
-func evalToText(e eval, col collations.ID, convert bool) (*evalBytes, error) {
+func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) {
 	var bytes []byte
 	var typedcol collations.TypedCollation
 
 	if b, ok := e.(*evalBytes); ok && convert {
-		if b.isText() && b.col.Collation == col {
+		if b.isVarChar() && b.col.Collation == col {
 			return b, nil
 		}
 
@@ -85,7 +85,7 @@ func evalToText(e eval, col collations.ID, convert bool) (*evalBytes, error) {
 			}
 		}
 	} else {
-		bytes = e.toRawBytes()
+		bytes = e.ToRawBytes()
 		typedcol = collations.TypedCollation{
 			Collation:    col,
 			Coercibility: collations.CoerceCoercible,
@@ -95,8 +95,8 @@ func evalToText(e eval, col collations.ID, convert bool) (*evalBytes, error) {
 	return newEvalText(bytes, typedcol), nil
 }
 
-func (e *evalBytes) hash() (HashCode, error) {
-	if sqltypes.IsDate(e.sqlType()) {
+func (e *evalBytes) Hash() (HashCode, error) {
+	if sqltypes.IsDate(e.SQLType()) {
 		t, err := e.parseDate()
 		if err != nil {
 			return 0, err
@@ -111,22 +111,22 @@ func (e *evalBytes) hash() (HashCode, error) {
 }
 
 func (e *evalBytes) isBinary() bool {
-	return e.sqlType() == sqltypes.VarBinary
+	return e.SQLType() == sqltypes.VarBinary
 }
 
 func (e *evalBytes) isHexOrBitLiteral() bool {
 	return e.isHexLiteral || e.isBitLiteral
 }
 
-func (e *evalBytes) isText() bool {
-	return e.sqlType() == sqltypes.VarChar
+func (e *evalBytes) isVarChar() bool {
+	return e.SQLType() == sqltypes.VarChar
 }
 
-func (e *evalBytes) sqlType() sqltypes.Type {
+func (e *evalBytes) SQLType() sqltypes.Type {
 	return sqltypes.Type(e.tt)
 }
 
-func (e *evalBytes) toRawBytes() []byte {
+func (e *evalBytes) ToRawBytes() []byte {
 	return e.bytes
 }
 
@@ -135,11 +135,11 @@ func (e *evalBytes) string() string {
 }
 
 func (e *evalBytes) withCollation(col collations.TypedCollation) *evalBytes {
-	return newEvalRaw(e.sqlType(), e.bytes, col)
+	return newEvalRaw(e.SQLType(), e.bytes, col)
 }
 
 func (e *evalBytes) truncateInPlace(size int) {
-	switch tt := e.sqlType(); {
+	switch tt := e.SQLType(); {
 	case sqltypes.IsBinary(tt):
 		if size > len(e.bytes) {
 			pad := make([]byte, size)
@@ -157,7 +157,7 @@ func (e *evalBytes) truncateInPlace(size int) {
 }
 
 func (e *evalBytes) parseDate() (t time.Time, err error) {
-	switch e.sqlType() {
+	switch e.SQLType() {
 	case sqltypes.Date:
 		t, err = sqlparser.ParseDate(e.string())
 	case sqltypes.Timestamp, sqltypes.Datetime:
@@ -165,7 +165,7 @@ func (e *evalBytes) parseDate() (t time.Time, err error) {
 	case sqltypes.Time:
 		t, err = sqlparser.ParseTime(e.string())
 	default:
-		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.sqlType())
+		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 	}
 	return
 }

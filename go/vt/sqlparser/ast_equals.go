@@ -758,6 +758,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfLimit(a, b)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLineStringExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -2367,7 +2373,7 @@ func (cmp *Comparator) RefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 		return false
 	}
 	return a.OpCode == b.OpCode &&
-		a.NeedsRewrite == b.NeedsRewrite &&
+		a.Merged == b.Merged &&
 		a.hasValuesArg == b.hasValuesArg &&
 		a.argName == b.argName &&
 		cmp.Expr(a.Original, b.Original) &&
@@ -3026,6 +3032,17 @@ func (cmp *Comparator) RefOfLimit(a, b *Limit) bool {
 	}
 	return cmp.Expr(a.Offset, b.Offset) &&
 		cmp.Expr(a.Rowcount, b.Rowcount)
+}
+
+// RefOfLineStringExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfLineStringExpr(a, b *LineStringExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.PointParams, b.PointParams)
 }
 
 // RefOfLiteral does deep equals between the two objects.
@@ -5021,6 +5038,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfLagLeadExpr(a, b)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLineStringExpr(a, b)
 	case *LocateExpr:
 		b, ok := inB.(*LocateExpr)
 		if !ok {
@@ -5681,6 +5704,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfLagLeadExpr(a, b)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLineStringExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {

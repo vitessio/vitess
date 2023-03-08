@@ -22,6 +22,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
 	"vitess.io/vitess/go/mysql"
@@ -55,27 +56,44 @@ func TestVtGateVExplain(t *testing.T) {
 	conn, closer := start(t)
 	defer closer()
 
+	assertVExplainEquals := func(t *testing.T, conn *mysql.Conn, query, expected string) {
+		t.Helper()
+
+		qr := utils.Exec(t, conn, query)
+
+		// strip the first column from each row as it is not deterministic in a VExplain query
+		for i := range qr.Rows {
+			qr.Rows[i] = qr.Rows[i][1:]
+		}
+
+		if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
+			t.Error(err)
+		}
+	}
+
 	utils.AssertContainsError(t, conn,
 		`vexplain queries insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
 		"vexplain queries/all will actually run queries")
 
-	expected := `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 1, '\x16k@\xb4J\xbaK\xd6') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
-		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
-		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 3, 'N\xb1\x90ɢ\xfa\x16\x9c') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
-		` [INT32(2) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
-		` [INT32(3) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]` +
-		` [INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
-		` [INT32(4) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('monkey', 'N\xb1\x90ɢ\xfa\x16\x9c')")]` +
-		` [INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(5) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('apa', '\x16k@\xb4J\xbaK\xd6')")]` +
-		` [INT32(6) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]` +
-		` [INT32(7) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
-		` [INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
-		` [INT32(8) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (3, 'monkey', 'monkey')")]` +
-		` [INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(9) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa')")]]`
-	utils.AssertMatchesNoOrder(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(3,'monkey','monkey')`, expected)
+	expected := `[
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 1, '\x16k@\xb4J\xbaK\xd6') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 3, 'N\xb1\x90ɢ\xfa\x16\x9c') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('monkey', 'N\xb1\x90ɢ\xfa\x16\x9c')")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('apa', '\x16k@\xb4J\xbaK\xd6')")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (3, 'monkey', 'monkey')")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (1, 'apa', 'apa')")]
+	]`
+	assertVExplainEquals(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (1,'apa','apa'),(3,'monkey','monkey')`, expected)
 
 	// Assert that the output of vexplain all doesn't have begin queries because they aren't explainable
 	utils.AssertMatchesNotContains(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ all insert into user (id,lookup,lookup_unique) values (2,'apa','bandar')`, `begin`)
@@ -91,29 +109,28 @@ func TestVtGateVExplain(t *testing.T) {
 
 	// transaction explicitly started to no commit in the end.
 	utils.Exec(t, conn, "begin")
-	expected = `[[INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(0) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 4, '\xd2\xfd\x88g\xd5\\r-\xfe'), ('apa', 5, 'p\xbb\x02<\x81\f\xa8z') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
-		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
-		` [INT32(1) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 6, '\xf0\x98H\\n\xc4ľq') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]` +
-		` [INT32(2) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
-		` [INT32(3) VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]` +
-		` [INT32(4) VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]` +
-		` [INT32(4) VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('foo', '\xd2\xfd\x88g\xd5\\r-\xfe')")]` +
-		` [INT32(5) VARCHAR("ks") VARCHAR("80-c0") VARCHAR("begin")]` +
-		` [INT32(5) VARCHAR("ks") VARCHAR("80-c0") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('bar', 'p\xbb\x02<\x81\f\xa8z')")]` +
-		` [INT32(6) VARCHAR("ks") VARCHAR("c0-") VARCHAR("begin")]` +
-		` [INT32(6) VARCHAR("ks") VARCHAR("c0-") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('nobar', '\xf0\x98H\\n\xc4ľq')")]` +
-		` [INT32(7) VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]` +
-		` [INT32(8) VARCHAR("ks") VARCHAR("80-c0") VARCHAR("commit")]` +
-		` [INT32(9) VARCHAR("ks") VARCHAR("c0-") VARCHAR("commit")]` +
-		` [INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]` +
-		` [INT32(10) VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (5, 'apa', 'bar')")]` +
-		` [INT32(11) VARCHAR("ks") VARCHAR("c0-") VARCHAR("begin")]` +
-		` [INT32(11) VARCHAR("ks") VARCHAR("c0-") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (4, 'apa', 'foo'), (6, 'monkey', 'nobar')")]]`
-
-	utils.AssertMatchesNoOrder(t, conn,
-		`vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`,
-		expected)
+	expected = `[
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('apa', 4, '\xd2\xfd\x88g\xd5\\r-\xfe'), ('apa', 5, 'p\xbb\x02<\x81\f\xa8z') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into lookup(lookup, id, keyspace_id) values ('monkey', 6, '\xf0\x98H\\n\xc4ľq') on duplicate key update lookup = values(lookup), id = values(id), keyspace_id = values(keyspace_id)")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('foo', '\xd2\xfd\x88g\xd5\\r-\xfe')")]
+		[VARCHAR("ks") VARCHAR("80-c0") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("80-c0") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('bar', 'p\xbb\x02<\x81\f\xa8z')")]
+		[VARCHAR("ks") VARCHAR("c0-") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("c0-") VARCHAR("insert into lookup_unique(lookup_unique, keyspace_id) values ('nobar', '\xf0\x98H\\n\xc4ľq')")]
+		[VARCHAR("ks") VARCHAR("-40") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("80-c0") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("c0-") VARCHAR("commit")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("40-80") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (5, 'apa', 'bar')")]
+		[VARCHAR("ks") VARCHAR("c0-") VARCHAR("begin")]
+		[VARCHAR("ks") VARCHAR("c0-") VARCHAR("insert into ` + "`user`" + `(id, lookup, lookup_unique) values (4, 'apa', 'foo'), (6, 'monkey', 'nobar')")]
+	]`
+	assertVExplainEquals(t, conn, `vexplain /*vt+ EXECUTE_DML_QUERIES */ queries insert into user (id,lookup,lookup_unique) values (4,'apa','foo'),(5,'apa','bar'),(6,'monkey','nobar')`, expected)
 
 	utils.Exec(t, conn, "rollback")
 }

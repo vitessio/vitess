@@ -63,5 +63,5 @@ func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, typeFlag) {
 			f |= flagIntegerOvf
 		}
 	}
-	return l.inner.sqlType(), f
+	return l.inner.SQLType(), f
 }

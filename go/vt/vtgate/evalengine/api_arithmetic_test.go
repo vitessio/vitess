@@ -1096,10 +1096,10 @@ func TestCompareNumeric(t *testing.T) {
 
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
-					if aVal.sqlType() == bVal.sqlType() {
+					if aVal.SQLType() == bVal.SQLType() {
 						// hash codes can only be compared if they are coerced to the same type first
-						aHash, _ := aVal.hash()
-						bHash, _ := bVal.hash()
+						aHash, _ := aVal.Hash()
+						bHash, _ := bVal.Hash()
 						assert.Equal(t, aHash, bHash, "hash code does not match")
 					}
 				}

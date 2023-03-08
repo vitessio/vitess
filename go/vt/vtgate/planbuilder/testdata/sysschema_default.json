@@ -67,7 +67,7 @@
         },
         "FieldQuery": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where 1 != 1",
         "Query": "select t.table_schema, t.table_name, c.column_name, c.column_type from information_schema.`tables` as t, information_schema.`columns` as c where t.table_schema = :__vtschemaname and c.table_schema = :__vtschemaname and c.table_schema = t.table_schema and c.table_name = t.table_name order by t.table_schema asc, t.table_name asc, c.column_name asc",
-        "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
+        "SysTableTableSchema": "[VARCHAR(\"user\")]",
         "Table": "information_schema.`columns`, information_schema.`tables`"
       }
     }
