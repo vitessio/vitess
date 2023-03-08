@@ -135,7 +135,7 @@ type UnsupportedNaturalJoinError struct {
 }
 
 func (e *UnsupportedNaturalJoinError) Error() string {
-	return printf(e, "", e.Join)
+	return printf(e, "%s", e.Join)
 }
 
 func (e *UnsupportedNaturalJoinError) Info() *SemanticsErrorInfo {
