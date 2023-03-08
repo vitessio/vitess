@@ -120,9 +120,10 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:  SSUnknownSQLState,
 		},
 		{
-			err: vterrors.Errorf(vtrpc.Code_ABORTED, "aborted"),
-			num: ERQueryInterrupted,
-			ss:  SSQueryInterrupted,
+			err:   vterrors.Errorf(vtrpc.Code_ABORTED, "aborted"),
+			isSql: true,
+			num:   ERQueryInterrupted,
+			ss:    SSQueryInterrupted,
 		},
 		{
 			err: vterrors.Errorf(vtrpc.Code_OUT_OF_RANGE, "out of range"),
@@ -164,10 +165,9 @@ func TestNewSQLErrorFromError(t *testing.T) {
 			ss:    SSNoDB,
 		},
 		{
-			err:   fmt.Errorf("just some random text here"),
-			isSql: true,
-			num:   ERUnknownError,
-			ss:    SSUnknownSQLState,
+			err: fmt.Errorf("just some random text here"),
+			num: ERUnknownError,
+			ss:  SSUnknownSQLState,
 		},
 		{
 			err:   fmt.Errorf("task error: Column 'val' cannot be null (errno 1048) (sqlstate 23000) during query: insert into _edf4846d_ab65_11ed_abb1_0a43f95f28a3_20230213061619_vrepl(id,val,ts) values (1,2,'2023-02-13 04:46:16'), (2,3,'2023-02-13 04:46:16'), (3,null,'2023-02-13 04:46:16')"),
