@@ -877,7 +877,7 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 	columnNames []*sqlparser.IdentifierCI,
 	err error,
 ) {
-	err = sqlparser.Walk(func(node sqlparser.SQLNode) (kontinue bool, err error) {
+	for _, node := range v.Select.GetColumns() {
 		switch node := node.(type) {
 		case *sqlparser.StarExpr:
 			if tableName := node.TableName.Name.String(); tableName != "" {
@@ -888,7 +888,7 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 			} else {
 				dependentNames, err := getViewDependentTableNames(v.CreateView)
 				if err != nil {
-					return false, err
+					return nil, err
 				}
 				// add all columns from all referenced tables and views
 				for _, entityName := range dependentNames {
@@ -901,14 +901,14 @@ func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *decl
 				}
 			}
 			if len(columnNames) == 0 {
-				return false, &InvalidStarExprInViewError{View: v.Name()}
+				return nil, &InvalidStarExprInViewError{View: v.Name()}
 			}
 		case *sqlparser.AliasedExpr:
 			ci := sqlparser.NewIdentifierCI(node.ColumnName())
 			columnNames = append(columnNames, &ci)
 		}
-		return true, nil
-	}, v.Select.GetColumns())
+	}
+
 	if err != nil {
 		return nil, err
 	}
