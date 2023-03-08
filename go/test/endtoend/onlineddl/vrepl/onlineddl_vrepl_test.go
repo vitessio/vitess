@@ -328,7 +328,6 @@ func TestSchemaChange(t *testing.T) {
 	t.Run("duplicate migration, implicitly ignored", func(t *testing.T) {
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "online", providedUUID, providedMigrationContext, "vtctl", "vrepl_col", "", true)
 		assert.Equal(t, providedUUID, uuid)
-		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusComplete)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusComplete)
 	})
 	t.Run("fail duplicate migration with different context", func(t *testing.T) {
