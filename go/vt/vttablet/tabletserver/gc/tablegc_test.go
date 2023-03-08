@@ -153,69 +153,100 @@ func TestNextState(t *testing.T) {
 
 func TestShouldTransitionTable(t *testing.T) {
 	tt := []struct {
+		name             string
 		table            string
 		state            schema.TableGCState
+		handledStates    string
 		uuid             string
 		shouldTransition bool
 		isError          bool
 	}{
 		{
+			name:             "purge, old timestamp",
 			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_20200915120410",
 			state:            schema.PurgeTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
 			shouldTransition: true,
 		},
 		{
+			name:             "no purge, future timestamp",
 			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
 			state:            schema.PurgeTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
 			shouldTransition: false,
 		},
 		{
+			name:             "no purge, PURGE not handled state",
+			table:            "_vt_PURGE_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            schema.PurgeTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			handledStates:    "hold,evac", // no PURGE
+			shouldTransition: true,
+		},
+		{
+			name:             "no drop, future timestamp",
 			table:            "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
 			state:            schema.DropTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
 			shouldTransition: false,
 		},
 		{
+			name:             "drop, old timestamp",
 			table:            "_vt_DROP_6ace8bcef73211ea87e9f875a4d24e90_20090915120410",
 			state:            schema.DropTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
 			shouldTransition: true,
 		},
 		{
+			name:             "no evac, future timestamp",
 			table:            "_vt_EVAC_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
 			state:            schema.EvacTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
 			shouldTransition: false,
 		},
 		{
+			name:             "no hold, HOLD not handled state",
 			table:            "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
 			state:            schema.HoldTableGCState,
 			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
 			shouldTransition: true,
 		},
 		{
+			name:             "hold, future timestamp",
+			table:            "_vt_HOLD_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
+			state:            schema.HoldTableGCState,
+			uuid:             "6ace8bcef73211ea87e9f875a4d24e90",
+			handledStates:    "hold,purge,evac,drop",
+			shouldTransition: false,
+		},
+		{
+			name:             "not a GC table",
 			table:            "_vt_SOMETHING_6ace8bcef73211ea87e9f875a4d24e90_29990915120410",
 			state:            "",
 			uuid:             "",
 			shouldTransition: false,
 		},
 	}
-	lifecycleStates, err := schema.ParseGCLifecycle("purge,evac,drop")
-	assert.NoError(t, err)
-	collector := &TableGC{
-		lifecycleStates: lifecycleStates,
-	}
 	for _, ts := range tt {
-		shouldTransition, state, uuid, err := collector.shouldTransitionTable(ts.table)
-		if ts.isError {
-			assert.Error(t, err)
-		} else {
+		t.Run(ts.name, func(t *testing.T) {
+			if ts.handledStates == "" {
+				ts.handledStates = "purge,evac,drop"
+			}
+			lifecycleStates, err := schema.ParseGCLifecycle(ts.handledStates)
 			assert.NoError(t, err)
-			assert.Equal(t, ts.shouldTransition, shouldTransition)
-			assert.Equal(t, ts.state, state)
-			assert.Equal(t, ts.uuid, uuid)
-		}
+			collector := &TableGC{
+				lifecycleStates: lifecycleStates,
+			}
+
+			shouldTransition, state, uuid, err := collector.shouldTransitionTable(ts.table)
+			if ts.isError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, ts.shouldTransition, shouldTransition)
+				assert.Equal(t, ts.state, state)
+				assert.Equal(t, ts.uuid, uuid)
+			}
+		})
 	}
 }

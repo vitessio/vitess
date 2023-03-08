@@ -1,10 +1,10 @@
-create table customer(
+create table if not exists customer(
     customer_id bigint not null,
     email varbinary(128),
     primary key(customer_id)
 ) ENGINE=InnoDB;
 
-create table corder(
+create table if not exists corder(
     order_id bigint not null,
     customer_id bigint,
     sku varbinary(128),

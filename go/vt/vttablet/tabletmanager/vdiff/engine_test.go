@@ -236,7 +236,7 @@ func TestEngineRetryErroredVDiffs(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state = 'error' and options->>'$.core_options.auto_retry' = 'true'", tt.retryQueryResults, nil)
+			vdiffenv.dbClient.ExpectRequest("select * from _vt.vdiff where state = 'error' and json_unquote(json_extract(options, '$.core_options.auto_retry')) = 'true'", tt.retryQueryResults, nil)
 
 			// Right now this only supports a single row as with multiple rows we have
 			// multiple controllers in separate goroutines and the order is not

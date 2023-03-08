@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"testing"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/require"
 	"github.com/tidwall/gjson"
 )
@@ -130,7 +132,7 @@ func modifySidecarDBSchema(t *testing.T, vc *VitessCluster, tabletID string, ddl
 }
 
 func getNumExecutedDDLQueries(t *testing.T, port int) int {
-	val, err := getDebugVar(t, port, []string{"SidecarDbDDLQueryCount"})
+	val, err := getDebugVar(t, port, []string{sidecardb.StatsKeyQueryCount})
 	require.NoError(t, err)
 	i, err := strconv.Atoi(val)
 	require.NoError(t, err)

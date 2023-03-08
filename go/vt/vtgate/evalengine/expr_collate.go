@@ -139,8 +139,8 @@ func mergeCollations(left, right eval) (eval, eval, collations.ID, error) {
 		return left, right, lc.Collation, nil
 	}
 
-	lt := evalResultIsTextual(left)
-	rt := evalResultIsTextual(right)
+	lt := typeIsTextual(left.SQLType())
+	rt := typeIsTextual(right.SQLType())
 	if !lt || !rt {
 		if lt {
 			return left, right, lc.Collation, nil
@@ -179,14 +179,12 @@ func mergeCollations(left, right eval) (eval, eval, collations.ID, error) {
 }
 
 type collationAggregation struct {
-	cur  collations.TypedCollation
-	init bool
+	cur collations.TypedCollation
 }
 
 func (ca *collationAggregation) add(env *collations.Environment, tc collations.TypedCollation) error {
-	if !ca.init {
+	if ca.cur.Collation == collations.Unknown {
 		ca.cur = tc
-		ca.init = true
 	} else {
 		var err error
 		ca.cur, _, _, err = env.MergeCollations(ca.cur, tc, collations.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})

@@ -67,7 +67,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -456,11 +455,6 @@ func (tsv *TabletServer) ClearQueryPlanCache() {
 // QueryService returns the QueryService part of TabletServer.
 func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
-}
-
-// OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
-func (tsv *TabletServer) OnlineDDLExecutor() vexec.Executor {
-	return tsv.onlineDDLExecutor
 }
 
 // LagThrottler returns the throttle.Throttler part of TabletServer.
@@ -1401,7 +1395,7 @@ func txToReserveState(state queryservice.TransactionState) queryservice.Reserved
 }
 
 // GetSchema returns table definitions for the specified tables.
-func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string) (schemaDef map[string]string, err error) {
+func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, tableType querypb.SchemaTableType, tableNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) (err error) {
 	err = tsv.execRequest(
 		ctx, tsv.loadQueryTimeout(),
 		"GetSchema", "", nil,
@@ -1414,8 +1408,7 @@ func (tsv *TabletServer) GetSchema(ctx context.Context, target *querypb.Target, 
 				logStats: logStats,
 				tsv:      tsv,
 			}
-			schemaDef, err = qre.GetSchemaDefinitions(tableType, tableNames)
-			return err
+			return qre.GetSchemaDefinitions(tableType, tableNames, callback)
 		},
 	)
 	return

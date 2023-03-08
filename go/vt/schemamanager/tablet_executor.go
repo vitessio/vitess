@@ -51,7 +51,6 @@ type TabletExecutor struct {
 	waitReplicasTimeout  time.Duration
 	ddlStrategySetting   *schema.DDLStrategySetting
 	uuids                []string
-	skipPreflight        bool
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
@@ -108,11 +107,6 @@ func (exec *TabletExecutor) SetUUIDList(uuids []string) error {
 // hasProvidedUUIDs returns true when UUIDs were provided
 func (exec *TabletExecutor) hasProvidedUUIDs() bool {
 	return len(exec.uuids) != 0
-}
-
-// SkipPreflight disables preflight checks
-func (exec *TabletExecutor) SkipPreflight() {
-	exec.skipPreflight = true
 }
 
 // Open opens a connection to the primary for every shard.
@@ -270,14 +264,6 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	return false, nil
 }
 
-func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
-	if exec.skipPreflight {
-		return nil
-	}
-	_, err := exec.tmc.PreflightSchema(ctx, exec.tablets[0], sqls)
-	return err
-}
-
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
 func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) (executedAsynchronously bool, err error) {
@@ -348,12 +334,6 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 			execResult.ExecutorErr = vterrors.Wrapf(unlockErr, "unlockErr in ApplySchemaKeyspace %v", exec.keyspace).Error()
 		}
 	}()
-
-	// Make sure the schema changes introduce a table definition change.
-	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
-		execResult.ExecutorErr = err.Error()
-		return &execResult
-	}
 
 	if exec.hasProvidedUUIDs() && len(exec.uuids) != len(sqls) {
 		execResult.ExecutorErr = fmt.Sprintf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls))

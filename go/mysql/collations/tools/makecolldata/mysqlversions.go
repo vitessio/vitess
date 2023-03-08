@@ -95,6 +95,10 @@ func makeversions(output string) {
 					aliased := strings.Replace(collname, from+"_", to+"_", 1)
 					vi.alias[aliased] |= 1 << v
 				}
+				if strings.HasPrefix(collname, to+"_") {
+					aliased := strings.Replace(collname, to+"_", from+"_", 1)
+					vi.alias[aliased] |= 1 << v
+				}
 			}
 
 			switch cols[3] {

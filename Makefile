@@ -159,19 +159,13 @@ install-testing: build
 vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 	make -C go/vt/vtctl/vtctldclient
 
-parser:
-	make -C go/vt/sqlparser
+sqlparser:
+	go generate ./go/vt/sqlparser/...
+
+codegen: sqlparser sizegen
 
 demo:
 	go install ./examples/demo/demo.go
-
-codegen: asthelpergen sizegen parser
-
-visitor: asthelpergen
-	echo "make visitor has been replaced by make asthelpergen"
-
-asthelpergen:
-	go generate ./go/vt/sqlparser/...
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
@@ -275,7 +269,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=14
+BOOTSTRAP_VERSION=15
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go

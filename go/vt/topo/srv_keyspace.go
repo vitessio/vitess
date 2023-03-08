@@ -23,8 +23,6 @@ import (
 	"path"
 	"sync"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -64,7 +62,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		return nil, nil, err
 	}
 	value := &topodatapb.SrvKeyspace{}
-	if err := proto.Unmarshal(current.Contents, value); err != nil {
+	if err := value.UnmarshalVT(current.Contents); err != nil {
 		// Cancel the watch, drain channel.
 		cancel()
 		for range wdChannel {
@@ -93,7 +91,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 			}
 
 			value := &topodatapb.SrvKeyspace{}
-			if err := proto.Unmarshal(wd.Contents, value); err != nil {
+			if err := value.UnmarshalVT(wd.Contents); err != nil {
 				cancel()
 				for range wdChannel {
 				}
@@ -635,7 +633,7 @@ func (ts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, 
 	}
 
 	nodePath := srvKeyspaceFileName(keyspace)
-	data, err := proto.Marshal(srvKeyspace)
+	data, err := srvKeyspace.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -689,7 +687,7 @@ func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*t
 		return nil, err
 	}
 	srvKeyspace := &topodatapb.SrvKeyspace{}
-	if err := proto.Unmarshal(data, srvKeyspace); err != nil {
+	if err := srvKeyspace.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrapf(err, "SrvKeyspace unmarshal failed: %v", data)
 	}
 	return srvKeyspace, nil
