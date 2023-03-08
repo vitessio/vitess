@@ -17,6 +17,7 @@ limitations under the License.
 package onlineddl
 
 import (
+	"context"
 	"fmt"
 	"testing"
 	"time"
@@ -64,6 +65,7 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 		args = append(args, "--check-as-check-shard")
 	}
 	args = append(args, clusterInstance.Keyspaces[0].Name)
+
 	ctx, cancel := context.WithTimeout(context.Background(), throttlerConfigTimeout)
 	defer cancel()
 
@@ -80,6 +82,5 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 			return "", fmt.Errorf("timed out waiting for UpdateThrottlerConfig to succeed after %v. Last seen value: %+v, error: %v", throttlerConfigTimeout, result, err)
 		case <-ticker.C:
 		}
-	}
 	}
 }
