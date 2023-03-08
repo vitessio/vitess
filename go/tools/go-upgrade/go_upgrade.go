@@ -63,10 +63,10 @@ func main() {
 		return
 	}
 
-	// err = replaceGoVersionInCodebase(currentVersion, upgradeTo)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	err = replaceGoVersionInCodebase(currentVersion, upgradeTo)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	currentBootstrapVersionF, err := currentBootstrapVersion()
 	if err != nil {
