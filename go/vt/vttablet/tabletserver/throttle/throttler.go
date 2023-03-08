@@ -402,8 +402,9 @@ func (throttler *Throttler) Open() error {
 	}
 	ctx := context.Background()
 	throttlerConfig, err := throttler.readThrottlerConfig(ctx)
-	// The query needs to be dynamically built because the sidecar db name is not known
-	// when the TabletServer is created, which in turn creates the Throttler.
+	// The query needs to be dynamically built because the sidecar database name
+	// is not known when the TabletServer is created, which in turn creates the
+	// Throttler.
 	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
 	if throttleMetricQuery != "" {
 		throttler.metricsQuery.Store(throttleMetricQuery) // override

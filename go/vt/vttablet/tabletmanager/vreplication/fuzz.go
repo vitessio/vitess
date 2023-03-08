@@ -102,7 +102,7 @@ func FuzzEngine(data []byte) int {
 
 	// Fuzzer fails if this expectation is not made first:
 	dbClient.ExpectRequest(sqlparser.BuildParsedQuery("select * from %s.vreplication where db_name='db'",
-		sidecardb.GetSidecarDBNameIdentifier()).Query, &sqltypes.Result{}, nil)
+		sidecardb.GetIdentifier()).Query, &sqltypes.Result{}, nil)
 	err = makeExpectations(dbClient, f)
 	if err != nil {
 		return 0
