@@ -23,11 +23,6 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Detect new version
-        run: |
-          pwd
-          ls
-
       - name: Check out matrix branch
         uses: actions/checkout@v3
         with:
@@ -37,51 +32,48 @@ jobs:
       - name: Detect new version and update codebase
         id: detect-and-update
         run: |
-          pwd
-          ls
-          cd ..
-          pwd
-          ls
-#          if [ ${{github.ref}} == "main" ]; then
-#            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update --main --allow-major-upgrade
-#          else
-#            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update
-#          fi
-#
-#          output=$(git status -s)
-#          if [ -z "${output}" ]; then
-#            exit 0
-#          fi
-#          echo "create-pr=true" >> $GITHUB_OUTPUT
-#
-#          go_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_go_version)
-#          bootstrap_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_bootstrap_version)
-#          echo "go-version=${go_version}" >> $GITHUB_OUTPUT
-#          echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
-#
-#      - name: Create Pull Request
-#        if: steps.detect-and-update.outputs.create-pr == 'true'
-#        uses: peter-evans/create-pull-request@v4
-#        with:
-#          branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{github.ref}}"
-#          commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
-#          signoff: true
-#          delete-branch: true
-#          title: "Upgrade the Golang version to `go${{steps.detect-and-update.outputs.go-version}}`"
-#          body: |
-#            This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.
-#
-#            There are a few manual steps remaining:
-#              - Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
-#              - Update the `./.github/workflows` file with the newer Golang version, the bot, also, cannot handle that due to permissions.
-#                - To accomplish this, run the following: ``
-#          base: "main" # TODO: remove, this is for test purposes
-#          reviewers: |
-#            frouioui
-#          labels: |
-#            Skip CI
-#            go
-#            Benchmark me
-#            Component: General
-#            Type: CI/Build
-#
+          cd ./vitess-to-upgrade
+          if [ ${{github.ref}} == "main" ]; then
+            go run ../go/tools/go-upgrade/go_upgrade.go --no-workflow-update --main --allow-major-upgrade
+          else
+            go run ../go/tools/go-upgrade/go_upgrade.go --no-workflow-update
+          fi
+
+          output=$(git status -s)
+          if [ -z "${output}" ]; then
+            exit 0
+          fi
+          echo "create-pr=true" >> $GITHUB_OUTPUT
+
+          go_version=$(go run ../go/tools/go-upgrade/go_upgrade.go get_go_version)
+          bootstrap_version=$(go run ../go/tools/go-upgrade/go_upgrade.go get_bootstrap_version)
+          echo "go-version=${go_version}" >> $GITHUB_OUTPUT
+          echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
+
+      - name: Create Pull Request
+        if: steps.detect-and-update.outputs.create-pr == 'true'
+        uses: peter-evans/create-pull-request@v4
+        with:
+          path: ./vitess-to-upgrade
+          branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"
+          commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
+          signoff: true
+          delete-branch: true
+          title: "Upgrade the Golang version to `go${{steps.detect-and-update.outputs.go-version}}`"
+          body: |
+            This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.
+
+            There are a few manual steps remaining:
+              - Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
+              - Update the `./.github/workflows` file with the newer Golang version, the bot, also, cannot handle that due to permissions.
+                - To accomplish this, run the following: ``
+          base: ${{ matrix.branch }}
+          reviewers: |
+            frouioui
+          labels: |
+            Skip CI
+            go
+            Benchmark me
+            Component: General
+            Type: CI/Build
+
