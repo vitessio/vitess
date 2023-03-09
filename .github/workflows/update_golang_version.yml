@@ -70,7 +70,7 @@ jobs:
               - [ ] Make sure you update the Golang version used in the previous and next release branches for the Upgrade/Downgrade tests.
               - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
               - [ ] Update the `./.github/workflows/*.yml` files with the newer Golang version, the bot cannot handle that due to permissions.
-                - To accomplish this, run the following: ``
+                - To accomplish this, run the following: `go run ./go/tools/go-upgrade/go_upgrade.go --go-from=${{steps.detect-and-update.outputs.old-go-version}} --go-to=${{steps.detect-and-update.outputs.go-version}} update_workflows`
           base: ${{ matrix.branch }}
           reviewers: |
             frouioui

@@ -30,6 +30,7 @@ import (
 	"time"
 
 	"github.com/hashicorp/go-version"
+	"golang.org/x/exp/slices"
 )
 
 const (
@@ -49,21 +50,21 @@ func main() {
 	goTo := flag.String("go-to", "", "The Golang version we want to upgrade to.")
 	flag.Parse()
 
-	switch strings.ToLower(os.Args[1]) {
-	case "get_go_version":
+	switch {
+	case slices.Contains(os.Args, "get_go_version"):
 		currentVersion, err := currentGolangVersion()
 		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println(currentVersion.String())
-	case "get_bootstrap_version":
+	case slices.Contains(os.Args, "get_bootstrap_version"):
 		currentBootstrapVersionF, err := currentBootstrapVersion()
 		if err != nil {
 			log.Fatal(err)
 		}
 		fmt.Println(currentBootstrapVersionF)
-	case "update_workflows":
-		if !(*noWorkflowUpdate) {
+	case slices.Contains(os.Args, "update_workflows"):
+		if *noWorkflowUpdate {
 			break
 		}
 		err := updateWorkflowFilesOnly(*goFrom, *goTo)
