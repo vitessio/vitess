@@ -251,8 +251,8 @@ func TestCanonicalOutput(t *testing.T) {
 		{
 			"create table x(a geometry default (polygon(linestring(point(7.0, 3.0), point(7.0, 3.0)))))",
 			"CREATE TABLE `x` (\n\t`a` geometry DEFAULT (POLYGON(LINESTRING(POINT(7.0, 3.0), POINT(7.0, 3.0))))\n)",
-    },
-    {
+    	},
+    	{
 			"alter vschema create vindex lookup_vdx using lookup with owner=user, table=name_user_idx, from=name, to=user_id",
 			"ALTER VSCHEMA CREATE VINDEX `lookup_vdx` USING `lookup` WITH owner=user, table=name_user_idx, from=name, to=user_id",
 		},
