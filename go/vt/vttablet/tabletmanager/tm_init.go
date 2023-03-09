@@ -503,11 +503,10 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 			return nil, vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
 		}
 		err = tm.TopoServer.UpdateKeyspace(ctx, ks)
+		unlock(&lockErr)
 		if err != nil {
-			unlock(&lockErr)
 			return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 		}
-		unlock(&lockErr)
 		if lockErr != nil {
 			return nil, vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
 		}

@@ -77,6 +77,10 @@ func buildControllerPlan(query string) (*controllerPlan, error) {
 }
 
 func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
+	// This should never happen.
+	if ins == nil {
+		return nil, fmt.Errorf("BUG: invalid nil INSERT statement found when building VReplication plan")
+	}
 	if ins.Table.Qualifier.String() != sidecardb.GetName() && ins.Table.Qualifier.String() != sidecardb.DefaultName {
 		return nil, fmt.Errorf("invalid database name: %s", ins.Table.Qualifier.String())
 	}
@@ -133,6 +137,11 @@ func buildInsertPlan(ins *sqlparser.Insert) (*controllerPlan, error) {
 }
 
 func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
+	// This should never happen.
+	if upd == nil || len(upd.TableExprs) == 0 {
+		return nil, fmt.Errorf("BUG: invalid UPDATE statement found when building VReplication plan: %s",
+			sqlparser.String(upd))
+	}
 	tableExpr, ok := upd.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, fmt.Errorf("invalid FROM construct: %v", sqlparser.String(upd.TableExprs[0]))
@@ -185,6 +194,11 @@ func buildUpdatePlan(upd *sqlparser.Update) (*controllerPlan, error) {
 }
 
 func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
+	// This should never happen.
+	if del == nil || len(del.TableExprs) == 0 {
+		return nil, fmt.Errorf("BUG: invalid DELETE statement found when building VReplication plan: %s",
+			sqlparser.String(del))
+	}
 	tableExpr, ok := del.TableExprs[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, fmt.Errorf("invalid FROM construct: %v", sqlparser.String(del.TableExprs[0]))
@@ -254,6 +268,11 @@ func buildDeletePlan(del *sqlparser.Delete) (*controllerPlan, error) {
 }
 
 func buildSelectPlan(sel *sqlparser.Select) (*controllerPlan, error) {
+	// This should never happen.
+	if sel == nil || len(sel.From) == 0 {
+		return nil, fmt.Errorf("BUG: invalid SELECT statement found when building VReplication plan: %s",
+			sqlparser.String(sel))
+	}
 	tableExpr, ok := sel.From[0].(*sqlparser.AliasedTableExpr)
 	if !ok {
 		return nil, fmt.Errorf("invalid FROM construct: %v", sqlparser.String(sel.From[0]))

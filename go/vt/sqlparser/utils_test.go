@@ -226,6 +226,18 @@ func TestReplaceTableQualifiers(t *testing.T) {
 			out:  "select table_name, lastpk from copy_state where vrepl_id = 1 and id in (select max(id) from copy_state where vrepl_id = 1 group by vrepl_id, table_name)",
 		},
 		{
+			name:  "complex mixed exists select",
+			in:    "select workflow_name, db_name from _vt.vreplication where id = 1 and exists (select v1 from mydb.foo where fname = 'matt') and not exists (select v2 from _vt.newsidecartable where _vt.newsidecartable.id = _vt.vreplication.workflow_name)",
+			newdb: "_vt_import",
+			out:   "select workflow_name, db_name from _vt_import.vreplication where id = 1 and exists (select v1 from mydb.foo where fname = 'matt') and not exists (select v2 from _vt_import.newsidecartable where _vt_import.newsidecartable.id = _vt_import.vreplication.workflow_name)",
+		},
+		{
+			name:  "derived table select",
+			in:    "select myder.id from (select max(id) as id from _vt.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
+			newdb: "__vt-metadata",
+			out:   "select myder.id from (select max(id) as id from `__vt-metadata`.copy_state where vrepl_id = 1 group by vrepl_id, table_name) as myder where id = 1",
+		},
+		{
 			name: "complex select",
 			in:   "select t1.col1, t2.col2 from _vt.t1 as t1 join _vt.t2 as t2 on t1.id = t2.id",
 			out:  "select t1.col1, t2.col2 from t1 as t1 join t2 as t2 on t1.id = t2.id",
