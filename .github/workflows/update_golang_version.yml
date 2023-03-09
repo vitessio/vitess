@@ -1,7 +1,6 @@
 name: Update Golang Version
 
 on:
-  # Triggers the workflow every day
   schedule:
     - cron: "0 0 * * *"
   workflow_dispatch:
@@ -9,6 +8,9 @@ on:
 
 jobs:
   update_golang_version:
+#    strategy:
+#      matrix:
+#        branches: [ main, release-16.0, release-15.0, release-14.0 ]
     name: Update Golang Version
     runs-on: ubuntu-latest
     steps:
@@ -44,12 +46,13 @@ jobs:
         if: steps.detect-and-update.outputs.create-pr == 'true'
         uses: peter-evans/create-pull-request@v4
         with:
-          commit-message: "bump go version to go${steps.detect-and-update.outputs.go-version}"
+          branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{github.ref}}"
+          commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
           signoff: true
           delete-branch: true
-          title: "Upgrade the Golang version to `go${steps.detect-and-update.outputs.go-version}`"
+          title: "Upgrade the Golang version to `go${{steps.detect-and-update.outputs.go-version}}`"
           body: |
-            This Pull Request bumps the Golang version to `go${steps.detect-and-update.outputs.go-version}` and the bootstrap version to `${steps.detect-and-update.outputs.bootstrap-version}`.
+            This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.
             
             There are a few manual steps remaining:
               - Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
