@@ -224,6 +224,11 @@ func (Ceil) Test(yield Iterator) {
 		yield(fmt.Sprintf("CEIL(%s)", num), nil)
 		yield(fmt.Sprintf("CEILING(%s)", num), nil)
 	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("CEIL(%s)", num), nil)
+		yield(fmt.Sprintf("CEILING(%s)", num), nil)
+	}
 }
 
 // HACK: for CASE comparisons, the expression is supposed to decompose like this:

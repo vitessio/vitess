@@ -1818,6 +1818,28 @@ func (asm *assembler) Collation(col collations.TypedCollation) {
 	}, "COLLATION (SP-1)")
 }
 
+func (asm *assembler) Fn_CEIL_f() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = math.Ceil(f.f)
+		return 1
+	}, "CEIL FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_CEIL_d() {
+	asm.emit(func(vm *VirtualMachine) int {
+		d := vm.stack[vm.sp-1].(*evalDecimal)
+		c := d.dec.Ceil()
+		i, valid := c.Int64()
+		if valid {
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(i)
+		} else {
+			vm.err = errDeoptimize
+		}
+		return 1
+	}, "CEIL DECIMAL(SP-1)")
+}
+
 func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	switch {
 	case a == b:

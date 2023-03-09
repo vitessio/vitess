@@ -43,6 +43,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_BIT_COUNT(call)
 	case *builtinCollation:
 		return c.compileFn_COLLATION(call)
+	case *builtinCeil:
+		return c.compileFn_CEIL(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -352,4 +354,34 @@ func (c *compiler) compileFn_COLLATION(expr *builtinCollation) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+}
+
+func (c *compiler) compileFn_CEIL(expr *builtinCeil) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.asm.jumpFrom()
+	c.asm.NullCheck1(skip)
+
+	convt := ctype{Type: arg.Type, Col: collationNumeric}
+	switch {
+	case sqltypes.IsIntegral(arg.Type):
+		// No-op for integers.
+	case sqltypes.IsFloat(arg.Type):
+		c.asm.Fn_CEIL_f()
+	case sqltypes.IsDecimal(arg.Type):
+		// We assume here the most common case here is that
+		// the decimal fits into an integer.
+		convt.Type = sqltypes.Int64
+		c.asm.Fn_CEIL_d()
+	default:
+		convt.Type = sqltypes.Float64
+		c.asm.Convert_xf(1)
+		c.asm.Fn_CEIL_f()
+	}
+
+	c.asm.jumpDestination(skip)
+	return convt, nil
 }
