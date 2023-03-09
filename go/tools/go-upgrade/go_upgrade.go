@@ -45,6 +45,8 @@ func main() {
 	noWorkflowUpdate := flag.Bool("no-workflow-update", false, "Whether or not the workflow files should be updated. Useful when using this script to auto-create PRs.")
 	allowMajorUpgrade := flag.Bool("allow-major-upgrade", false, "Defines if Golang major version upgrade are allowed.")
 	isMainBranch := flag.Bool("main", false, "Defines if the current branch is the main branch.")
+	goFrom := flag.String("go-from", "", "The original Golang version we start with.")
+	goTo := flag.String("go-to", "", "The Golang version we want to upgrade to.")
 	flag.Parse()
 
 	switch strings.ToLower(os.Args[1]) {
@@ -60,12 +62,47 @@ func main() {
 			log.Fatal(err)
 		}
 		fmt.Println(currentBootstrapVersionF)
+	case "update_workflows":
+		if !(*noWorkflowUpdate) {
+			break
+		}
+		err := updateWorkflowFilesOnly(*goFrom, *goTo)
+		if err != nil {
+			log.Fatal(err)
+		}
 	default:
 		err := upgradePath(*allowMajorUpgrade, *noWorkflowUpdate, *isMainBranch)
 		if err != nil {
 			log.Fatal(err)
 		}
 	}
+}
+
+func updateWorkflowFilesOnly(goFrom, goTo string) error {
+	oldV, err := version.NewVersion(goFrom)
+	if err != nil {
+		return err
+	}
+	newV, err := version.NewVersion(goTo)
+	if err != nil {
+		return err
+	}
+	filesToChange, err := getListOfFilesInPaths([]string{"./.github/workflows"})
+	if err != nil {
+		return err
+	}
+
+	for _, fileToChange := range filesToChange {
+		err = replaceInFile(
+			[]string{"go-version: " + oldV.String()},
+			[]string{"go-version: " + newV.String()},
+			fileToChange,
+		)
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func upgradePath(allowMajorUpgrade, noWorkflowUpdate, isMainBranch bool) error {
@@ -111,7 +148,7 @@ func upgradePath(allowMajorUpgrade, noWorkflowUpdate, isMainBranch bool) error {
 //
 // The file `./build.env` describes which version of Golang is expected by Vitess.
 // We use this file to detect the current Golang version of our codebase.
-// The file contains `goversion_min 1.20.1`, we will grep `goversion_min` to finally find
+// The file contains `goversion_min x.xx.xx`, we will grep `goversion_min` to finally find
 // the precise golang version we're using.
 func currentGolangVersion() (*version.Version, error) {
 	contentRaw, err := os.ReadFile("build.env")

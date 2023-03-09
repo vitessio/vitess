@@ -32,6 +32,9 @@ jobs:
       - name: Detect new version and update codebase
         id: detect-and-update
         run: |
+          old_go_version=$(go run ../go/tools/go-upgrade/go_upgrade.go get_go_version)
+          echo "old-go-version=${old_go_version}" >> $GITHUB_OUTPUT
+
           cd ./vitess-to-upgrade
           if [ ${{github.ref}} == "main" ]; then
             go run ../go/tools/go-upgrade/go_upgrade.go --no-workflow-update --main --allow-major-upgrade
@@ -64,8 +67,9 @@ jobs:
             This Pull Request bumps the Golang version to `go${{steps.detect-and-update.outputs.go-version}}` and the bootstrap version to `${{steps.detect-and-update.outputs.bootstrap-version}}`.
 
             There are a few manual steps remaining:
-              - Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
-              - Update the `./.github/workflows` file with the newer Golang version, the bot, also, cannot handle that due to permissions.
+              - [ ] Make sure you update the Golang version used in the previous and next release branches for the Upgrade/Downgrade tests.
+              - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
+              - [ ] Update the `./.github/workflows/*.yml` files with the newer Golang version, the bot cannot handle that due to permissions.
                 - To accomplish this, run the following: ``
           base: ${{ matrix.branch }}
           reviewers: |
