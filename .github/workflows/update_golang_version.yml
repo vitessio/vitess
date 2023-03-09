@@ -35,15 +35,23 @@ jobs:
           fi
           echo "create-pr=true" >> $GITHUB_OUTPUT
 
-      - name: Create Pull Request
-        if: steps.detect-and-update.outputs.create-pr == 'true'
-        uses: peter-evans/create-pull-request@v4
+      - name: Create pull request
+        uses: devops-infra/action-pull-request@v0.5.5
         with:
-          commit-message: "Upgrade the Golang version"
-          signoff: true
-          delete-branch: true
-          title: "Bump the Golang version"
-          body: "test"
-          base: "main" # TODO: remove, this is for test purposes
-          reviewers: |
-            frouioui
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          title: Automatic pull request
+          target_branch: main
+          reviewer: frouioui
+
+#      - name: Create Pull Request
+#        if: steps.detect-and-update.outputs.create-pr == 'true'
+#        uses: peter-evans/create-pull-request@v4
+#        with:
+#          commit-message: "Upgrade the Golang version"
+#          signoff: true
+#          delete-branch: true
+#          title: "Bump the Golang version"
+#          body: "test"
+#          base: "main" # TODO: remove, this is for test purposes
+#          reviewers: |
+#            frouioui
