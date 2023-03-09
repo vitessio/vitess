@@ -24,9 +24,9 @@ jobs:
         id: detect-and-update
         run: |
           if [ ${{github.ref}} == "main" ]; then
-            go run ./go/tools/go-upgrade/go_upgrade.go --main --allow-major-upgrade
+            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update --main --allow-major-upgrade
           else
-            go run ./go/tools/go-upgrade/go_upgrade.go
+            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update
           fi
           
           output=$(git status -s)
@@ -34,26 +34,21 @@ jobs:
             exit 0
           fi
           echo "create-pr=true" >> $GITHUB_OUTPUT
-          git add --all
-          git commit -m 
+          
+          go_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_go_version)
+          bootstrap_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_bootstrap_version)
+          echo "go-version=${go_version}" >> $GITHUB_OUTPUT
+          echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
 
-      - name: Create pull request
-        uses: devops-infra/action-pull-request@v0.5.5
+      - name: Create Pull Request
+        if: steps.detect-and-update.outputs.create-pr == 'true'
+        uses: peter-evans/create-pull-request@v4
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          title: Automatic pull request
-          target_branch: main
-          reviewer: frouioui
-
-#      - name: Create Pull Request
-#        if: steps.detect-and-update.outputs.create-pr == 'true'
-#        uses: peter-evans/create-pull-request@v4
-#        with:
-#          commit-message: "Upgrade the Golang version"
-#          signoff: true
-#          delete-branch: true
-#          title: "Bump the Golang version"
-#          body: "test"
-#          base: "main" # TODO: remove, this is for test purposes
-#          reviewers: |
-#            frouioui
+          commit-message: "bump go version to go${steps.detect-and-update.outputs.go-version}"
+          signoff: true
+          delete-branch: true
+          title: "Upgrade the Golang version to `go${steps.detect-and-update.outputs.go-version}`"
+          body: "This Pull Request bumps the Golang version to `go${steps.detect-and-update.outputs.go-version}` and the bootstrap version to `${steps.detect-and-update.outputs.bootstrap-version}`."
+          base: "main" # TODO: remove, this is for test purposes
+          reviewers: |
+            frouioui
