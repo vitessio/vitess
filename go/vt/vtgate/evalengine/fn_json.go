@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -160,7 +159,7 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 		if key == nil {
 			return nil, errJSONKeyIsNil
 		}
-		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
+		key1, err := evalToVarchar(key, env.DefaultCollation, true)
 		if err != nil {
 			return nil, err
 		}

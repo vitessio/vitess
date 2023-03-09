@@ -41,6 +41,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_HEX(call)
 	case *builtinBitCount:
 		return c.compileFn_BIT_COUNT(call)
+	case *builtinCollation:
+		return c.compileFn_COLLATION(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -330,4 +332,24 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: t, Col: col}, nil
+}
+
+func (c *compiler) compileFn_COLLATION(expr *builtinCollation) (ctype, error) {
+	_, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.asm.jumpFrom()
+
+	col := collations.TypedCollation{
+		Collation:    collations.CollationUtf8ID,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireASCII,
+	}
+
+	c.asm.Collation(col)
+	c.asm.jumpDestination(skip)
+
+	return ctype{Type: sqltypes.VarChar, Col: col}, nil
 }

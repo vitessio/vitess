@@ -1810,6 +1810,14 @@ func (asm *assembler) Sub_uu() {
 	}, "SUB UINT64(SP-2), UINT64(SP-1)")
 }
 
+func (asm *assembler) Collation(col collations.TypedCollation) {
+	asm.emit(func(vm *VirtualMachine) int {
+		v := evalCollation(vm.stack[vm.sp-1])
+		vm.stack[vm.sp-1] = vm.arena.newEvalText([]byte(v.Collation.Get().Name()), col)
+		return 1
+	}, "COLLATION (SP-1)")
+}
+
 func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	switch {
 	case a == b:
