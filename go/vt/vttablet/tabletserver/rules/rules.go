@@ -271,6 +271,7 @@ func (qr *Rule) Equal(other *Rule) bool {
 		qr.query.Equal(other.query) &&
 		qr.leadingComment.Equal(other.leadingComment) &&
 		qr.trailingComment.Equal(other.trailingComment) &&
+		qr.timeout == other.timeout &&
 		reflect.DeepEqual(qr.plans, other.plans) &&
 		reflect.DeepEqual(qr.tableNames, other.tableNames) &&
 		reflect.DeepEqual(qr.bindVarConds, other.bindVarConds) &&
@@ -289,7 +290,7 @@ func (qr *Rule) Copy() (newqr *Rule) {
 		trailingComment: qr.trailingComment,
 		act:             qr.act,
 		cancelCtx:       qr.cancelCtx,
-		timeout:         0,
+		timeout:         qr.timeout,
 	}
 	if qr.plans != nil {
 		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
@@ -337,6 +338,9 @@ func (qr *Rule) MarshalJSON() ([]byte, error) {
 	}
 	if qr.act != QRContinue {
 		safeEncode(b, `,"Action":`, qr.act)
+	}
+	if qr.timeout != 0 {
+		safeEncode(b, `,"Timeut":`, qr.timeout)
 	}
 	_, _ = b.WriteString("}")
 	return b.Bytes(), nil

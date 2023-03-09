@@ -247,6 +247,7 @@ func (tsv *TabletServer) onlineDDLExecutorToggleTableBuffer(bufferingCtx context
 	if bufferQueries {
 		tsv.RegisterQueryRuleSource(queryRuleSource)
 		bufferRules := rules.New()
+
 		bufferRules.Add(rules.NewBufferedTableQueryRule(bufferingCtx, tableName, timeout, "buffered for cut-over"))
 		tsv.SetQueryRules(queryRuleSource, bufferRules)
 	} else {
