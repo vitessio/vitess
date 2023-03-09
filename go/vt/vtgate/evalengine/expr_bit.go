@@ -75,8 +75,8 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalBinary(out), nil
 	}
 
-	eu := evalToNumeric(e).toUint64()
-	return newEvalUint64(^eu.u), nil
+	eu := evalToNumeric(e).toInt64()
+	return newEvalUint64(^uint64(eu.i)), nil
 }
 
 func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
@@ -201,9 +201,9 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			}
 		}
 
-		lu := evalToNumeric(l).toUint64()
-		ru := evalToNumeric(r).toUint64()
-		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+		lu := evalToNumeric(l).toInt64()
+		ru := evalToNumeric(r).toInt64()
+		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	case opBitShift:
 		/*
@@ -213,12 +213,12 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
-			ru := evalToNumeric(r).toUint64()
-			return newEvalBinary(op.binary(l.bytes, ru.u)), nil
+			ru := evalToNumeric(r).toInt64()
+			return newEvalBinary(op.binary(l.bytes, uint64(ru.i))), nil
 		}
-		lu := evalToNumeric(l).toUint64()
-		ru := evalToNumeric(r).toUint64()
-		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+		lu := evalToNumeric(l).toInt64()
+		ru := evalToNumeric(r).toInt64()
+		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	default:
 		panic("unexpected bit operation")
