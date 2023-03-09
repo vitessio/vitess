@@ -984,8 +984,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	vcursor.SetIgnoreMaxMemoryRows(ignoreMaxMemoryRows)
 	consolidator := sqlparser.Consolidator(stmt)
 	vcursor.SetConsolidator(consolidator)
-	workloadName := sqlparser.GetWorkloadNameFromStatement(stmt, workloadLabel)
-	vcursor.SetWorkloadName(workloadName)
+	vcursor.SetWorkloadName(sqlparser.GetWorkloadNameFromStatement(stmt))
 
 	setVarComment, err := prepareSetVarComment(vcursor, stmt)
 	if err != nil {

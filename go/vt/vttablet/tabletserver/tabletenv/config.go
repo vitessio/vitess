@@ -580,7 +580,6 @@ var defaultConfig = TabletConfig{
 	},
 
 	EnablePerWorkloadTableMetrics: false,
-	WorkloadLabel:                 "WORKLOAD",
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

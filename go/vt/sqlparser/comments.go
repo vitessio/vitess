@@ -49,7 +49,7 @@ const (
 	// DirectiveConsolidator enables the query consolidator.
 	DirectiveConsolidator = "CONSOLIDATOR"
 	// DirectiveWorkloadName specifies the name of the client application workload issuing the query.
-	DirectiveWorkloadName = "WORKLOAD"
+	DirectiveWorkloadName = "WORKLOAD_NAME"
 )
 
 func isNonSpace(r rune) bool {
