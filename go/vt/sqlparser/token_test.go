@@ -127,6 +127,10 @@ func TestString(t *testing.T) {
 		id:   STRING,
 		want: "a'b",
 	}, {
+		in:   "'a\\''",
+		id:   STRING,
+		want: "a'",
+	},{
 		in:   "'\\'",
 		id:   LEX_ERROR,
 		want: "'",
