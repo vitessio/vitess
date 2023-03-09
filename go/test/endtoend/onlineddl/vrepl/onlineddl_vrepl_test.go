@@ -171,8 +171,6 @@ func TestMain(m *testing.M) {
 		}
 
 		clusterInstance.VtTabletExtraArgs = []string{
-			"--enable-lag-throttler",
-			"--throttle_threshold", "1s",
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", "5s",
@@ -254,6 +252,23 @@ func TestSchemaChange(t *testing.T) {
 	providedUUID := ""
 	providedMigrationContext := ""
 
+	// We execute the throttler commands via vtgate, which in turn
+	// executes them via vttablet. So let's wait until vtgate's view
+	// is updated.
+	err := clusterInstance.WaitForTabletsToHealthyInVtgate()
+	require.NoError(t, err)
+
+	_, err = onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, 0, "", false)
+	require.NoError(t, err)
+
+	for _, ks := range clusterInstance.Keyspaces {
+		for _, shard := range ks.Shards {
+			for _, tablet := range shard.Vttablets {
+				onlineddl.WaitForThrottlerStatusEnabled(t, tablet, extendedMigrationWait)
+			}
+		}
+	}
+
 	testWithInitialSchema(t)
 	t.Run("alter non_online", func(t *testing.T) {
 		_ = testOnlineDDLStatement(t, alterTableNormalStatement, string(schema.DDLStrategyDirect), providedUUID, providedMigrationContext, "vtctl", "non_online", "", false)
@@ -327,6 +342,7 @@ func TestSchemaChange(t *testing.T) {
 		insertRows(t, 2)
 		uuid := testOnlineDDLStatement(t, alterTableTrivialStatement, "vitess -postpone-completion", providedUUID, providedMigrationContext, "vtgate", "test_val", "", false)
 		// Should be still running!
+		_ = onlineddl.WaitForMigrationStatus(t, &vtParams, shards, uuid, extendedMigrationWait, schema.OnlineDDLStatusRunning)
 		onlineddl.CheckMigrationStatus(t, &vtParams, shards, uuid, schema.OnlineDDLStatusRunning)
 		// Issue a complete and wait for successful completion
 		onlineddl.CheckCompleteMigration(t, &vtParams, shards, uuid, true)
