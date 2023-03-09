@@ -201,13 +201,13 @@ func chooseNewVersion(curVersion *version.Version, latestVersions version.Collec
 
 // replaceGoVersionInCodebase goes through all the files in the codebase where the
 // Golang version must be updated
-func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) error {
+func replaceGoVersionInCodebase(old, new *version.Version, noWorkflowUpdate bool) error {
 	explore := []string{
 		"./test/templates",
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
 	}
-	if workflowUpdate {
+	if !noWorkflowUpdate {
 		explore = append(explore, "./.github/workflows")
 	}
 	filesToChange, err := getListOfFilesInPaths(explore)

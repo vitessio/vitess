@@ -48,7 +48,13 @@ jobs:
           signoff: true
           delete-branch: true
           title: "Upgrade the Golang version to `go${steps.detect-and-update.outputs.go-version}`"
-          body: "This Pull Request bumps the Golang version to `go${steps.detect-and-update.outputs.go-version}` and the bootstrap version to `${steps.detect-and-update.outputs.bootstrap-version}`."
+          body: |
+            This Pull Request bumps the Golang version to `go${steps.detect-and-update.outputs.go-version}` and the bootstrap version to `${steps.detect-and-update.outputs.bootstrap-version}`.
+            
+            There are a few manual steps remaining:
+              - Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
+              - Update the `./.github/workflows` file with the newer Golang version, the bot, also, cannot handle that due to permissions.
+                - To accomplish this, run the following: ``
           base: "main" # TODO: remove, this is for test purposes
           reviewers: |
             frouioui
