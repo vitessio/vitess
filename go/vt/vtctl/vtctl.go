@@ -103,7 +103,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/discovery"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -117,7 +116,6 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -127,38 +125,8 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
-var (
-	// ErrUnknownCommand is returned for an unknown command
-	ErrUnknownCommand = errors.New("unknown command")
-
-	// Flag variables.
-	healthCheckRetryDelay = 5 * time.Second
-	healthCheckTimeout    = time.Minute
-)
-
-func init() {
-	servenv.OnParseFor("vtctl", registerFlags)
-	servenv.OnParseFor("vtctld", registerFlags)
-}
-
-func registerFlags(fs *pflag.FlagSet) {
-	// TODO: https://github.com/vitessio/vitess/issues/11973
-	// Then remove this function and associated code (NewHealthCheck, servenv
-	// OnParseFor hooks, etc) entirely.
-	fs.Duration("vtctl_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
-	fs.MarkDeprecated("vtctl_healthcheck_topology_refresh", "")
-
-	fs.DurationVar(&healthCheckRetryDelay, "vtctl_healthcheck_retry_delay", healthCheckRetryDelay, "delay before retrying a failed healthcheck")
-	fs.MarkDeprecated("vtctl_healthcheck_retry_delay", "This is used only by the legacy vtctld UI that is already deprecated and will be removed in the next release.")
-	fs.DurationVar(&healthCheckTimeout, "vtctl_healthcheck_timeout", healthCheckTimeout, "the health check timeout period")
-	fs.MarkDeprecated("vtctl_healthcheck_timeout", "This is used only by the legacy vtctld UI that is already deprecated and will be removed in the next release.")
-}
-
-// NewHealthCheck returns a healthcheck implementation based on the vtctl flags.
-// It is exported for use in go/vt/vtctld.
-func NewHealthCheck(ctx context.Context, ts *topo.Server, local string, cellsToWatch []string) discovery.HealthCheck {
-	return discovery.NewHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, ts, local, strings.Join(cellsToWatch, ","))
-}
+// ErrUnknownCommand is returned for an unknown command.
+var ErrUnknownCommand = errors.New("unknown command")
 
 type command struct {
 	name   string
@@ -3532,9 +3500,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 
 	keyspace := subFlags.Arg(0)
 
-	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
 		if customQuerySet {
 			// custom query provided
