@@ -309,7 +309,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
-	if throttler.isEnabled > 0 {
+	if throttler.IsEnabled() {
 		// throttler is running and we should apply the config change through Operate() or else we get into race conditions
 		go func() {
 			throttler.throttlerConfigChan <- throttlerConfig
@@ -352,7 +352,7 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if throttler.isEnabled > 0 {
+	if throttler.IsEnabled() {
 		return false
 	}
 	atomic.StoreInt64(&throttler.isEnabled, 1)
@@ -373,7 +373,7 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if throttler.isEnabled == 0 {
+	if !throttler.IsEnabled() {
 		return false
 	}
 	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
@@ -397,7 +397,6 @@ func (throttler *Throttler) Open() error {
 		return nil
 	}
 	ctx := context.Background()
-	throttlerConfig, err := throttler.readThrottlerConfig(ctx)
 	// The query needs to be dynamically built because the sidecar database name
 	// is not known when the TabletServer is created, which in turn creates the
 	// Throttler.
@@ -418,7 +417,7 @@ func (throttler *Throttler) Open() error {
 		// However, we want to handle a situation where the read errors out.
 		// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
 		go func() {
-			retryTicker := time.NewTicker(time.Minute)
+			retryTicker := time.NewTicker(30 * time.Second)
 			defer retryTicker.Stop()
 			for {
 				if atomic.LoadInt64(&throttler.isOpen) == 0 {
@@ -426,6 +425,7 @@ func (throttler *Throttler) Open() error {
 					return
 				}
 
+				throttlerConfig, err := throttler.readThrottlerConfig(ctx)
 				if err == nil {
 					// it's possible that during a retry-sleep, the throttler is closed and opened again, leading
 					// to two (or more) instances of this goroutine. That's not a big problem; it's fine if all
