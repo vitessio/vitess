@@ -8,9 +8,8 @@ on:
 
 jobs:
   update_golang_version:
-    strategy:
-      matrix:
-        branch: [ main ]
+#    strategy:
+#      matrix:
 #        branch: [ main, release-16.0, release-15.0, release-14.0 ]
     name: Update Golang Version
     runs-on: ubuntu-latest
@@ -23,23 +22,16 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v3
 
-      - name: Check out matrix branch
-        uses: actions/checkout@v3
-        with:
-          ref: ${{ matrix.branch }}
-          path: './vitess-to-upgrade/'
-
       - name: Detect new version and update codebase
         id: detect-and-update
         run: |
-          old_go_version=$(go run ../go/tools/go-upgrade/go_upgrade.go get_go_version)
+          old_go_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_go_version)
           echo "old-go-version=${old_go_version}" >> $GITHUB_OUTPUT
 
-          cd ./vitess-to-upgrade
           if [ ${{github.ref}} == "main" ]; then
-            go run ../go/tools/go-upgrade/go_upgrade.go --no-workflow-update --main --allow-major-upgrade
+            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update --main --allow-major-upgrade
           else
-            go run ../go/tools/go-upgrade/go_upgrade.go --no-workflow-update
+            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update
           fi
 
           output=$(git status -s)
@@ -48,8 +40,8 @@ jobs:
           fi
           echo "create-pr=true" >> $GITHUB_OUTPUT
 
-          go_version=$(go run ../go/tools/go-upgrade/go_upgrade.go get_go_version)
-          bootstrap_version=$(go run ../go/tools/go-upgrade/go_upgrade.go get_bootstrap_version)
+          go_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_go_version)
+          bootstrap_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_bootstrap_version)
           echo "go-version=${go_version}" >> $GITHUB_OUTPUT
           echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
 
@@ -57,8 +49,7 @@ jobs:
         if: steps.detect-and-update.outputs.create-pr == 'true'
         uses: peter-evans/create-pull-request@v4
         with:
-          path: ./vitess-to-upgrade
-          branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{ matrix.branch }}"
+          branch: "upgrade-go-to-${{steps.detect-and-update.outputs.go-version}}-on-${{github.ref}}" #${{ matrix.branch }}
           commit-message: "bump go version to go${{steps.detect-and-update.outputs.go-version}}"
           signoff: true
           delete-branch: true
@@ -71,7 +62,7 @@ jobs:
               - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
               - [ ] Update the `./.github/workflows/*.yml` files with the newer Golang version, the bot cannot handle that due to permissions.
                 - To accomplish this, run the following: `go run ./go/tools/go-upgrade/go_upgrade.go --go-from=${{steps.detect-and-update.outputs.old-go-version}} --go-to=${{steps.detect-and-update.outputs.go-version}} update_workflows`
-          base: ${{ matrix.branch }}
+          base: main #${{ matrix.branch }}
           reviewers: |
             frouioui
           labels: |
