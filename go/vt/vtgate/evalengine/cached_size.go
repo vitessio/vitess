@@ -17,13 +17,7 @@ limitations under the License.
 
 package evalengine
 
-import (
-	"math"
-	"reflect"
-	"unsafe"
-
-	hack "vitess.io/vitess/go/hack"
-)
+import hack "vitess.io/vitess/go/hack"
 
 type cachedObject interface {
 	CachedSize(alloc bool) int64
@@ -209,8 +203,6 @@ func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
 	size += cached.UnaryExpr.CachedSize(false)
 	return size
 }
-
-//go:nocheckptr
 func (cached *InExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -221,17 +213,6 @@ func (cached *InExpr) CachedSize(alloc bool) int64 {
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
-	// field Hashed map[[16]byte]int
-	if cached.Hashed != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.Hashed)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
-		if len(cached.Hashed) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
-		}
-	}
 	return size
 }
 func (cached *IsExpr) CachedSize(alloc bool) int64 {

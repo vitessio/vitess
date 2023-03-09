@@ -18,6 +18,7 @@ package integration
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/rand"
 	"os"
@@ -151,6 +152,10 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 		eval, err = env.Evaluate(local)
 		if err == nil && debugCheckTypes {
 			tt, err = env.TypeOf(local)
+			if errors.Is(err, evalengine.ErrAmbiguousType) {
+				tt = -1
+				err = nil
+			}
 		}
 		return
 	}()

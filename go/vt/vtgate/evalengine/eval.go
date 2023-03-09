@@ -52,6 +52,10 @@ const (
 	// flagExplicitCollation marks that this value has an explicit collation
 	flagExplicitCollation typeFlag = 1 << 10
 
+	// flagAmbiguousType marks that the type of this value depends on the value at runtime
+	// and cannot be computed accurately
+	flagAmbiguousType typeFlag = 1 << 11
+
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
 )

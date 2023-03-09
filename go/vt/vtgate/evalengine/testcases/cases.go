@@ -78,6 +78,7 @@ type FnBitLength struct{ defaultEnv }
 type FnAscii struct{ defaultEnv }
 type FnRepeat struct{ defaultEnv }
 type FnHex struct{ defaultEnv }
+type InStatement struct{ defaultEnv }
 
 var Cases = []TestCase{
 	JSONExtract{},
@@ -116,6 +117,7 @@ var Cases = []TestCase{
 	FnAscii{},
 	FnRepeat{},
 	FnHex{},
+	InStatement{},
 }
 
 func (JSONPathOperations) Test(yield Iterator) {
@@ -231,39 +233,6 @@ func (Ceil) Test(yield Iterator) {
 	}
 }
 
-// HACK: for CASE comparisons, the expression is supposed to decompose like this:
-//
-//	CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
-//		=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
-//
-// See: https://dev.mysql.com/doc/refman/5.7/en/flow-control-functions.html#operator_case
-// However, MySQL does not seem to be using the real `=` operator for some of these comparisons
-// namely, numerical comparisons are coerced into an unsigned form when they shouldn't.
-// Example:
-//
-//	SELECT -1 = 18446744073709551615
-//		=> 0
-//	SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
-//		=> 1
-//
-// This does not happen for other types, which all follow the behavior of the `=` operator,
-// so we're going to assume this is a bug for now.
-func comparisonSkip(a, b string) bool {
-	if a == "-1" && b == "18446744073709551615" {
-		return true
-	}
-	if b == "-1" && a == "18446744073709551615" {
-		return true
-	}
-	if a == "9223372036854775808" && b == "-9223372036854775808" {
-		return true
-	}
-	if a == "-9223372036854775808" && b == "9223372036854775808" {
-		return true
-	}
-	return false
-}
-
 func (CaseExprWithValue) Test(yield Iterator) {
 	var elements []string
 	elements = append(elements, inputBitwise...)
@@ -271,7 +240,7 @@ func (CaseExprWithValue) Test(yield Iterator) {
 
 	for _, cmpbase := range elements {
 		for _, val1 := range elements {
-			if comparisonSkip(cmpbase, val1) {
+			if !(bugs{}).CanCompare(cmpbase, val1) {
 				continue
 			}
 			yield(fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1), nil)
@@ -767,4 +736,19 @@ func (FnHex) Test(yield Iterator) {
 	for _, str := range inputBitwise {
 		yield(fmt.Sprintf("hex(%s)", str), nil)
 	}
+}
+
+func (InStatement) Test(yield Iterator) {
+	roots := append([]string(nil), inputBitwise...)
+	roots = append(roots, inputComparisonElement...)
+
+	genSubsets(roots, 3, func(inputs []string) {
+		if !(bugs{}).CanCompare(inputs...) {
+			return
+		}
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[0], inputs[1], inputs[2]), nil)
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil)
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
+		yield(fmt.Sprintf("%s IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
+	})
 }

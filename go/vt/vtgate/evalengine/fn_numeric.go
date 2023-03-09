@@ -56,10 +56,12 @@ func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinCeil) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	t, f := call.Arguments[0].typeof(env)
-	if sqltypes.IsIntegral(t) {
+	if sqltypes.IsSigned(t) {
 		return sqltypes.Int64, f
+	} else if sqltypes.IsUnsigned(t) {
+		return sqltypes.Uint64, f
 	} else if sqltypes.Decimal == t {
-		return sqltypes.Decimal, f
+		return sqltypes.Int64, f | flagAmbiguousType
 	} else {
 		return sqltypes.Float64, f
 	}

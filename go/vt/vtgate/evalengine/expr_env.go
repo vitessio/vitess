@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"errors"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -43,9 +45,14 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 	return EvalResult{e}, err
 }
 
-func (env *ExpressionEnv) TypeOf(expr Expr) (ty sqltypes.Type, err error) {
-	ty, _ = expr.typeof(env)
-	return
+var ErrAmbiguousType = errors.New("the type of this expression cannot be statically computed")
+
+func (env *ExpressionEnv) TypeOf(expr Expr) (sqltypes.Type, error) {
+	ty, f := expr.typeof(env)
+	if f&flagAmbiguousType != 0 {
+		return ty, ErrAmbiguousType
+	}
+	return ty, nil
 }
 
 func (env *ExpressionEnv) collation() collations.TypedCollation {

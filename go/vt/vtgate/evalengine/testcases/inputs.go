@@ -57,7 +57,8 @@ var inputBitwise = []string{
 	"64", "'64'", "_binary '64'", "X'40'", "_binary X'40'",
 }
 
-var inputComparisonElement = []string{"NULL", "-1", "0", "1",
+var inputComparisonElement = []string{
+	"NULL", "-1", "0", "1",
 	`'foo'`, `'bar'`, `'FOO'`, `'BAR'`,
 	`'foo' collate utf8mb4_0900_as_cs`,
 	`'FOO' collate utf8mb4_0900_as_cs`,

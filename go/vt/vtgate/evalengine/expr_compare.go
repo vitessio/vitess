@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
@@ -45,7 +44,6 @@ type (
 	InExpr struct {
 		BinaryExpr
 		Negate bool
-		Hashed map[vthash.Hash]int
 	}
 
 	ComparisonOp interface {
@@ -291,37 +289,18 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 
 	var foundNull, found bool
-	var hasher = vthash.New()
-	if i.Hashed != nil {
-		if left, ok := left.(hashable); ok {
-			left.Hash(&hasher)
-
-			hash := hasher.Sum128()
-			hasher.Reset()
-
-			if idx, ok := i.Hashed[hash]; ok {
-				var numeric int
-				numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
-				if err != nil {
-					return nil, err
-				}
-				found = numeric == 0
-			}
+	for _, rtuple := range rtuple.t {
+		numeric, isNull, err := evalCompareAll(left, rtuple, true)
+		if err != nil {
+			return nil, err
 		}
-	} else {
-		for _, rtuple := range rtuple.t {
-			numeric, isNull, err := evalCompareAll(left, rtuple, true)
-			if err != nil {
-				return nil, err
-			}
-			if isNull {
-				foundNull = true
-				continue
-			}
-			if numeric == 0 {
-				found = true
-				break
-			}
+		if isNull {
+			foundNull = true
+			continue
+		}
+		if numeric == 0 {
+			found = true
+			break
 		}
 	}
 

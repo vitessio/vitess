@@ -131,7 +131,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		} else {
 			localVal = v.String()
 		}
-		if debugCheckTypes {
+		if debugCheckTypes && localType != -1 {
 			tt := v.Type()
 			if tt != sqltypes.Null && tt != localType {
 				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
