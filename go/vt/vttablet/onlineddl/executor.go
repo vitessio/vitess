@@ -4743,12 +4743,10 @@ func (e *Executor) onSchemaMigrationStatus(ctx context.Context,
 	case schema.OnlineDDLStatusComplete:
 		{
 			progressPct = progressPctFull
-			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
 		}
 	case schema.OnlineDDLStatusFailed:
 		{
-			_ = e.updateMigrationStartedTimestamp(ctx, uuid)
 			err = e.updateMigrationTimestamp(ctx, "completed_timestamp", uuid)
 		}
 	}
