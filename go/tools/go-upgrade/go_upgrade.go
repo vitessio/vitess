@@ -17,11 +17,8 @@ limitations under the License.
 package main
 
 import (
-	"encoding/json"
-	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
 	"path"
@@ -29,9 +26,59 @@ import (
 	"strings"
 	"time"
 
+	"encoding/json"
+	"flag"
+	"log"
+
 	"github.com/hashicorp/go-version"
 	"golang.org/x/exp/slices"
 )
+
+// The tool go_upgrade allows us to automate some tasks required
+// to bump the version of Golang used throughout our codebase.
+//
+// It comes with four commands:
+// 		- Default: `./go/tools/go-upgrade/go_upgrade.go`
+//
+// 		  This will simply bump the version across the codebase.
+// 		  The latest available version of Golang will be fetched
+// 		  and used instead of the old version.
+//
+// 		  By default, we do allow major Golang version upgrade such
+// 		  as 1.20 to 1.21 but this can be overridden using the
+// 		  allow-major-upgrade CLI flag. Usually, we only allow such
+// 		  upgrade on the main branch of the repository.
+//
+// 		  In CI, particularly, we do not want to modify the workflow
+// 		  files before automatically creating a Pull Request to
+// 		  avoid permission issues. The rewrite of workflow files can
+// 		  be disabled using the no-workflow-update CLI flag.
+//
+// 		  Moreover, this command automatically bumps the bootstrap
+// 		  version of our codebase. If we are on the main branch, we
+// 		  want to use the CLI flag `main` to remember to increment
+// 		  the bootstrap version by 1 instead of 0.1.
+//
+//
+// 		- Get Current Go Version: `./go/tools/go-upgrade/go_upgrade.go get_go_version`
+//
+// 		  This command outputs the currently used Golang version of
+// 		  our codebase.
+//
+//
+// 		- Get Current bootstrap Version: `./go/tools/go-upgrade/go_upgrade.go get_bootstrap_version`
+//
+// 		  This command outputs the currently used bootstrap version
+// 		  of our codebase.
+//
+//
+// 		- Update Workflows: `./go/tools/go-upgrade/go_upgrade.go update_workflows`
+//
+// 		  This command is used after the auto Pull Request has been
+// 		  created. One of the reviewer must go and use this command
+// 		  to update the workflows files with the newer Golang version.
+// 		  It takes two arguments `go-from` and `go-to` to identify the
+// 		  old Golang version (go-from) and the new one (go-to).
 
 const (
 	goDevAPI = "https://go.dev/dl/?mode=json"
