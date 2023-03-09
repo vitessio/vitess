@@ -83,6 +83,7 @@ var (
 	ptOSCOverridePath       string
 	migrationCheckInterval  = 1 * time.Minute
 	retainOnlineDDLTables   = 24 * time.Hour
+	cutOverThreshold        = 10 * time.Second
 	maxConcurrentOnlineDDLs = 256
 )
 
@@ -97,6 +98,7 @@ func registerOnlineDDLFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&migrationCheckInterval, "migration_check_interval", migrationCheckInterval, "Interval between migration checks")
 	fs.DurationVar(&retainOnlineDDLTables, "retain_online_ddl_tables", retainOnlineDDLTables, "How long should vttablet keep an old migrated table before purging it")
 	fs.IntVar(&maxConcurrentOnlineDDLs, "max_concurrent_online_ddl", maxConcurrentOnlineDDLs, "Maximum number of online DDL changes that may run concurrently")
+	fs.DurationVar(&cutOverThreshold, "online-ddl-cut-over-threshold", cutOverThreshold, "max time to wait on migration cut-over before cancelling")
 }
 
 var migrationNextCheckIntervals = []time.Duration{1 * time.Second, 5 * time.Second, 10 * time.Second, 20 * time.Second}
@@ -113,7 +115,7 @@ const (
 	emptyHint                                = ""
 	readyToCompleteHint                      = "ready_to_complete"
 	databasePoolSize                         = 3
-	vreplicationCutOverThreshold             = 10 * time.Second
+	qrBufferExtraTimeout                     = 5 * time.Second
 	vreplicationTestSuiteWaitSeconds         = 5
 )
 
@@ -166,7 +168,7 @@ type Executor struct {
 	tabletTypeFunc        func() topodatapb.TabletType
 	ts                    *topo.Server
 	lagThrottler          *throttle.Throttler
-	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool)
+	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool)
 	tabletAlias           *topodatapb.TabletAlias
 
 	keyspace string
@@ -229,7 +231,7 @@ func newGCTableRetainTime() time.Time {
 func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *topo.Server,
 	lagThrottler *throttle.Throttler,
 	tabletTypeFunc func() topodatapb.TabletType,
-	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, bufferQueries bool),
+	toggleBufferTableFunc func(cancelCtx context.Context, tableName string, timeout time.Duration, bufferQueries bool),
 ) *Executor {
 	// sanitize flags
 	if maxConcurrentOnlineDDLs < 1 {
@@ -741,7 +743,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	var sentryTableName string
 
 	waitForPos := func(s *VReplStream, pos mysql.Position) error {
-		ctx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		ctx, cancel := context.WithTimeout(ctx, cutOverThreshold)
 		defer cancel()
 		// Wait for target to reach the up-to-date pos
 		if err := tmClient.VReplicationWaitForPos(ctx, tablet.Tablet, s.id, mysql.EncodePosition(pos)); err != nil {
@@ -824,7 +826,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// This function waits until it finds the RENAME TABLE... query running in MySQL's PROCESSLIST, or until timeout
 		// The function assumes that one of the renamed tables is locked, thus causing the RENAME to block. If nothing
 		// is locked, then the RENAME will be near-instantaneious and it's unlikely that the function will find it.
-		renameWaitCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		renameWaitCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
 		defer cancel()
 
 		for {
@@ -851,7 +853,8 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 	// Preparation is complete. We proceed to cut-over.
 	toggleBuffering := func(bufferQueries bool) error {
 		log.Infof("toggling buffering: %t in migration %v", bufferQueries, onlineDDL.UUID)
-		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, bufferQueries)
+		timeout := cutOverThreshold + qrBufferExtraTimeout
+		e.toggleBufferTableFunc(bufferingCtx, onlineDDL.Table, timeout, bufferQueries)
 		if !bufferQueries {
 			// called after new table is in place.
 			// unbuffer existing queries:
@@ -902,7 +905,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 		// real production
 
 		e.updateMigrationStage(ctx, onlineDDL.UUID, "locking tables")
-		lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+		lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
 		defer cancel()
 		lockTableQuery := sqlparser.BuildParsedQuery(sqlLockTwoTablesWrite, sentryTableName, onlineDDL.Table)
 		if _, err := lockConn.Exec(lockCtx, lockTableQuery.Query, 1, false); err != nil {
@@ -974,14 +977,14 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 
 			{
 				dropTableQuery := sqlparser.BuildParsedQuery(sqlDropTable, sentryTableName)
-				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+				lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
 				defer cancel()
 				if _, err := lockConn.Exec(lockCtx, dropTableQuery.Query, 1, false); err != nil {
 					return err
 				}
 			}
 			{
-				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+				lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
 				defer cancel()
 				e.updateMigrationStage(ctx, onlineDDL.UUID, "unlocking tables")
 				if _, err := lockConn.Exec(lockCtx, sqlUnlockTables, 1, false); err != nil {
@@ -989,7 +992,7 @@ func (e *Executor) cutOverVReplMigration(ctx context.Context, s *VReplStream) er
 				}
 			}
 			{
-				lockCtx, cancel := context.WithTimeout(ctx, vreplicationCutOverThreshold)
+				lockCtx, cancel := context.WithTimeout(ctx, cutOverThreshold)
 				defer cancel()
 				e.updateMigrationStage(lockCtx, onlineDDL.UUID, "waiting for RENAME to complete")
 				if err := <-renameCompleteChan; err != nil {
@@ -3379,13 +3382,13 @@ func (e *Executor) isVReplMigrationReadyToCutOver(ctx context.Context, s *VReplS
 		}
 		timeNow := time.Now()
 		timeUpdated := time.Unix(s.timeUpdated, 0)
-		if durationDiff(timeNow, timeUpdated) > vreplicationCutOverThreshold {
+		if durationDiff(timeNow, timeUpdated) > cutOverThreshold {
 			return false, nil
 		}
 		// Let's look at transaction timestamp. This gets written by any ongoing
 		// writes on the server (whether on this table or any other table)
 		transactionTimestamp := time.Unix(s.transactionTimestamp, 0)
-		if durationDiff(timeNow, transactionTimestamp) > vreplicationCutOverThreshold {
+		if durationDiff(timeNow, transactionTimestamp) > cutOverThreshold {
 			return false, nil
 		}
 	}

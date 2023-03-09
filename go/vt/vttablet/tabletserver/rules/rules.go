@@ -24,6 +24,7 @@ import (
 	"reflect"
 	"regexp"
 	"strconv"
+	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
@@ -177,13 +178,17 @@ func (qrs *Rules) GetAction(
 	user string,
 	bindVars map[string]*querypb.BindVariable,
 	marginComments sqlparser.MarginComments,
-) (action Action, cancelCtx context.Context, desc string) {
+) (
+	action Action,
+	cancelCtx context.Context,
+	timeout time.Duration,
+	desc string) {
 	for _, qr := range qrs.rules {
 		if act := qr.GetAction(ip, user, bindVars, marginComments); act != QRContinue {
-			return act, qr.cancelCtx, qr.Description
+			return act, qr.cancelCtx, qr.timeout, qr.Description
 		}
 	}
-	return QRContinue, nil, ""
+	return QRContinue, nil, 0, ""
 }
 
 //-----------------------------------------------
@@ -217,8 +222,11 @@ type Rule struct {
 	// Action to be performed on trigger
 	act Action
 
-	// a rule can be dynamically cancelled. This function determines whether it is cancelled
+	// a rule can be dynamically cancelled.
 	cancelCtx context.Context
+
+	// a rule can timeout.
+	timeout time.Duration
 }
 
 type namedRegexp struct {
@@ -246,9 +254,9 @@ func NewQueryRule(description, name string, act Action) (qr *Rule) {
 }
 
 // NewBufferedTableQueryRule creates a new buffer Rule.
-func NewBufferedTableQueryRule(cancelCtx context.Context, tableName string, description string) (qr *Rule) {
+func NewBufferedTableQueryRule(cancelCtx context.Context, tableName string, bufferTimeout time.Duration, description string) (qr *Rule) {
 	// We ignore act because there's only one action right now
-	return &Rule{cancelCtx: cancelCtx, Description: description, Name: bufferedTableRuleName, tableNames: []string{tableName}, act: QRBuffer}
+	return &Rule{cancelCtx: cancelCtx, timeout: bufferTimeout, Description: description, Name: bufferedTableRuleName, tableNames: []string{tableName}, act: QRBuffer}
 }
 
 // Equal returns true if other is equal to this Rule, otherwise false.
@@ -281,6 +289,7 @@ func (qr *Rule) Copy() (newqr *Rule) {
 		trailingComment: qr.trailingComment,
 		act:             qr.act,
 		cancelCtx:       qr.cancelCtx,
+		timeout:         0,
 	}
 	if qr.plans != nil {
 		newqr.plans = make([]planbuilder.PlanType, len(qr.plans))
