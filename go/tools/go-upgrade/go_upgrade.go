@@ -18,6 +18,7 @@ package main
 
 import (
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
@@ -41,32 +42,56 @@ type latestGolangRelease struct {
 }
 
 func main() {
-	allowMajorUpgrade := false
-	isMainBranch := true
+	noWorkflowUpdate := flag.Bool("no-workflow-update", false, "Whether or not the workflow files should be updated. Useful when using this script to auto-create PRs.")
+	allowMajorUpgrade := flag.Bool("allow-major-upgrade", false, "Defines if Golang major version upgrade are allowed.")
+	isMainBranch := flag.Bool("main", false, "Defines if the current branch is the main branch.")
+	flag.Parse()
 
+	switch strings.ToLower(os.Args[1]) {
+	case "get_go_version":
+		currentVersion, err := currentGolangVersion()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(currentVersion.String())
+	case "get_bootstrap_version":
+		currentBootstrapVersionF, err := currentBootstrapVersion()
+		if err != nil {
+			log.Fatal(err)
+		}
+		fmt.Println(currentBootstrapVersionF)
+	default:
+		err := upgradePath(*allowMajorUpgrade, *noWorkflowUpdate, *isMainBranch)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
+}
+
+func upgradePath(allowMajorUpgrade, noWorkflowUpdate, isMainBranch bool) error {
 	currentVersion, err := currentGolangVersion()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	availableVersions, err := getLatestStableGolangReleases()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	upgradeTo := chooseNewVersion(currentVersion, availableVersions, allowMajorUpgrade)
 	if upgradeTo == nil {
-		return
+		return nil
 	}
 
-	err = replaceGoVersionInCodebase(currentVersion, upgradeTo)
+	err = replaceGoVersionInCodebase(currentVersion, upgradeTo, noWorkflowUpdate)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	currentBootstrapVersionF, err := currentBootstrapVersion()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	nextBootstrapVersionF := currentBootstrapVersionF
 	if isMainBranch {
@@ -76,9 +101,9 @@ func main() {
 	}
 	err = updateBootstrapVersionInCodebase(currentBootstrapVersionF, nextBootstrapVersionF, upgradeTo)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-
+	return nil
 }
 
 // currentGolangVersion gets the running version of Golang in Vitess
@@ -176,13 +201,16 @@ func chooseNewVersion(curVersion *version.Version, latestVersions version.Collec
 
 // replaceGoVersionInCodebase goes through all the files in the codebase where the
 // Golang version must be updated
-func replaceGoVersionInCodebase(old, new *version.Version) error {
-	filesToChange, err := getListOfFilesInPaths([]string{
-		"./.github/workflows",
+func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) error {
+	explore := []string{
 		"./test/templates",
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
-	})
+	}
+	if workflowUpdate {
+		explore = append(explore, "./.github/workflows")
+	}
+	filesToChange, err := getListOfFilesInPaths(explore)
 	if err != nil {
 		return err
 	}
