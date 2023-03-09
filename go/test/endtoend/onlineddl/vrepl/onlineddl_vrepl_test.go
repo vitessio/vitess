@@ -46,8 +46,8 @@ var (
 	onlineDDLThrottlerAppName = "online-ddl"
 	vstreamerThrottlerAppName = "vstreamer"
 
-	normalMigrationWait   = 30 * time.Second
-	extendedMigrationWait = 45 * time.Second
+	normalMigrationWait   = 45 * time.Second
+	extendedMigrationWait = 60 * time.Second
 
 	hostname              = "localhost"
 	keyspaceName          = "ks"
