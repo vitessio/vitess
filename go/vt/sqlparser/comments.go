@@ -404,7 +404,7 @@ func Consolidator(stmt Statement) querypb.ExecuteOptions_Consolidator {
 func GetWorkloadNameFromStatement(statement Statement) string {
 	commentedStatement, ok := statement.(Commented)
 	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
-	// unspecified workload
+	// empty workload name
 	if !ok {
 		return ""
 	}
