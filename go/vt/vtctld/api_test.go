@@ -28,43 +28,12 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/wrangler"
 
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 )
-
-// tabletStats will create a discovery.TabletHealth object based on the given tablet configuration.
-func tabletStats(keyspace, cell, shard string, tabletType topodatapb.TabletType, uid uint32) (*topodatapb.Tablet, *discovery.TabletHealth) {
-	target := &querypb.Target{
-		Keyspace:   keyspace,
-		Shard:      shard,
-		TabletType: tabletType,
-	}
-	tablet := &topodatapb.Tablet{
-		Alias:    &topodatapb.TabletAlias{Cell: cell, Uid: uid},
-		Keyspace: keyspace,
-		Shard:    shard,
-		Type:     tabletType,
-		PortMap:  map[string]int32{"vt": int32(uid), "grpc": int32(uid + 1)},
-	}
-	realtimeStats := &querypb.RealtimeStats{
-		HealthError: "",
-		// uid is used for ReplicationLagSeconds to give it a unique value.
-		ReplicationLagSeconds: uid,
-	}
-	stats := &discovery.TabletHealth{
-		Tablet:    tablet,
-		Target:    target,
-		Serving:   true,
-		Stats:     realtimeStats,
-		LastError: nil,
-	}
-	return tablet, stats
-}
 
 func compactJSON(in []byte) string {
 	buf := &bytes.Buffer{}
@@ -146,32 +115,7 @@ func TestAPI(t *testing.T) {
 			return "TestTabletAction Result", nil
 		})
 
-	healthcheck := discovery.NewFakeHealthCheck(nil)
-	initAPI(ctx, ts, actionRepo, healthcheck)
-
-	t1, ts1 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_REPLICA, 100)
-	t2, ts2 := tabletStats("ks1", "cell1", "-80", topodatapb.TabletType_RDONLY, 200)
-	t3, ts3 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_REPLICA, 300)
-	t4, ts4 := tabletStats("ks1", "cell2", "80-", topodatapb.TabletType_RDONLY, 400)
-
-	t5, ts5 := tabletStats("ks2", "cell1", "0", topodatapb.TabletType_REPLICA, 500)
-	t6, ts6 := tabletStats("ks2", "cell2", "0", topodatapb.TabletType_REPLICA, 600)
-
-	healthcheck.AddTablet(t1)
-	healthcheck.AddTablet(t2)
-	healthcheck.AddTablet(t3)
-	healthcheck.AddTablet(t4)
-
-	healthcheck.AddTablet(t5)
-	healthcheck.AddTablet(t6)
-
-	healthcheck.UpdateHealth(ts1)
-	healthcheck.UpdateHealth(ts2)
-	healthcheck.UpdateHealth(ts3)
-	healthcheck.UpdateHealth(ts4)
-
-	healthcheck.UpdateHealth(ts5)
-	healthcheck.UpdateHealth(ts6)
+	initAPI(ctx, ts, actionRepo)
 
 	// all-tablets response for keyspace/ks1/tablets/ endpoints
 	keyspaceKs1AllTablets := `[
@@ -192,13 +136,6 @@ func TestAPI(t *testing.T) {
 			"type": 2,
 			"mysql_hostname": "mysql1-cell1.test.net",
 			"mysql_port": 3306,
-			"stats": {
-				"realtime": {
-					"replication_lag_seconds": 100
-				},
-				"serving": true,
-				"up": true
-			},
 			"url": "http://mysql1-cell1.test.net:100"
 		},
 		{
@@ -263,13 +200,6 @@ func TestAPI(t *testing.T) {
 				"type": 2,
 				"mysql_hostname": "mysql1-cell1.test.net",
 				"mysql_port": 3306,
-				"stats": {
-					"realtime": {
-						"replication_lag_seconds": 100
-					},
-					"serving": true,
-					"up": true
-				},
 				"url": "http://mysql1-cell1.test.net:100"
 			}
 		]`, http.StatusOK},
@@ -304,7 +234,8 @@ func TestAPI(t *testing.T) {
 				"keyspace_type":0,
 				"base_keyspace":"",
 				"snapshot_time":null,
-				"durability_policy":"semi_sync"
+				"durability_policy":"semi_sync",
+				"throttler_config": null
 			}`, http.StatusOK},
 		{"GET", "keyspaces/nonexistent", "", "404 page not found", http.StatusNotFound},
 		{"POST", "keyspaces/ks1?action=TestKeyspaceAction", "", `{
@@ -370,80 +301,26 @@ func TestAPI(t *testing.T) {
 			}`, http.StatusOK},
 
 		// Tablet Updates
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=REPLICA&metric=lag", "", `[
-		{
-		    "Data": [ [100, -1] ],
-		    "Aliases": [[ { "cell": "cell1", "uid": 100 }, null ]],
-		    "KeyspaceLabel": { "Name": "ks1", "Rowspan": 1 },
-		    "CellAndTypeLabels": [{ "CellLabel": { "Name": "cell1",  "Rowspan": 1 }, "TypeLabels": [{"Name": "REPLICA", "Rowspan": 1}] }] ,
-		    "ShardLabels": ["-80", "80-"],
-		    "YGridLines": [0.5]
-		  }
-		]`, http.StatusOK},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=all&type=all&metric=lag", "", `[
-		{
-		  "Data":[[-1,400],[-1,300],[200,-1],[100,-1]],
-		  "Aliases":[[null,{"cell":"cell2","uid":400}],[null,{"cell":"cell2","uid":300}],[{"cell":"cell1","uid":200},null],[{"cell":"cell1","uid":100},null]],
-		  "KeyspaceLabel":{"Name":"ks1","Rowspan":4},
-		  "CellAndTypeLabels":[
-		     {"CellLabel":{"Name":"cell1","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]},
-		     {"CellLabel":{"Name":"cell2","Rowspan":2},"TypeLabels":[{"Name":"REPLICA","Rowspan":1},{"Name":"RDONLY","Rowspan":1}]}],
-		  "ShardLabels":["-80","80-"],
-		  "YGridLines":[0.5,1.5,2.5,3.5]
-		}
-		]`, http.StatusOK},
-		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", "", `[
-		  {
-		   "Data":[[-1,300],[200,-1]],
-		   "Aliases":null,
-		   "KeyspaceLabel":{"Name":"ks1","Rowspan":2},
-		  "CellAndTypeLabels":[
-		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
-		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
-		  "ShardLabels":["-80","80-"],
-		  "YGridLines":[0.5,1.5]
-		  },
-		  {
-		    "Data":[[600],[500]],
-		   "Aliases":null,
-		   "KeyspaceLabel":{"Name":"ks2","Rowspan":2},
-		  "CellAndTypeLabels":[
-		    {"CellLabel":{"Name":"cell1","Rowspan":1},"TypeLabels":null},
-		    {"CellLabel":{"Name":"cell2","Rowspan":1},"TypeLabels":null}],
-		  "ShardLabels":["0"],
-		  "YGridLines":[0.5, 1.5]
-		  }
-		]`, http.StatusOK},
-		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "can't get tablet_statuses: invalid target path: \"cell1/REPLICA/lag\"  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", http.StatusInternalServerError},
-		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "can't get tablet_statuses: invalid tablet type: unknown TabletType hello", http.StatusInternalServerError},
+		{"GET", "tablet_statuses/?keyspace=all&cell=all&type=all&metric=lag", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_statuses/cell1/REPLICA/lag", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_statuses/?keyspace=ks1&cell=cell1&type=hello&metric=lag", "", "404 page not found", http.StatusNotFound},
 
 		// Tablet Health
-		{"GET", "tablet_health/cell1/100", "", `{ "Tablet": { "alias": { "cell": "cell1", "uid": 100 },"port_map": { "grpc": 101, "vt": 100 }, "keyspace": "ks1", "shard": "-80", "type": 2},
-		  "Target": { "keyspace": "ks1", "shard": "-80", "tablet_type": 2 }, "Serving": true, "PrimaryTermStartTime": 0,
-		  "Stats": { "replication_lag_seconds": 100 }, "LastError": null }`, http.StatusOK},
-		{"GET", "tablet_health/cell1", "", "can't get tablet_health: invalid tablet_health path: \"cell1\"  expected path: /tablet_health/<cell>/<uid>", http.StatusInternalServerError},
-		{"GET", "tablet_health/cell1/gh", "", "can't get tablet_health: incorrect uid", http.StatusInternalServerError},
+		{"GET", "tablet_health/cell1/100", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_health/cell1", "", "404 page not found", http.StatusNotFound},
+		{"GET", "tablet_health/cell1/gh", "", "404 page not found", http.StatusNotFound},
 
 		// Topology Info
-		{"GET", "topology_info/?keyspace=all&cell=all", "", `{
-		   "Keyspaces": ["ks1", "ks2"],
-		   "Cells": ["cell1","cell2"],
-		   "TabletTypes": ["REPLICA","RDONLY"]
-		}`, http.StatusOK},
-		{"GET", "topology_info/?keyspace=ks1&cell=cell1", "", `{
-		   "Keyspaces": ["ks1", "ks2"],
-		   "Cells": ["cell1","cell2"],
-		   "TabletTypes": ["REPLICA", "RDONLY"]
-		}`, http.StatusOK},
+		{"GET", "topology_info/?keyspace=all&cell=all", "", "404 page not found", http.StatusNotFound},
 
 		// vtctl RunCommand
 		{"POST", "vtctl/", `["GetKeyspace","ks1"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\"\n}\n\n"
+		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 0,\n  \"base_keyspace\": \"\",\n  \"snapshot_time\": null,\n  \"durability_policy\": \"semi_sync\",\n  \"throttler_config\": null\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetKeyspace","ks3"]`, `{
 		   "Error": "",
-		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\"\n}\n\n"
+		   "Output": "{\n  \"served_froms\": [],\n  \"keyspace_type\": 1,\n  \"base_keyspace\": \"ks1\",\n  \"snapshot_time\": {\n    \"seconds\": \"1136214245\",\n    \"nanoseconds\": 0\n  },\n  \"durability_policy\": \"none\",\n  \"throttler_config\": null\n}\n\n"
 		}`, http.StatusOK},
 		{"POST", "vtctl/", `["GetVSchema","ks3"]`, `{
 		   "Error": "",

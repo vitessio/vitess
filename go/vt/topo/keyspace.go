@@ -211,6 +211,14 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 	return "none", nil
 }
 
+func (ts *Server) GetThrottlerConfig(ctx context.Context, keyspace string) (*topodatapb.ThrottlerConfig, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return nil, err
+	}
+	return keyspaceInfo.ThrottlerConfig, nil
+}
+
 // UpdateKeyspace updates the keyspace data. It checks the keyspace is locked.
 func (ts *Server) UpdateKeyspace(ctx context.Context, ki *KeyspaceInfo) error {
 	// make sure it is locked first

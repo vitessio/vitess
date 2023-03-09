@@ -129,7 +129,7 @@ type Throttler struct {
 	mysqlThrottleMetricChan chan *mysql.MySQLThrottleMetric
 	mysqlInventoryChan      chan *mysql.Inventory
 	mysqlClusterProbesChan  chan *mysql.ClusterProbes
-	throttlerConfigChan     chan *topodatapb.SrvKeyspace_ThrottlerConfig
+	throttlerConfigChan     chan *topodatapb.ThrottlerConfig
 
 	mysqlInventory *mysql.Inventory
 
@@ -160,6 +160,7 @@ type ThrottlerStatus struct {
 
 	IsLeader  bool
 	IsOpen    bool
+	IsEnabled bool
 	IsDormant bool
 
 	AggregatedMetrics map[string]base.MetricResult
@@ -187,7 +188,7 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.mysqlThrottleMetricChan = make(chan *mysql.MySQLThrottleMetric)
 	throttler.mysqlInventoryChan = make(chan *mysql.Inventory, 1)
 	throttler.mysqlClusterProbesChan = make(chan *mysql.ClusterProbes)
-	throttler.throttlerConfigChan = make(chan *topodatapb.SrvKeyspace_ThrottlerConfig)
+	throttler.throttlerConfigChan = make(chan *topodatapb.ThrottlerConfig)
 	throttler.mysqlInventory = mysql.NewInventory()
 
 	throttler.throttledApps = cache.New(cache.NoExpiration, 0)
@@ -283,7 +284,7 @@ func (throttler *Throttler) initConfig() {
 }
 
 // readThrottlerConfig proactively reads the throttler's config from SrvKeyspace in local topo
-func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatapb.SrvKeyspace_ThrottlerConfig, error) {
+func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatapb.ThrottlerConfig, error) {
 	srvks, err := throttler.ts.GetSrvKeyspace(ctx, throttler.cell, throttler.keyspace)
 	if err != nil {
 		return nil, err
@@ -292,9 +293,9 @@ func (throttler *Throttler) readThrottlerConfig(ctx context.Context) (*topodatap
 }
 
 // normalizeThrottlerConfig noramlizes missing throttler config information, as needed.
-func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 	if thottlerConfig == nil {
-		thottlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+		thottlerConfig = &topodatapb.ThrottlerConfig{}
 	}
 	if thottlerConfig.CustomQuery == "" {
 		// no custom query; we check replication lag
@@ -305,12 +306,7 @@ func (throttler *Throttler) normalizeThrottlerConfig(thottlerConfig *topodatapb.
 	return thottlerConfig
 }
 
-// WatchSrvKeyspaceCallback gets called whenever SrvKeyspace has been modified. This callback only examines the ThrottlerConfig part of
-// SrvKeyspace, and proceeds to inform the throttler of the new config
 func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspace, err error) bool {
-	throttler.enableMutex.Lock()
-	defer throttler.enableMutex.Unlock()
-
 	if err != nil {
 		log.Errorf("WatchSrvKeyspaceCallback error: %v", err)
 		return false
@@ -332,7 +328,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 
 // applyThrottlerConfig receives a Throttlerconfig as read from SrvKeyspace, and applies the configuration. This may cause
 // the throttler to be enabled/disabled, and of course it affects the throttling query/threshold.
-func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) {
+func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerConfig *topodatapb.ThrottlerConfig) {
 	if !throttlerConfigViaTopo {
 		return
 	}
@@ -542,7 +538,7 @@ func (throttler *Throttler) isDormant() bool {
 }
 
 // Operate is the main entry point for the throttler operation and logic. It will
-// run the probes, colelct metrics, refresh inventory, etc.
+// run the probes, collect metrics, refresh inventory, etc.
 func (throttler *Throttler) Operate(ctx context.Context) {
 
 	tickers := [](*timer.SuspendableTicker){}
@@ -1035,6 +1031,7 @@ func (throttler *Throttler) Status() *ThrottlerStatus {
 
 		IsLeader:  (atomic.LoadInt64(&throttler.isLeader) > 0),
 		IsOpen:    (atomic.LoadInt64(&throttler.isOpen) > 0),
+		IsEnabled: (atomic.LoadInt64(&throttler.isEnabled) > 0),
 		IsDormant: throttler.isDormant(),
 
 		AggregatedMetrics: throttler.aggregatedMetricsSnapshot(),
