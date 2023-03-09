@@ -1,5 +1,5 @@
 /*
-Copyright 2021 The Vitess Authors.
+Copyright 2023 The Vitess Authors.
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
@@ -21,7 +21,6 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -52,24 +51,27 @@ func (f *formatter) formatBinary(left Expr, op string, right Expr, depth int) {
 }
 
 func (l *Literal) format(w *formatter, depth int) {
-	switch l.Val.typeof() {
-	case sqltypes.Tuple:
+	switch inner := l.inner.(type) {
+	case *evalTuple:
 		w.WriteByte('(')
-		for i, val := range l.Val.TupleValues() {
+		for i, val := range inner.t {
 			if i > 0 {
 				w.WriteString(", ")
 			}
-			w.WriteString(val.String())
+			w.WriteString(evalToSQLValue(val).String())
 		}
 		w.WriteByte(')')
 
 	default:
-		w.WriteString(l.Val.Value().String())
+		w.WriteString(evalToSQLValue(l.inner).String())
 	}
 }
 
 func (bv *BindVariable) format(w *formatter, depth int) {
 	w.WriteByte(':')
+	if bv.tuple {
+		w.WriteByte(':')
+	}
 	w.WriteString(bv.Key)
 }
 
@@ -114,7 +116,7 @@ func (t TupleExpr) format(w *formatter, depth int) {
 
 func (c *CollateExpr) format(w *formatter, depth int) {
 	c.Inner.format(w, depth)
-	coll := collations.Local().LookupByID(c.TypedCollation.Collation)
+	coll := c.TypedCollation.Collation.Get()
 	w.WriteString(" COLLATE ")
 	w.WriteString(coll.Name())
 }
@@ -154,15 +156,11 @@ func (c *CallExpr) format(w *formatter, depth int) {
 			w.WriteString(", ")
 		}
 		expr.format(w, depth+1)
-		if !c.Aliases[i].IsEmpty() {
-			w.WriteString(" AS ")
-			w.WriteString(c.Aliases[i].String())
-		}
 	}
 	w.WriteByte(')')
 }
 
-func (c *WeightStringCallExpr) format(w *formatter, depth int) {
+func (c *builtinWeightString) format(w *formatter, depth int) {
 	w.WriteString("WEIGHT_STRING(")
 	c.String.format(w, depth)
 
@@ -200,7 +198,7 @@ func (c *ConvertExpr) format(buf *formatter, depth int) {
 	}
 	if c.Collation != collations.Unknown {
 		buf.WriteString(" CHARACTER SET ")
-		buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
+		buf.WriteString(c.Collation.Get().Name())
 	}
 	buf.WriteByte(')')
 }
@@ -209,6 +207,6 @@ func (c *ConvertUsingExpr) format(buf *formatter, depth int) {
 	buf.WriteString("CONVERT(")
 	c.Inner.format(buf, depth)
 	buf.WriteString(" USING ")
-	buf.WriteString(collations.Local().LookupByID(c.Collation).Name())
+	buf.WriteString(c.Collation.Get().Name())
 	buf.WriteByte(')')
 }

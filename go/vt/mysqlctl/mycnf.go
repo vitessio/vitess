@@ -41,7 +41,7 @@ type Mycnf struct {
 
 	// MysqlPort is the port for the MySQL server running on this machine.
 	// It is mainly used to communicate with topology server.
-	MysqlPort int32
+	MysqlPort int
 
 	// DataDir is where the table files are
 	// (used by vt software for Clone)
@@ -184,9 +184,13 @@ func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 		mycnf.mycnfMap[lval] = rval
 	}
 
-	serverID, err := mycnf.lookupInt("server-id")
+	serverIDStr, err := mycnf.lookupWithDefault("server-id", "")
 	if err != nil {
 		return nil, err
+	}
+	serverID, err := strconv.ParseUint(serverIDStr, 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert server-id: %v", err)
 	}
 	mycnf.ServerID = uint32(serverID)
 
@@ -194,7 +198,7 @@ func ReadMycnf(mycnf *Mycnf) (*Mycnf, error) {
 	if err != nil {
 		return nil, err
 	}
-	mycnf.MysqlPort = int32(port)
+	mycnf.MysqlPort = port
 
 	mapping := map[string]*string{
 		"datadir":                   &mycnf.DataDir,

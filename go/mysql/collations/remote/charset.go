@@ -24,7 +24,7 @@ import (
 
 	"vitess.io/vitess/go/bytes2"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
 type Charset struct {
@@ -112,4 +112,8 @@ func (c *Charset) DecodeToUTF8(dst, src []byte) ([]byte, error) {
 
 func (c *Charset) Convert(dst, src []byte, srcCharset charset.Charset) ([]byte, error) {
 	return c.performConversion(dst, c.name, src, srcCharset.Name())
+}
+
+func (c *Charset) MaxWidth() int {
+	return 1
 }

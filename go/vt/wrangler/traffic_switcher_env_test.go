@@ -17,22 +17,20 @@ limitations under the License.
 package wrangler
 
 import (
+	"context"
 	"fmt"
 	"sync"
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
-	"vitess.io/vitess/go/vt/log"
-
-	"vitess.io/vitess/go/mysql/fakesqldb"
-
-	"context"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -47,7 +45,7 @@ import (
 
 const (
 	streamInfoQuery    = "select id, source, message, cell, tablet_types, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where workflow='%s' and db_name='vt_%s'"
-	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type, defer_secondary_keys from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
+	streamExtInfoQuery = "select id, source, pos, stop_pos, max_replication_lag, state, db_name, time_updated, transaction_timestamp, time_heartbeat, time_throttled, component_throttled, message, tags, workflow_type, workflow_sub_type, defer_secondary_keys, rows_copied from _vt.vreplication where db_name = 'vt_%s' and workflow = '%s'"
 	copyStateQuery     = "select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)"
 )
 
@@ -108,7 +106,7 @@ func newTestTableMigraterCustom(ctx context.Context, t *testing.T, sourceShards,
 	tme := &testMigraterEnv{}
 	tme.ts = memorytopo.NewServer("cell1", "cell2")
 	tme.wr = New(logutil.NewConsoleLogger(), tme.ts, tmclient.NewTabletManagerClient())
-	tme.wr.sem = sync2.NewSemaphore(1, 1)
+	tme.wr.sem = semaphore.NewWeighted(1)
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
@@ -271,7 +269,7 @@ func newTestShardMigrater(ctx context.Context, t *testing.T, sourceShards, targe
 	tme.sourceShards = sourceShards
 	tme.targetShards = targetShards
 	tme.tmeDB = fakesqldb.New(t)
-	tme.wr.sem = sync2.NewSemaphore(1, 0)
+	tme.wr.sem = semaphore.NewWeighted(1)
 
 	tabletID := 10
 	for _, shard := range sourceShards {

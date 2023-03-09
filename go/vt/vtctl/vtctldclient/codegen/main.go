@@ -332,7 +332,7 @@ func extractSourceInterface(pkg *packages.Package, name string) (*types.Interfac
 	return nil, fmt.Errorf("symbol %s was not an interface but %T", name, obj.Type())
 }
 
-var vitessProtoRegexp = regexp.MustCompile(`^vitess.io.*/proto/.*`)
+var vitessProtoRegexp = regexp.MustCompile(`^vitess\.io.*/proto/.*`)
 
 func rewriteProtoImports(pkg *types.Package) string {
 	if vitessProtoRegexp.MatchString(pkg.Path()) {

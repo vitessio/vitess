@@ -39,7 +39,7 @@ func (cached *ArithmeticExpr) CachedSize(alloc bool) int64 {
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
-	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.ArithmeticOp
+	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.opArith
 	if cc, ok := cached.Op.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -69,7 +69,7 @@ func (cached *BindVariable) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(24)
+		size += int64(32)
 	}
 	// field Key string
 	size += hack.RuntimeAllocSize(int64(len(cached.Key)))
@@ -85,7 +85,7 @@ func (cached *BitwiseExpr) CachedSize(alloc bool) int64 {
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
-	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.BitwiseOp
+	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.opBit
 	if cc, ok := cached.Op.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
@@ -109,7 +109,7 @@ func (cached *CallExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(80)
+		size += int64(48)
 	}
 	// field Arguments vitess.io/vitess/go/vt/vtgate/evalengine.TupleExpr
 	{
@@ -120,19 +120,8 @@ func (cached *CallExpr) CachedSize(alloc bool) int64 {
 			}
 		}
 	}
-	// field Aliases []vitess.io/vitess/go/vt/sqlparser.IdentifierCI
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Aliases)) * int64(32))
-		for _, elem := range cached.Aliases {
-			size += elem.CachedSize(false)
-		}
-	}
 	// field Method string
 	size += hack.RuntimeAllocSize(int64(len(cached.Method)))
-	// field F vitess.io/vitess/go/vt/vtgate/evalengine.builtin
-	if cc, ok := cached.F.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
 	return size
 }
 func (cached *CaseExpr) CachedSize(alloc bool) int64 {
@@ -220,77 +209,6 @@ func (cached *ConvertUsingExpr) CachedSize(alloc bool) int64 {
 	size += cached.UnaryExpr.CachedSize(false)
 	return size
 }
-func (cached *EvalResult) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(96)
-	}
-	// field expr vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cc, ok := cached.expr.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field env *vitess.io/vitess/go/vt/vtgate/evalengine.ExpressionEnv
-	size += cached.env.CachedSize(true)
-	// field bytes_ []byte
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.bytes_)))
-	}
-	// field tuple_ *[]vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
-	if cached.tuple_ != nil {
-		size += int64(24)
-		size += hack.RuntimeAllocSize(int64(cap(*cached.tuple_)) * int64(88))
-		for _, elem := range *cached.tuple_ {
-			size += elem.CachedSize(false)
-		}
-	}
-	// field decimal_ vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal.Decimal
-	size += cached.decimal_.CachedSize(false)
-	return size
-}
-
-//go:nocheckptr
-func (cached *ExpressionEnv) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(64)
-	}
-	// field BindVars map[string]*vitess.io/vitess/go/vt/proto/query.BindVariable
-	if cached.BindVars != nil {
-		size += int64(48)
-		hmap := reflect.ValueOf(cached.BindVars)
-		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
-		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
-		if len(cached.BindVars) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
-		}
-		for k, v := range cached.BindVars {
-			size += hack.RuntimeAllocSize(int64(len(k)))
-			size += v.CachedSize(true)
-		}
-	}
-	// field Row []vitess.io/vitess/go/sqltypes.Value
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Row)) * int64(32))
-		for _, elem := range cached.Row {
-			size += elem.CachedSize(false)
-		}
-	}
-	// field Fields []*vitess.io/vitess/go/vt/proto/query.Field
-	{
-		size += hack.RuntimeAllocSize(int64(cap(cached.Fields)) * int64(8))
-		for _, elem := range cached.Fields {
-			size += elem.CachedSize(true)
-		}
-	}
-	return size
-}
 
 //go:nocheckptr
 func (cached *InExpr) CachedSize(alloc bool) int64 {
@@ -303,15 +221,15 @@ func (cached *InExpr) CachedSize(alloc bool) int64 {
 	}
 	// field BinaryExpr vitess.io/vitess/go/vt/vtgate/evalengine.BinaryExpr
 	size += cached.BinaryExpr.CachedSize(false)
-	// field Hashed map[uintptr]int
+	// field Hashed map[[16]byte]int
 	if cached.Hashed != nil {
 		size += int64(48)
 		hmap := reflect.ValueOf(cached.Hashed)
 		numBuckets := int(math.Pow(2, float64((*(*uint8)(unsafe.Pointer(hmap.Pointer() + uintptr(9)))))))
 		numOldBuckets := (*(*uint16)(unsafe.Pointer(hmap.Pointer() + uintptr(10))))
-		size += hack.RuntimeAllocSize(int64(numOldBuckets * 144))
+		size += hack.RuntimeAllocSize(int64(numOldBuckets * 208))
 		if len(cached.Hashed) > 0 || numBuckets > 1 {
-			size += hack.RuntimeAllocSize(int64(numBuckets * 144))
+			size += hack.RuntimeAllocSize(int64(numBuckets * 208))
 		}
 	}
 	return size
@@ -350,10 +268,12 @@ func (cached *Literal) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(96)
+		size += int64(16)
 	}
-	// field Val vitess.io/vitess/go/vt/vtgate/evalengine.EvalResult
-	size += cached.Val.CachedSize(false)
+	// field inner vitess.io/vitess/go/vt/vtgate/evalengine.eval
+	if cc, ok := cached.inner.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *LogicalExpr) CachedSize(alloc bool) int64 {
@@ -408,22 +328,6 @@ func (cached *UnaryExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
-func (cached *WeightStringCallExpr) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(48)
-	}
-	// field String vitess.io/vitess/go/vt/vtgate/evalengine.Expr
-	if cc, ok := cached.String.(cachedObject); ok {
-		size += cc.CachedSize(true)
-	}
-	// field Cast string
-	size += hack.RuntimeAllocSize(int64(len(cached.Cast)))
-	return size
-}
 func (cached *WhenThen) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -442,7 +346,333 @@ func (cached *WhenThen) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *builtinASCII) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinBitCount) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinBitLength) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinCeil) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinChangeCase) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinCharLength) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinCoalesce) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinCollation) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinFromBase64) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinHex) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONArray) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONContainsPath) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONDepth) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONExtract) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONKeys) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONLength) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONObject) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinJSONUnquote) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinLength) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
 func (cached *builtinMultiComparison) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinRepeat) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinToBase64) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field CallExpr vitess.io/vitess/go/vt/vtgate/evalengine.CallExpr
+	size += cached.CallExpr.CachedSize(false)
+	return size
+}
+func (cached *builtinWeightString) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(48)
+	}
+	// field String vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.String.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	// field Cast string
+	size += hack.RuntimeAllocSize(int64(len(cached.Cast)))
+	return size
+}
+func (cached *evalBytes) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field bytes []byte
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.bytes)))
+	}
+	return size
+}
+func (cached *evalDecimal) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
+	// field dec vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal.Decimal
+	size += cached.dec.CachedSize(false)
+	return size
+}
+func (cached *evalFloat) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+func (cached *evalInt64) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(8)
+	}
+	return size
+}
+func (cached *evalTuple) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
 	}
@@ -450,7 +680,24 @@ func (cached *builtinMultiComparison) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field name string
-	size += hack.RuntimeAllocSize(int64(len(cached.name)))
+	// field t []vitess.io/vitess/go/vt/vtgate/evalengine.eval
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.t)) * int64(16))
+		for _, elem := range cached.t {
+			if cc, ok := elem.(cachedObject); ok {
+				size += cc.CachedSize(true)
+			}
+		}
+	}
+	return size
+}
+func (cached *evalUint64) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(16)
+	}
 	return size
 }

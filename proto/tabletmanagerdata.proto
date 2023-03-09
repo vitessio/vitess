@@ -354,7 +354,7 @@ message VReplicationExecResponse {
 }
 
 message VReplicationWaitForPosRequest {
-  int64 id = 1;
+  int32 id = 1;
   string position = 2;
 }
 
@@ -495,16 +495,6 @@ message RestoreFromBackupRequest {
 
 message RestoreFromBackupResponse {
   logutil.Event event = 1;
-}
-
-message VExecRequest {
-  string query = 1;
-  string workflow = 2;
-  string keyspace = 3;
-}
-
-message VExecResponse {
-  query.QueryResult result = 1;
 }
 
 message VDiffRequest {

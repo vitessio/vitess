@@ -45,7 +45,7 @@ func NewMySQL(cluster *cluster.LocalProcessCluster, dbName string, schemaSQL ...
 
 // CreateMysqldAndMycnf returns a Mysqld and a Mycnf object to use for working with a MySQL
 // installation that hasn't been set up yet.
-func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int32) (*mysqlctl.Mysqld, *mysqlctl.Mycnf, error) {
+func CreateMysqldAndMycnf(tabletUID uint32, mysqlSocket string, mysqlPort int) (*mysqlctl.Mysqld, *mysqlctl.Mycnf, error) {
 	mycnf := mysqlctl.NewMycnf(tabletUID, mysqlPort)
 	if err := mycnf.RandomizeMysqlServerID(); err != nil {
 		return nil, nil, fmt.Errorf("couldn't generate random MySQL server_id: %v", err)
@@ -71,7 +71,7 @@ func NewMySQLWithDetails(port int, hostname, dbName string, schemaSQL ...string)
 	}
 
 	mysqlPort := port
-	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", int32(mysqlPort))
+	mysqld, mycnf, err := CreateMysqldAndMycnf(0, "", mysqlPort)
 	if err != nil {
 		return mysql.ConnParams{}, nil, err
 	}

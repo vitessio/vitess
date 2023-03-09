@@ -15,7 +15,7 @@
 # limitations under the License.
 # this script brings down the tablets for main/0 keyspace/shard
 
-source ./env.sh
+source ../common/env.sh
 
-CELL=zone1 TABLET_UID=100 ./scripts/vttablet-down.sh
-CELL=zone1 TABLET_UID=100 ./scripts/mysqlctl-down.sh
+CELL=zone1 TABLET_UID=100 ../common/scripts/vttablet-down.sh
+CELL=zone1 TABLET_UID=100 ../common/scripts/mysqlctl-down.sh

@@ -55,7 +55,7 @@ func (c PlanningContext) IsSubQueryToReplace(e sqlparser.Expr) bool {
 		return false
 	}
 	for _, extractedSubq := range c.SemTable.GetSubqueryNeedingRewrite() {
-		if extractedSubq.NeedsRewrite && c.SemTable.EqualsExpr(extractedSubq.Subquery, ext) {
+		if extractedSubq.Merged && c.SemTable.EqualsExpr(extractedSubq.Subquery, ext) {
 			return true
 		}
 	}

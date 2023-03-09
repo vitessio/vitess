@@ -17,46 +17,43 @@
 # this script brings up topo server and all the vitess components
 # required for a single shard deployment.
 
-source ./env.sh
+source ../common/env.sh
 
 # start topo server
 if [ "${TOPO}" = "zk2" ]; then
-	CELL=zone1 ./scripts/zk-up.sh
+	CELL=zone1 ../common/scripts/zk-up.sh
 elif [ "${TOPO}" = "k8s" ]; then
-	CELL=zone1 ./scripts/k3s-up.sh
+	CELL=zone1 ../common/scripts/k3s-up.sh
 else
-	CELL=zone1 ./scripts/etcd-up.sh
+	CELL=zone1 ../common/scripts/etcd-up.sh
 fi
 
 # start vtctld
-CELL=zone1 ./scripts/vtctld-up.sh
+CELL=zone1 ../common/scripts/vtctld-up.sh
 
 # start unsharded keyspace and tablet
-CELL=zone1 TABLET_UID=100 ./scripts/mysqlctl-up.sh
-SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID=100 ./scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=100 ../common/scripts/mysqlctl-up.sh
+SHARD=0 CELL=zone1 KEYSPACE=main TABLET_UID=100 ../common/scripts/vttablet-up.sh
 
 # set the correct durability policy for the keyspace
-vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=none main
+vtctldclient --server localhost:15999 SetKeyspaceDurabilityPolicy --durability-policy=none main || fail "Failed to set keyspace durability policy on the main keyspace"
 
 # start vtorc
-./scripts/vtorc-up.sh
+../common/scripts/vtorc-up.sh
 
-# Wait for a primary tablet to be elected in the shard
-for _ in $(seq 0 200); do
-	vtctldclient GetTablets --keyspace main --shard 0 | grep -q "primary" && break
-	sleep 1
-done;
-vtctldclient GetTablets --keyspace main --shard 0 | grep "primary" || (echo "Timed out waiting for primary to be elected in main/0" && exit 1)
+# Wait for a primary tablet to be elected in the shard and for it
+# to become healthy/sherving.
+wait_for_healthy_shard main 0 1 || exit 1
 
 # create the schema
-vtctldclient ApplySchema --sql-file create_main_schema.sql main
+vtctldclient ApplySchema --sql-file create_main_schema.sql main || fail "Failed to apply schema for the main keyspace"
 
 # create the vschema
-vtctldclient ApplyVSchema --vschema-file main_vschema_initial.json main
+vtctldclient ApplyVSchema --vschema-file main_vschema_initial.json main ||  fail "Failed to apply vschema for the main keyspace"
 
 # start vtgate
-CELL=zone1 ./scripts/vtgate-up.sh
+CELL=zone1 ../common/scripts/vtgate-up.sh
 
 # start vtadmin
-./scripts/vtadmin-up.sh
+../common/scripts/vtadmin-up.sh
 

@@ -679,20 +679,6 @@ func (client *Client) GetReplicas(ctx context.Context, tablet *topodatapb.Tablet
 	return response.Addrs, nil
 }
 
-// VExec is part of the tmclient.TabletManagerClient interface.
-func (client *Client) VExec(ctx context.Context, tablet *topodatapb.Tablet, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	c, closer, err := client.dialer.dial(ctx, tablet)
-	if err != nil {
-		return nil, err
-	}
-	defer closer.Close()
-	response, err := c.VExec(ctx, &tabletmanagerdatapb.VExecRequest{Query: query, Workflow: workflow, Keyspace: keyspace})
-	if err != nil {
-		return nil, err
-	}
-	return response.Result, nil
-}
-
 // VReplicationExec is part of the tmclient.TabletManagerClient interface.
 func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.Tablet, query string) (*querypb.QueryResult, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
@@ -708,13 +694,13 @@ func (client *Client) VReplicationExec(ctx context.Context, tablet *topodatapb.T
 }
 
 // VReplicationWaitForPos is part of the tmclient.TabletManagerClient interface.
-func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int, pos string) error {
+func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topodatapb.Tablet, id int32, pos string) error {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return err
 	}
 	defer closer.Close()
-	if _, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: int64(id), Position: pos}); err != nil {
+	if _, err = c.VReplicationWaitForPos(ctx, &tabletmanagerdatapb.VReplicationWaitForPosRequest{Id: id, Position: pos}); err != nil {
 		return err
 	}
 	return nil

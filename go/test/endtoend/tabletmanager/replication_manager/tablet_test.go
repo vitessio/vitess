@@ -24,6 +24,8 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -164,11 +166,12 @@ func waitForSourcePort(ctx context.Context, t *testing.T, tablet cluster.Vttable
 	return fmt.Errorf("time out before source port became %v for %v", expectedPort, tablet.Alias)
 }
 
-func getSidecarDbDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
+func getSidecarDBDDLQueryCount(tablet *cluster.VttabletProcess) (int64, error) {
 	vars := tablet.GetVars()
-	val, ok := vars["SidecarDbDDLQueryCount"]
+	key := sidecardb.StatsKeyQueryCount
+	val, ok := vars[key]
 	if !ok {
-		return 0, fmt.Errorf("SidecarDbDDLQueryCount not found in debug/vars")
+		return 0, fmt.Errorf("%s not found in debug/vars", key)
 	}
 	return int64(val.(float64)), nil
 }
@@ -178,7 +181,7 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	err := waitForSourcePort(ctx, t, replicaTablet, int32(primaryTablet.MySQLPort))
 	require.NoError(t, err)
 
-	sidecarDDLCount, err := getSidecarDbDDLQueryCount(primaryTablet.VttabletProcess)
+	sidecarDDLCount, err := getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
 	require.NoError(t, err)
 	// sidecar db should create all _vt tables when vttablet started
 	require.Greater(t, sidecarDDLCount, int64(0))
@@ -197,7 +200,7 @@ func TestReplicationRepairAfterPrimaryTabletChange(t *testing.T) {
 	err = waitForSourcePort(ctx, t, replicaTablet, int32(newMysqlPort))
 	require.NoError(t, err)
 
-	sidecarDDLCount, err = getSidecarDbDDLQueryCount(primaryTablet.VttabletProcess)
+	sidecarDDLCount, err = getSidecarDBDDLQueryCount(primaryTablet.VttabletProcess)
 	require.NoError(t, err)
 	// sidecardb should find the desired _vt schema and not apply any new creates or upgrades when the tablet comes up again
 	require.Equal(t, sidecarDDLCount, int64(0))

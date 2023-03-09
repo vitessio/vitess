@@ -161,6 +161,14 @@ func NewVarChar(v string) Value {
 	return MakeTrusted(VarChar, []byte(v))
 }
 
+func NewJSON(v string) (Value, error) {
+	j := []byte(v)
+	if !json.Valid(j) {
+		return Value{}, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "invalid JSON value: %q", v)
+	}
+	return MakeTrusted(TypeJSON, j), nil
+}
+
 // NewVarBinary builds a VarBinary Value.
 // The input is a string because it's the most common use case.
 func NewVarBinary(v string) Value {
@@ -281,6 +289,24 @@ func (v Value) ToInt64() (int64, error) {
 	return strconv.ParseInt(v.RawStr(), 10, 64)
 }
 
+func (v Value) ToInt32() (int32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseInt(v.RawStr(), 10, 32)
+	return int32(i), err
+}
+
+// ToInt returns the value as MySQL would return it as a int.
+func (v Value) ToInt() (int, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	return strconv.Atoi(v.RawStr())
+}
+
 // ToFloat64 returns the value as MySQL would return it as a float64.
 func (v Value) ToFloat64() (float64, error) {
 	if !IsNumber(v.typ) {
@@ -290,6 +316,16 @@ func (v Value) ToFloat64() (float64, error) {
 	return strconv.ParseFloat(v.RawStr(), 64)
 }
 
+// ToUint16 returns the value as MySQL would return it as a uint16.
+func (v Value) ToUint16() (uint16, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	i, err := strconv.ParseUint(v.RawStr(), 10, 16)
+	return uint16(i), err
+}
+
 // ToUint64 returns the value as MySQL would return it as a uint64.
 func (v Value) ToUint64() (uint64, error) {
 	if !v.IsIntegral() {
@@ -297,6 +333,15 @@ func (v Value) ToUint64() (uint64, error) {
 	}
 
 	return strconv.ParseUint(v.RawStr(), 10, 64)
+}
+
+func (v Value) ToUint32() (uint32, error) {
+	if !v.IsIntegral() {
+		return 0, ErrIncompatibleTypeCast
+	}
+
+	u, err := strconv.ParseUint(v.RawStr(), 10, 32)
+	return uint32(u), err
 }
 
 // ToBool returns the value as a bool value
@@ -434,6 +479,11 @@ func (v Value) IsBinary() bool {
 func (v Value) IsDateTime() bool {
 	dt := int(querypb.Type_DATETIME)
 	return int(v.typ)&dt == dt
+}
+
+// IsDecimal returns true if Value is a decimal.
+func (v Value) IsDecimal() bool {
+	return IsDecimal(v.typ)
 }
 
 // IsComparable returns true if the Value is null safe comparable without collation information.

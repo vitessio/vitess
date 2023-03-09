@@ -1,4 +1,4 @@
-ARG bootstrap_version=14
+ARG bootstrap_version=15
 ARG image="vitess/bootstrap:${bootstrap_version}-common"
 
 FROM "${image}"
@@ -12,7 +12,7 @@ RUN /vt/dist/install_dependencies.sh mysql57
 
 COPY docker/local/install_local_dependencies.sh /vt/dist/install_local_dependencies.sh
 RUN /vt/dist/install_local_dependencies.sh
-RUN echo "source /vt/local/env.sh" >> /etc/bash.bashrc
+RUN echo "source /vt/common/env.sh" >> /etc/bash.bashrc
 
 # Allows some docker builds to disable CGO
 ARG CGO_ENABLED=0
@@ -33,6 +33,10 @@ ENV PATH="/var/opt/etcd:${PATH}"
 
 RUN mkdir /vt/local
 COPY examples/local /vt/local
+
+# Copy the vtadmin web app to the correct location and npm install
+COPY --chown=vitess:vitess web /web
+RUN npm install /web/vtadmin
 
 RUN mkdir /vt/common
 COPY examples/common /vt/common

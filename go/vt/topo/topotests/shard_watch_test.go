@@ -151,7 +151,7 @@ func TestWatchShard(t *testing.T) {
 		t.Fatalf("expected an initial error setting watch on bad content, but got: %v", err)
 	}
 
-	data, err := proto.Marshal(wanted)
+	data, err := wanted.MarshalVT()
 	if err != nil {
 		t.Fatalf("error marshalling proto data: %v", err)
 	}

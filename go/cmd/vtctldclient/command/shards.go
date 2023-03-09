@@ -61,14 +61,14 @@ that shard.`,
 		DisableFlagsInUseLine: true,
 		Args:                  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			n, err := strconv.ParseInt(cmd.Flags().Arg(0), 10, 64)
+			n, err := strconv.Atoi(cmd.Flags().Arg(0))
 			if err != nil {
 				return err
 			}
 
 			cli.FinishedParsing(cmd)
 
-			shards, err := key.GenerateShardRanges(int(n))
+			shards, err := key.GenerateShardRanges(n)
 			if err != nil {
 				return err
 			}
@@ -504,7 +504,7 @@ func commandSourceShardAdd(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	uid, err := strconv.ParseUint(cmd.Flags().Arg(1), 10, 32)
+	uid, err := strconv.ParseInt(cmd.Flags().Arg(1), 10, 32)
 	if err != nil {
 		return fmt.Errorf("Failed to parse SourceShard uid: %w", err) // nolint
 	}
@@ -527,7 +527,7 @@ func commandSourceShardAdd(cmd *cobra.Command, args []string) error {
 	resp, err := client.SourceShardAdd(commandCtx, &vtctldatapb.SourceShardAddRequest{
 		Keyspace:       ks,
 		Shard:          shard,
-		Uid:            uint32(uid),
+		Uid:            int32(uid),
 		SourceKeyspace: sks,
 		SourceShard:    sshard,
 		KeyRange:       kr,
@@ -568,7 +568,7 @@ func commandSourceShardDelete(cmd *cobra.Command, args []string) error {
 	resp, err := client.SourceShardDelete(commandCtx, &vtctldatapb.SourceShardDeleteRequest{
 		Keyspace: ks,
 		Shard:    shard,
-		Uid:      uint32(uid),
+		Uid:      int32(uid),
 	})
 	if err != nil {
 		return err

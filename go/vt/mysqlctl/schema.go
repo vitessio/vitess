@@ -232,7 +232,7 @@ func (mysqld *Mysqld) normalizedSchema(ctx context.Context, dbName, tableName, t
 	backtickDBName := sqlescape.EscapeID(dbName)
 	qr, fetchErr := mysqld.FetchSuperQuery(ctx, fmt.Sprintf("SHOW CREATE TABLE %s.%s", backtickDBName, sqlescape.EscapeID(tableName)))
 	if fetchErr != nil {
-		return "", fetchErr
+		return "", vterrors.Wrapf(fetchErr, "in Mysqld.normalizedSchema()")
 	}
 	if len(qr.Rows) == 0 {
 		return "", fmt.Errorf("empty create table statement for %v", tableName)
@@ -322,7 +322,7 @@ func GetColumns(dbName, table string, exec func(string, int, bool) (*sqltypes.Re
 	query := fmt.Sprintf(GetFieldsQuery, selectColumns, tableSpec)
 	qr, err := exec(query, 0, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, vterrors.Wrapf(err, "in Mysqld.GetColumns()")
 	}
 
 	columns := make([]string, len(qr.Fields))

@@ -204,7 +204,7 @@ func TestDeferSecondaryKeys(t *testing.T) {
 		Shard:    env.ShardName,
 		Filter:   filter,
 	}
-	id := uint32(1)
+	id := int32(1)
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
 	dbClient := playerEngine.dbClientFactoryFiltered()
@@ -535,7 +535,7 @@ func TestCancelledDeferSecondaryKeys(t *testing.T) {
 	// The test env uses the same factory for both dba and
 	// filtered connections.
 	dbconfigs.GlobalDBConfigs.Filtered.User = "vt_dba"
-	id := uint32(1)
+	id := int32(1)
 	vsclient := newTabletConnector(tablet)
 	stats := binlogplayer.NewStats()
 	dbaconn := playerEngine.dbClientFactoryDba()

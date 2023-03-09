@@ -1,7 +1,7 @@
 CREATE DATABASE IF NOT EXISTS commerce;
 USE commerce;
 DROP TABLE IF EXISTS users;
-CREATE TABLE users (
+CREATE TABLE IF NOT EXISTS users (
    device_id BIGINT,
    first_name VARCHAR(50),
    last_name VARCHAR(50),

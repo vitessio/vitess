@@ -157,6 +157,15 @@ func BuildBindVariable(v any) (*querypb.BindVariable, error) {
 			Type:  querypb.Type_INT64,
 			Value: strconv.AppendInt(nil, int64(v), 10),
 		}, nil
+	case uint:
+		return &querypb.BindVariable{
+			Type:  querypb.Type_UINT64,
+			Value: strconv.AppendUint(nil, uint64(v), 10),
+		}, nil
+	case int32:
+		return Int32BindVariable(v), nil
+	case uint32:
+		return Uint32BindVariable(v), nil
 	case int64:
 		return Int64BindVariable(v), nil
 	case uint64:
@@ -220,6 +229,42 @@ func BuildBindVariable(v any) (*querypb.BindVariable, error) {
 		for i, lv := range v {
 			values[i].Type = querypb.Type_INT64
 			values[i].Value = strconv.AppendInt(nil, int64(lv), 10)
+			bv.Values[i] = &values[i]
+		}
+		return bv, nil
+	case []uint:
+		bv := &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: make([]*querypb.Value, len(v)),
+		}
+		values := make([]querypb.Value, len(v))
+		for i, lv := range v {
+			values[i].Type = querypb.Type_UINT64
+			values[i].Value = strconv.AppendInt(nil, int64(lv), 10)
+			bv.Values[i] = &values[i]
+		}
+		return bv, nil
+	case []int32:
+		bv := &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: make([]*querypb.Value, len(v)),
+		}
+		values := make([]querypb.Value, len(v))
+		for i, lv := range v {
+			values[i].Type = querypb.Type_INT32
+			values[i].Value = strconv.AppendInt(nil, int64(lv), 10)
+			bv.Values[i] = &values[i]
+		}
+		return bv, nil
+	case []uint32:
+		bv := &querypb.BindVariable{
+			Type:   querypb.Type_TUPLE,
+			Values: make([]*querypb.Value, len(v)),
+		}
+		values := make([]querypb.Value, len(v))
+		for i, lv := range v {
+			values[i].Type = querypb.Type_UINT32
+			values[i].Value = strconv.AppendUint(nil, uint64(lv), 10)
 			bv.Values[i] = &values[i]
 		}
 		return bv, nil

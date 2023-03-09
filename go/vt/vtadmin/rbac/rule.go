@@ -19,7 +19,7 @@ package rbac
 import (
 	"fmt"
 
-	"k8s.io/apimachinery/pkg/util/sets"
+	"vitess.io/vitess/go/sets"
 )
 
 // Rule is a single rule governing access to a particular resource.

@@ -231,7 +231,6 @@ func BuildVSchema(source *vschemapb.SrvVSchema) (vschema *VSchema) {
 	buildReferences(source, vschema)
 	buildGlobalTables(source, vschema)
 	resolveAutoIncrement(source, vschema)
-	addDual(vschema)
 	buildRoutingRule(source, vschema)
 	buildShardRoutingRule(source, vschema)
 	return vschema
@@ -681,28 +680,6 @@ func resolveAutoIncrement(source *vschemapb.SrvVSchema, vschema *VSchema) {
 	}
 }
 
-// addDual adds dual as a valid table to all keyspaces.
-// For sharded keyspaces, it gets pinned against keyspace id '0x00'.
-func addDual(vschema *VSchema) {
-	first := ""
-	for ksname, ks := range vschema.Keyspaces {
-		t := &Table{
-			Name:     sqlparser.NewIdentifierCS("dual"),
-			Keyspace: ks.Keyspace,
-			Type:     TypeReference,
-		}
-		ks.Tables["dual"] = t
-		if first == "" || first > ksname {
-			// In case of a reference to dual that's not qualified
-			// by keyspace, we still want to resolve it to one of
-			// the keyspaces. For consistency, we'll always use the
-			// first keyspace by lexical ordering.
-			first = ksname
-			vschema.globalTables["dual"] = t
-		}
-	}
-}
-
 // expects table name of the form <keyspace>.<tablename>
 func escapeQualifiedTable(qualifiedTableName string) (string, error) {
 	keyspace, tableName, err := extractQualifiedTableParts(qualifiedTableName)
@@ -885,6 +862,18 @@ func (vschema *VSchema) findTable(keyspace, tablename string) (*Table, error) {
 		return &Table{Name: sqlparser.NewIdentifierCS(tablename), Keyspace: ks.Keyspace}, nil
 	}
 	return table, nil
+}
+
+func (vschema *VSchema) FirstKeyspace() *Keyspace {
+	var first string
+	for ksname := range vschema.Keyspaces {
+		if first == "" || first > ksname {
+			first = ksname
+		}
+	}
+	ks := vschema.Keyspaces[first]
+
+	return ks.Keyspace
 }
 
 // FindRoutedTable finds a table checking the routing rules.
