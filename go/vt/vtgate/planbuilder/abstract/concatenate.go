@@ -47,6 +47,20 @@ func (c *Concatenate) TableID() semantics.TableSet {
 
 // PushPredicate implements the Operator interface
 func (c *Concatenate) PushPredicate(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
+	op, err := c.tryPush(expr, semTable)
+	if err == nil {
+		return op, nil
+	}
+
+	// if we fail to push down the predicate, we can always evaluate it at the vtgate level
+	filter := &Filter{
+		Source:     c,
+		Predicates: []sqlparser.Expr{expr},
+	}
+	return filter, nil
+}
+
+func (c *Concatenate) tryPush(expr sqlparser.Expr, semTable *semantics.SemTable) (LogicalOperator, error) {
 	newSources := make([]LogicalOperator, 0, len(c.Sources))
 	for index, source := range c.Sources {
 		if len(c.SelectStmts[index].SelectExprs) != 1 {

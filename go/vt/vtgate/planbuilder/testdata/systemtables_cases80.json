@@ -1742,12 +1742,6 @@
     "gen4-plan": "symbol id not found"
   },
   {
-    "comment": "systable union query in derived table with constraint on outside (star projection)",
-    "query": "select * from (select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select * from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `constraint_name` = 'primary'",
-    "v3-plan": "symbol constraint_name not found in table or subquery",
-    "gen4-plan": "can't push predicates on concatenate"
-  },
-  {
     "comment": "table_schema OR predicate\n# It is unsupported because we do not route queries to multiple keyspaces right now",
     "query": "SELECT * FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = 'ks' OR TABLE_SCHEMA = 'main'",
     "v3-plan": {
@@ -1781,6 +1775,95 @@
       },
       "TablesUsed": [
         "information_schema.TABLES"
+      ]
+    }
+  },
+  {
+    "comment": "Query from TypeORM",
+    "query": "SELECT * FROM ( SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'fuelings' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_payments' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'pools' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'orders' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_hops' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'market_outlets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'prefuel' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'billing_statements' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_market_outlets' ) `kcu` WHERE `CONSTRAINT_NAME` = 'PRIMARY'",
+    "v3-plan": "symbol CONSTRAINT_NAME not found in table or subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM ( SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'fuelings' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_payments' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'pools' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'orders' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'order_hops' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'market_outlets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'prefuel' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'billing_statements' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_markets' UNION SELECT * FROM `INFORMATION_SCHEMA`.`KEY_COLUMN_USAGE` `kcu` WHERE `kcu`.`TABLE_SCHEMA` = 'rio' AND `kcu`.`TABLE_NAME` = 'perp_market_outlets' ) `kcu` WHERE `CONSTRAINT_NAME` = 'PRIMARY'",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0,
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "kcu.CONSTRAINT_NAME = 'PRIMARY'",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1 union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where 1 != 1",
+                "Query": "select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME1 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME2 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME3 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME4 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME5 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME6 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME7 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME8 union all select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME9 union select kcu.CONSTRAINT_CATALOG, kcu.CONSTRAINT_SCHEMA, kcu.CONSTRAINT_NAME, kcu.TABLE_CATALOG, kcu.TABLE_SCHEMA, kcu.TABLE_NAME, kcu.COLUMN_NAME, kcu.ORDINAL_POSITION, kcu.POSITION_IN_UNIQUE_CONSTRAINT, kcu.REFERENCED_TABLE_SCHEMA, kcu.REFERENCED_TABLE_NAME, kcu.REFERENCED_COLUMN_NAME from INFORMATION_SCHEMA.KEY_COLUMN_USAGE as kcu where kcu.TABLE_SCHEMA = :__vtschemaname and kcu.TABLE_NAME = :kcu_TABLE_NAME10",
+                "SysTableTableName": "[kcu_TABLE_NAME10:VARCHAR(\"perp_market_outlets\"), kcu_TABLE_NAME1:VARCHAR(\"order_payments\"), kcu_TABLE_NAME2:VARCHAR(\"pools\"), kcu_TABLE_NAME3:VARCHAR(\"orders\"), kcu_TABLE_NAME4:VARCHAR(\"order_hops\"), kcu_TABLE_NAME5:VARCHAR(\"markets\"), kcu_TABLE_NAME6:VARCHAR(\"market_outlets\"), kcu_TABLE_NAME7:VARCHAR(\"prefuel\"), kcu_TABLE_NAME8:VARCHAR(\"billing_statements\"), kcu_TABLE_NAME9:VARCHAR(\"perp_markets\"), kcu_TABLE_NAME:VARCHAR(\"fuelings\")]",
+                "SysTableTableSchema": "[VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\"), VARCHAR(\"rio\")]",
+                "Table": "INFORMATION_SCHEMA.KEY_COLUMN_USAGE"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "information_schema.KEY_COLUMN_USAGE"
+      ]
+    }
+  },
+  {
+    "comment": "systable union query in derived table with constraint on outside (without star projection)",
+    "query": "select CONSTRAINT_NAME from (select CONSTRAINT_NAME from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select CONSTRAINT_NAME from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `CONSTRAINT_NAME` = 'primary'",
+    "v3-plan": "unsupported: filtering on results of cross-shard subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select CONSTRAINT_NAME from (select CONSTRAINT_NAME from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'user_extra' union select CONSTRAINT_NAME from `information_schema`.`key_column_usage` `kcu` where `kcu`.`table_schema` = 'user' and `kcu`.`table_name` = 'music') `kcu` where `CONSTRAINT_NAME` = 'primary'",
+      "Instructions": {
+        "OperatorType": "SimpleProjection",
+        "Columns": [
+          0
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Filter",
+            "Predicate": "CONSTRAINT_NAME = 'primary'",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "DBA",
+                "Keyspace": {
+                  "Name": "main",
+                  "Sharded": false
+                },
+                "FieldQuery": "select CONSTRAINT_NAME from information_schema.key_column_usage as kcu where 1 != 1 union select CONSTRAINT_NAME from information_schema.key_column_usage as kcu where 1 != 1",
+                "Query": "select CONSTRAINT_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name union select CONSTRAINT_NAME from information_schema.key_column_usage as kcu where kcu.table_schema = :__vtschemaname and kcu.table_name = :kcu_table_name1",
+                "SysTableTableName": "[kcu_table_name1:VARCHAR(\"music\"), kcu_table_name:VARCHAR(\"user_extra\")]",
+                "SysTableTableSchema": "[VARCHAR(\"user\"), VARCHAR(\"user\")]",
+                "Table": "information_schema.key_column_usage"
+              }
+            ]
+          }
+        ]
+      },
+      "TablesUsed": [
+        "information_schema.key_column_usage"
       ]
     }
   }
