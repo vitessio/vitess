@@ -329,8 +329,7 @@ type TabletConfig struct {
 
 	EnableViews bool `json:"-"`
 
-	EnablePerWorkloadTableMetrics bool   `json:"-"`
-	WorkloadLabel                 string `json:"-"`
+	EnablePerWorkloadTableMetrics bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.

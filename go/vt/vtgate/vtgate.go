@@ -112,9 +112,6 @@ var (
 	queryLogBufferSize = 10
 
 	messageStreamGracePeriod = 30 * time.Second
-
-	// workloadLabel is the label that is looked for in query directives to identify the workload name
-	workloadLabel = "workload"
 )
 
 func registerFlags(fs *pflag.FlagSet) {
@@ -149,7 +146,6 @@ func registerFlags(fs *pflag.FlagSet) {
 	fs.IntVar(&queryLogBufferSize, "querylog-buffer-size", queryLogBufferSize, "Maximum number of buffered query logs before throttling log output")
 	fs.DurationVar(&messageStreamGracePeriod, "message_stream_grace_period", messageStreamGracePeriod, "the amount of time to give for a vttablet to resume if it ends a message stream, usually because of a reparent.")
 	fs.BoolVar(&enableViews, "enable-views", enableViews, "Enable views support in vtgate.")
-	fs.StringVar(&workloadLabel, "workload-label", workloadLabel, "The label looked for in query directive comments to identify the workload name.")
 }
 func init() {
 	servenv.OnParseFor("vtgate", registerFlags)
@@ -490,7 +486,7 @@ func (vtg *VTGate) ExecuteBatch(ctx context.Context, session *vtgatepb.Session, 
 func (vtg *VTGate) StreamExecute(ctx context.Context, session *vtgatepb.Session, sql string, bindVariables map[string]*querypb.BindVariable, callback func(*sqltypes.Result) error) error {
 	// In this context, we don't care if we can't fully parse destination
 	destKeyspace, destTabletType, _, _ := vtg.executor.ParseDestinationTarget(session.TargetString)
-	statsKey := []string{" StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
+	statsKey := []string{"StreamExecute", destKeyspace, topoproto.TabletTypeLString(destTabletType)}
 
 	defer vtg.timings.Record(statsKey, time.Now())
 

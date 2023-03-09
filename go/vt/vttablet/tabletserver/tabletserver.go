@@ -748,13 +748,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
-			workload := sqlparser.UnspecifiedWorkloadName
-
-			// Some vitess internal queries come with nil options, so check for that before trying to get the workload
-			// from the options.
-			if options != nil {
-				workload = options.WorkloadName
-			}
 
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
@@ -790,7 +783,6 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				tsv:            tsv,
 				tabletType:     target.GetTabletType(),
 				setting:        connSetting,
-				workload:       workload,
 			}
 			result, err = qre.Execute()
 			if err != nil {
@@ -1441,7 +1433,7 @@ func (tsv *TabletServer) execRequest(
 		span.Annotate("shard", target.Shard)
 		span.Annotate("keyspace", target.Keyspace)
 	}
-	workloadName := sqlparser.UnspecifiedWorkloadName
+	workloadName := ""
 	if options != nil {
 		workloadName = options.WorkloadName
 	}

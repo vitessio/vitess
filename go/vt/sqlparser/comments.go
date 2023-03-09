@@ -48,8 +48,8 @@ const (
 	DirectiveVExplainRunDMLQueries = "EXECUTE_DML_QUERIES"
 	// DirectiveConsolidator enables the query consolidator.
 	DirectiveConsolidator = "CONSOLIDATOR"
-
-	UnspecifiedWorkloadName = "unspecified"
+	// DirectiveWorkloadName specifies the name of the client application workload issuing the query.
+	DirectiveWorkloadName = "WORKLOAD"
 )
 
 func isNonSpace(r rune) bool {
@@ -401,22 +401,16 @@ func Consolidator(stmt Statement) querypb.ExecuteOptions_Consolidator {
 
 // GetWorkloadNameFromStatement gets the workload name from the provided Statement, using workloadLabel as the name of
 // the query directive that specifies it.
-func GetWorkloadNameFromStatement(statement Statement, workloadLabel string) string {
+func GetWorkloadNameFromStatement(statement Statement) string {
 	commentedStatement, ok := statement.(Commented)
 	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
 	// unspecified workload
 	if !ok {
-		return UnspecifiedWorkloadName
+		return ""
 	}
 
 	directives := commentedStatement.GetParsedComments().Directives()
-	workloadName, _ := directives.GetString(workloadLabel, UnspecifiedWorkloadName)
-
-	// CommentDirectives.GetString() can return empty instead of the default passed to it, so override that if empty
-	// string
-	if workloadName == "" {
-		workloadName = UnspecifiedWorkloadName
-	}
+	workloadName, _ := directives.GetString(DirectiveWorkloadName, "")
 
 	return workloadName
 }

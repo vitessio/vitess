@@ -852,7 +852,9 @@ func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Conso
 }
 
 func (vc *vcursorImpl) SetWorkloadName(workloadName string) {
-	vc.safeSession.GetOrCreateOptions().WorkloadName = workloadName
+	if workloadName != "" {
+		vc.safeSession.GetOrCreateOptions().WorkloadName = workloadName
+	}
 }
 
 // SetFoundRows implements the SessionActions interface
