@@ -589,12 +589,13 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-<<<<<<< HEAD
 	if len(m.SidecarDbName) > 0 {
 		i -= len(m.SidecarDbName)
 		copy(dAtA[i:], m.SidecarDbName)
 		i = encodeVarint(dAtA, i, uint64(len(m.SidecarDbName)))
-=======
+		i--
+		dAtA[i] = 0x52
+	}
 	if m.ThrottlerConfig != nil {
 		size, err := m.ThrottlerConfig.MarshalToSizedBufferVT(dAtA[:i])
 		if err != nil {
@@ -602,7 +603,6 @@ func (m *Keyspace) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		}
 		i -= size
 		i = encodeVarint(dAtA, i, uint64(size))
->>>>>>> origin/main
 		i--
 		dAtA[i] = 0x4a
 	}
@@ -1630,13 +1630,12 @@ func (m *Keyspace) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-<<<<<<< HEAD
-	l = len(m.SidecarDbName)
-	if l > 0 {
-=======
 	if m.ThrottlerConfig != nil {
 		l = m.ThrottlerConfig.SizeVT()
->>>>>>> origin/main
+		n += 1 + l + sov(uint64(l))
+	}
+	l = len(m.SidecarDbName)
+	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
 	n += len(m.unknownFields)
@@ -3702,15 +3701,9 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 			iNdEx = postIndex
 		case 9:
 			if wireType != 2 {
-<<<<<<< HEAD
-				return fmt.Errorf("proto: wrong wireType = %d for field SidecarDbName", wireType)
-			}
-			var stringLen uint64
-=======
 				return fmt.Errorf("proto: wrong wireType = %d for field ThrottlerConfig", wireType)
 			}
 			var msglen int
->>>>>>> origin/main
 			for shift := uint(0); ; shift += 7 {
 				if shift >= 64 {
 					return ErrIntOverflow
@@ -3720,43 +3713,59 @@ func (m *Keyspace) UnmarshalVT(dAtA []byte) error {
 				}
 				b := dAtA[iNdEx]
 				iNdEx++
-<<<<<<< HEAD
-				stringLen |= uint64(b&0x7F) << shift
-=======
 				msglen |= int(b&0x7F) << shift
->>>>>>> origin/main
 				if b < 0x80 {
 					break
 				}
 			}
-<<<<<<< HEAD
-			intStringLen := int(stringLen)
-			if intStringLen < 0 {
-				return ErrInvalidLength
-			}
-			postIndex := iNdEx + intStringLen
-=======
 			if msglen < 0 {
 				return ErrInvalidLength
 			}
 			postIndex := iNdEx + msglen
->>>>>>> origin/main
 			if postIndex < 0 {
 				return ErrInvalidLength
 			}
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-<<<<<<< HEAD
-			m.SidecarDbName = string(dAtA[iNdEx:postIndex])
-=======
 			if m.ThrottlerConfig == nil {
 				m.ThrottlerConfig = &ThrottlerConfig{}
 			}
 			if err := m.ThrottlerConfig.UnmarshalVT(dAtA[iNdEx:postIndex]); err != nil {
 				return err
 			}
->>>>>>> origin/main
+			iNdEx = postIndex
+		case 10:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field SidecarDbName", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.SidecarDbName = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

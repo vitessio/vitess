@@ -13242,13 +13242,11 @@ export namespace topodata {
         /** Keyspace durability_policy */
         durability_policy?: (string|null);
 
-<<<<<<< HEAD
-        /** Keyspace sidecar_db_name */
-        sidecar_db_name?: (string|null);
-=======
         /** Keyspace throttler_config */
         throttler_config?: (topodata.IThrottlerConfig|null);
->>>>>>> origin/main
+
+        /** Keyspace sidecar_db_name */
+        sidecar_db_name?: (string|null);
     }
 
     /** Represents a Keyspace. */
@@ -13275,13 +13273,11 @@ export namespace topodata {
         /** Keyspace durability_policy. */
         public durability_policy: string;
 
-<<<<<<< HEAD
-        /** Keyspace sidecar_db_name. */
-        public sidecar_db_name: string;
-=======
         /** Keyspace throttler_config. */
         public throttler_config?: (topodata.IThrottlerConfig|null);
->>>>>>> origin/main
+
+        /** Keyspace sidecar_db_name. */
+        public sidecar_db_name: string;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
