@@ -1,4 +1,4 @@
-CREATE TABLE customer (
+CREATE TABLE IF NOT EXISTS customer (
   id int NOT NULL,
   fullname varbinary(256),
   nationalid varbinary(256),

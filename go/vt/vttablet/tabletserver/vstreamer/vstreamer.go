@@ -32,7 +32,6 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/log"
@@ -54,14 +53,6 @@ const (
 // set by VPlayer at slightly above 1s. This minimizes conflicts
 // between the two timeouts.
 var HeartbeatTime = 900 * time.Millisecond
-
-// vschemaUpdateCount is for testing only.
-// vstreamer is a mutex free data structure. So, it's not safe to access its members
-// from a test. Since VSchema gets updated asynchronously, there's no way for a test
-// to wait for it. Instead, the code that updates the vschema increments this atomic
-// counter, which will let the tests poll for it to change.
-// TODO(sougou): find a better way for this.
-var vschemaUpdateCount sync2.AtomicInt64
 
 // vstreamer is for serving a single vreplication stream on the source side.
 type vstreamer struct {
@@ -385,8 +376,6 @@ func (vs *vstreamer) parseEvents(ctx context.Context, events <-chan mysql.Binlog
 				if err := vs.rebuildPlans(); err != nil {
 					return err
 				}
-				// Increment this counter for testing.
-				vschemaUpdateCount.Add(1)
 			}
 		case err := <-errs:
 			return err

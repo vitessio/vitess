@@ -19,6 +19,7 @@ package collations
 import (
 	"bytes"
 	"fmt"
+	"math/rand"
 	"sort"
 	"strings"
 	"sync"
@@ -27,8 +28,10 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/exp/slices"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var testcollationMap map[string]Collation
@@ -37,11 +40,13 @@ var testcollationOnce sync.Once
 
 func testinit() {
 	testcollationOnce.Do(func() {
-		testcollationSlice = make([]Collation, 0, len(globalAllCollations))
+		testcollationSlice = make([]Collation, 0, len(collationsById))
 		testcollationMap = make(map[string]Collation)
 
-		for _, collation := range globalAllCollations {
-			collation.Init()
+		for _, collation := range collationsById {
+			if collation == nil {
+				continue
+			}
 			testcollationMap[collation.Name()] = collation
 			testcollationSlice = append(testcollationSlice, collation)
 		}
@@ -189,7 +194,6 @@ func TestIsPrefix(t *testing.T) {
 func DebugUcaLegacyWeightString(t *testing.T, collname string, input, expected []byte) {
 	coll := testcollation(t, collname).(*Collation_uca_legacy)
 	iter := coll.uca.Iterator(input)
-	defer iter.Done()
 
 	for {
 		curcp, _ := iter.DebugCodepoint()
@@ -839,10 +843,15 @@ func TestFastIterators(t *testing.T) {
 func TestUniqueHashes(t *testing.T) {
 	for _, teststr := range AllTestStrings {
 		t.Run(teststr.Name, func(t *testing.T) {
-			var hashes = make(map[uintptr]string)
+			var hashes = make(map[uint64]string)
+			var hasher vthash.Hasher
+
 			for _, collation := range testall() {
 				trans, _ := charset.ConvertFromUTF8(nil, collation.Charset(), []byte(teststr.Content))
-				h := collation.Hash(trans, 0)
+
+				hasher.Reset()
+				collation.Hash(&hasher, trans, 0)
+				h := hasher.Sum64()
 				if dupname, dup := hashes[h]; dup {
 					t.Fatalf("%s hashes to %d in %s and %s", teststr.Name, h, collation.Name(), dupname)
 				}
@@ -870,8 +879,14 @@ func (c *ConsistentCollation) Collate(left, right []byte, isPrefix bool) int {
 		c.t.Errorf("ConsistentCollation(%s): expected WeightString %q / %v == %q / %v to be %v", c.Name(), left, w1, right, w2, equal)
 	}
 
-	h1 := c.Hash(left, 0)
-	h2 := c.Hash(right, 0)
+	hasher := vthash.New()
+	c.Hash(&hasher, left, 0)
+	h1 := hasher.Sum64()
+
+	hasher.Reset()
+	c.Hash(&hasher, right, 0)
+	h2 := hasher.Sum64()
+
 	if (h1 == h2) != equal {
 		c.t.Errorf("ConsistentCollation(%s): expected Hash %q / %v == %q / %v to be %v", c.Name(), left, h1, right, h2, equal)
 	}
@@ -901,6 +916,43 @@ func TestEqualities(t *testing.T) {
 		cmp := collation.Collate([]byte(tc.left), []byte(tc.right), false)
 		assert.Equal(t, tc.equal, (cmp == 0), "expected %q == %q to be %v", tc.left, tc.right, tc.equal)
 
+	}
+}
+
+func TestUCACollationOrder(t *testing.T) {
+	var sorted = []string{
+		"aaaa",
+		"bbbb",
+		"cccc",
+		"dddd",
+		"zzzz",
+	}
+
+	var collations = []string{
+		"utf8mb4_0900_ai_ci",
+		"utf8mb4_0900_as_cs",
+	}
+
+	for _, colname := range collations {
+		col := testcollation(t, colname)
+
+		for _, a := range sorted {
+			for _, b := range sorted {
+				want := strings.Compare(a, b) < 0
+				got := col.Collate([]byte(a), []byte(b), false) < 0
+				require.Equalf(t, want, got, "failed to compare %q vs %q", a, b)
+			}
+		}
+
+		ary := slices.Clone(sorted)
+		for i := range ary {
+			j := rand.Intn(i + 1)
+			ary[i], ary[j] = ary[j], ary[i]
+		}
+		slices.SortFunc(ary, func(a, b string) bool {
+			return col.Collate([]byte(a), []byte(b), false) < 0
+		})
+		require.Equal(t, sorted, ary)
 	}
 }
 

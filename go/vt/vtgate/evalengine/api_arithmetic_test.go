@@ -26,6 +26,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/test/utils"
+	"vitess.io/vitess/go/vt/vthash"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1097,10 +1098,13 @@ func TestCompareNumeric(t *testing.T) {
 				// if two values are considered equal, they must also produce the same hashcode
 				if result == 0 {
 					if aVal.SQLType() == bVal.SQLType() {
+						hash1 := vthash.New()
+						hash2 := vthash.New()
+
 						// hash codes can only be compared if they are coerced to the same type first
-						aHash, _ := aVal.Hash()
-						bHash, _ := bVal.Hash()
-						assert.Equal(t, aHash, bHash, "hash code does not match")
+						aVal.(hashable).Hash(&hash1)
+						bVal.(hashable).Hash(&hash2)
+						assert.Equal(t, hash1.Sum128(), hash2.Sum128(), "hash code does not match")
 					}
 				}
 			})

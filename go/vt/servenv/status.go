@@ -104,6 +104,32 @@ text-align: right;
 
 <h1>Status for {{.BinaryName}}</h1>
 
+<script>
+function refreshTablesHaveClassRefreshRequired() {
+  var xhr = new XMLHttpRequest();
+  xhr.open("GET", "/debug/status", true);
+  xhr.onreadystatechange = function() {
+    if (this.readyState === XMLHttpRequest.DONE && this.status === 200) {
+  	  var data = this.responseText;
+  	  var parser = new DOMParser();
+  	  var htmlDoc = parser.parseFromString(data, "text/html");
+  	  var tables = document.getElementsByClassName("refreshRequired");
+  	  var counter = 0;
+  	  for (var i = 0; i < tables.length; i++) {
+  	    var newTable = htmlDoc.querySelectorAll("table.refreshRequired")[counter];
+  	    if (newTable) {
+  	  	tables[i].innerHTML = newTable.innerHTML;
+  	    }
+  	    counter++;
+  	  }
+    }
+  };
+  xhr.send();
+}
+if (` + strconv.Itoa(tableRefreshInterval) + ` !== 0) {
+	setInterval(refreshTablesHaveClassRefreshRequired, ` + strconv.Itoa(tableRefreshInterval) + `);
+}
+</script>
 <div>
 <div class=lefthand>
 Started: {{.StartTime}}<br>
@@ -255,7 +281,7 @@ func registerDebugBlockProfileRate() {
 			return
 		}
 
-		rate, err := strconv.ParseInt(r.FormValue("rate"), 10, 32)
+		rate, err := strconv.Atoi(r.FormValue("rate"))
 		message := "block profiling enabled"
 		if rate < 0 || err != nil {
 			// We can't get the current profiling rate
@@ -269,8 +295,8 @@ func registerDebugBlockProfileRate() {
 		} else {
 			message = fmt.Sprintf("Block profiling rate set to %d", rate)
 		}
-		blockProfileRate = int(rate)
-		runtime.SetBlockProfileRate(int(rate))
+		blockProfileRate = rate
+		runtime.SetBlockProfileRate(rate)
 		log.Infof("Set block profile rate to: %d", rate)
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte(message))
@@ -286,7 +312,7 @@ func registerDebugMutexProfileFraction() {
 		}
 
 		currentFraction := runtime.SetMutexProfileFraction(-1)
-		fraction, err := strconv.ParseInt(r.FormValue("fraction"), 10, 32)
+		fraction, err := strconv.Atoi(r.FormValue("fraction"))
 		message := "mutex profiling enabled"
 		if fraction < 0 || err != nil {
 			if currentFraction == 0 {
@@ -298,7 +324,7 @@ func registerDebugMutexProfileFraction() {
 		} else {
 			message = fmt.Sprintf("Mutex profiling set to fraction %d", fraction)
 		}
-		runtime.SetMutexProfileFraction(int(fraction))
+		runtime.SetMutexProfileFraction(fraction)
 		log.Infof("Set mutex profiling fraction to: %d", fraction)
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte(message))

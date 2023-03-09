@@ -21,6 +21,7 @@ import (
 	"sync"
 
 	"vitess.io/vitess/go/streamlog"
+	"vitess.io/vitess/go/vt/vtgate/logstats"
 )
 
 var (
@@ -34,18 +35,18 @@ var (
 	QueryzHandler = "/debug/queryz"
 
 	// QueryLogger enables streaming logging of queries
-	QueryLogger   *streamlog.StreamLogger
+	QueryLogger   *streamlog.StreamLogger[*logstats.LogStats]
 	queryLoggerMu sync.Mutex
 )
 
-func SetQueryLogger(logger *streamlog.StreamLogger) {
+func SetQueryLogger(logger *streamlog.StreamLogger[*logstats.LogStats]) {
 	queryLoggerMu.Lock()
 	defer queryLoggerMu.Unlock()
 	QueryLogger = logger
 }
 
 func initQueryLogger(vtg *VTGate) error {
-	SetQueryLogger(streamlog.New("VTGate", queryLogBufferSize))
+	SetQueryLogger(streamlog.New[*logstats.LogStats]("VTGate", queryLogBufferSize))
 	QueryLogger.ServeLogs(QueryLogHandler, streamlog.GetFormatter(QueryLogger))
 
 	http.HandleFunc(QueryLogzHandler, func(w http.ResponseWriter, r *http.Request) {

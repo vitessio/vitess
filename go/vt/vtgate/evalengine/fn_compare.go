@@ -18,9 +18,9 @@ package evalengine
 
 import (
 	"bytes"
-	"math"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 )
 
@@ -64,11 +64,12 @@ func (b *builtinCoalesce) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 
 func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 	var (
-		integers int
-		floats   int
-		decimals int
-		text     int
-		binary   int
+		integersI int
+		integersU int
+		floats    int
+		decimals  int
+		text      int
+		binary    int
 	)
 
 	/*
@@ -89,13 +90,9 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 
 		switch arg := arg.(type) {
 		case *evalInt64:
-			integers++
+			integersI++
 		case *evalUint64:
-			if arg.u > math.MaxInt64 {
-				decimals++
-			} else {
-				integers++
-			}
+			integersU++
 		case *evalFloat:
 			floats++
 		case *evalDecimal:
@@ -110,15 +107,21 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 		}
 	}
 
-	if integers == len(args) {
-		return compareAllInteger
+	if integersI+integersU == len(args) {
+		if integersI == len(args) {
+			return compareAllInteger_i
+		}
+		if integersU == len(args) {
+			return compareAllInteger_u
+		}
+		return compareAllDecimal
 	}
 	if binary > 0 || text > 0 {
-		if binary > 0 {
-			return compareAllBinary
-		}
 		if text > 0 {
 			return compareAllText
+		}
+		if binary > 0 {
+			return compareAllBinary
 		}
 	} else {
 		if floats > 0 {
@@ -131,15 +134,26 @@ func getMultiComparisonFunc(args []eval) multiComparisonFunc {
 	panic("unexpected argument type")
 }
 
-func compareAllInteger(args []eval, cmp int) (eval, error) {
-	var candidateI = args[0].(*evalInt64).i
+func compareAllInteger_u(args []eval, cmp int) (eval, error) {
+	x := args[0].(*evalUint64)
 	for _, arg := range args[1:] {
-		thisI := arg.(*evalInt64).i
-		if (cmp < 0) == (thisI < candidateI) {
-			candidateI = thisI
+		y := arg.(*evalUint64)
+		if (cmp < 0) == (y.u < x.u) {
+			x = y
 		}
 	}
-	return &evalInt64{candidateI}, nil
+	return x, nil
+}
+
+func compareAllInteger_i(args []eval, cmp int) (eval, error) {
+	x := args[0].(*evalInt64)
+	for _, arg := range args[1:] {
+		y := arg.(*evalInt64)
+		if (cmp < 0) == (y.i < x.i) {
+			x = y
+		}
+	}
+	return x, nil
 }
 
 func compareAllFloat(args []eval, cmp int) (eval, error) {
@@ -186,42 +200,37 @@ func compareAllDecimal(args []eval, cmp int) (eval, error) {
 
 func compareAllText(args []eval, cmp int) (eval, error) {
 	env := collations.Local()
-	candidateB := args[0].ToRawBytes()
-	collationB := evalCollation(args[0])
 
+	var charsets = make([]charset.Charset, 0, len(args))
 	var ca collationAggregation
-	if err := ca.add(env, collationB); err != nil {
+	for _, arg := range args {
+		col := evalCollation(arg)
+		if err := ca.add(env, col); err != nil {
+			return nil, err
+		}
+		charsets = append(charsets, col.Collation.Get().Charset())
+	}
+
+	tc := ca.result()
+	col := tc.Collation.Get()
+	cs := col.Charset()
+
+	b1, err := charset.Convert(nil, cs, args[0].ToRawBytes(), charsets[0])
+	if err != nil {
 		return nil, err
 	}
 
-	for _, arg := range args[1:] {
-		thisB := arg.ToRawBytes()
-		thisColl := evalCollation(arg)
-		if err := ca.add(env, thisColl); err != nil {
-			return nil, err
-		}
-
-		thisTC, coerceLeft, coerceRight, err := env.MergeCollations(thisColl, collationB, collations.CoercionOptions{ConvertToSuperset: true, ConvertWithCoercion: true})
+	for i, arg := range args[1:] {
+		b2, err := charset.Convert(nil, cs, arg.ToRawBytes(), charsets[i+1])
 		if err != nil {
 			return nil, err
 		}
-
-		collation := env.LookupByID(thisTC.Collation)
-
-		var leftB = thisB
-		var rightB = candidateB
-		if coerceLeft != nil {
-			leftB, _ = coerceLeft(nil, leftB)
-		}
-		if coerceRight != nil {
-			rightB, _ = coerceRight(nil, rightB)
-		}
-		if (cmp < 0) == (collation.Collate(leftB, rightB, false) < 0) {
-			candidateB = thisB
+		if (cmp < 0) == (col.Collate(b2, b1, false) < 0) {
+			b1 = b2
 		}
 	}
 
-	return newEvalText(candidateB, ca.result()), nil
+	return newEvalText(b1, tc), nil
 }
 
 func compareAllBinary(args []eval, cmp int) (eval, error) {
@@ -247,12 +256,13 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 
 func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	var (
-		integers int
-		floats   int
-		decimals int
-		text     int
-		binary   int
-		flags    typeFlag
+		integersI int
+		integersU int
+		floats    int
+		decimals  int
+		text      int
+		binary    int
+		flags     typeFlag
 	)
 
 	for _, expr := range call.Arguments {
@@ -261,13 +271,9 @@ func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, t
 
 		switch tt {
 		case sqltypes.Int8, sqltypes.Int16, sqltypes.Int32, sqltypes.Int64:
-			integers++
+			integersI++
 		case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
-			if f&flagIntegerOvf != 0 {
-				decimals++
-			} else {
-				integers++
-			}
+			integersU++
 		case sqltypes.Float32, sqltypes.Float64:
 			floats++
 		case sqltypes.Decimal:
@@ -282,15 +288,21 @@ func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, t
 	if flags&flagNull != 0 {
 		return sqltypes.Null, flags
 	}
-	if integers == len(call.Arguments) {
-		return sqltypes.Int64, flags
+	if integersI+integersU == len(call.Arguments) {
+		if integersI == len(call.Arguments) {
+			return sqltypes.Int64, flags
+		}
+		if integersU == len(call.Arguments) {
+			return sqltypes.Uint64, flags
+		}
+		return sqltypes.Decimal, flags
 	}
 	if binary > 0 || text > 0 {
-		if binary > 0 {
-			return sqltypes.VarBinary, flags
-		}
 		if text > 0 {
 			return sqltypes.VarChar, flags
+		}
+		if binary > 0 {
+			return sqltypes.VarBinary, flags
 		}
 	} else {
 		if floats > 0 {

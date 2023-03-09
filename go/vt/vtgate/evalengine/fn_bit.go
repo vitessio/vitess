@@ -44,13 +44,14 @@ func (call *builtinBitCount) eval(env *ExpressionEnv) (eval, error) {
 			count += bits.OnesCount8(b)
 		}
 	} else {
-		u := evalToNumeric(arg).toUint64()
-		count = bits.OnesCount64(u.u)
+		u := evalToNumeric(arg).toInt64()
+		count = bits.OnesCount64(uint64(u.i))
 	}
 	return newEvalInt64(int64(count)), nil
 }
 
 func (call *builtinBitCount) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	_, f := call.Arguments[0].typeof(env)
+	// The MySQL docs are actually wrong and this returns an int64, not a uint64.
 	return sqltypes.Int64, f
 }
