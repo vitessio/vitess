@@ -41,4 +41,6 @@ for _ in {0..300}; do
 done
 
 # check one last time
-curl -I "http://${hostname}:${vtctld_web_port}/debug/status" || fail "vtctld could not be started"
+curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null || fail "vtctld could not be started!"
+
+echo -e "vtctld is running!"
