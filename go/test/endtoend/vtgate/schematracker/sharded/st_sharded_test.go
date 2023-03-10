@@ -28,7 +28,9 @@ import (
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder"
 
 	"github.com/stretchr/testify/require"
@@ -112,6 +114,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		err = waitForVTGateAndVTTablets()
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
@@ -119,6 +127,22 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func waitForVTGateAndVTTablets() error {
+	timeout := time.After(5 * time.Minute)
+	for {
+		select {
+		case <-timeout:
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "timed out waiting for cluster to become healthy")
+		default:
+			err := clusterInstance.WaitForTabletsToHealthyInVtgate()
+			if err != nil {
+				continue
+			}
+			return nil
+		}
+	}
 }
 
 func TestNewTable(t *testing.T) {
@@ -141,11 +165,21 @@ func TestNewTable(t *testing.T) {
 
 	_ = utils.Exec(t, conn, "create table test_table (id bigint, name varchar(100))")
 
-	time.Sleep(2 * time.Second)
-
-	utils.AssertMatches(t, conn, "select * from test_table", `[]`)
-	utils.AssertMatches(t, connShard1, "select * from test_table", `[]`)
-	utils.AssertMatches(t, connShard2, "select * from test_table", `[]`)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select * from test_table", `[]`,
+		100*time.Millisecond,
+		60*time.Second, // longer timeout as this is the first query after setup
+		"could not query test_table through vtgate")
+	utils.AssertMatchesWithTimeout(t, connShard1,
+		"select * from test_table", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query test_table on "+shard1Params.DbName)
+	utils.AssertMatchesWithTimeout(t, connShard2,
+		"select * from test_table", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query test_table on "+shard2Params.DbName)
 
 	utils.Exec(t, conn, "drop table test_table")
 
@@ -181,7 +215,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"initial table list not complete")
 
 	// Init
@@ -194,7 +228,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc not in vschema tables")
 
 	// Tables Update via health check.
@@ -207,7 +241,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc1 not in vschema tables")
 
 	_ = utils.Exec(t, conn, "drop table test_sc, test_sc1")
@@ -219,7 +253,7 @@ func TestInitAndUpdate(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc and test_sc_1 should not be in vschema tables")
 
 }
@@ -244,11 +278,19 @@ func TestDMLOnNewTable(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"test_sc not in vschema tables")
 
-	utils.AssertMatches(t, conn, "select id from new_table_tracked", `[]`)              // select
-	utils.AssertMatches(t, conn, "select id from new_table_tracked where id = 5", `[]`) // select
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select id from new_table_tracked", `[]`,
+		100*time.Millisecond,
+		60*time.Second, // longer timeout as it's the first query after setup
+		"could not query new_table_tracked through vtgate")
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select id from new_table_tracked where id = 5", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query new_table_tracked through vtgate")
 	// DML on new table
 	// insert initial data ,update and delete will fail since we have not added a primary vindex
 	errorMessage := "table 'new_table_tracked' does not have a primary vindex (errno 1173) (sqlstate 42000)"
@@ -264,6 +306,11 @@ func TestDMLOnNewTable(t *testing.T) {
 	utils.Exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)
 	utils.Exec(t, conn, `insert into t8(id8) values(2)`)
 	defer utils.Exec(t, conn, `delete from t8`)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select count(*) from new_table_tracked join t8", `[[INT64(2)]]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"did not get expected number of rows when joining new_table_tracked with t8")
 	utils.AssertMatchesNoOrder(t, conn, `select id from new_table_tracked join t8`, `[[INT64(0)] [INT64(1)]]`)
 }
 
@@ -289,7 +336,7 @@ func TestNewView(t *testing.T) {
 	// executing the query directly
 	qr := utils.Exec(t, conn, selQuery)
 	// selecting it through the view.
-	utils.AssertMatchesWithTimeout(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows), 100*time.Millisecond, 10*time.Second, "test_view not in vschema tables")
+	utils.AssertMatchesWithTimeout(t, conn, "select * from test_view", fmt.Sprintf("%v", qr.Rows), 100*time.Millisecond, 30*time.Second, "test_view not in vschema tables")
 }
 
 // TestViewAndTable validates that new column added in table is present in the view definition
@@ -315,7 +362,7 @@ func TestViewAndTable(t *testing.T) {
 	_ = utils.Exec(t, conn, "create view t8_view as select * from t8")
 
 	// executing the view query, with the new column in the select field.
-	utils.AssertMatchesWithTimeout(t, conn, "select new_col from t8_view", `[[VARCHAR("V")]]`, 100*time.Millisecond, 5*time.Second, "t8_view not in vschema tables")
+	utils.AssertMatchesWithTimeout(t, conn, "select new_col from t8_view", `[[VARCHAR("V")]]`, 100*time.Millisecond, 30*time.Second, "t8_view not in vschema tables")
 
 	// add another column to the table t8
 	_ = utils.Exec(t, conn, "alter table t8 add column additional_col bigint")

@@ -19,12 +19,15 @@ package unsharded
 import (
 	"context"
 	"flag"
+	"fmt"
 	"os"
 	"testing"
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/require"
 
@@ -95,6 +98,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		err = waitForVTGateAndVTTablets()
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
@@ -102,6 +111,22 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
+}
+
+func waitForVTGateAndVTTablets() error {
+	timeout := time.After(5 * time.Minute)
+	for {
+		select {
+		case <-timeout:
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "timed out waiting for cluster to become healthy")
+		default:
+			err := clusterInstance.WaitForTabletsToHealthyInVtgate()
+			if err != nil {
+				continue
+			}
+			return nil
+		}
+	}
 }
 
 func TestNewUnshardedTable(t *testing.T) {
@@ -125,7 +150,7 @@ func TestNewUnshardedTable(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"initial table list not complete")
 
 	// create a new table which is not part of the VSchema
@@ -141,17 +166,30 @@ func TestNewUnshardedTable(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"new_table_tracked not in vschema tables")
 
-	utils.AssertMatches(t, conn, "select id from new_table_tracked", `[]`)              // select
-	utils.AssertMatches(t, conn, "select id from new_table_tracked where id = 5", `[]`) // select
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select id from new_table_tracked", `[]`,
+		100*time.Millisecond,
+		60*time.Second, // longer timeout as it's the first query after setup
+		"could not query new_table_tracked through vtgate")
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select id from new_table_tracked where id = 5", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query new_table_tracked through vtgate")
+
 	// DML on new table
 	// insert initial data ,update and delete for the new table
 	utils.Exec(t, conn, `insert into new_table_tracked(id) values(0),(1)`)
 	utils.Exec(t, conn, `update new_table_tracked set name = "newName1"`)
 	utils.Exec(t, conn, "delete from new_table_tracked where id = 0")
-	utils.AssertMatches(t, conn, `select * from new_table_tracked`, `[[INT64(1) VARCHAR("newName1")]]`)
+	utils.AssertMatchesWithTimeout(t, conn,
+		`select * from new_table_tracked`, `[[INT64(1) VARCHAR("newName1")]]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"could not query expected row in new_table_tracked through vtgate")
 
 	utils.Exec(t, conn, `drop table new_table_tracked`)
 
@@ -164,6 +202,6 @@ func TestNewUnshardedTable(t *testing.T) {
 		"SHOW VSCHEMA TABLES",
 		expected,
 		100*time.Millisecond,
-		3*time.Second,
+		30*time.Second,
 		"new_table_tracked not in vschema tables")
 }

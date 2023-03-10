@@ -27,6 +27,8 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/require"
 
@@ -104,6 +106,13 @@ func TestMain(m *testing.M) {
 			clusterInstance.VtgateProcess = cluster.VtgateProcess{}
 			return 1
 		}
+
+		err := waitForVTGateAndVTTablets()
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
@@ -113,6 +122,22 @@ func TestMain(m *testing.M) {
 	os.Exit(exitcode)
 }
 
+func waitForVTGateAndVTTablets() error {
+	timeout := time.After(5 * time.Minute)
+	for {
+		select {
+		case <-timeout:
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "timed out waiting for cluster to become healthy")
+		default:
+			err := clusterInstance.WaitForTabletsToHealthyInVtgate()
+			if err != nil {
+				continue
+			}
+			return nil
+		}
+	}
+}
+
 func TestVSchemaTrackerInit(t *testing.T) {
 	defer cluster.PanicHandler(t)
 	ctx := context.Background()
@@ -120,10 +145,13 @@ func TestVSchemaTrackerInit(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := utils.Exec(t, conn, "SHOW VSCHEMA TABLES")
-	got := fmt.Sprintf("%v", qr.Rows)
 	want := `[[VARCHAR("main")] [VARCHAR("test_table")] [VARCHAR("vt_user")]]`
-	assert.Equal(t, want, got)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		want,
+		100*time.Millisecond,
+		60*time.Second,
+		"initial table list not complete")
 }
 
 // TestVSchemaTrackerKeyspaceReInit tests that the vschema tracker

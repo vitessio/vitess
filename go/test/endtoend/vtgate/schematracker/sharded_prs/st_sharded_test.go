@@ -174,7 +174,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = waitForVTGateAndVTTablet()
+		err = waitForVTGateAndVTTablets()
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -195,7 +195,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = waitForVTGateAndVTTablet()
+		err = waitForVTGateAndVTTablets()
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -210,12 +210,12 @@ func TestMain(m *testing.M) {
 	os.Exit(exitCode)
 }
 
-func waitForVTGateAndVTTablet() error {
+func waitForVTGateAndVTTablets() error {
 	timeout := time.After(5 * time.Minute)
 	for {
 		select {
 		case <-timeout:
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "timeout")
+			return vterrors.New(vtrpcpb.Code_INTERNAL, "timed out waiting for cluster to become healthy")
 		default:
 			err := clusterInstance.WaitForTabletsToHealthyInVtgate()
 			if err != nil {
@@ -235,6 +235,9 @@ func TestAddColumn(t *testing.T) {
 	defer conn.Close()
 
 	_ = utils.Exec(t, conn, `alter table t2 add column aaa int`)
-	time.Sleep(10 * time.Second)
-	_ = utils.Exec(t, conn, "select aaa from t2")
+	utils.AssertMatchesWithTimeout(t, conn,
+		"select aaa from t2", `[]`,
+		100*time.Millisecond,
+		30*time.Second,
+		"t2 did not have the expected aaa column")
 }
