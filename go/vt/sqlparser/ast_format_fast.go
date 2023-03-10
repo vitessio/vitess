@@ -3631,3 +3631,10 @@ func (node *LineStringExpr) formatFast(buf *TrackedBuffer) {
 	node.PointParams.formatFast(buf)
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node.
+func (node *PolygonExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("polygon(")
+	node.LinestringParams.formatFast(buf)
+	buf.WriteByte(')')
+}
