@@ -18,10 +18,14 @@ package sidecardb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 func TestAll(t *testing.T) {
@@ -43,7 +47,7 @@ func TestAll(t *testing.T) {
 		preHook       func() error
 		postHook      func() error
 		want          string
-		wantErr       bool
+		wantErr       error
 	}{
 		{
 			name: "calling New twice should return the same instance",
@@ -57,7 +61,6 @@ func TestAll(t *testing.T) {
 			keyspace:      "ks1",
 			sidecardbname: "_vt",
 			want:          "_vt",
-			wantErr:       false,
 		},
 		{
 			name:     "keyspace doesn't exist",
@@ -66,11 +69,10 @@ func TestAll(t *testing.T) {
 				delete(sidecarDBIdentifierMap, "ks2")
 				return nil
 			},
-			want:    "",
-			wantErr: true,
+			wantErr: errors.New("keyspace ks2 not found"),
 		},
 		{
-			name:     "uninitialized cache",
+			name:     "uninitialized load func",
 			keyspace: "ks3",
 			preHook: func() error {
 				cache.load = nil
@@ -80,15 +82,13 @@ func TestAll(t *testing.T) {
 				cache.load = loadFunc
 				return nil
 			},
-			want:    "",
-			wantErr: true,
+			wantErr: vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction),
 		},
 		{
 			name:          "sidecar database name that needs escaping",
 			keyspace:      "ks4",
 			sidecardbname: "_vt-test",
 			want:          "`_vt-test`",
-			wantErr:       false,
 		},
 	}
 	for _, tt := range tests {
@@ -103,8 +103,8 @@ func TestAll(t *testing.T) {
 				err := tt.postHook()
 				require.NoError(t, err)
 			}
-			if (err != nil) != tt.wantErr {
-				t.Errorf("cache.GetIdentifierForKeyspace() error = %v, wantErr %v", err, tt.wantErr)
+			if err != nil && err.Error() != tt.wantErr.Error() {
+				t.Errorf("cache.GetIdentifierForKeyspace() error = %v, wantErr: %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {

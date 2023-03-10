@@ -26,7 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// This provides a read through cache of sidecar database identifiers
+// This provides a read through cache of sidecar database identifiers;
 // loading the values from an opaque backend database using a provided
 // load function.
 type IdentifierCache struct {
@@ -43,6 +43,7 @@ type IdentifierCache struct {
 }
 
 const ErrIdentifierCacheUninitialized = "sidecar database identifier cache is not initialized"
+const ErrIdentifierCacheNoLoadFunction = "the load from database function has not been set"
 
 var (
 	instance    *IdentifierCache // singleton
@@ -87,7 +88,7 @@ func GetIdentifierCache() (*IdentifierCache, error) {
 // the database. This provides a read through cache.
 func (sc *IdentifierCache) GetForKeyspace(keyspace string) (string, error) {
 	if sc.load == nil {
-		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "the load from database function has not been set")
+		return "", vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction)
 	}
 	sdbid, ok := sc.sidecarDBIdentifiers.Load(keyspace)
 	if !ok || sdbid == nil || sdbid == "" {

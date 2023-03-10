@@ -270,12 +270,12 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 
 	sidecarDBCache, err := sidecardb.GetIdentifierCache()
 	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to read sidecar database identifier for keyspace %q from the cache",
-			ks.Name)
+		return nil, err
 	}
 	sidecarDBID, err := sidecarDBCache.GetForKeyspace(ks.Name)
 	if err != nil {
-		return nil, err
+		return nil, vterrors.Wrapf(err, "failed to read sidecar database identifier for keyspace %q from the cache",
+			ks.Name)
 	}
 
 	sql := fmt.Sprintf("SELECT * FROM %s.schema_migrations", sidecarDBID)
