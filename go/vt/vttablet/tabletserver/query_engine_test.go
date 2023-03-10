@@ -710,7 +710,7 @@ func TestAddQueryStats(t *testing.T) {
 			rowsAffected:                     0,
 			rowsReturned:                     0,
 			errorCount:                       1,
-			errorCode:                        "OK",
+			errorCode:                        "RESOURCE_EXHAUSTED",
 			enablePerWorkloadTableMetrics:    true,
 			workload:                         "some-workload",
 			expectedQueryCounts:              `{"A.Select.some-workload": 1}`,
@@ -718,7 +718,7 @@ func TestAddQueryStats(t *testing.T) {
 			expectedQueryRowsAffected:        `{}`,
 			expectedQueryRowsReturned:        `{"A.Select.some-workload": 0}`,
 			expectedQueryErrorCounts:         `{"A.Select.some-workload": 1}`,
-			expectedQueryErrorCountsWithCode: `{}`,
+			expectedQueryErrorCountsWithCode: `{"A.Select.RESOURCE_EXHAUSTED": 1}`,
 		}, {
 			name:                             "insert query with per workload metrics",
 			planType:                         planbuilder.PlanInsert,
