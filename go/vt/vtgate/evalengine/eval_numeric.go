@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"encoding/binary"
 	"math"
 	"strconv"
 
@@ -101,16 +100,12 @@ func evalToNumeric(e eval) evalNumeric {
 		return e
 	case *evalBytes:
 		if e.isHexLiteral {
-			raw := e.bytes
-			if len(raw) > 8 {
-				return &evalFloat{0} // overflow
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return newEvalFloat(0)
 			}
-
-			var number [8]byte
-			for i, b := range raw {
-				number[8-len(raw)+i] = b
-			}
-			return &evalUint64{u: binary.BigEndian.Uint64(number[:]), hexLiteral: true}
+			return hex
 		}
 		return &evalFloat{f: parseStringToFloat(e.string())}
 	case *evalJSON:
@@ -148,17 +143,21 @@ func (e *evalInt64) ToRawBytes() []byte {
 
 func (e *evalInt64) negate() evalNumeric {
 	if e.i == math.MinInt64 {
-		return &evalDecimal{dec: decimal.NewFromInt(e.i).NegInPlace(), length: 0}
+		return newEvalDecimalWithPrec(decimal.NewFromInt(e.i).NegInPlace(), 0)
 	}
-	return &evalInt64{-e.i}
+	return newEvalInt64(-e.i)
 }
 
 func (e *evalInt64) toInt64() *evalInt64 {
 	return e
 }
 
+func (e *evalInt64) toFloat0() float64 {
+	return float64(e.i)
+}
+
 func (e *evalInt64) toFloat() (*evalFloat, bool) {
-	return newEvalFloat(float64(e.i)), true
+	return newEvalFloat(e.toFloat0()), true
 }
 
 func (e *evalInt64) toDecimal(m, d int32) *evalDecimal {
@@ -196,8 +195,12 @@ func (e *evalUint64) toInt64() *evalInt64 {
 	return newEvalInt64(int64(e.u))
 }
 
+func (e *evalUint64) toFloat0() float64 {
+	return float64(e.u)
+}
+
 func (e *evalUint64) toFloat() (*evalFloat, bool) {
-	return &evalFloat{float64(e.u)}, true
+	return newEvalFloat(e.toFloat0()), true
 }
 
 func (e *evalUint64) toDecimal(m, d int32) *evalDecimal {
@@ -222,7 +225,7 @@ func (e *evalFloat) ToRawBytes() []byte {
 }
 
 func (e *evalFloat) negate() evalNumeric {
-	return &evalFloat{-e.f}
+	return newEvalFloat(-e.f)
 }
 
 func (e *evalFloat) toInt64() *evalInt64 {
@@ -234,7 +237,7 @@ func (e *evalFloat) toInt64() *evalInt64 {
 	if i < 0 && !math.Signbit(f) {
 		i = math.MaxInt64
 	}
-	return &evalInt64{i}
+	return newEvalInt64(i)
 }
 
 func (e *evalFloat) toFloat() (*evalFloat, bool) {
@@ -303,12 +306,22 @@ func (e *evalDecimal) negate() evalNumeric {
 
 func (e *evalDecimal) toInt64() *evalInt64 {
 	dec := e.dec.Round(0)
-	i, _ := dec.Int64()
+	i, valid := dec.Int64()
+	if !valid {
+		if dec.Sign() < 0 {
+			return newEvalInt64(math.MinInt64)
+		}
+		return newEvalInt64(math.MaxInt64)
+	}
 	return newEvalInt64(i)
 }
 
+func (e *evalDecimal) toFloat0() (float64, bool) {
+	return e.dec.Float64()
+}
+
 func (e *evalDecimal) toFloat() (*evalFloat, bool) {
-	f, exact := e.dec.Float64()
+	f, exact := e.toFloat0()
 	return newEvalFloat(f), exact
 }
 
@@ -326,6 +339,9 @@ func (e *evalDecimal) toUint64() *evalUint64 {
 		return newEvalUint64(uint64(i))
 	}
 
-	u, _ := dec.Uint64()
+	u, valid := dec.Uint64()
+	if !valid {
+		return newEvalUint64(math.MaxUint64)
+	}
 	return newEvalUint64(u)
 }

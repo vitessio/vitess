@@ -20,7 +20,7 @@ import (
 	"unicode/utf16"
 	"unicode/utf8"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset/types"
+	"vitess.io/vitess/go/mysql/collations/charset/types"
 )
 
 // 0xd800-0xdc00 encodes the high 10 bits of a pair.

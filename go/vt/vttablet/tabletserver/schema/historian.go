@@ -22,8 +22,6 @@ import (
 	"sort"
 	"sync"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
@@ -206,7 +204,7 @@ func (h *historian) readRow(row []sqltypes.Value) (*trackedSchema, int64, error)
 	if err != nil {
 		return nil, 0, err
 	}
-	if err := proto.Unmarshal(rowBytes, sch); err != nil {
+	if err := sch.UnmarshalVT(rowBytes); err != nil {
 		return nil, 0, err
 	}
 	log.V(vl).Infof("Read tracked schema from db: id %d, pos %v, ddl %s, schema len %d, time_updated %d \n",

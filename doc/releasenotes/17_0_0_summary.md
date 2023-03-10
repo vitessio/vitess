@@ -4,12 +4,14 @@
 
 - **[Major Changes](#major-changes)**
   - **[Breaking Changes](#breaking-changes)**
-    - [Deprecated Stats](#deprecated-stats)
+    - [Dedicated stats for VTGate Prepare operations](#dedicated-vtgate-prepare-stats)
   - **[New command line flags and behavior](#new-flag)**
     - [Builtin backup: read buffering flags](#builtin-backup-read-buffering-flags)
   - **[New stats](#new-stats)**
     - [Detailed backup and restore stats](#detailed-backup-and-restore-stats)
+    - [VTtablet Error count with code ](#vttablet-error-count-with-code)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
+    - [Deprecated Stats](#deprecated-stats)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -19,14 +21,30 @@
 
 When using TLS with `vtgr`, we now default to TLS 1.2 if no other explicit version is configured. Configuration flags are provided to explicitly configure the minimum TLS version to be used. 
 
-#### <a id="deprecated-stats"/>Deprecated Stats
+#### <a id="dedicated-vtgate-prepare-stats"> Dedicated stats for VTGate Prepare operations
 
-These stats are deprecated in v17.
+Prior to v17 Vitess incorrectly combined stats for VTGate Execute and Prepare operations under a single stats key (`Execute`). In v17 Execute and Prepare operations generate stats under independent stats keys.
 
-| Deprecated stat | Supported alternatives |
-|-|-|
-| `backup_duration_seconds` | `BackupDurationNanoseconds` |
-| `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+Here is a (condensed) example of stats output:
+
+```
+{
+  "VtgateApi": {
+    "Histograms": {
+      "Execute.src.primary": {
+        "500000": 5
+      },
+      "Prepare.src.primary": {
+        "100000000": 0
+      }
+    }
+  },
+  "VtgateApiErrorCounts": {
+    "Execute.src.primary.INVALID_ARGUMENT": 3,
+    "Execute.src.primary.ALREADY_EXISTS": 1
+  }
+}
+```
 
 ### <a id="new-flag"/> New command line flags and behavior
 
@@ -166,9 +184,25 @@ Some notes to help understand these metrics:
  * `DurationByPhaseSeconds["RestoreLastBackup"]` measures to the duration of the restore phase.
  * `RestoreDurationNanoseconds["-.-.Restore"]` also measures to the duration of the restore phase.
 
+#### <a id="vttablet-error-count-with-code"/> VTTablet error count with error code
+
+##### VTTablet Error Count
+
+We are introducing new error counter `QueryErrorCountsWithCode` for VTTablet. It is similar to existing [QueryErrorCounts](https://github.com/vitessio/vitess/blob/main/go/vt/vttablet/tabletserver/query_engine.go#L174) except it contains errorCode as additional dimension.
+We will deprecate `QueryErrorCounts` in v18.
+
 ## <a id="deprecations-and-deletions"/> Deprecations and Deletions
 
 * The deprecated `automation` and `automationservice` protobuf definitions and associated client and server packages have been removed.
 * Auto-population of DDL revert actions and tables at execution-time has been removed. This is now handled entirely at enqueue-time.
 * Backwards-compatibility for failed migrations without a `completed_timestamp` has been removed (see https://github.com/vitessio/vitess/issues/8499).
 * The deprecated `Key`, `Name`, `Up`, and `TabletExternallyReparentedTimestamp` fields were removed from the JSON representation of `TabletHealth` structures.
+
+### <a id="deprecated-stats"/>Deprecated Stats
+
+These stats are deprecated in v17.
+
+| Deprecated stat | Supported alternatives |
+|-|-|
+| `backup_duration_seconds` | `BackupDurationNanoseconds` |
+| `restore_duration_seconds` | `RestoreDurationNanoseconds` |

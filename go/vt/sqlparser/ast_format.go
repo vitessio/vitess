@@ -2204,7 +2204,7 @@ func (node *AddColumns) Format(buf *TrackedBuffer) {
 
 // Format formats the node.
 func (node AlgorithmValue) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "algorithm = %s", string(node))
+	buf.astPrintf(node, "algorithm = %#s", string(node))
 }
 
 // Format formats the node
@@ -2765,4 +2765,9 @@ func (node *PointExpr) Format(buf *TrackedBuffer) {
 // Format formats the node.
 func (node *LineStringExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "linestring(%v)", node.PointParams)
+}
+
+// Format formats the node.
+func (node *PolygonExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "polygon(%v)", node.LinestringParams)
 }

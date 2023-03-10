@@ -35,18 +35,18 @@ func addNumericWithError(left, right eval) (eval, error) {
 	v1, v2 := makeNumericAndPrioritize(left, right)
 	switch v1 := v1.(type) {
 	case *evalInt64:
-		return intPlusIntWithError(v1.i, v2.(*evalInt64).i)
+		return mathAdd_ii(v1.i, v2.(*evalInt64).i)
 	case *evalUint64:
 		switch v2 := v2.(type) {
 		case *evalInt64:
-			return uintPlusIntWithError(v1.u, v2.i)
+			return mathAdd_ui(v1.u, v2.i)
 		case *evalUint64:
-			return uintPlusUintWithError(v1.u, v2.u)
+			return mathAdd_uu(v1.u, v2.u)
 		}
 	case *evalDecimal:
-		return decimalPlusAny(v1, v2)
+		return mathAdd_dx(v1, v2), nil
 	case *evalFloat:
-		return floatPlusAny(v1.f, v2)
+		return mathAdd_fx(v1.f, v2)
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSQLValue(v1), evalToSQLValue(v2))
 }
@@ -58,33 +58,33 @@ func subtractNumericWithError(left, right eval) (eval, error) {
 	case *evalInt64:
 		switch v2 := v2.(type) {
 		case *evalInt64:
-			return intMinusIntWithError(v1.i, v2.i)
+			return mathSub_ii(v1.i, v2.i)
 		case *evalUint64:
-			return intMinusUintWithError(v1.i, v2.u)
+			return mathSub_iu(v1.i, v2.u)
 		case *evalFloat:
-			return anyMinusFloat(v1, v2.f)
+			return mathSub_xf(v1, v2.f)
 		case *evalDecimal:
-			return anyMinusDecimal(v1, v2)
+			return mathSub_xd(v1, v2), nil
 		}
 	case *evalUint64:
 		switch v2 := v2.(type) {
 		case *evalInt64:
-			return uintMinusIntWithError(v1.u, v2.i)
+			return mathSub_ui(v1.u, v2.i)
 		case *evalUint64:
-			return uintMinusUintWithError(v1.u, v2.u)
+			return mathSub_uu(v1.u, v2.u)
 		case *evalFloat:
-			return anyMinusFloat(v1, v2.f)
+			return mathSub_xf(v1, v2.f)
 		case *evalDecimal:
-			return anyMinusDecimal(v1, v2)
+			return mathSub_xd(v1, v2), nil
 		}
 	case *evalFloat:
-		return floatMinusAny(v1.f, v2)
+		return mathSub_fx(v1.f, v2)
 	case *evalDecimal:
 		switch v2 := v2.(type) {
 		case *evalFloat:
-			return anyMinusFloat(v1, v2.f)
+			return mathSub_xf(v1, v2.f)
 		default:
-			return decimalMinusAny(v1, v2)
+			return mathSub_dx(v1, v2), nil
 		}
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSQLValue(v1), evalToSQLValue(v2))
@@ -94,18 +94,18 @@ func multiplyNumericWithError(left, right eval) (eval, error) {
 	v1, v2 := makeNumericAndPrioritize(left, right)
 	switch v1 := v1.(type) {
 	case *evalInt64:
-		return intTimesIntWithError(v1.i, v2.(*evalInt64).i)
+		return mathMul_ii(v1.i, v2.(*evalInt64).i)
 	case *evalUint64:
 		switch v2 := v2.(type) {
 		case *evalInt64:
-			return uintTimesIntWithError(v1.u, v2.i)
+			return mathMul_ui(v1.u, v2.i)
 		case *evalUint64:
-			return uintTimesUintWithError(v1.u, v2.u)
+			return mathMul_uu(v1.u, v2.u)
 		}
 	case *evalFloat:
-		return floatTimesAny(v1.f, v2)
+		return mathMul_fx(v1.f, v2)
 	case *evalDecimal:
-		return decimalTimesAny(v1, v2)
+		return mathMul_dx(v1, v2), nil
 	}
 	return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "invalid arithmetic between: %s %s", evalToSQLValue(v1), evalToSQLValue(v2))
 }
@@ -113,27 +113,17 @@ func multiplyNumericWithError(left, right eval) (eval, error) {
 func divideNumericWithError(left, right eval, precise bool) (eval, error) {
 	v1 := evalToNumeric(left)
 	v2 := evalToNumeric(right)
-	if !precise && v1.SQLType() != sqltypes.Decimal && v2.SQLType() != sqltypes.Decimal {
-		switch v1 := v1.(type) {
-		case *evalInt64:
-			return floatDivideAnyWithError(float64(v1.i), v2)
-		case *evalUint64:
-			return floatDivideAnyWithError(float64(v1.u), v2)
-		case *evalFloat:
-			return floatDivideAnyWithError(v1.f, v2)
-		}
-	}
 	if v1, ok := v1.(*evalFloat); ok {
-		return floatDivideAnyWithError(v1.f, v2)
+		return mathDiv_fx(v1.f, v2)
 	}
 	if v2, ok := v2.(*evalFloat); ok {
 		v1f, ok := v1.toFloat()
 		if !ok {
 			return nil, errDecimalOutOfRange
 		}
-		return floatDivideAnyWithError(v1f.f, v2)
+		return mathDiv_fx(v1f.f, v2)
 	}
-	return decimalDivide(v1, v2, divPrecisionIncrement)
+	return mathDiv_xx(v1, v2, divPrecisionIncrement)
 }
 
 // makeNumericAndPrioritize reorders the input parameters
@@ -158,120 +148,175 @@ func makeNumericAndPrioritize(left, right eval) (evalNumeric, evalNumeric) {
 	return i1, i2
 }
 
-func intPlusIntWithError(v1, v2 int64) (eval, error) {
+func mathAdd_ii(v1, v2 int64) (eval, error) {
+	result, err := mathAdd_ii0(v1, v2)
+	return newEvalInt64(result), err
+}
+
+func mathAdd_ii0(v1, v2 int64) (int64, error) {
 	result := v1 + v2
 	if (result > v1) != (v2 > 0) {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT", "+")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT", "+")
 	}
-	return &evalInt64{result}, nil
+	return result, nil
 }
 
-func intMinusIntWithError(v1, v2 int64) (eval, error) {
+func mathSub_ii(v1, v2 int64) (*evalInt64, error) {
+	result, err := mathSub_ii0(v1, v2)
+	return newEvalInt64(result), err
+}
+
+func mathSub_ii0(v1, v2 int64) (int64, error) {
 	result := v1 - v2
 	if (result < v1) != (v2 > 0) {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT", "-")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT", "-")
 	}
-	return &evalInt64{result}, nil
+	return result, nil
 }
 
-func intTimesIntWithError(v1, v2 int64) (eval, error) {
+func mathMul_ii(v1, v2 int64) (*evalInt64, error) {
+	result, err := mathMul_ii0(v1, v2)
+	return newEvalInt64(result), err
+}
+
+func mathMul_ii0(v1, v2 int64) (int64, error) {
 	result := v1 * v2
 	if v1 != 0 && result/v1 != v2 {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT", "*")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT", "*")
 	}
-	return &evalInt64{result}, nil
-
+	return result, nil
 }
 
-func intMinusUintWithError(v1 int64, v2 uint64) (eval, error) {
+func mathSub_iu(v1 int64, v2 uint64) (*evalUint64, error) {
+	result, err := mathSub_iu0(v1, v2)
+	return newEvalUint64(result), err
+}
+
+func mathSub_iu0(v1 int64, v2 uint64) (uint64, error) {
 	if v1 < 0 || v1 < int64(v2) {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
-	return uintMinusUintWithError(uint64(v1), v2)
+	return mathSub_uu0(uint64(v1), v2)
 }
 
-func uintPlusIntWithError(v1 uint64, v2 int64) (eval, error) {
+func mathAdd_ui(v1 uint64, v2 int64) (*evalUint64, error) {
+	result, err := mathAdd_ui0(v1, v2)
+	return newEvalUint64(result), err
+}
+
+func mathAdd_ui0(v1 uint64, v2 int64) (uint64, error) {
 	result := v1 + uint64(v2)
 	if v2 < 0 && v1 < uint64(-v2) || v2 > 0 && (result < v1 || result < uint64(v2)) {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "+")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "+")
 	}
-	// convert to int -> uint is because for numeric operators (such as + or -)
-	// where one of the operands is an unsigned integer, the result is unsigned by default.
-	return newEvalUint64(result), nil
+	return result, nil
 }
 
-func uintMinusIntWithError(v1 uint64, v2 int64) (eval, error) {
+func mathSub_ui(v1 uint64, v2 int64) (*evalUint64, error) {
+	result, err := mathSub_ui0(v1, v2)
+	return newEvalUint64(result), err
+}
+
+func mathSub_ui0(v1 uint64, v2 int64) (uint64, error) {
 	if int64(v1) < v2 && v2 > 0 {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
 	// uint - (- int) = uint + int
 	if v2 < 0 {
-		return uintPlusIntWithError(v1, -v2)
+		return mathAdd_ui0(v1, -v2)
 	}
-	return uintMinusUintWithError(v1, uint64(v2))
+	return mathSub_uu0(v1, uint64(v2))
 }
 
-func uintTimesIntWithError(v1 uint64, v2 int64) (eval, error) {
+func mathMul_ui(v1 uint64, v2 int64) (*evalUint64, error) {
+	result, err := mathMul_ui0(v1, v2)
+	return newEvalUint64(result), err
+}
+
+func mathMul_ui0(v1 uint64, v2 int64) (uint64, error) {
 	if v1 == 0 || v2 == 0 {
-		return newEvalUint64(0), nil
+		return 0, nil
 	}
 	if v2 < 0 || int64(v1) < 0 {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
 	}
-	return uintTimesUintWithError(v1, uint64(v2))
+	return mathMul_uu0(v1, uint64(v2))
 }
 
-func uintPlusUintWithError(v1, v2 uint64) (eval, error) {
+func mathAdd_uu(v1, v2 uint64) (*evalUint64, error) {
+	result, err := mathAdd_uu0(v1, v2)
+	return newEvalUint64(result), err
+}
+
+func mathAdd_uu0(v1, v2 uint64) (uint64, error) {
 	result := v1 + v2
 	if result < v1 || result < v2 {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "+")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "+")
 	}
-	return newEvalUint64(result), nil
+	return result, nil
 }
 
-func uintMinusUintWithError(v1, v2 uint64) (eval, error) {
+func mathSub_uu(v1, v2 uint64) (*evalUint64, error) {
+	result, err := mathSub_uu0(v1, v2)
+	return newEvalUint64(result), err
+}
+
+func mathSub_uu0(v1, v2 uint64) (uint64, error) {
 	result := v1 - v2
 	if v2 > v1 {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
-	return newEvalUint64(result), nil
+	return result, nil
 }
 
-func uintTimesUintWithError(v1, v2 uint64) (eval, error) {
+func mathMul_uu(v1, v2 uint64) (*evalUint64, error) {
+	result, err := mathMul_uu0(v1, v2)
+	return newEvalUint64(result), err
+}
+
+func mathMul_uu0(v1, v2 uint64) (uint64, error) {
 	if v1 == 0 || v2 == 0 {
-		return newEvalUint64(0), nil
+		return 0, nil
 	}
 	result := v1 * v2
 	if result < v2 || result < v1 {
-		return nil, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
 	}
-	return newEvalUint64(result), nil
+	return result, nil
 }
 
 var errDecimalOutOfRange = vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 
-func floatPlusAny(v1 float64, v2 evalNumeric) (eval, error) {
+func mathAdd_fx(v1 float64, v2 evalNumeric) (*evalFloat, error) {
 	v2f, ok := v2.toFloat()
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	return &evalFloat{v1 + v2f.f}, nil
+	return mathAdd_ff(v1, v2f.f), nil
 }
 
-func floatMinusAny(v1 float64, v2 evalNumeric) (eval, error) {
-	v2f, ok := v2.toFloat()
-	if !ok {
-		return nil, errDecimalOutOfRange
-	}
-	return &evalFloat{v1 - v2f.f}, nil
+func mathAdd_ff(v1, v2 float64) *evalFloat {
+	return newEvalFloat(v1 + v2)
 }
 
-func floatTimesAny(v1 float64, v2 evalNumeric) (eval, error) {
+func mathSub_fx(v1 float64, v2 evalNumeric) (*evalFloat, error) {
 	v2f, ok := v2.toFloat()
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	return &evalFloat{v1 * v2f.f}, nil
+	return mathSub_ff(v1, v2f.f), nil
+}
+
+func mathMul_fx(v1 float64, v2 evalNumeric) (eval, error) {
+	v2f, ok := v2.toFloat()
+	if !ok {
+		return nil, errDecimalOutOfRange
+	}
+	return mathMul_ff(v1, v2f.f), nil
+}
+
+func mathMul_ff(v1, v2 float64) *evalFloat {
+	return newEvalFloat(v1 * v2)
 }
 
 func maxprec(a, b int32) int32 {
@@ -281,77 +326,104 @@ func maxprec(a, b int32) int32 {
 	return b
 }
 
-func decimalPlusAny(v1 *evalDecimal, v2 evalNumeric) (eval, error) {
-	v2d := v2.toDecimal(0, 0)
-	return &evalDecimal{
-		dec:    v1.dec.Add(v2d.dec),
-		length: maxprec(v1.length, v2d.length),
-	}, nil
+func mathAdd_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
+	return mathAdd_dd(v1, v2.toDecimal(0, 0))
 }
 
-func decimalMinusAny(v1 *evalDecimal, v2 evalNumeric) (eval, error) {
-	v2d := v2.toDecimal(0, 0)
-	return &evalDecimal{
-		dec:    v1.dec.Sub(v2d.dec),
-		length: maxprec(v1.length, v2d.length),
-	}, nil
+func mathAdd_dd(v1, v2 *evalDecimal) *evalDecimal {
+	return newEvalDecimalWithPrec(v1.dec.Add(v2.dec), maxprec(v1.length, v2.length))
 }
 
-func anyMinusDecimal(v1 evalNumeric, v2 *evalDecimal) (eval, error) {
-	v1d := v1.toDecimal(0, 0)
-	return &evalDecimal{
-		dec:    v1d.dec.Sub(v2.dec),
-		length: maxprec(v1d.length, v2.length),
-	}, nil
+func mathAdd_dd0(v1, v2 *evalDecimal) {
+	v1.dec = v1.dec.Add(v2.dec)
+	v1.length = maxprec(v1.length, v2.length)
 }
 
-func decimalTimesAny(v1 *evalDecimal, v2 evalNumeric) (eval, error) {
-	v2d := v2.toDecimal(0, 0)
-	return &evalDecimal{
-		dec:    v1.dec.Mul(v2d.dec),
-		length: v1.length + v2d.length,
-	}, nil
+func mathSub_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
+	return mathSub_dd(v1, v2.toDecimal(0, 0))
+}
+
+func mathSub_xd(v1 evalNumeric, v2 *evalDecimal) *evalDecimal {
+	return mathSub_dd(v1.toDecimal(0, 0), v2)
+}
+
+func mathSub_dd(v1, v2 *evalDecimal) *evalDecimal {
+	return newEvalDecimalWithPrec(v1.dec.Sub(v2.dec), maxprec(v1.length, v2.length))
+}
+
+func mathSub_dd0(v1, v2 *evalDecimal) {
+	v1.dec = v1.dec.Sub(v2.dec)
+	v1.length = maxprec(v1.length, v2.length)
+}
+
+func mathMul_dx(v1 *evalDecimal, v2 evalNumeric) *evalDecimal {
+	return mathMul_dd(v1, v2.toDecimal(0, 0))
+}
+
+func mathMul_dd(v1, v2 *evalDecimal) *evalDecimal {
+	return newEvalDecimalWithPrec(v1.dec.Mul(v2.dec), v1.length+v2.length)
+}
+
+func mathMul_dd0(v1, v2 *evalDecimal) {
+	v1.dec = v1.dec.Mul(v2.dec)
+	v1.length = v1.length + v2.length
 }
 
 const divPrecisionIncrement = 4
 
-func decimalDivide(v1, v2 evalNumeric, incrPrecision int32) (eval, error) {
-	v1d := v1.toDecimal(0, 0)
-	v2d := v2.toDecimal(0, 0)
-	if v2d.dec.IsZero() {
-		return nil, nil
-	}
-	return &evalDecimal{
-		dec:    v1d.dec.Div(v2d.dec, incrPrecision),
-		length: v1d.length + incrPrecision,
-	}, nil
+func mathDiv_xx(v1, v2 evalNumeric, incrPrecision int32) (eval, error) {
+	return mathDiv_dd(v1.toDecimal(0, 0), v2.toDecimal(0, 0), incrPrecision)
 }
 
-func floatDivideAnyWithError(v1 float64, v2 evalNumeric) (eval, error) {
+func mathDiv_dd(v1, v2 *evalDecimal, incrPrecision int32) (eval, error) {
+	if v2.dec.IsZero() {
+		return nil, nil
+	}
+	return newEvalDecimalWithPrec(v1.dec.Div(v2.dec, incrPrecision), v1.length+incrPrecision), nil
+}
+
+func mathDiv_dd0(v1, v2 *evalDecimal, incrPrecision int32) {
+	v1.dec = v1.dec.Div(v2.dec, incrPrecision)
+	v1.length = v1.length + incrPrecision
+}
+
+func mathDiv_fx(v1 float64, v2 evalNumeric) (eval, error) {
 	v2f, ok := v2.toFloat()
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	if v2f.f == 0.0 {
-		return nil, nil
-	}
-
-	result := v1 / v2f.f
-	divisorLessThanOne := v2f.f < 1
-	resultMismatch := v2f.f*result != v1
-
-	if divisorLessThanOne && resultMismatch {
-		return nil, dataOutOfRangeError(v1, v2f.f, "BIGINT", "/")
-	}
-	return &evalFloat{result}, nil
+	return mathDiv_ff(v1, v2f.f)
 }
 
-func anyMinusFloat(v1 evalNumeric, v2 float64) (eval, error) {
+func mathDiv_ff(v1, v2 float64) (eval, error) {
+	if v2 == 0.0 {
+		return nil, nil
+	}
+	result, err := mathDiv_ff0(v1, v2)
+	return newEvalFloat(result), err
+}
+
+func mathDiv_ff0(v1, v2 float64) (float64, error) {
+	result := v1 / v2
+	divisorLessThanOne := v2 < 1
+	resultMismatch := v2*result != v1
+
+	if divisorLessThanOne && resultMismatch {
+		return 0, dataOutOfRangeError(v1, v2, "BIGINT", "/")
+	}
+	return result, nil
+}
+
+func mathSub_xf(v1 evalNumeric, v2 float64) (*evalFloat, error) {
 	v1f, ok := v1.toFloat()
 	if !ok {
 		return nil, errDecimalOutOfRange
 	}
-	return &evalFloat{v1f.f - v2}, nil
+	return mathSub_ff(v1f.f, v2), nil
+}
+
+func mathSub_ff(v1, v2 float64) *evalFloat {
+	return newEvalFloat(v1 - v2)
 }
 
 func parseStringToFloat(str string) float64 {

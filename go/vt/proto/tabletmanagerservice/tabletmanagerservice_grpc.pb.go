@@ -104,8 +104,6 @@ type TabletManagerClient interface {
 	Backup(ctx context.Context, in *tabletmanagerdata.BackupRequest, opts ...grpc.CallOption) (TabletManager_BackupClient, error)
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(ctx context.Context, in *tabletmanagerdata.RestoreFromBackupRequest, opts ...grpc.CallOption) (TabletManager_RestoreFromBackupClient, error)
-	// Generic VExec request. Can be used for various purposes
-	VExec(ctx context.Context, in *tabletmanagerdata.VExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VExecResponse, error)
 }
 
 type tabletManagerClient struct {
@@ -576,15 +574,6 @@ func (x *tabletManagerRestoreFromBackupClient) Recv() (*tabletmanagerdata.Restor
 	return m, nil
 }
 
-func (c *tabletManagerClient) VExec(ctx context.Context, in *tabletmanagerdata.VExecRequest, opts ...grpc.CallOption) (*tabletmanagerdata.VExecResponse, error) {
-	out := new(tabletmanagerdata.VExecResponse)
-	err := c.cc.Invoke(ctx, "/tabletmanagerservice.TabletManager/VExec", in, out, opts...)
-	if err != nil {
-		return nil, err
-	}
-	return out, nil
-}
-
 // TabletManagerServer is the server API for TabletManager service.
 // All implementations must embed UnimplementedTabletManagerServer
 // for forward compatibility
@@ -670,8 +659,6 @@ type TabletManagerServer interface {
 	Backup(*tabletmanagerdata.BackupRequest, TabletManager_BackupServer) error
 	// RestoreFromBackup deletes all local data and restores it from the latest backup.
 	RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, TabletManager_RestoreFromBackupServer) error
-	// Generic VExec request. Can be used for various purposes
-	VExec(context.Context, *tabletmanagerdata.VExecRequest) (*tabletmanagerdata.VExecResponse, error)
 	mustEmbedUnimplementedTabletManagerServer()
 }
 
@@ -816,9 +803,6 @@ func (UnimplementedTabletManagerServer) Backup(*tabletmanagerdata.BackupRequest,
 }
 func (UnimplementedTabletManagerServer) RestoreFromBackup(*tabletmanagerdata.RestoreFromBackupRequest, TabletManager_RestoreFromBackupServer) error {
 	return status.Errorf(codes.Unimplemented, "method RestoreFromBackup not implemented")
-}
-func (UnimplementedTabletManagerServer) VExec(context.Context, *tabletmanagerdata.VExecRequest) (*tabletmanagerdata.VExecResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method VExec not implemented")
 }
 func (UnimplementedTabletManagerServer) mustEmbedUnimplementedTabletManagerServer() {}
 
@@ -1667,24 +1651,6 @@ func (x *tabletManagerRestoreFromBackupServer) Send(m *tabletmanagerdata.Restore
 	return x.ServerStream.SendMsg(m)
 }
 
-func _TabletManager_VExec_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(tabletmanagerdata.VExecRequest)
-	if err := dec(in); err != nil {
-		return nil, err
-	}
-	if interceptor == nil {
-		return srv.(TabletManagerServer).VExec(ctx, in)
-	}
-	info := &grpc.UnaryServerInfo{
-		Server:     srv,
-		FullMethod: "/tabletmanagerservice.TabletManager/VExec",
-	}
-	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(TabletManagerServer).VExec(ctx, req.(*tabletmanagerdata.VExecRequest))
-	}
-	return interceptor(ctx, in, info, handler)
-}
-
 // TabletManager_ServiceDesc is the grpc.ServiceDesc for TabletManager service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -1867,10 +1833,6 @@ var TabletManager_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "PromoteReplica",
 			Handler:    _TabletManager_PromoteReplica_Handler,
-		},
-		{
-			MethodName: "VExec",
-			Handler:    _TabletManager_VExec_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{
