@@ -67,7 +67,7 @@ Then, we also want to support changing the VSchema via SQL-like statements, like
 ## Client Connectors
 
 Client connectors (like JDBC) usually have a connection string that describes
-the connection. It usually includes the keyspace and the tablet type, and uses
+the connection. It typically includes the keyspace and the tablet type, and uses
 the Execute API.
 
 ## MySQL Server Protocol API
