@@ -963,6 +963,36 @@ func (asm *assembler) Fn_ASCII() {
 	}, "FN ASCII VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_CEIL_d() {
+	asm.emit(func(vm *VirtualMachine) int {
+		d := vm.stack[vm.sp-1].(*evalDecimal)
+		c := d.dec.Ceil()
+		i, valid := c.Int64()
+		if valid {
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(i)
+		} else {
+			vm.err = errDeoptimize
+		}
+		return 1
+	}, "FN CEIL DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Fn_CEIL_f() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = math.Ceil(f.f)
+		return 1
+	}, "FN CEIL FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
+	asm.emit(func(vm *VirtualMachine) int {
+		v := evalCollation(vm.stack[vm.sp-1])
+		vm.stack[vm.sp-1] = vm.arena.newEvalText([]byte(v.Collation.Get().Name()), col)
+		return 1
+	}, "FN COLLATION (SP-1)")
+}
+
 func (asm *assembler) Fn_FROM_BASE64() {
 	asm.emit(func(vm *VirtualMachine) int {
 		str := vm.stack[vm.sp-1].(*evalBytes)
@@ -977,7 +1007,7 @@ func (asm *assembler) Fn_FROM_BASE64() {
 		str.tt = int16(sqltypes.VarBinary)
 		str.bytes = decoded[:n]
 		return 1
-	}, "FROM_BASE64 VARCHAR(SP-1)")
+	}, "FN FROM_BASE64 VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Fn_HEX_c(t sqltypes.Type, col collations.TypedCollation) {
@@ -1076,6 +1106,49 @@ func (asm *assembler) Fn_JSON_EXTRACT0(jp []*json.Path) {
 			}
 			return 1
 		}, "FN JSON_EXTRACT, SP-1, [static]")
+	}
+}
+
+func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
+	if jp == nil {
+		asm.emit(func(vm *VirtualMachine) int {
+			doc := vm.stack[vm.sp-1]
+			if doc == nil {
+				return 1
+			}
+			j := doc.(*evalJSON)
+			if obj, ok := j.Object(); ok {
+				var keys []*json.Value
+				obj.Visit(func(key []byte, _ *json.Value) {
+					keys = append(keys, json.NewString(key))
+				})
+				vm.stack[vm.sp-1] = json.NewArray(keys)
+			} else {
+				vm.stack[vm.sp-1] = nil
+			}
+			return 1
+		}, "FN JSON_KEYS (SP-1)")
+	} else {
+		asm.emit(func(vm *VirtualMachine) int {
+			doc := vm.stack[vm.sp-1]
+			if doc == nil {
+				return 1
+			}
+			var obj *json.Object
+			jp.Match(doc.(*evalJSON), false, func(value *json.Value) {
+				obj, _ = value.Object()
+			})
+			if obj != nil {
+				var keys []*json.Value
+				obj.Visit(func(key []byte, _ *json.Value) {
+					keys = append(keys, json.NewString(key))
+				})
+				vm.stack[vm.sp-1] = json.NewArray(keys)
+			} else {
+				vm.stack[vm.sp-1] = nil
+			}
+			return 1
+		}, "FN JSON_KEYS (SP-1), %q", jp.String())
 	}
 }
 
@@ -1326,11 +1399,85 @@ func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollatio
 	}, "FN TO_BASE64 VARCHAR(SP-1)")
 }
 
+func (asm *assembler) Fn_WEIGHT_STRING_b(length int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		str := vm.stack[vm.sp-1].(*evalBytes)
+		w := collations.Binary.WeightString(make([]byte, 0, length), str.bytes, collations.PadToMax)
+		vm.stack[vm.sp-1] = vm.arena.newEvalBinary(w)
+		return 1
+	}, "FN WEIGHT_STRING VARBINARY(SP-1)")
+}
+
+func (asm *assembler) Fn_WEIGHT_STRING_c(col collations.Collation, length int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		str := vm.stack[vm.sp-1].(*evalBytes)
+		w := col.WeightString(nil, str.bytes, length)
+		vm.stack[vm.sp-1] = vm.arena.newEvalBinary(w)
+		return 1
+	}, "FN WEIGHT_STRING VARCHAR(SP-1)")
+}
+
+func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
+	if not {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-1]
+			if lhs != nil {
+				vm.hash.Reset()
+				lhs.(hashable).Hash(&vm.hash)
+				_, in := table[vm.hash.Sum128()]
+				vm.stack[vm.sp-1] = newEvalBool(!in)
+			}
+			return 1
+		}, "NOT IN (SP-1), [static table]")
+	} else {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-1]
+			if lhs != nil {
+				vm.hash.Reset()
+				lhs.(hashable).Hash(&vm.hash)
+				_, in := table[vm.hash.Sum128()]
+				vm.stack[vm.sp-1] = newEvalBool(in)
+			}
+			return 1
+		}, "IN (SP-1), [static table]")
+	}
+}
+
+func (asm *assembler) In_slow(not bool) {
+	asm.adjustStack(-1)
+
+	if not {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-2]
+			rhs := vm.stack[vm.sp-1].(*evalTuple)
+
+			var in boolean
+			in, vm.err = evalInExpr(lhs, rhs)
+
+			vm.stack[vm.sp-2] = in.not().eval()
+			vm.sp -= 1
+			return 1
+		}, "NOT IN (SP-2), TUPLE(SP-1)")
+	} else {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-2]
+			rhs := vm.stack[vm.sp-1].(*evalTuple)
+
+			var in boolean
+			in, vm.err = evalInExpr(lhs, rhs)
+
+			vm.stack[vm.sp-2] = in.eval()
+			vm.sp -= 1
+			return 1
+		}, "IN (SP-2), TUPLE(SP-1)")
+	}
+}
+
 func (asm *assembler) Is(check func(eval) bool) {
 	asm.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp-1] = newEvalBool(check(vm.stack[vm.sp-1]))
 		return 1
-	}, "IS (SP-1)")
+	}, "IS (SP-1), [static]")
 }
 
 func (asm *assembler) Like_coerce(expr *LikeExpr, coercion *compiledCoercion) {
@@ -1745,6 +1892,13 @@ func (asm *assembler) SetBool(offset int, b bool) {
 	}
 }
 
+func (asm *assembler) SetNull(offset int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		vm.stack[vm.sp-offset] = nil
+		return 1
+	}, "SET (SP-%d), NULL", offset)
+}
+
 func (asm *assembler) Sub_dd() {
 	asm.adjustStack(-1)
 
@@ -1816,135 +1970,6 @@ func (asm *assembler) Sub_uu() {
 		vm.sp--
 		return 1
 	}, "SUB UINT64(SP-2), UINT64(SP-1)")
-}
-
-func (asm *assembler) Fn_JSON_KEYS(jp *json.Path) {
-	if jp == nil {
-		asm.emit(func(vm *VirtualMachine) int {
-			doc := vm.stack[vm.sp-1]
-			if doc == nil {
-				return 1
-			}
-			j := doc.(*evalJSON)
-			if obj, ok := j.Object(); ok {
-				var keys []*json.Value
-				obj.Visit(func(key []byte, _ *json.Value) {
-					keys = append(keys, json.NewString(key))
-				})
-				vm.stack[vm.sp-1] = json.NewArray(keys)
-			} else {
-				vm.stack[vm.sp-1] = nil
-			}
-			return 1
-		}, "FN JSON_KEYS (SP-1)")
-	} else {
-		asm.emit(func(vm *VirtualMachine) int {
-			doc := vm.stack[vm.sp-1]
-			if doc == nil {
-				return 1
-			}
-			var obj *json.Object
-			jp.Match(doc.(*evalJSON), false, func(value *json.Value) {
-				obj, _ = value.Object()
-			})
-			if obj != nil {
-				var keys []*json.Value
-				obj.Visit(func(key []byte, _ *json.Value) {
-					keys = append(keys, json.NewString(key))
-				})
-				vm.stack[vm.sp-1] = json.NewArray(keys)
-			} else {
-				vm.stack[vm.sp-1] = nil
-			}
-			return 1
-		}, "FN JSON_KEYS (SP-1), %q", jp.String())
-	}
-}
-
-func (asm *assembler) Collation(col collations.TypedCollation) {
-	asm.emit(func(vm *VirtualMachine) int {
-		v := evalCollation(vm.stack[vm.sp-1])
-		vm.stack[vm.sp-1] = vm.arena.newEvalText([]byte(v.Collation.Get().Name()), col)
-		return 1
-	}, "COLLATION (SP-1)")
-}
-
-func (asm *assembler) Fn_CEIL_f() {
-	asm.emit(func(vm *VirtualMachine) int {
-		f := vm.stack[vm.sp-1].(*evalFloat)
-		f.f = math.Ceil(f.f)
-		return 1
-	}, "CEIL FLOAT64(SP-1)")
-}
-
-func (asm *assembler) Fn_CEIL_d() {
-	asm.emit(func(vm *VirtualMachine) int {
-		d := vm.stack[vm.sp-1].(*evalDecimal)
-		c := d.dec.Ceil()
-		i, valid := c.Int64()
-		if valid {
-			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(i)
-		} else {
-			vm.err = errDeoptimize
-		}
-		return 1
-	}, "CEIL DECIMAL(SP-1)")
-}
-
-func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
-	if not {
-		asm.emit(func(vm *VirtualMachine) int {
-			lhs := vm.stack[vm.sp-1]
-			if lhs != nil {
-				vm.hash.Reset()
-				lhs.(hashable).Hash(&vm.hash)
-				_, in := table[vm.hash.Sum128()]
-				vm.stack[vm.sp-1] = newEvalBool(!in)
-			}
-			return 1
-		}, "NOT IN (SP-1), [static table]")
-	} else {
-		asm.emit(func(vm *VirtualMachine) int {
-			lhs := vm.stack[vm.sp-1]
-			if lhs != nil {
-				vm.hash.Reset()
-				lhs.(hashable).Hash(&vm.hash)
-				_, in := table[vm.hash.Sum128()]
-				vm.stack[vm.sp-1] = newEvalBool(in)
-			}
-			return 1
-		}, "IN (SP-1), [static table]")
-	}
-}
-
-func (asm *assembler) In_slow(not bool) {
-	asm.adjustStack(-1)
-
-	if not {
-		asm.emit(func(vm *VirtualMachine) int {
-			lhs := vm.stack[vm.sp-2]
-			rhs := vm.stack[vm.sp-1].(*evalTuple)
-
-			var in boolean
-			in, vm.err = evalInExpr(lhs, rhs)
-
-			vm.stack[vm.sp-2] = in.not().eval()
-			vm.sp -= 1
-			return 1
-		}, "NOT IN (SP-2), TUPLE(SP-1)")
-	} else {
-		asm.emit(func(vm *VirtualMachine) int {
-			lhs := vm.stack[vm.sp-2]
-			rhs := vm.stack[vm.sp-1].(*evalTuple)
-
-			var in boolean
-			in, vm.err = evalInExpr(lhs, rhs)
-
-			vm.stack[vm.sp-2] = in.eval()
-			vm.sp -= 1
-			return 1
-		}, "IN (SP-2), TUPLE(SP-1)")
-	}
 }
 
 func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {

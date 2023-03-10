@@ -47,6 +47,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_COLLATION(call)
 	case *builtinCeil:
 		return c.compileFn_CEIL(call)
+	case *builtinWeightString:
+		return c.compileFn_WEIGHT_STRING(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -352,7 +354,7 @@ func (c *compiler) compileFn_COLLATION(expr *builtinCollation) (ctype, error) {
 		Repertoire:   collations.RepertoireASCII,
 	}
 
-	c.asm.Collation(col)
+	c.asm.Fn_COLLATION(col)
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.VarChar, Col: col}, nil
@@ -386,4 +388,32 @@ func (c *compiler) compileFn_CEIL(expr *builtinCeil) (ctype, error) {
 
 	c.asm.jumpDestination(skip)
 	return convt, nil
+}
+
+func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, error) {
+	str, err := c.compileExpr(call.String)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch str.Type {
+	case sqltypes.Int64, sqltypes.Uint64:
+		return ctype{}, c.unsupported(call)
+
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		skip := c.asm.jumpFrom()
+		c.asm.NullCheck1(skip)
+
+		if call.Cast == "binary" {
+			c.asm.Fn_WEIGHT_STRING_b(call.Len)
+		} else {
+			c.asm.Fn_WEIGHT_STRING_c(str.Col.Collation.Get(), call.Len)
+		}
+		c.asm.jumpDestination(skip)
+		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+
+	default:
+		c.asm.SetNull(1)
+		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
+	}
 }
