@@ -13,6 +13,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 type jump struct {
@@ -1888,6 +1889,62 @@ func (asm *assembler) Fn_CEIL_d() {
 		}
 		return 1
 	}, "CEIL DECIMAL(SP-1)")
+}
+
+func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
+	if not {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-1]
+			if lhs != nil {
+				vm.hash.Reset()
+				lhs.(hashable).Hash(&vm.hash)
+				_, in := table[vm.hash.Sum128()]
+				vm.stack[vm.sp-1] = newEvalBool(!in)
+			}
+			return 1
+		}, "NOT IN (SP-1), [static table]")
+	} else {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-1]
+			if lhs != nil {
+				vm.hash.Reset()
+				lhs.(hashable).Hash(&vm.hash)
+				_, in := table[vm.hash.Sum128()]
+				vm.stack[vm.sp-1] = newEvalBool(in)
+			}
+			return 1
+		}, "IN (SP-1), [static table]")
+	}
+}
+
+func (asm *assembler) In_slow(not bool) {
+	asm.adjustStack(-1)
+
+	if not {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-2]
+			rhs := vm.stack[vm.sp-1].(*evalTuple)
+
+			var in boolean
+			in, vm.err = evalInExpr(lhs, rhs)
+
+			vm.stack[vm.sp-2] = in.not().eval()
+			vm.sp -= 1
+			return 1
+		}, "NOT IN (SP-2), TUPLE(SP-1)")
+	} else {
+		asm.emit(func(vm *VirtualMachine) int {
+			lhs := vm.stack[vm.sp-2]
+			rhs := vm.stack[vm.sp-1].(*evalTuple)
+
+			var in boolean
+			in, vm.err = evalInExpr(lhs, rhs)
+
+			vm.stack[vm.sp-2] = in.eval()
+			vm.sp -= 1
+			return 1
+		}, "IN (SP-2), TUPLE(SP-1)")
+	}
 }
 
 func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {

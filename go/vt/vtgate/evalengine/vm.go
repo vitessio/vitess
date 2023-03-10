@@ -4,12 +4,14 @@ import (
 	"errors"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 var errDeoptimize = errors.New("de-optimize")
 
 type VirtualMachine struct {
 	arena Arena
+	hash  vthash.Hasher
 	row   []sqltypes.Value
 	stack []eval
 	sp    int

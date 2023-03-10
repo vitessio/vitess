@@ -274,25 +274,16 @@ func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, f1 | f2
 }
 
-// eval implements the ComparisonOp interface
-func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := i.arguments(env)
-	if err != nil {
-		return nil, err
-	}
-	rtuple, ok := right.(*evalTuple)
-	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
-	}
-	if left == nil {
-		return nil, nil
+func evalInExpr(lhs eval, rhs *evalTuple) (boolean, error) {
+	if lhs == nil {
+		return boolNULL, nil
 	}
 
 	var foundNull, found bool
-	for _, rtuple := range rtuple.t {
-		numeric, isNull, err := evalCompareAll(left, rtuple, true)
+	for _, rtuple := range rhs.t {
+		numeric, isNull, err := evalCompareAll(lhs, rtuple, true)
 		if err != nil {
-			return nil, err
+			return boolNULL, err
 		}
 		if isNull {
 			foundNull = true
@@ -306,12 +297,32 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 
 	switch {
 	case found:
-		return newEvalBool(!i.Negate), nil
+		return boolTrue, nil
 	case foundNull:
-		return nil, nil
+		return boolNULL, nil
 	default:
-		return newEvalBool(i.Negate), nil
+		return boolFalse, nil
 	}
+}
+
+// eval implements the ComparisonOp interface
+func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
+	left, right, err := i.arguments(env)
+	if err != nil {
+		return nil, err
+	}
+	rtuple, ok := right.(*evalTuple)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
+	}
+	in, err := evalInExpr(left, rtuple)
+	if err != nil {
+		return nil, err
+	}
+	if i.Negate {
+		in = in.not()
+	}
+	return in.eval(), nil
 }
 
 func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

@@ -5,6 +5,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vthash"
 )
 
 func (c *compiler) compileComparisonTuple(expr *ComparisonExpr) (ctype, error) {
@@ -293,5 +294,56 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileInTable(lhs ctype, rhs TupleExpr) map[vthash.Hash]struct{} {
+	var (
+		table  = make(map[vthash.Hash]struct{})
+		hasher = vthash.New()
+	)
+
+	for _, expr := range rhs {
+		lit, ok := expr.(*Literal)
+		if !ok {
+			return nil
+		}
+		inner, ok := lit.inner.(hashable)
+		if !ok {
+			return nil
+		}
+
+		thisColl := evalCollation(lit.inner).Collation
+		thisTyp := lit.inner.SQLType()
+
+		if thisTyp != lhs.Type || thisColl != lhs.Col.Collation {
+			return nil
+		}
+
+		inner.Hash(&hasher)
+		table[hasher.Sum128()] = struct{}{}
+		hasher.Reset()
+	}
+
+	return table
+}
+
+func (c *compiler) compileIn(expr *InExpr) (ctype, error) {
+	lhs, err := c.compileExpr(expr.Left)
+	if err != nil {
+		return ctype{}, nil
+	}
+
+	rhs := expr.Right.(TupleExpr)
+
+	if table := c.compileInTable(lhs, rhs); table != nil {
+		c.asm.In_table(expr.Negate, table)
+	} else {
+		_, err := c.compileTuple(rhs)
+		if err != nil {
+			return ctype{}, err
+		}
+		c.asm.In_slow(expr.Negate)
+	}
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 }

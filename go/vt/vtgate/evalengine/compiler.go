@@ -129,6 +129,9 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	case *IsExpr:
 		return c.compileIs(expr)
 
+	case *InExpr:
+		return c.compileIn(expr)
+
 	case callable:
 		return c.compileFn(expr)
 
