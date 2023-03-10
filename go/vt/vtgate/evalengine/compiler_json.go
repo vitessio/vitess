@@ -72,7 +72,9 @@ func (c *compiler) compileFn_JSON_OBJECT(call *builtinJSONObject) (ctype, error)
 		if err != nil {
 			return ctype{}, err
 		}
-		c.compileToJSONKey(key)
+		if err := c.compileToJSONKey(key); err != nil {
+			return ctype{}, err
+		}
 		val, err := c.compileExpr(call.Arguments[i+1])
 		if err != nil {
 			return ctype{}, err
@@ -86,14 +88,18 @@ func (c *compiler) compileFn_JSON_OBJECT(call *builtinJSONObject) (ctype, error)
 	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
 }
 
-func (c *compiler) compileToJSONKey(key ctype) {
+func (c *compiler) compileToJSONKey(key ctype) error {
+	if key.Type == sqltypes.Null {
+		return errJSONKeyIsNil
+	}
 	if key.Type == sqltypes.VarChar && isEncodingJSONSafe(key.Col.Collation) {
-		return
+		return nil
 	}
 	if key.Type == sqltypes.VarBinary {
-		return
+		return nil
 	}
 	c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
+	return nil
 }
 
 func (c *compiler) jsonExtractPath(expr Expr) (*json.Path, error) {

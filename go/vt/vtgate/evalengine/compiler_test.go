@@ -97,26 +97,27 @@ func TestCompilerReference(t *testing.T) {
 					return
 				}
 
-				env.Row = row
-				expected, err := env.Evaluate(converted)
-				if err != nil {
-					// do not attempt failing queries for now
-					return
-				}
-
 				total++
+				env.Row = row
+				expected, evalErr := env.Evaluate(converted)
+				program, compileErr := evalengine.Compile(converted, env.Fields)
 
-				program, err := evalengine.Compile(converted, env.Fields)
-				if err != nil {
-					if vterrors.Code(err) != vtrpcpb.Code_UNIMPLEMENTED {
-						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, err)
+				if compileErr != nil {
+					switch {
+					case vterrors.Code(compileErr) == vtrpcpb.Code_UNIMPLEMENTED:
+						t.Logf("unsupported: %s", query)
+					case evalErr == nil:
+						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, compileErr)
+					case evalErr.Error() != compileErr.Error():
+						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, compileErr)
+					default:
+						supported++
 					}
-					t.Logf("unsupported: %s", query)
 					return
 				}
 
 				var vm evalengine.VirtualMachine
-				res, err := func() (res evalengine.EvalResult, err error) {
+				res, vmErr := func() (res evalengine.EvalResult, err error) {
 					defer func() {
 						if r := recover(); r != nil {
 							err = fmt.Errorf("PANIC: %v", r)
@@ -126,8 +127,15 @@ func TestCompilerReference(t *testing.T) {
 					return
 				}()
 
-				if err != nil {
-					t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, err)
+				if vmErr != nil {
+					switch {
+					case evalErr == nil:
+						t.Errorf("failed evaluation from compiler:\nSQL:  %s\nError: %s", query, err)
+					case evalErr.Error() != vmErr.Error():
+						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, vmErr)
+					default:
+						supported++
+					}
 					return
 				}
 
