@@ -39,8 +39,9 @@ import (
 
 func TestDisabledThrottler(t *testing.T) {
 	config := tabletenv.NewDefaultConfig()
+	env := tabletenv.NewEnv(config, t.Name())
 	config.EnableTxThrottler = false
-	throttler := NewTxThrottler(config, nil)
+	throttler := NewTxThrottler(env, nil)
 	throttler.InitDBConfig(&querypb.Target{
 		Keyspace: "keyspace",
 		Shard:    "shard",
