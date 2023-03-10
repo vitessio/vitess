@@ -49,6 +49,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_CEIL(call)
 	case *builtinFloor:
 		return c.compileFn_FLOOR(call)
+	case *builtinAbs:
+		return c.compileFn_ABS(call)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
 	default:
@@ -407,6 +409,36 @@ func (c *compiler) compileFn_FLOOR(expr *builtinFloor) (ctype, error) {
 		convt.Type = sqltypes.Float64
 		c.asm.Convert_xf(1)
 		c.asm.Fn_FLOOR_f()
+	}
+
+	c.asm.jumpDestination(skip)
+	return convt, nil
+}
+
+func (c *compiler) compileFn_ABS(expr *builtinAbs) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	convt := ctype{Type: arg.Type, Col: collationNumeric}
+	switch {
+	case sqltypes.IsUnsigned(arg.Type):
+		// No-op if it's unsigned since that's already positive.
+	case sqltypes.IsSigned(arg.Type):
+		c.asm.Fn_ABS_i()
+	case sqltypes.IsFloat(arg.Type):
+		c.asm.Fn_ABS_f()
+	case sqltypes.IsDecimal(arg.Type):
+		// We assume here the most common case here is that
+		// the decimal fits into an integer.
+		c.asm.Fn_ABS_d()
+	default:
+		convt.Type = sqltypes.Float64
+		c.asm.Convert_xf(1)
+		c.asm.Fn_ABS_f()
 	}
 
 	c.asm.jumpDestination(skip)

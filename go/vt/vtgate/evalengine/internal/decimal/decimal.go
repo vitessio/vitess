@@ -263,7 +263,7 @@ func (d Decimal) rescale(exp int32) Decimal {
 }
 
 // abs returns the absolute value of the decimal.
-func (d Decimal) abs() Decimal {
+func (d Decimal) Abs() Decimal {
 	if d.Sign() >= 0 {
 		return d
 	}
@@ -438,7 +438,7 @@ func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
 	// now rv2 = abs(r.value) * 2
 	r2 := Decimal{value: &rv2, exp: r.exp + precision}
 	// r2 is now 2 * r * 10 ^ precision
-	var c = r2.Cmp(d2.abs())
+	var c = r2.Cmp(d2.Abs())
 
 	if c < 0 {
 		return q

@@ -49,6 +49,7 @@ type CharsetConversionOperators struct{ defaultEnv }
 type CaseExprWithPredicate struct{ defaultEnv }
 type Ceil struct{ defaultEnv }
 type Floor struct{ defaultEnv }
+type Abs struct{ defaultEnv }
 type CaseExprWithValue struct{ defaultEnv }
 type Base64 struct{ defaultEnv }
 type Conversion struct{ defaultEnv }
@@ -90,6 +91,7 @@ var Cases = []TestCase{
 	CaseExprWithPredicate{},
 	Ceil{},
 	Floor{},
+	Abs{},
 	CaseExprWithValue{},
 	Base64{},
 	Conversion{},
@@ -255,6 +257,29 @@ func (Floor) Test(yield Iterator) {
 
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("FLOOR(%s)", num), nil)
+	}
+}
+
+func (Abs) Test(yield Iterator) {
+	var absInputs = []string{
+		"0",
+		"1",
+		"-1",
+		"'1.5'",
+		"NULL",
+		"'ABC'",
+		"1.5e0",
+		"-1.5e0",
+		"9223372036854775810.4",
+		"-9223372036854775810.4",
+	}
+
+	for _, num := range absInputs {
+		yield(fmt.Sprintf("ABS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ABS(%s)", num), nil)
 	}
 }
 

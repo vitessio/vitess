@@ -20,6 +20,8 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/sqltypes"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type builtinCeil struct {
@@ -107,6 +109,49 @@ func (call *builtinFloor) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 		return sqltypes.Uint64, f
 	} else if sqltypes.Decimal == t {
 		return sqltypes.Int64, f | flagAmbiguousType
+	} else {
+		return sqltypes.Float64, f
+	}
+}
+
+type builtinAbs struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinAbs)(nil)
+
+func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	switch num := arg.(type) {
+	case *evalUint64:
+		return num, nil
+	case *evalInt64:
+		if num.i < 0 {
+			if num.i == math.MinInt64 {
+				return nil, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "BIGINT value is out of range")
+			}
+			return newEvalInt64(-num.i), nil
+		}
+		return num, nil
+	case *evalDecimal:
+		return newEvalDecimalWithPrec(num.dec.Abs(), num.length), nil
+	default:
+		f, _ := evalToNumeric(num).toFloat()
+		return newEvalFloat(math.Abs(f.f)), nil
+	}
+}
+
+func (call *builtinAbs) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	t, f := call.Arguments[0].typeof(env)
+	if sqltypes.IsNumber(t) {
+		return t, f
 	} else {
 		return sqltypes.Float64, f
 	}

@@ -107,6 +107,11 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinFloor{CallExpr: call}, nil
+	case "abs":
+		if len(args) != 1 {
+			return nil, argError(method)
+		}
+		return &builtinAbs{CallExpr: call}, nil
 	case "lower", "lcase":
 		if len(args) != 1 {
 			return nil, argError(method)

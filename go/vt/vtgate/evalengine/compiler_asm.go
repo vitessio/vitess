@@ -1009,6 +1009,40 @@ func (asm *assembler) Fn_FLOOR_f() {
 	}, "FN FLOOR FLOAT64(SP-1)")
 }
 
+func (asm *assembler) Fn_ABS_i() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalInt64)
+		if f.i >= 0 {
+			return 1
+		}
+		if f.i == math.MinInt64 {
+			vm.err = vterrors.NewErrorf(vtrpc.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "BIGINT value is out of range")
+			return 1
+		}
+		f.i = -f.i
+		return 1
+	}, "FN ABS INT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ABS_d() {
+	asm.emit(func(vm *VirtualMachine) int {
+		d := vm.stack[vm.sp-1].(*evalDecimal)
+		d.dec = d.dec.Abs()
+		return 1
+	}, "FN ABS DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Fn_ABS_f() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		if f.f >= 0 {
+			return 1
+		}
+		f.f = -f.f
+		return 1
+	}, "FN ABS FLOAT64(SP-1)")
+}
+
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
 	asm.emit(func(vm *VirtualMachine) int {
 		v := evalCollation(vm.stack[vm.sp-1])
