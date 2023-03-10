@@ -987,6 +987,28 @@ func (asm *assembler) Fn_CEIL_f() {
 	}, "FN CEIL FLOAT64(SP-1)")
 }
 
+func (asm *assembler) Fn_FLOOR_d() {
+	asm.emit(func(vm *VirtualMachine) int {
+		d := vm.stack[vm.sp-1].(*evalDecimal)
+		c := d.dec.Floor()
+		i, valid := c.Int64()
+		if valid {
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(i)
+		} else {
+			vm.err = errDeoptimize
+		}
+		return 1
+	}, "FN FLOOR DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Fn_FLOOR_f() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = math.Floor(f.f)
+		return 1
+	}, "FN FLOOR FLOAT64(SP-1)")
+}
+
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
 	asm.emit(func(vm *VirtualMachine) int {
 		v := evalCollation(vm.stack[vm.sp-1])

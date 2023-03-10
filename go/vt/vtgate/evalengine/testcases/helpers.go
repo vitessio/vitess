@@ -79,14 +79,14 @@ type bugs struct{}
 // results that do not match the behavior of the `=` operator, which is supposed to apply,
 // pair-wise, to the comparisons in a CASE or IN statement):
 //
-// 	SELECT -1 IN (0xFF, 18446744073709551615) => 1
-// 	SELECT -1 IN (0, 18446744073709551615) => 0
-// 	SELECT -1 IN (0.0, 18446744073709551615) => 1
+//	SELECT -1 IN (0xFF, 18446744073709551615) => 1
+//	SELECT -1 IN (0, 18446744073709551615) => 0
+//	SELECT -1 IN (0.0, 18446744073709551615) => 1
 //
-// 	SELECT 'FOO' IN ('foo', 0x00) => 0
-// 	SELECT 'FOO' IN ('foo', 0) => 1
-// 	SELECT 'FOO' IN ('foo', 0x00, CAST('bar' as char)) => 1
-// 	SELECT 'FOO' IN ('foo', 0x00, 'bar') => 0
+//	SELECT 'FOO' IN ('foo', 0x00) => 0
+//	SELECT 'FOO' IN ('foo', 0) => 1
+//	SELECT 'FOO' IN ('foo', 0x00, CAST('bar' as char)) => 1
+//	SELECT 'FOO' IN ('foo', 0x00, 'bar') => 0
 //
 //	SELECT 9223372036854775808 IN (0.0e0, -9223372036854775808) => 1
 //	SELECT 9223372036854775808 IN (0, -9223372036854775808) => 0

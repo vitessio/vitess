@@ -217,7 +217,7 @@ func (c *compiler) compileFn_JSON_KEYS(call *builtinJSONKeys) (ctype, error) {
 		return ctype{}, err
 	}
 
-	doc, err = c.compileParseJSON("JSON_KEYS", doc, 1)
+	_, err = c.compileParseJSON("JSON_KEYS", doc, 1)
 	if err != nil {
 		return ctype{}, err
 	}

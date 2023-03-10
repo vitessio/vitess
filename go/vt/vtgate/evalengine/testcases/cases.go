@@ -48,6 +48,7 @@ type JSONObject struct{ defaultEnv }
 type CharsetConversionOperators struct{ defaultEnv }
 type CaseExprWithPredicate struct{ defaultEnv }
 type Ceil struct{ defaultEnv }
+type Floor struct{ defaultEnv }
 type CaseExprWithValue struct{ defaultEnv }
 type Base64 struct{ defaultEnv }
 type Conversion struct{ defaultEnv }
@@ -88,6 +89,7 @@ var Cases = []TestCase{
 	CharsetConversionOperators{},
 	CaseExprWithPredicate{},
 	Ceil{},
+	Floor{},
 	CaseExprWithValue{},
 	Base64{},
 	Conversion{},
@@ -230,6 +232,29 @@ func (Ceil) Test(yield Iterator) {
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("CEIL(%s)", num), nil)
 		yield(fmt.Sprintf("CEILING(%s)", num), nil)
+	}
+}
+
+func (Floor) Test(yield Iterator) {
+	var floorInputs = []string{
+		"0",
+		"1",
+		"-1",
+		"'1.5'",
+		"NULL",
+		"'ABC'",
+		"1.5e0",
+		"-1.5e0",
+		"9223372036854775810.4",
+		"-9223372036854775810.4",
+	}
+
+	for _, num := range floorInputs {
+		yield(fmt.Sprintf("FLOOR(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("FLOOR(%s)", num), nil)
 	}
 }
 

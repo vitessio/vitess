@@ -474,6 +474,20 @@ func (d Decimal) Ceil() Decimal {
 	return Decimal{value: z, exp: 0}
 }
 
+func (d Decimal) Floor() Decimal {
+	if d.isInteger() {
+		return d
+	}
+
+	exp := big.NewInt(10)
+
+	// NOTE(vadim): must negate after casting to prevent int32 overflow
+	exp.Exp(exp, big.NewInt(-int64(d.exp)), nil)
+
+	z, _ := new(big.Int).DivMod(d.value, exp, new(big.Int))
+	return Decimal{value: z, exp: 0}
+}
+
 func (d Decimal) truncate(precision int32) Decimal {
 	d.ensureInitialized()
 	if precision >= 0 && -precision > d.exp {

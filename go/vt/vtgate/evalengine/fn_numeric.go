@@ -66,3 +66,48 @@ func (call *builtinCeil) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 		return sqltypes.Float64, f
 	}
 }
+
+type builtinFloor struct {
+	CallExpr
+}
+
+var _ Expr = (*builtinFloor)(nil)
+
+func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
+	arg, err := call.arg1(env)
+	if err != nil {
+		return nil, err
+	}
+	if arg == nil {
+		return nil, nil
+	}
+
+	switch num := arg.(type) {
+	case *evalInt64, *evalUint64:
+		return num, nil
+	case *evalDecimal:
+		dec := num.dec
+		dec = dec.Floor()
+		intnum, isfit := dec.Int64()
+		if isfit {
+			return newEvalInt64(intnum), nil
+		}
+		return newEvalDecimalWithPrec(dec, 0), nil
+	default:
+		f, _ := evalToNumeric(num).toFloat()
+		return newEvalFloat(math.Floor(f.f)), nil
+	}
+}
+
+func (call *builtinFloor) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	t, f := call.Arguments[0].typeof(env)
+	if sqltypes.IsSigned(t) {
+		return sqltypes.Int64, f
+	} else if sqltypes.IsUnsigned(t) {
+		return sqltypes.Uint64, f
+	} else if sqltypes.Decimal == t {
+		return sqltypes.Int64, f | flagAmbiguousType
+	} else {
+		return sqltypes.Float64, f
+	}
+}
