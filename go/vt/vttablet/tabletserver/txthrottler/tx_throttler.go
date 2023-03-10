@@ -94,8 +94,7 @@ const TxThrottlerName = "TransactionThrottler"
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *TxThrottler {
-	env := tabletenv.NewEnv(config, TxThrottlerName)
+func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) *TxThrottler {
 	txThrottler, err := tryCreateTxThrottler(env, topoServer)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
