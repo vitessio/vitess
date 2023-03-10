@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package sidecardbcache
+package sidecardb
 
 import (
 	"context"
@@ -22,14 +22,20 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/topo/memorytopo"
 )
 
 func TestAll(t *testing.T) {
-	ts := memorytopo.NewServer("cell1")
-	cache := New(ts)
+	sidecarDBIdentifierMap := map[string]string{}
+	loadFunc := func(ctx context.Context, keyspace string) (string, error) {
+		val, ok := sidecarDBIdentifierMap[keyspace]
+		if !ok {
+			return "", fmt.Errorf("keyspace %s not found", keyspace)
+		}
+		return val, nil
+	}
+	// Create a cache to use for lookups of the sidecar database identifier
+	// in use by each keyspace.
+	cache := NewIdentifierCache(loadFunc)
 	tests := []struct {
 		name          string
 		keyspace      string
@@ -42,8 +48,8 @@ func TestAll(t *testing.T) {
 		{
 			name: "calling New twice should return the same instance",
 			preHook: func() error {
-				cache = New(ts) // should work fine
-				if cache != New(ts) {
+				cache = NewIdentifierCache(loadFunc) // should work fine
+				if cache != NewIdentifierCache(loadFunc) {
 					return fmt.Errorf("cache should be singleton")
 				}
 				return nil
@@ -57,7 +63,8 @@ func TestAll(t *testing.T) {
 			name:     "keyspace doesn't exist",
 			keyspace: "ks2",
 			preHook: func() error {
-				return ts.DeleteKeyspace(context.Background(), "ks2")
+				delete(sidecarDBIdentifierMap, "ks2")
+				return nil
 			},
 			want:    "",
 			wantErr: true,
@@ -66,11 +73,11 @@ func TestAll(t *testing.T) {
 			name:     "uninitialized cache",
 			keyspace: "ks3",
 			preHook: func() error {
-				cache.toposerv = nil
+				cache.load = nil
 				return nil
 			},
 			postHook: func() error {
-				cache.toposerv = ts
+				cache.load = loadFunc
 				return nil
 			},
 			want:    "",
@@ -86,15 +93,12 @@ func TestAll(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := ts.CreateKeyspace(context.Background(), tt.keyspace, &topodatapb.Keyspace{
-				SidecarDbName: tt.sidecardbname,
-			})
-			require.NoError(t, err)
+			sidecarDBIdentifierMap[tt.keyspace] = tt.sidecardbname
 			if tt.preHook != nil {
 				err := tt.preHook()
 				require.NoError(t, err)
 			}
-			got, err := cache.GetIdentifierForKeyspace(tt.keyspace)
+			got, err := cache.GetForKeyspace(tt.keyspace)
 			if tt.postHook != nil {
 				err := tt.postHook()
 				require.NoError(t, err)

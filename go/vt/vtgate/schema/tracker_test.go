@@ -17,7 +17,9 @@ limitations under the License.
 package schema
 
 import (
+	"context"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -35,16 +37,38 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 	"vitess.io/vitess/go/vt/vttablet/sandboxconn"
 )
 
+var (
+	keyspace = "ks"
+	cell     = "aa"
+)
+
+func TestMain(m *testing.M) {
+	exitCode := func() int {
+		ts := memorytopo.NewServer(cell)
+		ts.CreateKeyspace(context.Background(), keyspace, &topodatapb.Keyspace{})
+		sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+			ki, err := ts.GetKeyspace(ctx, keyspace)
+			if err != nil {
+				return "", err
+			}
+			return ki.SidecarDbName, nil
+		})
+		return m.Run()
+	}()
+	os.Exit(exitCode)
+}
+
 func TestTracking(t *testing.T) {
 	target := &querypb.Target{
-		Keyspace:   "ks",
+		Keyspace:   keyspace,
 		Shard:      "-80",
 		TabletType: topodatapb.TabletType_PRIMARY,
-		Cell:       "aa",
+		Cell:       cell,
 	}
 	tablet := &topodatapb.Tablet{
 		Keyspace: target.Keyspace,
@@ -198,10 +222,10 @@ func TestTracking(t *testing.T) {
 
 func TestTrackingUnHealthyTablet(t *testing.T) {
 	target := &querypb.Target{
-		Keyspace:   "ks",
+		Keyspace:   keyspace,
 		Shard:      "-80",
 		TabletType: topodatapb.TabletType_PRIMARY,
-		Cell:       "aa",
+		Cell:       cell,
 	}
 	tablet := &topodatapb.Tablet{
 		Keyspace: target.Keyspace,
@@ -314,7 +338,7 @@ func TestTrackerGetKeyspaceUpdateController(t *testing.T) {
 
 // TestViewsTracking tests that the tracker is able to track views.
 func TestViewsTracking(t *testing.T) {
-	target := &querypb.Target{Cell: "aa", Keyspace: "ks", Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
+	target := &querypb.Target{Cell: cell, Keyspace: keyspace, Shard: "-80", TabletType: topodatapb.TabletType_PRIMARY}
 	tablet := &topodatapb.Tablet{Keyspace: target.Keyspace, Shard: target.Shard, Type: target.TabletType}
 
 	schemaDefResult := []map[string]string{{
@@ -389,7 +413,7 @@ func TestViewsTracking(t *testing.T) {
 			require.Equal(t, true, keyspacePresent)
 
 			for k, v := range tcase.exp {
-				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews("ks", k)), "mismatch for table: ", k)
+				utils.MustMatch(t, v, sqlparser.String(tracker.GetViews(keyspace, k)), "mismatch for table: ", k)
 			}
 		})
 	}

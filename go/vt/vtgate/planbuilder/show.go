@@ -23,7 +23,7 @@ import (
 	"strings"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -34,7 +34,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/sidecardbcache"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -269,13 +268,12 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecarDBCache := sidecardbcache.Get()
-	if sidecarDBCache == nil {
-		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
-			fmt.Sprintf("failed to read sidecar database name for keyspace %q from the cache: sidecar database cache is not initialized",
-				ks.Name))
+	sidecarDBCache, err := sidecardb.GetIdentifierCache()
+	if err != nil {
+		return nil, vterrors.Wrapf(err, "failed to read sidecar database identifier for keyspace %q from the cache",
+			ks.Name)
 	}
-	sidecarDBID, err := sidecarDBCache.GetIdentifierForKeyspace(ks.Name)
+	sidecarDBID, err := sidecarDBCache.GetForKeyspace(ks.Name)
 	if err != nil {
 		return nil, err
 	}

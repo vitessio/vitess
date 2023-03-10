@@ -128,13 +128,21 @@ func init() {
 }
 
 func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn.SandboxConn) {
-	ctx := context.Background()
 	cell := "aa"
 	hc := discovery.NewFakeHealthCheck(nil)
 	s := createSandbox(KsTestSharded)
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
-	serv.topoServer.CreateKeyspace(ctx, "TestExecutor", &topodatapb.Keyspace{SidecarDbName: sidecardb.DefaultName})
+	serv.topoServer.CreateKeyspace(context.Background(), "TestExecutor", &topodatapb.Keyspace{SidecarDbName: sidecardb.DefaultName})
+	// Create a cache to use for lookups of the sidecar database identifier
+	// in use by each keyspace.
+	sidecardb.NewTestIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := serv.topoServer.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
 	resolver := newTestResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_PRIMARY, true, 1, nil)

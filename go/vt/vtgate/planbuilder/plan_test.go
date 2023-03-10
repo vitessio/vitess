@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardbcache"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -451,7 +451,15 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	ts := memorytopo.NewServer("cell1")
 	ts.CreateKeyspace(context.Background(), "main", &topodatapb.Keyspace{})
 	ts.CreateKeyspace(context.Background(), "user", &topodatapb.Keyspace{})
-	sidecardbcache.New(ts)
+	// Create a cache to use for lookups of the sidecar database identifier
+	// in use by each keyspace.
+	sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
 
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "alterVschema_cases.json", testOutputTempDir, vschema, false)

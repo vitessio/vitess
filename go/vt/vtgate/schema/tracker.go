@@ -22,7 +22,7 @@ import (
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sidecardbcache"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -111,11 +111,12 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
-	sidecarDBCache := sidecardbcache.Get()
-	if sidecarDBCache == nil {
-		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "sidecar database cache is not initialized")
+	sidecarDBCache, err := sidecardb.GetIdentifierCache()
+	if err != nil {
+		return vterrors.Wrapf(err, "failed to read sidecar database name for keyspace %q from the cache",
+			target.Keyspace)
 	}
-	sidecarDBID, err := sidecarDBCache.GetIdentifierForKeyspace(target.Keyspace)
+	sidecarDBID, err := sidecarDBCache.GetForKeyspace(target.Keyspace)
 	if err != nil {
 		return err
 	}
@@ -274,13 +275,13 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 		return false
 	}
 
-	sidecarDBCache := sidecardbcache.Get()
-	if sidecarDBCache == nil {
-		log.Errorf("failed to read sidecar database name for keyspace %q from the cache: sidecar database cache is not initialized",
-			th.Target.Keyspace)
+	sidecarDBCache, err := sidecardb.GetIdentifierCache()
+	if err != nil {
+		log.Errorf("failed to read sidecar database identifier for keyspace %q from the cache: %v",
+			th.Target.Keyspace, err)
 		return false
 	}
-	sidecarDBID, err := sidecarDBCache.GetIdentifierForKeyspace(th.Target.Keyspace)
+	sidecarDBID, err := sidecarDBCache.GetForKeyspace(th.Target.Keyspace)
 	if err != nil {
 		log.Errorf("failed to read sidecar database name for keyspace %q from the cache: %v",
 			th.Target.Keyspace, err)

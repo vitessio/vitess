@@ -1,0 +1,109 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
+package sidecardb
+
+import (
+	"context"
+	"sync"
+	"time"
+
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+)
+
+// This provides a read through cache of sidecar database identifiers
+// loading the values from an opaque backend database using a provided
+// load function.
+type IdentifierCache struct {
+	// Lazily loaded cache of sidecar database identifiers by keyspace.
+	// The key is a keyspace name string and the val is an sqlparser
+	// string built from an IdentifierCS using the sidecar database
+	// name stored in the backend database read in the provided load
+	// function.
+	sidecarDBIdentifiers sync.Map
+
+	// The callback used to load the values from the database into
+	// the cache.
+	load func(context.Context, string) (string, error)
+}
+
+const ErrIdentifierCacheUninitialized = "sidecar database identifier cache is not initialized"
+
+var (
+	instance    *IdentifierCache // singleton
+	loadTimeout time.Duration    = 30 * time.Second
+)
+
+// NewIdentifierCache returns an initialized cache struct. This is
+// a singleton so if you call New multiple times you will get the
+// same instance.
+func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) *IdentifierCache {
+	if instance == nil {
+		instance = &IdentifierCache{
+			load:                 loadFunc,
+			sidecarDBIdentifiers: sync.Map{},
+		}
+	}
+	return instance
+}
+
+// NewTestIdentifierCache returns an initialized cache struct. This is
+// NOT a singleton and allows you to override the global instance used
+// outside of unit tests.
+// NOTE: This should ONLY be used in unit tests and NOT in production!
+func NewTestIdentifierCache(loadFunc func(context.Context, string) (string, error)) *IdentifierCache {
+	instance = &IdentifierCache{
+		load:                 loadFunc,
+		sidecarDBIdentifiers: sync.Map{},
+	}
+	return instance
+}
+
+func GetIdentifierCache() (*IdentifierCache, error) {
+	if instance == nil {
+		return nil, vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheUninitialized)
+	} else {
+		return instance, nil
+	}
+}
+
+// GetForKeyspace returns an sqlparser string built from an
+// IdentifierCS using the sidecar database name stored in
+// the database. This provides a read through cache.
+func (sc *IdentifierCache) GetForKeyspace(keyspace string) (string, error) {
+	if sc.load == nil {
+		return "", vterrors.New(vtrpc.Code_FAILED_PRECONDITION, "the load from database function has not been set")
+	}
+	sdbid, ok := sc.sidecarDBIdentifiers.Load(keyspace)
+	if !ok || sdbid == nil || sdbid == "" {
+		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		defer cancel()
+
+		sdbname, err := sc.load(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		if sdbname == "" {
+			sdbname = DefaultName
+		}
+
+		sdbid = sqlparser.String(sqlparser.NewIdentifierCS(sdbname))
+		sc.sidecarDBIdentifiers.Store(keyspace, sdbid)
+	}
+	return sdbid.(string), nil
+}

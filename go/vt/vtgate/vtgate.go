@@ -41,7 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardbcache"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -266,9 +266,15 @@ func Init(
 	if err != nil {
 		log.Fatalf("Unable to get Topo server: %v", err)
 	}
-	// Provide a cache for lookups of the sidecar database names in use
-	// by each keyspace.
-	sidecardbcache.New(ts)
+	// Create a cache to use for lookups of the sidecar database identifier
+	// in use by each keyspace.
+	sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
 
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
