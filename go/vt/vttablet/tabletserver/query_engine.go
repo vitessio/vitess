@@ -500,7 +500,7 @@ func (qe *QueryEngine) AddStats(planType planbuilder.PlanType, tableName, worklo
 	qe.queryCounts.Add(keys, queryCount)
 	qe.queryTimes.Add(keys, int64(duration))
 	qe.queryErrorCounts.Add(keys, errorCount)
-	// queryErrorCountsWithCode is similar to queryError	Counts except we have an additional dimension
+	// queryErrorCountsWithCode is similar to queryErrorCounts except we have an additional dimension
 	// of error code.
 	if errorCount > 0 {
 		errorKeys := []string{tableName, planType.String(), errorCode}
