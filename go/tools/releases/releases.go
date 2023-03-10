@@ -16,6 +16,19 @@ limitations under the License.
 
 package main
 
+// The changelog directory is composed of a README that lists
+// and links to all major releases of Vitess. It has one
+// sub-directory for each major version. Each sub-directory is
+// composed of another README that also lists and links all the
+// patch releases of this major release. Those sub-directories
+// are composed of one directory per patch release. Finally,
+// the patch release directory contains the old files markdown:
+// summary, release_notes, changelog.
+//
+// This tool is solely responsible for generating the READMEs
+// and making sure they are up-to-date with the list of major
+// and patch releases we have.
+
 import (
 	"log"
 	"os"
