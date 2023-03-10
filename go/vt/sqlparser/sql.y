@@ -495,7 +495,7 @@ func yySpecialCommentMode(yylex interface{}) bool {
 %type <empty> to_opt to_or_as as_opt column_opt
 %type <str> algorithm_opt definer_opt security_opt
 %type <viewSpec> view_opts
-%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword non_reserved_keyword2 non_reserved_keyword3
+%type <bytes> reserved_keyword qualified_column_name_safe_reserved_keyword non_reserved_keyword column_name_safe_keyword non_reserved_keyword2 non_reserved_keyword3 all_non_reserved
 %type <colIdent> sql_id reserved_sql_id col_alias as_ci_opt using_opt existing_window_name_opt
 %type <colIdents> reserved_sql_id_list
 %type <expr> charset_value
@@ -4487,12 +4487,18 @@ analyze_statement:
     $$ = &Analyze{Tables: $3}
   }
 
+all_non_reserved:
+  non_reserved_keyword
+| non_reserved_keyword2
+| non_reserved_keyword3
+| column_name_safe_keyword
+
 prepare_statement:
   PREPARE ID FROM STRING
   {
     $$ = &Prepare{Name: string($2), Expr: string($4)}
   }
-| PREPARE non_reserved_keyword FROM STRING
+| PREPARE all_non_reserved FROM STRING
   {
     $$ = &Prepare{Name: string($2), Expr: string($4)}
   }
@@ -4500,7 +4506,7 @@ prepare_statement:
   {
     $$ = &Prepare{Name: string($2), Expr: string($4)}
   }
-| PREPARE non_reserved_keyword FROM system_variable
+| PREPARE all_non_reserved FROM system_variable
   {
     $$ = &Prepare{Name: string($2), Expr: string($4)}
   }
@@ -4521,7 +4527,7 @@ system_variable:
   {
     $$ = string($1)
   }
-| non_reserved_keyword
+| all_non_reserved
   {
     $$ = string($1)
   }
