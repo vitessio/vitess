@@ -526,7 +526,14 @@ func merge(
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
 		case AggregateRandom:
-			// we just grab the first value per grouping. no need to do anything more complicated here
+			// we just grab the first value per grouping
+			// however, if the first row contains a Null value for this row we decide to ignore
+			// it and use the second row. there might some cases (i.e. `sum(a) / sum(b)`) on a sharded
+			// cluster for which MySQL will return Null on row1 and a value on row2. we want to return
+			// the computed value of row2.
+			if row1[aggr.Col].IsNull() {
+				result[aggr.Col] = row2[aggr.Col]
+			}
 		default:
 			return nil, nil, fmt.Errorf("BUG: Unexpected opcode: %v", aggr.Opcode)
 		}
