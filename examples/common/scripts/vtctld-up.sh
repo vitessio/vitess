@@ -35,7 +35,7 @@ vtctld \
  --pid_file $VTDATAROOT/tmp/vtctld.pid \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
 
-for i in $(seq 0 300); do
+for _ in {0..300}; do
  curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null && break
  sleep 0.1
 done
