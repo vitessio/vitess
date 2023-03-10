@@ -306,7 +306,13 @@ func (e *evalDecimal) negate() evalNumeric {
 
 func (e *evalDecimal) toInt64() *evalInt64 {
 	dec := e.dec.Round(0)
-	i, _ := dec.Int64()
+	i, valid := dec.Int64()
+	if !valid {
+		if dec.Sign() < 0 {
+			return newEvalInt64(math.MinInt64)
+		}
+		return newEvalInt64(math.MaxInt64)
+	}
 	return newEvalInt64(i)
 }
 
@@ -333,6 +339,9 @@ func (e *evalDecimal) toUint64() *evalUint64 {
 		return newEvalUint64(uint64(i))
 	}
 
-	u, _ := dec.Uint64()
+	u, valid := dec.Uint64()
+	if !valid {
+		return newEvalUint64(math.MaxUint64)
+	}
 	return newEvalUint64(u)
 }

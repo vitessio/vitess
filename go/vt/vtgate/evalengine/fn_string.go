@@ -186,6 +186,20 @@ func (call *builtinASCII) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, f
 }
 
+// maxRepeatLength is the maximum number of times a string can be repeated.
+// This is based on how MySQL behaves here. The maximum value in MySQL is
+// actually based on `max_allowed_packet`. The value here is the maximum
+// for `max_allowed_packet` with 1GB.
+// See https://dev.mysql.com/doc/refman/8.0/en/server-system-variables.html#sysvar_max_allowed_packet
+//
+// Practically though, this is really whacky anyway.
+// There's 3 possible states:
+//   - `<= max_allowed_packet` and actual packet  generated is `<= max_allowed_packet`. It works
+//   - `<= max_allowed_packet` but the actual packet generated is `> max_allowed_packet` so it fails with an
+//     error: `ERROR 2020 (HY000): Got packet bigger than 'max_allowed_packet' bytes` and the client gets disconnected.
+//   - `> max_allowed_packet`, no error and returns `NULL`.
+const maxRepeatLength = 1073741824
+
 type builtinRepeat struct {
 	CallExpr
 }
@@ -211,7 +225,22 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 	if repeat < 0 {
 		repeat = 0
 	}
+	if !checkMaxLength(int64(len(text.bytes)), repeat) {
+		return nil, nil
+	}
+
 	return newEvalText(bytes.Repeat(text.bytes, int(repeat)), text.col), nil
+}
+
+func checkMaxLength(len, repeat int64) bool {
+	if repeat <= 0 {
+		return true
+	}
+	if len*repeat/repeat != len {
+		// we have an overflow, can't be a valid length.
+		return false
+	}
+	return len*repeat <= maxRepeatLength
 }
 
 func (call *builtinRepeat) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
