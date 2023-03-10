@@ -166,8 +166,7 @@ func (c *compiler) compileFn_REPEAT(expr *builtinRepeat) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(str, repeat)
 
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
@@ -187,8 +186,7 @@ func (c *compiler) compileFn_TO_BASE64(call *builtinToBase64) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(str)
 
 	t := sqltypes.VarChar
 	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
@@ -219,8 +217,7 @@ func (c *compiler) compileFn_FROM_BASE64(call *builtinFromBase64) (ctype, error)
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(str)
 
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
@@ -240,8 +237,7 @@ func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(str)
 
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
@@ -269,8 +265,7 @@ func (c *compiler) compileFn_LENGTH(call callable, op lengthOp) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(str)
 
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
@@ -290,8 +285,7 @@ func (c *compiler) compileFn_ASCII(call *builtinASCII) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(str)
 
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
@@ -311,8 +305,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(str)
 
 	col := collations.TypedCollation{
 		Collation:    c.defaultCollation,
@@ -366,8 +359,7 @@ func (c *compiler) compileFn_CEIL(expr *builtinCeil) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(arg)
 
 	convt := ctype{Type: arg.Type, Col: collationNumeric}
 	switch {
@@ -401,8 +393,7 @@ func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, er
 		return ctype{}, c.unsupported(call)
 
 	case sqltypes.VarChar, sqltypes.VarBinary:
-		skip := c.asm.jumpFrom()
-		c.asm.NullCheck1(skip)
+		skip := c.compileNullCheck1(str)
 
 		if call.Cast == "binary" {
 			c.asm.Fn_WEIGHT_STRING_b(call.Len)

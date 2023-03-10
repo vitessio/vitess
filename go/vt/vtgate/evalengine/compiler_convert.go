@@ -13,8 +13,7 @@ func (c *compiler) compileCollate(expr *CollateExpr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(ct)
 
 	switch ct.Type {
 	case sqltypes.VarChar:
@@ -31,7 +30,7 @@ func (c *compiler) compileCollate(expr *CollateExpr) (ctype, error) {
 	c.asm.jumpDestination(skip)
 
 	ct.Col = expr.TypedCollation
-	ct.Flag |= flagExplicitCollation
+	ct.Flag |= flagExplicitCollation | flagNullable
 	return ct, nil
 }
 
@@ -41,9 +40,7 @@ func (c *compiler) compileConvert(conv *ConvertExpr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
-
+	skip := c.compileNullCheck1(arg)
 	var convt ctype
 
 	switch conv.Type {
@@ -84,18 +81,18 @@ func (c *compiler) compileConvert(conv *ConvertExpr) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
+	convt.Flag = arg.Flag | flagNullable
 	return convt, nil
 
 }
 
 func (c *compiler) compileConvertUsing(conv *ConvertUsingExpr) (ctype, error) {
-	_, err := c.compileExpr(conv.Inner)
+	ct, err := c.compileExpr(conv.Inner)
 	if err != nil {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(ct)
 	c.asm.Convert_xc(1, sqltypes.VarChar, conv.Collation, 0, false)
 	c.asm.jumpDestination(skip)
 
@@ -104,5 +101,5 @@ func (c *compiler) compileConvertUsing(conv *ConvertUsingExpr) (ctype, error) {
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireASCII,
 	}
-	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Flag: flagNullable, Col: col}, nil
 }

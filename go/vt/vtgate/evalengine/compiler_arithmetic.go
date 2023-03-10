@@ -8,9 +8,7 @@ func (c *compiler) compileNegate(expr *NegateExpr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
-
+	skip := c.compileNullCheck1(arg)
 	arg = c.compileToNumeric(arg, 1)
 	var neg sqltypes.Type
 
@@ -85,8 +83,7 @@ func (c *compiler) compileArithmeticAdd(left, right Expr) (ctype, error) {
 	}
 
 	swap := false
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(lt, rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
@@ -138,8 +135,7 @@ func (c *compiler) compileArithmeticSub(left, right Expr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(lt, rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 
@@ -217,8 +213,7 @@ func (c *compiler) compileArithmeticMul(left, right Expr) (ctype, error) {
 	}
 
 	swap := false
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(lt, rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
@@ -270,8 +265,7 @@ func (c *compiler) compileArithmeticDiv(left, right Expr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(lt, rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 
@@ -279,11 +273,13 @@ func (c *compiler) compileArithmeticDiv(left, right Expr) (ctype, error) {
 		c.compileToFloat(lt, 2)
 		c.compileToFloat(rt, 1)
 		c.asm.Div_ff()
+		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
 	} else {
 		c.compileToDecimal(lt, 2)
 		c.compileToDecimal(rt, 1)
 		c.asm.Div_dd()
+		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Decimal, Col: collationNumeric}, nil
 	}
 }

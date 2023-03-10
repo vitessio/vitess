@@ -292,3 +292,21 @@ func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 	}
 	return ctype{sqltypes.Decimal, ct.Flag, collationNumeric}
 }
+
+func (c *compiler) compileNullCheck1(ct ctype) *jump {
+	if ct.Flag&flagNullable != 0 {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck1(j)
+		return j
+	}
+	return nil
+}
+
+func (c *compiler) compileNullCheck2(lt, rt ctype) *jump {
+	if lt.Flag&flagNullable != 0 || rt.Flag&flagNullable != 0 {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck2(j)
+		return j
+	}
+	return nil
+}

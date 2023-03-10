@@ -38,7 +38,9 @@ func (asm *assembler) jumpFrom() *jump {
 }
 
 func (asm *assembler) jumpDestination(j *jump) {
-	j.to = len(asm.ins)
+	if j != nil {
+		j.to = len(asm.ins)
+	}
 }
 
 func (asm *assembler) adjustStack(offset int) {
@@ -1666,7 +1668,7 @@ func (asm *assembler) NullCheck2(j *jump) {
 	}, "NULLCHECK SP-1, SP-2")
 }
 
-func (asm *assembler) NullCmp(j *jump) {
+func (asm *assembler) Cmp_nullsafe(j *jump) {
 	asm.emit(func(vm *VirtualMachine) int {
 		l := vm.stack[vm.sp-2]
 		r := vm.stack[vm.sp-1]

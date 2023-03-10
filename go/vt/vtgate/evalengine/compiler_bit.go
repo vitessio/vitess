@@ -38,8 +38,7 @@ func (c *compiler) compileBitwiseOp(left Expr, right Expr, op bitwiseOp) (ctype,
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(lt, rt)
 
 	if lt.Type == sqltypes.VarBinary && rt.Type == sqltypes.VarBinary {
 		if !lt.isHexOrBitLiteral() || !rt.isHexOrBitLiteral() {
@@ -68,8 +67,7 @@ func (c *compiler) compileBitwiseShift(left Expr, right Expr, i int) (ctype, err
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(lt, rt)
 
 	if lt.Type == sqltypes.VarBinary && !lt.isHexOrBitLiteral() {
 		_ = c.compileToUint64(rt, 1)
@@ -101,8 +99,7 @@ func (c *compiler) compileFn_BIT_COUNT(expr *builtinBitCount) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(ct)
 
 	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
 		c.asm.BitCount_b()
@@ -122,8 +119,7 @@ func (c *compiler) compileBitwiseNot(expr *BitwiseNotExpr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
+	skip := c.compileNullCheck1(ct)
 
 	if ct.Type == sqltypes.VarBinary && !ct.isHexOrBitLiteral() {
 		c.asm.BitwiseNot_b()

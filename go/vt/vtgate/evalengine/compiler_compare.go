@@ -56,13 +56,14 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 	}
 
 	swapped := false
-	skip := c.asm.jumpFrom()
+	var skip *jump
 
 	switch expr.Op.(type) {
 	case compareNullSafeEQ:
-		c.asm.NullCmp(skip)
+		skip = c.asm.jumpFrom()
+		c.asm.Cmp_nullsafe(skip)
 	default:
-		c.asm.NullCheck2(skip)
+		skip = c.compileNullCheck2(lt, rt)
 	}
 
 	switch {
@@ -239,8 +240,7 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck2(skip)
+	skip := c.compileNullCheck2(lt, rt)
 
 	if !sqltypes.IsText(lt.Type) && !sqltypes.IsBinary(lt.Type) {
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.defaultCollation, 0, false)

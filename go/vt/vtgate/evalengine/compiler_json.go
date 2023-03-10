@@ -27,7 +27,7 @@ func (c *compiler) compileParseJSON(fn string, doct ctype, offset int) (ctype, e
 	default:
 		return ctype{}, errJSONType(fn)
 	}
-	return ctype{Type: sqltypes.TypeJSON, Col: collationJSON}, nil
+	return ctype{Type: sqltypes.TypeJSON, Flag: doct.Flag, Col: collationJSON}, nil
 }
 
 func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
@@ -156,9 +156,7 @@ func (c *compiler) compileFn_JSON_UNQUOTE(call *builtinJSONUnquote) (ctype, erro
 		return ctype{}, err
 	}
 
-	skip := c.asm.jumpFrom()
-	c.asm.NullCheck1(skip)
-
+	skip := c.compileNullCheck1(arg)
 	_, err = c.compileParseJSON("JSON_UNQUOTE", arg, 1)
 	if err != nil {
 		return ctype{}, err
@@ -166,7 +164,7 @@ func (c *compiler) compileFn_JSON_UNQUOTE(call *builtinJSONUnquote) (ctype, erro
 
 	c.asm.Fn_JSON_UNQUOTE()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Blob, Col: collationJSON}, nil
+	return ctype{Type: sqltypes.Blob, Flag: flagNullable, Col: collationJSON}, nil
 }
 
 func (c *compiler) compileFn_JSON_CONTAINS_PATH(call *builtinJSONContainsPath) (ctype, error) {
