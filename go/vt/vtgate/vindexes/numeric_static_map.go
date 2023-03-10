@@ -51,10 +51,6 @@ func init() {
 	Register("numeric_static_map", NewNumericStaticMap)
 }
 
-const (
-	defaultFallbackType = "xxhash"
-)
-
 // NewNumericStaticMap creates a NumericStaticMap vindex.
 func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) {
 	jsonStr, jsok := params["json"]
