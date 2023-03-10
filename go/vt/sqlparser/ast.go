@@ -6584,7 +6584,11 @@ func (node *Prepare) walkSubtree(visit Visit) error {
 }
 
 func (node *Prepare) Format(buf *TrackedBuffer) {
-	buf.Myprintf("prepare %s from '%s'", node.Name, node.Expr)
+	if strings.HasPrefix(node.Expr, "@") {
+		buf.Myprintf("prepare %s from %s", node.Name, node.Expr)
+	} else {
+		buf.Myprintf("prepare %s from '%s'", node.Name, node.Expr)
+	}
 }
 
 type Execute struct {

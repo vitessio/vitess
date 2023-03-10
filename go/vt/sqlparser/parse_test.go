@@ -1500,6 +1500,9 @@ var (
 			input:  "prepare stmt from 'select sqrt(pow(?,2) + pow(?,2)) as hypotenuse'",
 			output: "prepare stmt from 'select sqrt(pow(?,2) + pow(?,2)) as hypotenuse'",
 		}, {
+			input:  "prepare stmt from @a",
+			output: "prepare stmt from @a",
+		}, {
 			input:  "execute stmt",
 			output: "execute stmt",
 		}, {

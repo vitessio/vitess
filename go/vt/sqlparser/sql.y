@@ -4496,6 +4496,14 @@ prepare_statement:
   {
     $$ = &Prepare{Name: string($2), Expr: string($4)}
   }
+| PREPARE ID FROM system_variable
+  {
+    $$ = &Prepare{Name: string($2), Expr: string($4)}
+  }
+| PREPARE non_reserved_keyword FROM system_variable
+  {
+    $$ = &Prepare{Name: string($2), Expr: string($4)}
+  }
 
 system_variable_list:
   system_variable
