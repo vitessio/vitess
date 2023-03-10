@@ -1,7 +1,6 @@
 package plancontext
 
 import (
-	"context"
 	"strings"
 
 	"vitess.io/vitess/go/vt/log"
@@ -30,7 +29,6 @@ type VSchema interface {
 	Destination() key.Destination
 	TabletType() topodatapb.TabletType
 	TargetDestination(qualifier string) (key.Destination, *vindexes.Keyspace, topodatapb.TabletType, error)
-	GetSidecarDBName(context.Context, string) (string, error)
 	AnyKeyspace() (*vindexes.Keyspace, error)
 	FirstSortedKeyspace() (*vindexes.Keyspace, error)
 	SysVarSetEnabled() bool

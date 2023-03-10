@@ -41,10 +41,9 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardbcache"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
-	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -263,15 +262,19 @@ func Init(
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
+	ts, err := serv.GetTopoServer()
+	if err != nil {
+		log.Fatalf("Unable to get Topo server: %v", err)
+	}
+	// Provide a cache for lookups of the sidecar database names in use
+	// by each keyspace.
+	sidecardbcache.New(ts)
+
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
 		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser, enableViews)
-		ts, err := serv.GetTopoServer()
-		if err != nil {
-			log.Fatalf("Unable to get Topo server: %v", err)
-		}
-		addKeyspacesToTracker(ctx, ts, srvResolver, st, gw)
+		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
 
@@ -350,7 +353,7 @@ func Init(
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	rpcVTGate.registerDebugEnvHandler()
-	err := initQueryLogger(rpcVTGate)
+	err = initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
 	}
@@ -359,7 +362,7 @@ func Init(
 	return rpcVTGate
 }
 
-func addKeyspacesToTracker(ctx context.Context, topoServer *topo.Server, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
+func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
 		log.Warningf("Unable to get all keyspaces: %v", err)
@@ -369,27 +372,11 @@ func addKeyspacesToTracker(ctx context.Context, topoServer *topo.Server, srvReso
 		log.Infof("No keyspace to load")
 	}
 	for _, keyspace := range keyspaces {
-		sidecarDBName, err := getKeyspaceSidecarDBName(ctx, topoServer, keyspace)
-		if err != nil {
-			log.Warningf("Unable to get sidecar database name for keyspace %q: %v", keyspace, err)
-			return
-		}
-		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace, sidecarDBName)
+		resolveAndLoadKeyspace(ctx, srvResolver, st, gw, keyspace)
 	}
 }
 
-func getKeyspaceSidecarDBName(ctx context.Context, topoServer *topo.Server, keyspace string) (string, error) {
-	ki, err := topoServer.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return "", err
-	}
-	if ki.SidecarDbName == "" {
-		return sidecardb.DefaultName, nil
-	}
-	return ki.SidecarDbName, nil
-}
-
-func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace, sidecarDBName string) {
+func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway, keyspace string) {
 	dest, err := srvResolver.ResolveDestination(ctx, keyspace, topodatapb.TabletType_PRIMARY, key.DestinationAllShards{})
 	if err != nil {
 		log.Warningf("Unable to resolve destination: %v", err)
@@ -404,7 +391,7 @@ func resolveAndLoadKeyspace(ctx context.Context, srvResolver *srvtopo.Resolver, 
 			return
 		case <-time.After(500 * time.Millisecond):
 			for _, shard := range dest {
-				err := st.AddNewKeyspace(gw, shard.Target, sidecarDBName)
+				err := st.AddNewKeyspace(gw, shard.Target)
 				if err == nil {
 					return
 				}

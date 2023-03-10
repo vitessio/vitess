@@ -23,7 +23,6 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -320,21 +319,6 @@ func (vc *vcursorImpl) DefaultKeyspace() (*vindexes.Keyspace, error) {
 		return nil, vterrors.VT05003(vc.keyspace)
 	}
 	return ks.Keyspace, nil
-}
-
-// GetSidecarDBname returns the sidecar database name configured for
-// the given keyspace in the topo server.
-// There should always be a value set in the keyspace record but if
-// not we return the default name.
-func (vc *vcursorImpl) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
-	ki, err := vc.topoServer.GetKeyspace(ctx, keyspace)
-	if err != nil {
-		return "", err
-	}
-	if ki.SidecarDbName == "" {
-		return sidecardb.DefaultName, nil
-	}
-	return ki.SidecarDbName, nil
 }
 
 var errNoDbAvailable = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.NoDB, "no database available")

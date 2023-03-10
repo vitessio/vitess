@@ -22,6 +22,7 @@ import (
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardbcache"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -39,10 +40,9 @@ import (
 )
 
 type (
-	keyspaceStr           = string
-	tableNameStr          = string
-	viewNameStr           = string
-	sidcarDBIdentifierStr = string
+	keyspaceStr  = string
+	tableNameStr = string
+	viewNameStr  = string
 
 	// Tracker contains the required fields to perform schema tracking.
 	Tracker struct {
@@ -58,13 +58,6 @@ type (
 		// map of keyspace currently tracked
 		tracked      map[keyspaceStr]*updateController
 		consumeDelay time.Duration
-
-		// A map of the sidecar database identifier for each keyspace.
-		// The key is a keyspace name string and the val is an sqlparser
-		// string built from an IdentifierCS using the sidecar database
-		// name stored in the global topo Keyspace record for the given
-		// keyspace.
-		sidecarDBIdentifiers map[keyspaceStr]sidcarDBIdentifierStr
 	}
 )
 
@@ -84,12 +77,11 @@ func NewTracker(ch chan *discovery.TabletHealth, user string, enableViews bool) 
 	}
 
 	t := &Tracker{
-		ctx:                  ctx,
-		ch:                   ch,
-		tables:               &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
-		tracked:              map[keyspaceStr]*updateController{},
-		consumeDelay:         defaultConsumeDelay,
-		sidecarDBIdentifiers: map[keyspaceStr]sidcarDBIdentifierStr{},
+		ctx:          ctx,
+		ch:           ch,
+		tables:       &tableMap{m: map[keyspaceStr]map[tableNameStr][]vindexes.Column{}},
+		tracked:      map[keyspaceStr]*updateController{},
+		consumeDelay: defaultConsumeDelay,
 	}
 
 	if enableViews {
@@ -119,8 +111,17 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
+	sidecarDBCache := sidecardbcache.Get()
+	if sidecarDBCache == nil {
+		return vterrors.Errorf(vtrpcpb.Code_INTERNAL, "sidecar database cache is not initialized")
+	}
+	sidecarDBID, err := sidecarDBCache.GetIdentifierForKeyspace(target.Keyspace)
+	if err != nil {
+		return err
+	}
+
 	ftRes, err := conn.Execute(t.ctx, target,
-		sqlparser.BuildParsedQuery(mysql.FetchTables, t.sidecarDBIdentifiers[target.Keyspace]).Query,
+		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecarDBID).Query,
 		nil, 0, 0, nil)
 	if err != nil {
 		return err
@@ -272,9 +273,23 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 		log.Errorf("failed to read updated tables from TabletHealth: %v", err)
 		return false
 	}
+
+	sidecarDBCache := sidecardbcache.Get()
+	if sidecarDBCache == nil {
+		log.Errorf("failed to read sidecar database name for keyspace %q from the cache: sidecar database cache is not initialized",
+			th.Target.Keyspace)
+		return false
+	}
+	sidecarDBID, err := sidecarDBCache.GetIdentifierForKeyspace(th.Target.Keyspace)
+	if err != nil {
+		log.Errorf("failed to read sidecar database name for keyspace %q from the cache: %v",
+			th.Target.Keyspace, err)
+		return false
+	}
+
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
 	res, err := th.Conn.Execute(t.ctx, th.Target,
-		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, t.sidecarDBIdentifiers[th.Target.Keyspace]).Query,
+		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecarDBID).Query,
 		bv, 0, 0, nil)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
@@ -355,13 +370,9 @@ func (t *Tracker) RegisterSignalReceiver(f func()) {
 }
 
 // AddNewKeyspace adds keyspace to the tracker.
-func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target, sidecarDBName string) error {
+func (t *Tracker) AddNewKeyspace(conn queryservice.QueryService, target *querypb.Target) error {
 	updateController := t.newUpdateController()
 	t.tracked[target.Keyspace] = updateController
-	if t.sidecarDBIdentifiers == nil {
-		t.sidecarDBIdentifiers = map[keyspaceStr]sidcarDBIdentifierStr{}
-	}
-	t.sidecarDBIdentifiers[target.Keyspace] = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	err := t.LoadKeyspace(conn, target)
 	if err != nil {
 		updateController.setIgnore(checkIfWeShouldIgnoreKeyspace(err))

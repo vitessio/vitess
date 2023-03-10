@@ -212,7 +212,6 @@ func TestTrackingUnHealthyTablet(t *testing.T) {
 	sbc := sandboxconn.NewSandboxConn(tablet)
 	ch := make(chan *discovery.TabletHealth)
 	tracker := NewTracker(ch, "", false)
-	tracker.sidecarDBIdentifiers = map[string]string{target.Keyspace: sidecardb.DefaultName}
 	tracker.consumeDelay = 1 * time.Millisecond
 	tracker.Start()
 	defer tracker.Stop()

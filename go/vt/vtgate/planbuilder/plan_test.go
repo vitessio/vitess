@@ -32,7 +32,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/servenv"
-	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sidecardbcache"
 
 	vtgatepb "vitess.io/vitess/go/vt/proto/vtgate"
 
@@ -48,6 +48,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtgate/engine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -447,6 +448,10 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 		},
 		tabletType: topodatapb.TabletType_PRIMARY,
 	}
+	ts := memorytopo.NewServer("cell1")
+	ts.CreateKeyspace(context.Background(), "main", &topodatapb.Keyspace{})
+	ts.CreateKeyspace(context.Background(), "user", &topodatapb.Keyspace{})
+	sidecardbcache.New(ts)
 
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "alterVschema_cases.json", testOutputTempDir, vschema, false)
@@ -744,10 +749,6 @@ func (vw *vschemaWrapper) getActualKeyspace() string {
 
 func (vw *vschemaWrapper) DefaultKeyspace() (*vindexes.Keyspace, error) {
 	return vw.v.Keyspaces["main"].Keyspace, nil
-}
-
-func (vw *vschemaWrapper) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
-	return sidecardb.DefaultName, nil
 }
 
 func (vw *vschemaWrapper) AnyKeyspace() (*vindexes.Keyspace, error) {

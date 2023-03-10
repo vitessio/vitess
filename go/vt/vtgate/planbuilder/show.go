@@ -17,15 +17,13 @@ limitations under the License.
 package planbuilder
 
 import (
-	"context"
 	"fmt"
 	"regexp"
 	"sort"
 	"strings"
-	"sync"
 
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/topo"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -36,6 +34,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/sidecardbcache"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
@@ -47,13 +46,6 @@ const (
 	both    = "both"
 	charset = "charset"
 )
-
-// Lazily loaded cache of sidecar database identifiers by keyspace.
-// The key is a keyspace name string and the val is an sqlparser
-// string built from an IdentifierCS using the sidecar database
-// name stored in the global topo Keyspace record for the given
-// keyspace.
-var sidecarDBIdentifiers sync.Map
 
 func buildShowPlan(sql string, stmt *sqlparser.Show, _ *sqlparser.ReservedVars, vschema plancontext.VSchema) (*planResult, error) {
 	if vschema.Destination() != nil {
@@ -277,7 +269,13 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecarDBID, err := getSidecarDBIdentifierForKeyspace(vschema, ks.Name)
+	sidecarDBCache := sidecardbcache.Get()
+	if sidecarDBCache == nil {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION,
+			fmt.Sprintf("failed to read sidecar database name for keyspace %q from the cache: sidecar database cache is not initialized",
+				ks.Name))
+	}
+	sidecarDBID, err := sidecarDBCache.GetIdentifierForKeyspace(ks.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -762,26 +760,4 @@ func buildVschemaVindexesPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		buildVarCharFields("Keyspace", "Name", "Type", "Params", "Owner"),
 	), nil
 
-}
-
-// getSidecarDBIdentifierForKeyspace is a helper function that can be
-// used to get the configured sidecar database identifier to use for
-// a given keyspace when generating raw SQL queries targeted at any
-// of tablet's sidecar database tables.
-// NOTE: this should be avoided whenever possible, preferring instead
-// to use a well defined vtgate->vttablet RPC that hides the
-// implementation details (so that the schema is not the interface).
-func getSidecarDBIdentifierForKeyspace(vschema plancontext.VSchema, keyspace string) (string, error) {
-	sdbid, ok := sidecarDBIdentifiers.Load(keyspace)
-	if !ok || sdbid == nil || sdbid == "" {
-		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
-		defer cancel()
-		sdbname, err := vschema.GetSidecarDBName(ctx, keyspace)
-		if err != nil {
-			return sdbname, err
-		}
-		sdbid = sqlparser.String(sqlparser.NewIdentifierCS(sdbname))
-		sidecarDBIdentifiers.Store(keyspace, sdbid)
-	}
-	return sdbid.(string), nil
 }
