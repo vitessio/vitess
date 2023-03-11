@@ -1357,10 +1357,12 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 
 			// Set up consolidator pre-conditions.
 
-			fakeConsolidator.CreateReturnCreated = !tcase.consolidatorHasIdenticalQuery
 			fakePendingResult := &sync2.FakePendingResult{}
 			fakePendingResult.SetResult(result)
-			fakeConsolidator.CreateReturnPendingResult = fakePendingResult
+			fakeConsolidator.CreateReturn = &sync2.FakeConsolidatorCreateReturn{
+				Created:       !tcase.consolidatorHasIdenticalQuery,
+				PendingResult: fakePendingResult,
+			}
 
 			// Set up database query/response.
 

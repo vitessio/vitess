@@ -22,15 +22,22 @@ type FakeConsolidator struct {
 	// CreateCalls can be used to inspect Create calls.
 	CreateCalls []string
 	// CreateReturns can be used to inspect Create return values.
-	CreateReturns []PendingResult
-	// CreateReturnCreated pre-configures the "created" bool returned in Create
-	// calls.
-	CreateReturnCreated bool
-	// CreateReturnPendingResult pre-configures the PendingResult returned in
-	// Create calls.
-	CreateReturnPendingResult PendingResult
+	CreateReturns []*FakeConsolidatorCreateReturn
+	// CreateReturnCreated pre-configures the return value of Create calls.
+	CreateReturn *FakeConsolidatorCreateReturn
 	// RecordCalls can be usd to inspect Record calls.
 	RecordCalls []string
+}
+
+// FakeConsolidatorCreateReturn wraps the two return values of a call to
+// FakeConsolidator.Create.
+type FakeConsolidatorCreateReturn struct {
+	// PendingResult contains the PendingResult return value of a call to
+	// FakeConsolidator.Create.
+	PendingResult
+	// PendingResult contains the Created return value of a call to
+	// FakeConsolidator.Create.
+	Created bool
 }
 
 // FakePendingResult satisies the PendingResult interface and can be used to
@@ -58,8 +65,8 @@ func NewFakeConsolidator() *FakeConsolidator {
 // pre-configured PendingResult and "created" bool.
 func (fc *FakeConsolidator) Create(sql string) (PendingResult, bool) {
 	fc.CreateCalls = append(fc.CreateCalls, sql)
-	fc.CreateReturns = append(fc.CreateReturns, fc.CreateReturnPendingResult)
-	return fc.CreateReturnPendingResult, fc.CreateReturnCreated
+	fc.CreateReturns = append(fc.CreateReturns, fc.CreateReturn)
+	return fc.CreateReturn.PendingResult, fc.CreateReturn.Created
 }
 
 // Record records the Record call for later verification.
