@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"fmt"
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
@@ -176,16 +175,10 @@ func ToNative(v sqltypes.Value) (any, error) {
 	return out, err
 }
 
-func NormalizeValue(v sqltypes.Value, coll collations.ID) string {
+func NormalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	typ := v.Type()
-	if typ == sqltypes.Null {
-		return "NULL"
-	}
 	if typ == sqltypes.VarChar && coll == collations.CollationBinaryID {
-		return fmt.Sprintf("VARBINARY(%q)", v.Raw())
-	}
-	if v.IsQuoted() || typ == sqltypes.Bit {
-		return fmt.Sprintf("%v(%q)", typ, v.Raw())
+		return sqltypes.NewVarBinary(string(v.Raw()))
 	}
 	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
 		var bitsize = 64
@@ -196,7 +189,7 @@ func NormalizeValue(v sqltypes.Value, coll collations.ID) string {
 		if err != nil {
 			panic(err)
 		}
-		return fmt.Sprintf("%v(%s)", typ, FormatFloat(typ, f))
+		return sqltypes.MakeTrusted(typ, FormatFloat(typ, f))
 	}
-	return fmt.Sprintf("%v(%s)", typ, v.Raw())
+	return v
 }

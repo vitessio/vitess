@@ -19,6 +19,9 @@ package testcases
 import (
 	"math"
 	"strconv"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var inputJSONObjects = []string{
@@ -55,6 +58,23 @@ var inputBitwise = []string{
 	`"foobar"`, `"foobar1234"`, `"0"`, "0x1", "-0x1", "X'ff'", "X'00'",
 	`"1abcd"`, "NULL", `_binary "foobar"`, `_binary "foobar1234"`,
 	"64", "'64'", "_binary '64'", "X'40'", "_binary X'40'",
+}
+
+var radianInputs = []string{
+	"0",
+	"1",
+	"-1",
+	"'1.5'",
+	"NULL",
+	"'ABC'",
+	"1.5e0",
+	"-1.5e0",
+	"9223372036854775810.4",
+	"-9223372036854775810.4",
+	string(evalengine.FormatFloat(sqltypes.Float64, math.Pi)),
+	string(evalengine.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
+	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
+	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
 }
 
 var inputComparisonElement = []string{

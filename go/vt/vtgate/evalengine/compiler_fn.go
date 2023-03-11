@@ -51,6 +51,26 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_FLOOR(call)
 	case *builtinAbs:
 		return c.compileFn_ABS(call)
+	case *builtinPi:
+		return c.compileFn_PI(call)
+	case *builtinAcos:
+		return c.compileFn_ACOS(call)
+	case *builtinAsin:
+		return c.compileFn_ASIN(call)
+	case *builtinAtan:
+		return c.compileFn_ATAN(call)
+	case *builtinAtan2:
+		return c.compileFn_ATAN2(call)
+	case *builtinCos:
+		return c.compileFn_COS(call)
+	case *builtinSin:
+		return c.compileFn_SIN(call)
+	case *builtinTan:
+		return c.compileFn_TAN(call)
+	case *builtinDegrees:
+		return c.compileFn_DEGREES(call)
+	case *builtinRadians:
+		return c.compileFn_RADIANS(call)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
 	default:
@@ -443,6 +463,192 @@ func (c *compiler) compileFn_ABS(expr *builtinAbs) (ctype, error) {
 
 	c.asm.jumpDestination(skip)
 	return convt, nil
+}
+
+func (c *compiler) compileFn_PI(expr *builtinPi) (ctype, error) {
+	c.asm.Fn_PI()
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_ACOS(expr *builtinAcos) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_ACOS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: flagNullable}, nil
+}
+
+func (c *compiler) compileFn_ASIN(expr *builtinAsin) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_ASIN()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: flagNullable}, nil
+}
+
+func (c *compiler) compileFn_ATAN(expr *builtinAtan) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_ATAN()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_ATAN2(expr *builtinAtan2) (ctype, error) {
+	arg1, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	arg2, err := c.compileExpr(expr.Arguments[1])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(arg1, arg2)
+
+	switch {
+	case sqltypes.IsFloat(arg1.Type) && sqltypes.IsFloat(arg2.Type):
+	case sqltypes.IsFloat(arg1.Type):
+		c.asm.Convert_xf(1)
+	case sqltypes.IsFloat(arg2.Type):
+		c.asm.Convert_xf(2)
+	default:
+		c.asm.Convert_xf(2)
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_ATAN2()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_COS(expr *builtinCos) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_COS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_SIN(expr *builtinSin) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_SIN()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_TAN(expr *builtinTan) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_TAN()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_DEGREES(expr *builtinDegrees) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_DEGREES()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_RADIANS(expr *builtinRadians) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_RADIANS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
 }
 
 func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, error) {

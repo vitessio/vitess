@@ -50,6 +50,17 @@ type CaseExprWithPredicate struct{ defaultEnv }
 type Ceil struct{ defaultEnv }
 type Floor struct{ defaultEnv }
 type Abs struct{ defaultEnv }
+type Pi struct{ defaultEnv }
+type Acos struct{ defaultEnv }
+type Asin struct{ defaultEnv }
+type Atan struct{ defaultEnv }
+type Atan2 struct{ defaultEnv }
+type Cos struct{ defaultEnv }
+type Cot struct{ defaultEnv }
+type Sin struct{ defaultEnv }
+type Tan struct{ defaultEnv }
+type Degrees struct{ defaultEnv }
+type Radians struct{ defaultEnv }
 type CaseExprWithValue struct{ defaultEnv }
 type Base64 struct{ defaultEnv }
 type Conversion struct{ defaultEnv }
@@ -92,6 +103,17 @@ var Cases = []TestCase{
 	Ceil{},
 	Floor{},
 	Abs{},
+	Pi{},
+	Acos{},
+	Asin{},
+	Atan{},
+	Atan2{},
+	Cos{},
+	Cot{},
+	Sin{},
+	Tan{},
+	Degrees{},
+	Radians{},
 	CaseExprWithValue{},
 	Base64{},
 	Conversion{},
@@ -280,6 +302,116 @@ func (Abs) Test(yield Iterator) {
 
 	for _, num := range inputBitwise {
 		yield(fmt.Sprintf("ABS(%s)", num), nil)
+	}
+}
+
+func (Pi) Test(yield Iterator) {
+	yield("PI()+0.000000000000000000", nil)
+}
+
+func (Acos) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ACOS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ACOS(%s)", num), nil)
+	}
+}
+
+func (Asin) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ASIN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ASIN(%s)", num), nil)
+	}
+}
+
+func (Atan) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ATAN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ATAN(%s)", num), nil)
+	}
+}
+
+func (Atan2) Test(yield Iterator) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func (Cos) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("COS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("COS(%s)", num), nil)
+	}
+}
+
+func (Cot) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("COT(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("COT(%s)", num), nil)
+	}
+}
+
+func (Sin) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SIN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SIN(%s)", num), nil)
+	}
+}
+
+func (Tan) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("TAN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("TAN(%s)", num), nil)
+	}
+}
+
+func (Degrees) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("DEGREES(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("DEGREES(%s)", num), nil)
+	}
+}
+
+func (Radians) Test(yield Iterator) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
 	}
 }
 

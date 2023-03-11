@@ -1043,6 +1043,98 @@ func (asm *assembler) Fn_ABS_f() {
 	}, "FN ABS FLOAT64(SP-1)")
 }
 
+func (asm *assembler) Fn_PI() {
+	asm.adjustStack(1)
+	asm.emit(func(vm *VirtualMachine) int {
+		vm.stack[vm.sp] = vm.arena.newEvalFloat(math.Pi)
+		vm.sp++
+		return 1
+	}, "FN PI")
+}
+
+func (asm *assembler) Fn_ACOS() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		if f.f < -1 || f.f > 1 {
+			vm.stack[vm.sp-1] = nil
+			return 1
+		}
+		f.f = math.Acos(f.f)
+		return 1
+	}, "FN ACOS FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ASIN() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		if f.f < -1 || f.f > 1 {
+			vm.stack[vm.sp-1] = nil
+			return 1
+		}
+		f.f = math.Asin(f.f)
+		return 1
+	}, "FN ASIN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ATAN() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = math.Atan(f.f)
+		return 1
+	}, "FN ATAN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_ATAN2() {
+	asm.adjustStack(-1)
+	asm.emit(func(vm *VirtualMachine) int {
+		f1 := vm.stack[vm.sp-2].(*evalFloat)
+		f2 := vm.stack[vm.sp-1].(*evalFloat)
+		f1.f = math.Atan2(f1.f, f2.f)
+		vm.sp--
+		return 1
+	}, "FN ATAN2 FLOAT64(SP-2) FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_COS() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = math.Cos(f.f)
+		return 1
+	}, "FN COS FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_SIN() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = math.Sin(f.f)
+		return 1
+	}, "FN SIN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_TAN() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = math.Tan(f.f)
+		return 1
+	}, "FN TAN FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_DEGREES() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = f.f * (180 / math.Pi)
+		return 1
+	}, "FN DEGREES FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Fn_RADIANS() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = f.f * (math.Pi / 180)
+		return 1
+	}, "FN RADIANS FLOAT64(SP-1)")
+}
+
 func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
 	asm.emit(func(vm *VirtualMachine) int {
 		v := evalCollation(vm.stack[vm.sp-1])

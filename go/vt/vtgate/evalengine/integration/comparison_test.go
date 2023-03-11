@@ -115,7 +115,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	local, localType, localErr := evaluateLocalEvalengine(env, localQuery)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
-	var localVal, remoteVal string
+	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
 	if localErr == nil {
 		v := local.Value()
@@ -129,7 +129,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		if debugNormalize {
 			localVal = evalengine.NormalizeValue(v, local.Collation())
 		} else {
-			localVal = v.String()
+			localVal = v
 		}
 		if debugCheckTypes && localType != -1 {
 			tt := v.Type()
@@ -143,7 +143,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		if debugNormalize {
 			remoteVal = evalengine.NormalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
 		} else {
-			remoteVal = remote.Rows[0][0].String()
+			remoteVal = remote.Rows[0][0]
 		}
 		if debugCheckCollations {
 			if remote.Rows[0][0].IsNull() {
@@ -158,7 +158,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation); diff != "" {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", diff, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
-		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal, remoteVal, localQuery, env.Row)
+		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
 	}
 }
 
