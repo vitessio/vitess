@@ -119,6 +119,21 @@ func TestAll(t *testing.T) {
 			sidecardbname: "_vt-test",
 			want:          "`_vt-test`",
 		},
+		{
+			name:     "destroy cache and create a new one",
+			keyspace: "ks5",
+			preHook: func() error {
+				cache.Destroy()                       // clears the cache and will require a re-load
+				delete(sidecarDBIdentifierMap, "ks5") // delete from the backing database
+				newcache := NewIdentifierCache(loadFunc)
+				if newcache == cache {
+					return fmt.Errorf("cache should have been destroyed")
+				}
+				cache = newcache
+				return nil
+			},
+			wantErr: errors.New("keyspace ks5 not found"),
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

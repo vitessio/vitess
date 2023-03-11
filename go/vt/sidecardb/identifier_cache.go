@@ -63,18 +63,6 @@ func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) 
 	return instance
 }
 
-// NewTestIdentifierCache returns an initialized cache struct. This is
-// NOT a singleton and allows you to override the global instance used
-// outside of unit tests.
-// NOTE: This should ONLY be used in unit tests and NOT in production!
-func NewTestIdentifierCache(loadFunc func(context.Context, string) (string, error)) *IdentifierCache {
-	instance = &IdentifierCache{
-		load:                 loadFunc,
-		sidecarDBIdentifiers: sync.Map{},
-	}
-	return instance
-}
-
 func GetIdentifierCache() (*IdentifierCache, error) {
 	if instance == nil {
 		return nil, vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheUninitialized)
@@ -118,4 +106,13 @@ func (ic *IdentifierCache) Delete(keyspace string) {
 // Clear empties out the cache.
 func (ic *IdentifierCache) Clear() {
 	ic.sidecarDBIdentifiers = sync.Map{}
+}
+
+// Destroy clears the existing cache and sets the singleton instance
+// to nil so that a new cache can be created.
+// Note: this should ONLY be used in unit tests and NOT in production
+// as it breaks the singleton pattern!
+func (ic *IdentifierCache) Destroy() {
+	ic.Clear()
+	instance = nil
 }

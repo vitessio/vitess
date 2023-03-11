@@ -347,7 +347,7 @@ func (ts *Server) GetOrCreateShard(ctx context.Context, keyspace, shard string) 
 	// then on immutable. Any other tablets that try to come up in
 	// this keyspace will be able to serve queries but will fail to
 	// fully initialize and perform certain operations (e.g.
-	// OnlineDLD or VReplication workflows) if they are using a
+	// OnlineDDL or VReplication workflows) if they are using a
 	// different sidecar database name.
 	ksi := topodatapb.Keyspace{SidecarDbName: sidecardb.GetName()}
 	if err = ts.CreateKeyspace(ctx, keyspace, &ksi); err != nil && !IsErrType(err, NodeExists) {

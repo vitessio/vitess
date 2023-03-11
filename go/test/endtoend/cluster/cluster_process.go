@@ -43,12 +43,14 @@ import (
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	// Ensure dialers are registered (needed by ExecOnTablet and ExecOnVTGate).
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -809,6 +811,24 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 		}
 	}
 	return nil
+}
+
+// WaitForVTGateAndVTTablets waits for as long as you like for the vtgate and any
+// vttablets to be healthy.
+func (cluster *LocalProcessCluster) WaitForVTGateAndVTTablets(howlong time.Duration) error {
+	timeout := time.After(howlong)
+	for {
+		select {
+		case <-timeout:
+			return vterrors.New(vtrpcpb.Code_CANCELED, "timed out waiting for cluster to become healthy")
+		default:
+			err := cluster.WaitForTabletsToHealthyInVtgate()
+			if err != nil {
+				continue
+			}
+			return nil
+		}
+	}
 }
 
 // ExecOnTablet executes a query on the local cluster Vttablet and returns the

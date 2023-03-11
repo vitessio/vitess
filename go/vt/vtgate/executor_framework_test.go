@@ -134,9 +134,13 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	s.VSchema = executorVSchema
 	serv := newSandboxForCells([]string{cell})
 	serv.topoServer.CreateKeyspace(context.Background(), "TestExecutor", &topodatapb.Keyspace{SidecarDbName: sidecardb.DefaultName})
-	// Create a cache to use for lookups of the sidecar database identifier
-	// in use by each keyspace.
-	sidecardb.NewTestIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+	// Force a new cache to use for lookups of the sidecar database identifier
+	// in use by each keyspace -- as we want to use a different load function
+	// than the one already created by the vtgate as it uses a different topo.
+	if sdbc, _ := sidecardb.GetIdentifierCache(); sdbc != nil {
+		sdbc.Destroy()
+	}
+	sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
 		ki, err := serv.topoServer.GetKeyspace(ctx, keyspace)
 		if err != nil {
 			return "", err

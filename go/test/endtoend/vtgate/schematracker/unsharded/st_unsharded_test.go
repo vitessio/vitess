@@ -25,9 +25,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/test/endtoend/utils"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sidecardb"
-	"vitess.io/vitess/go/vt/vterrors"
 
 	"github.com/stretchr/testify/require"
 
@@ -98,7 +96,7 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
-		err = waitForVTGateAndVTTablets()
+		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
 		if err != nil {
 			fmt.Println(err)
 			return 1
@@ -111,22 +109,6 @@ func TestMain(m *testing.M) {
 		return m.Run()
 	}()
 	os.Exit(exitCode)
-}
-
-func waitForVTGateAndVTTablets() error {
-	timeout := time.After(5 * time.Minute)
-	for {
-		select {
-		case <-timeout:
-			return vterrors.New(vtrpcpb.Code_INTERNAL, "timed out waiting for cluster to become healthy")
-		default:
-			err := clusterInstance.WaitForTabletsToHealthyInVtgate()
-			if err != nil {
-				continue
-			}
-			return nil
-		}
-	}
 }
 
 func TestNewUnshardedTable(t *testing.T) {
