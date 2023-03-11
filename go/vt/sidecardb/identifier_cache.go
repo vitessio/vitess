@@ -83,19 +83,19 @@ func GetIdentifierCache() (*IdentifierCache, error) {
 	}
 }
 
-// GetForKeyspace returns an sqlparser string built from an
-// IdentifierCS using the sidecar database name stored in
-// the database. This provides a read through cache.
-func (sc *IdentifierCache) GetForKeyspace(keyspace string) (string, error) {
-	if sc.load == nil {
+// Get returns an sqlparser string built from an IdentifierCS using
+// the sidecar database name stored in the database. This provides a
+// read through cache.
+func (ic *IdentifierCache) Get(keyspace string) (string, error) {
+	if ic.load == nil {
 		return "", vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction)
 	}
-	sdbid, ok := sc.sidecarDBIdentifiers.Load(keyspace)
+	sdbid, ok := ic.sidecarDBIdentifiers.Load(keyspace)
 	if !ok || sdbid == nil || sdbid == "" {
 		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
 		defer cancel()
 
-		sdbname, err := sc.load(ctx, keyspace)
+		sdbname, err := ic.load(ctx, keyspace)
 		if err != nil {
 			return "", err
 		}
@@ -104,7 +104,15 @@ func (sc *IdentifierCache) GetForKeyspace(keyspace string) (string, error) {
 		}
 
 		sdbid = sqlparser.String(sqlparser.NewIdentifierCS(sdbname))
-		sc.sidecarDBIdentifiers.Store(keyspace, sdbid)
+		ic.sidecarDBIdentifiers.Store(keyspace, sdbid)
 	}
 	return sdbid.(string), nil
+}
+
+func (ic *IdentifierCache) Delete(keyspace string) {
+	ic.sidecarDBIdentifiers.Delete(keyspace)
+}
+
+func (ic *IdentifierCache) Clear() {
+	ic.sidecarDBIdentifiers = sync.Map{}
 }

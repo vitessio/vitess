@@ -99,17 +99,17 @@ func TestAll(t *testing.T) {
 				err := tt.preHook()
 				require.NoError(t, err)
 			}
-			got, err := cache.GetForKeyspace(tt.keyspace)
+			got, err := cache.Get(tt.keyspace)
 			if tt.postHook != nil {
 				err := tt.postHook()
 				require.NoError(t, err)
 			}
 			if tt.wantErr != emptyErr && (err == nil || tt.wantErr.Error() != err.Error()) {
-				t.Errorf("cache.GetIdentifierForKeyspace() produced error: %v, wanted error: %v", err, tt.wantErr)
+				t.Errorf("cache.Get() produced error: %v, wanted error: %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("cache.GetIdentifierForKeyspace() returned: %v, wanted: %v", got, tt.want)
+				t.Errorf("cache.Get() returned: %v, wanted: %v", got, tt.want)
 			}
 		})
 	}
