@@ -383,11 +383,11 @@ func (si *schemaInit) getCurrentSchema(tableName string) (string, error) {
 	return currentTableSchema, nil
 }
 
-// findTableSchemaDiff gets the diff that needs to be applied
-// to current table schema to get the desired one. Will be an
-// empty string if they match.
+// findTableSchemaDiff gets the diff which needs to be applied
+// to the current table schema in order toreach the desired one.
+// The result will be an empty string if they match.
 // This will be a CREATE statement if the table does not exist
-// or an ALTER if table exists but has a different schema.
+// or an ALTER if the table exists but has a different schema.
 func (si *schemaInit) findTableSchemaDiff(tableName, current, desired string) (string, error) {
 	hints := &schemadiff.DiffHints{
 		TableCharsetCollateStrategy: schemadiff.TableCharsetCollateIgnoreAlways,
@@ -531,8 +531,8 @@ func AddSchemaInitQueries(db *fakesqldb.DB, populateTables bool) {
 	db.AddQuery("set @@session.sql_mode=''", &sqltypes.Result{})
 }
 
-// MatchesInitQuery returns true if query has one of the test
-// patterns as a substring, or it matches a provided regexp.
+// MatchesInitQuery returns true if the query has one of the
+// test patterns as a substring or it matches a provided regexp.
 // This is for unit tests only!
 func MatchesInitQuery(query string) bool {
 	query = strings.ToLower(query)

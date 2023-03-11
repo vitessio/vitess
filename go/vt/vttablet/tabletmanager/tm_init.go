@@ -497,7 +497,7 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	// If the keyspace exists but this is the first tablet added, then
 	// update the keyspace record to the default.
 	if ks.SidecarDbName == "" {
-		ks.SidecarDbName = sidecardb.GetName()
+		ks.SidecarDbName = sidecardb.DefaultName
 		ctx, unlock, lockErr := tm.TopoServer.LockKeyspace(ctx, tablet.Keyspace, "Setting sidecar database name")
 		if lockErr != nil {
 			return nil, vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")

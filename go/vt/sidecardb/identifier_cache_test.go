@@ -40,6 +40,7 @@ func TestAll(t *testing.T) {
 	// Create a cache to use for lookups of the sidecar database identifier
 	// in use by each keyspace.
 	cache := NewIdentifierCache(loadFunc)
+	var emptyErr error
 	tests := []struct {
 		name          string
 		keyspace      string
@@ -103,12 +104,12 @@ func TestAll(t *testing.T) {
 				err := tt.postHook()
 				require.NoError(t, err)
 			}
-			if err != nil && err.Error() != tt.wantErr.Error() {
-				t.Errorf("cache.GetIdentifierForKeyspace() error = %v, wantErr: %v", err, tt.wantErr)
+			if tt.wantErr != emptyErr && (err == nil || tt.wantErr.Error() != err.Error()) {
+				t.Errorf("cache.GetIdentifierForKeyspace() produced error: %v, wanted error: %v", err, tt.wantErr)
 				return
 			}
 			if got != tt.want {
-				t.Errorf("cache.GetIdentifierForKeyspace() = %v, want %v", got, tt.want)
+				t.Errorf("cache.GetIdentifierForKeyspace() returned: %v, wanted: %v", got, tt.want)
 			}
 		})
 	}

@@ -95,7 +95,14 @@ func VtctldClientProcessInstance(hostname string, grpcPort int, tmpDirectory str
 
 // CreateKeyspace executes the vtctl command to create a keyspace
 func (vtctldclient *VtctldClientProcess) CreateKeyspace(keyspaceName string, sidecarDBName string) (err error) {
-	output, err := vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--sidecar-db-name", sidecarDBName)
+	var output string
+	// For upgrade/downgrade tests where an older version is also used.
+	if vtctldclient.VtctldClientMajorVersion < 17 {
+		log.Errorf("CreateKeyspace does not support the --sidecar-db-name flag in vtctl version %d; ignoring...", vtctldclient.VtctldClientMajorVersion)
+		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName)
+	} else {
+		output, err = vtctldclient.ExecuteCommandWithOutput("CreateKeyspace", keyspaceName, "--sidecar-db-name", sidecarDBName)
+	}
 	if err != nil {
 		log.Errorf("CreateKeyspace returned err: %s, output: %s", err, output)
 	}
