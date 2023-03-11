@@ -86,6 +86,34 @@ func TestAll(t *testing.T) {
 			wantErr: vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction),
 		},
 		{
+			name:     "delete keyspace",
+			keyspace: "ksdel",
+			preHook: func() error {
+				cache.Delete("ksdel")                   // delete from the cache so we re-load
+				delete(sidecarDBIdentifierMap, "ksdel") // delete from the backing database
+				return nil
+			},
+			wantErr: errors.New("keyspace ksdel not found"),
+		},
+		{
+			name:     "clear cache",
+			keyspace: "ksalldel",
+			preHook: func() error {
+				cache.Clear()                                // clear the cache so we re-load
+				sidecarDBIdentifierMap = map[string]string{} // clear the backing database
+				return nil
+			},
+			postHook: func() error {
+				// Make sure previous entries are also now gone
+				_, err := cache.Get("ks1")
+				require.Equal(t, err, errors.New("keyspace ks1 not found"))
+				_, err = cache.Get("ks3")
+				require.Equal(t, err, errors.New("keyspace ks3 not found"))
+				return nil
+			},
+			wantErr: errors.New("keyspace ksalldel not found"),
+		},
+		{
 			name:          "sidecar database name that needs escaping",
 			keyspace:      "ks4",
 			sidecardbname: "_vt-test",

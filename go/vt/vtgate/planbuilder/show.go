@@ -268,11 +268,11 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sidecarDBCache, err := sidecardb.GetIdentifierCache()
+	sdbidc, err := sidecardb.GetIdentifierCache()
 	if err != nil {
 		return nil, err
 	}
-	sidecarDBID, err := sidecarDBCache.Get(ks.Name)
+	sidecarDBID, err := sdbidc.Get(ks.Name)
 	if err != nil {
 		return nil, vterrors.Wrapf(err, "failed to read sidecar database identifier for keyspace %q from the cache",
 			ks.Name)

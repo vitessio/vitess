@@ -109,10 +109,13 @@ func (ic *IdentifierCache) Get(keyspace string) (string, error) {
 	return sdbid.(string), nil
 }
 
+// Delete removes an entry from the cache. It is idempotent and
+// will always delete the entry IF it exists.
 func (ic *IdentifierCache) Delete(keyspace string) {
 	ic.sidecarDBIdentifiers.Delete(keyspace)
 }
 
+// Clear empties out the cache.
 func (ic *IdentifierCache) Clear() {
 	ic.sidecarDBIdentifiers = sync.Map{}
 }
