@@ -1293,7 +1293,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			expectConsolidate:             true,
 			expectExec:                    false,
 			input:                         "select * from t limit 10001",
- 		},
+		},
 		{
 			consolidatorEnabledByDefault:  true,
 			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
@@ -1301,7 +1301,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			expectConsolidate:             false,
 			expectExec:                    true,
 			input:                         "select * from t limit 10001",
- 		},
+		},
 		{
 			consolidatorEnabledByDefault:  false,
 			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_DISABLED,
@@ -1309,7 +1309,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			expectConsolidate:             false,
 			expectExec:                    true,
 			input:                         "select * from t limit 10001",
- 		},
+		},
 		{
 			consolidatorEnabledByDefault:  false,
 			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
@@ -1317,7 +1317,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			expectConsolidate:             true,
 			expectExec:                    true,
 			input:                         "select * from t limit 10001",
- 		},
+		},
 		{
 			consolidatorEnabledByDefault:  false,
 			consolidatorExecuteOption:     querypb.ExecuteOptions_CONSOLIDATOR_ENABLED,
@@ -1325,11 +1325,11 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			expectConsolidate:             true,
 			expectExec:                    false,
 			input:                         "select * from t limit 10001",
- 		},
+		},
 	}
 	for _, tcase := range testCases {
 		name := fmt.Sprintf("table-consolidator:%t;query-consolidator:%v;identical-query:%t",
-				tcase.consolidatorEnabledByDefault, tcase.consolidatorExecuteOption, tcase.consolidatorHasIdenticalQuery)
+			tcase.consolidatorEnabledByDefault, tcase.consolidatorExecuteOption, tcase.consolidatorHasIdenticalQuery)
 		t.Run(name, func(t *testing.T) {
 			// Set up fake db, tablet server (with fake consolidator), and executor.
 
@@ -1341,7 +1341,7 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			if tcase.consolidatorEnabledByDefault {
 				flags = enableConsolidator
 			}
- 
+
 			tsv := newTestTabletServer(ctx, flags, db)
 			defer tsv.StopService()
 
@@ -1354,7 +1354,6 @@ func TestQueryExecutorShouldConsolidate(t *testing.T) {
 			result := &sqltypes.Result{
 				Fields: getTestTableFields(),
 			}
-
 
 			// Set up consolidator pre-conditions.
 
