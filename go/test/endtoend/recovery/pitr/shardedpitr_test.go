@@ -430,14 +430,10 @@ func initializeCluster(t *testing.T) {
 	sql := string(initDb)
 	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
 	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
-	if err != nil {
-		require.NoError(t, err, "expected to load init_db file")
-	}
+	require.NoError(t, err, "expected to load init_db file")
 	initDBFileWithPassword = path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
-	err = os.WriteFile(initDBFileWithPassword, []byte(sql), 0666)
-	if err != nil {
-		require.NoError(t, err, "expected to load init_db file")
-	}
+	err = os.WriteFile(initDBFileWithPassword, []byte(sql), 0660)
+	require.NoError(t, err, "expected to load init_db file")
 
 	// Start MySql
 	var mysqlCtlProcessList []*exec.Cmd
@@ -523,9 +519,7 @@ func testTabletRecovery(t *testing.T, binlogServer *binLogServer, lookupTimeout,
 
 func launchRecoveryTablet(t *testing.T, tablet *cluster.Vttablet, binlogServer *binLogServer, lookupTimeout, restoreKeyspaceName, shardName string) {
 	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-	if err != nil {
-		require.NoError(t, err)
-	}
+	require.NoError(t, err)
 	tablet.MysqlctlProcess = *mysqlctlProcess
 	extraArgs := []string{"--db-credentials-file", dbCredentialFile}
 	tablet.MysqlctlProcess.InitDBFile = initDBFileWithPassword

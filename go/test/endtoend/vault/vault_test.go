@@ -256,14 +256,10 @@ func initializeClusterLate(t *testing.T) {
 	sql := string(initDb)
 	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
 	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(clusterInstance), "")
-	if err != nil {
-		require.NoError(t, err, "expected to load init_db file")
-	}
+	require.NoError(t, err, "expected to load init_db file")
 	newInitDBFile := path.Join(clusterInstance.TmpDirectory, "init_db_with_passwords.sql")
-	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
-	if err != nil {
-		require.NoError(t, err, "expected to load init_db file")
-	}
+	err = os.WriteFile(newInitDBFile, []byte(sql), 0660)
+	require.NoError(t, err, "expected to load init_db file")
 
 	// Start MySQL
 	var mysqlCtlProcessList []*exec.Cmd

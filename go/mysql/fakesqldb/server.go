@@ -795,7 +795,6 @@ func (db *DB) GetRejectedQueryResult(key string) error {
 
 // GetQueryResult checks for explicit queries add through AddQuery().
 func (db *DB) GetQueryResult(key string) *ExpectedResult {
-
 	result, ok := db.data[key]
 	if ok {
 		return result
@@ -803,7 +802,7 @@ func (db *DB) GetQueryResult(key string) *ExpectedResult {
 	return nil
 }
 
-// GetQueryPatternResult checks if query matches ay pattern from AddQueryPattern().
+// GetQueryPatternResult checks if a query matches any pattern previously added using AddQueryPattern().
 func (db *DB) GetQueryPatternResult(key string) (func(string), ExpectedResult, bool, error) {
 	for _, pat := range db.patternData {
 		if pat.expr.MatchString(key) {

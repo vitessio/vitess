@@ -291,9 +291,9 @@ func convertToMap(input interface{}) map[string]interface{} {
 func GetInitDBSQL(initDBSQL string, updatedPasswords string, oldAlterTableMode string) (string, error) {
 	// Since password update is DML we need to insert it before we disable
 	// super_read_only therefore doing the split below.
-	splitString := strings.Split(initDBSQL, "# add custom sql here")
-	if len(splitString) < 2 {
-		return "", fmt.Errorf("missing `# add custom sql here` in init_db.sql file")
+	splitString := strings.Split(initDBSQL, "# {{custom_sql}}")
+	if len(splitString) != 2 {
+		return "", fmt.Errorf("missing `# {{custom_sql}}` in init_db.sql file")
 	}
 	var builder strings.Builder
 	builder.WriteString(splitString[0])

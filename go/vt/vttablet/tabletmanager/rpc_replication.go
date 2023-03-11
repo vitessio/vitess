@@ -41,7 +41,7 @@ var disableReplicationManager bool
 
 func registerReplicationFlags(fs *pflag.FlagSet) {
 	fs.Bool("use_super_read_only", true, "Set super_read_only flag when performing planned failover.")
-	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always start with super_read_only=ON")
+	fs.MarkDeprecated("use_super_read_only", "From v17 onwards MySQL server will always try to start with super_read_only=ON")
 	fs.BoolVar(&disableReplicationManager, "disable-replication-manager", disableReplicationManager, "Disable replication manager to prevent replication repairs.")
 	fs.MarkDeprecated("disable-replication-manager", "Replication manager is deleted")
 }
@@ -306,7 +306,7 @@ func (tm *TabletManager) InitPrimary(ctx context.Context, semiSync bool) (string
 
 	// Setting super_read_only `OFF` so that we can run the DDL commands
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(false); err != nil {
-		if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return "", err
@@ -472,7 +472,7 @@ func (tm *TabletManager) demotePrimary(ctx context.Context, revertPartialFailure
 	// previous demotion, or because we are not primary anyway, this should be
 	// idempotent.
 	if _, err := tm.MysqlDaemon.SetSuperReadOnly(true); err != nil {
-		if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
+		if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
 			log.Warningf("server does not know about super_read_only, continuing anyway...")
 		} else {
 			return nil, err

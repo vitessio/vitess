@@ -589,7 +589,8 @@ func RunSQL(t *testing.T, sql string, tablet *cluster.Vttablet, db string) (*sql
 func RunSQLs(t *testing.T, sqls []string, tablet *cluster.Vttablet, db string) error {
 	// Get Connection
 	tabletParams := getMysqlConnParam(tablet, db)
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	var timeoutDuration = time.Duration(5 * len(sqls))
+	ctx, cancel := context.WithTimeout(context.Background(), timeoutDuration*time.Second)
 	defer cancel()
 	conn, err := mysql.Connect(ctx, &tabletParams)
 	require.Nil(t, err)

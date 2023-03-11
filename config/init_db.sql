@@ -1,5 +1,4 @@
-# This file is executed immediately after mysql_install_db,
-# to initialize a fresh data directory.
+# This file is executed immediately after initializing a fresh data directory.
 
 ###############################################################################
 # WARNING: This sql is *NOT* safe for production use,
@@ -85,7 +84,7 @@ RESET SLAVE ALL;
 RESET MASTER;
 
 # custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
-# add custom sql here
+# {{custom_sql}}
 
 # We need to set super_read_only back to what it was before
-SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'OFF');
+SET GLOBAL super_read_only=IFNULL(@original_super_read_only, 'ON');

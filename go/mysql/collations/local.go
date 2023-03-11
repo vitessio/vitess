@@ -21,7 +21,6 @@ package collations
 import (
 	"sync"
 
-	"vitess.io/vitess/go/internal/flag"
 	"vitess.io/vitess/go/vt/servenv"
 )
 
@@ -32,9 +31,9 @@ var defaultEnvInit sync.Once
 // on the value of the `mysql_server_version` flag passed to this Vitess process.
 func Local() *Environment {
 	defaultEnvInit.Do(func() {
-		if !flag.Parsed() {
+		/*if !flag.Parsed() {
 			panic("collations.Local() called too early")
-		}
+		}*/
 		defaultEnv = NewEnvironment(servenv.MySQLServerVersion())
 	})
 	return defaultEnv

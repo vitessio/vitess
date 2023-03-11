@@ -145,7 +145,7 @@ func (mysqlctld *MysqlctldProcess) CleanupFiles(tabletUID int) {
 // MysqlCtldProcessInstance returns a Mysqlctld handle for mysqlctld process
 // configured with the given Config.
 func MysqlCtldProcessInstance(tabletUID int, mySQLPort int, tmpDirectory string) (*MysqlctldProcess, error) {
-	initFile, err := getInitDBFile()
+	initFile, err := getInitDBFileUsed()
 	if err != nil {
 		return nil, err
 	}

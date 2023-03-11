@@ -57,6 +57,8 @@ func TestTabletInitialBackup(t *testing.T) {
 	//    - list the backups, remove them
 	defer cluster.PanicHandler(t)
 
+	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
+
 	vtBackup(t, true, false, false)
 	verifyBackupCount(t, shardKsName, 1)
 
@@ -304,7 +306,8 @@ func tearDown(t *testing.T, initMysql bool) {
 		_, err := primary.VttabletProcess.QueryTablet(fmt.Sprintf("drop database if exists %s", db), keyspaceName, true)
 		require.Nil(t, err)
 	}
-	waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
+	caughtUp := waitForReplicationToCatchup([]cluster.Vttablet{*replica1, *replica2})
+	require.True(t, caughtUp, "Timed out waiting for all replicas to catch up")
 	promoteCommands := "STOP SLAVE; RESET SLAVE ALL; RESET MASTER;"
 	disableSemiSyncCommands := "SET GLOBAL rpl_semi_sync_master_enabled = false; SET GLOBAL rpl_semi_sync_slave_enabled = false"
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1, *replica2} {

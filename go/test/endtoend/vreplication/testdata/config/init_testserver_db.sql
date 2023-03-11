@@ -1,5 +1,5 @@
 # This file is for testing purpose only.
-# This file is executed immediately after mysql_install_db, to initialize a fresh data directory.
+# This file is executed immediately after initializing a fresh data directory.
 # It is equivalent of init_db.sql. Given init_db.sql is for mysql which has super_read_only
 # related stuff therefore for testing purpose we avoid setting `super_read_only` during initialization.
 
@@ -88,4 +88,4 @@ RESET SLAVE ALL;
 RESET MASTER;
 
 # custom sql is used to add custom scripts like creating users/passwords. We use it in our tests
-# add custom sql here
+# {{custom_sql}}

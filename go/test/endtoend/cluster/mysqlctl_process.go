@@ -237,7 +237,7 @@ func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (
 // MysqlCtlProcessInstanceOptionalInit returns a Mysqlctl handle for mysqlctl process
 // configured with the given Config.
 func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirectory string, initMySQL bool) (*MysqlctlProcess, error) {
-	initFile, err := getInitDBFile()
+	initFile, err := getInitDBFileUsed()
 	if err != nil {
 		return nil, err
 	}
@@ -254,7 +254,7 @@ func MysqlCtlProcessInstanceOptionalInit(tabletUID int, mySQLPort int, tmpDirect
 	return mysqlctl, nil
 }
 
-func getInitDBFile() (string, error) {
+func getInitDBFileUsed() (string, error) {
 	versionStr, err := mysqlctl.GetVersionString()
 	if err != nil {
 		return "", err
@@ -266,6 +266,8 @@ func getInitDBFile() (string, error) {
 	if flavor == mysqlctl.FlavorMySQL || flavor == mysqlctl.FlavorPercona {
 		return path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"), nil
 	}
+	// Non-MySQL instances for example MariaDB, will use init_testserver_db.sql which does not contain super_read_only global variable.
+	// Even though MariaDB support is deprecated (https://github.com/vitessio/vitess/issues/9518) but we still support migration scenario.
 	return path.Join(os.Getenv("VTROOT"), "go/test/endtoend/vreplication/testdata/config/init_testserver_db.sql"), nil
 }
 

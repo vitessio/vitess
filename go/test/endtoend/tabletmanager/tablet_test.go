@@ -35,9 +35,8 @@ func TestEnsureDB(t *testing.T) {
 	// Create new tablet
 	tablet := clusterInstance.NewVttabletInstance("replica", 0, "")
 	mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-	if err != nil {
-		return
-	}
+	require.NoError(t, err)
+
 	tablet.MysqlctlProcess = *mysqlctlProcess
 	err = tablet.MysqlctlProcess.Start()
 	require.NoError(t, err)

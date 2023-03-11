@@ -75,35 +75,47 @@ func TestCreateMySQL(t *testing.T) {
 }
 
 func TestSetSuperReadOnlyMySQL(t *testing.T) {
+	require.NotNil(t, mysqld)
+	isSuperReadOnly, _ := mysqld.IsSuperReadOnly()
+	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
 	retFunc1, err := mysqld.SetSuperReadOnly(true)
-	assert.NotNil(t, retFunc1, "SetSuperReadOnly is suppose to return a defer function")
-	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
+	assert.NotNil(t, retFunc1, "SetSuperReadOnly is supposed to return a defer function")
+	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
 
-	// if value is already true then retFunc will be nil
+	isSuperReadOnly, _ = mysqld.IsSuperReadOnly()
+	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
+	// if value is already true then retFunc2 will be nil
 	retFunc2, err := mysqld.SetSuperReadOnly(true)
-	assert.Nil(t, retFunc2, "SetSuperReadOnly is suppose to return a nil function")
-	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
+	assert.Nil(t, retFunc2, "SetSuperReadOnly is supposed to return a nil function")
+	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
 
 	retFunc1()
-	isSuperReadOnly, _ := mysqld.IsSuperReadOnly()
+	isSuperReadOnly, _ = mysqld.IsSuperReadOnly()
 	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
 	isReadOnly, _ := mysqld.IsReadOnly()
 	assert.True(t, isReadOnly, "read_only should be set to True")
 
+	isSuperReadOnly, _ = mysqld.IsSuperReadOnly()
+	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
 	retFunc1, err = mysqld.SetSuperReadOnly(false)
-	assert.Nil(t, retFunc1, "SetSuperReadOnly is suppose to return a nil function")
-	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
+	assert.Nil(t, retFunc1, "SetSuperReadOnly is supposed to return a nil function")
+	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
 
-	_, _ = mysqld.SetSuperReadOnly(true)
+	_, err = mysqld.SetSuperReadOnly(true)
+	assert.NoError(t, err)
 
+	isSuperReadOnly, _ = mysqld.IsSuperReadOnly()
+	assert.True(t, isSuperReadOnly, "super_read_only should be set to True")
 	retFunc1, err = mysqld.SetSuperReadOnly(false)
-	assert.NotNil(t, retFunc1, "SetSuperReadOnly is suppose to return a defer function")
-	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
+	assert.NotNil(t, retFunc1, "SetSuperReadOnly is supposed to return a defer function")
+	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
 
-	// if value is already false then retFunc will be nil
+	isSuperReadOnly, _ = mysqld.IsSuperReadOnly()
+	assert.False(t, isSuperReadOnly, "super_read_only should be set to False")
+	// if value is already false then retFunc2 will be nil
 	retFunc2, err = mysqld.SetSuperReadOnly(false)
-	assert.Nil(t, retFunc2, "SetSuperReadOnly is suppose to return a nil function")
-	assert.Nil(t, err, "SetSuperReadOnly should not have failed")
+	assert.Nil(t, retFunc2, "SetSuperReadOnly is supposed to return a nil function")
+	assert.NoError(t, err, "SetSuperReadOnly should not have failed")
 
 	retFunc1()
 	isSuperReadOnly, _ = mysqld.IsSuperReadOnly()

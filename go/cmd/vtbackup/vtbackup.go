@@ -312,16 +312,16 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
-		// We need to switch off super_read_only before we create database.
+		// We need to switch off super_read_only before we create the database.
 		resetFunc, err := mysqld.SetSuperReadOnly(false)
 		if err != nil {
-			return fmt.Errorf("can't turn-off super_read_only during backup: %v", err)
+			return fmt.Errorf("failed to disable super_read_only during backup: %v", err)
 		}
 		if resetFunc != nil {
 			defer func() {
 				err := resetFunc()
 				if err != nil {
-					log.Info("not able to set super_read_only to its original value during backup")
+					log.Error("Failed to set super_read_only back to its original value during backup")
 				}
 			}()
 		}

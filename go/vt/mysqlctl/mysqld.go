@@ -667,7 +667,7 @@ func (mysqld *Mysqld) InitConfig(cnf *Mycnf) error {
 // generate / configure a my.cnf file install a skeleton database,
 // and apply the provided initial SQL file.
 func (mysqld *Mysqld) Init(ctx context.Context, cnf *Mycnf, initDBSQLFile string) error {
-	log.Infof("mysqlctl.Init with %s", initDBSQLFile)
+	log.Infof("mysqlctl.Init running with contents previously embedded from %s", initDBSQLFile)
 	err := mysqld.InitConfig(cnf)
 	if err != nil {
 		log.Errorf("%s", err.Error())
@@ -1258,7 +1258,7 @@ func (mysqld *Mysqld) applyBinlogFile(binlogFile string, includeGTIDs mysql.GTID
 		log.Infof("applyBinlogFile: disabling super_read_only")
 		resetFunc, err := mysqld.SetSuperReadOnly(false)
 		if err != nil {
-			if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
+			if sqlErr, ok := err.(*mysql.SQLError); ok && sqlErr.Number() == mysql.ERUnknownSystemVariable {
 				log.Warningf("applyBinlogFile: server does not know about super_read_only, continuing anyway...")
 			} else {
 				log.Errorf("applyBinlogFile: unexpected error while trying to set super_read_only: %v", err)

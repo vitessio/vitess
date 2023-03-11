@@ -270,40 +270,39 @@ func (mysqld *Mysqld) SetReadOnly(on bool) error {
 	return mysqld.ExecuteSuperQuery(context.TODO(), query)
 }
 
-// SetSuperReadOnly set/unset the super_read_only flag
+// SetSuperReadOnly set/unset the super_read_only flag.
 // Returns a function which is called to set super_read_only back to its original value.
 func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
 	//  return function for switching `OFF` super_read_only
-	var returnFunc ResetSuperReadOnlyFunc
-	var resetFunc = func() error {
+	var resetFunc ResetSuperReadOnlyFunc
+	var disableFunc = func() error {
 		query := "SET GLOBAL super_read_only = 'OFF'"
-		err := mysqld.ExecuteSuperQuery(context.TODO(), query)
+		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err
 	}
 
-	//  return function for switching `ON` super_read_only
-	var setFunc = func() error {
+	//  return function for switching `ON` super_read_only.
+	var enableFunc = func() error {
 		query := "SET GLOBAL super_read_only = 'ON'"
-		err := mysqld.ExecuteSuperQuery(context.TODO(), query)
+		err := mysqld.ExecuteSuperQuery(context.Background(), query)
 		return err
 	}
 
-	//var err error = nil
 	superReadOnlyEnabled, err := mysqld.IsSuperReadOnly()
 	if err != nil {
 		return nil, err
 	}
 
-	// If non-idempotent then set the right call-back
-	// We are asked to turn on super_read_only but original value is false
-	// then return resetFunc, that can be used as defer by caller
+	// If non-idempotent then set the right call-back.
+	// We are asked to turn on super_read_only but original value is false,
+	// therefore return disableFunc, that can be used as defer by caller.
 	if on && !superReadOnlyEnabled {
-		returnFunc = resetFunc
+		resetFunc = disableFunc
 	}
-	// We are asked to turn off super_read_only but original value is true
-	// then return setFunc, that can be used as defer by caller
+	// We are asked to turn off super_read_only but original value is true,
+	// therefore return enableFunc, that can be used as defer by caller.
 	if !on && superReadOnlyEnabled {
-		returnFunc = setFunc
+		resetFunc = enableFunc
 	}
 
 	query := "SET GLOBAL super_read_only = "
@@ -312,11 +311,11 @@ func (mysqld *Mysqld) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) 
 	} else {
 		query += "'OFF'"
 	}
-	if err := mysqld.ExecuteSuperQuery(context.TODO(), query); err != nil {
+	if err := mysqld.ExecuteSuperQuery(context.Background(), query); err != nil {
 		return nil, err
 	}
 
-	return returnFunc, nil
+	return resetFunc, nil
 }
 
 // WaitSourcePos lets replicas wait to given replication position

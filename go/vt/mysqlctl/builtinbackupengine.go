@@ -339,22 +339,30 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// get the read-only flag
 	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get read_only status")
+		return false, vterrors.Wrap(err, "failed to get read_only status")
 	}
 	superReadOnly, err = params.Mysqld.IsSuperReadOnly()
 	if err != nil {
 		return false, vterrors.Wrap(err, "can't get super_read_only status")
 	}
-	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%v", readOnly, superReadOnly)
+	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
 
 	// get the replication position
 	if sourceIsPrimary {
 		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
 		if !superReadOnly {
-			params.Logger.Infof("turning primary super_read_only before backup")
+			params.Logger.Infof("Enabling super_read_only on primary prior to backup")
 			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
-				return false, vterrors.Wrap(err, "can't set super_read_only status")
+				return false, vterrors.Wrap(err, "failed to enable super_read_only")
 			}
+			defer func() {
+				// Resetting super_read_only back to its original value
+				params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+				if _, err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+					log.Error("Failed to set super_read_only back to its original value")
+				}
+			}()
+
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
@@ -406,7 +414,7 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	}
 
 	// Resetting super_read_only back to its original value
-	params.Logger.Infof("resetting mysqld super_read-only to %v", superReadOnly)
+	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
 	if _, err := params.Mysqld.SetSuperReadOnly(superReadOnly); err != nil {
 		return usable, err
 	}
