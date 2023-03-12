@@ -560,8 +560,7 @@ func testScheduler(t *testing.T) {
 				for _, row := range rs.Named().Rows {
 					readyToComplete := row.AsInt64("ready_to_complete", 0)
 					assert.Equal(t, int64(0), readyToComplete)
-					wasReadyToComplete := row.AsInt64("ready_to_complete_timestamp is not null", 0)
-					assert.Equal(t, int64(0), wasReadyToComplete)
+					assert.True(t, row["ready_to_complete_timestamp"].IsNull())
 				}
 			}
 		})
@@ -599,8 +598,7 @@ func testScheduler(t *testing.T) {
 				for _, row := range rs.Named().Rows {
 					readyToComplete := row.AsInt64("ready_to_complete", 0)
 					assert.Equal(t, int64(1), readyToComplete)
-					wasReadyToComplete := row.AsInt64("ready_to_complete_timestamp is not null", 0)
-					assert.Equal(t, int64(1), wasReadyToComplete)
+					assert.False(t, row["ready_to_complete_timestamp"].IsNull())
 				}
 			}
 		})
