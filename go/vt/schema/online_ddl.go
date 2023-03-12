@@ -24,7 +24,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -84,19 +83,20 @@ const (
 
 // OnlineDDL encapsulates the relevant information in an online schema change request
 type OnlineDDL struct {
-	Keyspace         string          `json:"keyspace,omitempty"`
-	Table            string          `json:"table,omitempty"`
-	Schema           string          `json:"schema,omitempty"`
-	SQL              string          `json:"sql,omitempty"`
-	UUID             string          `json:"uuid,omitempty"`
-	Strategy         DDLStrategy     `json:"strategy,omitempty"`
-	Options          string          `json:"options,omitempty"`
-	RequestTime      int64           `json:"time_created,omitempty"`
-	MigrationContext string          `json:"context,omitempty"`
-	Status           OnlineDDLStatus `json:"status,omitempty"`
-	TabletAlias      string          `json:"tablet,omitempty"`
-	Retries          int64           `json:"retries,omitempty"`
-	ReadyToComplete  int64           `json:"ready_to_complete,omitempty"`
+	Keyspace string      `json:"keyspace,omitempty"`
+	Table    string      `json:"table,omitempty"`
+	Schema   string      `json:"schema,omitempty"`
+	SQL      string      `json:"sql,omitempty"`
+	UUID     string      `json:"uuid,omitempty"`
+	Strategy DDLStrategy `json:"strategy,omitempty"`
+	Options  string      `json:"options,omitempty"`
+	// Stateful fields:
+	MigrationContext   string          `json:"context,omitempty"`
+	Status             OnlineDDLStatus `json:"status,omitempty"`
+	TabletAlias        string          `json:"tablet,omitempty"`
+	Retries            int64           `json:"retries,omitempty"`
+	ReadyToComplete    int64           `json:"ready_to_complete,omitempty"`
+	WasReadyToComplete int64           `json:"was_ready_to_complete,omitempty"`
 }
 
 // FromJSON creates an OnlineDDL from json
@@ -249,7 +249,6 @@ func NewOnlineDDL(keyspace string, table string, sql string, ddlStrategySetting 
 		UUID:             onlineDDLUUID,
 		Strategy:         ddlStrategySetting.Strategy,
 		Options:          ddlStrategySetting.Options,
-		RequestTime:      time.Now().UnixNano(),
 		MigrationContext: migrationContext,
 		Status:           OnlineDDLStatusRequested,
 	}, nil
@@ -326,11 +325,6 @@ func OnlineDDLFromCommentedStatement(stmt sqlparser.Statement) (onlineDDL *Onlin
 // StrategySetting returns the ddl strategy setting associated with this online DDL
 func (onlineDDL *OnlineDDL) StrategySetting() *DDLStrategySetting {
 	return NewDDLStrategySetting(onlineDDL.Strategy, onlineDDL.Options)
-}
-
-// RequestTimeSeconds converts request time to seconds (losing nano precision)
-func (onlineDDL *OnlineDDL) RequestTimeSeconds() int64 {
-	return onlineDDL.RequestTime / int64(time.Second)
 }
 
 // ToJSON exports this onlineDDL to JSON

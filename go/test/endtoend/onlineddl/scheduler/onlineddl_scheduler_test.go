@@ -552,6 +552,27 @@ func testScheduler(t *testing.T) {
 			// both should be still running!
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
+
+			{
+				rs := onlineddl.ReadMigrations(t, &vtParams, t1uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					readyToComplete := row.AsInt64("ready_to_complete", 0)
+					assert.Equal(t, int64(1), readyToComplete)
+					wasReadyToComplete := row.AsInt64("ready_to_complete_timestamp is not null", 0)
+					assert.Equal(t, int64(1), wasReadyToComplete)
+				}
+			}
+			{
+				rs := onlineddl.ReadMigrations(t, &vtParams, t2uuid)
+				require.NotNil(t, rs)
+				for _, row := range rs.Named().Rows {
+					readyToComplete := row.AsInt64("ready_to_complete", 0)
+					assert.Equal(t, int64(0), readyToComplete)
+					wasReadyToComplete := row.AsInt64("ready_to_complete_timestamp is not null", 0)
+					assert.Equal(t, int64(0), wasReadyToComplete)
+				}
+			}
 		})
 		t.Run("unthrottle, expect t2 running", func(t *testing.T) {
 			onlineddl.UnthrottleAllMigrations(t, &vtParams)
