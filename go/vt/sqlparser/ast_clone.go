@@ -353,6 +353,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PolygonExpr:
+		return CloneRefOfPolygonExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
 	case ReferenceAction:
@@ -2265,6 +2267,16 @@ func CloneRefOfPointExpr(n *PointExpr) *PointExpr {
 	return &out
 }
 
+// CloneRefOfPolygonExpr creates a deep clone of the input.
+func CloneRefOfPolygonExpr(n *PolygonExpr) *PolygonExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.LinestringParams = CloneExprs(n.LinestringParams)
+	return &out
+}
+
 // CloneRefOfPrepareStmt creates a deep clone of the input.
 func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	if n == nil {
@@ -3350,6 +3362,8 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PolygonExpr:
+		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:
@@ -3628,6 +3642,8 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfPerformanceSchemaFuncExpr(in)
 	case *PointExpr:
 		return CloneRefOfPointExpr(in)
+	case *PolygonExpr:
+		return CloneRefOfPolygonExpr(in)
 	case *RegexpInstrExpr:
 		return CloneRefOfRegexpInstrExpr(in)
 	case *RegexpLikeExpr:

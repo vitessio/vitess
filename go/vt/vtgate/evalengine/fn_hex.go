@@ -20,8 +20,6 @@ import (
 	"math/bits"
 
 	"vitess.io/vitess/go/sqltypes"
-	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/vterrors"
 )
 
 type builtinHex struct {
@@ -44,16 +42,21 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 	case *evalBytes:
 		encoded = hexEncodeBytes(arg.bytes)
 	case evalNumeric:
-		encoded = hexEncodeUint(arg.toUint64().u)
+		encoded = hexEncodeUint(uint64(arg.toInt64().i))
 	default:
-		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "Unsupported HEX argument: %s", arg.SQLType())
+		encoded = hexEncodeBytes(arg.ToRawBytes())
 	}
-
+	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
+		return newEvalRaw(sqltypes.Text, encoded, env.collation()), nil
+	}
 	return newEvalText(encoded, env.collation()), nil
 }
 
 func (call *builtinHex) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+	tt, f := call.Arguments[0].typeof(env)
+	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
+		return sqltypes.Text, f
+	}
 	return sqltypes.VarChar, f
 }
 
