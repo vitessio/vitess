@@ -48,6 +48,14 @@ Here is a (condensed) example of stats output:
 
 ### <a id="new-flag"/> New command line flags and behavior
 
+#### <a id="online-ddl-cut-over-threshold-flags" /> vttablet --online-ddl-cut-over-threshold
+
+Online DDL migration cut-over for `vitess` strategies has a timeout, previously hard coded and now configurable via `--online-ddl-cut-over-threshold` (type: `duration`).
+
+The value of the cut-over threshold should be high enough to support the async nature of vreplication catchup phase, as well as accommodate some replication lag. But it mustn't be too high. While cutting over, the migrated table is being locked, causing app connection and query pileup, consuming query buffers, and holding internal mutexes.
+
+Recommended range for this variable is `5s` - `30s`. Default: `10s`.
+
 #### <a id="builtin-backup-read-buffering-flags" /> Backup --builtinbackup-file-read-buffer-size and --builtinbackup-file-write-buffer-size
 
 Prior to v17 the builtin Backup Engine does not use read buffering for restores, and for backups uses a hardcoded write buffer size of 2097152 bytes.
