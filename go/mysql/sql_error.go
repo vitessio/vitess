@@ -50,8 +50,8 @@ func NewSQLError(number ErrorCode, sqlState string, format string, args ...any) 
 	}
 }
 
-// NewUnknownSQLError creates a new SQLError with no specific error code or state
-func NewUnknownSQLError(format string, args ...any) *SQLError {
+// newUnknownSQLError creates a new SQLError with no specific error code or state
+func newUnknownSQLError(format string, args ...any) *SQLError {
 	return &SQLError{
 		Num:     ERUnknownError,
 		State:   SSUnknownSQLState,
@@ -90,7 +90,10 @@ func (se *SQLError) SQLState() string {
 var errExtract = regexp.MustCompile(`.*\(errno ([0-9]*)\) \(sqlstate ([0-9a-zA-Z]{5})\).*`)
 
 // NewSQLErrorFromError returns a *SQLError from the provided error.
-// If it's not the right type, it still tries to get it from a regexp.
+// If it's not the right type, it still tries to get it from a regexp, or from vitess error code.
+// If there's absolutely no path to extracting a sensible SQL error information from the error,
+// the function returns (<unknown>, false).
+// If the input is `nil` then the result is (nil, false)
 func NewSQLErrorFromError(err error) (sqlError *SQLError, ok bool) {
 	if err == nil {
 		return nil, false
@@ -120,6 +123,9 @@ func NewSQLErrorFromError(err error) (sqlError *SQLError, ok bool) {
 	return mapToSQLErrorFromErrorCode(err, msg)
 }
 
+// ForceNewSQLErrorFromError returns a SQLError obejct at all costs. It first attempts to extract
+// sensible information from the error, via NewSQLErrorFromError(). But if that's unsuccessful, it
+// returns a SQLError with _undefined_ sql num&state.
 func ForceNewSQLErrorFromError(err error) *SQLError {
 	if err == nil {
 		return nil
@@ -127,7 +133,7 @@ func ForceNewSQLErrorFromError(err error) *SQLError {
 	if sqlErr, ok := NewSQLErrorFromError(err); ok {
 		return sqlErr
 	}
-	return NewUnknownSQLError(err.Error())
+	return newUnknownSQLError(err.Error())
 }
 
 func extractSQLErrorFromMessage(match []string, msg string) (sqlError *SQLError, ok bool) {

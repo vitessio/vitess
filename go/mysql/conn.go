@@ -20,6 +20,7 @@ import (
 	"bufio"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -1151,7 +1152,7 @@ func (c *Conn) handleComStmtExecute(handler Handler, data []byte) (kontinue bool
 	if !fieldSent {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewUnknownSQLError("unexpected: query ended without no results and no error")
+			err = ForceNewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return false
@@ -1399,7 +1400,7 @@ func (c *Conn) execQuery(query string, handler Handler, more bool) execResult {
 	if !callbackCalled {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewUnknownSQLError("unexpected: query ended without no results and no error")
+			err = ForceNewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
 		}
 		if !c.writeErrorPacketFromErrorAndLog(err) {
 			return connErr
