@@ -553,7 +553,7 @@ func testScheduler(t *testing.T) {
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusRunning)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t2uuid, schema.OnlineDDLStatusQueued, schema.OnlineDDLStatusReady)
 		})
-		t.Run("chech ready to complete (before)", func(t *testing.T) {
+		t.Run("check ready to complete (before)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
 				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 				require.NotNil(t, rs)
@@ -591,7 +591,7 @@ func testScheduler(t *testing.T) {
 			fmt.Printf("# Migration status (for debug purposes): <%s>\n", status)
 			onlineddl.CheckMigrationStatus(t, &vtParams, shards, t1uuid, schema.OnlineDDLStatusComplete)
 		})
-		t.Run("chech ready to complete (after)", func(t *testing.T) {
+		t.Run("check ready to complete (after)", func(t *testing.T) {
 			for _, uuid := range []string{t1uuid, t2uuid} {
 				rs := onlineddl.ReadMigrations(t, &vtParams, uuid)
 				require.NotNil(t, rs)
