@@ -298,8 +298,7 @@ func (vh *vtgateHandler) ComPrepare(c *mysql.Conn, query string, bindVars map[st
 	}()
 
 	session, fld, err := vh.vtg.Prepare(ctx, session, query, bindVars)
-	err = mysql.ForceNewSQLErrorFromError(err)
-	if err != nil {
+	if err := mysql.ForceNewSQLErrorFromError(err); err != nil {
 		return nil, err
 	}
 	return fld, nil
