@@ -28,7 +28,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-func TestAll(t *testing.T) {
+func TestIdentifierCache(t *testing.T) {
 	sidecarDBIdentifierMap := map[string]string{}
 	loadFunc := func(ctx context.Context, keyspace string) (string, error) {
 		val, ok := sidecarDBIdentifierMap[keyspace]
