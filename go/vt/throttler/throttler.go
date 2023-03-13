@@ -201,6 +201,7 @@ func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount
 
 func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
 	config := NewMaxReplicationLagModuleConfig(maxReplicationLag)
+	config.MaxReplicationLagSec = maxReplicationLag
 
 	return newThrottlerFromConfig(manager, name, unit, threadCount, maxRate, config, nowFunc)
 
