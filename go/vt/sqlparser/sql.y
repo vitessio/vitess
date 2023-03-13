@@ -6177,6 +6177,10 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| POLYGON openb expression_list closeb
+  {
+    $$ = &PolygonExpr{ LinestringParams:$3 }
+  }
 | LINESTRING openb expression_list closeb
   {
     $$ = &LineStringExpr{ PointParams:$3 }
@@ -7794,7 +7798,7 @@ non_reserved_keyword:
 | PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
 | POINT %prec FUNCTION_CALL_NON_KEYWORD
-| POLYGON
+| POLYGON %prec FUNCTION_CALL_NON_KEYWORD
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
 | PROCESSLIST
