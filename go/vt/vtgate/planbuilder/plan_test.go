@@ -453,13 +453,14 @@ func TestWithDefaultKeyspaceFromFile(t *testing.T) {
 	ts.CreateKeyspace(context.Background(), "user", &topodatapb.Keyspace{})
 	// Create a cache to use for lookups of the sidecar database identifier
 	// in use by each keyspace.
-	sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
 		ki, err := ts.GetKeyspace(ctx, keyspace)
 		if err != nil {
 			return "", err
 		}
 		return ki.SidecarDbName, nil
 	})
+	require.True(t, created)
 
 	testOutputTempDir := makeTestOutput(t)
 	testFile(t, "alterVschema_cases.json", testOutputTempDir, vschema, false)

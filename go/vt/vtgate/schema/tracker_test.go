@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sidecardb"
@@ -51,13 +52,17 @@ func TestMain(m *testing.M) {
 	exitCode := func() int {
 		ts := memorytopo.NewServer(cell)
 		ts.CreateKeyspace(context.Background(), keyspace, &topodatapb.Keyspace{})
-		sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
 			ki, err := ts.GetKeyspace(ctx, keyspace)
 			if err != nil {
 				return "", err
 			}
 			return ki.SidecarDbName, nil
 		})
+		if !created {
+			log.Error("Failed to create a new sidecar database identifier cache as one already existed!")
+			return 1
+		}
 		return m.Run()
 	}()
 	os.Exit(exitCode)

@@ -266,15 +266,19 @@ func Init(
 	if err != nil {
 		log.Fatalf("Unable to get Topo server: %v", err)
 	}
-	// Create a cache to use for lookups of the sidecar database identifier
-	// in use by each keyspace.
-	sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+	// Create a global cache to use for lookups of the sidecar database
+	// identifier in use by each keyspace.
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
 		ki, err := ts.GetKeyspace(ctx, keyspace)
 		if err != nil {
 			return "", err
 		}
 		return ki.SidecarDbName, nil
 	})
+	// This should never happen.
+	if !created {
+		log.Fatal("An existing sidecar database identifier cache was found during init!")
+	}
 
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker

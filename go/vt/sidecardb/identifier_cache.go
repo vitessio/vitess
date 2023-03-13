@@ -53,13 +53,15 @@ var identifierCache atomic.Value // *IdentifierCache singleton
 
 // NewIdentifierCache returns an initialized cache. This is a
 // singleton so if you call New multiple times you will get the
-// same instance.
-func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) *IdentifierCache {
-	_ = identifierCache.CompareAndSwap(nil, &IdentifierCache{
+// same instance. If the cache has already been initialized then
+// it will return false indicating that your New call did not
+// create a new instance.
+func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) (*IdentifierCache, bool) {
+	created := identifierCache.CompareAndSwap(nil, &IdentifierCache{
 		load:                 loadFunc,
 		sidecarDBIdentifiers: sync.Map{},
 	})
-	return identifierCache.Load().(*IdentifierCache)
+	return identifierCache.Load().(*IdentifierCache), created
 }
 
 func GetIdentifierCache() (*IdentifierCache, error) {

@@ -25,6 +25,7 @@ import (
 	"strings"
 	"testing"
 
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
@@ -140,13 +141,16 @@ func createExecutorEnv() (executor *Executor, sbc1, sbc2, sbclookup *sandboxconn
 	if sdbc, _ := sidecardb.GetIdentifierCache(); sdbc != nil {
 		sdbc.Destroy()
 	}
-	sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
 		ki, err := serv.topoServer.GetKeyspace(ctx, keyspace)
 		if err != nil {
 			return "", err
 		}
 		return ki.SidecarDbName, nil
 	})
+	if !created {
+		log.Fatal("Failed to [re]create a sidecar database identifier cache!")
+	}
 	resolver := newTestResolver(hc, serv, cell)
 	sbc1 = hc.AddTestTablet(cell, "-20", 1, "TestExecutor", "-20", topodatapb.TabletType_PRIMARY, true, 1, nil)
 	sbc2 = hc.AddTestTablet(cell, "40-60", 1, "TestExecutor", "40-60", topodatapb.TabletType_PRIMARY, true, 1, nil)

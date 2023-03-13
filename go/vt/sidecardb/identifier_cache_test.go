@@ -44,7 +44,9 @@ func TestAll(t *testing.T) {
 	require.Equal(t, err.Error(), ErrIdentifierCacheUninitialized)
 	// Create the cache to use for lookups of the sidecar database
 	// identifier in use by each keyspace.
-	cache = NewIdentifierCache(loadFunc)
+	var created bool
+	cache, created = NewIdentifierCache(loadFunc)
+	require.True(t, created)
 	var emptyErr error
 	tests := []struct {
 		name          string
@@ -58,8 +60,9 @@ func TestAll(t *testing.T) {
 		{
 			name: "calling New twice should return the same instance",
 			preHook: func() error {
-				cache = NewIdentifierCache(loadFunc) // should work fine
-				if cache != NewIdentifierCache(loadFunc) {
+				newcache, created := NewIdentifierCache(loadFunc) // should work fine
+				require.False(t, created)
+				if newcache != cache {
 					return fmt.Errorf("cache should be singleton")
 				}
 				return nil
@@ -130,7 +133,8 @@ func TestAll(t *testing.T) {
 			preHook: func() error {
 				cache.Destroy()                       // clears the cache and will require a re-load
 				delete(sidecarDBIdentifierMap, "ks5") // delete from the backing database
-				newcache := NewIdentifierCache(loadFunc)
+				newcache, created := NewIdentifierCache(loadFunc)
+				require.True(t, created)
 				if newcache == cache {
 					return fmt.Errorf("cache should have been destroyed")
 				}
