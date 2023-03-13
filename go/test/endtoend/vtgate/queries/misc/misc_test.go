@@ -207,7 +207,7 @@ func TestOuterJoinWithPredicate(t *testing.T) {
 		`[[INT64(0) INT64(0)] [INT64(1) INT64(10)] [INT64(4) INT64(40)]]`)
 }
 
-// This test ensures that we support PREPARE statement with over 65530 parameters.
+// This test ensures that we support PREPARE statement with 65530 parameters.
 // It opens a MySQL connection using the go-mysql driver and execute a select query
 // it then checks the result contains the proper rows and that it's not failing.
 func TestHighNumberOfParams(t *testing.T) {
