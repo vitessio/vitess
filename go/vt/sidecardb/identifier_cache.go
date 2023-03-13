@@ -19,6 +19,7 @@ package sidecardb
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -42,32 +43,30 @@ type IdentifierCache struct {
 	load func(context.Context, string) (string, error)
 }
 
-const ErrIdentifierCacheUninitialized = "sidecar database identifier cache is not initialized"
-const ErrIdentifierCacheNoLoadFunction = "the load from database function has not been set"
-
-var (
-	instance    *IdentifierCache // singleton
-	loadTimeout time.Duration    = 30 * time.Second
+const (
+	ErrIdentifierCacheUninitialized  = "sidecar database identifier cache is not initialized"
+	ErrIdentifierCacheNoLoadFunction = "the load from database function has not been set"
+	identifierCacheLoadTimeout       = 30 * time.Second
 )
 
-// NewIdentifierCache returns an initialized cache struct. This is
-// a singleton so if you call New multiple times you will get the
+var identifierCache atomic.Value // *IdentifierCache singleton
+
+// NewIdentifierCache returns an initialized cache. This is a
+// singleton so if you call New multiple times you will get the
 // same instance.
 func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) *IdentifierCache {
-	if instance == nil {
-		instance = &IdentifierCache{
-			load:                 loadFunc,
-			sidecarDBIdentifiers: sync.Map{},
-		}
-	}
-	return instance
+	_ = identifierCache.CompareAndSwap(nil, &IdentifierCache{
+		load:                 loadFunc,
+		sidecarDBIdentifiers: sync.Map{},
+	})
+	return identifierCache.Load().(*IdentifierCache)
 }
 
 func GetIdentifierCache() (*IdentifierCache, error) {
-	if instance == nil {
+	if identifierCache.Load() == nil {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, ErrIdentifierCacheUninitialized)
 	} else {
-		return instance, nil
+		return identifierCache.Load().(*IdentifierCache), nil
 	}
 }
 
@@ -80,7 +79,7 @@ func (ic *IdentifierCache) Get(keyspace string) (string, error) {
 	}
 	sdbid, ok := ic.sidecarDBIdentifiers.Load(keyspace)
 	if !ok || sdbid == nil || sdbid == "" {
-		ctx, cancel := context.WithTimeout(context.Background(), loadTimeout)
+		ctx, cancel := context.WithTimeout(context.Background(), identifierCacheLoadTimeout)
 		defer cancel()
 
 		sdbname, err := ic.load(ctx, keyspace)
@@ -110,9 +109,9 @@ func (ic *IdentifierCache) Clear() {
 
 // Destroy clears the existing cache and sets the singleton instance
 // to nil so that a new cache can be created.
-// Note: this should ONLY be used in unit tests and NOT in production
+// NOTE: this should ONLY be used in unit tests and NOT in production
 // as it breaks the singleton pattern!
 func (ic *IdentifierCache) Destroy() {
 	ic.Clear()
-	instance = nil
+	identifierCache = atomic.Value{}
 }
