@@ -302,6 +302,12 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 	if lagRecordNow.isZero() {
 		panic("rate recalculation was triggered with a zero replication lag record")
 	}
+
+	// Protect against nil stats - see https://github.com/vitessio/vitess/issues/12619
+	if lagRecordNow.Stats == nil {
+		return
+	}
+
 	now := lagRecordNow.time
 	lagNow := lagRecordNow.lag()
 
