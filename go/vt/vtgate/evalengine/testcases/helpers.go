@@ -17,10 +17,26 @@ limitations under the License.
 package testcases
 
 import (
+	"reflect"
+	"runtime"
 	"strings"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+type Query func(query string, row []sqltypes.Value)
+type Runner func(yield Query)
+type TestCase struct {
+	Run    Runner
+	Schema []*querypb.Field
+}
+
+func (tc TestCase) Name() string {
+	ptr := reflect.ValueOf(tc.Run).Pointer()
+	name := runtime.FuncForPC(ptr).Name()
+	return name[strings.LastIndexByte(name, '.')+1:]
+}
 
 func perm(a []string, f func([]string)) {
 	perm1(a, f, 0)

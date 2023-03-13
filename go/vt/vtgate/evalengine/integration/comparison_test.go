@@ -167,9 +167,10 @@ func TestMySQL(t *testing.T) {
 	defer conn.Close()
 
 	for _, tc := range testcases.Cases {
-		t.Run(fmt.Sprintf("%T", tc), func(t *testing.T) {
-			env := tc.Environment()
-			tc.Test(func(query string, row []sqltypes.Value) {
+		t.Run(tc.Name(), func(t *testing.T) {
+			env := evalengine.EmptyExpressionEnv()
+			env.Fields = tc.Schema
+			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 				compareRemoteExprEnv(t, env, conn, query)
 			})

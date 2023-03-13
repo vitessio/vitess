@@ -47,7 +47,7 @@ func NewTracker() *Tracker {
 
 func (s *Tracker) Add(name string, supported, total int) {
 	s.tbl.Append([]string{
-		name[strings.LastIndexByte(name, '.')+1:],
+		name,
 		strconv.Itoa(supported),
 		strconv.Itoa(total),
 		fmt.Sprintf("%.02f%%", 100*float64(supported)/float64(total)),
@@ -79,12 +79,12 @@ func TestCompilerReference(t *testing.T) {
 	track := NewTracker()
 
 	for _, tc := range testcases.Cases {
-		name := fmt.Sprintf("%T", tc)
-		t.Run(name, func(t *testing.T) {
+		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
-			env := tc.Environment()
+			env := evalengine.EmptyExpressionEnv()
+			env.Fields = tc.Schema
 
-			tc.Test(func(query string, row []sqltypes.Value) {
+			tc.Run(func(query string, row []sqltypes.Value) {
 				stmt, err := sqlparser.Parse("SELECT " + query)
 				if err != nil {
 					// no need to test un-parseable queries
@@ -150,7 +150,7 @@ func TestCompilerReference(t *testing.T) {
 				supported++
 			})
 
-			track.Add(name, supported, total)
+			track.Add(tc.Name(), supported, total)
 		})
 	}
 

@@ -65,7 +65,7 @@ func (env *ExpressionEnv) collation() collations.TypedCollation {
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return EnvWithBindVars(map[string]*querypb.BindVariable{}, collations.Unknown)
+	return EnvWithBindVars(map[string]*querypb.BindVariable{}, collations.Default())
 }
 
 // EnvWithBindVars returns an expression environment with no current row, but with bindvars
