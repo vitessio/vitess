@@ -184,7 +184,7 @@ func run() (*results, error) {
 	_flag.Parse(fs)
 	args := _flag.Args()
 
-	go logutil.PurgeLogs()
+	logutil.PurgeLogs()
 
 	if len(args) == 0 {
 		pflag.Usage()

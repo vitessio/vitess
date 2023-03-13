@@ -51,7 +51,7 @@ var (
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
-			go logutil.PurgeLogs()
+			logutil.PurgeLogs()
 			traceCloser = trace.StartTracing("vtctldclient")
 			client, err = getClientForCommand(cmd)
 			ctx := cmd.Context()

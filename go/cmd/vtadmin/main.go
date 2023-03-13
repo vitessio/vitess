@@ -59,7 +59,7 @@ var (
 		Use: "vtadmin",
 		PreRun: func(cmd *cobra.Command, args []string) {
 			_flag.TrickGlog()
-			go logutil.PurgeLogs()
+			logutil.PurgeLogs()
 
 			if opts.EnableTracing || httpOpts.EnableTracing {
 				startTracing(cmd)

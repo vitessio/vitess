@@ -338,7 +338,7 @@ func ParseFlags(cmd string) {
 		log.Exitf("%s doesn't take any positional arguments, got '%s'", cmd, strings.Join(args, " "))
 	}
 
-	go logutil.PurgeLogs()
+	logutil.PurgeLogs()
 }
 
 // GetFlagSetFor returns the flag set for a given command.
@@ -368,7 +368,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 		log.Exitf("%s expected at least one positional argument", cmd)
 	}
 
-	go logutil.PurgeLogs()
+	logutil.PurgeLogs()
 
 	return args
 }

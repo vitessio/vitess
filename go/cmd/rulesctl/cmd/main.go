@@ -15,7 +15,7 @@ func Main() *cobra.Command {
 		Args: cobra.NoArgs,
 		PreRun: func(cmd *cobra.Command, args []string) {
 			_flag.TrickGlog()
-			go logutil.PurgeLogs()
+			logutil.PurgeLogs()
 		},
 		Run: func(cmd *cobra.Command, _ []string) { cmd.Help() },
 	}
