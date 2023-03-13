@@ -334,6 +334,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 // Type Modifiers
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
+// PURGE tokens
+%token <str> PURGE BEFORE
+
 // SHOW tokens
 %token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
 %token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
@@ -424,7 +427,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <databaseOption> collate character_set encryption
 %type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
-%type <statement> analyze_statement show_statement use_statement other_statement
+%type <statement> analyze_statement show_statement use_statement purge_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
 %type <statement> revert_statement
@@ -633,6 +636,7 @@ command:
 | drop_statement
 | truncate_statement
 | analyze_statement
+| purge_statement
 | show_statement
 | use_statement
 | begin_statement
@@ -3950,6 +3954,16 @@ analyze_statement:
   ANALYZE TABLE table_name
   {
     $$ = &OtherRead{}
+  }
+
+purge_statement:
+  PURGE BINARY LOGS TO STRING
+  {
+    $$ = &PurgeBinaryLogs{To: string($5)}
+  }
+| PURGE BINARY LOGS BEFORE STRING
+  {
+    $$ = &PurgeBinaryLogs{Before: string($5)}
   }
 
 show_statement:
@@ -7570,6 +7584,7 @@ non_reserved_keyword:
 | AVG %prec FUNCTION_CALL_NON_KEYWORD
 | AVG_ROW_LENGTH
 | BEGIN
+| BEFORE
 | BIGINT
 | BIT
 | BIT_AND %prec FUNCTION_CALL_NON_KEYWORD
@@ -7802,6 +7817,7 @@ non_reserved_keyword:
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
 | PROCESSLIST
+| PURGE
 | QUERIES
 | QUERY
 | RANDOM

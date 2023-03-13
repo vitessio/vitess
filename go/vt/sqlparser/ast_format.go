@@ -2771,3 +2771,13 @@ func (node *LineStringExpr) Format(buf *TrackedBuffer) {
 func (node *PolygonExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "polygon(%v)", node.LinestringParams)
 }
+
+// Format formats the node.
+func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "purge binary logs")
+	if node.To != "" {
+		buf.astPrintf(node, " to '%#s'", node.To)
+	} else {
+		buf.astPrintf(node, " before '%#s'", node.Before)
+	}
+}

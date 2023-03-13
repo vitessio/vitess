@@ -552,6 +552,12 @@ type (
 	Load struct {
 	}
 
+	// PurgeBinaryLogs represents a PURGE BINARY LOGS statement
+	PurgeBinaryLogs struct {
+		To     string
+		Before string
+	}
+
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -739,6 +745,7 @@ func (*ExplainTab) iStatement()          {}
 func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
 func (*DeallocateStmt) iStatement()      {}
+func (*PurgeBinaryLogs) iStatement()     {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}

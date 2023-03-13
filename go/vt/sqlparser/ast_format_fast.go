@@ -3638,3 +3638,17 @@ func (node *PolygonExpr) formatFast(buf *TrackedBuffer) {
 	node.LinestringParams.formatFast(buf)
 	buf.WriteByte(')')
 }
+
+// formatFast formats the node.
+func (node *PurgeBinaryLogs) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("purge binary logs")
+	if node.To != "" {
+		buf.WriteString(" to '")
+		buf.WriteString(node.To)
+		buf.WriteByte('\'')
+	} else {
+		buf.WriteString(" before '")
+		buf.WriteString(node.Before)
+		buf.WriteByte('\'')
+	}
+}
