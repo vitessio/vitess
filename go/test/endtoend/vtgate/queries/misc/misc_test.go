@@ -17,13 +17,16 @@ limitations under the License.
 package misc
 
 import (
+	"database/sql"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
+	_ "github.com/go-sql-driver/mysql"
+
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -201,4 +204,26 @@ func TestOuterJoinWithPredicate(t *testing.T) {
 		`[[INT64(2) INT64(20)] [INT64(3) INT64(30)]]`)
 	mcmp.AssertMatchesNoOrder("select A.id1, B.id2 from t1 as A left join t1 as B on A.id1*10 = B.id2 WHERE B.id2 NOT BETWEEN 20 AND 30",
 		`[[INT64(0) INT64(0)] [INT64(1) INT64(10)] [INT64(4) INT64(40)]]`)
+}
+
+func TestHighNumberOfParams(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t1(id1) values (0), (1), (2), (3), (4)")
+
+	paramCount := 65530
+
+	var vals []any
+	var params []string
+	for i := 1; i <= paramCount; i++ {
+		vals = append(vals, strconv.Itoa(i))
+		params = append(params, "?")
+	}
+
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
+	require.NoError(t, err)
+
+	_, err = db.Query(fmt.Sprintf("SELECT id1 FROM t1 WHERE id1 in (%s)", strings.Join(params, ", ")), vals...)
+	require.NoError(t, err)
 }
