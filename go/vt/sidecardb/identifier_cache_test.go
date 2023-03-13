@@ -37,9 +37,14 @@ func TestAll(t *testing.T) {
 		}
 		return val, nil
 	}
-	// Create a cache to use for lookups of the sidecar database identifier
-	// in use by each keyspace.
-	cache := NewIdentifierCache(loadFunc)
+	// Test using the cache before it's been initialized
+	cache, err := GetIdentifierCache()
+	require.Error(t, err)
+	require.Nil(t, cache)
+	require.Equal(t, err.Error(), ErrIdentifierCacheUninitialized)
+	// Create the cache to use for lookups of the sidecar database
+	// identifier in use by each keyspace.
+	cache = NewIdentifierCache(loadFunc)
 	var emptyErr error
 	tests := []struct {
 		name          string
