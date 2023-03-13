@@ -24,7 +24,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -83,7 +83,7 @@ func TestAll(t *testing.T) {
 				cache.load = loadFunc
 				return nil
 			},
-			wantErr: vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction),
+			wantErr: vterrors.New(vtrpcpb.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction),
 		},
 		{
 			name:     "delete keyspace",

@@ -21,7 +21,7 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/vt/proto/vtrpc"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -65,7 +65,7 @@ func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) 
 
 func GetIdentifierCache() (*IdentifierCache, error) {
 	if instance == nil {
-		return nil, vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheUninitialized)
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, ErrIdentifierCacheUninitialized)
 	} else {
 		return instance, nil
 	}
@@ -76,7 +76,7 @@ func GetIdentifierCache() (*IdentifierCache, error) {
 // read through cache.
 func (ic *IdentifierCache) Get(keyspace string) (string, error) {
 	if ic.load == nil {
-		return "", vterrors.New(vtrpc.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction)
+		return "", vterrors.New(vtrpcpb.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction)
 	}
 	sdbid, ok := ic.sidecarDBIdentifiers.Load(keyspace)
 	if !ok || sdbid == nil || sdbid == "" {
