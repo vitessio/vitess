@@ -42,6 +42,10 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
+	clearQuery := sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query
+	insertQuery := sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query
+	detectQuery := sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query
+
 	tests := []struct {
 		name    string
 		changeQ string
@@ -85,10 +89,6 @@ func TestChangeSchemaIsNoticed(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			clearQuery := sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query
-			insertQuery := sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query
-			detectQuery := sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query
-
 			// reset schemacopy
 			_, err := conn.ExecuteFetch(clearQuery, 1000, true)
 			require.NoError(t, err)

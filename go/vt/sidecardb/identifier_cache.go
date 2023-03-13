@@ -27,9 +27,9 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-// This provides a read through cache of sidecar database identifiers;
-// loading the values from an opaque backend database using a provided
-// load function.
+// IdentifierCache provides a read through cache of sidecar database
+// identifiers; loading the values from an opaque backend database
+// using a provided load function.
 type IdentifierCache struct {
 	// Lazily loaded cache of sidecar database identifiers by keyspace.
 	// The key is a keyspace name string and the val is an sqlparser
