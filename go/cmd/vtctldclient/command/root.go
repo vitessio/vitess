@@ -26,6 +26,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/trace"
+	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtctl/vtctldclient"
 )
@@ -49,6 +50,7 @@ var (
 		// We use PersistentPreRun to set up the tracer, grpc client, and
 		// command context for every command.
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) (err error) {
+			logutil.PurgeLogs()
 			traceCloser = trace.StartTracing("vtctldclient")
 			if VtctldClientProtocol != "local" {
 				if err := ensureServerArg(); err != nil {
