@@ -134,6 +134,14 @@ func NewThrottlerFromConfig(name, unit string, threadCount int, maxRateModuleMax
 	return newThrottlerFromConfig(GlobalManager, name, unit, threadCount, maxRateModuleMaxRate, maxReplicationLagModuleConfig, nowFunc)
 }
 
+func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
+	config := NewMaxReplicationLagModuleConfig(maxReplicationLag)
+	config.MaxReplicationLagSec = maxReplicationLag
+
+	return newThrottlerFromConfig(manager, name, unit, threadCount, maxRate, config, nowFunc)
+
+}
+
 func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount int, maxRateModuleMaxRate int64, maxReplicationLagModuleConfig MaxReplicationLagModuleConfig, nowFunc func() time.Time) (*Throttler, error) {
 	err := maxReplicationLagModuleConfig.Verify()
 	if err != nil {
@@ -197,14 +205,6 @@ func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount
 	}()
 
 	return t, nil
-}
-
-func newThrottler(manager *managerImpl, name, unit string, threadCount int, maxRate, maxReplicationLag int64, nowFunc func() time.Time) (*Throttler, error) {
-	config := NewMaxReplicationLagModuleConfig(maxReplicationLag)
-	config.MaxReplicationLagSec = maxReplicationLag
-
-	return newThrottlerFromConfig(manager, name, unit, threadCount, maxRate, config, nowFunc)
-
 }
 
 // Throttle returns a backoff duration which specifies for how long "threadId"
