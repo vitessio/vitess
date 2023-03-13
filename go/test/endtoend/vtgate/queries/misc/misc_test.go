@@ -27,6 +27,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/test/endtoend/utils"
 )
@@ -206,6 +207,9 @@ func TestOuterJoinWithPredicate(t *testing.T) {
 		`[[INT64(0) INT64(0)] [INT64(1) INT64(10)] [INT64(4) INT64(40)]]`)
 }
 
+// This test ensures that we support PREPARE statement with over 65530 parameters.
+// It opens a MySQL connection using the go-mysql driver and execute a select query
+// it then checks the result contains the proper rows and that it's not failing.
 func TestHighNumberOfParams(t *testing.T) {
 	mcmp, closer := start(t)
 	defer closer()
@@ -214,16 +218,32 @@ func TestHighNumberOfParams(t *testing.T) {
 
 	paramCount := 65530
 
+	// create the value and argument slices used to build the prepare stmt
 	var vals []any
 	var params []string
-	for i := 1; i <= paramCount; i++ {
+	for i := 0; i < paramCount; i++ {
 		vals = append(vals, strconv.Itoa(i))
 		params = append(params, "?")
 	}
 
+	// connect to the vitess cluster
 	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
 	require.NoError(t, err)
 
-	_, err = db.Query(fmt.Sprintf("SELECT id1 FROM t1 WHERE id1 in (%s)", strings.Join(params, ", ")), vals...)
+	// run the query
+	r, err := db.Query(fmt.Sprintf("SELECT /*vt+ QUERY_TIMEOUT_MS=10000 */ id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
 	require.NoError(t, err)
+
+	// check the results we got, we should get 5 rows with each: 0, 1, 2, 3, 4
+	// count is the row number we are currently visiting, also correspond to the
+	// column value we expect.
+	count := 0
+	for r.Next() {
+		j := -1
+		err := r.Scan(&j)
+		require.NoError(t, err)
+		require.Equal(t, j, count)
+		count++
+	}
+	require.Equal(t, 5, count)
 }
