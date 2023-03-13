@@ -119,7 +119,7 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrott
 		return newTxThrottler(env, &txThrottlerConfig{enabled: false})
 	}
 
-	for _, tabletType := range config.TxThrottlerTabletTypes {
+	for _, tabletType := range env.Config().TxThrottlerTabletTypes {
 		switch tabletType {
 		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
 			continue
@@ -141,7 +141,7 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrott
 	return newTxThrottler(env, &txThrottlerConfig{
 		enabled:          true,
 		topoServer:       topoServer,
-		tabletConfig:     config,
+		tabletConfig:     env.Config(),
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
 	})
