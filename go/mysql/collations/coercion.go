@@ -20,7 +20,7 @@ import (
 	"fmt"
 	"unsafe"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 )
 
 func init() {
@@ -203,8 +203,8 @@ type CoercionOptions struct {
 // If the collations for both sides of the expression are not compatible, an error
 // will be returned and the returned TypedCollation and Coercion will be nil.
 func (env *Environment) MergeCollations(left, right TypedCollation, opt CoercionOptions) (TypedCollation, Coercion, Coercion, error) {
-	leftColl := env.LookupByID(left.Collation)
-	rightColl := env.LookupByID(right.Collation)
+	leftColl := left.Collation.Get()
+	rightColl := right.Collation.Get()
 	if leftColl == nil || rightColl == nil {
 		return TypedCollation{}, nil, nil, fmt.Errorf("unsupported TypeCollationID: %v / %v", left.Collation, right.Collation)
 	}
@@ -310,8 +310,8 @@ coerceToRight:
 
 func (env *Environment) EnsureCollate(fromID, toID ID) error {
 	// these two lookups should never fail
-	from := env.LookupByID(fromID)
-	to := env.LookupByID(toID)
+	from := fromID.Get()
+	to := toID.Get()
 	if from.Charset().Name() != to.Charset().Name() {
 		return fmt.Errorf("COLLATION '%s' is not valid for CHARACTER SET '%s'", to.Name(), from.Charset().Name())
 	}

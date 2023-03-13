@@ -89,6 +89,8 @@ var (
 		regexp.MustCompile(`Operand should contain (\d+) column\(s\)`),
 		regexp.MustCompile(`You have an error in your SQL syntax; (.*?)`),
 		regexp.MustCompile(`Cannot convert string '(.*?)' from \w+ to \w+`),
+		regexp.MustCompile(`Invalid JSON text in argument (\d+) to function (\w+): (.*?)`),
+		regexp.MustCompile(`Illegal mix of collations`),
 	}
 )
 
@@ -118,7 +120,7 @@ func errorsMatch(remote, local error) bool {
 	return false
 }
 
-func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
+func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evalengine.EvalResult, sqltypes.Type, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, 0, err
@@ -131,28 +133,27 @@ func safeEvaluate(query string) (evalengine.EvalResult, sqltypes.Type, error) {
 				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
-		expr, err = evalengine.TranslateEx(astExpr, evalengine.LookupDefaultCollation(collations.CollationUtf8mb4ID), debugSimplify)
+		lookup := &evalengine.LookupIntegrationTest{Collation: collations.CollationUtf8mb4ID}
+		expr, err = evalengine.TranslateEx(astExpr, lookup, debugSimplify)
 		return
 	}()
 
-	var eval evalengine.EvalResult
-	var tt sqltypes.Type
-	if err == nil {
-		eval, err = func() (eval evalengine.EvalResult, err error) {
-			defer func() {
-				if r := recover(); r != nil {
-					err = fmt.Errorf("PANIC: %v", r)
-				}
-			}()
-			env := evalengine.EnvWithBindVars(nil, 255)
-			eval, err = env.Evaluate(local)
-			if err == nil && debugCheckTypes {
-				tt, err = env.TypeOf(local)
-			}
-			return
-		}()
+	if err != nil {
+		return evalengine.EvalResult{}, 0, err
 	}
-	return eval, tt, err
+
+	return func() (eval evalengine.EvalResult, tt sqltypes.Type, err error) {
+		defer func() {
+			if r := recover(); r != nil {
+				err = fmt.Errorf("PANIC: %v", r)
+			}
+		}()
+		eval, err = env.Evaluate(local)
+		if err == nil && debugCheckTypes {
+			tt, err = env.TypeOf(local)
+		}
+		return
+	}()
 }
 
 const syntaxErr = `You have an error in your SQL syntax; (errno 1064) (sqlstate 42000) during query: SQL`
@@ -181,7 +182,8 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		eval, _, localErr := safeEvaluate(query)
+		env := evalengine.EnvWithBindVars(nil, 255)
+		eval, _, localErr := evaluateLocalEvalengine(env, query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {
@@ -308,11 +310,10 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal string, localC
 
 	var localCollationName string
 	var remoteCollationName string
-	env := collations.Local()
-	if coll := env.LookupByID(localCollation); coll != nil {
+	if coll := localCollation.Get(); coll != nil {
 		localCollationName = coll.Name()
 	}
-	if coll := env.LookupByID(remoteCollation); coll != nil {
+	if coll := remoteCollation.Get(); coll != nil {
 		remoteCollationName = coll.Name()
 	}
 

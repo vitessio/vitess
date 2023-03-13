@@ -28,10 +28,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/proto"
-	"k8s.io/apimachinery/pkg/util/sets"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/protoutil"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/test/utils"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtadmin/cluster"
@@ -977,7 +977,7 @@ func TestFindWorkflows(t *testing.T) {
 			},
 			keyspaces: []string{"ks2"},
 			opts: cluster.FindWorkflowsOptions{
-				IgnoreKeyspaces: sets.NewString("ks2"),
+				IgnoreKeyspaces: sets.New[string]("ks2"),
 			},
 			expected: &vtadminpb.ClusterWorkflows{
 				Workflows: []*vtadminpb.Workflow{
@@ -1047,7 +1047,7 @@ func TestFindWorkflows(t *testing.T) {
 			},
 			keyspaces: nil,
 			opts: cluster.FindWorkflowsOptions{
-				IgnoreKeyspaces: sets.NewString("ks2"),
+				IgnoreKeyspaces: sets.New[string]("ks2"),
 			},
 			expected: &vtadminpb.ClusterWorkflows{
 				Workflows: []*vtadminpb.Workflow{

@@ -758,6 +758,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfLimit(a, b)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLineStringExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -1004,6 +1010,18 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
+	case *PolygonExpr:
+		b, ok := inB.(*PolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonExpr(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
@@ -2361,7 +2379,7 @@ func (cmp *Comparator) RefOfExtractedSubquery(a, b *ExtractedSubquery) bool {
 		return false
 	}
 	return a.OpCode == b.OpCode &&
-		a.NeedsRewrite == b.NeedsRewrite &&
+		a.Merged == b.Merged &&
 		a.hasValuesArg == b.hasValuesArg &&
 		a.argName == b.argName &&
 		cmp.Expr(a.Original, b.Original) &&
@@ -3022,6 +3040,17 @@ func (cmp *Comparator) RefOfLimit(a, b *Limit) bool {
 		cmp.Expr(a.Rowcount, b.Rowcount)
 }
 
+// RefOfLineStringExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfLineStringExpr(a, b *LineStringExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.PointParams, b.PointParams)
+}
+
 // RefOfLiteral does deep equals between the two objects.
 func (cmp *Comparator) RefOfLiteral(a, b *Literal) bool {
 	if a == b {
@@ -3504,6 +3533,29 @@ func (cmp *Comparator) RefOfPerformanceSchemaFuncExpr(a, b *PerformanceSchemaFun
 	}
 	return a.Type == b.Type &&
 		cmp.Expr(a.Argument, b.Argument)
+}
+
+// RefOfPointExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfPointExpr(a, b *PointExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Expr(a.XCordinate, b.XCordinate) &&
+		cmp.Expr(a.YCordinate, b.YCordinate)
+}
+
+// RefOfPolygonExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfPolygonExpr(a, b *PolygonExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.LinestringParams, b.LinestringParams)
 }
 
 // RefOfPrepareStmt does deep equals between the two objects.
@@ -5003,6 +5055,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfLagLeadExpr(a, b)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLineStringExpr(a, b)
 	case *LocateExpr:
 		b, ok := inB.(*LocateExpr)
 		if !ok {
@@ -5057,6 +5115,18 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
+	case *PolygonExpr:
+		b, ok := inB.(*PolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5657,6 +5727,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfLagLeadExpr(a, b)
+	case *LineStringExpr:
+		b, ok := inB.(*LineStringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfLineStringExpr(a, b)
 	case ListArg:
 		b, ok := inB.(ListArg)
 		if !ok {
@@ -5753,6 +5829,18 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfPerformanceSchemaFuncExpr(a, b)
+	case *PointExpr:
+		b, ok := inB.(*PointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPointExpr(a, b)
+	case *PolygonExpr:
+		b, ok := inB.(*PolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {

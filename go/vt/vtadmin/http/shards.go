@@ -22,8 +22,8 @@ import (
 	"fmt"
 
 	"github.com/gorilla/mux"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vtadmin/errors"
 
@@ -70,7 +70,7 @@ func DeleteShards(ctx context.Context, r Request, api *API) *JSONResponse {
 	}
 
 	shardList := r.URL.Query()["keyspace_shard"]
-	shardList = sets.NewString(shardList...).List()
+	shardList = sets.List(sets.New[string](shardList...))
 	shards := make([]*vtctldatapb.Shard, len(shardList))
 	for i, kss := range shardList {
 		ks, shard, err := topoproto.ParseKeyspaceShard(kss)

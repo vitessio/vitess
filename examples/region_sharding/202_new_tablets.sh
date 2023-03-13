@@ -14,23 +14,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-source ./env.sh
+source ../common/env.sh
 
 # start vttablets for new shards. we start only one tablet each (primary)
-CELL=zone1 TABLET_UID=200 ./scripts/mysqlctl-up.sh
-SHARD=-40 CELL=zone1 KEYSPACE=main TABLET_UID=200 ./scripts/vttablet-up.sh
-CELL=zone1 TABLET_UID=300 ./scripts/mysqlctl-up.sh
-SHARD=40-80 CELL=zone1 KEYSPACE=main TABLET_UID=300 ./scripts/vttablet-up.sh
-CELL=zone1 TABLET_UID=400 ./scripts/mysqlctl-up.sh
-SHARD=80-c0 CELL=zone1 KEYSPACE=main TABLET_UID=400 ./scripts/vttablet-up.sh
-CELL=zone1 TABLET_UID=500 ./scripts/mysqlctl-up.sh
-SHARD=c0- CELL=zone1 KEYSPACE=main TABLET_UID=500 ./scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=200 ../common/scripts/mysqlctl-up.sh
+SHARD=-40 CELL=zone1 KEYSPACE=main TABLET_UID=200 ../common/scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=300 ../common/scripts/mysqlctl-up.sh
+SHARD=40-80 CELL=zone1 KEYSPACE=main TABLET_UID=300 ../common/scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=400 ../common/scripts/mysqlctl-up.sh
+SHARD=80-c0 CELL=zone1 KEYSPACE=main TABLET_UID=400 ../common/scripts/vttablet-up.sh
+CELL=zone1 TABLET_UID=500 ../common/scripts/mysqlctl-up.sh
+SHARD=c0- CELL=zone1 KEYSPACE=main TABLET_UID=500 ../common/scripts/vttablet-up.sh
 
 for shard in "-40" "40-80" "80-c0" "c0-"; do
-  # Wait for a primary tablet to be elected in the shard
-  for _ in $(seq 0 200); do
-  	vtctldclient GetTablets --keyspace main --shard $shard | grep -q "primary" && break
-  	sleep 1
-  done;
-  vtctldclient GetTablets --keyspace main --shard $shard | grep "primary" || (echo "Timed out waiting for primary to be elected in main/$shard" && exit 1)
+	# Wait for all the tablets to be up and registered in the topology server
+	# and for a primary tablet to be elected in the shard and become healthy/serving.
+	wait_for_healthy_shard main "${shard}" 1 || exit 1
 done;

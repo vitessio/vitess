@@ -26,7 +26,6 @@ import (
 	"fmt"
 
 	"google.golang.org/grpc"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -89,7 +88,7 @@ func OpenWithConfiguration(c Configuration) (*sql.DB, error) {
 	}
 
 	if len(c.GRPCDialOptions) != 0 {
-		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.DialWithOpts(context.TODO(), c.GRPCDialOptions...))
+		vtgateconn.RegisterDialer(c.Protocol, grpcvtgateconn.Dial(c.GRPCDialOptions...))
 	}
 
 	return sql.Open(c.DriverName, json)
@@ -354,7 +353,7 @@ func newSessionTokenRow(session *vtgatepb.Session, c *converter) (driver.Rows, e
 }
 
 func sessionToSessionToken(session *vtgatepb.Session) (string, error) {
-	b, err := proto.Marshal(session)
+	b, err := session.MarshalVT()
 	if err != nil {
 		return "", err
 	}
@@ -369,7 +368,7 @@ func sessionTokenToSession(sessionToken string) (*vtgatepb.Session, error) {
 	}
 
 	session := &vtgatepb.Session{}
-	err = proto.Unmarshal(b, session)
+	err = session.UnmarshalVT(b)
 	if err != nil {
 		return nil, err
 	}

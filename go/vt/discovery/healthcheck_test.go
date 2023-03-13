@@ -196,8 +196,9 @@ func TestHealthCheck(t *testing.T) {
 	}
 	input <- shr
 	result = <-resultChan
-	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// Ignore LastError because we're going to check it separately.
+	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
+	assert.Error(t, result.LastError, "vttablet error: some error")
 	testChecksum(t, 1027934207, hc.stateChecksum()) // unchanged
 
 	// remove tablet
@@ -257,8 +258,9 @@ func TestHealthCheckStreamError(t *testing.T) {
 		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// Ignore LastError because we're going to check it separately.
+	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
+	assert.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -317,8 +319,9 @@ func TestHealthCheckErrorOnPrimary(t *testing.T) {
 		LastError:            fmt.Errorf("some stream error"),
 	}
 	result = <-resultChan
-	// TODO: figure out how to compare objects that contain errors using utils.MustMatch
-	assert.True(t, want.DeepEqual(result), "Wrong TabletHealth data\n Expected: %v\n Actual:   %v", want, result)
+	// Ignore LastError because we're going to check it separately.
+	utils.MustMatchFn(".LastError", ".Conn")(t, want, result, "Wrong TabletHealth data")
+	assert.Error(t, result.LastError, "some stream error")
 	// tablet should be removed from healthy list
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_PRIMARY})
 	assert.Empty(t, a, "wrong result, expected empty list")
@@ -684,7 +687,7 @@ func TestRemoveTablet(t *testing.T) {
 	// there will be a first result, get and discard it
 	<-resultChan
 
-	shr := &querypb.StreamHealthResponse{
+	shrReplica := &querypb.StreamHealthResponse{
 		TabletAlias:                         tablet.Alias,
 		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA},
 		Serving:                             true,
@@ -698,7 +701,7 @@ func TestRemoveTablet(t *testing.T) {
 		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 1, CpuUsage: 0.2},
 		PrimaryTermStartTime: 0,
 	}}
-	input <- shr
+	input <- shrReplica
 	<-resultChan
 	// check it's there
 	a := hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
@@ -707,6 +710,71 @@ func TestRemoveTablet(t *testing.T) {
 	// delete the tablet
 	hc.RemoveTablet(tablet)
 	a = hc.GetHealthyTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Empty(t, a, "wrong result, expected empty list")
+
+	// Now confirm that when a tablet's type changes between when it's added to the
+	// cache and when it's removed, that the tablet is entirely removed from the
+	// cache since in the secondary maps it's keyed in part by tablet type.
+	// Note: we are using GetTabletStats here to check the healthData map (rather
+	// than the healthy map that we checked above) because that is the data
+	// structure that is used when printing the contents of the healthcheck cache
+	// in the /debug/status endpoint and in the SHOW VITESS_TABLETS; SQL command
+	// output.
+
+	// Add the tablet back.
+	hc.AddTablet(tablet)
+	// Receive and discard the initial result as we have not yet sent the first
+	// StreamHealthResponse with the dynamic serving and stats information.
+	<-resultChan
+	// Send the first StreamHealthResponse with the dynamic serving and stats
+	// information.
+	input <- shrReplica
+	<-resultChan
+	// Confirm it's there in the cache.
+	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	mustMatch(t, want, a, "unexpected result")
+
+	// Change the tablet type to RDONLY.
+	tablet.Type = topodatapb.TabletType_RDONLY
+	shrRdonly := &querypb.StreamHealthResponse{
+		TabletAlias:                         tablet.Alias,
+		Target:                              &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY},
+		Serving:                             true,
+		TabletExternallyReparentedTimestamp: 0,
+		RealtimeStats:                       &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.4},
+	}
+
+	// Now Replace it, which does a Remove and Add. The tablet should be removed
+	// from the cache and all its maps even though the tablet type had changed
+	// in-between the initial Add and Remove.
+	hc.ReplaceTablet(tablet, tablet)
+	// Receive and discard the initial result as we have not yet sent the first
+	// StreamHealthResponse with the dynamic serving and stats information.
+	<-resultChan
+	// Confirm that the old entry is gone.
+	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Empty(t, a, "wrong result, expected empty list")
+	// Send the first StreamHealthResponse with the dynamic serving and stats
+	// information.
+	input <- shrRdonly
+	<-resultChan
+	// Confirm that the new entry is there in the cache.
+	want = []*TabletHealth{{
+		Tablet:               tablet,
+		Target:               &querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY},
+		Serving:              true,
+		Stats:                &querypb.RealtimeStats{ReplicationLagSeconds: 2, CpuUsage: 0.4},
+		PrimaryTermStartTime: 0,
+	}}
+	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY})
+	mustMatch(t, want, a, "unexpected result")
+
+	// Delete the tablet, confirm again that it's gone in both tablet type
+	// forms.
+	hc.RemoveTablet(tablet)
+	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_REPLICA})
+	assert.Empty(t, a, "wrong result, expected empty list")
+	a = hc.GetTabletStats(&querypb.Target{Keyspace: "k", Shard: "s", TabletType: topodatapb.TabletType_RDONLY})
 	assert.Empty(t, a, "wrong result, expected empty list")
 }
 

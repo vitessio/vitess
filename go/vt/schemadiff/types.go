@@ -94,6 +94,18 @@ const (
 	TableCharsetCollateIgnoreAlways
 )
 
+const (
+	TableQualifierDefault int = iota
+	TableQualifierDeclared
+)
+
+const (
+	AlterTableAlgorithmStrategyNone int = iota
+	AlterTableAlgorithmStrategyInstant
+	AlterTableAlgorithmStrategyInplace
+	AlterTableAlgorithmStrategyCopy
+)
+
 // DiffHints is an assortment of rules for diffing entities
 type DiffHints struct {
 	StrictIndexOrdering         bool
@@ -104,4 +116,6 @@ type DiffHints struct {
 	TableRenameStrategy         int
 	FullTextKeyStrategy         int
 	TableCharsetCollateStrategy int
+	TableQualifierHint          int
+	AlterTableAlgorithmStrategy int
 }

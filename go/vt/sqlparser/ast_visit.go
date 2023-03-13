@@ -266,6 +266,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfLagLeadExpr(in, f)
 	case *Limit:
 		return VisitRefOfLimit(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -348,6 +350,10 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitPartitions(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
+	case *PolygonExpr:
+		return VisitRefOfPolygonExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
 	case ReferenceAction:
@@ -2295,6 +2301,18 @@ func VisitRefOfLimit(in *Limit, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfLineStringExpr(in *LineStringExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PointParams, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfLiteral(in *Literal, f Visit) error {
 	if in == nil {
 		return nil
@@ -2815,6 +2833,33 @@ func VisitRefOfPerformanceSchemaFuncExpr(in *PerformanceSchemaFuncExpr, f Visit)
 		return err
 	}
 	if err := VisitExpr(in.Argument, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPointExpr(in *PointExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExpr(in.XCordinate, f); err != nil {
+		return err
+	}
+	if err := VisitExpr(in.YCordinate, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfPolygonExpr(in *PolygonExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.LinestringParams, f); err != nil {
 		return err
 	}
 	return nil
@@ -4188,6 +4233,8 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case *LocateExpr:
 		return VisitRefOfLocateExpr(in, f)
 	case *MatchExpr:
@@ -4206,6 +4253,10 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfNtileExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
+	case *PolygonExpr:
+		return VisitRefOfPolygonExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:
@@ -4436,6 +4487,8 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfJSONValueModifierExpr(in, f)
 	case *LagLeadExpr:
 		return VisitRefOfLagLeadExpr(in, f)
+	case *LineStringExpr:
+		return VisitRefOfLineStringExpr(in, f)
 	case ListArg:
 		return VisitListArg(in, f)
 	case *Literal:
@@ -4468,6 +4521,10 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfOrExpr(in, f)
 	case *PerformanceSchemaFuncExpr:
 		return VisitRefOfPerformanceSchemaFuncExpr(in, f)
+	case *PointExpr:
+		return VisitRefOfPointExpr(in, f)
+	case *PolygonExpr:
+		return VisitRefOfPolygonExpr(in, f)
 	case *RegexpInstrExpr:
 		return VisitRefOfRegexpInstrExpr(in, f)
 	case *RegexpLikeExpr:

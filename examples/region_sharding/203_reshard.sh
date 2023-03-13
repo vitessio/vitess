@@ -14,6 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-source ./env.sh
+source ../common/env.sh
 
 vtctlclient Reshard -- --source_shards '0' --target_shards '-40,40-80,80-c0,c0-' --tablet_types=PRIMARY Create main.main2regions

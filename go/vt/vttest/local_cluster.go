@@ -30,6 +30,8 @@ import (
 	"time"
 	"unicode"
 
+	"vitess.io/vitess/go/vt/sidecardb"
+
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/encoding/prototext"
 	"google.golang.org/protobuf/proto"
@@ -497,8 +499,29 @@ func (db *LocalCluster) loadSchema(shouldRunDatabaseMigrations bool) error {
 	return nil
 }
 
+func (db *LocalCluster) createVTSchema() error {
+	var sidecardbExec sidecardb.Exec = func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
+		if useDB {
+			if err := db.Execute([]string{sidecardb.UseSidecarDatabaseQuery}, ""); err != nil {
+				return nil, err
+			}
+		}
+		return db.ExecuteFetch(query, "")
+	}
+
+	if err := sidecardb.Init(context.Background(), sidecardbExec); err != nil {
+		return err
+	}
+	return nil
+}
 func (db *LocalCluster) createDatabases() error {
 	log.Info("Creating databases in cluster...")
+
+	// The tablets created in vttest do not follow the same tablet init process, so we need to explicitly create
+	// the sidecar database tables
+	if err := db.createVTSchema(); err != nil {
+		return err
+	}
 
 	var sql []string
 	for _, kpb := range db.Topology.Keyspaces {
@@ -530,7 +553,7 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	for _, cmd := range sql {
 		log.Infof("Execute(%s): \"%s\"", dbname, cmd)
-		_, err := conn.ExecuteFetch(cmd, 0, false)
+		_, err := conn.ExecuteFetch(cmd, -1, false)
 		if err != nil {
 			return err
 		}
@@ -538,6 +561,21 @@ func (db *LocalCluster) Execute(sql []string, dbname string) error {
 
 	_, err = conn.ExecuteFetch("COMMIT", 0, false)
 	return err
+}
+
+// ExecuteFetch runs a SQL statement on the MySQL instance backing
+// this local cluster and returns the result.
+func (db *LocalCluster) ExecuteFetch(sql string, dbname string) (*sqltypes.Result, error) {
+	params := db.mysql.Params(dbname)
+	conn, err := mysql.Connect(context.Background(), &params)
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+
+	log.Infof("ExecuteFetch(%s): \"%s\"", dbname, sql)
+	rs, err := conn.ExecuteFetch(sql, -1, true)
+	return rs, err
 }
 
 // Query runs a  SQL query on the MySQL instance backing this local cluster and returns

@@ -475,9 +475,7 @@ func initMySQLProtocol() {
 		if err != nil {
 			log.Exitf("mysql.NewListener failed: %v", err)
 		}
-		if mySQLVersion := servenv.MySQLServerVersion(); mySQLVersion != "" {
-			mysqlListener.ServerVersion = mySQLVersion
-		}
+		mysqlListener.ServerVersion = servenv.MySQLServerVersion()
 		if mysqlSslCert != "" && mysqlSslKey != "" {
 			tlsVersion, err := vttls.TLSVersionToNumber(mysqlTLSMinVersion)
 			if err != nil {
@@ -486,11 +484,11 @@ func initMySQLProtocol() {
 
 			_ = initTLSConfig(mysqlListener, mysqlSslCert, mysqlSslKey, mysqlSslCa, mysqlSslCrl, mysqlSslServerCA, mysqlServerRequireSecureTransport, tlsVersion)
 		}
-		mysqlListener.AllowClearTextWithoutTLS.Set(mysqlAllowClearTextWithoutTLS)
+		mysqlListener.AllowClearTextWithoutTLS.Store(mysqlAllowClearTextWithoutTLS)
 		// Check for the connection threshold
 		if mysqlSlowConnectWarnThreshold != 0 {
 			log.Infof("setting mysql slow connection threshold to %v", mysqlSlowConnectWarnThreshold)
-			mysqlListener.SlowConnectWarnThreshold.Set(mysqlSlowConnectWarnThreshold)
+			mysqlListener.SlowConnectWarnThreshold.Store(mysqlSlowConnectWarnThreshold.Nanoseconds())
 		}
 		// Start listening for tcp
 		go mysqlListener.Accept()

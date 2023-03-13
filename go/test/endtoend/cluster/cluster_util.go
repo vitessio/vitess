@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,6 +42,8 @@ var (
 	tmClient                 = tmc.NewClient()
 	dbCredentialFile         string
 	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
+	defaultOperationTimeout  = 60 * time.Second
+	defeaultRetryDelay       = 1 * time.Second
 )
 
 // Restart restarts vttablet and mysql.
@@ -95,16 +98,20 @@ func GetPrimaryPosition(t *testing.T, vttablet Vttablet, hostname string) (strin
 // This is used to check that replication has caught up with the changes on primary.
 func VerifyRowsInTabletForTable(t *testing.T, vttablet *Vttablet, ksName string, expectedRows int, tableName string) {
 	timeout := time.Now().Add(1 * time.Minute)
+	lastNumRowsFound := 0
 	for time.Now().Before(timeout) {
 		// ignoring the error check, if the newly created table is not replicated, then there might be error and we should ignore it
 		// but eventually it will catch up and if not caught up in required time, testcase will fail
 		qr, _ := vttablet.VttabletProcess.QueryTablet("select * from "+tableName, ksName, true)
-		if qr != nil && len(qr.Rows) == expectedRows {
-			return
+		if qr != nil {
+			if len(qr.Rows) == expectedRows {
+				return
+			}
+			lastNumRowsFound = len(qr.Rows)
 		}
 		time.Sleep(300 * time.Millisecond)
 	}
-	assert.Fail(t, "expected rows not found.")
+	require.Equalf(t, expectedRows, lastNumRowsFound, "unexpected number of rows in %s (%s.%s)", vttablet.Alias, ksName, tableName)
 }
 
 // VerifyRowsInTablet Verify total number of rows in a tablet
@@ -119,20 +126,6 @@ func PanicHandler(t *testing.T) {
 		return
 	}
 	require.Nilf(t, err, "panic occured in testcase %v", t.Name())
-}
-
-// VerifyLocalMetadata Verify Local Metadata of a tablet
-func VerifyLocalMetadata(t *testing.T, tablet *Vttablet, ksName string, shardName string, cell string) {
-	qr, err := tablet.VttabletProcess.QueryTablet("select * from _vt.local_metadata", ksName, false)
-	require.Nil(t, err)
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[0][1]), fmt.Sprintf(`BLOB("%s")`, tablet.Alias))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[1][1]), fmt.Sprintf(`BLOB("%s.%s")`, ksName, shardName))
-	assert.Equal(t, fmt.Sprintf("%v", qr.Rows[2][1]), fmt.Sprintf(`BLOB("%s")`, cell))
-	if tablet.Type == "replica" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("neutral")`)
-	} else if tablet.Type == "rdonly" {
-		assert.Equal(t, fmt.Sprintf("%v", qr.Rows[3][1]), `BLOB("must_not")`)
-	}
 }
 
 // ListBackups Lists back preset in shard
@@ -262,8 +255,8 @@ func NewConnParams(port int, password, socketPath, keyspace string) mysql.ConnPa
 		UnixSocket: socketPath,
 		Pass:       password,
 	}
-
-	if keyspace != "" {
+	cp.DbName = keyspace
+	if keyspace != "" && keyspace != "_vt" {
 		cp.DbName = "vt_" + keyspace
 	}
 
@@ -390,4 +383,49 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	}
 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
+}
+
+// WaitForHealthyShard waits for the given shard info record in the topo
+// server to list a tablet (alias and uid) as the primary serving tablet
+// for the shard. This is done using "vtctldclient GetShard" and parsing
+// its JSON output. All other watchers should then also see this shard
+// info status as well.
+func WaitForHealthyShard(vtctldclient *VtctldClientProcess, keyspace, shard string) error {
+	var (
+		tmr  = time.NewTimer(defaultOperationTimeout)
+		res  string
+		err  error
+		json []byte
+		cell string
+		uid  int64
+	)
+	for {
+		res, err = vtctldclient.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace, shard))
+		if err != nil {
+			return err
+		}
+		json = []byte(res)
+
+		cell, err = jsonparser.GetString(json, "shard", "primary_alias", "cell")
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
+			return err
+		}
+		uid, err = jsonparser.GetInt(json, "shard", "primary_alias", "uid")
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
+			return err
+		}
+
+		if cell != "" && uid > 0 {
+			return nil
+		}
+
+		select {
+		case <-tmr.C:
+			return fmt.Errorf("timed out waiting for the %s/%s shard to become healthy in the topo after %v; last seen status: %s; last seen error: %v",
+				keyspace, shard, defaultOperationTimeout, res, err)
+		default:
+		}
+
+		time.Sleep(defeaultRetryDelay)
+	}
 }

@@ -30,7 +30,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/netutil"
-	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -45,7 +44,6 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -62,16 +60,8 @@ const (
 	jsonContentType = "application/json; charset=utf-8"
 )
 
-// TabletStats represents realtime stats from a discovery.TabletHealth struct.
-type TabletStats struct {
-	LastError string                 `json:"last_error,omitempty"`
-	Realtime  *querypb.RealtimeStats `json:"realtime,omitempty"`
-	Serving   bool                   `json:"serving"`
-	Up        bool                   `json:"up"`
-}
-
-// TabletWithStatsAndURL wraps topo.Tablet, adding a URL property and optional realtime stats.
-type TabletWithStatsAndURL struct {
+// TabletWithURL wraps topo.Tablet, adding a URL property.
+type TabletWithURL struct {
 	Alias                *topodatapb.TabletAlias `json:"alias,omitempty"`
 	Hostname             string                  `json:"hostname,omitempty"`
 	PortMap              map[string]int32        `json:"port_map,omitempty"`
@@ -84,7 +74,6 @@ type TabletWithStatsAndURL struct {
 	MysqlHostname        string                  `json:"mysql_hostname,omitempty"`
 	MysqlPort            int32                   `json:"mysql_port,omitempty"`
 	PrimaryTermStartTime *vttime.Time            `json:"primary_term_start_time,omitempty"`
-	Stats                *TabletStats            `json:"stats,omitempty"`
 	URL                  string                  `json:"url,omitempty"`
 }
 
@@ -101,8 +90,8 @@ func registerVtctldAPIFlags(fs *pflag.FlagSet) {
 	fs.MarkDeprecated("vtctld_show_topology_crud", "It is no longer applicable because vtctld no longer provides a UI.")
 }
 
-func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.HealthCheck) *TabletWithStatsAndURL {
-	tablet := &TabletWithStatsAndURL{
+func newTabletWithURL(t *topodatapb.Tablet) *TabletWithURL {
+	tablet := &TabletWithURL{
 		Alias:                t.Alias,
 		Hostname:             t.Hostname,
 		PortMap:              t.PortMap,
@@ -121,19 +110,6 @@ func newTabletWithStatsAndURL(t *topodatapb.Tablet, healthcheck discovery.Health
 		tablet.URL = fmt.Sprintf("/vttablet/%s-%d/debug/status", t.Alias.Cell, t.Alias.Uid)
 	} else {
 		tablet.URL = "http://" + netutil.JoinHostPort(t.Hostname, t.PortMap["vt"])
-	}
-
-	if healthcheck != nil {
-		if health, err := healthcheck.GetTabletHealth(discovery.KeyFromTablet(t), tablet.Alias); err == nil {
-			tablet.Stats = &TabletStats{
-				Realtime: health.Stats,
-				Serving:  health.Serving,
-				Up:       true,
-			}
-			if health.LastError != nil {
-				tablet.Stats.LastError = health.LastError.Error()
-			}
-		}
 	}
 
 	return tablet
@@ -205,7 +181,7 @@ func unmarshalRequest(r *http.Request, v any) error {
 	return json.Unmarshal(data, v)
 }
 
-func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, healthcheck discovery.HealthCheck) {
+func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository) {
 	tabletHealthCache := newTabletHealthCache(ts)
 	tmClient := tmclient.NewTabletManagerClient()
 
@@ -293,7 +269,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 			filterCells = strings.Split(cells, ",") // list of cells
 		}
 
-		tablets := [](*TabletWithStatsAndURL){}
+		tablets := [](*TabletWithURL){}
 		for _, shard := range shardNames {
 			// Get tablets for this shard.
 			tabletAliases, err := ts.FindAllTabletAliasesInShardByCell(ctx, keyspace, shard, filterCells)
@@ -305,7 +281,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 				if err != nil {
 					return nil, err
 				}
-				tablet := newTabletWithStatsAndURL(t.Tablet, healthcheck)
+				tablet := newTabletWithURL(t.Tablet)
 				tablets = append(tablets, tablet)
 			}
 		}
@@ -478,113 +454,23 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 			return nil, err
 		}
 
-		return newTabletWithStatsAndURL(t.Tablet, nil), nil
+		return newTabletWithURL(t.Tablet), nil
 	})
 
 	// Healthcheck real time status per (cell, keyspace, tablet type, metric).
-	handleCollection("tablet_statuses", func(r *http.Request) (any, error) {
-		targetPath := getItemPath(r.URL.Path)
-
-		// Get the heatmap data based on query parameters.
-		if targetPath == "" {
-			if err := r.ParseForm(); err != nil {
-				return nil, err
-			}
-			keyspace := r.FormValue("keyspace")
-			cell := r.FormValue("cell")
-			tabletType := r.FormValue("type")
-			_, err := topoproto.ParseTabletType(tabletType)
-			// Excluding the case where parse fails because all tabletTypes was chosen.
-			if err != nil && tabletType != "all" {
-				return nil, fmt.Errorf("invalid tablet type: %v ", err)
-			}
-			metric := r.FormValue("metric")
-
-			// Setting default values if none was specified in the query params.
-			if keyspace == "" {
-				keyspace = "all"
-			}
-			if cell == "" {
-				cell = "all"
-			}
-			if tabletType == "" {
-				tabletType = "all"
-			}
-			if metric == "" {
-				metric = "health"
-			}
-
-			if healthcheck == nil {
-				return nil, fmt.Errorf("healthcheck not initialized")
-			}
-
-			heatmap, err := heatmapData(healthcheck, keyspace, cell, tabletType, metric)
-			if err != nil {
-				return nil, fmt.Errorf("couldn't get heatmap data: %v", err)
-			}
-			return heatmap, nil
-		}
-
-		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>&type=<type>&metric=<metric>", targetPath)
+	handleAPI("tablet_statuses/", func(w http.ResponseWriter, r *http.Request) error {
+		http.NotFound(w, r)
+		return nil
 	})
 
-	handleCollection("tablet_health", func(r *http.Request) (any, error) {
-		tabletPath := getItemPath(r.URL.Path)
-		parts := strings.SplitN(tabletPath, "/", 2)
-
-		// Request was incorrectly formatted.
-		if len(parts) != 2 {
-			return nil, fmt.Errorf("invalid tablet_health path: %q  expected path: /tablet_health/<cell>/<uid>", tabletPath)
-		}
-
-		if healthcheck == nil {
-			return nil, fmt.Errorf("healthcheck not initialized")
-		}
-
-		cell := parts[0]
-		uidStr := parts[1]
-		uid, err := topoproto.ParseUID(uidStr)
-		if err != nil {
-			return nil, fmt.Errorf("incorrect uid: %v", err)
-		}
-
-		tabletAlias := topodatapb.TabletAlias{
-			Cell: cell,
-			Uid:  uid,
-		}
-		tabletStat, err := healthcheck.GetTabletHealthByAlias(&tabletAlias)
-		if err != nil {
-			return nil, fmt.Errorf("could not get tabletStats: %v", err)
-		}
-		return tabletStat, nil
+	handleAPI("tablet_health/", func(w http.ResponseWriter, r *http.Request) error {
+		http.NotFound(w, r)
+		return nil
 	})
 
-	handleCollection("topology_info", func(r *http.Request) (any, error) {
-		targetPath := getItemPath(r.URL.Path)
-
-		// Retrieving topology information (keyspaces, cells, and types) based on query params.
-		if targetPath == "" {
-			if err := r.ParseForm(); err != nil {
-				return nil, err
-			}
-			keyspace := r.FormValue("keyspace")
-			cell := r.FormValue("cell")
-
-			// Setting default values if none was specified in the query params.
-			if keyspace == "" {
-				keyspace = "all"
-			}
-			if cell == "" {
-				cell = "all"
-			}
-
-			if healthcheck == nil {
-				return nil, fmt.Errorf("realtimeStats not initialized")
-			}
-
-			return getTopologyInfo(healthcheck, keyspace, cell), nil
-		}
-		return nil, fmt.Errorf("invalid target path: %q  expected path: ?keyspace=<keyspace>&cell=<cell>", targetPath)
+	handleAPI("topology_info/", func(w http.ResponseWriter, r *http.Request) error {
+		http.NotFound(w, r)
+		return nil
 	})
 
 	// Vtctl Command
@@ -667,7 +553,7 @@ func initAPI(ctx context.Context, ts *topo.Server, actions *ActionRepository, he
 
 		resp := make(map[string]any)
 		resp["activeReparents"] = !mysqlctl.DisableActiveReparents
-		resp["showStatus"] = enableRealtimeStats
+		resp["showStatus"] = false /* enableRealtimeStats = false, always */
 		data, err := json.MarshalIndent(resp, "", "  ")
 		if err != nil {
 			return fmt.Errorf("json error: %v", err)

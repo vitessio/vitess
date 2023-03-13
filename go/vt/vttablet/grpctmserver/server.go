@@ -17,12 +17,11 @@ limitations under the License.
 package grpctmserver
 
 import (
+	"context"
 	"time"
 
 	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-
-	"context"
 
 	"google.golang.org/grpc"
 
@@ -344,14 +343,6 @@ func (s *server) GetReplicas(ctx context.Context, request *tabletmanagerdatapb.G
 	return response, err
 }
 
-func (s *server) VExec(ctx context.Context, request *tabletmanagerdatapb.VExecRequest) (response *tabletmanagerdatapb.VExecResponse, err error) {
-	defer s.tm.HandleRPCPanic(ctx, "VExec", request, response, true /*verbose*/, &err)
-	ctx = callinfo.GRPCCallInfo(ctx)
-	response = &tabletmanagerdatapb.VExecResponse{}
-	response.Result, err = s.tm.VExec(ctx, request.Query, request.Workflow, request.Keyspace)
-	return response, err
-}
-
 func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdatapb.VReplicationExecRequest) (response *tabletmanagerdatapb.VReplicationExecResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "VReplicationExec", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
@@ -363,7 +354,7 @@ func (s *server) VReplicationExec(ctx context.Context, request *tabletmanagerdat
 func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmanagerdatapb.VReplicationWaitForPosRequest) (response *tabletmanagerdatapb.VReplicationWaitForPosResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "VReplicationWaitForPos", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
-	err = s.tm.VReplicationWaitForPos(ctx, int(request.Id), request.Position)
+	err = s.tm.VReplicationWaitForPos(ctx, request.Id, request.Position)
 	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
 }
 

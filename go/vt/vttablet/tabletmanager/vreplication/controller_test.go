@@ -23,12 +23,11 @@ import (
 	"testing"
 	"time"
 
+	"vitess.io/vitess/go/vt/mysqlctl"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
-	"vitess.io/vitess/go/vt/mysqlctl/fakemysqldaemon"
 	"vitess.io/vitess/go/vt/mysqlctl/tmutils"
 
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -89,7 +88,8 @@ func TestControllerKeyRange(t *testing.T) {
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, nil)
 	if err != nil {
@@ -125,8 +125,7 @@ func TestControllerTables(t *testing.T) {
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{
-		MysqlPort: sync2.NewAtomicInt32(3306),
+	mysqld := &mysqlctl.FakeMysqlDaemon{
 		Schema: &tabletmanagerdatapb.SchemaDefinition{
 			DatabaseSchema: "",
 			TableDefinitions: []*tabletmanagerdatapb.TableDefinition{
@@ -151,6 +150,7 @@ func TestControllerTables(t *testing.T) {
 			},
 		},
 	}
+	mysqld.MysqlPort.Store(3306)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, nil)
 	if err != nil {
@@ -170,7 +170,7 @@ func TestControllerBadID(t *testing.T) {
 		"id": "bad",
 	}
 	_, err := newController(context.Background(), params, nil, nil, nil, "", "", nil, nil)
-	want := `strconv.Atoi: parsing "bad": invalid syntax`
+	want := `strconv.ParseInt: parsing "bad": invalid syntax`
 	if err == nil || err.Error() != want {
 		t.Errorf("newController err: %v, want %v", err, want)
 	}
@@ -218,7 +218,8 @@ func TestControllerOverrides(t *testing.T) {
 	dbClient.ExpectRequest("commit", nil, nil)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, nil)
 	if err != nil {
@@ -286,7 +287,8 @@ func TestControllerRetry(t *testing.T) {
 	dbClient.ExpectRequestRE("update _vt.vreplication set pos='MariaDB/0-1-1235', time_updated=.*", testDMLResponse, nil)
 	dbClient.ExpectRequest("commit", nil, nil)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "rdonly", nil, nil)
 	if err != nil {
@@ -346,7 +348,8 @@ func TestControllerStopPosition(t *testing.T) {
 	dbClient.ExpectRequest("update _vt.vreplication set state='Stopped', message='Reached stopping position, done playing logs' where id=1", testDMLResponse, nil)
 
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &fakemysqldaemon.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	ct, err := newController(context.Background(), params, dbClientFactory, mysqld, env.TopoServ, env.Cells[0], "replica", nil, nil)
 	if err != nil {

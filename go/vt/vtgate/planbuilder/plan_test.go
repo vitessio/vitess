@@ -109,6 +109,7 @@ func (*nameLkpIndex) Cost() int                            { return 3 }
 func (*nameLkpIndex) IsUnique() bool                       { return false }
 func (*nameLkpIndex) NeedsVCursor() bool                   { return false }
 func (*nameLkpIndex) AllowBatch() bool                     { return true }
+func (*nameLkpIndex) AutoCommitEnabled() bool              { return false }
 func (*nameLkpIndex) GetCommitOrder() vtgatepb.CommitOrder { return vtgatepb.CommitOrder_NORMAL }
 func (*nameLkpIndex) Verify(context.Context, vindexes.VCursor, []sqltypes.Value, [][]byte) ([]bool, error) {
 	return []bool{}, nil
@@ -250,7 +251,7 @@ func TestPlan(t *testing.T) {
 	testFile(t, "flush_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "show_cases_no_default_keyspace.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "stream_cases.json", testOutputTempDir, vschemaWrapper, false)
-	testFile(t, "systemtables_cases80.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "info_schema80_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "reference_cases.json", testOutputTempDir, vschemaWrapper, false)
 	testFile(t, "vexplain_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
@@ -261,7 +262,7 @@ func TestSystemTables57(t *testing.T) {
 	defer servenv.SetMySQLServerVersionForTest("")
 	vschemaWrapper := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 	testOutputTempDir := makeTestOutput(t)
-	testFile(t, "systemtables_cases57.json", testOutputTempDir, vschemaWrapper, false)
+	testFile(t, "info_schema57_cases.json", testOutputTempDir, vschemaWrapper, false)
 }
 
 func TestSysVarSetDisabled(t *testing.T) {
@@ -331,6 +332,15 @@ func TestOneWithTPCHVSchema(t *testing.T) {
 		v:             loadSchema(t, "vschemas/tpch_schema.json", true),
 		sysVarEnabled: true,
 	}
+
+	testFile(t, "onecase.json", "", vschema, false)
+}
+
+func TestOneWith57Version(t *testing.T) {
+	// first we move everything to use 5.7 logic
+	servenv.SetMySQLServerVersionForTest("5.7")
+	defer servenv.SetMySQLServerVersionForTest("")
+	vschema := &vschemaWrapper{v: loadSchema(t, "vschemas/schema.json", true)}
 
 	testFile(t, "onecase.json", "", vschema, false)
 }
@@ -677,6 +687,22 @@ func (vw *vschemaWrapper) FindView(tab sqlparser.TableName) sqlparser.SelectStat
 }
 
 func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	if tab.Qualifier.IsEmpty() && tab.Name.String() == "dual" {
+		ksName := vw.getActualKeyspace()
+		var ks *vindexes.Keyspace
+		if ksName == "" {
+			ks = vw.getfirstKeyspace()
+			ksName = ks.Name
+		} else {
+			ks = vw.v.Keyspaces[ksName].Keyspace
+		}
+		tbl := &vindexes.Table{
+			Name:     sqlparser.NewIdentifierCS("dual"),
+			Keyspace: ks,
+			Type:     vindexes.TypeReference,
+		}
+		return tbl, nil, ksName, topodatapb.TabletType_PRIMARY, nil, nil
+	}
 	destKeyspace, destTabletType, destTarget, err := topoproto.ParseDestination(tab.Qualifier.String(), topodatapb.TabletType_PRIMARY)
 	if err != nil {
 		return nil, nil, destKeyspace, destTabletType, destTarget, err
@@ -691,6 +717,16 @@ func (vw *vschemaWrapper) FindTableOrVindex(tab sqlparser.TableName) (*vindexes.
 	return table, vindex, destKeyspace, destTabletType, destTarget, nil
 }
 
+func (vw *vschemaWrapper) getfirstKeyspace() (ks *vindexes.Keyspace) {
+	var f string
+	for name, schema := range vw.v.Keyspaces {
+		if f == "" || f > name {
+			f = name
+			ks = schema.Keyspace
+		}
+	}
+	return
+}
 func (vw *vschemaWrapper) getActualKeyspace() string {
 	if vw.keyspace == nil {
 		return ""

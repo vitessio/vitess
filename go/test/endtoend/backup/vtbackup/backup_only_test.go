@@ -36,7 +36,7 @@ import (
 
 var (
 	vtInsertTest = `
-		create table vt_insert_test (
+		create table if not exists vt_insert_test (
 		id bigint auto_increment,
 		msg varchar(64),
 		primary key (id)
@@ -63,8 +63,14 @@ func TestTabletInitialBackup(t *testing.T) {
 	initTablets(t, false, false)
 
 	// Restore the Tablets
+
 	restore(t, primary, "replica", "NOT_SERVING")
+	// Vitess expects that the user has set the database into ReadWrite mode before calling
+	// TabletExternallyReparented
 	err := localCluster.VtctlclientProcess.ExecuteCommand(
+		"SetReadWrite", primary.Alias)
+	require.Nil(t, err)
+	err = localCluster.VtctlclientProcess.ExecuteCommand(
 		"TabletExternallyReparented", primary.Alias)
 	require.Nil(t, err)
 	restore(t, replica1, "replica", "SERVING")
@@ -137,7 +143,7 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	require.Nil(t, err)
 	cluster.VerifyRowsInTablet(t, replica1, keyspaceName, 2)
 
-	// eventhough we change the value of compression it won't effect
+	// even though we change the value of compression it won't affect
 	// decompression since it gets its value from MANIFEST file, created
 	// as part of backup.
 	mysqlctl.CompressionEngineName = "lz4"
@@ -150,20 +156,6 @@ func firstBackupTest(t *testing.T, tabletType string) {
 	time.Sleep(5 * time.Second)
 	//check the new replica has the data
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
-
-	// check that the restored replica has the right local_metadata
-	result, err := replica2.VttabletProcess.QueryTabletWithDB("select * from local_metadata", "_vt")
-	require.Nil(t, err)
-	require.NotNil(t, result)
-	require.NotEmpty(t, result.Rows)
-	assert.Equal(t, replica2.Alias, result.Rows[0][1].ToString(), "Alias")
-	assert.Equal(t, "ks.0", result.Rows[1][1].ToString(), "ClusterAlias")
-	assert.Equal(t, cell, result.Rows[2][1].ToString(), "DataCenter")
-	if tabletType == "replica" {
-		assert.Equal(t, "neutral", result.Rows[3][1].ToString(), "PromotionRule")
-	} else {
-		assert.Equal(t, "must_not", result.Rows[3][1].ToString(), "PromotionRule")
-	}
 
 	removeBackups(t)
 	verifyBackupCount(t, shardKsName, 0)

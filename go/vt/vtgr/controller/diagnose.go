@@ -147,7 +147,7 @@ func (shard *GRShard) Diagnose(ctx context.Context) (DiagnoseType, error) {
 func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) {
 	// fast path only diagnose problem Vitess primary
 	// which does not needed if the shard is inactive
-	if shard.localDbPort != 0 && shard.isActive.Get() {
+	if shard.localDbPort != 0 && shard.isActive.Load() {
 		localView := shard.getLocalView()
 		if localView != nil {
 			fastDiagnose := shard.fastPathDiagnose(ctx, localView)
@@ -202,7 +202,7 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 
 	// We only check Vitess primary iff shard is active.
 	// Otherwise VTGR will only make sure there is a mysql group in the shard.
-	if shard.isActive.Get() {
+	if shard.isActive.Load() {
 		// Secondly, we check if there is a primary tablet.
 		// If there is a group but we cannot find a primary tablet
 		// we should set it based on mysql group
@@ -240,17 +240,17 @@ func (shard *GRShard) diagnoseLocked(ctx context.Context) (DiagnoseType, error) 
 	onlineMembers, isReadOnly := shard.getOnlineGroupInfo()
 	// If we found a writable shard in the inactive shard
 	// we should consider the shard as InsufficientGroupSize to set read only
-	if !isReadOnly && !shard.isActive.Get() {
+	if !isReadOnly && !shard.isActive.Load() {
 		return DiagnoseTypeInsufficientGroupSize, nil
 	}
 	// Then we check if we satisfy the minimum replica requirement
 	if shard.minNumReplicas > 0 {
-		if onlineMembers >= shard.minNumReplicas && isReadOnly && shard.isActive.Get() {
+		if onlineMembers >= shard.minNumReplicas && isReadOnly && shard.isActive.Load() {
 			return DiagnoseTypeReadOnlyShard, nil
 		}
 		// If we disable readonly protection and still found we have a read only shard,
 		// we should return DiagnoseTypeReadOnlyShard so that VTGR can turn off read only
-		if shard.disableReadOnlyProtection && isReadOnly && shard.isActive.Get() {
+		if shard.disableReadOnlyProtection && isReadOnly && shard.isActive.Load() {
 			return DiagnoseTypeReadOnlyShard, nil
 		}
 		// We don't check isActive here since if it is inactive, VTGR should already return InsufficientGroupSize

@@ -20,11 +20,11 @@ import (
 	"fmt"
 	"math"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"google.golang.org/protobuf/proto"
 
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -95,7 +95,7 @@ type MaxReplicationLagModule struct {
 	applyMutableConfig bool
 
 	// rate is the rate calculated for the throttler.
-	rate         sync2.AtomicInt64
+	rate         atomic.Int64
 	currentState state
 	// lastRateChange is the time when rate was adjusted last.
 	lastRateChange             time.Time
@@ -139,13 +139,10 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		// Register "config" for a future config update.
 		mutableConfig:      config,
 		applyMutableConfig: true,
-		// Always start off with a non-zero rate because zero means all requests
-		// get throttled.
-		rate:           sync2.NewAtomicInt64(rate),
-		currentState:   stateIncreaseRate,
-		lastRateChange: nowFunc(),
-		memory:         newMemory(memoryGranularity, config.AgeBadRateAfter(), config.BadRateIncrease),
-		lagRecords:     make(chan replicationLagRecord, 10),
+		currentState:       stateIncreaseRate,
+		lastRateChange:     nowFunc(),
+		memory:             newMemory(memoryGranularity, config.AgeBadRateAfter(), config.BadRateIncrease),
+		lagRecords:         make(chan replicationLagRecord, 10),
 		// Prevent an immediate increase of the initial rate.
 		nextAllowedChangeAfterInit: nowFunc().Add(config.MaxDurationBetweenIncreases()),
 		actualRatesHistory:         actualRatesHistory,
@@ -153,6 +150,10 @@ func NewMaxReplicationLagModule(config MaxReplicationLagModuleConfig, actualRate
 		rdonlyLagCache:             newReplicationLagCache(1000),
 		results:                    newResultRing(1000),
 	}
+
+	// Always start off with a non-zero rate because zero means all requests
+	// get throttled.
+	m.rate.Store(rate)
 
 	// Enforce a config update.
 	m.applyLatestConfig()
@@ -178,7 +179,7 @@ func (m *MaxReplicationLagModule) Stop() {
 // MaxRate returns the current maximum allowed rate.
 // It implements the Module interface.
 func (m *MaxReplicationLagModule) MaxRate() int64 {
-	return m.rate.Get()
+	return m.rate.Load()
 }
 
 // applyLatestConfig checks if "mutableConfig" should be applied as the new
@@ -312,8 +313,8 @@ func (m *MaxReplicationLagModule) recalculateRate(lagRecordNow replicationLagRec
 		lastRateChange: m.lastRateChange,
 		OldState:       m.currentState,
 		NewState:       m.currentState,
-		OldRate:        m.rate.Get(),
-		NewRate:        m.rate.Get(),
+		OldRate:        m.rate.Load(),
+		NewRate:        m.rate.Load(),
 		LagRecordNow:   lagRecordNow,
 	}
 	if lagNow <= m.config.TargetReplicationLagSec {
@@ -469,7 +470,7 @@ func (m *MaxReplicationLagModule) isReplicaUnderTest(r *result, now time.Time, t
 func (m *MaxReplicationLagModule) increaseRate(r *result, now time.Time, lagRecordNow replicationLagRecord) {
 	m.markCurrentRateAsBadOrGood(r, now, stateIncreaseRate, unknown)
 
-	oldRate := m.rate.Get()
+	oldRate := m.rate.Load()
 	actualRate := m.actualRatesHistory.average(m.lastRateChange, now)
 	// Do not increase the rate if we didn't see an actual rate that approached the current max rate.
 	// actualRate will be NaN if there were no observations in the history.
@@ -678,7 +679,7 @@ func (m *MaxReplicationLagModule) emergency(r *result, now time.Time, lagRecordN
 }
 
 func (m *MaxReplicationLagModule) decreaseRateByPercentage(r *result, now time.Time, lagRecordNow replicationLagRecord, newState state, decrease float64, decreaseReason string) {
-	oldRate := m.rate.Get()
+	oldRate := m.rate.Load()
 	rate := int64(float64(oldRate) - float64(oldRate)*decrease)
 	if rate == 0 {
 		// Never fully stop throttling.
@@ -690,7 +691,7 @@ func (m *MaxReplicationLagModule) decreaseRateByPercentage(r *result, now time.T
 }
 
 func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int64, reason string, now time.Time, lagRecordNow replicationLagRecord, testDuration time.Duration) {
-	oldRate := m.rate.Get()
+	oldRate := m.rate.Load()
 
 	m.currentState = newState
 
@@ -710,7 +711,7 @@ func (m *MaxReplicationLagModule) updateRate(r *result, newState state, rate int
 	if rate == oldRate {
 		return
 	}
-	m.rate.Set(int64(rate))
+	m.rate.Store(rate)
 	// Notify the throttler that we updated our max rate.
 	m.rateUpdateChan <- struct{}{}
 }

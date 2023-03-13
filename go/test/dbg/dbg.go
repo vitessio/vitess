@@ -23,6 +23,7 @@ import (
 	"go/format"
 	"go/parser"
 	"go/token"
+	"io"
 	"os"
 	"path"
 	"runtime"
@@ -163,6 +164,17 @@ func V[Val any](v Val) Val {
 
 // P prints all the arguments passed to the function in verbose debug form
 func P(vals ...any) {
+	dump(vals, os.Stdout)
+}
+
+// S returns a string with all the arguments passed to the function in verbose debug form
+func S(vals ...any) string {
+	buf := &strings.Builder{}
+	dump(vals, buf)
+	return buf.String()
+}
+
+func dump(vals []any, writer io.Writer) {
 	var p *params
 	if _, f, lineno, ok := runtime.Caller(1); ok {
 		p = defaultCache.resolve(f, lineno)
@@ -176,5 +188,7 @@ func P(vals ...any) {
 		w := text.NewIndentWriter(&buf, nil, bytes.Repeat([]byte{' '}, indent))
 		fmt.Fprintf(w, "%# v\n", pretty.Formatter(v))
 	}
-	_, _ = buf.WriteTo(os.Stdout)
+
+	_, _ = buf.WriteTo(writer)
+
 }

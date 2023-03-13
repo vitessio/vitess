@@ -24,8 +24,6 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 
-	"vitess.io/vitess/go/test/utils"
-
 	"github.com/google/go-cmp/cmp"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -116,8 +114,9 @@ func AssertContainsError(t *testing.T, conn *mysql.Conn, query, expected string)
 func AssertMatchesNoOrder(t *testing.T, conn *mysql.Conn, query, expected string) {
 	t.Helper()
 	qr := Exec(t, conn, query)
-	actual := fmt.Sprintf("%v", qr.Rows)
-	assert.Equal(t, utils.SortString(expected), utils.SortString(actual), "for query: [%s] expected \n%s \nbut actual \n%s", query, expected, actual)
+	if err := sqltypes.RowsEqualsStr(expected, qr.Rows); err != nil {
+		t.Errorf("for query: [%s] %v", query, err)
+	}
 }
 
 // AssertIsEmpty ensures that the given query returns 0 row.
@@ -199,7 +198,11 @@ func AssertMatchesWithTimeout(t *testing.T, conn *mysql.Conn, query, expected st
 		case <-timeout:
 			require.Fail(t, failureMsg, diff)
 		case <-time.After(r):
-			qr := Exec(t, conn, query)
+			qr, err := ExecAllowError(t, conn, query)
+			if err != nil {
+				diff = err.Error()
+				break
+			}
 			diff = cmp.Diff(expected,
 				fmt.Sprintf("%v", qr.Rows))
 		}
@@ -228,6 +231,47 @@ func WaitForAuthoritative(t *testing.T, vtgateProcess cluster.VtgateProcess, ks,
 				continue
 			}
 			return nil
+		}
+	}
+}
+
+// WaitForColumn waits for a table's column to be present
+func WaitForColumn(t *testing.T, vtgateProcess cluster.VtgateProcess, ks, tbl, col string) error {
+	timeout := time.After(10 * time.Second)
+	for {
+		select {
+		case <-timeout:
+			return fmt.Errorf("schema tracking did not find column '%s' in table '%s'", col, tbl)
+		default:
+			time.Sleep(1 * time.Second)
+			res, err := vtgateProcess.ReadVSchema()
+			require.NoError(t, err, res)
+			t2Map := getTableT2Map(res, ks, tbl)
+			authoritative, fieldPresent := t2Map["column_list_authoritative"]
+			if !fieldPresent {
+				break
+			}
+			authoritativeBool, isBool := authoritative.(bool)
+			if !isBool || !authoritativeBool {
+				break
+			}
+			colMap, exists := t2Map["columns"]
+			if !exists {
+				break
+			}
+			colList, isSlice := colMap.([]interface{})
+			if !isSlice {
+				break
+			}
+			for _, c := range colList {
+				colDef, isMap := c.(map[string]interface{})
+				if !isMap {
+					break
+				}
+				if colName, exists := colDef["name"]; exists && colName == col {
+					return nil
+				}
+			}
 		}
 	}
 }

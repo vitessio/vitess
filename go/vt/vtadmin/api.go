@@ -31,8 +31,8 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/patrickmn/go-cache"
-	"k8s.io/apimachinery/pkg/util/sets"
 
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
@@ -1402,7 +1402,7 @@ func (api *API) GetWorkflows(ctx context.Context, req *vtadminpb.GetWorkflowsReq
 
 			workflows, err := c.GetWorkflows(ctx, req.Keyspaces, cluster.GetWorkflowsOptions{
 				ActiveOnly:      req.ActiveOnly,
-				IgnoreKeyspaces: sets.NewString(req.IgnoreKeyspaces...),
+				IgnoreKeyspaces: sets.New[string](req.IgnoreKeyspaces...),
 			})
 			if err != nil {
 				rec.RecordError(err)

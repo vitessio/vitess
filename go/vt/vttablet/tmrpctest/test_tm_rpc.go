@@ -901,14 +901,6 @@ func tmRPCTestGetReplicasPanic(ctx context.Context, t *testing.T, client tmclien
 	expectHandleRPCPanic(t, "GetReplicas", false /*verbose*/, err)
 }
 
-func (fra *fakeRPCTM) VExec(ctx context.Context, query, workflow, keyspace string) (*querypb.QueryResult, error) {
-	if fra.panics {
-		panic(fmt.Errorf("test-triggered panic"))
-	}
-	compare(fra.t, "VExec query", query, "query")
-	return testExecuteFetchResult, nil
-}
-
 var testVRQuery = "query"
 
 func (fra *fakeRPCTM) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
@@ -930,11 +922,11 @@ func tmRPCTestVReplicationExecPanic(ctx context.Context, t *testing.T, client tm
 }
 
 var (
-	wfpid  = 3
+	wfpid  = int32(3)
 	wfppos = ""
 )
 
-func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int, pos string) error {
+func (fra *fakeRPCTM) VReplicationWaitForPos(ctx context.Context, id int32, pos string) error {
 	if fra.panics {
 		panic(fmt.Errorf("test-triggered panic"))
 	}

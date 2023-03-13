@@ -38,7 +38,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as l_orderkey",
-                      "([COLUMN 6] * [COLUMN 7]) * [COLUMN 8] as revenue",
+                      "([COLUMN 6] * COALESCE([COLUMN 7], INT64(1))) * COALESCE([COLUMN 8], INT64(1)) as revenue",
                       "[COLUMN 1] as o_orderdate",
                       "[COLUMN 2] as o_shippriority",
                       "[COLUMN 5]",
@@ -195,7 +195,7 @@
                         "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                         "Table": "lineitem_map",
                         "Values": [
-                          ":l_orderkey"
+                          "::l_orderkey"
                         ],
                         "Vindex": "md5"
                       },
@@ -247,7 +247,7 @@
                 "OperatorType": "Projection",
                 "Expressions": [
                   "[COLUMN 0] as n_name",
-                  "(((([COLUMN 2] * [COLUMN 3]) * [COLUMN 4]) * [COLUMN 5]) * [COLUMN 6]) * [COLUMN 7] as revenue",
+                  "(((([COLUMN 2] * COALESCE([COLUMN 3], INT64(1))) * COALESCE([COLUMN 4], INT64(1))) * COALESCE([COLUMN 5], INT64(1))) * COALESCE([COLUMN 6], INT64(1))) * COALESCE([COLUMN 7], INT64(1)) as revenue",
                   "[COLUMN 1]"
                 ],
                 "Inputs": [
@@ -344,7 +344,7 @@
                                         "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                                         "Table": "lineitem_map",
                                         "Values": [
-                                          ":l_orderkey"
+                                          "::l_orderkey"
                                         ],
                                         "Vindex": "md5"
                                       },
@@ -512,7 +512,7 @@
               "[COLUMN 4] as supp_nation",
               "[COLUMN 5] as cust_nation",
               "[COLUMN 6] as l_year",
-              "(((([COLUMN 10] * [COLUMN 11]) * [COLUMN 12]) * [COLUMN 13]) * [COLUMN 14]) * [COLUMN 15] as revenue",
+              "(((([COLUMN 10] * COALESCE([COLUMN 11], INT64(1))) * COALESCE([COLUMN 12], INT64(1))) * COALESCE([COLUMN 13], INT64(1))) * COALESCE([COLUMN 14], INT64(1))) * COALESCE([COLUMN 15], INT64(1)) as revenue",
               "[COLUMN 9]",
               "[COLUMN 8]",
               "[COLUMN 7]"
@@ -720,7 +720,7 @@
                     "Expressions": [
                       "[COLUMN 0] as c_custkey",
                       "[COLUMN 1] as c_name",
-                      "(([COLUMN 14] * [COLUMN 15]) * [COLUMN 16]) * [COLUMN 17] as revenue",
+                      "(([COLUMN 14] * COALESCE([COLUMN 15], INT64(1))) * COALESCE([COLUMN 16], INT64(1))) * COALESCE([COLUMN 17], INT64(1)) as revenue",
                       "[COLUMN 2] as c_acctbal",
                       "[COLUMN 4] as n_name",
                       "[COLUMN 5] as c_address",
@@ -792,7 +792,7 @@
                                         "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                                         "Table": "lineitem_map",
                                         "Values": [
-                                          ":l_orderkey"
+                                          "::l_orderkey"
                                         ],
                                         "Vindex": "md5"
                                       },
@@ -896,8 +896,8 @@
             "OperatorType": "Projection",
             "Expressions": [
               "[COLUMN 0] as l_shipmode",
-              "[COLUMN 2] * [COLUMN 3] as high_line_count",
-              "[COLUMN 4] * [COLUMN 5] as low_line_count",
+              "[COLUMN 2] * COALESCE([COLUMN 3], INT64(1)) as high_line_count",
+              "[COLUMN 4] * COALESCE([COLUMN 5], INT64(1)) as low_line_count",
               "[COLUMN 1]"
             ],
             "Inputs": [
@@ -949,7 +949,7 @@
                             "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                             "Table": "lineitem_map",
                             "Values": [
-                              ":l_orderkey"
+                              "::l_orderkey"
                             ],
                             "Vindex": "md5"
                           },
@@ -1153,7 +1153,7 @@
                   "[COLUMN 4] as o_orderkey",
                   "[COLUMN 1] as o_orderdate",
                   "[COLUMN 0] as o_totalprice",
-                  "([COLUMN 10] * [COLUMN 11]) * [COLUMN 12] as sum(l_quantity)",
+                  "([COLUMN 10] * COALESCE([COLUMN 11], INT64(1))) * COALESCE([COLUMN 12], INT64(1)) as sum(l_quantity)",
                   "[COLUMN 9]",
                   "[COLUMN 8]",
                   "[COLUMN 7]",
@@ -1195,7 +1195,7 @@
                                 "Query": "select o_custkey, o_orderkey, count(*), weight_string(o_custkey), weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate) from orders where :o_orderkey in (select l_orderkey from lineitem group by l_orderkey having sum(l_quantity) > 300) group by o_custkey, weight_string(o_custkey), o_orderkey, weight_string(o_orderkey), o_totalprice, weight_string(o_totalprice), o_orderdate, weight_string(o_orderdate)",
                                 "Table": "orders",
                                 "Values": [
-                                  ":__sq1"
+                                  "::__sq1"
                                 ],
                                 "Vindex": "hash"
                               },
@@ -1241,7 +1241,7 @@
                             "Query": "select l_orderkey, l_linenumber from lineitem_map where l_orderkey in ::__vals",
                             "Table": "lineitem_map",
                             "Values": [
-                              ":l_orderkey"
+                              "::l_orderkey"
                             ],
                             "Vindex": "md5"
                           },
@@ -1288,7 +1288,7 @@
           {
             "OperatorType": "Projection",
             "Expressions": [
-              "[COLUMN 0] * [COLUMN 1] as revenue"
+              "[COLUMN 0] * COALESCE([COLUMN 1], INT64(1)) as revenue"
             ],
             "Inputs": [
               {
@@ -1370,7 +1370,7 @@
                     "OperatorType": "Projection",
                     "Expressions": [
                       "[COLUMN 0] as s_name",
-                      "(([COLUMN 2] * [COLUMN 3]) * [COLUMN 4]) * [COLUMN 5] as numwait",
+                      "(([COLUMN 2] * COALESCE([COLUMN 3], INT64(1))) * COALESCE([COLUMN 4], INT64(1))) * COALESCE([COLUMN 5], INT64(1)) as numwait",
                       "[COLUMN 1]"
                     ],
                     "Inputs": [

@@ -92,12 +92,6 @@ endif
 		    -ldflags "$(shell tools/build_version_flags.sh)" \
 		    -o ${VTROOTBIN} ./go/...
 
-	# build vtorc with CGO, because it depends on sqlite
-	CGO_ENABLED=1 go build \
-		    -trimpath $(EXTRA_BUILD_FLAGS) $(VT_GO_PARALLEL) \
-		    -ldflags "$(shell tools/build_version_flags.sh)" \
-		    -o ${VTROOTBIN} ./go/cmd/vtorc/...
-
 # cross-build can be used to cross-compile Vitess client binaries
 # Outside of select client binaries (namely vtctlclient & vtexplain), cross-compiled Vitess Binaries are not recommended for production deployments
 # Usage: GOOS=darwin GOARCH=amd64 make cross-build
@@ -119,8 +113,6 @@ endif
 	@if [ ! -x "${VTROOTBIN}/${GOOS}_${GOARCH}/vttablet" ]; then \
 		echo "Missing vttablet at: ${VTROOTBIN}/${GOOS}_${GOARCH}." && exit; \
 	fi
-
-	# Cross-compiling w/ cgo isn't trivial and we don't need vtorc, so we can skip building it
 
 debug:
 ifndef NOBANNER
@@ -145,8 +137,7 @@ install: build
 cross-install: cross-build
 	# binaries
 	mkdir -p "$${PREFIX}/bin"
-	# Still no vtorc for cross-compile
-	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
+	cp "${VTROOTBIN}/${GOOS}_${GOARCH}/"{mysqlctl,mysqlctld,vtorc,vtadmin,vtctld,vtctlclient,vtctldclient,vtgate,vttablet,vtbackup} "$${PREFIX}/bin/"
 
 # Install local install the binaries needed to run vitess locally
 # Usage: make install-local PREFIX=/path/to/install/root
@@ -168,19 +159,13 @@ install-testing: build
 vtctldclient: go/vt/proto/vtctlservice/vtctlservice.pb.go
 	make -C go/vt/vtctl/vtctldclient
 
-parser:
-	make -C go/vt/sqlparser
+sqlparser:
+	go generate ./go/vt/sqlparser/...
+
+codegen: sqlparser sizegen
 
 demo:
 	go install ./examples/demo/demo.go
-
-codegen: asthelpergen sizegen parser
-
-visitor: asthelpergen
-	echo "make visitor has been replaced by make asthelpergen"
-
-asthelpergen:
-	go generate ./go/vt/sqlparser/...
 
 sizegen:
 	go run ./go/tools/sizegen/sizegen.go \
@@ -284,7 +269,7 @@ $(PROTO_GO_OUTS): minimaltools install_protoc-gen-go proto/*.proto
 # This rule builds the bootstrap images for all flavors.
 DOCKER_IMAGES_FOR_TEST = mysql57 mysql80 percona57 percona80
 DOCKER_IMAGES = common $(DOCKER_IMAGES_FOR_TEST)
-BOOTSTRAP_VERSION=14
+BOOTSTRAP_VERSION=15
 ensure_bootstrap_version:
 	find docker/ -type f -exec sed -i "s/^\(ARG bootstrap_version\)=.*/\1=${BOOTSTRAP_VERSION}/" {} \;
 	sed -i 's/\(^.*flag.String(\"bootstrap-version\",\) *\"[^\"]\+\"/\1 \"${BOOTSTRAP_VERSION}\"/' test.go
@@ -311,6 +296,9 @@ define build_docker_image
 	if grep -q arm64 <<< ${2}; then \
 		echo "Building docker using arm64 buildx"; \
 		docker buildx build --platform linux/arm64 -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
+	elif [ $$(go env GOOS) != $$(go env GOHOSTOS) ] || [ $$(go env GOARCH) != $$(go env GOHOSTARCH) ]; then \
+		echo "Building docker using buildx --platform=$$(go env GOOS)/$$(go env GOARCH)"; \
+		docker buildx build --platform "$$(go env GOOS)/$$(go env GOARCH)" -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \
 	else \
 		echo "Building docker using straight docker build"; \
 		docker build -f ${1} -t ${2} --build-arg bootstrap_version=${BOOTSTRAP_VERSION} .; \

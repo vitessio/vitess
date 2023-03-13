@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
@@ -70,6 +71,25 @@ type BackupParams struct {
 	// Position of last known backup. If non empty, then this value indicates the backup should be incremental
 	// and as of this position
 	IncrementalFromPos string
+	// Stats let's backup engines report detailed backup timings.
+	Stats backupstats.Stats
+}
+
+func (b BackupParams) Copy() BackupParams {
+	return BackupParams{
+		b.Cnf,
+		b.Mysqld,
+		b.Logger,
+		b.Concurrency,
+		b.HookExtraEnv,
+		b.TopoServer,
+		b.Keyspace,
+		b.Shard,
+		b.TabletAlias,
+		b.BackupTime,
+		b.IncrementalFromPos,
+		b.Stats,
+	}
 }
 
 // RestoreParams is the struct that holds all params passed to ExecuteRestore
@@ -82,8 +102,6 @@ type RestoreParams struct {
 	Concurrency int
 	// Extra env variables for pre-restore and post-restore transform hooks
 	HookExtraEnv map[string]string
-	// Metadata to write into database after restore. See PopulateMetadataTables
-	LocalMetadata map[string]string
 	// DeleteBeforeRestore tells us whether existing data should be deleted before
 	// restoring. This is always set to false when starting a tablet with -restore_from_backup,
 	// but is set to true when executing a RestoreFromBackup command on an already running vttablet
@@ -101,6 +119,26 @@ type RestoreParams struct {
 	RestoreToPos mysql.Position
 	// When DryRun is set, no restore actually takes place; but some of its steps are validated.
 	DryRun bool
+	// Stats let's restore engines report detailed restore timings.
+	Stats backupstats.Stats
+}
+
+func (p RestoreParams) Copy() RestoreParams {
+	return RestoreParams{
+		p.Cnf,
+		p.Mysqld,
+		p.Logger,
+		p.Concurrency,
+		p.HookExtraEnv,
+		p.DeleteBeforeRestore,
+		p.DbName,
+		p.Keyspace,
+		p.Shard,
+		p.StartTime,
+		p.RestoreToPos,
+		p.DryRun,
+		p.Stats,
+	}
 }
 
 func (p *RestoreParams) IsIncrementalRecovery() bool {
@@ -417,7 +455,7 @@ func FindBackupToRestore(ctx context.Context, params RestoreParams, bhs []backup
 	}
 	// restore to a position (using incremental backups):
 	// we calculate a possible restore path based on the manifests. The resulting manifests are
-	// a sorted subsequence, with the full backup first, and zero or more inremental backups to follow.
+	// a sorted subsequence, with the full backup first, and zero or more incremental backups to follow.
 	manifests, err := FindPITRPath(params.RestoreToPos.GTIDSet, manifests)
 	if err != nil {
 		return nil, err

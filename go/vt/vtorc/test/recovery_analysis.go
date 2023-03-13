@@ -22,7 +22,7 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"github.com/openark/golib/sqlutils"
+	"vitess.io/vitess/go/vt/external/golib/sqlutils"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
@@ -46,7 +46,7 @@ type InfoForRecoveryAnalysis struct {
 	Region                                    string
 	PhysicalEnvironment                       string
 	LogFile                                   string
-	LogPos                                    int64
+	LogPos                                    uint32
 	IsStaleBinlogCoordinates                  int
 	GTIDMode                                  string
 	LastCheckValid                            int

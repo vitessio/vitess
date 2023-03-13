@@ -296,7 +296,9 @@ func NewCreateTableEntity(c *sqlparser.CreateTable) (*CreateTableEntity, error) 
 // - table option case (upper/lower/special)
 // The function returns this receiver as courtesy
 func (c *CreateTableEntity) normalize() *CreateTableEntity {
-	c.normalizeKeys()
+	c.normalizePrimaryKeyColumns()
+	c.normalizeForeignKeyIndexes() // implicitly add missing indexes for foreign keys
+	c.normalizeKeys()              // assign names to keys
 	c.normalizeUnnamedConstraints()
 	c.normalizeTableOptions()
 	c.normalizeColumnOptions()
@@ -340,7 +342,7 @@ const mysqlCollationVersion = "8.0.0"
 var collationEnv = collations.NewEnvironment(mysqlCollationVersion)
 
 func defaultCharset() string {
-	collation := collationEnv.LookupByID(collations.ID(collationEnv.DefaultConnectionCharset()))
+	collation := collations.ID(collationEnv.DefaultConnectionCharset()).Get()
 	if collation == nil {
 		return ""
 	}
@@ -432,6 +434,32 @@ func (c *CreateTableEntity) normalizeColumnOptions() {
 			// stored as a tinyint(1) and treated special.
 			if !isBool(col.Type) {
 				col.Type.Length = nil
+			}
+		}
+
+		// Normalize boolean to tinyint(1). Otherwise we get a diff if the desired schema has a boolean column because
+		// "show create table" reports it as a tinyint(1).
+		if col.Type.Type == "boolean" {
+			col.Type.Type = "tinyint"
+			col.Type.Length = &sqlparser.Literal{
+				Type: sqlparser.IntVal,
+				Val:  "1",
+			}
+
+			if col.Type.Options.Default != nil {
+				val, ok := col.Type.Options.Default.(sqlparser.BoolVal)
+				if ok {
+					defaultVal := "0"
+					if val {
+						defaultVal = "1"
+					}
+					col.Type.Options.Default = &sqlparser.Literal{
+						Type: sqlparser.StrVal,
+						Val:  defaultVal,
+					}
+				} else {
+					col.Type.Options.Default = nil
+				}
 			}
 		}
 
@@ -622,7 +650,7 @@ func (c *CreateTableEntity) normalizeKeys() {
 }
 
 func (c *CreateTableEntity) normalizeUnnamedConstraints() {
-	// let's ensure all keys have names
+	// let's ensure all constraints have names
 	constraintNameExists := map[string]bool{}
 	// first, we iterate and take note for all keys that do already have names
 	for _, constraint := range c.CreateTable.TableSpec.Constraints {
@@ -646,6 +674,34 @@ func (c *CreateTableEntity) normalizeUnnamedConstraints() {
 			// OK we found a free slot!
 			constraint.Name = sqlparser.NewIdentifierCI(suggestedCheckName)
 			constraintNameExists[strings.ToLower(suggestedCheckName)] = true
+		}
+	}
+}
+
+func (c *CreateTableEntity) normalizeForeignKeyIndexes() {
+	for _, constraint := range c.CreateTable.TableSpec.Constraints {
+		fk, ok := constraint.Details.(*sqlparser.ForeignKeyDefinition)
+		if !ok {
+			continue
+		}
+		if !c.columnsCoveredByInOrderIndex(fk.Source) {
+			// We add a foreign key, but the local FK columns are not indexed.
+			// MySQL's behavior is to implicitly add an index that covers the foreign key's local columns.
+			// The name of the index is either:
+			// - the same name of the constraint, if such name is provided
+			//   - and error if an index by this name exists
+			// - or, a standard auto-generated index name, if the constraint name is not provided
+			indexDefinition := &sqlparser.IndexDefinition{
+				Info: &sqlparser.IndexInfo{
+					Type: "key",
+					Name: constraint.Name, // if name is empty, then the name is later auto populated
+				},
+			}
+			for _, col := range fk.Source {
+				indexColumn := &sqlparser.IndexColumn{Column: col}
+				indexDefinition.Columns = append(indexDefinition.Columns, indexColumn)
+			}
+			c.TableSpec.Indexes = append(c.TableSpec.Indexes, indexDefinition)
 		}
 	}
 }
@@ -694,6 +750,10 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 	alterTable := &sqlparser.AlterTable{
 		Table: c.CreateTable.Table,
 	}
+	if hints.TableQualifierHint == TableQualifierDeclared {
+		alterTable.Table.Qualifier = other.Table.Qualifier
+	}
+
 	diffedTableCharset := ""
 	var parentAlterTableEntityDiff *AlterTableEntityDiff
 	var partitionSpecs []*sqlparser.PartitionSpec
@@ -722,7 +782,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		// ordered constraints for both tables:
 		t1Constraints := c.CreateTable.TableSpec.Constraints
 		t2Constraints := other.CreateTable.TableSpec.Constraints
-		c.diffConstraints(alterTable, t1Constraints, t2Constraints, hints)
+		c.diffConstraints(alterTable, c.Name(), t1Constraints, other.Name(), t2Constraints, hints)
 	}
 	{
 		// diff partitions
@@ -745,15 +805,35 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 		}
 	}
 	tableSpecHasChanged := len(alterTable.AlterOptions) > 0 || alterTable.PartitionOption != nil || alterTable.PartitionSpec != nil
+
+	newAlterTableEntityDiff := func(alterTable *sqlparser.AlterTable) *AlterTableEntityDiff {
+		d := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+
+		var algorithmValue sqlparser.AlgorithmValue
+
+		switch hints.AlterTableAlgorithmStrategy {
+		case AlterTableAlgorithmStrategyCopy:
+			algorithmValue = sqlparser.AlgorithmValue("COPY")
+		case AlterTableAlgorithmStrategyInplace:
+			algorithmValue = sqlparser.AlgorithmValue("INPLACE")
+		case AlterTableAlgorithmStrategyInstant:
+			algorithmValue = sqlparser.AlgorithmValue("INSTANT")
+		}
+		if algorithmValue != "" {
+			alterTable.AlterOptions = append(alterTable.AlterOptions, algorithmValue)
+		}
+		return d
+	}
 	if tableSpecHasChanged {
-		parentAlterTableEntityDiff = &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		parentAlterTableEntityDiff = newAlterTableEntityDiff(alterTable)
+
 	}
 	for _, superfluousFulltextKey := range superfluousFulltextKeys {
 		alterTable := &sqlparser.AlterTable{
 			Table:        c.CreateTable.Table,
 			AlterOptions: []sqlparser.AlterOption{superfluousFulltextKey},
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		// if we got superfluous fulltext keys, that means the table spec has changed, ie
 		// parentAlterTableEntityDiff is not nil
 		parentAlterTableEntityDiff.addSubsequentDiff(diff)
@@ -763,7 +843,7 @@ func (c *CreateTableEntity) TableDiff(other *CreateTableEntity, hints *DiffHints
 			Table:         c.CreateTable.Table,
 			PartitionSpec: partitionSpec,
 		}
-		diff := &AlterTableEntityDiff{alterTable: alterTable, from: c, to: other}
+		diff := newAlterTableEntityDiff(alterTable)
 		if parentAlterTableEntityDiff == nil {
 			parentAlterTableEntityDiff = diff
 		} else {
@@ -1128,14 +1208,16 @@ func (c *CreateTableEntity) diffPartitions(alterTable *sqlparser.AlterTable,
 }
 
 func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
+	t1Name string,
 	t1Constraints []*sqlparser.ConstraintDefinition,
+	t2Name string,
 	t2Constraints []*sqlparser.ConstraintDefinition,
 	hints *DiffHints,
 ) {
-	normalizeConstraintName := func(constraint *sqlparser.ConstraintDefinition) string {
+	normalizeConstraintName := func(tableName string, constraint *sqlparser.ConstraintDefinition) string {
 		switch hints.ConstraintNamesStrategy {
 		case ConstraintNamesIgnoreVitess:
-			return ExtractConstraintOriginalName(constraint.Name.String())
+			return ExtractConstraintOriginalName(tableName, constraint.Name.String())
 		case ConstraintNamesIgnoreAll:
 			return sqlparser.CanonicalString(constraint.Details)
 		case ConstraintNamesStrict:
@@ -1148,10 +1230,10 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	t1ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	t2ConstraintsMap := map[string]*sqlparser.ConstraintDefinition{}
 	for _, constraint := range t1Constraints {
-		t1ConstraintsMap[normalizeConstraintName(constraint)] = constraint
+		t1ConstraintsMap[normalizeConstraintName(t1Name, constraint)] = constraint
 	}
 	for _, constraint := range t2Constraints {
-		t2ConstraintsMap[normalizeConstraintName(constraint)] = constraint
+		t2ConstraintsMap[normalizeConstraintName(t2Name, constraint)] = constraint
 	}
 
 	dropConstraintStatement := func(constraint *sqlparser.ConstraintDefinition) *sqlparser.DropKey {
@@ -1164,7 +1246,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	// evaluate dropped constraints
 	//
 	for _, t1Constraint := range t1Constraints {
-		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Constraint)]; !ok {
+		if _, ok := t2ConstraintsMap[normalizeConstraintName(t1Name, t1Constraint)]; !ok {
 			// constraint exists in t1 but not in t2, hence it is dropped
 			dropConstraint := dropConstraintStatement(t1Constraint)
 			alterTable.AlterOptions = append(alterTable.AlterOptions, dropConstraint)
@@ -1172,7 +1254,7 @@ func (c *CreateTableEntity) diffConstraints(alterTable *sqlparser.AlterTable,
 	}
 
 	for _, t2Constraint := range t2Constraints {
-		normalizedT2ConstraintName := normalizeConstraintName(t2Constraint)
+		normalizedT2ConstraintName := normalizeConstraintName(t2Name, t2Constraint)
 		// evaluate modified & added constraints:
 		//
 		if t1Constraint, ok := t1ConstraintsMap[normalizedT2ConstraintName]; ok {
@@ -1758,6 +1840,21 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 			if !found {
 				return &ApplyKeyNotFoundError{Table: c.Name(), Key: opt.Name.String()}
 			}
+
+			// Now, if this is a normal key being dropped, let's validate it does not leave any foreign key constraint uncovered
+			switch opt.Type {
+			case sqlparser.PrimaryKeyType, sqlparser.NormalKeyType:
+				for _, cs := range c.CreateTable.TableSpec.Constraints {
+					fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+					if !ok {
+						continue
+					}
+					if !c.columnsCoveredByInOrderIndex(fk.Source) {
+						return &IndexNeededByForeignKeyError{Table: c.Name(), Key: opt.Name.String()}
+					}
+				}
+			}
+
 		case *sqlparser.AddIndexDefinition:
 			// validate no existing key by same name
 			keyName := opt.IndexDefinition.Info.Name.String()
@@ -1945,6 +2042,8 @@ func (c *CreateTableEntity) apply(diff *AlterTableEntityDiff) error {
 					c.TableSpec.Options = append(c.TableSpec.Options, option)
 				}()
 			}
+		case sqlparser.AlgorithmValue:
+			// silently ignore. This has an operational effect on the MySQL engine, but has no semantical effect.
 		default:
 			return &UnsupportedApplyOperationError{Statement: sqlparser.CanonicalString(opt)}
 		}
@@ -1990,6 +2089,7 @@ func (c *CreateTableEntity) Apply(diff EntityDiff) (Entity, error) {
 //   - edit or remove keys if referenced columns are dropped
 //   - drop check constraints for a single specific column if that column
 //     is the only referenced column in that check constraint.
+//   - add implicit keys for foreign key constraint, if needed
 func (c *CreateTableEntity) postApplyNormalize() error {
 	// reduce or remove keys based on existing column list
 	// (a column may have been removed)postApplyNormalize
@@ -2051,6 +2151,10 @@ func (c *CreateTableEntity) postApplyNormalize() error {
 	}
 	c.CreateTable.TableSpec.Constraints = keptConstraints
 
+	c.normalizePrimaryKeyColumns()
+	c.normalizeForeignKeyIndexes()
+	c.normalizeKeys()
+
 	return nil
 }
 
@@ -2081,6 +2185,44 @@ func getKeyColumnNames(key *sqlparser.IndexDefinition) (colNames map[string]bool
 	return colNames
 }
 
+// indexCoversColumnsInOrder checks if the given index covers the given columns in order and in prefix.
+// the index must either covers the exact list of columns or continue to cover additional columns beyond.
+// Used for validating indexes covering foreign keys.
+func indexCoversColumnsInOrder(index *sqlparser.IndexDefinition, columns sqlparser.Columns) bool {
+	if len(columns) == 0 {
+		return false
+	}
+	if len(index.Columns) < len(columns) {
+		// obviously the index doesn't cover the required columns
+		return false
+	}
+	for i, col := range columns {
+		// the index must cover same columns, in order, wih possibly more columns covered than requested.
+		indexCol := index.Columns[i]
+		if !strings.EqualFold(col.String(), indexCol.Column.String()) {
+			return false
+		}
+	}
+	return true
+}
+
+// indexesCoveringForeignKeyColumns returns a list of indexes that cover a given list of coumns, in-oder and in prefix.
+// Used for validating indexes covering foreign keys.
+func (c *CreateTableEntity) indexesCoveringForeignKeyColumns(columns sqlparser.Columns) (indexes []*sqlparser.IndexDefinition) {
+	for _, index := range c.CreateTable.TableSpec.Indexes {
+		if indexCoversColumnsInOrder(index, columns) {
+			indexes = append(indexes, index)
+		}
+	}
+	return indexes
+}
+
+// columnsCoveredByInOrderIndex returns 'true' when there is at least one index that covers the given
+// list of columns in-order and in-prefix.
+func (c *CreateTableEntity) columnsCoveredByInOrderIndex(columns sqlparser.Columns) bool {
+	return len(c.indexesCoveringForeignKeyColumns(columns)) > 0
+}
+
 func (c *CreateTableEntity) validateDuplicateKeyNameError() error {
 	keyNames := map[string]bool{}
 	for _, key := range c.CreateTable.TableSpec.Indexes {
@@ -2103,6 +2245,22 @@ func (c *CreateTableEntity) validate() error {
 			return &ApplyDuplicateColumnError{Table: c.Name(), Column: col.Name.String()}
 		}
 		columnExists[colName] = true
+	}
+	// validate all columns used by foreign key constraints do in fact exist,
+	// and that there exists an index over those columns
+	for _, cs := range c.CreateTable.TableSpec.Constraints {
+		fk, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
+		if !ok {
+			continue
+		}
+		if len(fk.Source) != len(fk.ReferenceDefinition.ReferencedColumns) {
+			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(fk.Source), ReferencedTable: fk.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(fk.ReferenceDefinition.ReferencedColumns)}
+		}
+		for _, col := range fk.Source {
+			if !columnExists[col.Lowered()] {
+				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
+			}
+		}
 	}
 	// validate all columns referenced by indexes do in fact exist
 	for _, key := range c.CreateTable.TableSpec.Indexes {
@@ -2153,23 +2311,6 @@ func (c *CreateTableEntity) validate() error {
 				}
 			}
 		}
-	}
-	// validate all columns used by foreign key constraints do in fact exist,
-	// and that there exists an index over those columns
-	for _, cs := range c.CreateTable.TableSpec.Constraints {
-		check, ok := cs.Details.(*sqlparser.ForeignKeyDefinition)
-		if !ok {
-			continue
-		}
-		if len(check.Source) != len(check.ReferenceDefinition.ReferencedColumns) {
-			return &ForeignKeyColumnCountMismatchError{Table: c.Name(), Constraint: cs.Name.String(), ColumnCount: len(check.Source), ReferencedTable: check.ReferenceDefinition.ReferencedTable.Name.String(), ReferencedColumnCount: len(check.ReferenceDefinition.ReferencedColumns)}
-		}
-		for _, col := range check.Source {
-			if !columnExists[col.Lowered()] {
-				return &InvalidColumnInForeignKeyConstraintError{Table: c.Name(), Constraint: cs.Name.String(), Column: col.String()}
-			}
-		}
-		// TODO(shlomi): find a valid index
 	}
 	// validate all columns referenced by constraint checks do in fact exist
 	for _, cs := range c.CreateTable.TableSpec.Constraints {

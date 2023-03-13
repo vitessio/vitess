@@ -48,7 +48,7 @@ const (
     background-color: #fff;
   }
 </style>
-<table>
+<table class="refreshRequired">
   <tr>
     <th>Keyspace</th>
     <th>Shard</th>

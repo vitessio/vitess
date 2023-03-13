@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -27,7 +28,6 @@ import (
 	"golang.org/x/net/context"
 
 	"vitess.io/vitess/go/stats"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/topo"
@@ -93,7 +93,7 @@ type GRShard struct {
 	lastDiagnoseResult DiagnoseType
 	lastDiagnoseSince  time.Time
 
-	isActive sync2.AtomicBool
+	isActive atomic.Bool
 
 	logger *log.Logger
 
@@ -150,7 +150,7 @@ func NewGRShard(
 		transientErrorWaitTime:    time.Duration(config.BackoffErrorWaitTimeSeconds) * time.Second,
 		bootstrapWaitTime:         time.Duration(config.BootstrapWaitTimeSeconds) * time.Second,
 	}
-	grShard.isActive.Set(isActive)
+	grShard.isActive.Store(isActive)
 	return grShard
 }
 
@@ -349,7 +349,7 @@ func (shard *GRShard) GetUnlock() func(*error) {
 // SetIsActive sets isActive for the shard
 func (shard *GRShard) SetIsActive(isActive bool) {
 	shard.logger.Infof("Setting is active to %v", isActive)
-	shard.isActive.Set(isActive)
+	shard.isActive.Store(isActive)
 }
 
 func (collector *shardStatusCollector) isUnreachable(instance *grInstance) bool {

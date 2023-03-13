@@ -29,9 +29,8 @@ import (
 
 	"google.golang.org/protobuf/encoding/prototext"
 
-	"k8s.io/apimachinery/pkg/util/sets"
-
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/sets"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -406,7 +405,7 @@ type ReplicationStatus struct {
 	// Tablet is the tablet alias that the ReplicationStatus came from.
 	Tablet string
 	// ID represents the id column from the _vt.vreplication table.
-	ID int64
+	ID int32
 	// Bls represents the BinlogSource.
 	Bls *binlogdatapb.BinlogSource
 	// Pos represents the pos column from the _vt.vreplication table.
@@ -435,6 +434,8 @@ type ReplicationStatus struct {
 	WorkflowSubType string
 	// CopyState represents the rows from the _vt.copy_state table.
 	CopyState []copyState
+	// RowsCopied shows the number of rows copied per stream, only valid when workflow state is "Copying"
+	RowsCopied int64
 	// sourceTimeZone represents the time zone of each stream, only set if not UTC
 	sourceTimeZone string
 	// targetTimeZone is set to the sourceTimeZone of the forward stream, if it was provided in the workflow
@@ -444,14 +445,15 @@ type ReplicationStatus struct {
 
 func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltypes.RowNamedValues, primary *topo.TabletInfo) (*ReplicationStatus, string, error) {
 	var err error
-	var id, timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
+	var id int32
+	var timeUpdated, transactionTimestamp, timeHeartbeat, timeThrottled int64
 	var state, dbName, pos, stopPos, message, tags, componentThrottled string
-	var workflowType, workflowSubType int64
+	var workflowType, workflowSubType int32
 	var deferSecondaryKeys bool
 	var bls binlogdatapb.BinlogSource
 	var mpos mysql.Position
-
-	id, err = row.ToInt64("id")
+	var rowsCopied int64
+	id, err = row.ToInt32("id")
 	if err != nil {
 		return nil, "", err
 	}
@@ -515,9 +517,13 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 	if err != nil {
 		return nil, "", err
 	}
-	workflowType, _ = row.ToInt64("workflow_type")
-	workflowSubType, _ = row.ToInt64("workflow_sub_type")
+	workflowType, _ = row.ToInt32("workflow_type")
+	workflowSubType, _ = row.ToInt32("workflow_sub_type")
 	deferSecondaryKeys, _ = row.ToBool("defer_secondary_keys")
+	rowsCopied = row.AsInt64("rows_copied", 0)
+	if err != nil {
+		return nil, "", err
+	}
 
 	status := &ReplicationStatus{
 		Shard:                primary.Shard,
@@ -537,9 +543,10 @@ func (wr *Wrangler) getReplicationStatusFromRow(ctx context.Context, row sqltype
 		Tags:                 tags,
 		sourceTimeZone:       bls.SourceTimeZone,
 		targetTimeZone:       bls.TargetTimeZone,
-		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[int32(workflowType)],
-		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[int32(workflowSubType)],
+		WorkflowType:         binlogdatapb.VReplicationWorkflowType_name[workflowType],
+		WorkflowSubType:      binlogdatapb.VReplicationWorkflowSubType_name[workflowSubType],
 		deferSecondaryKeys:   deferSecondaryKeys,
+		RowsCopied:           rowsCopied,
 	}
 	status.CopyState, err = wr.getCopyState(ctx, primary, id)
 	if err != nil {
@@ -572,7 +579,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		tags,
 		workflow_type, 
 		workflow_sub_type,
-		defer_secondary_keys
+		defer_secondary_keys,
+		rows_copied
 	from _vt.vreplication`
 	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
 	if err != nil {
@@ -583,8 +591,8 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	ctx, cancel := context.WithTimeout(ctx, topo.RemoteOperationTimeout)
 	defer cancel()
 	var sourceKeyspace string
-	sourceShards := sets.NewString()
-	targetShards := sets.NewString()
+	sourceShards := sets.New[string]()
+	targetShards := sets.New[string]()
 	for primary, result := range results {
 		var rsrStatus []*ReplicationStatus
 		nqr := sqltypes.Proto3ToResult(result).Named()
@@ -669,13 +677,12 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 	}
 	rsr.SourceLocation = ReplicationLocation{
 		Keyspace: sourceKeyspace,
-		Shards:   sourceShards.List(),
+		Shards:   sets.List(sourceShards),
 	}
 	rsr.TargetLocation = ReplicationLocation{
 		Keyspace: keyspace,
-		Shards:   targetShards.List(),
+		Shards:   sets.List(targetShards),
 	}
-
 	return &rsr, nil
 }
 
@@ -696,7 +703,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 	if err != nil {
 		return nil, err
 	}
-	workflowsSet := sets.NewString()
+	workflowsSet := sets.New[string]()
 	for _, result := range results {
 		if len(result.Rows) == 0 {
 			continue
@@ -709,7 +716,7 @@ func (wr *Wrangler) ListAllWorkflows(ctx context.Context, keyspace string, activ
 			}
 		}
 	}
-	workflows := workflowsSet.List()
+	workflows := sets.List(workflowsSet)
 	return workflows, nil
 }
 
@@ -755,7 +762,7 @@ func (wr *Wrangler) printWorkflowList(keyspace string, workflows []string) {
 	wr.Logger().Printf("Following workflow(s) found in keyspace %s: %v\n", keyspace, list)
 }
 
-func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int64) ([]copyState, error) {
+func (wr *Wrangler) getCopyState(ctx context.Context, tablet *topo.TabletInfo, id int32) ([]copyState, error) {
 	var cs []copyState
 	query := fmt.Sprintf("select table_name, lastpk from _vt.copy_state where vrepl_id = %d and id in (select max(id) from _vt.copy_state where vrepl_id = %d group by vrepl_id, table_name)",
 		id, id)

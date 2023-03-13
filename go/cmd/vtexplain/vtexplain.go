@@ -22,7 +22,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/exit"
-	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtexplain"
@@ -146,10 +145,6 @@ func parseAndRun() error {
 		Normalize:       normalize,
 		Target:          dbName,
 	}
-
-	log.V(100).Infof("sql %s\n", sql)
-	log.V(100).Infof("schema %s\n", schema)
-	log.V(100).Infof("vschema %s\n", vschema)
 
 	vte, err := vtexplain.Init(vschema, schema, ksShardMap, opts)
 	if err != nil {
