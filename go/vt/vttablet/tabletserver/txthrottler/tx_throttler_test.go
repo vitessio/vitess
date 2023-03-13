@@ -24,6 +24,7 @@ package txthrottler
 import (
 	"testing"
 	"time"
+	"vitess.io/vitess/go/vt/throttler"
 
 	"github.com/golang/mock/gomock"
 
@@ -88,7 +89,7 @@ func TestEnabledThrottler(t *testing.T) {
 	}
 
 	mockThrottler := NewMockThrottlerInterface(mockCtrl)
-	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagCondfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
 		if threadCount != 1 {
 			t.Errorf("want: 1, got: %v", threadCount)
 		}
