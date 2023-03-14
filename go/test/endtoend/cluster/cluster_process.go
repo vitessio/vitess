@@ -42,12 +42,15 @@ import (
 	"vitess.io/vitess/go/test/endtoend/filelock"
 	"vitess.io/vitess/go/vt/grpcclient"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/vtgateconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 
 	// Ensure dialers are registered (needed by ExecOnTablet and ExecOnVTGate).
 	_ "vitess.io/vitess/go/vt/vtgate/grpcvtgateconn"
@@ -147,10 +150,11 @@ type Vttablet struct {
 
 // Keyspace : Cluster accepts keyspace to launch it
 type Keyspace struct {
-	Name      string
-	SchemaSQL string
-	VSchema   string
-	Shards    []Shard
+	Name          string
+	SchemaSQL     string
+	VSchema       string
+	SidecarDBName string
+	Shards        []Shard
 }
 
 // Shard with associated vttablets
@@ -229,8 +233,8 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 		}
 	}
 
+	cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 	if !cluster.ReusingVTDATAROOT {
-		cluster.VtctlProcess = *VtctlProcessInstance(cluster.TopoProcess.Port, cluster.Hostname)
 		if err = cluster.VtctlProcess.AddCellInfo(cluster.Cell); err != nil {
 			log.Error(err)
 			return
@@ -248,6 +252,7 @@ func (cluster *LocalProcessCluster) StartTopo() (err error) {
 	}
 
 	cluster.VtctlclientProcess = *VtctlClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
+	cluster.VtctldClientProcess = *VtctldClientProcessInstance("localhost", cluster.VtctldProcess.GrpcPort, cluster.TmpDirectory)
 	return
 }
 
@@ -324,9 +329,11 @@ func (cluster *LocalProcessCluster) startKeyspace(keyspace Keyspace, shardNames 
 	}
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
-	if !cluster.ReusingVTDATAROOT {
-		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	if keyspace.SidecarDBName == "" {
+		keyspace.SidecarDBName = sidecardb.DefaultName
 	}
+	// Create the keyspace if it doesn't already exist.
+	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -471,9 +478,11 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 	}
 
 	log.Infof("Starting keyspace: %v", keyspace.Name)
-	if !cluster.ReusingVTDATAROOT {
-		_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+	if keyspace.SidecarDBName == "" {
+		keyspace.SidecarDBName = sidecardb.DefaultName
 	}
+	// Create the keyspace if it doesn't already exist.
+	_ = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 	var mysqlctlProcessList []*exec.Cmd
 	for _, shardName := range shardNames {
 		shard := &Shard{
@@ -606,9 +615,13 @@ func (cluster *LocalProcessCluster) StartKeyspaceLegacy(keyspace Keyspace, shard
 func (cluster *LocalProcessCluster) SetupCluster(keyspace *Keyspace, shards []Shard) (err error) {
 	log.Infof("Starting keyspace: %v", keyspace.Name)
 
+	if keyspace.SidecarDBName == "" {
+		keyspace.SidecarDBName = sidecardb.DefaultName
+	}
+
 	if !cluster.ReusingVTDATAROOT {
 		// Create Keyspace
-		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name)
+		err = cluster.VtctlProcess.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName)
 		if err != nil {
 			log.Error(err)
 			return
@@ -798,6 +811,24 @@ func (cluster *LocalProcessCluster) WaitForTabletsToHealthyInVtgate() (err error
 		}
 	}
 	return nil
+}
+
+// WaitForVTGateAndVTTablets waits for as long as you like for the vtgate and any
+// vttablets to be healthy.
+func (cluster *LocalProcessCluster) WaitForVTGateAndVTTablets(howlong time.Duration) error {
+	timeout := time.After(howlong)
+	for {
+		select {
+		case <-timeout:
+			return vterrors.New(vtrpcpb.Code_CANCELED, "timed out waiting for cluster to become healthy")
+		default:
+			err := cluster.WaitForTabletsToHealthyInVtgate()
+			if err != nil {
+				continue
+			}
+			return nil
+		}
+	}
 }
 
 // ExecOnTablet executes a query on the local cluster Vttablet and returns the

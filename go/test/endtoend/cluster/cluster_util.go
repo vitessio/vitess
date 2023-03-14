@@ -385,6 +385,20 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
 }
 
+// GetSidecarDBName returns the sidecar database name configured for
+// the keyspace in the topo server.
+func (cluster LocalProcessCluster) GetSidecarDBName(keyspace string) (string, error) {
+	res, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspace)
+	if err != nil {
+		return "", err
+	}
+	sdbn, err := jsonparser.GetString([]byte(res), "sidecar_db_name")
+	if err != nil {
+		return "", err
+	}
+	return sdbn, nil
+}
+
 // WaitForHealthyShard waits for the given shard info record in the topo
 // server to list a tablet (alias and uid) as the primary serving tablet
 // for the shard. This is done using "vtctldclient GetShard" and parsing

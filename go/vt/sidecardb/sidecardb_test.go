@@ -41,14 +41,6 @@ func TestInitErrors(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 	AddSchemaInitQueries(db, false)
-	db.AddQuery("use dbname", &sqltypes.Result{})
-	sqlMode := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"sql_mode",
-		"varchar"),
-		"ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION",
-	)
-	db.AddQuery("select @@session.sql_mode as sql_mode", sqlMode)
-	db.AddQueryPattern("set @@session.sql_mode=.*", &sqltypes.Result{})
 
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
@@ -70,7 +62,7 @@ func TestInitErrors(t *testing.T) {
 
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(UseSidecarDatabaseQuery, maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetIdentifier()), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
@@ -125,34 +117,6 @@ func TestInitErrors(t *testing.T) {
 	}
 }
 
-// test the logic that confirms that the user defined schema's table name and qualifier are valid
-func TestValidateSchema(t *testing.T) {
-	type testCase struct {
-		testName  string
-		name      string
-		schema    string
-		mustError bool
-	}
-	testCases := []testCase{
-		{"valid", "t1", "create table if not exists _vt.t1(i int)", false},
-		{"no if not exists", "t1", "create table _vt.t1(i int)", true},
-		{"invalid table name", "t2", "create table if not exists _vt.t1(i int)", true},
-		{"invalid table name", "t1", "create table if not exists _vt.t2(i int)", true},
-		{"invalid qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
-		{"invalid qualifier", "t1", "create table if not exists t1(i int)", true},
-	}
-	for _, tc := range testCases {
-		t.Run(tc.testName, func(t *testing.T) {
-			_, err := validateSchemaDefinition(tc.name, tc.schema)
-			if tc.mustError {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
-		})
-	}
-}
-
 // Tests various non-error code paths in sidecardb
 func TestMiscSidecarDB(t *testing.T) {
 	ctx := context.Background()
@@ -168,12 +132,23 @@ func TestMiscSidecarDB(t *testing.T) {
 	require.NoError(t, err)
 	exec := func(ctx context.Context, query string, maxRows int, useDB bool) (*sqltypes.Result, error) {
 		if useDB {
-			if _, err := conn.ExecuteFetch(UseSidecarDatabaseQuery, maxRows, true); err != nil {
+			if _, err := conn.ExecuteFetch(fmt.Sprintf("use %s", GetIdentifier()), maxRows, true); err != nil {
 				return nil, err
 			}
 		}
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
+
+	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"dbexists",
+		"int64"),
+		GetName(),
+	)
+	dbeq, err := sqlparser.ParseAndBind(sidecarDBExistsQuery, sqltypes.StringBindVariable(GetName()))
+	require.NoError(t, err)
+	db.AddQuery(dbeq, result)
+	db.AddQuery(sqlparser.BuildParsedQuery(createSidecarDBQuery, GetIdentifier()).Query, &sqltypes.Result{})
+	AddSchemaInitQueries(db, false)
 
 	// tests init on empty db
 	ddlErrorCount.Set(0)
@@ -183,8 +158,11 @@ func TestMiscSidecarDB(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
 
-	// tests init on already inited db
+	// Include the table DDLs in the expected queries.
+	// This causes them to NOT be created again.
 	AddSchemaInitQueries(db, true)
+
+	// tests init on already inited db
 	err = Init(ctx, exec)
 	require.NoError(t, err)
 	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
@@ -194,20 +172,39 @@ func TestMiscSidecarDB(t *testing.T) {
 		ctx:  ctx,
 		exec: exec,
 	}
-	result := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Database",
-		"varchar"),
-		"currentDB",
-	)
-	db.AddQuery(SelectCurrentDatabaseQuery, result)
 
-	currentDB, err := si.setCurrentDatabase("dbname")
+	err = si.setCurrentDatabase(GetIdentifier())
 	require.NoError(t, err)
-	require.Equal(t, "currentDB", currentDB)
 
 	require.False(t, MatchesInitQuery("abc"))
-	require.True(t, MatchesInitQuery(SelectCurrentDatabaseQuery))
-	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS `_vt`.vreplication"))
+	require.True(t, MatchesInitQuery("CREATE TABLE IF NOT EXISTS _vt.vreplication"))
+}
+
+// test the logic that confirms that the user defined schema's table name and qualifier are valid
+func TestValidateSchema(t *testing.T) {
+	type testCase struct {
+		testName  string
+		name      string
+		schema    string
+		mustError bool
+	}
+	testCases := []testCase{
+		{"valid", "t1", "create table if not exists t1(i int)", false},
+		{"no if not exists", "t1", "create table t1(i int)", true},
+		{"invalid table name", "t2", "create table if not exists t1(i int)", true},
+		{"invalid table name", "t1", "create table if not exists t2(i int)", true},
+		{"qualifier", "t1", "create table if not exists vt_product.t1(i int)", true},
+	}
+	for _, tc := range testCases {
+		t.Run(tc.testName, func(t *testing.T) {
+			_, err := validateSchemaDefinition(tc.name, tc.schema)
+			if tc.mustError {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
 }
 
 // TestAlterTableAlgorithm confirms that we use ALGORITHM=COPY during alter tables

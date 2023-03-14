@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/callinfo"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/schema"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/tableacl"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -1232,10 +1233,10 @@ func (qre *QueryExecutor) GetSchemaDefinitions(tableType querypb.SchemaTableType
 }
 
 func (qre *QueryExecutor) getViewDefinitions(viewNames []string, callback func(schemaRes *querypb.GetSchemaResponse) error) error {
-	query := mysql.FetchViews
+	query := sqlparser.BuildParsedQuery(mysql.FetchViews, sidecardb.GetIdentifier()).Query
 	var bindVars map[string]*querypb.BindVariable
 	if len(viewNames) > 0 {
-		query = mysql.FetchUpdatedViews
+		query = sqlparser.BuildParsedQuery(mysql.FetchUpdatedViews, sidecardb.GetIdentifier()).Query
 		bindVars = map[string]*querypb.BindVariable{
 			"viewnames": sqltypes.StringBindVariable(strings.Join(viewNames, ",")),
 		}
