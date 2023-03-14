@@ -43,7 +43,7 @@ type latestGolangRelease struct {
 }
 
 var (
-	noWorkflowUpdate  = false
+	workflowUpdate    = true
 	allowMajorUpgrade = false
 	isMainBranch      = false
 	goFrom            = ""
@@ -99,7 +99,7 @@ By default, we do not allow major Golang version upgrade such as 1.20 to 1.21 bu
 --allow-major-upgrade CLI flag. Usually, we only allow such upgrade on the main branch of the repository.
 
 In CI, particularly, we do not want to modify the workflow files before automatically creating a Pull Request to
-avoid permission issues. The rewrite of workflow files can be disabled using the --no-workflow-update CLI flag.
+avoid permission issues. The rewrite of workflow files can be disabled using the --workflow-update=false CLI flag.
 
 Moreover, this command automatically bumps the bootstrap version of our codebase. If we are on the main branch, we
 want to use the CLI flag --main to remember to increment the bootstrap version by 1 instead of 0.1.`,
@@ -125,7 +125,7 @@ func init() {
 
 	upgradeCmd.AddCommand(upgradeWorkflowsCmd)
 
-	upgradeCmd.Flags().BoolVar(&noWorkflowUpdate, "no-workflow-update", noWorkflowUpdate, "Whether or not the workflow files should be updated. Useful when using this script to auto-create PRs.")
+	upgradeCmd.Flags().BoolVar(&workflowUpdate, "workflow-update", workflowUpdate, "Whether or not the workflow files should be updated. Useful when using this script to auto-create PRs.")
 	upgradeCmd.Flags().BoolVar(&allowMajorUpgrade, "allow-major-upgrade", allowMajorUpgrade, "Defines if Golang major version upgrade are allowed.")
 	upgradeCmd.Flags().BoolVar(&isMainBranch, "main", isMainBranch, "Defines if the current branch is the main branch.")
 
@@ -161,7 +161,7 @@ func runUpgradeWorkflowsCmd(_ *cobra.Command, _ []string) {
 }
 
 func runUpgradeCmd(_ *cobra.Command, _ []string) {
-	err := upgradePath(allowMajorUpgrade, noWorkflowUpdate, isMainBranch)
+	err := upgradePath(allowMajorUpgrade, workflowUpdate, isMainBranch)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -194,7 +194,7 @@ func updateWorkflowFilesOnly(goFrom, goTo string) error {
 	return nil
 }
 
-func upgradePath(allowMajorUpgrade, noWorkflowUpdate, isMainBranch bool) error {
+func upgradePath(allowMajorUpgrade, workflowUpdate, isMainBranch bool) error {
 	currentVersion, err := currentGolangVersion()
 	if err != nil {
 		return err
@@ -210,7 +210,7 @@ func upgradePath(allowMajorUpgrade, noWorkflowUpdate, isMainBranch bool) error {
 		return nil
 	}
 
-	err = replaceGoVersionInCodebase(currentVersion, upgradeTo, noWorkflowUpdate)
+	err = replaceGoVersionInCodebase(currentVersion, upgradeTo, workflowUpdate)
 	if err != nil {
 		return err
 	}
@@ -327,7 +327,7 @@ func chooseNewVersion(curVersion *version.Version, latestVersions version.Collec
 
 // replaceGoVersionInCodebase goes through all the files in the codebase where the
 // Golang version must be updated
-func replaceGoVersionInCodebase(old, new *version.Version, noWorkflowUpdate bool) error {
+func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) error {
 	if old.Equal(new) {
 		return nil
 	}
@@ -336,7 +336,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, noWorkflowUpdate bool
 		"./build.env",
 		"./docker/bootstrap/Dockerfile.common",
 	}
-	if !noWorkflowUpdate {
+	if workflowUpdate {
 		explore = append(explore, "./.github/workflows")
 	}
 	filesToChange, err := getListOfFilesInPaths(explore)
