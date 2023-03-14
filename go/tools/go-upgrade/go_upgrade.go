@@ -328,6 +328,9 @@ func chooseNewVersion(curVersion *version.Version, latestVersions version.Collec
 // replaceGoVersionInCodebase goes through all the files in the codebase where the
 // Golang version must be updated
 func replaceGoVersionInCodebase(old, new *version.Version, noWorkflowUpdate bool) error {
+	if old.Equal(new) {
+		return nil
+	}
 	explore := []string{
 		"./test/templates",
 		"./build.env",
