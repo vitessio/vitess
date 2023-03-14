@@ -718,8 +718,8 @@ var commands = []commandGroup{
 			{
 				name:   "Workflow",
 				method: commandWorkflow,
-				params: "<ks.workflow> <action> --dry-run",
-				help:   "Start/Stop/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
+				params: "[--dry-run] [--cells] [--tablet-types] <ks.workflow> <action>",
+				help:   "Start/Stop/Update/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
 	},
@@ -3606,19 +3606,17 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 }
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	dryRun := subFlags.Bool("dry_run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
+	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
+	cells := subFlags.String("cells", "", "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
+	tabletTypes := subFlags.String("tablet-types", "", "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/show/listall/tags [<tags>]")
+		return fmt.Errorf("usage: Workflow [--dry-run] [--cells] [--tablet-types] keyspace[.workflow] start/stop/update/delete/show/listall/tags [<tags>]")
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
-	// Note: List is deprecated and replaced by show.
-	if action == "list" {
-		action = "show"
-	}
 	var workflow string
 	var err error
 	if action != "listall" {
@@ -3646,10 +3644,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			return err
 		}
 	} else {
-		if subFlags.NArg() != 2 {
-			return fmt.Errorf("usage: Workflow --dry-run keyspace[.workflow] start/stop/delete/show/listall")
-		}
-		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun)
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, *cells, *tabletTypes)
 		if err != nil {
 			return err
 		}

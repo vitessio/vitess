@@ -293,25 +293,35 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 	return retResults
 }
 
-// WorkflowAction can start/stop/delete or list streams in _vt.vreplication on all primaries in the target keyspace of the workflow.
-func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error) {
-
-	if action == "show" {
+// WorkflowAction can start/stop/update/delete or list streams in _vt.vreplication on all primaries in the target keyspace of the workflow.
+func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+	switch action {
+	case "show":
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
 		if err != nil {
 			return nil, err
 		}
 		err = dumpStreamListAsJSON(replStatus, wr)
 		return nil, err
-	} else if action == "listall" {
+	case "listall":
 		workflows, err := wr.ListAllWorkflows(ctx, keyspace, false)
 		if err != nil {
 			return nil, err
 		}
 		wr.printWorkflowList(keyspace, workflows)
 		return nil, err
+	case "update":
+		// This is the only place we use the cells and tabletTypes
+		// variables.
+		if _, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, cells, tabletTypes); err != nil {
+			return nil, vterrors.Wrapf(err, "failed to update the %s.%s workflow", keyspace, workflow)
+		}
+		// The workflow is stopped when updated, so now we restart
+		// the workflow for the changes to take effect and we
+		// return result of the restart.
+		action = "start"
 	}
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, "", "")
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -319,7 +329,7 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	var query string
 	updateSQL := "update _vt.vreplication set state = %s"
 	switch action {
-	case "stop":
+	case "stop", "update":
 		query = fmt.Sprintf(updateSQL, encodeString("Stopped"))
 	case "start":
 		query = fmt.Sprintf(updateSQL, encodeString("Running"))
@@ -331,10 +341,20 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	return query, nil
 }
 
-func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
 		return nil, err
+	}
+	if action == "update" {
+		query += ", cell=%a, tablet_types=%a"
+		query, err = sqlparser.ParseAndBind(query,
+			sqltypes.StringBindVariable(strings.TrimSpace(cells)),
+			sqltypes.StringBindVariable(strings.TrimSpace(tabletTypes)),
+		)
+		if err != nil {
+			return nil, err
+		}
 	}
 	return wr.runVexec(ctx, workflow, keyspace, query, dryRun)
 }

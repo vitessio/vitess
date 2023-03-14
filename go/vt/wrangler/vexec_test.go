@@ -185,16 +185,16 @@ func TestWorkflowListStreams(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, "", "")
 	require.NoError(t, err)
 
-	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false)
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, "", "")
 	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
 
-	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false)
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, "", "")
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false)
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, "", "")
 	require.NoError(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
@@ -313,7 +313,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
 	require.Equal(t, want, got)
 
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, "", "")
 	require.Nil(t, err)
 
 	// convert map to list and sort it for comparison
@@ -327,7 +327,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	require.ElementsMatch(t, wantResults, gotResults)
 
 	logger.Clear()
-	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true)
+	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, "", "")
 	require.Nil(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
 	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
@@ -431,6 +431,11 @@ func TestVExecValidations(t *testing.T) {
 			expectedError: nil,
 		},
 		{
+			name:          "update", // we then tack on config changes
+			want:          fmt.Sprintf(updateSQL, encodeString("Stopped")),
+			expectedError: nil,
+		},
+		{
 			name:          "delete",
 			want:          "delete from _vt.vreplication",
 			expectedError: nil,
@@ -448,4 +453,81 @@ func TestVExecValidations(t *testing.T) {
 			require.Equal(t, a.want, sql)
 		})
 	}
+}
+
+func TestWorkflowUpdate(t *testing.T) {
+	ctx := context.Background()
+	workflow := "wrWorkflow"
+	keyspace := "target"
+	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
+	defer env.close()
+	logger := logutil.NewMemoryLogger()
+	wr := New(logger, env.topoServ, env.tmc)
+	cells := "zone1,zone2"
+	tabletTypes := "rdonly,spare"
+
+	// First we stop the workflow and update the config on both
+	// target primaries.
+	env.tmc.setVRResults(env.tmc.tablets[200].tablet,
+		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s' where db_name = 'vt_%s' and workflow = '%s'", cells, tabletTypes, keyspace, workflow),
+		&sqltypes.Result{},
+	)
+	env.tmc.setVRResults(env.tmc.tablets[210].tablet,
+		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s' where db_name = 'vt_%s' and workflow = '%s'", cells, tabletTypes, keyspace, workflow),
+		&sqltypes.Result{},
+	)
+	// Then we restart the workflow for the config changes to take
+	// effect.
+	env.tmc.setVRResults(env.tmc.tablets[200].tablet,
+		fmt.Sprintf("update _vt.vreplication set state = 'Running' where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflow),
+		&sqltypes.Result{},
+	)
+	env.tmc.setVRResults(env.tmc.tablets[210].tablet,
+		fmt.Sprintf("update _vt.vreplication set state = 'Running' where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflow),
+		&sqltypes.Result{},
+	)
+
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", false, cells, tabletTypes)
+	require.NoError(t, err)
+
+	results, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, cells, tabletTypes)
+	require.NoError(t, err)
+	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
+	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped', cell = 'zone1,zone2', tablet_types = 'rdonly,spare' where db_name = 'vt_target' and workflow = 'wrWorkflow'
+will be run on the following streams in keyspace target for workflow wrWorkflow:
+
+
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+
+
+
+
+Query: update _vt.vreplication set state = 'Running' where db_name = 'vt_target' and workflow = 'wrWorkflow'
+will be run on the following streams in keyspace target for workflow wrWorkflow:
+
+
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+
+
+
+
+`
+
+	require.Equal(t, dryRunResult, logger.String())
 }
