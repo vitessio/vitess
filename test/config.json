@@ -129,7 +129,7 @@
 		},
 		"backup_xtrabackup": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/backup/xtrabackup", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "xb_backup",
