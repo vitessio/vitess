@@ -325,6 +325,9 @@ func replaceGoVersionInCodebase(old, new *version.Version, noWorkflowUpdate bool
 }
 
 func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Version) error {
+	if old == new {
+		return nil
+	}
 	files, err := getListOfFilesInPaths([]string{
 		"./docker/base",
 		"./docker/lite",
