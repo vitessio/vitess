@@ -47,7 +47,7 @@ import (
 // constants for test variants
 const (
 	XtraBackup = iota
-	Backup
+	BuiltinBackup
 	Mysqlctld
 	timeout = time.Duration(60 * time.Second)
 )
@@ -87,10 +87,11 @@ var (
 )
 
 type CompressionDetails struct {
-	CompressorEngineName    string
-	ExternalCompressorCmd   string
-	ExternalCompressorExt   string
-	ExternalDecompressorCmd string
+	CompressorEngineName            string
+	ExternalCompressorCmd           string
+	ExternalCompressorExt           string
+	ExternalDecompressorCmd         string
+	ManifestExternalDecompressorCmd string
 }
 
 // LaunchCluster : starts the cluster as per given params.
@@ -258,9 +259,11 @@ func getCompressorArgs(cDetails *CompressionDetails) []string {
 	if cDetails.ExternalDecompressorCmd != "" {
 		args = append(args, fmt.Sprintf("--external-decompressor=%s", cDetails.ExternalDecompressorCmd))
 	}
+	if cDetails.ManifestExternalDecompressorCmd != "" {
+		args = append(args, fmt.Sprintf("--manifest-external-decompressor=%s", cDetails.ManifestExternalDecompressorCmd))
+	}
 
 	return args
-
 }
 
 // update arguments with new values of compressionDetail.
