@@ -24943,6 +24943,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_access_mode */
         transaction_access_mode?: (query.ExecuteOptions.TransactionAccessMode[]|null);
+
+        /** ExecuteOptions WorkloadName */
+        WorkloadName?: (string|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -24983,6 +24986,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_access_mode. */
         public transaction_access_mode: query.ExecuteOptions.TransactionAccessMode[];
+
+        /** ExecuteOptions WorkloadName. */
+        public WorkloadName: string;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.

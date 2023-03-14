@@ -183,6 +183,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
+
+	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
 }
 
 var (
@@ -326,6 +328,8 @@ type TabletConfig struct {
 	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
 
 	EnableViews bool `json:"-"`
+
+	EnablePerWorkloadTableMetrics bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -574,6 +578,8 @@ var defaultConfig = TabletConfig{
 		MaxInnoDBTrxHistLen: 1000000,
 		MaxMySQLReplLagSecs: 43200,
 	},
+
+	EnablePerWorkloadTableMetrics: false,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration
