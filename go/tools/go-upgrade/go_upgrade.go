@@ -19,6 +19,7 @@ package main
 import (
 	"fmt"
 	"io"
+	"log"
 	"net/http"
 	"os"
 	"path"
@@ -27,11 +28,9 @@ import (
 	"time"
 
 	"encoding/json"
-	"flag"
-	"log"
 
 	"github.com/hashicorp/go-version"
-	"golang.org/x/exp/slices"
+	"github.com/spf13/cobra"
 )
 
 // The tool go_upgrade allows us to automate some tasks required
@@ -89,40 +88,128 @@ type latestGolangRelease struct {
 	Stable  bool   `json:"stable"`
 }
 
-func main() {
-	noWorkflowUpdate := flag.Bool("no-workflow-update", false, "Whether or not the workflow files should be updated. Useful when using this script to auto-create PRs.")
-	allowMajorUpgrade := flag.Bool("allow-major-upgrade", false, "Defines if Golang major version upgrade are allowed.")
-	isMainBranch := flag.Bool("main", false, "Defines if the current branch is the main branch.")
-	goFrom := flag.String("go-from", "", "The original Golang version we start with.")
-	goTo := flag.String("go-to", "", "The Golang version we want to upgrade to.")
-	flag.Parse()
+var (
+	noWorkflowUpdate  = false
+	allowMajorUpgrade = false
+	isMainBranch      = false
+	goFrom            = ""
+	goTo              = ""
 
-	switch {
-	case slices.Contains(os.Args, "get_go_version"):
-		currentVersion, err := currentGolangVersion()
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(currentVersion.String())
-	case slices.Contains(os.Args, "get_bootstrap_version"):
-		currentBootstrapVersionF, err := currentBootstrapVersion()
-		if err != nil {
-			log.Fatal(err)
-		}
-		fmt.Println(currentBootstrapVersionF)
-	case slices.Contains(os.Args, "update_workflows"):
-		if *noWorkflowUpdate {
-			break
-		}
-		err := updateWorkflowFilesOnly(*goFrom, *goTo)
-		if err != nil {
-			log.Fatal(err)
-		}
-	default:
-		err := upgradePath(*allowMajorUpgrade, *noWorkflowUpdate, *isMainBranch)
-		if err != nil {
-			log.Fatal(err)
-		}
+	rootCmd = &cobra.Command{
+		Use:   "go-upgrade",
+		Short: "Automates the Golang upgrade.",
+		Long: `go-upgrade allows us to automate some tasks required to bump the version of Golang used throughout our codebase.
+
+It mostly used by the update_golang_version.yml CI workflow that runs on a CRON.
+`,
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = cmd.Help()
+		},
+		Args: cobra.NoArgs,
+	}
+
+	getCmd = &cobra.Command{
+		Use:   "get",
+		Short: "Command to get useful information about the codebase.",
+		Long:  "Command to get useful information about the codebase.",
+		Run: func(cmd *cobra.Command, args []string) {
+			_ = cmd.Help()
+		},
+		Args: cobra.NoArgs,
+	}
+
+	getGoCmd = &cobra.Command{
+		Use:   "go-version",
+		Short: "go-version prints the Golang version used by the current codebase.",
+		Long:  "go-version prints the Golang version used by the current codebase.",
+		Run:   runGetGoCmd,
+		Args:  cobra.NoArgs,
+	}
+
+	getBootstrapCmd = &cobra.Command{
+		Use:   "bootstrap-version",
+		Short: "bootstrap-version prints the Docker Bootstrap version used by the current codebase.",
+		Long:  "bootstrap-version prints the Docker Bootstrap version used by the current codebase.",
+		Run:   runGetBootstrapCmd,
+		Args:  cobra.NoArgs,
+	}
+
+	upgradeCmd = &cobra.Command{
+		Use:   "upgrade",
+		Short: "upgrade will upgrade the Golang and Bootstrap versions of the codebase to the latest available version.",
+		Long: `This command bumps the Golang and Bootstrap versions of the codebase.
+
+The latest available version of Golang will be fetched and used instead of the old version.
+
+By default, we do not allow major Golang version upgrade such as 1.20 to 1.21 but this can be overridden using the
+--allow-major-upgrade CLI flag. Usually, we only allow such upgrade on the main branch of the repository.
+
+In CI, particularly, we do not want to modify the workflow files before automatically creating a Pull Request to
+avoid permission issues. The rewrite of workflow files can be disabled using the --no-workflow-update CLI flag.
+
+Moreover, this command automatically bumps the bootstrap version of our codebase. If we are on the main branch, we
+want to use the CLI flag --main to remember to increment the bootstrap version by 1 instead of 0.1.`,
+		Run:  runUpgradeCmd,
+		Args: cobra.NoArgs,
+	}
+
+	upgradeWorkflowsCmd = &cobra.Command{
+		Use:   "workflows",
+		Short: "workflows will upgrade the Golang version used in our CI workflows files.",
+		Long:  "This step is omitted by the bot since. We let the maintainers of Vitess manually upgrade the version used by the workflows using this command.",
+		Run:   runUpgradeWorkflowsCmd,
+		Args:  cobra.NoArgs,
+	}
+)
+
+func init() {
+	rootCmd.AddCommand(getCmd)
+	rootCmd.AddCommand(upgradeCmd)
+
+	getCmd.AddCommand(getGoCmd)
+	getCmd.AddCommand(getBootstrapCmd)
+
+	upgradeCmd.AddCommand(upgradeWorkflowsCmd)
+
+	upgradeCmd.Flags().BoolVar(&noWorkflowUpdate, "no-workflow-update", noWorkflowUpdate, "Whether or not the workflow files should be updated. Useful when using this script to auto-create PRs.")
+	upgradeCmd.Flags().BoolVar(&allowMajorUpgrade, "allow-major-upgrade", allowMajorUpgrade, "Defines if Golang major version upgrade are allowed.")
+	upgradeCmd.Flags().BoolVar(&isMainBranch, "main", isMainBranch, "Defines if the current branch is the main branch.")
+
+	upgradeWorkflowsCmd.Flags().StringVar(&goFrom, "go-from", goFrom, "The original Golang version we start with.")
+	upgradeWorkflowsCmd.Flags().StringVar(&goTo, "go-to", goTo, "The Golang version we want to upgrade to.")
+}
+
+func main() {
+	cobra.CheckErr(rootCmd.Execute())
+}
+
+func runGetGoCmd(_ *cobra.Command, _ []string) {
+	currentVersion, err := currentGolangVersion()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(currentVersion.String())
+}
+
+func runGetBootstrapCmd(_ *cobra.Command, _ []string) {
+	currentVersion, err := currentBootstrapVersion()
+	if err != nil {
+		log.Fatal(err)
+	}
+	fmt.Println(currentVersion)
+}
+
+func runUpgradeWorkflowsCmd(_ *cobra.Command, _ []string) {
+	err := updateWorkflowFilesOnly(goFrom, goTo)
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
+func runUpgradeCmd(_ *cobra.Command, _ []string) {
+	err := upgradePath(allowMajorUpgrade, noWorkflowUpdate, isMainBranch)
+	if err != nil {
+		log.Fatal(err)
 	}
 }
 
