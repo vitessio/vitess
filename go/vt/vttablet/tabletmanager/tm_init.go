@@ -499,11 +499,13 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 		// update the keyspace record to the default.
 		if ks.SidecarDbName == "" {
 			ks.SidecarDbName = sidecardb.DefaultName
-			ctx, unlock, lockErr := tm.TopoServer.LockKeyspace(ctx, tablet.Keyspace, "Setting sidecar database name")
+			getlockctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+			defer cancel()
+			lockctx, unlock, lockErr := tm.TopoServer.LockKeyspace(getlockctx, tablet.Keyspace, "Setting sidecar database name")
 			if lockErr != nil {
 				return vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
 			}
-			err = tm.TopoServer.UpdateKeyspace(ctx, ks)
+			err = tm.TopoServer.UpdateKeyspace(lockctx, ks)
 			unlock(&lockErr)
 			if err != nil {
 				return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
