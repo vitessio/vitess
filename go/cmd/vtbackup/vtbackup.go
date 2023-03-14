@@ -312,6 +312,19 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 		if err := mysqld.ResetReplication(ctx); err != nil {
 			return fmt.Errorf("can't reset replication: %v", err)
 		}
+		// We need to switch off super_read_only before we create the database.
+		resetFunc, err := mysqld.SetSuperReadOnly(false)
+		if err != nil {
+			return fmt.Errorf("failed to disable super_read_only during backup: %v", err)
+		}
+		if resetFunc != nil {
+			defer func() {
+				err := resetFunc()
+				if err != nil {
+					log.Error("Failed to set super_read_only back to its original value during backup")
+				}
+			}()
+		}
 		cmd := mysqlctl.GenerateInitialBinlogEntry()
 		if err := mysqld.ExecuteSuperQueryList(ctx, []string{cmd}); err != nil {
 			return err
@@ -404,6 +417,8 @@ func takeBackup(ctx context.Context, topoServer *topo.Server, backupStorage back
 	if err != nil {
 		return fmt.Errorf("can't get the primary replication position after all retries: %v", err)
 	}
+
+	log.Infof("takeBackup: primary position is: %s", primaryPos.String())
 
 	// Remember the time when we fetched the primary position, not when we caught
 	// up to it, so the timestamp on our backup is honest (assuming we make it

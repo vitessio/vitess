@@ -97,8 +97,12 @@ func initCluster(shardNames []string, totalTabletsRequired int) error {
 				tablet.Type = "primary"
 			}
 			// Start Mysqlctld process
-			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
-			err := tablet.MysqlctldProcess.Start()
+			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+			if err != nil {
+				return err
+			}
+			tablet.MysqlctldProcess = *mysqlctldProcess
+			err = tablet.MysqlctldProcess.Start()
 			if err != nil {
 				return err
 			}

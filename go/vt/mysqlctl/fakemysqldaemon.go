@@ -101,7 +101,7 @@ type FakeMysqlDaemon struct {
 	ReadOnly bool
 
 	// SuperReadOnly is the current value of the flag
-	SuperReadOnly bool
+	SuperReadOnly atomic.Bool
 
 	// SetReplicationPositionPos is matched against the input of SetReplicationPosition.
 	// If it doesn't match, SetReplicationPosition will return an error.
@@ -364,6 +364,11 @@ func (fmd *FakeMysqlDaemon) IsReadOnly() (bool, error) {
 	return fmd.ReadOnly, nil
 }
 
+// IsSuperReadOnly is part of the MysqlDaemon interface
+func (fmd *FakeMysqlDaemon) IsSuperReadOnly() (bool, error) {
+	return fmd.SuperReadOnly.Load(), nil
+}
+
 // SetReadOnly is part of the MysqlDaemon interface
 func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 	fmd.ReadOnly = on
@@ -371,10 +376,10 @@ func (fmd *FakeMysqlDaemon) SetReadOnly(on bool) error {
 }
 
 // SetSuperReadOnly is part of the MysqlDaemon interface
-func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) error {
-	fmd.SuperReadOnly = on
+func (fmd *FakeMysqlDaemon) SetSuperReadOnly(on bool) (ResetSuperReadOnlyFunc, error) {
+	fmd.SuperReadOnly.Store(on)
 	fmd.ReadOnly = on
-	return nil
+	return nil, nil
 }
 
 // StartReplication is part of the MysqlDaemon interface.

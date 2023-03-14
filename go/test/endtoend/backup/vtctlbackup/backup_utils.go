@@ -28,19 +28,19 @@ import (
 	"testing"
 	"time"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/test/endtoend/cluster"
+	"vitess.io/vitess/go/test/endtoend/utils"
 	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	"vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-
-	"vitess.io/vitess/go/test/endtoend/cluster"
 )
 
 // constants for test variants
@@ -115,11 +115,18 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	}
 	shard := &localCluster.Keyspaces[0].Shards[0]
 
+	// Create a new init_db.sql file that sets up passwords for all users.
+	// Then we use a db-credentials-file with the passwords.
+	// TODO: We could have operated with empty password here. Create a separate test for --db-credentials-file functionality (@rsajwani)
 	dbCredentialFile = cluster.WriteDbCredentialToTmp(localCluster.TmpDirectory)
 	initDb, _ := os.ReadFile(path.Join(os.Getenv("VTROOT"), "/config/init_db.sql"))
 	sql := string(initDb)
+	// The original init_db.sql does not have any passwords. Here we update the init file with passwords
+	sql, err = utils.GetInitDBSQL(sql, cluster.GetPasswordUpdateSQL(localCluster), "")
+	if err != nil {
+		return 1, err
+	}
 	newInitDBFile = path.Join(localCluster.TmpDirectory, "init_db_with_passwords.sql")
-	sql = sql + cluster.GetPasswordUpdateSQL(localCluster)
 	err = os.WriteFile(newInitDBFile, []byte(sql), 0666)
 	if err != nil {
 		return 1, err
@@ -163,7 +170,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		tablet.VttabletProcess.SupportsBackup = true
 
 		if setupType == Mysqlctld {
-			tablet.MysqlctldProcess = *cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			mysqlctldProcess, err := cluster.MysqlCtldProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+			if err != nil {
+				return 1, err
+			}
+			tablet.MysqlctldProcess = *mysqlctldProcess
 			tablet.MysqlctldProcess.InitDBFile = newInitDBFile
 			tablet.MysqlctldProcess.ExtraArgs = extraArgs
 			tablet.MysqlctldProcess.Password = tablet.VttabletProcess.DbPassword
@@ -174,7 +185,11 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 			continue
 		}
 
-		tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, localCluster.TmpDirectory)
+		if err != nil {
+			return 1, err
+		}
+		tablet.MysqlctlProcess = *mysqlctlProcess
 		tablet.MysqlctlProcess.InitDBFile = newInitDBFile
 		tablet.MysqlctlProcess.ExtraArgs = extraArgs
 		proc, err := tablet.MysqlctlProcess.StartProcess()
@@ -207,9 +222,6 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 	}
 
 	for _, tablet := range []cluster.Vttablet{*primary, *replica1} {
-		if err := tablet.VttabletProcess.CreateDB(keyspaceName); err != nil {
-			return 1, err
-		}
 		if err := tablet.VttabletProcess.Setup(); err != nil {
 			return 1, err
 		}
@@ -678,8 +690,6 @@ func restartPrimaryAndReplica(t *testing.T) {
 	}
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
 		err := localCluster.VtctlclientProcess.InitTablet(tablet, cell, keyspaceName, hostname, shardName)
-		require.Nil(t, err)
-		err = tablet.VttabletProcess.CreateDB(keyspaceName)
 		require.Nil(t, err)
 		err = tablet.VttabletProcess.Setup()
 		require.Nil(t, err)
