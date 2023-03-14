@@ -23,6 +23,7 @@ import (
 	"net/http"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -129,7 +130,6 @@ func init() {
 	upgradeCmd.Flags().BoolVar(&allowMajorUpgrade, "allow-major-upgrade", allowMajorUpgrade, "Defines if Golang major version upgrade are allowed.")
 	upgradeCmd.Flags().BoolVar(&isMainBranch, "main", isMainBranch, "Defines if the current branch is the main branch.")
 
-	upgradeWorkflowsCmd.Flags().StringVar(&goFrom, "go-from", goFrom, "The original Golang version we start with.")
 	upgradeWorkflowsCmd.Flags().StringVar(&goTo, "go-to", goTo, "The Golang version we want to upgrade to.")
 }
 
@@ -154,7 +154,7 @@ func runGetBootstrapCmd(_ *cobra.Command, _ []string) {
 }
 
 func runUpgradeWorkflowsCmd(_ *cobra.Command, _ []string) {
-	err := updateWorkflowFilesOnly(goFrom, goTo)
+	err := updateWorkflowFilesOnly(goTo)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -167,11 +167,7 @@ func runUpgradeCmd(_ *cobra.Command, _ []string) {
 	}
 }
 
-func updateWorkflowFilesOnly(goFrom, goTo string) error {
-	oldV, err := version.NewVersion(goFrom)
-	if err != nil {
-		return err
-	}
+func updateWorkflowFilesOnly(goTo string) error {
 	newV, err := version.NewVersion(goTo)
 	if err != nil {
 		return err
@@ -183,7 +179,7 @@ func updateWorkflowFilesOnly(goFrom, goTo string) error {
 
 	for _, fileToChange := range filesToChange {
 		err = replaceInFile(
-			[]string{"go-version: " + oldV.String()},
+			[]*regexp.Regexp{regexp.MustCompile(`(?i).*go-version:[[:space:]]*([0-9.]+).*`)},
 			[]string{"go-version: " + newV.String()},
 			fileToChange,
 		)
@@ -245,10 +241,13 @@ func currentGolangVersion() (*version.Version, error) {
 		return nil, err
 	}
 	content := string(contentRaw)
-	idxBegin := strings.Index(content, "goversion_min") + len("goversion_min") + 1
-	idxFinish := strings.Index(content[idxBegin:], "||") + idxBegin
-	versionStr := strings.TrimSpace(content[idxBegin:idxFinish])
-	return version.NewVersion(versionStr)
+
+	versre := regexp.MustCompile("(?i).*goversion_min[[:space:]]*([0-9.]+).*")
+	versionStr := versre.FindStringSubmatch(content)
+	if len(versionStr) != 2 {
+		return nil, fmt.Errorf("malformatted error, got: %v", versionStr)
+	}
+	return version.NewVersion(versionStr[1])
 }
 
 func currentBootstrapVersion() (float64, error) {
@@ -257,10 +256,13 @@ func currentBootstrapVersion() (float64, error) {
 		return 0, err
 	}
 	content := string(contentRaw)
-	idxBegin := strings.Index(content, "BOOTSTRAP_VERSION=") + len("BOOTSTRAP_VERSION=")
-	idxFinish := strings.IndexByte(content[idxBegin:], '\n') + idxBegin
-	versionStr := strings.TrimSpace(content[idxBegin:idxFinish])
-	f, err := strconv.ParseFloat(versionStr, 64)
+
+	versre := regexp.MustCompile("(?i).*BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*([0-9.]+).*")
+	versionStr := versre.FindStringSubmatch(content)
+	if len(versionStr) != 2 {
+		return 0, fmt.Errorf("malformatted error, got: %v", versionStr)
+	}
+	f, err := strconv.ParseFloat(versionStr[1], 64)
 	if err != nil {
 		return 0, err
 	}
@@ -346,7 +348,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 
 	for _, fileToChange := range filesToChange {
 		err = replaceInFile(
-			[]string{old.String()},
+			[]*regexp.Regexp{regexp.MustCompile(fmt.Sprintf(`(%s)`, old.String()))},
 			[]string{new.String()},
 			fileToChange,
 		)
@@ -357,7 +359,7 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 
 	if !isSameMajorMinorVersion(old, new) {
 		err = replaceInFile(
-			[]string{fmt.Sprintf("%d.%d", old.Segments()[0], old.Segments()[1])},
+			[]*regexp.Regexp{regexp.MustCompile(fmt.Sprintf("(%d.%d)", old.Segments()[0], old.Segments()[1]))},
 			[]string{fmt.Sprintf("%d.%d", new.Segments()[0], new.Segments()[1])},
 			"./go.mod",
 		)
@@ -389,7 +391,10 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 	newReplace := fmt.Sprintf("%s%-1g", btv, new)
 	for _, file := range files {
 		err = replaceInFile(
-			[]string{oldReplace, strings.ToUpper(oldReplace)},
+			[]*regexp.Regexp{
+				regexp.MustCompile(fmt.Sprintf(`(%s)`, oldReplace)),
+				regexp.MustCompile(fmt.Sprintf(`(%s)`, strings.ToUpper(oldReplace))),
+			},
 			[]string{newReplace, strings.ToUpper(newReplace)},
 			file,
 		)
@@ -398,10 +403,9 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 		}
 	}
 
-	oldReplace = fmt.Sprintf("\"bootstrap-version\", \"%-1g\"", old)
 	newReplace = fmt.Sprintf("\"bootstrap-version\", \"%-1g\"", new)
 	err = replaceInFile(
-		[]string{oldReplace},
+		[]*regexp.Regexp{regexp.MustCompile(`(?i).*bootstrap-version\",[[:space:]]*\"([0-9.]+)\".*`)},
 		[]string{newReplace},
 		"./test.go",
 	)
@@ -471,8 +475,8 @@ func getListOfFilesInPaths(pathsToExplore []string) ([]string, error) {
 }
 
 // replaceInFile replaces old with new in the given file.
-func replaceInFile(old, new []string, fileToChange string) error {
-	if len(old) != len(new) {
+func replaceInFile(oldexps []*regexp.Regexp, new []string, fileToChange string) error {
+	if len(oldexps) != len(new) {
 		panic("old and new should be of the same length")
 	}
 
@@ -488,8 +492,8 @@ func replaceInFile(old, new []string, fileToChange string) error {
 	}
 	contentStr := string(content)
 
-	for i := range old {
-		contentStr = strings.ReplaceAll(contentStr, old[i], new[i])
+	for i, oldex := range oldexps {
+		contentStr = oldex.ReplaceAllString(contentStr, new[i])
 	}
 
 	_, err = f.WriteAt([]byte(contentStr), 0)
