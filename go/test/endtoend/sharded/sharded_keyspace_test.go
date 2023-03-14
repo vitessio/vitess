@@ -28,6 +28,7 @@ import (
 
 	"vitess.io/vitess/go/test/endtoend/cluster"
 	"vitess.io/vitess/go/vt/log"
+	"vitess.io/vitess/go/vt/sidecardb"
 )
 
 var (
@@ -83,7 +84,7 @@ func TestMain(m *testing.M) {
 		if err := clusterInstance.StartTopo(); err != nil {
 			return 1, err
 		}
-		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName); err != nil {
+		if err := clusterInstance.VtctlProcess.CreateKeyspace(keyspaceName, sidecardb.DefaultName); err != nil {
 			return 1, err
 		}
 

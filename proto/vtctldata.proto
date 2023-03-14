@@ -339,6 +339,9 @@ message CreateKeyspaceRequest {
   // DurabilityPolicy is the durability policy to be
   // used for this keyspace.
   string durability_policy = 10;
+  // SidecarDBName is the name of the sidecar database that
+  // each vttablet in the keyspace will use.
+  string sidecar_db_name = 11;
 }
 
 message CreateKeyspaceResponse {

@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.vdiff_log
+CREATE TABLE IF NOT EXISTS vdiff_log
 (
     `id`         int(11)   NOT NULL AUTO_INCREMENT,
     `vdiff_id`   int(11)   NOT NULL,

@@ -20,6 +20,7 @@ import (
 	"context"
 	_ "embed"
 	"flag"
+	"fmt"
 	"os"
 	"path"
 	"strings"
@@ -78,6 +79,12 @@ func TestMain(m *testing.M) {
 			return 1
 		}
 
+		err = clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
@@ -95,7 +102,7 @@ func TestSchemaTrackingError(t *testing.T) {
 
 	logDir := clusterInstance.VtgateProcess.LogDir
 
-	timeout := time.After(1 * time.Minute)
+	timeout := time.After(5 * time.Minute)
 	var present bool
 	for {
 		select {

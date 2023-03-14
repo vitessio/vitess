@@ -27,7 +27,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-var throttlerConfigTimeout = 60 * time.Second
+var throttlerConfigTimeout = 90 * time.Second
 
 // CheckCancelAllMigrations cancels all pending migrations. There is no validation for affected migrations.
 func CheckCancelAllMigrationsViaVtctl(t *testing.T, vtctlclient *cluster.VtctlClientProcess, keyspace string) {

@@ -31,6 +31,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
 	"github.com/stretchr/testify/require"
@@ -42,8 +43,12 @@ import (
 var (
 	debugMode = false // set to true for local debugging: this uses the local env vtdataroot and does not teardown clusters
 
-	originalVtdataroot    string
-	vtdataroot            string
+	originalVtdataroot string
+	vtdataroot         string
+	// If you query the sidecar database directly against mysqld then you will need to specify the
+	// sidecarDBIdentifier
+	sidecarDBName         = "__vt_e2e-test" // test a non-default sidecar database name that also needs to be escaped
+	sidecarDBIdentifier   = sqlparser.String(sqlparser.NewIdentifierCS(sidecarDBName))
 	mainClusterConfig     *ClusterConfig
 	externalClusterConfig *ClusterConfig
 	extraVTGateArgs       = []string{"--tablet_refresh_interval", "10ms"}
@@ -98,10 +103,11 @@ type Cell struct {
 
 // Keyspace represents a Vitess keyspace contained by a cell within the test cluster
 type Keyspace struct {
-	Name    string
-	Shards  map[string]*Shard
-	VSchema string
-	Schema  string
+	Name          string
+	Shards        map[string]*Shard
+	VSchema       string
+	Schema        string
+	SidecarDBName string
 }
 
 // Shard represents a Vitess shard in a keyspace
@@ -377,11 +383,12 @@ func NewVitessCluster(t *testing.T, name string, cellNames []string, clusterConf
 // You can pass optional key value pairs (opts) if you want conditional behavior.
 func (vc *VitessCluster) AddKeyspace(t *testing.T, cells []*Cell, ksName string, shards string, vschema string, schema string, numReplicas int, numRdonly int, tabletIDBase int, opts map[string]string) (*Keyspace, error) {
 	keyspace := &Keyspace{
-		Name:   ksName,
-		Shards: make(map[string]*Shard),
+		Name:          ksName,
+		Shards:        make(map[string]*Shard),
+		SidecarDBName: sidecarDBName,
 	}
 
-	if err := vc.Vtctl.CreateKeyspace(keyspace.Name); err != nil {
+	if err := vc.VtctldClient.CreateKeyspace(keyspace.Name, keyspace.SidecarDBName); err != nil {
 		t.Fatalf(err.Error())
 	}
 	cellsToWatch := ""

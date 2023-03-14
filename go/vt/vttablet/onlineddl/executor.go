@@ -55,6 +55,7 @@ import (
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/schemadiff"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -187,11 +188,14 @@ type Executor struct {
 	tickReentranceFlag            int64
 	reviewedRunningMigrationsFlag bool
 
-	ticks             *timer.Timer
-	isOpen            int64
-	schemaInitialized bool
+	ticks  *timer.Timer
+	isOpen int64
 
-	initVreplicationDDLOnce sync.Once
+	// This will be a pointer to the executeQuery function unless
+	// a custom sidecar database is used, then it will point to
+	// the executeQueryWithSidecarDBReplacement function. This
+	// variable assignment must be managed in the Open function.
+	execQuery func(ctx context.Context, query string) (result *sqltypes.Result, err error)
 }
 
 type cancellableMigration struct {
@@ -248,10 +252,15 @@ func NewExecutor(env tabletenv.Env, tabletAlias *topodatapb.TabletAlias, ts *top
 		lagThrottler:          lagThrottler,
 		toggleBufferTableFunc: toggleBufferTableFunc,
 		ticks:                 timer.NewTimer(migrationCheckInterval),
+		// Gracefully return an error if any caller tries to execute
+		// a query before the executor has been fully opened.
+		execQuery: func(ctx context.Context, query string) (result *sqltypes.Result, err error) {
+			return nil, vterrors.New(vtrpcpb.Code_UNAVAILABLE, "onlineddl executor is closed")
+		},
 	}
 }
 
-func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltypes.Result, err error) {
+func (e *Executor) executeQuery(ctx context.Context, query string) (result *sqltypes.Result, err error) {
 	defer e.env.LogError()
 
 	conn, err := e.pool.Get(ctx, nil)
@@ -259,7 +268,25 @@ func (e *Executor) execQuery(ctx context.Context, query string) (result *sqltype
 		return result, err
 	}
 	defer conn.Recycle()
+
 	return conn.Exec(ctx, query, math.MaxInt32, true)
+}
+
+func (e *Executor) executeQueryWithSidecarDBReplacement(ctx context.Context, query string) (result *sqltypes.Result, err error) {
+	defer e.env.LogError()
+
+	conn, err := e.pool.Get(ctx, nil)
+	if err != nil {
+		return result, err
+	}
+	defer conn.Recycle()
+
+	// Replace any provided sidecar DB qualifiers with the correct one.
+	uq, err := sqlparser.ReplaceTableQualifiers(query, sidecardb.DefaultName, sidecardb.GetName())
+	if err != nil {
+		return nil, err
+	}
+	return conn.Exec(ctx, uq, math.MaxInt32, true)
 }
 
 // TabletAliasString returns tablet alias as string (duh)
@@ -267,7 +294,7 @@ func (e *Executor) TabletAliasString() string {
 	return topoproto.TabletAliasString(e.tabletAlias)
 }
 
-// InitDBConfig initializes keysapce
+// InitDBConfig initializes keyspace
 func (e *Executor) InitDBConfig(keyspace, shard, dbName string) {
 	e.keyspace = keyspace
 	e.shard = shard
@@ -289,6 +316,12 @@ func (e *Executor) Open() error {
 		return true
 	})
 	e.vreplicationLastError = make(map[string]*vterrors.LastError)
+
+	if sidecardb.GetName() != sidecardb.DefaultName {
+		e.execQuery = e.executeQueryWithSidecarDBReplacement
+	} else {
+		e.execQuery = e.executeQuery
+	}
 
 	e.pool.Open(e.env.Config().DB.AppWithDB(), e.env.Config().DB.DbaWithDB(), e.env.Config().DB.AppDebugWithDB())
 	e.ticks.Start(e.onMigrationCheckTick)

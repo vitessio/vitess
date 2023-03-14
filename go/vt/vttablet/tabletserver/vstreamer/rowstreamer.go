@@ -119,7 +119,7 @@ func (rs *rowStreamer) Stream() error {
 		return err
 	}
 	defer conn.Close()
-	if _, err := conn.ExecuteFetch("set names binary", 1, false); err != nil {
+	if _, err := conn.ExecuteFetch("set names 'binary'", 1, false); err != nil {
 		return err
 	}
 	return rs.streamQuery(conn, rs.send)
