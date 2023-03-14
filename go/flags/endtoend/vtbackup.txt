@@ -101,6 +101,7 @@ Usage of vtbackup:
       --log_err_stacks                                  log stack traces for errors
       --log_rotate_max_size uint                        size in bytes at which logs are rotated (glog.MaxSize) (default 1887436800)
       --logtostderr                                     log to standard error instead of files
+      --manifest-external-decompressor string           command with arguments to store in the backup manifest when compressing a backup with an external compression engine.
       --min_backup_interval duration                    Only take a new backup if it's been at least this long since the most recent backup.
       --min_retention_count int                         Always keep at least this many of the most recent backups in this backup storage location, even if some are older than the min_retention_time. This must be at least 1 since a backup must always exist to allow new backups to be made (default 1)
       --min_retention_time duration                     Keep each old backup for at least this long before removing it. Set to 0 to disable pruning of old backups.
