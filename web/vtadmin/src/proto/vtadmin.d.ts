@@ -32017,6 +32017,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_wait_for_replica_count */
         semi_sync_wait_for_replica_count?: (number|null);
+
+        /** FullStatus super_read_only */
+        super_read_only?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -32087,6 +32090,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_wait_for_replica_count. */
         public semi_sync_wait_for_replica_count: number;
+
+        /** FullStatus super_read_only. */
+        public super_read_only: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.

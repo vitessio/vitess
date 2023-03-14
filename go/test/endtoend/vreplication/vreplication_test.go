@@ -387,6 +387,7 @@ func TestMultiCellVreplicationWorkflow(t *testing.T) {
 	insertInitialData(t)
 	shardCustomer(t, true, []*Cell{cell1, cell2}, cell2.Name, true)
 
+	checkIfDenyListExists(t, vc, "product:0", "customer")
 	// we tag along this test so as not to create the overhead of creating another cluster
 	testVStreamCellFlag(t)
 }
