@@ -490,29 +490,35 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 
 	// Ensure that this tablet comes up with the sidecar database
 	// name that is set for the keyspace.
-	ks, err := tm.TopoServer.GetKeyspace(ctx, tablet.Keyspace)
-	if err != nil {
-		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
-	}
-	// If the keyspace exists but this is the first tablet added, then
-	// update the keyspace record to the default.
-	if ks.SidecarDbName == "" {
-		ks.SidecarDbName = sidecardb.DefaultName
-		ctx, unlock, lockErr := tm.TopoServer.LockKeyspace(ctx, tablet.Keyspace, "Setting sidecar database name")
-		if lockErr != nil {
-			return nil, vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
-		}
-		err = tm.TopoServer.UpdateKeyspace(ctx, ks)
-		unlock(&lockErr)
+	setSidecarDBName := func() error {
+		ks, err := tm.TopoServer.GetKeyspace(ctx, tablet.Keyspace)
 		if err != nil {
-			return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
+			return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 		}
-		if lockErr != nil {
-			return nil, vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
+		// If the keyspace exists but this is the first tablet added, then
+		// update the keyspace record to the default.
+		if ks.SidecarDbName == "" {
+			ks.SidecarDbName = sidecardb.DefaultName
+			ctx, unlock, lockErr := tm.TopoServer.LockKeyspace(ctx, tablet.Keyspace, "Setting sidecar database name")
+			if lockErr != nil {
+				return vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
+			}
+			err = tm.TopoServer.UpdateKeyspace(ctx, ks)
+			unlock(&lockErr)
+			if err != nil {
+				return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
+			}
+			if lockErr != nil {
+				return vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
+			}
 		}
+		// Have the tablet use the sidecar database that's set for the keyspace.
+		sidecardb.SetName(ks.SidecarDbName)
+		return nil
 	}
-	// Have the tablet use the sidecar database that's set for the keyspace.
-	sidecardb.SetName(ks.SidecarDbName)
+	if err := tm.withRetry(ctx, "setting sidecar database name", setSidecarDBName); err != nil {
+		return nil, err
+	}
 
 	tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil)
 

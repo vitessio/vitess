@@ -644,8 +644,8 @@ func (vs *vstreamer) buildJournalPlan(id uint64, tm *mysql.TableMap) error {
 		return err
 	}
 	defer conn.Close()
-	qr, err := conn.ExecuteFetch(fmt.Sprintf("select * from %s.resharding_journal where 1 != 1",
-		sidecardb.GetIdentifier()), 1, true)
+	qr, err := conn.ExecuteFetch(sqlparser.BuildParsedQuery("select * from %s.resharding_journal where 1 != 1",
+		sidecardb.GetIdentifier()).Query, 1, true)
 	if err != nil {
 		return err
 	}

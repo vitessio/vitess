@@ -111,14 +111,9 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
-	sdbidc, err := sidecardb.GetIdentifierCache()
+	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(target.Keyspace)
 	if err != nil {
-		return err
-	}
-	sidecarDBID, err := sdbidc.Get(target.Keyspace)
-	if err != nil {
-		return vterrors.Wrapf(err, "failed to read sidecar database identifier for keyspace %q from the cache",
-			target.Keyspace)
+		return vterrors.VT14005(target.Keyspace)
 	}
 
 	ftRes, err := conn.Execute(t.ctx, target,
@@ -275,12 +270,7 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 		return false
 	}
 
-	sdbidc, err := sidecardb.GetIdentifierCache()
-	if err != nil {
-		log.Errorf("Failed to get sidecar database identifier cache: %v", err)
-		return false
-	}
-	sidecarDBID, err := sdbidc.Get(th.Target.Keyspace)
+	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(th.Target.Keyspace)
 	if err != nil {
 		log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v",
 			th.Target.Keyspace, err)

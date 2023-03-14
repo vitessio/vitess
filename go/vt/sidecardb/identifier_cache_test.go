@@ -41,7 +41,7 @@ func TestIdentifierCache(t *testing.T) {
 	cache, err := GetIdentifierCache()
 	require.Error(t, err)
 	require.Nil(t, cache)
-	require.Equal(t, err.Error(), ErrIdentifierCacheUninitialized)
+	require.Equal(t, err.Error(), errIdentifierCacheUninitialized)
 	// Create the cache to use for lookups of the sidecar database
 	// identifier in use by each keyspace.
 	var created bool
@@ -91,7 +91,7 @@ func TestIdentifierCache(t *testing.T) {
 				cache.load = loadFunc
 				return nil
 			},
-			wantErr: vterrors.New(vtrpcpb.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction),
+			wantErr: vterrors.New(vtrpcpb.Code_INTERNAL, errIdentifierCacheNoLoadFunction),
 		},
 		{
 			name:     "delete keyspace",

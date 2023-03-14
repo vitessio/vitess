@@ -44,8 +44,8 @@ type IdentifierCache struct {
 }
 
 const (
-	ErrIdentifierCacheUninitialized  = "sidecar database identifier cache is not initialized"
-	ErrIdentifierCacheNoLoadFunction = "the load from database function has not been set"
+	errIdentifierCacheUninitialized  = "sidecar database identifier cache is not initialized"
+	errIdentifierCacheNoLoadFunction = "the load from database function has not been set"
 	identifierCacheLoadTimeout       = 30 * time.Second
 )
 
@@ -66,7 +66,7 @@ func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) 
 
 func GetIdentifierCache() (*IdentifierCache, error) {
 	if identifierCache.Load() == nil {
-		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, ErrIdentifierCacheUninitialized)
+		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, errIdentifierCacheUninitialized)
 	} else {
 		return identifierCache.Load().(*IdentifierCache), nil
 	}
@@ -77,7 +77,7 @@ func GetIdentifierCache() (*IdentifierCache, error) {
 // read through cache.
 func (ic *IdentifierCache) Get(keyspace string) (string, error) {
 	if ic.load == nil {
-		return "", vterrors.New(vtrpcpb.Code_INTERNAL, ErrIdentifierCacheNoLoadFunction)
+		return "", vterrors.New(vtrpcpb.Code_INTERNAL, errIdentifierCacheNoLoadFunction)
 	}
 	sdbid, ok := ic.sidecarDBIdentifiers.Load(keyspace)
 	if !ok || sdbid == nil || sdbid == "" {
@@ -96,6 +96,18 @@ func (ic *IdentifierCache) Get(keyspace string) (string, error) {
 		ic.sidecarDBIdentifiers.Store(keyspace, sdbid)
 	}
 	return sdbid.(string), nil
+}
+
+// GetIdentifierForKeyspace is a convenience function -- combining
+// GetIdentifierCache() and IdentifierCache.Get(keyspace) -- which
+// returns the sidecar database identifier as an sqlparser string
+// for the provided keyspace.
+func GetIdentifierForKeyspace(keyspace string) (string, error) {
+	cache, err := GetIdentifierCache()
+	if err != nil {
+		return "", err
+	}
+	return cache.Get(keyspace)
 }
 
 // Delete removes an entry from the cache. It is idempotent and

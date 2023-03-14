@@ -173,7 +173,7 @@ func TestMiscSidecarDB(t *testing.T) {
 		exec: exec,
 	}
 
-	err = si.setCurrentDatabase(GetName())
+	err = si.setCurrentDatabase(GetIdentifier())
 	require.NoError(t, err)
 
 	require.False(t, MatchesInitQuery("abc"))

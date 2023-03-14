@@ -22,6 +22,7 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/log"
 	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
 	"vitess.io/vitess/go/vt/sidecardb"
 
@@ -268,17 +269,13 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sdbidc, err := sidecardb.GetIdentifierCache()
+	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(ks.Name)
 	if err != nil {
-		return nil, err
-	}
-	sidecarDBID, err := sdbidc.Get(ks.Name)
-	if err != nil {
-		return nil, vterrors.Wrapf(err, "failed to read sidecar database identifier for keyspace %q from the cache",
-			ks.Name)
+		log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v", ks.Name, err)
+		return nil, vterrors.VT14005(ks.Name)
 	}
 
-	sql := fmt.Sprintf("SELECT * FROM %s.schema_migrations", sidecarDBID)
+	sql := sqlparser.BuildParsedQuery("SELECT * FROM %s.schema_migrations", sidecarDBID).Query
 
 	if show.Filter != nil {
 		if show.Filter.Filter != nil {

@@ -277,7 +277,7 @@ func Init(
 	})
 	// This should never happen.
 	if !created {
-		log.Fatal("An existing sidecar database identifier cache was found during init!")
+		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
 	}
 
 	var si SchemaInfo // default nil
