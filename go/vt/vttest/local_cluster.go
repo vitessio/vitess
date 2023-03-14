@@ -156,20 +156,20 @@ type Config struct {
 // It then sets the right value for cfg.SchemaDir.
 // At the end of the test, the caller should os.RemoveAll(cfg.SchemaDir).
 func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keyspace) error {
-	if cfg.SchemaDir != "" {
-		return fmt.Errorf("SchemaDir is already set to %v", cfg.SchemaDir)
-	}
-
-	// Create a base temporary directory.
-	tempSchemaDir, err := os.MkdirTemp("", "vttest")
-	if err != nil {
-		return err
+	schemaDir := cfg.SchemaDir
+	if schemaDir == "" {
+		// Create a base temporary directory.
+		tempSchemaDir, err := os.MkdirTemp("", "vttest")
+		if err != nil {
+			return err
+		}
+		schemaDir = tempSchemaDir
 	}
 
 	// Write the schema if set.
 	if schema != "" {
-		ksDir := path.Join(tempSchemaDir, keyspace)
-		err = os.Mkdir(ksDir, os.ModeDir|0775)
+		ksDir := path.Join(schemaDir, keyspace)
+		err := os.Mkdir(ksDir, os.ModeDir|0775)
 		if err != nil {
 			return err
 		}
@@ -182,7 +182,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 
 	// Write in the vschema if set.
 	if vschema != nil {
-		vschemaFilePath := path.Join(tempSchemaDir, keyspace, "vschema.json")
+		vschemaFilePath := path.Join(schemaDir, keyspace, "vschema.json")
 		vschemaJSON, err := json.Marshal(vschema)
 		if err != nil {
 			return err
@@ -191,7 +191,7 @@ func (cfg *Config) InitSchemas(keyspace, schema string, vschema *vschemapb.Keysp
 			return err
 		}
 	}
-	cfg.SchemaDir = tempSchemaDir
+	cfg.SchemaDir = schemaDir
 	return nil
 }
 
