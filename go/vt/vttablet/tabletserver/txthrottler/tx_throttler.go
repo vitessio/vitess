@@ -28,6 +28,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/discovery"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/throttler"
@@ -77,19 +78,28 @@ type TxThrottler struct {
 	state *txThrottlerState
 
 	target *querypb.Target
+
+	// stats
+	throttlerRunning  *stats.Gauge
+	requestsTotal     *stats.Counter
+	requestsThrottled *stats.Counter
 }
+
+// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
+// go/vt/throttler.GlobalManager.
+const TxThrottlerName = "TransactionThrottler"
 
 // NewTxThrottler tries to construct a TxThrottler from the
 // relevant fields in the tabletenv.Config object. It returns a disabled TxThrottler if
 // any error occurs.
 // This function calls tryCreateTxThrottler that does the actual creation work
 // and returns an error if one occurred.
-func NewTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) *TxThrottler {
-	txThrottler, err := tryCreateTxThrottler(config, topoServer)
+func NewTxThrottler(env tabletenv.Env, topoServer *topo.Server) *TxThrottler {
+	txThrottler, err := tryCreateTxThrottler(env, topoServer)
 	if err != nil {
 		log.Errorf("Error creating transaction throttler. Transaction throttling will"+
 			" be disabled. Error: %v", err)
-		txThrottler, err = newTxThrottler(&txThrottlerConfig{enabled: false})
+		txThrottler, err = newTxThrottler(env, &txThrottlerConfig{enabled: false})
 		if err != nil {
 			panic("BUG: Can't create a disabled transaction throttler")
 		}
@@ -104,22 +114,22 @@ func (t *TxThrottler) InitDBConfig(target *querypb.Target) {
 	t.target = proto.Clone(target).(*querypb.Target)
 }
 
-func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Server) (*TxThrottler, error) {
-	if !config.EnableTxThrottler {
-		return newTxThrottler(&txThrottlerConfig{enabled: false})
+func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrottler, error) {
+	if !env.Config().EnableTxThrottler {
+		return newTxThrottler(env, &txThrottlerConfig{enabled: false})
 	}
 
 	var throttlerConfig throttlerdatapb.Configuration
-	if err := prototext.Unmarshal([]byte(config.TxThrottlerConfig), &throttlerConfig); err != nil {
+	if err := prototext.Unmarshal([]byte(env.Config().TxThrottlerConfig), &throttlerConfig); err != nil {
 		return nil, err
 	}
 
 	// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 	// is immutable.
-	healthCheckCells := make([]string, len(config.TxThrottlerHealthCheckCells))
-	copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
+	healthCheckCells := make([]string, len(env.Config().TxThrottlerHealthCheckCells))
+	copy(healthCheckCells, env.Config().TxThrottlerHealthCheckCells)
 
-	return newTxThrottler(&txThrottlerConfig{
+	return newTxThrottler(env, &txThrottlerConfig{
 		enabled:          true,
 		topoServer:       topoServer,
 		throttlerConfig:  &throttlerConfig,
@@ -205,11 +215,7 @@ func resetTxThrottlerFactories() {
 	}
 }
 
-// TxThrottlerName is the name the wrapped go/vt/throttler object will be registered with
-// go/vt/throttler.GlobalManager.
-const TxThrottlerName = "TransactionThrottler"
-
-func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
+func newTxThrottler(env tabletenv.Env, config *txThrottlerConfig) (*TxThrottler, error) {
 	if config.enabled {
 		// Verify config.
 		err := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}.Verify()
@@ -221,7 +227,10 @@ func newTxThrottler(config *txThrottlerConfig) (*TxThrottler, error) {
 		}
 	}
 	return &TxThrottler{
-		config: config,
+		config:            config,
+		throttlerRunning:  env.Exporter().NewGauge("TransactionThrottlerRunning", "transaction throttler running state"),
+		requestsTotal:     env.Exporter().NewCounter("TransactionThrottlerRequests", "transaction throttler requests"),
+		requestsThrottled: env.Exporter().NewCounter("TransactionThrottlerThrottled", "transaction throttler requests throttled"),
 	}, nil
 }
 
@@ -234,6 +243,7 @@ func (t *TxThrottler) Open() error {
 		return nil
 	}
 	log.Info("TxThrottler: opening")
+	t.throttlerRunning.Set(1)
 	var err error
 	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard, t.target.Cell)
 	return err
@@ -251,6 +261,7 @@ func (t *TxThrottler) Close() {
 	}
 	t.state.deallocateResources()
 	t.state = nil
+	t.throttlerRunning.Set(0)
 	log.Info("TxThrottler: closed")
 }
 
@@ -265,7 +276,12 @@ func (t *TxThrottler) Throttle() (result bool) {
 	if t.state == nil {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}
-	return t.state.throttle()
+	result = t.state.throttle()
+	t.requestsTotal.Add(1)
+	if result {
+		t.requestsThrottled.Add(1)
+	}
+	return result
 }
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
