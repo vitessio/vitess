@@ -30,6 +30,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var unusedFlag = &pflag.Flag{}
@@ -496,28 +497,18 @@ func TestWorkflowUpdate(t *testing.T) {
 		Value:   stringValue{"EXEC"},
 		Changed: true,
 	}
+	sourceVal := fmt.Sprintf(updateOnDDLInSource, onDDL.Value.String(), onDDL.Value.String())
 	// First we stop the workflow and update the config on both
 	// target primaries.
-	env.tmc.setVRResults(env.tmc.tablets[200].tablet,
-		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s', source = if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:%s')) where db_name = 'vt_%s' and workflow = '%s'",
-			cells.Value.String(), tabletTypes.Value.String(), onDDL.Value.String(), onDDL.Value.String(), keyspace, workflow),
-		&sqltypes.Result{},
-	)
-	env.tmc.setVRResults(env.tmc.tablets[210].tablet,
-		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s', source = if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:%s')) where db_name = 'vt_%s' and workflow = '%s'",
-			cells.Value.String(), tabletTypes.Value.String(), onDDL.Value.String(), onDDL.Value.String(), keyspace, workflow),
-		&sqltypes.Result{},
-	)
-	// Then we restart the workflow for the config changes to take
+	updateQuery := sqlparser.BuildParsedQuery("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s', source = %s where db_name = 'vt_%s' and workflow = '%s'",
+		cells.Value.String(), tabletTypes.Value.String(), sourceVal, keyspace, workflow).Query
+	env.tmc.setVRResults(env.tmc.tablets[200].tablet, updateQuery, &sqltypes.Result{})
+	env.tmc.setVRResults(env.tmc.tablets[210].tablet, updateQuery, &sqltypes.Result{})
+	// then we restart the workflow for the config changes to take
 	// effect.
-	env.tmc.setVRResults(env.tmc.tablets[200].tablet,
-		fmt.Sprintf("update _vt.vreplication set state = 'Running' where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflow),
-		&sqltypes.Result{},
-	)
-	env.tmc.setVRResults(env.tmc.tablets[210].tablet,
-		fmt.Sprintf("update _vt.vreplication set state = 'Running' where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflow),
-		&sqltypes.Result{},
-	)
+	restartQuery := fmt.Sprintf("update _vt.vreplication set state = 'Running' where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflow)
+	env.tmc.setVRResults(env.tmc.tablets[200].tablet, restartQuery, &sqltypes.Result{})
+	env.tmc.setVRResults(env.tmc.tablets[210].tablet, restartQuery, &sqltypes.Result{})
 
 	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", false, cells, tabletTypes, onDDL)
 	require.NoError(t, err)
@@ -525,7 +516,7 @@ func TestWorkflowUpdate(t *testing.T) {
 	results, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, cells, tabletTypes, onDDL)
 	require.NoError(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
-	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped', cell = 'zone1,zone2', tablet_types = 'rdonly,spare', source = if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:EXEC'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:EXEC')) where db_name = 'vt_target' and workflow = 'wrWorkflow'
+	dryRunResult := fmt.Sprintf(`Query: %s
 will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 
@@ -559,7 +550,7 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 
 
-`
+`, updateQuery)
 
 	require.Equal(t, dryRunResult, logger.String())
 }

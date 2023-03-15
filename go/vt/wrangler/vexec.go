@@ -49,6 +49,16 @@ const (
 	vexecTableQualifier   = "_vt"
 	vreplicationTableName = "vreplication"
 	sqlVReplicationDelete = "delete from _vt.vreplication"
+
+	// The vreplication.source column contains a prototext value. If
+	// there's currently no on_ddl value (which would mean it's the
+	// default of 0/IGNORE) then we append the new value. Otherwise,
+	// we replace the existing value within the string. When we no
+	// longer have to support MySQL 5.7 we can use this much simpler
+	// query:
+	// 	if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:%s'))"
+	// Until then... this 5.7 compatible ugliness:
+	updateOnDDLInSource = "trim(both ' ' from if(locate('on_ddl:', source) = 0, concat(source, ' on_ddl:%s'), insert(source, locate('on_ddl:', source) + length('on_ddl:'), if(locate(' ', source, locate('on_ddl:', source) + length('on_ddl:')) = 0, -1, length(source) - locate(' ', source, locate('on_ddl:', source) + length('on_ddl:'))), '%s ')))"
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -368,11 +378,10 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			if _, ok := binlogdatapb.OnDDLAction_value[onDDLVal]; !ok {
 				return nil, fmt.Errorf("invalid value provided for on-ddl: %v", onDDLVal)
 			}
-			// The source column is a prototext value. If there's currently no
-			// on_ddl value (which would mean it's the default of 0/IGNORE) then
-			// we append it. Otherwise, we replace the existing value.
-			query += fmt.Sprintf(", source=if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:%s'))",
-				onDDLVal, onDDLVal)
+			sb := strings.Builder{}
+			sb.WriteString(", source = ")
+			sb.WriteString(fmt.Sprintf(updateOnDDLInSource, onDDLVal, onDDLVal))
+			query += sb.String()
 		}
 		if !changes {
 			return nil, fmt.Errorf("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
