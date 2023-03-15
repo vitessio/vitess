@@ -344,6 +344,10 @@ message ExecuteOptions {
   // TransactionAccessMode specifies the access modes to be used while starting the transaction i.e. READ WRITE/READ ONLY/WITH CONSISTENT SNAPSHOT
   // If not specified, the transaction will be started with the default access mode on the connection.
   repeated TransactionAccessMode transaction_access_mode = 14;
+
+  // WorkloadName specifies the name of the workload as indicated in query directives. This is used for instrumentation
+  // in metrics and tracing spans.
+  string WorkloadName = 15;
 }
 
 // Field describes a single column returned by a query

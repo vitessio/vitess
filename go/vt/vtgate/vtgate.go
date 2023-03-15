@@ -41,6 +41,7 @@ import (
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -261,11 +262,29 @@ func Init(
 	resolver := NewResolver(srvResolver, serv, cell, sc)
 	vsm := newVStreamManager(srvResolver, serv, cell)
 
+	ts, err := serv.GetTopoServer()
+	if err != nil {
+		log.Fatalf("Unable to get Topo server: %v", err)
+	}
+	// Create a global cache to use for lookups of the sidecar database
+	// identifier in use by each keyspace.
+	_, created := sidecardb.NewIdentifierCache(func(ctx context.Context, keyspace string) (string, error) {
+		ki, err := ts.GetKeyspace(ctx, keyspace)
+		if err != nil {
+			return "", err
+		}
+		return ki.SidecarDbName, nil
+	})
+	// This should never happen.
+	if !created {
+		log.Fatal("Failed to create a new sidecar database identifier cache during init as one already existed!")
+	}
+
 	var si SchemaInfo // default nil
 	var st *vtschema.Tracker
 	if enableSchemaChangeSignal {
 		st = vtschema.NewTracker(gw.hc.Subscribe(), schemaChangeUser, enableViews)
-		addKeyspaceToTracker(ctx, srvResolver, st, gw)
+		addKeyspacesToTracker(ctx, srvResolver, st, gw)
 		si = st
 	}
 
@@ -344,7 +363,7 @@ func Init(
 	})
 	rpcVTGate.registerDebugHealthHandler()
 	rpcVTGate.registerDebugEnvHandler()
-	err := initQueryLogger(rpcVTGate)
+	err = initQueryLogger(rpcVTGate)
 	if err != nil {
 		log.Fatalf("error initializing query logger: %v", err)
 	}
@@ -353,7 +372,7 @@ func Init(
 	return rpcVTGate
 }
 
-func addKeyspaceToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
+func addKeyspacesToTracker(ctx context.Context, srvResolver *srvtopo.Resolver, st *vtschema.Tracker, gw *TabletGateway) {
 	keyspaces, err := srvResolver.GetAllKeyspaces(ctx)
 	if err != nil {
 		log.Warningf("Unable to get all keyspaces: %v", err)

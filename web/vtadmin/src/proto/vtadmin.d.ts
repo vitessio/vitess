@@ -13244,6 +13244,9 @@ export namespace topodata {
 
         /** Keyspace throttler_config */
         throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** Keyspace sidecar_db_name */
+        sidecar_db_name?: (string|null);
     }
 
     /** Represents a Keyspace. */
@@ -13272,6 +13275,9 @@ export namespace topodata {
 
         /** Keyspace throttler_config. */
         public throttler_config?: (topodata.IThrottlerConfig|null);
+
+        /** Keyspace sidecar_db_name. */
+        public sidecar_db_name: string;
 
         /**
          * Creates a new Keyspace instance using the specified properties.
@@ -24943,6 +24949,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_access_mode */
         transaction_access_mode?: (query.ExecuteOptions.TransactionAccessMode[]|null);
+
+        /** ExecuteOptions WorkloadName */
+        WorkloadName?: (string|null);
     }
 
     /** Represents an ExecuteOptions. */
@@ -24983,6 +24992,9 @@ export namespace query {
 
         /** ExecuteOptions transaction_access_mode. */
         public transaction_access_mode: query.ExecuteOptions.TransactionAccessMode[];
+
+        /** ExecuteOptions WorkloadName. */
+        public WorkloadName: string;
 
         /**
          * Creates a new ExecuteOptions instance using the specified properties.
@@ -32005,6 +32017,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_wait_for_replica_count */
         semi_sync_wait_for_replica_count?: (number|null);
+
+        /** FullStatus super_read_only */
+        super_read_only?: (boolean|null);
     }
 
     /** Represents a FullStatus. */
@@ -32075,6 +32090,9 @@ export namespace replicationdata {
 
         /** FullStatus semi_sync_wait_for_replica_count. */
         public semi_sync_wait_for_replica_count: number;
+
+        /** FullStatus super_read_only. */
+        public super_read_only: boolean;
 
         /**
          * Creates a new FullStatus instance using the specified properties.
@@ -36382,6 +36400,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest durability_policy */
         durability_policy?: (string|null);
+
+        /** CreateKeyspaceRequest sidecar_db_name */
+        sidecar_db_name?: (string|null);
     }
 
     /** Represents a CreateKeyspaceRequest. */
@@ -36416,6 +36437,9 @@ export namespace vtctldata {
 
         /** CreateKeyspaceRequest durability_policy. */
         public durability_policy: string;
+
+        /** CreateKeyspaceRequest sidecar_db_name. */
+        public sidecar_db_name: string;
 
         /**
          * Creates a new CreateKeyspaceRequest instance using the specified properties.

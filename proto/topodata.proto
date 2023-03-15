@@ -309,6 +309,11 @@ message Keyspace {
   // server's lag throttler, and applies to the entire
   // keyspace, across all shards and tablets.
   ThrottlerConfig throttler_config = 9;
+
+  // SidecarDBName is the name of the Vitess sidecar database
+  // used for various system metadata that is stored in each
+  // tablet's mysqld instance.
+  string sidecar_db_name = 10;
 }
 
 // ShardReplication describes the MySQL replication relationships

@@ -21,10 +21,10 @@ This file contains the reparenting methods for mysqlctl.
 */
 
 import (
-	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
@@ -32,30 +32,33 @@ import (
 	"context"
 )
 
-// GenerateInitialBinlogEntry is used to create a binlog entry when a primary comes up and we need to get a
-// MySQL position so that we can set it as the starting position for replicas to do MySQL Replication from.
+// GenerateInitialBinlogEntry is used to create a binlog entry when
+// a primary comes up and we need to get a MySQL position so that we
+// can set it as the starting position for replicas to start MySQL
+// Replication from.
 func GenerateInitialBinlogEntry() string {
-	return sidecardb.CreateSidecarDatabaseQuery
+	return sidecardb.GetCreateQuery()
 }
 
 // PopulateReparentJournal returns the SQL command to use to populate
-// the _vt.reparent_journal table, as well as the time_created_ns
+// the reparent_journal table, as well as the time_created_ns
 // value used.
 func PopulateReparentJournal(timeCreatedNS int64, actionName, primaryAlias string, pos mysql.Position) string {
 	posStr := mysql.EncodePosition(pos)
 	if len(posStr) > mysql.MaximumPositionSize {
 		posStr = posStr[:mysql.MaximumPositionSize]
 	}
-	return fmt.Sprintf("INSERT INTO _vt.reparent_journal "+
+	return sqlparser.BuildParsedQuery("INSERT INTO %s.reparent_journal "+
 		"(time_created_ns, action_name, primary_alias, replication_position) "+
-		"VALUES (%v, '%v', '%v', '%v')",
-		timeCreatedNS, actionName, primaryAlias, posStr)
+		"VALUES (%d, '%s', '%s', '%s')", sidecardb.GetIdentifier(),
+		timeCreatedNS, actionName, primaryAlias, posStr).Query
 }
 
 // queryReparentJournal returns the SQL query to use to query the database
 // for a reparent_journal row.
 func queryReparentJournal(timeCreatedNS int64) string {
-	return fmt.Sprintf("SELECT action_name, primary_alias, replication_position FROM _vt.reparent_journal WHERE time_created_ns=%v", timeCreatedNS)
+	return sqlparser.BuildParsedQuery("SELECT action_name, primary_alias, replication_position FROM %s.reparent_journal WHERE time_created_ns=%d",
+		sidecardb.GetIdentifier(), timeCreatedNS).Query
 }
 
 // WaitForReparentJournal will wait until the context is done for
