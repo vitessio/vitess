@@ -47,7 +47,6 @@ var (
 	workflowUpdate    = true
 	allowMajorUpgrade = false
 	isMainBranch      = false
-	goFrom            = ""
 	goTo              = ""
 
 	rootCmd = &cobra.Command{
@@ -58,8 +57,7 @@ var (
 It mostly used by the update_golang_version.yml CI workflow that runs on a CRON.
 `,
 		Run: func(cmd *cobra.Command, args []string) {
-			// _ = cmd.Help()
-			runUpgradeCmd(cmd, args)
+			_ = cmd.Help()
 		},
 		Args: cobra.NoArgs,
 	}
