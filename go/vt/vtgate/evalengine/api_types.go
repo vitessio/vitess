@@ -17,9 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"strconv"
-
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -173,27 +170,4 @@ func ToNative(v sqltypes.Value) (any, error) {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "%v cannot be converted to a go type", v)
 	}
 	return out, err
-}
-
-// NormalizeValue returns a normalized form of this value that matches the output
-// of the evaluation engine. This is used to mask quirks in the way MySQL sends SQL
-// values over the wire, to allow comparing our implementation against MySQL's in
-// integration tests.
-func NormalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
-	typ := v.Type()
-	if typ == sqltypes.VarChar && coll == collations.CollationBinaryID {
-		return sqltypes.NewVarBinary(string(v.Raw()))
-	}
-	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
-		var bitsize = 64
-		if typ == sqltypes.Float32 {
-			bitsize = 32
-		}
-		f, err := strconv.ParseFloat(v.RawStr(), bitsize)
-		if err != nil {
-			panic(err)
-		}
-		return sqltypes.MakeTrusted(typ, FormatFloat(typ, f))
-	}
-	return v
 }

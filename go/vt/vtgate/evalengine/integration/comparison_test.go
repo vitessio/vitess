@@ -18,6 +18,7 @@ package integration
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,29 @@ func init() {
 	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 	servenv.OnParse(registerFlags)
+}
+
+// normalizeValue returns a normalized form of this value that matches the output
+// of the evaluation engine. This is used to mask quirks in the way MySQL sends SQL
+// values over the wire, to allow comparing our implementation against MySQL's in
+// integration tests.
+func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
+	typ := v.Type()
+	if typ == sqltypes.VarChar && coll == collations.CollationBinaryID {
+		return sqltypes.NewVarBinary(string(v.Raw()))
+	}
+	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
+		var bitsize = 64
+		if typ == sqltypes.Float32 {
+			bitsize = 32
+		}
+		f, err := strconv.ParseFloat(v.RawStr(), bitsize)
+		if err != nil {
+			panic(err)
+		}
+		return sqltypes.MakeTrusted(typ, evalengine.FormatFloat(typ, f))
+	}
+	return v
 }
 
 func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string) {
@@ -127,7 +151,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 			}
 		}
 		if debugNormalize {
-			localVal = evalengine.NormalizeValue(v, local.Collation())
+			localVal = normalizeValue(v, local.Collation())
 		} else {
 			localVal = v
 		}
@@ -141,7 +165,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	}
 	if remoteErr == nil {
 		if debugNormalize {
-			remoteVal = evalengine.NormalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
+			remoteVal = normalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
 		} else {
 			remoteVal = remote.Rows[0][0]
 		}
