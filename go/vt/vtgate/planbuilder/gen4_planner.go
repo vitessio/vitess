@@ -216,7 +216,10 @@ func newBuildSelectPlan(
 		return nil, nil, nil, err
 	}
 
-	plan = optimizePlan(plan)
+	plan, err = optimizePlan(plan)
+	if err != nil {
+		return nil, nil, nil, err
+	}
 
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
@@ -238,25 +241,36 @@ func newBuildSelectPlan(
 }
 
 // optimizePlan removes unnecessary simpleProjections that have been created while planning
-func optimizePlan(plan logicalPlan) logicalPlan {
-	newPlan, _ := visit(plan, func(plan logicalPlan) (bool, logicalPlan, error) {
-		this, ok := plan.(*simpleProjection)
-		if !ok {
-			return true, plan, nil
+func optimizePlan(plan logicalPlan) (output logicalPlan, err error) {
+	output = plan
+	inputs := make([]logicalPlan, len(plan.Inputs()))
+	for i, lp := range plan.Inputs() {
+		in, err := optimizePlan(lp)
+		if err != nil {
+			return nil, err
 		}
+		inputs[i] = in
+	}
+	err = plan.Rewrite(inputs...)
+	if err != nil {
+		return
+	}
 
-		input, ok := this.input.(*simpleProjection)
-		if !ok {
-			return true, plan, nil
-		}
+	this, ok := plan.(*simpleProjection)
+	if !ok {
+		return
+	}
 
-		for i, col := range this.eSimpleProj.Cols {
-			this.eSimpleProj.Cols[i] = input.eSimpleProj.Cols[col]
-		}
-		this.input = input.input
-		return true, this, nil
-	})
-	return newPlan
+	input, ok := this.input.(*simpleProjection)
+	if !ok {
+		return
+	}
+
+	for i, col := range this.eSimpleProj.Cols {
+		this.eSimpleProj.Cols[i] = input.eSimpleProj.Cols[col]
+	}
+	this.input = input.input
+	return
 }
 
 func gen4UpdateStmtPlanner(
