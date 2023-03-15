@@ -16,7 +16,7 @@ limitations under the License.
 
 package sync2
 
-// FakeConsolidator satisies the Consolidator interface and can be used to mock
+// FakeConsolidator satisfies the Consolidator interface and can be used to mock
 // how Vitess interacts with the Consolidator.
 type FakeConsolidator struct {
 	// CreateCalls can be used to inspect Create calls.
@@ -40,7 +40,7 @@ type FakeConsolidatorCreateReturn struct {
 	Created bool
 }
 
-// FakePendingResult satisies the PendingResult interface and can be used to
+// FakePendingResult satisfies the PendingResult interface and can be used to
 // mock how Vitess interacts with the Consolidator.
 type FakePendingResult struct {
 	// BroadcastCalls can be used to inspect Broadcast calls.
@@ -89,7 +89,7 @@ func (fr *FakePendingResult) Err() error {
 	return fr.err
 }
 
-// Err returns the pre-configured Result.
+// Result returns the pre-configured Result.
 func (fr *FakePendingResult) Result() any {
 	return fr.result
 }
