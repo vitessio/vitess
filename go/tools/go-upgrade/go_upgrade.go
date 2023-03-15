@@ -360,8 +360,8 @@ func replaceGoVersionInCodebase(old, new *version.Version, workflowUpdate bool) 
 
 	if !isSameMajorMinorVersion(old, new) {
 		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(fmt.Sprintf("(%d.%d)", old.Segments()[0], old.Segments()[1]))},
-			[]string{fmt.Sprintf("%d.%d", new.Segments()[0], new.Segments()[1])},
+			[]*regexp.Regexp{regexp.MustCompile(`go[[:space:]]*([0-9.]+)`)},
+			[]string{fmt.Sprintf("go %d.%d", new.Segments()[0], new.Segments()[1])},
 			"./go.mod",
 		)
 		if err != nil {
@@ -387,16 +387,10 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 		return err
 	}
 
-	const btv = "bootstrap_version="
-	oldReplace := fmt.Sprintf("%s%-1g", btv, old)
-	newReplace := fmt.Sprintf("%s%-1g", btv, new)
 	for _, file := range files {
 		err = replaceInFile(
-			[]*regexp.Regexp{
-				regexp.MustCompile(fmt.Sprintf(`(%s)`, oldReplace)),
-				regexp.MustCompile(fmt.Sprintf(`(%s)`, strings.ToUpper(oldReplace))),
-			},
-			[]string{newReplace, strings.ToUpper(newReplace)},
+			[]*regexp.Regexp{regexp.MustCompile(`(?i)ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*([0-9.]+)`)},
+			[]string{fmt.Sprintf("ARG bootstrap_version=%-1g", new)},
 			file,
 		)
 		if err != nil {
