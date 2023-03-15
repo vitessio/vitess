@@ -3887,7 +3887,7 @@ func TestSelectAggregationRandom(t *testing.T) {
 	rs, err := executor.Execute(context.Background(), "TestSelectCFC", session,
 		"select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)
 	require.NoError(t, err)
-	assert.Equal(t, `[[INT64(10) INT64(1) INT64(10)]]`, fmt.Sprintf("%v", rs.Rows))
+	assert.Equal(t, `[[INT64(10) INT64(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
 }
 
 func TestSelectHexAndBit(t *testing.T) {
