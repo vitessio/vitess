@@ -58,7 +58,8 @@ var (
 It mostly used by the update_golang_version.yml CI workflow that runs on a CRON.
 `,
 		Run: func(cmd *cobra.Command, args []string) {
-			_ = cmd.Help()
+			// _ = cmd.Help()
+			runUpgradeCmd(cmd, args)
 		},
 		Args: cobra.NoArgs,
 	}
@@ -403,10 +404,9 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 		}
 	}
 
-	newReplace = fmt.Sprintf("\"bootstrap-version\", \"%-1g\"", new)
 	err = replaceInFile(
-		[]*regexp.Regexp{regexp.MustCompile(`(?i).*bootstrap-version\",[[:space:]]*\"([0-9.]+)\".*`)},
-		[]string{newReplace},
+		[]*regexp.Regexp{regexp.MustCompile(`(?i)\"bootstrap-version\",[[:space:]]*\"([0-9.]+)\"`)},
+		[]string{fmt.Sprintf("\"bootstrap-version\", \"%-1g\"", new)},
 		"./test.go",
 	)
 	if err != nil {
