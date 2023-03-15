@@ -55,6 +55,8 @@ var (
 		Long: `go-upgrade allows us to automate some tasks required to bump the version of Golang used throughout our codebase.
 
 It mostly used by the update_golang_version.yml CI workflow that runs on a CRON.
+
+This tool is meant to be run at the root of the repository.
 `,
 		Run: func(cmd *cobra.Command, args []string) {
 			_ = cmd.Help()
