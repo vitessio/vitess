@@ -23,9 +23,10 @@ import (
 	"testing"
 
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/mysqlctl"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 
 	fuzz "github.com/AdaLogics/go-fuzz-headers"
@@ -94,12 +95,14 @@ func FuzzEngine(data []byte) int {
 	resetBinlogClient()
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	mysqld := &mysqlctl.FakeMysqlDaemon{MysqlPort: sync2.NewAtomicInt32(3306)}
+	mysqld := &mysqlctl.FakeMysqlDaemon{}
+	mysqld.MysqlPort.Store(3306)
 
 	vre := NewTestEngine(topoServer, "cell1", mysqld, dbClientFactory, dbClientFactory, dbClient.DBName(), nil)
 
 	// Fuzzer fails if this expectation is not made first:
-	dbClient.ExpectRequest("select * from _vt.vreplication where db_name='db'", &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest(sqlparser.BuildParsedQuery("select * from %s.vreplication where db_name='db'",
+		sidecardb.GetIdentifier()).Query, &sqltypes.Result{}, nil)
 	err = makeExpectations(dbClient, f)
 	if err != nil {
 		return 0

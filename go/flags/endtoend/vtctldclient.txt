@@ -1,6 +1,7 @@
 Executes a cluster management command on the remote vtctld server.
 
 Usage:
+  vtctldclient [flags]
   vtctldclient [command]
 
 Available Commands:

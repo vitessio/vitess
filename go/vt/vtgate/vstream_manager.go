@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -179,31 +180,51 @@ func (vsm *vstreamManager) resolveParams(ctx context.Context, tabletType topodat
 		return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "vgtid must have at least one value with a starting position")
 	}
 	// To fetch from all keyspaces, the input must contain a single ShardGtid
-	// that has an empty keyspace, and the Gtid must be "current". In the
-	// future, we'll allow the Gtid to be empty which will also support
-	// copying of existing data.
-	if len(vgtid.ShardGtids) == 1 && vgtid.ShardGtids[0].Keyspace == "" {
-		if vgtid.ShardGtids[0].Gtid != "current" {
-			return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+	// that has an empty keyspace, and the Gtid must be "current".
+	// Or the input must contain a single ShardGtid that has keyspace wildcards.
+	if len(vgtid.ShardGtids) == 1 {
+		inputKeyspace := vgtid.ShardGtids[0].Keyspace
+		isEmpty := inputKeyspace == ""
+		isRegexp := strings.HasPrefix(inputKeyspace, "/")
+		if isEmpty || isRegexp {
+			newvgtid := &binlogdatapb.VGtid{}
+			keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
+			if err != nil {
+				return nil, nil, nil, err
+			}
+
+			if isEmpty {
+				if vgtid.ShardGtids[0].Gtid != "current" {
+					return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "for an empty keyspace, the Gtid value must be 'current': %v", vgtid)
+				}
+				for _, keyspace := range keyspaces {
+					newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+						Keyspace: keyspace,
+						Gtid:     "current",
+					})
+				}
+			} else {
+				re, err := regexp.Compile(strings.Trim(inputKeyspace, "/"))
+				if err != nil {
+					return nil, nil, nil, err
+				}
+				for _, keyspace := range keyspaces {
+					if re.MatchString(keyspace) {
+						newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
+							Keyspace: keyspace,
+							Gtid:     vgtid.ShardGtids[0].Gtid,
+						})
+					}
+				}
+			}
+			vgtid = newvgtid
 		}
-		keyspaces, err := vsm.toposerv.GetSrvKeyspaceNames(ctx, vsm.cell, false)
-		if err != nil {
-			return nil, nil, nil, err
-		}
-		newvgtid := &binlogdatapb.VGtid{}
-		for _, keyspace := range keyspaces {
-			newvgtid.ShardGtids = append(newvgtid.ShardGtids, &binlogdatapb.ShardGtid{
-				Keyspace: keyspace,
-				Gtid:     "current",
-			})
-		}
-		vgtid = newvgtid
 	}
 	newvgtid := &binlogdatapb.VGtid{}
 	for _, sgtid := range vgtid.ShardGtids {
 		if sgtid.Shard == "" {
-			if sgtid.Gtid != "current" {
-				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current': %v", vgtid)
+			if sgtid.Gtid != "current" && sgtid.Gtid != "" {
+				return nil, nil, nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "if shards are unspecified, the Gtid value must be 'current' or empty; got: %v", vgtid)
 			}
 			// TODO(sougou): this should work with the new Migrate workflow
 			_, _, allShards, err := vsm.resolver.GetKeyspaceShards(ctx, sgtid.Keyspace, tabletType)

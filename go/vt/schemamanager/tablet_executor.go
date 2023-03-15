@@ -22,7 +22,8 @@ import (
 	"sync"
 	"time"
 
-	"vitess.io/vitess/go/sync2"
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/timer"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/schema"
@@ -50,7 +51,6 @@ type TabletExecutor struct {
 	waitReplicasTimeout  time.Duration
 	ddlStrategySetting   *schema.DDLStrategySetting
 	uuids                []string
-	skipPreflight        bool
 }
 
 // NewTabletExecutor creates a new TabletExecutor instance
@@ -107,11 +107,6 @@ func (exec *TabletExecutor) SetUUIDList(uuids []string) error {
 // hasProvidedUUIDs returns true when UUIDs were provided
 func (exec *TabletExecutor) hasProvidedUUIDs() bool {
 	return len(exec.uuids) != 0
-}
-
-// SkipPreflight disables preflight checks
-func (exec *TabletExecutor) SkipPreflight() {
-	exec.skipPreflight = true
 }
 
 // Open opens a connection to the primary for every shard.
@@ -269,14 +264,6 @@ func (exec *TabletExecutor) detectBigSchemaChanges(ctx context.Context, parsedDD
 	return false, nil
 }
 
-func (exec *TabletExecutor) preflightSchemaChanges(ctx context.Context, sqls []string) error {
-	if exec.skipPreflight {
-		return nil
-	}
-	_, err := exec.tmc.PreflightSchema(ctx, exec.tablets[0], sqls)
-	return err
-}
-
 // executeSQL executes a single SQL statement either as online DDL or synchronously on all tablets.
 // In online DDL case, the query may be exploded into multiple queries during
 func (exec *TabletExecutor) executeSQL(ctx context.Context, sql string, providedUUID string, execResult *ExecuteResult) (executedAsynchronously bool, err error) {
@@ -348,12 +335,6 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		}
 	}()
 
-	// Make sure the schema changes introduce a table definition change.
-	if err := exec.preflightSchemaChanges(ctx, sqls); err != nil {
-		execResult.ExecutorErr = err.Error()
-		return &execResult
-	}
-
 	if exec.hasProvidedUUIDs() && len(exec.uuids) != len(sqls) {
 		execResult.ExecutorErr = fmt.Sprintf("provided %v UUIDs do not match number of DDLs %v", len(exec.uuids), len(sqls))
 		return &execResult
@@ -385,7 +366,7 @@ func (exec *TabletExecutor) Execute(ctx context.Context, sqls []string) *Execute
 		// If all shards succeeded, wait (up to waitReplicasTimeout) for replicas to
 		// execute the schema change via replication. This is best-effort, meaning
 		// we still return overall success if the timeout expires.
-		concurrency := sync2.NewSemaphore(10, 0)
+		concurrency := semaphore.NewWeighted(10)
 		reloadCtx, cancel := context.WithTimeout(ctx, exec.waitReplicasTimeout)
 		defer cancel()
 		for _, result := range uniqueShards {

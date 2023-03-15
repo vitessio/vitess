@@ -136,7 +136,9 @@ func addCellback(t *testing.T) {
 	// create sql process for vttablets
 	var mysqlProcs []*exec.Cmd
 	for _, tablet := range []*cluster.Vttablet{shard1Replica, shard1Rdonly, shard2Replica, shard2Rdonly} {
-		tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+		mysqlctlProcess, err := cluster.MysqlCtlProcessInstance(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory)
+		require.NoError(t, err)
+		tablet.MysqlctlProcess = *mysqlctlProcess
 		tablet.VttabletProcess = cluster.VttabletProcessInstance(tablet.HTTPPort,
 			tablet.GrpcPort,
 			tablet.TabletUID,

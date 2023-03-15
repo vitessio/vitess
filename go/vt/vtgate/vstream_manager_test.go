@@ -21,10 +21,9 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
-
-	"vitess.io/vitess/go/sync2"
 
 	"vitess.io/vitess/go/vt/topo"
 
@@ -226,9 +225,7 @@ func TestVStreamChunks(t *testing.T) {
 
 	rowEncountered := false
 	doneCounting := false
-	var rowCount, ddlCount sync2.AtomicInt32
-	rowCount.Set(0)
-	ddlCount.Set(0)
+	var rowCount, ddlCount atomic.Int32
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -265,13 +262,13 @@ func TestVStreamChunks(t *testing.T) {
 			t.Errorf("Unexpected event: %v", events[0])
 			return fmt.Errorf("unexpected event: %v", events[0])
 		}
-		if rowCount.Get() == int32(100) && ddlCount.Get() == int32(100) {
+		if rowCount.Load() == int32(100) && ddlCount.Load() == int32(100) {
 			cancel()
 		}
 		return nil
 	})
-	assert.Equal(t, int32(100), rowCount.Get())
-	assert.Equal(t, int32(100), ddlCount.Get())
+	assert.Equal(t, int32(100), rowCount.Load())
+	assert.Equal(t, int32(100), ddlCount.Load())
 }
 
 func TestVStreamMulti(t *testing.T) {
@@ -358,8 +355,7 @@ func TestVStreamRetry(t *testing.T) {
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "bb"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "cc"))
 	sbc0.AddVStreamEvents(nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "final error"))
-	var count sync2.AtomicInt32
-	count.Set(0)
+	var count atomic.Int32
 	vgtid := &binlogdatapb.VGtid{
 		ShardGtids: []*binlogdatapb.ShardGtid{{
 			Keyspace: ks,
@@ -376,7 +372,7 @@ func TestVStreamRetry(t *testing.T) {
 		t.Errorf("vstream end: %v, must contain %v", err.Error(), wantErr)
 	}
 	time.Sleep(100 * time.Millisecond) // wait for goroutine within VStream to finish
-	assert.Equal(t, int32(2), count.Get())
+	assert.Equal(t, int32(2), count.Load())
 }
 
 func TestVStreamShouldNotSendSourceHeartbeats(t *testing.T) {
@@ -893,9 +889,44 @@ func TestResolveVStreamParams(t *testing.T) {
 		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
 				Keyspace: "TestVStream",
+				Gtid:     "other",
 			}},
 		},
-		err: "if shards are unspecified, the Gtid value must be 'current'",
+		err: "if shards are unspecified, the Gtid value must be 'current' or empty",
+	}, {
+		// Verify that the function maps the input missing the shard to a list of all shards in the topology.
+		input: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestVStream",
+			}},
+		},
+		output: &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{{
+				Keyspace: "TestVStream",
+				Shard:    "-20",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "20-40",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "40-60",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "60-80",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "80-a0",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "a0-c0",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "c0-e0",
+			}, {
+				Keyspace: "TestVStream",
+				Shard:    "e0-",
+			}},
+		},
 	}, {
 		input: &binlogdatapb.VGtid{
 			ShardGtids: []*binlogdatapb.ShardGtid{{
@@ -987,17 +1018,49 @@ func TestResolveVStreamParams(t *testing.T) {
 		assert.Equal(t, wantFilter, filter, tcase.input)
 		require.False(t, flags.MinimizeSkew)
 	}
-	// Special-case: empty keyspace because output is too big.
-	input := &binlogdatapb.VGtid{
-		ShardGtids: []*binlogdatapb.ShardGtid{{
-			Gtid: "current",
-		}},
+
+	// Special-case: empty keyspace or keyspace containing wildcards because output is too big.
+	// Verify that the function resolves input for multiple keyspaces into a list of all corresponding shards.
+	// Ensure that the number of shards returned is greater than the number of shards in a single keyspace named 'TestVStream.'
+	specialCases := []struct {
+		input *binlogdatapb.ShardGtid
+	}{
+		{
+			input: &binlogdatapb.ShardGtid{
+				Gtid: "current",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/.*",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/.*",
+				Gtid:     "current",
+			},
+		},
+		{
+			input: &binlogdatapb.ShardGtid{
+				Keyspace: "/Test.*",
+			},
+		},
 	}
-	vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
-	require.NoError(t, err, input)
-	if got, want := len(vgtid.ShardGtids), 8; want >= got {
-		t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, want)
+	for _, tcase := range specialCases {
+		input := &binlogdatapb.VGtid{
+			ShardGtids: []*binlogdatapb.ShardGtid{tcase.input},
+		}
+		vgtid, _, _, err := vsm.resolveParams(context.Background(), topodatapb.TabletType_REPLICA, input, nil, nil)
+		require.NoError(t, err, tcase.input)
+		if got, expectTestVStreamShardNumber := len(vgtid.ShardGtids), 8; expectTestVStreamShardNumber >= got {
+			t.Errorf("len(vgtid.ShardGtids): %v, must be >%d", got, expectTestVStreamShardNumber)
+		}
+		for _, s := range vgtid.ShardGtids {
+			require.Equal(t, tcase.input.Gtid, s.Gtid)
+		}
 	}
+
 	for _, minimizeSkew := range []bool{true, false} {
 		t.Run(fmt.Sprintf("resolveParams MinimizeSkew %t", minimizeSkew), func(t *testing.T) {
 			flags := &vtgatepb.VStreamFlags{MinimizeSkew: minimizeSkew}

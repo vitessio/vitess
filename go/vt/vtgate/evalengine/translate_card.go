@@ -27,7 +27,7 @@ func errCardinality(expected int) error {
 	return vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.OperandColumns, "Operand should contain %d column(s)", expected)
 }
 
-func (card cardinalityCheck) cardinality(expr Expr) int {
+func (ast *astCompiler) cardinality(expr Expr) int {
 	switch expr := expr.(type) {
 	case *BindVariable:
 		if expr.tuple {
@@ -41,17 +41,17 @@ func (card cardinalityCheck) cardinality(expr Expr) int {
 	}
 }
 
-func (card cardinalityCheck) ensure(expr Expr, expected int) error {
-	c := card.cardinality(expr)
+func (ast *astCompiler) ensureCardinality(expr Expr, expected int) error {
+	c := ast.cardinality(expr)
 	if c != expected {
 		return errCardinality(expected)
 	}
 	return nil
 }
 
-func (card cardinalityCheck) comparison(expr1 Expr, expr2 Expr) error {
-	card1 := card.cardinality(expr1)
-	card2 := card.cardinality(expr2)
+func (ast *astCompiler) cardComparison(expr1 Expr, expr2 Expr) error {
+	card1 := ast.cardinality(expr1)
+	card2 := ast.cardinality(expr2)
 
 	switch {
 	case card1 < 0:
@@ -61,10 +61,10 @@ func (card cardinalityCheck) comparison(expr1 Expr, expr2 Expr) error {
 		return errCardinality(card1)
 
 	case card1 == 1 && card2 == 1:
-		if err := card.expr(expr1); err != nil {
+		if err := ast.cardExpr(expr1); err != nil {
 			return err
 		}
-		if err := card.expr(expr2); err != nil {
+		if err := ast.cardExpr(expr2); err != nil {
 			return err
 		}
 		return nil
@@ -76,87 +76,85 @@ func (card cardinalityCheck) comparison(expr1 Expr, expr2 Expr) error {
 			panic("did not check cardinalities?")
 		}
 		for n := range expr1 {
-			if err := card.comparison(expr1[n], expr2[n]); err != nil {
+			if err := ast.cardComparison(expr1[n], expr2[n]); err != nil {
 				return err
 			}
 		}
 		return nil
 
 	default:
-		if err := card.expr(expr1); err != nil {
+		if err := ast.cardExpr(expr1); err != nil {
 			return err
 		}
-		if err := card.expr(expr2); err != nil {
+		if err := ast.cardExpr(expr2); err != nil {
 			return err
 		}
 		return errCardinality(card1)
 	}
 }
 
-func (card cardinalityCheck) binary(left, right Expr) error {
-	if err := card.expr(left); err != nil {
+func (ast *astCompiler) cardBinary(left, right Expr) error {
+	if err := ast.cardExpr(left); err != nil {
 		return err
 	}
-	if err := card.ensure(left, 1); err != nil {
+	if err := ast.ensureCardinality(left, 1); err != nil {
 		return err
 	}
-	if err := card.expr(right); err != nil {
+	if err := ast.cardExpr(right); err != nil {
 		return err
 	}
-	if err := card.ensure(right, 1); err != nil {
+	if err := ast.ensureCardinality(right, 1); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (card cardinalityCheck) unary(inner Expr) error {
-	if err := card.expr(inner); err != nil {
+func (ast *astCompiler) cardUnary(inner Expr) error {
+	if err := ast.cardExpr(inner); err != nil {
 		return err
 	}
-	return card.ensure(inner, 1)
+	return ast.ensureCardinality(inner, 1)
 }
 
-type cardinalityCheck struct{}
-
-func (card cardinalityCheck) expr(expr Expr) error {
+func (ast *astCompiler) cardExpr(expr Expr) error {
 	if expr == nil {
 		return nil
 	}
 
 	switch expr := expr.(type) {
 	case *ConvertExpr:
-		return card.unary(expr.Inner)
+		return ast.cardUnary(expr.Inner)
 	case *ConvertUsingExpr:
-		return card.unary(expr.Inner)
+		return ast.cardUnary(expr.Inner)
 	case *NegateExpr:
-		return card.unary(expr.Inner)
+		return ast.cardUnary(expr.Inner)
 	case *CollateExpr:
-		return card.unary(expr.Inner)
+		return ast.cardUnary(expr.Inner)
 	case *IsExpr:
-		return card.unary(expr.Inner)
+		return ast.cardUnary(expr.Inner)
 	case *BitwiseNotExpr:
-		return card.unary(expr.Inner)
+		return ast.cardUnary(expr.Inner)
 	case *ArithmeticExpr:
-		return card.binary(expr.Left, expr.Right)
+		return ast.cardBinary(expr.Left, expr.Right)
 	case *LogicalExpr:
-		return card.binary(expr.Left, expr.Right)
+		return ast.cardBinary(expr.Left, expr.Right)
 	case *BitwiseExpr:
-		return card.binary(expr.Left, expr.Right)
+		return ast.cardBinary(expr.Left, expr.Right)
 	case *LikeExpr:
-		return card.binary(expr.Left, expr.Right)
+		return ast.cardBinary(expr.Left, expr.Right)
 	case *ComparisonExpr:
-		return card.comparison(expr.Left, expr.Right)
+		return ast.cardComparison(expr.Left, expr.Right)
 	case *InExpr:
-		if err := card.expr(expr.Left); err != nil {
+		if err := ast.cardExpr(expr.Left); err != nil {
 			return err
 		}
 
-		left := card.cardinality(expr.Left)
+		left := ast.cardinality(expr.Left)
 		switch r := expr.Right.(type) {
 		case TupleExpr:
 			for _, subexpr := range r {
-				subcard := card.cardinality(subexpr)
-				if err := card.expr(subexpr); err != nil {
+				subcard := ast.cardinality(subexpr)
+				if err := ast.cardExpr(subexpr); err != nil {
 					return err
 				}
 				if left != subcard {
@@ -176,12 +174,12 @@ func (card cardinalityCheck) expr(expr Expr) error {
 
 	case TupleExpr:
 		for _, subexpr := range expr {
-			if err := card.expr(subexpr); err != nil {
+			if err := ast.cardExpr(subexpr); err != nil {
 				return err
 			}
 		}
 	case callable:
-		return card.expr(TupleExpr(expr.callable()))
+		return ast.cardExpr(TupleExpr(expr.callable()))
 	case *Literal, *Column, *BindVariable, *CaseExpr: // noop
 	default:
 		panic(fmt.Sprintf("unhandled cardinality: %T", expr))

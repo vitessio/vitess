@@ -10,7 +10,7 @@ concurrency:
 jobs:
   get_next_release:
     if: always()
-    name: Get a recent LTS release
+    name: Get Previous Release - Backups - Manual - Next Release
     runs-on: ubuntu-22.04
     outputs:
       next_release: ${{ steps.output-next-release-ref.outputs.next_release_ref }}
@@ -32,7 +32,7 @@ jobs:
   upgrade_downgrade_test_manual:
     timeout-minutes: 40
     if: always() && (needs.get_next_release.result == 'success')
-    name: Run Upgrade Downgrade Test
+    name: Run Upgrade Downgrade Test - Backups - Manual - Next Release
     runs-on: ubuntu-22.04
     needs:
       - get_next_release
@@ -88,7 +88,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
       uses: actions/setup-go@v3
       with:
-        go-version: 1.19.4
+        go-version: 1.20.1
 
     - name: Set up python
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.end_to_end == 'true'
@@ -237,8 +237,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-other/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-other/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-other/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again, they will automatically start restoring the last backup.
@@ -293,8 +295,10 @@ jobs:
       run: |
         source build.env
 
-        rm -f $PWD/bin/vttablet
+        rm -f $PWD/bin/vttablet $PWD/bin/mysqlctl $PWD/bin/mysqlctld
         cp /tmp/vitess-build-current/bin/vttablet $PWD/bin/vttablet
+        cp /tmp/vitess-build-current/bin/mysqlctl $PWD/bin/mysqlctl
+        cp /tmp/vitess-build-current/bin/mysqlctld $PWD/bin/mysqlctld
         vttablet --version
 
     # Starting the tablets again and restoring the next backup.

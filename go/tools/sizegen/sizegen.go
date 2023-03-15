@@ -31,8 +31,7 @@ import (
 	"golang.org/x/tools/go/packages"
 
 	"vitess.io/vitess/go/hack"
-	"vitess.io/vitess/go/tools/common"
-	"vitess.io/vitess/go/tools/goimports"
+	"vitess.io/vitess/go/tools/codegen"
 )
 
 const licenseFileHeader = `Copyright 2021 The Vitess Authors.
@@ -518,13 +517,8 @@ func main() {
 		log.Printf("%d files OK", len(result))
 	} else {
 		for fullPath, file := range result {
-			content, err := goimports.FormatJenFile(file)
-			if err != nil {
-				log.Fatalf("failed to apply goimport to '%s': %v", fullPath, err)
-			}
-			err = os.WriteFile(fullPath, content, 0664)
-			if err != nil {
-				log.Fatalf("failed to save file to '%s': %v", fullPath, err)
+			if err := codegen.SaveJenFile(fullPath, file); err != nil {
+				log.Fatal(err)
 			}
 		}
 	}
@@ -542,7 +536,7 @@ func VerifyFilesOnDisk(result map[string]*jen.File) (errors []error) {
 			continue
 		}
 
-		genFile, err := goimports.FormatJenFile(file)
+		genFile, err := codegen.FormatJenFile(file)
 		if err != nil {
 			errors = append(errors, fmt.Errorf("goimport error: %w", err))
 			continue
@@ -567,8 +561,8 @@ func GenerateSizeHelpers(packagePatterns []string, typePatterns []string) (map[s
 		return nil, err
 	}
 
-	if common.PkgFailed(loaded) {
-		return nil, fmt.Errorf("failed to load packages")
+	if err := codegen.CheckErrors(loaded, func(filename string) bool { return filename == "cached_size.go" }); err != nil {
+		return nil, err
 	}
 
 	sizegen := newSizegen(loaded[0].Module, loaded[0].TypesSizes)

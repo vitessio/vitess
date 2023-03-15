@@ -33,10 +33,10 @@ import (
 	"time"
 
 	"github.com/spf13/pflag"
+	"golang.org/x/sync/semaphore"
 
 	"vitess.io/vitess/go/ioutil"
 	"vitess.io/vitess/go/mysql"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -127,7 +127,7 @@ type FileEntry struct {
 }
 
 func init() {
-	for _, cmd := range []string{"vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
+	for _, cmd := range []string{"vtbackup", "vtcombo", "vttablet", "vttestserver", "vtctld", "vtctldclient"} {
 		servenv.OnParseFor(cmd, registerBuiltinBackupEngineFlags)
 	}
 }
@@ -318,7 +318,8 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// Save initial state so we can restore.
 	replicaStartRequired := false
 	sourceIsPrimary := false
-	readOnly := true //nolint
+	superReadOnly := true //nolint
+	readOnly := true      //nolint
 	var replicationPosition mysql.Position
 	semiSyncSource, semiSyncReplica := params.Mysqld.SemiSyncEnabled()
 
@@ -338,16 +339,30 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 	// get the read-only flag
 	readOnly, err = params.Mysqld.IsReadOnly()
 	if err != nil {
-		return false, vterrors.Wrap(err, "can't get read-only status")
+		return false, vterrors.Wrap(err, "failed to get read_only status")
 	}
+	superReadOnly, err = params.Mysqld.IsSuperReadOnly()
+	if err != nil {
+		return false, vterrors.Wrap(err, "can't get super_read_only status")
+	}
+	log.Infof("Flag values during full backup, read_only: %v, super_read_only:%t", readOnly, superReadOnly)
 
 	// get the replication position
 	if sourceIsPrimary {
-		if !readOnly {
-			params.Logger.Infof("turning primary read-only before backup")
-			if err = params.Mysqld.SetReadOnly(true); err != nil {
-				return false, vterrors.Wrap(err, "can't set read-only status")
+		// No need to set read_only because super_read_only will implicitly set read_only to true as well.
+		if !superReadOnly {
+			params.Logger.Infof("Enabling super_read_only on primary prior to backup")
+			if _, err = params.Mysqld.SetSuperReadOnly(true); err != nil {
+				return false, vterrors.Wrap(err, "failed to enable super_read_only")
 			}
+			defer func() {
+				// Resetting super_read_only back to its original value
+				params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+				if _, err := params.Mysqld.SetSuperReadOnly(false); err != nil {
+					log.Error("Failed to set super_read_only back to its original value")
+				}
+			}()
+
 		}
 		replicationPosition, err = params.Mysqld.PrimaryPosition()
 		if err != nil {
@@ -398,9 +413,9 @@ func (be *BuiltinBackupEngine) executeFullBackup(ctx context.Context, params Bac
 		return usable, vterrors.Wrap(err, "can't restart mysqld")
 	}
 
-	// And set read-only mode
-	params.Logger.Infof("resetting mysqld read-only to %v", readOnly)
-	if err := params.Mysqld.SetReadOnly(readOnly); err != nil {
+	// Resetting super_read_only back to its original value
+	params.Logger.Infof("resetting mysqld super_read_only to %v", superReadOnly)
+	if _, err := params.Mysqld.SetSuperReadOnly(superReadOnly); err != nil {
 		return usable, err
 	}
 
@@ -491,7 +506,7 @@ func (be *BuiltinBackupEngine) backupFiles(
 	params.Logger.Infof("found %v files to backup", len(fes))
 
 	// Backup with the provided concurrency.
-	sema := sync2.NewSemaphore(params.Concurrency, 0)
+	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	wg := sync.WaitGroup{}
 	for i := range fes {
 		wg.Add(1)
@@ -500,8 +515,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 
 			// Wait until we are ready to go, skip if we already
 			// encountered an error.
-			sema.Acquire()
-			defer sema.Release()
+			sema.Acquire(ctx, 1)
+			defer sema.Release(1)
 			if bh.HasErrors() {
 				return
 			}
@@ -785,7 +800,6 @@ func (be *BuiltinBackupEngine) executeRestoreFullBackup(ctx context.Context, par
 // The underlying mysql database is expected to be up and running.
 func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle, bm builtinBackupManifest) error {
 	params.Logger.Infof("Restoring incremental backup to position: %v", bm.Position)
-
 	createdDir, err := be.restoreFiles(context.Background(), params, bh, bm)
 	defer os.RemoveAll(createdDir)
 	mysqld, ok := params.Mysqld.(*Mysqld)
@@ -819,7 +833,6 @@ func (be *BuiltinBackupEngine) executeRestoreIncrementalBackup(ctx context.Conte
 func (be *BuiltinBackupEngine) ExecuteRestore(ctx context.Context, params RestoreParams, bh backupstorage.BackupHandle) (*BackupManifest, error) {
 
 	var bm builtinBackupManifest
-
 	if err := getBackupManifestInto(ctx, bh, &bm); err != nil {
 		return nil, err
 	}
@@ -862,7 +875,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		}
 	}
 	fes := bm.FileEntries
-	sema := sync2.NewSemaphore(params.Concurrency, 0)
+	sema := semaphore.NewWeighted(int64(params.Concurrency))
 	rec := concurrency.AllErrorRecorder{}
 	wg := sync.WaitGroup{}
 	for i := range fes {
@@ -872,8 +885,8 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 
 			// Wait until we are ready to go, skip if we already
 			// encountered an error.
-			sema.Acquire()
-			defer sema.Release()
+			sema.Acquire(ctx, 1)
+			defer sema.Release(1)
 			if rec.HasErrors() {
 				return
 			}

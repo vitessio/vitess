@@ -75,8 +75,8 @@ func (b *BitwiseNotExpr) eval(env *ExpressionEnv) (eval, error) {
 		return newEvalBinary(out), nil
 	}
 
-	eu := evalToNumeric(e).toUint64()
-	return newEvalUint64(^eu.u), nil
+	eu := evalToNumeric(e).toInt64()
+	return newEvalUint64(^uint64(eu.i)), nil
 }
 
 func (b *BitwiseNotExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
@@ -170,6 +170,8 @@ func (o opBitAnd) binary(left, right []byte) (out []byte) {
 
 func (o opBitAnd) BitwiseOp() string { return "&" }
 
+var errBitwiseOperandsLength = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
+
 func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 	l, r, err := bit.arguments(env)
 	if l == nil || r == nil || err != nil {
@@ -192,16 +194,16 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 					b1 := l.bytes
 					b2 := r.bytes
 					if len(b1) != len(b2) {
-						return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
+						return nil, errBitwiseOperandsLength
 					}
 					return newEvalBinary(op.binary(b1, b2)), nil
 				}
 			}
 		}
 
-		lu := evalToNumeric(l).toUint64()
-		ru := evalToNumeric(r).toUint64()
-		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+		lu := evalToNumeric(l).toInt64()
+		ru := evalToNumeric(r).toInt64()
+		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	case opBitShift:
 		/*
@@ -211,12 +213,12 @@ func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
 			unsigned 64-bit integer as necessary.
 		*/
 		if l, ok := l.(*evalBytes); ok && l.isBinary() && !l.isHexOrBitLiteral() {
-			ru := evalToNumeric(r).toUint64()
-			return newEvalBinary(op.binary(l.bytes, ru.u)), nil
+			ru := evalToNumeric(r).toInt64()
+			return newEvalBinary(op.binary(l.bytes, uint64(ru.i))), nil
 		}
-		lu := evalToNumeric(l).toUint64()
-		ru := evalToNumeric(r).toUint64()
-		return newEvalUint64(op.numeric(lu.u, ru.u)), nil
+		lu := evalToNumeric(l).toInt64()
+		ru := evalToNumeric(r).toInt64()
+		return newEvalUint64(op.numeric(uint64(lu.i), uint64(ru.i))), nil
 
 	default:
 		panic("unexpected bit operation")

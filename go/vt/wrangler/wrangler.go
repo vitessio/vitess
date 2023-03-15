@@ -21,8 +21,9 @@ package wrangler
 import (
 	"context"
 
+	"golang.org/x/sync/semaphore"
+
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/sync2"
 	"vitess.io/vitess/go/vt/logutil"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/grpcvtctldserver"
@@ -55,7 +56,7 @@ type Wrangler struct {
 	// DO NOT USE in production code.
 	VExecFunc func(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*sqltypes.Result, error)
 	// Limt the number of concurrent background goroutines if needed.
-	sem *sync2.Semaphore
+	sem *semaphore.Weighted
 }
 
 // New creates a new Wrangler object.

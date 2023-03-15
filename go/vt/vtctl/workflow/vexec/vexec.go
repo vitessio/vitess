@@ -36,9 +36,6 @@ const (
 	// are prefixed by.
 	VExecTableQualifier = "_vt"
 
-	// SchemaMigrationsTableName is the unqualified name of the schema
-	// migrations table supported by vexec.
-	SchemaMigrationsTableName = "schema_migrations"
 	// VReplicationLogTableName is the unqualified name of the vreplication_log
 	// table supported by vexec.
 	VReplicationLogTableName = "vreplication_log"
@@ -237,8 +234,6 @@ func (vx *VExec) GetPlanner(ctx context.Context, table string) (QueryPlanner, er
 		}
 
 		return NewVReplicationLogQueryPlanner(vx.tmc, tabletStreamIDMap), nil
-	case qualifiedTableName(SchemaMigrationsTableName):
-		return nil, errors.New("Schema Migrations not yet supported in new workflow package")
 	default:
 		return nil, fmt.Errorf("%w: %v", ErrUnsupportedTable, table)
 	}

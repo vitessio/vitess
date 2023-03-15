@@ -21,7 +21,6 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 
 	"vitess.io/vitess/go/sqltypes"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
@@ -65,7 +64,7 @@ func getDbSchemaBlob(t *testing.T, tables map[string]*binlogdatapb.MinimalTable)
 		t.PKColumns = pks
 		dbSchema.Tables = append(dbSchema.Tables, t)
 	}
-	blob, err := proto.Marshal(dbSchema)
+	blob, err := dbSchema.MarshalVT()
 	require.NoError(t, err)
 	return string(blob)
 }

@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -417,6 +418,13 @@ func (kew *KeyspaceEventWatcher) getKeyspaceStatus(keyspace string) *keyspaceSta
 	if kss.deleted {
 		kss = nil
 		delete(kew.keyspaces, keyspace)
+		// Delete from the sidecar database identifier cache as well.
+		// Ignore any errors as they should all mean that the entry
+		// does not exist in the cache (which will be common).
+		sdbidc, _ := sidecardb.GetIdentifierCache()
+		if sdbidc != nil {
+			sdbidc.Delete(keyspace)
+		}
 	}
 	return kss
 }

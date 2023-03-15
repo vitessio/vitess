@@ -51,10 +51,10 @@ var (
 	// TxLogger can be used to enable logging of transactions.
 	// Call TxLogger.ServeLogs in your main program to enable logging.
 	// The log format can be inferred by looking at TxConnection.Format.
-	TxLogger = streamlog.New("TxLog", 10)
+	TxLogger = streamlog.New[any]("TxLog", 10)
 
 	// StatsLogger is the main stream logger object
-	StatsLogger = streamlog.New("TabletServer", 50)
+	StatsLogger = streamlog.New[*LogStats]("TabletServer", 50)
 
 	// The following vars are used for custom initialization of Tabletconfig.
 	enableHotRowProtection       bool
@@ -155,7 +155,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TransactionLimitByComponent, "transaction_limit_by_component", defaultConfig.TransactionLimitByComponent, "Include CallerID.component when considering who the user is for the purpose of transaction limit.")
 	fs.BoolVar(&currentConfig.TransactionLimitBySubcomponent, "transaction_limit_by_subcomponent", defaultConfig.TransactionLimitBySubcomponent, "Include CallerID.subcomponent when considering who the user is for the purpose of transaction limit.")
 
-	fs.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the table _vt.heartbeat. The result is used to inform the serving state of the vttablet via healthchecks.")
+	fs.BoolVar(&enableHeartbeat, "heartbeat_enable", false, "If true, vttablet records (if master) or checks (if replica) the current time of a replication heartbeat in the sidecar database's heartbeat table. The result is used to inform the serving state of the vttablet via healthchecks.")
 	fs.DurationVar(&heartbeatInterval, "heartbeat_interval", 1*time.Second, "How frequently to read and write replication heartbeat.")
 	fs.DurationVar(&heartbeatOnDemandDuration, "heartbeat_on_demand_duration", 0, "If non-zero, heartbeats are only written upon consumer request, and only run for up to given duration following the request. Frequent requests can keep the heartbeat running consistently; when requests are infrequent heartbeat may completely stop between requests")
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableLagThrottler, "enable_lag_throttler", defaultConfig.EnableLagThrottler, "If true, vttablet will run a throttler service, and will implicitly enable heartbeats")
@@ -183,6 +183,8 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.Int64Var(&currentConfig.RowStreamer.MaxMySQLReplLagSecs, "vreplication_copy_phase_max_mysql_replication_lag", 43200, "The maximum MySQL replication lag (in seconds) that can exist on a vstreamer (source) before starting another round of copying rows. This helps to limit the impact on the source tablet.")
 
 	fs.BoolVar(&currentConfig.EnableViews, "queryserver-enable-views", false, "Enable views support in vttablet.")
+
+	fs.BoolVar(&currentConfig.EnablePerWorkloadTableMetrics, "enable-per-workload-table-metrics", defaultConfig.EnablePerWorkloadTableMetrics, "If true, query counts and query error metrics include a label that identifies the workload")
 }
 
 var (
@@ -326,6 +328,8 @@ type TabletConfig struct {
 	RowStreamer RowStreamerConfig `json:"rowStreamer,omitempty"`
 
 	EnableViews bool `json:"-"`
+
+	EnablePerWorkloadTableMetrics bool `json:"-"`
 }
 
 // ConnPoolConfig contains the config for a conn pool.
@@ -574,6 +578,8 @@ var defaultConfig = TabletConfig{
 		MaxInnoDBTrxHistLen: 1000000,
 		MaxMySQLReplLagSecs: 43200,
 	},
+
+	EnablePerWorkloadTableMetrics: false,
 }
 
 // defaultTxThrottlerConfig formats the default throttlerdata.Configuration

@@ -34,3 +34,13 @@ vtctld \
  --grpc_port $grpc_port \
  --pid_file $VTDATAROOT/tmp/vtctld.pid \
   > $VTDATAROOT/tmp/vtctld.out 2>&1 &
+
+for _ in {0..300}; do
+ curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null && break
+ sleep 0.1
+done
+
+# check one last time
+curl -I "http://${hostname}:${vtctld_web_port}/debug/status" &>/dev/null || fail "vtctld could not be started!"
+
+echo -e "vtctld is running!"

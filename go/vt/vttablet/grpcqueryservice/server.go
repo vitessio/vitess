@@ -483,6 +483,13 @@ func (q *query) Release(ctx context.Context, request *querypb.ReleaseRequest) (r
 	return &querypb.ReleaseResponse{}, nil
 }
 
+// GetSchema implements the QueryServer interface
+func (q *query) GetSchema(request *querypb.GetSchemaRequest, stream queryservicepb.Query_GetSchemaServer) (err error) {
+	defer q.server.HandlePanic(&err)
+	err = q.server.GetSchema(stream.Context(), request.Target, request.TableType, request.TableNames, stream.Send)
+	return vterrors.ToGRPC(err)
+}
+
 // Register registers the implementation on the provide gRPC Server.
 func Register(s *grpc.Server, server queryservice.QueryService) {
 	queryservicepb.RegisterQueryServer(s, &query{server: server})

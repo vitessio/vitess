@@ -17,8 +17,6 @@ limitations under the License.
 package vtgate
 
 import (
-	"fmt"
-	"io"
 	"net/http"
 	"strconv"
 	"strings"
@@ -86,7 +84,7 @@ var (
 
 // querylogzHandler serves a human readable snapshot of the
 // current query log.
-func querylogzHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
+func querylogzHandler(ch chan *logstats.LogStats, w http.ResponseWriter, r *http.Request) {
 	if err := acl.CheckAccessHTTP(r, acl.DEBUGGING); err != nil {
 		acl.SendError(w, err)
 		return
@@ -100,20 +98,11 @@ func querylogzHandler(ch chan any, w http.ResponseWriter, r *http.Request) {
 	defer tmr.Stop()
 	for i := 0; i < limit; i++ {
 		select {
-		case out := <-ch:
+		case stats := <-ch:
 			select {
 			case <-tmr.C:
 				return
 			default:
-			}
-			stats, ok := out.(*logstats.LogStats)
-			if !ok {
-				err := fmt.Errorf("unexpected value in %s: %#v (expecting value of type %T)", QueryLogger.Name(), out, &logstats.LogStats{})
-				_, _ = io.WriteString(w, `<tr class="error">`)
-				_, _ = io.WriteString(w, err.Error())
-				_, _ = io.WriteString(w, "</tr>")
-				log.Error(err)
-				continue
 			}
 			var level string
 			if stats.TotalTime().Seconds() < 0.01 {

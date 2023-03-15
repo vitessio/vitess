@@ -23,8 +23,6 @@ import (
 	"path"
 	"sync"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/concurrency"
@@ -64,7 +62,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 		return nil, nil, err
 	}
 	value := &topodatapb.SrvKeyspace{}
-	if err := proto.Unmarshal(current.Contents, value); err != nil {
+	if err := value.UnmarshalVT(current.Contents); err != nil {
 		// Cancel the watch, drain channel.
 		cancel()
 		for range wdChannel {
@@ -93,7 +91,7 @@ func (ts *Server) WatchSrvKeyspace(ctx context.Context, cell, keyspace string) (
 			}
 
 			value := &topodatapb.SrvKeyspace{}
-			if err := proto.Unmarshal(wd.Contents, value); err != nil {
+			if err := value.UnmarshalVT(wd.Contents); err != nil {
 				cancel()
 				for range wdChannel {
 				}
@@ -397,16 +395,16 @@ func (ts *Server) DeleteSrvKeyspacePartitions(ctx context.Context, keyspace stri
 }
 
 // UpdateSrvKeyspaceThrottlerConfig updates existing throttler configuration
-func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace string, cells []string, update func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig) (updatedCells []string, err error) {
+func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace string, cells []string, update func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig) (updatedCells []string, err error) {
 	if err = CheckKeyspaceLocked(ctx, keyspace); err != nil {
-		return cells, err
+		return updatedCells, err
 	}
 
-	// The caller intents to update all cells in this case
+	// The caller intends to update all cells in this case
 	if len(cells) == 0 {
 		cells, err = ts.GetCellInfoNames(ctx)
 		if err != nil {
-			return cells, err
+			return updatedCells, err
 		}
 	}
 
@@ -424,8 +422,10 @@ func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace
 					rec.RecordError(err)
 					return
 				}
+				updatedCells = append(updatedCells, cell)
+				return
 			case IsErrType(err, NoNode):
-				// NOOP
+				// NOOP as not every cell will contain a serving tablet in the keyspace
 			default:
 				rec.RecordError(err)
 				return
@@ -434,9 +434,9 @@ func (ts *Server) UpdateSrvKeyspaceThrottlerConfig(ctx context.Context, keyspace
 	}
 	wg.Wait()
 	if rec.HasErrors() {
-		return cells, NewError(PartialResult, rec.Error().Error())
+		return updatedCells, NewError(PartialResult, rec.Error().Error())
 	}
-	return cells, nil
+	return updatedCells, nil
 }
 
 // UpdateDisableQueryService will make sure the disableQueryService is
@@ -635,7 +635,7 @@ func (ts *Server) UpdateSrvKeyspace(ctx context.Context, cell, keyspace string, 
 	}
 
 	nodePath := srvKeyspaceFileName(keyspace)
-	data, err := proto.Marshal(srvKeyspace)
+	data, err := srvKeyspace.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -689,7 +689,7 @@ func (ts *Server) GetSrvKeyspace(ctx context.Context, cell, keyspace string) (*t
 		return nil, err
 	}
 	srvKeyspace := &topodatapb.SrvKeyspace{}
-	if err := proto.Unmarshal(data, srvKeyspace); err != nil {
+	if err := srvKeyspace.UnmarshalVT(data); err != nil {
 		return nil, vterrors.Wrapf(err, "SrvKeyspace unmarshal failed: %v", data)
 	}
 	return srvKeyspace, nil

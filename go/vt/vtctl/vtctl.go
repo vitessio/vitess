@@ -103,7 +103,6 @@ import (
 	"vitess.io/vitess/go/protoutil"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/textutil"
-	"vitess.io/vitess/go/vt/discovery"
 	hk "vitess.io/vitess/go/vt/hook"
 	"vitess.io/vitess/go/vt/key"
 	"vitess.io/vitess/go/vt/log"
@@ -117,7 +116,7 @@ import (
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/proto/vttime"
 	"vitess.io/vitess/go/vt/schema"
-	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -127,38 +126,8 @@ import (
 	"vitess.io/vitess/go/vt/wrangler"
 )
 
-var (
-	// ErrUnknownCommand is returned for an unknown command
-	ErrUnknownCommand = errors.New("unknown command")
-
-	// Flag variables.
-	healthCheckRetryDelay = 5 * time.Second
-	healthCheckTimeout    = time.Minute
-)
-
-func init() {
-	servenv.OnParseFor("vtctl", registerFlags)
-	servenv.OnParseFor("vtctld", registerFlags)
-}
-
-func registerFlags(fs *pflag.FlagSet) {
-	// TODO: https://github.com/vitessio/vitess/issues/11973
-	// Then remove this function and associated code (NewHealthCheck, servenv
-	// OnParseFor hooks, etc) entirely.
-	fs.Duration("vtctl_healthcheck_topology_refresh", 30*time.Second, "refresh interval for re-reading the topology")
-	fs.MarkDeprecated("vtctl_healthcheck_topology_refresh", "")
-
-	fs.DurationVar(&healthCheckRetryDelay, "vtctl_healthcheck_retry_delay", healthCheckRetryDelay, "delay before retrying a failed healthcheck")
-	fs.MarkDeprecated("vtctl_healthcheck_retry_delay", "This is used only by the legacy vtctld UI that is already deprecated and will be removed in the next release.")
-	fs.DurationVar(&healthCheckTimeout, "vtctl_healthcheck_timeout", healthCheckTimeout, "the health check timeout period")
-	fs.MarkDeprecated("vtctl_healthcheck_timeout", "This is used only by the legacy vtctld UI that is already deprecated and will be removed in the next release.")
-}
-
-// NewHealthCheck returns a healthcheck implementation based on the vtctl flags.
-// It is exported for use in go/vt/vtctld.
-func NewHealthCheck(ctx context.Context, ts *topo.Server, local string, cellsToWatch []string) discovery.HealthCheck {
-	return discovery.NewHealthCheck(ctx, healthCheckRetryDelay, healthCheckTimeout, ts, local, strings.Join(cellsToWatch, ","))
-}
+// ErrUnknownCommand is returned for an unknown command.
+var ErrUnknownCommand = errors.New("unknown command")
 
 type command struct {
 	name   string
@@ -419,7 +388,7 @@ var commands = []commandGroup{
 			{
 				name:   "CreateKeyspace",
 				method: commandCreateKeyspace,
-				params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] <keyspace name>",
+				params: "[--sharding_column_name=name] [--sharding_column_type=type] [--served_from=tablettype1:ks1,tablettype2:ks2,...] [--force] [--keyspace_type=type] [--base_keyspace=base_keyspace] [--snapshot_time=time] [--durability-policy=policy_name] [--sidecar-db-name=db_name] <keyspace name>",
 				help:   "Creates the specified keyspace. keyspace_type can be NORMAL or SNAPSHOT. For a SNAPSHOT keyspace you must specify the name of a base_keyspace, and a snapshot_time in UTC, in RFC3339 time format, e.g. 2006-01-02T15:04:05+00:00",
 			},
 			{
@@ -614,8 +583,8 @@ var commands = []commandGroup{
 			{
 				name:   "ApplySchema",
 				method: commandApplySchema,
-				params: "[--allow_long_unavailability] [--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] [--skip_preflight] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
-				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. If --allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations. If -skip_preflight, SQL goes directly to shards without going through sanity checks.",
+				params: "[--allow_long_unavailability] [--wait_replicas_timeout=10s] [--ddl_strategy=<ddl_strategy>] [--uuid_list=<comma_separated_uuids>] [--migration_context=<unique-request-context>] {--sql=<sql> || --sql-file=<filename>} <keyspace>",
+				help:   "Applies the schema change to the specified keyspace on every primary, running in parallel on all shards. The changes are then propagated to replicas via replication. If --allow_long_unavailability is set, schema changes affecting a large number of rows (and possibly incurring a longer period of unavailability) will not be rejected. -ddl_strategy is used to instruct migrations via vreplication, gh-ost or pt-osc with optional parameters. -migration_context allows the user to specify a custom request context for online DDL migrations.",
 			},
 			{
 				name:   "CopySchemaShard",
@@ -1832,6 +1801,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 	baseKeyspace := subFlags.String("base_keyspace", "", "Specifies the base keyspace for a snapshot keyspace")
 	timestampStr := subFlags.String("snapshot_time", "", "Specifies the snapshot time for this keyspace")
 	durabilityPolicy := subFlags.String("durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
+	sidecarDBName := subFlags.String("sidecar-db-name", sidecardb.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -1879,6 +1849,7 @@ func commandCreateKeyspace(ctx context.Context, wr *wrangler.Wrangler, subFlags 
 		BaseKeyspace:     *baseKeyspace,
 		SnapshotTime:     snapshotTime,
 		DurabilityPolicy: *durabilityPolicy,
+		SidecarDbName:    *sidecarDBName,
 	}
 	if len(servedFrom) > 0 {
 		for name, value := range servedFrom {
@@ -2877,7 +2848,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	migrationContext := subFlags.String("migration_context", "", "For Online DDL, optionally supply a custom unique string used as context for the migration(s) in this command. By default a unique context is auto-generated by Vitess")
 	requestContext := subFlags.String("request_context", "", "synonym for --migration_context")
 	waitReplicasTimeout := subFlags.Duration("wait_replicas_timeout", wrangler.DefaultWaitReplicasTimeout, "The amount of time to wait for replicas to receive the schema change via replication.")
-	skipPreflight := subFlags.Bool("skip_preflight", false, "Skip pre-apply schema checks, and directly forward schema change query to shards")
+	skipPreflight := subFlags.Bool("skip_preflight", false, "Deprecated. Always assumed to be 'true'")
 
 	callerID := subFlags.String("caller_id", "", "This is the effective caller ID used for the operation and should map to an ACL name which grants this identity the necessary permissions to perform the operation (this is only necessary when strict table ACLs are used)")
 	if err := subFlags.Parse(args); err != nil {
@@ -2885,6 +2856,9 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 	}
 	if subFlags.NArg() != 1 {
 		return fmt.Errorf("the <keyspace> argument is required for the commandApplySchema command")
+	}
+	if *skipPreflight {
+		log.Warningf("--skip_preflight flag is deprecated. Always assumed to be 'true'")
 	}
 
 	keyspace := subFlags.Arg(0)
@@ -2917,7 +2891,7 @@ func commandApplySchema(ctx context.Context, wr *wrangler.Wrangler, subFlags *pf
 		AllowLongUnavailability: *allowLongUnavailability,
 		DdlStrategy:             *ddlStrategy,
 		Sql:                     parts,
-		SkipPreflight:           *skipPreflight,
+		SkipPreflight:           true,
 		UuidList:                textutil.SplitDelimitedList(*uuidList),
 		MigrationContext:        *migrationContext,
 		WaitReplicasTimeout:     protoutil.DurationToProto(*waitReplicasTimeout),
@@ -3529,9 +3503,9 @@ func commandUpdateThrottlerConfig(ctx context.Context, wr *wrangler.Wrangler, su
 
 	keyspace := subFlags.Arg(0)
 
-	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
 		if customQuerySet {
 			// custom query provided
@@ -3903,7 +3877,6 @@ func RunCommand(ctx context.Context, wr *wrangler.Wrangler, args []string) error
 		}
 	}
 
-	wr.Logger().Printf("Unknown command: %v\n", action)
 	return ErrUnknownCommand
 }
 
