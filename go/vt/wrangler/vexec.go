@@ -25,6 +25,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/spf13/pflag"
+
 	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -294,7 +296,7 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 }
 
 // WorkflowAction can start/stop/update/delete or list streams in _vt.vreplication on all primaries in the target keyspace of the workflow.
-func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes, onDDL *pflag.Flag) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	switch action {
 	case "show":
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
@@ -311,9 +313,9 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		wr.printWorkflowList(keyspace, workflows)
 		return nil, err
 	case "update":
-		// This is the only place we use the cells and tabletTypes
-		// variables.
-		if _, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, cells, tabletTypes); err != nil {
+		// This is the only place we use the cells, tabletTypes, and
+		// onDDL variables.
+		if _, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, cells, tabletTypes, onDDL); err != nil {
 			return nil, vterrors.Wrapf(err, "failed to update the %s.%s workflow", keyspace, workflow)
 		}
 		// The workflow is stopped when updated, so now we restart
@@ -321,7 +323,8 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		// return result of the restart.
 		action = "start"
 	}
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, "", "")
+	unusedFlag := &pflag.Flag{}
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, unusedFlag, unusedFlag, unusedFlag)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -341,17 +344,40 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	return query, nil
 }
 
-func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes string) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes, onDDL *pflag.Flag) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
 		return nil, err
 	}
 	if action == "update" {
-		query += ", cell=%a, tablet_types=%a"
-		query, err = sqlparser.ParseAndBind(query,
-			sqltypes.StringBindVariable(strings.TrimSpace(cells)),
-			sqltypes.StringBindVariable(strings.TrimSpace(tabletTypes)),
-		)
+		changes := false
+		bindVars := []*querypb.BindVariable{}
+		if cells.Changed {
+			changes = true
+			query += ", cell=%a"
+			bindVars = append(bindVars, sqltypes.StringBindVariable(strings.TrimSpace(cells.Value.String())))
+		}
+		if tabletTypes.Changed {
+			changes = true
+			query += ", tablet_types=%a"
+			bindVars = append(bindVars, sqltypes.StringBindVariable(strings.TrimSpace(tabletTypes.Value.String())))
+		}
+		if onDDL.Changed {
+			changes = true
+			onDDLVal := strings.ToUpper(onDDL.Value.String())
+			if _, ok := binlogdatapb.OnDDLAction_value[onDDLVal]; !ok {
+				return nil, fmt.Errorf("invalid value provided for on-ddl: %v", onDDLVal)
+			}
+			// The source column is a prototext value. If there's currently no
+			// on_ddl value (which would mean it's the default of 0/IGNORE) then
+			// we append it. Otherwise, we replace the existing value.
+			query += fmt.Sprintf(", source=if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:%s'))",
+				onDDLVal, onDDLVal)
+		}
+		if !changes {
+			return nil, fmt.Errorf("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
+		}
+		query, err = sqlparser.ParseAndBind(query, bindVars...)
 		if err != nil {
 			return nil, err
 		}

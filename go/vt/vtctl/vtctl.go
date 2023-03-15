@@ -719,7 +719,7 @@ var commands = []commandGroup{
 			{
 				name:   "Workflow",
 				method: commandWorkflow,
-				params: "[--dry-run] [--cells] [--tablet-types] <ks.workflow> <action>",
+				params: "[--dry-run] [--cells=<cells>] [--tablet-types=<types>] [--on-ddl=<value>] <ks.workflow> <action>",
 				help:   "Start/Stop/Update/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
@@ -3610,8 +3610,9 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
-	cells := subFlags.String("cells", "", "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
-	tabletTypes := subFlags.String("tablet-types", "", "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
+	subFlags.String("cells", "", "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
+	subFlags.String("tablet-types", "", "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
+	subFlags.String("on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE. (Update only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3647,7 +3648,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			return err
 		}
 	} else {
-		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, *cells, *tabletTypes)
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, subFlags.Lookup("cells"), subFlags.Lookup("tablet-types"), subFlags.Lookup("on-ddl"))
 		if err != nil {
 			return err
 		}

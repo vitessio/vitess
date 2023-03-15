@@ -25,11 +25,29 @@ import (
 	"testing"
 	"time"
 
+	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
 )
+
+var unusedFlag = &pflag.Flag{}
+
+// stringValue implements the pflag.Value interface.
+type stringValue struct {
+	value string
+}
+
+func (sv stringValue) Set(val string) error {
+	return nil
+}
+func (sv stringValue) String() string {
+	return sv.value
+}
+func (sv stringValue) Type() string {
+	return "string"
+}
 
 func TestVExec(t *testing.T) {
 	ctx := context.Background()
@@ -185,16 +203,16 @@ func TestWorkflowListStreams(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, "", "")
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, unusedFlag, unusedFlag, unusedFlag)
 	require.NoError(t, err)
 
-	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, "", "")
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, unusedFlag, unusedFlag, unusedFlag)
 	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
 
-	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, "", "")
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, unusedFlag, unusedFlag, unusedFlag)
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, "", "")
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, unusedFlag, unusedFlag, unusedFlag)
 	require.NoError(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
@@ -313,7 +331,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
 	require.Equal(t, want, got)
 
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, "", "")
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, unusedFlag, unusedFlag, unusedFlag)
 	require.Nil(t, err)
 
 	// convert map to list and sort it for comparison
@@ -327,7 +345,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	require.ElementsMatch(t, wantResults, gotResults)
 
 	logger.Clear()
-	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, "", "")
+	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, unusedFlag, unusedFlag, unusedFlag)
 	require.Nil(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
 	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
@@ -463,17 +481,31 @@ func TestWorkflowUpdate(t *testing.T) {
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
-	cells := "zone1,zone2"
-	tabletTypes := "rdonly,spare"
-
+	cells := &pflag.Flag{
+		Name:    "cells",
+		Value:   stringValue{"zone1,zone2"},
+		Changed: true,
+	}
+	tabletTypes := &pflag.Flag{
+		Name:    "tablet-types",
+		Value:   stringValue{"rdonly,spare"},
+		Changed: true,
+	}
+	onDDL := &pflag.Flag{
+		Name:    "on-ddl",
+		Value:   stringValue{"EXEC"},
+		Changed: true,
+	}
 	// First we stop the workflow and update the config on both
 	// target primaries.
 	env.tmc.setVRResults(env.tmc.tablets[200].tablet,
-		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s' where db_name = 'vt_%s' and workflow = '%s'", cells, tabletTypes, keyspace, workflow),
+		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s', source = if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:%s')) where db_name = 'vt_%s' and workflow = '%s'",
+			cells.Value.String(), tabletTypes.Value.String(), onDDL.Value.String(), onDDL.Value.String(), keyspace, workflow),
 		&sqltypes.Result{},
 	)
 	env.tmc.setVRResults(env.tmc.tablets[210].tablet,
-		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s' where db_name = 'vt_%s' and workflow = '%s'", cells, tabletTypes, keyspace, workflow),
+		fmt.Sprintf("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s', source = if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:%s')) where db_name = 'vt_%s' and workflow = '%s'",
+			cells.Value.String(), tabletTypes.Value.String(), onDDL.Value.String(), onDDL.Value.String(), keyspace, workflow),
 		&sqltypes.Result{},
 	)
 	// Then we restart the workflow for the config changes to take
@@ -487,13 +519,13 @@ func TestWorkflowUpdate(t *testing.T) {
 		&sqltypes.Result{},
 	)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", false, cells, tabletTypes)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", false, cells, tabletTypes, onDDL)
 	require.NoError(t, err)
 
-	results, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, cells, tabletTypes)
+	results, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, cells, tabletTypes, onDDL)
 	require.NoError(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
-	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped', cell = 'zone1,zone2', tablet_types = 'rdonly,spare' where db_name = 'vt_target' and workflow = 'wrWorkflow'
+	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped', cell = 'zone1,zone2', tablet_types = 'rdonly,spare', source = if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:EXEC'), regexp_replace(source, 'on_ddl:.*', 'on_ddl:EXEC')) where db_name = 'vt_target' and workflow = 'wrWorkflow'
 will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 
