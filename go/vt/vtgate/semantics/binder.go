@@ -257,12 +257,13 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		} else if err != nil {
 			return dependency{}, err
 		}
-		if current.parent == nil && len(current.tables) == 1 && first {
+		if current.parent == nil && len(current.tables) == 1 && first && colName.Qualifier.IsEmpty() {
 			// if this is the top scope, and we still haven't been able to find a match, we know we are about to fail
 			// we can check this last scope and see if there is a single table. if there is just one table in the scope
 			// we assume that the column is meant to come from this table.
 			// we also check that this is the first scope we are looking in.
 			// If there are more scopes the column could come from, we can't assume anything
+			// This is just used for a clearer error message
 			name, err := current.tables[0].Name()
 			if err == nil {
 				colName.Qualifier = name
