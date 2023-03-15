@@ -117,8 +117,7 @@ func tryCreateTxThrottler(config *tabletenv.TabletConfig, topoServer *topo.Serve
 	if len(config.TxThrottlerHealthCheckCells) > 0 {
 		// Clone tsv.TxThrottlerHealthCheckCells so that we don't assume tsv.TxThrottlerHealthCheckCells
 		// is immutable.
-		healthCheckCells = make([]string, len(config.TxThrottlerHealthCheckCells))
-		copy(healthCheckCells, config.TxThrottlerHealthCheckCells)
+		healthCheckCells = append(healthCheckCells, config.TxThrottlerHealthCheckCells...)
 	} else {
 		ctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
 		defer cancel()
