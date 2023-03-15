@@ -141,9 +141,9 @@ The entire changelog for this release can be found [here]({{ .PathToChangeLogFil
 func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
 	var err error
 	// Generate the release notes
-	rn.PathToChangeLogFileOnGH = releaseNotesPathGitHub + path.Join(rn.SubDirPath, fmt.Sprintf("%s_changelog.md", rn.VersionUnderscore))
+	rn.PathToChangeLogFileOnGH = releaseNotesPathGitHub + path.Join(rn.SubDirPath, "changelog.md")
 	if rnFile == nil {
-		rnFile, err = os.OpenFile(fmt.Sprintf(path.Join(rn.SubDirPath, "%s_release_notes.md"), rn.VersionUnderscore), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		rnFile, err = os.OpenFile(path.Join(rn.SubDirPath, "release_notes.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
 			return err
 		}
@@ -157,7 +157,7 @@ func (rn *releaseNote) generate(rnFile, changelogFile *os.File) error {
 
 	// Generate the changelog
 	if changelogFile == nil {
-		changelogFile, err = os.OpenFile(fmt.Sprintf(path.Join(rn.SubDirPath, "%s_changelog.md"), rn.VersionUnderscore), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+		changelogFile, err = os.OpenFile(path.Join(rn.SubDirPath, "changelog.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
 		if err != nil {
 			return err
 		}

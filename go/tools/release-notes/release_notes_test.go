@@ -165,7 +165,7 @@ func TestGenerateReleaseNotes(t *testing.T) {
 			expectedOut: "# Release of Vitess v12.0.0\n" +
 				"This is the new release.\n\nNew features got added.\n" +
 				"------------\n" +
-				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/12.0/12.0.0/12_0_0_changelog.md).\n" +
+				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/12.0/12.0.0/changelog.md).\n" +
 				"optimization is the root of all evil\n",
 			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
 				"* PR 1\n" +
@@ -180,7 +180,7 @@ func TestGenerateReleaseNotes(t *testing.T) {
 				SubDirPath:        "changelog/12.0/12.0.0",
 			},
 			expectedOut: "# Release of Vitess v12.0.0\n" +
-				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/12.0/12.0.0/12_0_0_changelog.md).\n" +
+				"The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/12.0/12.0.0/changelog.md).\n" +
 				"optimization is the root of all evil\n",
 			expectedOutChangeLog: "# Changelog of Vitess v12.0.0\n" +
 				"* PR 1\n" +

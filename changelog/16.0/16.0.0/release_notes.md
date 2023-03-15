@@ -525,7 +525,7 @@ The sidecar tables `local_metadata` and `shard_metadata` are no longer in use an
 part of this refactor. They were used previously for Orchestrator support, which has been superseded by `vtorc`.
 
 ------------
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/16.0/16.0.0/16_0_0_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/16.0/16.0.0/changelog.md).
 
 The release includes 378 commits (excluding merges)
 
