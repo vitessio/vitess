@@ -4599,7 +4599,7 @@
     "comment": "table names should be case-sensitive",
     "query": "select unsharded.id from unsharded where Unsharded.val = 1",
     "v3-plan": "VT03019: symbol Unsharded.val not found",
-    "gen4-plan": "symbol unsharded.val not found"
+    "gen4-plan": "symbol Unsharded.val not found"
   },
   {
     "comment": "implicit table reference for sharded keyspace",
