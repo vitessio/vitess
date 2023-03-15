@@ -60,8 +60,8 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	// a simpleProjection. We create a new Route that contains the derived table in the
 	// FROM clause. Meaning that, when we push expressions to the select list of this
 	// new Route, we do not want them to rewrite them.
-	sp, isSimpleProj := plan.(*simpleProjection)
-	if isSimpleProj {
+	sp, derivedTable := plan.(*simpleProjection)
+	if derivedTable {
 		oldRewriteDerivedExpr := ctx.RewriteDerivedExpr
 		defer func() {
 			ctx.RewriteDerivedExpr = oldRewriteDerivedExpr
@@ -94,15 +94,7 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		if err != nil {
 			return nil, err
 		}
-	default:
-		if !isSimpleProj {
-			err = pushProjections(ctx, plan, hp.qp.SelectExprs)
-			if err != nil {
-				return nil, err
-			}
-			break
-		}
-
+	case derivedTable:
 		pusher := func(ae *sqlparser.AliasedExpr) (int, error) {
 			offset, _, err := pushProjection(ctx, ae, sp.input, true, true, false)
 			return offset, err
@@ -121,6 +113,11 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 			source:      sp.input,
 			columns:     projections,
 			columnNames: colNames,
+		}
+	default:
+		err = pushProjections(ctx, plan, hp.qp.SelectExprs)
+		if err != nil {
+			return nil, err
 		}
 	}
 

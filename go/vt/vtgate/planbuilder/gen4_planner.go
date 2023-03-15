@@ -216,10 +216,7 @@ func newBuildSelectPlan(
 		return nil, nil, nil, err
 	}
 
-	plan, err = optimizePlan(plan)
-	if err != nil {
-		return nil, nil, nil, err
-	}
+	optimizePlan(plan)
 
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
@@ -241,19 +238,9 @@ func newBuildSelectPlan(
 }
 
 // optimizePlan removes unnecessary simpleProjections that have been created while planning
-func optimizePlan(plan logicalPlan) (output logicalPlan, err error) {
-	output = plan
-	inputs := make([]logicalPlan, len(plan.Inputs()))
-	for i, lp := range plan.Inputs() {
-		in, err := optimizePlan(lp)
-		if err != nil {
-			return nil, err
-		}
-		inputs[i] = in
-	}
-	err = plan.Rewrite(inputs...)
-	if err != nil {
-		return
+func optimizePlan(plan logicalPlan) {
+	for _, lp := range plan.Inputs() {
+		optimizePlan(lp)
 	}
 
 	this, ok := plan.(*simpleProjection)
@@ -270,7 +257,6 @@ func optimizePlan(plan logicalPlan) (output logicalPlan, err error) {
 		this.eSimpleProj.Cols[i] = input.eSimpleProj.Cols[col]
 	}
 	this.input = input.input
-	return
 }
 
 func gen4UpdateStmtPlanner(
