@@ -1,3 +1,19 @@
+/*
+Copyright 2023 The Vitess Authors.
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/
+
 package evalengine
 
 import (
@@ -6,6 +22,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 )
 
+// Arena is an arena memory allocator for eval types.
+// It allocates the types from reusable slices to prevent heap allocations.
+// After each evaluation execution, (*Arena).reset() should be called to reset the arena.
 type Arena struct {
 	aInt64   []evalInt64
 	aUint64  []evalUint64

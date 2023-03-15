@@ -175,6 +175,10 @@ func ToNative(v sqltypes.Value) (any, error) {
 	return out, err
 }
 
+// NormalizeValue returns a normalized form of this value that matches the output
+// of the evaluation engine. This is used to mask quirks in the way MySQL sends SQL
+// values over the wire, to allow comparing our implementation against MySQL's in
+// integration tests.
 func NormalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	typ := v.Type()
 	if typ == sqltypes.VarChar && coll == collations.CollationBinaryID {
