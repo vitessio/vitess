@@ -482,41 +482,116 @@ func TestWorkflowUpdate(t *testing.T) {
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
-	cells := &pflag.Flag{
-		Name:    "cells",
-		Value:   stringValue{"zone1,zone2"},
-		Changed: true,
+	tests := []struct {
+		name        string
+		cells       *pflag.Flag
+		tabletTypes *pflag.Flag
+		onDDL       *pflag.Flag
+		wantErr     string
+	}{
+		{
+			name:        "no flags",
+			cells:       &pflag.Flag{},
+			tabletTypes: &pflag.Flag{},
+			onDDL:       &pflag.Flag{},
+			wantErr:     fmt.Sprintf("failed to update the %s.%s workflow: %s", keyspace, workflow, errWorkflowUpdateWithoutChanges),
+		},
+		{
+			name: "only cells",
+			cells: &pflag.Flag{
+				Name:    "cells",
+				Value:   stringValue{"zone1"},
+				Changed: true,
+			},
+			tabletTypes: &pflag.Flag{},
+			onDDL:       &pflag.Flag{},
+		},
+		{
+			name:  "only tablet types",
+			cells: &pflag.Flag{},
+			tabletTypes: &pflag.Flag{
+				Name:    "tablet-types",
+				Value:   stringValue{"primary,replica"},
+				Changed: true,
+			},
+			onDDL: &pflag.Flag{},
+		},
+		{
+			name:        "only on-ddl",
+			cells:       &pflag.Flag{},
+			tabletTypes: &pflag.Flag{},
+			onDDL: &pflag.Flag{
+				Name:    "on-ddl",
+				Value:   stringValue{"EXEC_IGNORE"},
+				Changed: true,
+			},
+		},
+		{
+			name:        "only on-ddl invalid",
+			cells:       &pflag.Flag{},
+			tabletTypes: &pflag.Flag{},
+			onDDL: &pflag.Flag{
+				Name:    "on-ddl",
+				Value:   stringValue{"WUT"},
+				Changed: true,
+			},
+			wantErr: fmt.Sprintf("failed to update the %s.%s workflow: invalid value provided for on-ddl: WUT", keyspace, workflow),
+		},
+		{
+			name: "all flags",
+			cells: &pflag.Flag{
+				Name:    "cells",
+				Value:   stringValue{"zone1,zone2"},
+				Changed: true,
+			},
+			tabletTypes: &pflag.Flag{
+				Name:    "tablet-types",
+				Value:   stringValue{"rdonly,spare"},
+				Changed: true,
+			},
+			onDDL: &pflag.Flag{
+				Name:    "on-ddl",
+				Value:   stringValue{"EXEC"},
+				Changed: true,
+			},
+		},
 	}
-	tabletTypes := &pflag.Flag{
-		Name:    "tablet-types",
-		Value:   stringValue{"rdonly,spare"},
-		Changed: true,
-	}
-	onDDL := &pflag.Flag{
-		Name:    "on-ddl",
-		Value:   stringValue{"EXEC"},
-		Changed: true,
-	}
-	sourceVal := fmt.Sprintf(updateOnDDLInSource, onDDL.Value.String(), onDDL.Value.String())
-	// First we stop the workflow and update the config on both
-	// target primaries.
-	updateQuery := sqlparser.BuildParsedQuery("update _vt.vreplication set state = 'Stopped', cell = '%s', tablet_types = '%s', source = %s where db_name = 'vt_%s' and workflow = '%s'",
-		cells.Value.String(), tabletTypes.Value.String(), sourceVal, keyspace, workflow).Query
-	env.tmc.setVRResults(env.tmc.tablets[200].tablet, updateQuery, &sqltypes.Result{})
-	env.tmc.setVRResults(env.tmc.tablets[210].tablet, updateQuery, &sqltypes.Result{})
-	// then we restart the workflow for the config changes to take
-	// effect.
-	restartQuery := fmt.Sprintf("update _vt.vreplication set state = 'Running' where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflow)
-	env.tmc.setVRResults(env.tmc.tablets[200].tablet, restartQuery, &sqltypes.Result{})
-	env.tmc.setVRResults(env.tmc.tablets[210].tablet, restartQuery, &sqltypes.Result{})
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", false, cells, tabletTypes, onDDL)
-	require.NoError(t, err)
+	for _, tcase := range tests {
+		t.Run(tcase.name, func(t *testing.T) {
+			require.NotNil(t, tcase.cells)
+			require.NotNil(t, tcase.tabletTypes)
+			require.NotNil(t, tcase.onDDL)
+			updateQuery := "update _vt.vreplication set state = 'Stopped'"
+			if tcase.cells.Changed {
+				updateQuery += fmt.Sprintf(", cell = '%s'", tcase.cells.Value.String())
+			}
+			if tcase.tabletTypes.Changed {
+				updateQuery += fmt.Sprintf(", tablet_types = '%s'", tcase.tabletTypes.Value.String())
+			}
+			if tcase.onDDL.Changed {
+				updateQuery += fmt.Sprintf(", source = "+updateOnDDLInSource, tcase.onDDL.Value.String(), tcase.onDDL.Value.String())
+			}
+			// First we stop the workflow and update the config on both
+			// target primaries.
+			updateQuery = sqlparser.BuildParsedQuery(updateQuery+" where db_name = 'vt_%s' and workflow = '%s'",
+				keyspace, workflow).Query
+			env.tmc.setVRResults(env.tmc.tablets[200].tablet, updateQuery, &sqltypes.Result{})
+			env.tmc.setVRResults(env.tmc.tablets[210].tablet, updateQuery, &sqltypes.Result{})
+			// Then we restart the workflow for the config changes to take
+			// effect on both target primaries.
+			restartQuery := fmt.Sprintf("update _vt.vreplication set state = 'Running' where db_name = 'vt_%s' and workflow = '%s'", keyspace, workflow)
+			env.tmc.setVRResults(env.tmc.tablets[200].tablet, restartQuery, &sqltypes.Result{})
+			env.tmc.setVRResults(env.tmc.tablets[210].tablet, restartQuery, &sqltypes.Result{})
 
-	results, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, cells, tabletTypes, onDDL)
-	require.NoError(t, err)
-	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
-	dryRunResult := fmt.Sprintf(`Query: %s
+			results, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, tcase.cells, tcase.tabletTypes, tcase.onDDL)
+			if tcase.wantErr != "" {
+				require.Error(t, err)
+				require.Equal(t, err.Error(), tcase.wantErr)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, "map[]", fmt.Sprintf("%v", results))
+				dryRunResult := fmt.Sprintf(`Query: %s
 will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 
@@ -552,5 +627,9 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 
 `, updateQuery)
 
-	require.Equal(t, dryRunResult, logger.String())
+				require.Equal(t, dryRunResult, logger.String())
+			}
+			logger.Clear()
+		})
+	}
 }

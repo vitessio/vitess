@@ -3609,6 +3609,7 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 }
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
+	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] keyspace[.workflow] start/stop/update/delete/show/listall/tags [<tags>]"
 	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
 	subFlags.String("cells", "", "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
 	subFlags.String("tablet-types", "", "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
@@ -3617,7 +3618,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		return err
 	}
 	if subFlags.NArg() < 2 {
-		return fmt.Errorf("usage: Workflow [--dry-run] [--cells] [--tablet-types] keyspace[.workflow] start/stop/update/delete/show/listall/tags [<tags>]")
+		return fmt.Errorf(usage)
 	}
 	keyspace := subFlags.Arg(0)
 	action := strings.ToLower(subFlags.Arg(1))
@@ -3648,6 +3649,9 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			return err
 		}
 	} else {
+		if subFlags.NArg() != 2 {
+			return fmt.Errorf(usage)
+		}
 		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, subFlags.Lookup("cells"), subFlags.Lookup("tablet-types"), subFlags.Lookup("on-ddl"))
 		if err != nil {
 			return err
