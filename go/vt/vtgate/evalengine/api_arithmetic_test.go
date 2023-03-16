@@ -350,7 +350,7 @@ func TestArithmetics(t *testing.T) {
 			// testing for overflow of float64
 			v1:  NewFloat64(math.MaxFloat64),
 			v2:  NewFloat64(0.5),
-			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "BIGINT", "/").Error(),
+			err: dataOutOfRangeError(math.MaxFloat64, 0.5, "DOUBLE", "/").Error(),
 		}},
 	}, {
 		operator: "*",
