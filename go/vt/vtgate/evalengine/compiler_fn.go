@@ -403,7 +403,7 @@ func (c *compiler) compileFn_CEIL(expr *builtinCeil) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
-	convt := ctype{Type: arg.Type, Col: collationNumeric}
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
 	switch {
 	case sqltypes.IsIntegral(arg.Type):
 		// No-op for integers.
@@ -432,7 +432,7 @@ func (c *compiler) compileFn_FLOOR(expr *builtinFloor) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
-	convt := ctype{Type: arg.Type, Col: collationNumeric}
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
 	switch {
 	case sqltypes.IsIntegral(arg.Type):
 		// No-op for integers.
@@ -461,7 +461,7 @@ func (c *compiler) compileFn_ABS(expr *builtinAbs) (ctype, error) {
 
 	skip := c.compileNullCheck1(arg)
 
-	convt := ctype{Type: arg.Type, Col: collationNumeric}
+	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
 	switch {
 	case sqltypes.IsUnsigned(arg.Type):
 		// No-op if it's unsigned since that's already positive.
@@ -504,7 +504,7 @@ func (c *compiler) compileFn_ACOS(expr *builtinAcos) (ctype, error) {
 
 	c.asm.Fn_ACOS()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (c *compiler) compileFn_ASIN(expr *builtinAsin) (ctype, error) {
@@ -523,7 +523,7 @@ func (c *compiler) compileFn_ASIN(expr *builtinAsin) (ctype, error) {
 
 	c.asm.Fn_ASIN()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: flagNullable}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag | flagNullable}, nil
 }
 
 func (c *compiler) compileFn_ATAN(expr *builtinAtan) (ctype, error) {
@@ -542,7 +542,7 @@ func (c *compiler) compileFn_ATAN(expr *builtinAtan) (ctype, error) {
 
 	c.asm.Fn_ATAN()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_ATAN2(expr *builtinAtan2) (ctype, error) {
@@ -571,7 +571,7 @@ func (c *compiler) compileFn_ATAN2(expr *builtinAtan2) (ctype, error) {
 
 	c.asm.Fn_ATAN2()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg1.Flag | arg2.Flag}, nil
 }
 
 func (c *compiler) compileFn_COS(expr *builtinCos) (ctype, error) {
@@ -590,7 +590,7 @@ func (c *compiler) compileFn_COS(expr *builtinCos) (ctype, error) {
 
 	c.asm.Fn_COS()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_COT(expr *builtinCot) (ctype, error) {
@@ -609,7 +609,7 @@ func (c *compiler) compileFn_COT(expr *builtinCot) (ctype, error) {
 
 	c.asm.Fn_COT()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_SIN(expr *builtinSin) (ctype, error) {
@@ -628,7 +628,7 @@ func (c *compiler) compileFn_SIN(expr *builtinSin) (ctype, error) {
 
 	c.asm.Fn_SIN()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_TAN(expr *builtinTan) (ctype, error) {
@@ -647,7 +647,7 @@ func (c *compiler) compileFn_TAN(expr *builtinTan) (ctype, error) {
 
 	c.asm.Fn_TAN()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_DEGREES(expr *builtinDegrees) (ctype, error) {
@@ -666,7 +666,7 @@ func (c *compiler) compileFn_DEGREES(expr *builtinDegrees) (ctype, error) {
 
 	c.asm.Fn_DEGREES()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_RADIANS(expr *builtinRadians) (ctype, error) {
@@ -685,7 +685,7 @@ func (c *compiler) compileFn_RADIANS(expr *builtinRadians) (ctype, error) {
 
 	c.asm.Fn_RADIANS()
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric, Flag: arg.Flag}, nil
 }
 
 func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, error) {
