@@ -294,15 +294,20 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	case *sqlparser.Nextval:
 		currScope := a.scoper.currentScope()
 		if currScope.parent != nil {
-			// TODO: untested
-			return &CantUseOptionHereError{Msg: "Incorrect usage/placement of 'INTO'"}
+			// This is defensively checking that we are not inside a subquery or derived table
+			// Will probably already have been checked on the SELECT level
+			return &CantUseOptionHereError{Msg: "INTO"}
 		}
 		if len(currScope.tables) != 1 {
+			// This is defensively checking that we don't have too many tables.
+			// Hard to check this with unit tests, since the parser does not accept these queries
 			return &NextWithMultipleTablesError{CountTables: len(currScope.tables)}
 		}
 		vindexTbl := currScope.tables[0].GetVindexTable()
 		if vindexTbl == nil {
-			return &MissingInVSchemaError{}
+			return &MissingInVSchemaError{
+				Table: currScope.tables[0],
+			}
 		}
 		if vindexTbl.Type != vindexes.TypeSequence {
 			return &NotSequenceTableError{Table: vindexTbl.Name.String()}

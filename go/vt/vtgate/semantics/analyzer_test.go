@@ -124,7 +124,7 @@ func TestBindingSingleTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{})
+			_, err = Analyze(parse, "d", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "symbol")
 			require.Contains(t, err.Error(), "not found")
@@ -144,7 +144,7 @@ func TestBindingSingleAliasedTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{
+			_, err = Analyze(parse, "", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
@@ -249,7 +249,7 @@ func TestBindingMultiTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{
+			_, err = Analyze(parse, "d", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
 					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
@@ -273,7 +273,7 @@ func TestBindingMultiAliasedTableNegative(t *testing.T) {
 		t.Run(query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "d", &FakeSI{
+			_, err = Analyze(parse, "d", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"tabl": {Name: sqlparser.NewIdentifierCS("tabl")},
 					"foo":  {Name: sqlparser.NewIdentifierCS("foo")},
@@ -295,7 +295,7 @@ func TestNotUniqueTableName(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "test", &FakeSI{})
+			_, err := Analyze(parse, "test", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "VT03013: not unique table/alias")
 		})
@@ -310,7 +310,7 @@ func TestMissingTable(t *testing.T) {
 	for _, query := range queries {
 		t.Run(query, func(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", &FakeSI{})
+			_, err := Analyze(parse, "", &FakeSI{})
 			require.Error(t, err)
 			require.Contains(t, err.Error(), "symbol t.col not found")
 		})
@@ -406,7 +406,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 			for _, test := range tests {
 				t.Run(test.name, func(t *testing.T) {
 					si := &FakeSI{Tables: test.schema}
-					tbl, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
+					tbl, err := Analyze(parse, "", si)
 					if test.err {
 						require.True(t, err != nil || tbl.NotSingleRouteErr != nil)
 					} else {
@@ -446,7 +446,7 @@ func TestUnknownPredicate(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			si := &FakeSI{Tables: test.schema}
-			_, err := Analyze(parse.(sqlparser.SelectStatement), "", si)
+			_, err := Analyze(parse, "", si)
 			if test.err {
 				require.Error(t, err)
 			} else {
@@ -470,7 +470,7 @@ func TestScoping(t *testing.T) {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			_, err = Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+			_, err = Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
@@ -1043,7 +1043,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
@@ -1108,7 +1108,7 @@ func TestDerivedTablesOrderClause(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
 
-			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", si)
+			st, err := Analyze(parse, "user", si)
 			require.NoError(t, err)
 
 			sel := parse.(*sqlparser.Select)
@@ -1141,7 +1141,7 @@ func TestScopingWComplexDerivedTables(t *testing.T) {
 		t.Run(query.query, func(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
-			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
@@ -1183,7 +1183,7 @@ func TestScopingWVindexTables(t *testing.T) {
 			parse, err := sqlparser.Parse(query.query)
 			require.NoError(t, err)
 			hash, _ := vindexes.NewHash("user_index", nil)
-			st, err := Analyze(parse.(sqlparser.SelectStatement), "user", &FakeSI{
+			st, err := Analyze(parse, "user", &FakeSI{
 				Tables: map[string]*vindexes.Table{
 					"t": {Name: sqlparser.NewIdentifierCS("t")},
 				},
@@ -1225,7 +1225,7 @@ func BenchmarkAnalyzeMultipleDifferentQueries(b *testing.B) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo())
 		}
 	}
 }
@@ -1249,7 +1249,7 @@ func BenchmarkAnalyzeUnionQueries(b *testing.B) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo())
 		}
 	}
 }
@@ -1275,7 +1275,7 @@ func BenchmarkAnalyzeSubQueries(b *testing.B) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo())
 		}
 	}
 }
@@ -1305,7 +1305,7 @@ func BenchmarkAnalyzeDerivedTableQueries(b *testing.B) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo())
 		}
 	}
 }
@@ -1331,7 +1331,7 @@ func BenchmarkAnalyzeHavingQueries(b *testing.B) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo())
 		}
 	}
 }
@@ -1360,7 +1360,7 @@ func BenchmarkAnalyzeGroupByQueries(b *testing.B) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo())
 		}
 	}
 }
@@ -1383,7 +1383,7 @@ func BenchmarkAnalyzeOrderByQueries(b *testing.B) {
 			parse, err := sqlparser.Parse(query)
 			require.NoError(b, err)
 
-			_, _ = Analyze(parse.(sqlparser.SelectStatement), "d", fakeSchemaInfo())
+			_, _ = Analyze(parse, "d", fakeSchemaInfo())
 		}
 	}
 }
@@ -1432,6 +1432,60 @@ func TestSingleUnshardedKeyspace(t *testing.T) {
 			queryIsUnsharded, tables := semTable.SingleUnshardedKeyspace()
 			assert.Equal(t, test.unsharded, queryIsUnsharded)
 			assert.Equal(t, test.tables, tables)
+		})
+	}
+}
+
+func TestNextErrors(t *testing.T) {
+	tests := []struct {
+		query, expectedError string
+	}{
+		{
+			query:         "select next 2 values from dual",
+			expectedError: "Table information is not provided in vschema for table `dual`",
+		}, {
+			query:         "select next 2 values from t1",
+			expectedError: "NEXT used on a non-sequence table `t1`",
+		}, {
+			query:         "select * from (select next 2 values from t1) dt",
+			expectedError: "Incorrect usage/placement of 'NEXT'",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(test.query)
+			require.NoError(t, err)
+
+			_, err = Analyze(parse, "d", fakeSchemaInfo())
+			assert.EqualError(t, err, test.expectedError)
+		})
+	}
+}
+
+func TestUpdateErrors(t *testing.T) {
+	tests := []struct {
+		query, expectedError string
+	}{
+		{
+			query:         "update t1, t2 set id = 12",
+			expectedError: "VT12001: unsupported: multiple (2) tables in update",
+		}, {
+			query:         "update (select 1 from dual) dt set id = 1",
+			expectedError: "The target table dt of the UPDATE is not updatable",
+		},
+	}
+
+	for _, test := range tests {
+		t.Run(test.query, func(t *testing.T) {
+			parse, err := sqlparser.Parse(test.query)
+			require.NoError(t, err)
+
+			st, err := Analyze(parse, "d", fakeSchemaInfo())
+			if err == nil {
+				err = st.NotUnshardedErr
+			}
+			assert.EqualError(t, err, test.expectedError)
 		})
 	}
 }
