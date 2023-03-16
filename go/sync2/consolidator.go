@@ -21,6 +21,7 @@ import (
 	"sync/atomic"
 
 	"vitess.io/vitess/go/cache"
+	"vitess.io/vitess/go/sqltypes"
 )
 
 // Consolidator consolidates duplicate queries from executing simulaneously
@@ -36,8 +37,8 @@ type PendingResult interface {
 	Broadcast()
 	Err() error
 	SetErr(error)
-	SetResult(any)
-	Result() any
+	SetResult(*sqltypes.Result)
+	Result() *sqltypes.Result
 	Wait()
 }
 
@@ -64,7 +65,7 @@ type pendingResult struct {
 	executing    sync.RWMutex
 	consolidator *consolidator
 	query        string
-	result       any
+	result       *sqltypes.Result
 	err          error
 }
 
@@ -100,7 +101,7 @@ func (rs *pendingResult) Err() error {
 }
 
 // Result returns any result returned by the query.
-func (rs *pendingResult) Result() any {
+func (rs *pendingResult) Result() *sqltypes.Result {
 	return rs.result
 }
 
@@ -110,7 +111,7 @@ func (rs *pendingResult) SetErr(err error) {
 }
 
 // SetResult sets any result returned by the query.
-func (rs *pendingResult) SetResult(res any) {
+func (rs *pendingResult) SetResult(res *sqltypes.Result) {
 	rs.result = res
 }
 

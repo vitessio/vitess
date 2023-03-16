@@ -16,6 +16,10 @@ limitations under the License.
 
 package sync2
 
+import (
+	"vitess.io/vitess/go/sqltypes"
+)
+
 // FakeConsolidator satisfies the Consolidator interface and can be used to mock
 // how Vitess interacts with the Consolidator.
 type FakeConsolidator struct {
@@ -48,7 +52,7 @@ type FakePendingResult struct {
 	// WaitCalls can be used to inspect Wait calls.
 	WaitCalls int
 	err       error
-	result    any
+	result    *sqltypes.Result
 }
 
 var (
@@ -90,7 +94,7 @@ func (fr *FakePendingResult) Err() error {
 }
 
 // Result returns the pre-configured Result.
-func (fr *FakePendingResult) Result() any {
+func (fr *FakePendingResult) Result() *sqltypes.Result {
 	return fr.result
 }
 
@@ -100,7 +104,7 @@ func (fr *FakePendingResult) SetErr(err error) {
 }
 
 // SetResult stores the result, which can be retrieved with Result.
-func (fr *FakePendingResult) SetResult(result any) {
+func (fr *FakePendingResult) SetResult(result *sqltypes.Result) {
 	fr.result = result
 }
 

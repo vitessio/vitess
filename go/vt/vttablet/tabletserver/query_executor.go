@@ -816,7 +816,7 @@ func (qre *QueryExecutor) execSelect() (*sqltypes.Result, error) {
 		if q.Err() != nil {
 			return nil, q.Err()
 		}
-		return q.Result().(*sqltypes.Result), nil
+		return q.Result(), nil
 	}
 	conn, err := qre.getConn()
 	if err != nil {
