@@ -13,9 +13,13 @@ A set of Grafana dashboards, Prometheus rules and alerts for Vitess, packaged to
         export PATH="$GOPATH/bin:/usr/local/go/bin:$PATH"
         ```
 
-1. Install the go tools: `make tools`, `jb`, `jsonnet`, `jsonnetfmt`, and `promtool` should now be in `$GOPATH/bin`.
+2. Install the go tools: `make tools`, `jb`, `jsonnet`, `jsonnetfmt`, and `promtool` should now be in `$GOPATH/bin`:  
+  - `go install -a github.com/jsonnet-bundler/jsonnet-bundler/cmd/jb@latest`  
+  - `go install -a github.com/google/go-jsonnet/cmd/jsonnet@latest`  
+  - `go install -a github.com/google/go-jsonnet/cmd/jsonnetfmt@latest`  
+  - `go install -a github.com/prometheus/prometheus/cmd/promtool`  
 
-1. Install the dependencies by running: `jb install`
+3. Install the dependencies by running: `jb install`
 
 ## ℹ️ How-to
 
