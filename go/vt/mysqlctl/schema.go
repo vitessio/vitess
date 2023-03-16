@@ -101,6 +101,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 
 	// Get per-table schema concurrently.
 	tableNames := make([]string, 0, len(tds))
+	validTds := []*tabletmanagerdatapb.TableDefinition{}
 	for _, td := range tds {
 		tableNames = append(tableNames, td.Name)
 
@@ -113,10 +114,9 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 				// there's a possible race condition: it could happen that a table was dropped in between reading
 				// the list of tables (collectBasicTableData(), earlier) and the point above where we investigate
 				// the table.
-				// This is fine. We identify the situation and continue to remove the table from our records
+				// This is fine. We identify the situation and continue to remove the table from our records.
 				sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
 				if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchTable {
-					td.Fields = nil
 					return
 				}
 
@@ -128,6 +128,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 			td.Fields = fields
 			td.Columns = columns
 			td.Schema = schema
+			validTds = append(validTds, td)
 		}(td)
 	}
 
@@ -155,18 +156,11 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 		return nil, err
 	}
 
-	for _, td := range tds {
+	for _, td := range validTds {
 		td.PrimaryKeyColumns = colMap[td.Name]
 	}
 
-	sd.TableDefinitions = []*tabletmanagerdatapb.TableDefinition{}
-	for _, td := range tds {
-		if td.Fields == nil {
-			// means table was dropped before we called GetColumns
-			continue
-		}
-		sd.TableDefinitions = append(sd.TableDefinitions, td)
-	}
+	sd.TableDefinitions = validTds
 
 	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
