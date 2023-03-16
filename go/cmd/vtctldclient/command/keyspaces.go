@@ -19,12 +19,15 @@ package command
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/logutil"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -35,7 +38,7 @@ import (
 var (
 	// CreateKeyspace makes a CreateKeyspace gRPC call to a vtctld.
 	CreateKeyspace = &cobra.Command{
-		Use:   "CreateKeyspace <keyspace> [--force|-f] [--type KEYSPACE_TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...]  [--durability-policy <policy_name>]",
+		Use:   "CreateKeyspace <keyspace> [--force|-f] [--type KEYSPACE_TYPE] [--base-keyspace KEYSPACE --snapshot-timestamp TIME] [--served-from DB_TYPE:KEYSPACE ...] [--durability-policy <policy_name>] [--sidecar-db-name <db_name>]",
 		Short: "Creates the specified keyspace in the topology.",
 		Long: `Creates the specified keyspace in the topology.
 	
@@ -136,6 +139,7 @@ var createKeyspaceOptions = struct {
 	BaseKeyspace      string
 	SnapshotTimestamp string
 	DurabilityPolicy  string
+	SidecarDBName     string
 }{
 	KeyspaceType: cli.KeyspaceTypeFlag(topodatapb.KeyspaceType_NORMAL),
 }
@@ -175,6 +179,15 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		snapshotTime = logutil.TimeToProto(t)
 	}
 
+	createKeyspaceOptions.SidecarDBName = strings.TrimSpace(createKeyspaceOptions.SidecarDBName)
+	if createKeyspaceOptions.SidecarDBName == "" {
+		return errors.New("--sidecar-db-name cannot be empty when creating a keyspace")
+	}
+	if len(createKeyspaceOptions.SidecarDBName) > mysql.MaxIdentifierLength {
+		return mysql.NewSQLError(mysql.ERTooLongIdent, mysql.SSDataTooLong, "--sidecar-db-name identifier value of %q is too long (%d chars), max length for database identifiers is %d characters",
+			createKeyspaceOptions.SidecarDBName, len(createKeyspaceOptions.SidecarDBName), mysql.MaxIdentifierLength)
+	}
+
 	cli.FinishedParsing(cmd)
 
 	req := &vtctldatapb.CreateKeyspaceRequest{
@@ -185,6 +198,7 @@ func commandCreateKeyspace(cmd *cobra.Command, args []string) error {
 		BaseKeyspace:      createKeyspaceOptions.BaseKeyspace,
 		SnapshotTime:      snapshotTime,
 		DurabilityPolicy:  createKeyspaceOptions.DurabilityPolicy,
+		SidecarDbName:     createKeyspaceOptions.SidecarDBName,
 	}
 
 	for n, v := range createKeyspaceOptions.ServedFromsMap.StringMapValue {
@@ -411,6 +425,7 @@ func init() {
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.BaseKeyspace, "base-keyspace", "", "The base keyspace for a snapshot keyspace.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SnapshotTimestamp, "snapshot-timestamp", "", "The snapshot time for a snapshot keyspace, as a timestamp in RFC3339 format.")
 	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.DurabilityPolicy, "durability-policy", "none", "Type of durability to enforce for this keyspace. Default is none. Possible values include 'semi_sync' and others as dictated by registered plugins.")
+	CreateKeyspace.Flags().StringVar(&createKeyspaceOptions.SidecarDBName, "sidecar-db-name", sidecardb.DefaultName, "(Experimental) Name of the Vitess sidecar database that tablets in this keyspace will use for internal metadata.")
 	Root.AddCommand(CreateKeyspace)
 
 	DeleteKeyspace.Flags().BoolVarP(&deleteKeyspaceOptions.Recursive, "recursive", "r", false, "Recursively delete all shards in the keyspace, and all tablets in those shards.")

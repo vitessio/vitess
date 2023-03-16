@@ -352,6 +352,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
 	case *PointExpr:
 		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PolygonExpr:
+		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
 	case ReferenceAction:
@@ -4223,6 +4225,28 @@ func (c *cow) copyOnRewriteRefOfPointExpr(n *PointExpr, parent SQLNode) (out SQL
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfPolygonExpr(n *PolygonExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_LinestringParams, changedLinestringParams := c.copyOnRewriteExprs(n.LinestringParams, n)
+		if changedLinestringParams {
+			res := *n
+			res.LinestringParams, _ = _LinestringParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6295,6 +6319,8 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
 	case *PointExpr:
 		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PolygonExpr:
+		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:
@@ -6561,6 +6587,8 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfPerformanceSchemaFuncExpr(n, parent)
 	case *PointExpr:
 		return c.copyOnRewriteRefOfPointExpr(n, parent)
+	case *PolygonExpr:
+		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *RegexpInstrExpr:
 		return c.copyOnRewriteRefOfRegexpInstrExpr(n, parent)
 	case *RegexpLikeExpr:

@@ -104,6 +104,13 @@ func TestMain(m *testing.M) {
 			clusterInstance.VtgateProcess = cluster.VtgateProcess{}
 			return 1
 		}
+
+		err := clusterInstance.WaitForVTGateAndVTTablets(5 * time.Minute)
+		if err != nil {
+			fmt.Println(err)
+			return 1
+		}
+
 		vtParams = mysql.ConnParams{
 			Host: clusterInstance.Hostname,
 			Port: clusterInstance.VtgateMySQLPort,
@@ -120,10 +127,13 @@ func TestVSchemaTrackerInit(t *testing.T) {
 	require.NoError(t, err)
 	defer conn.Close()
 
-	qr := utils.Exec(t, conn, "SHOW VSCHEMA TABLES")
-	got := fmt.Sprintf("%v", qr.Rows)
 	want := `[[VARCHAR("main")] [VARCHAR("test_table")] [VARCHAR("vt_user")]]`
-	assert.Equal(t, want, got)
+	utils.AssertMatchesWithTimeout(t, conn,
+		"SHOW VSCHEMA TABLES",
+		want,
+		100*time.Millisecond,
+		60*time.Second,
+		"initial table list not complete")
 }
 
 // TestVSchemaTrackerKeyspaceReInit tests that the vschema tracker

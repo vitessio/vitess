@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.vreplication
+CREATE TABLE IF NOT EXISTS vreplication
 (
     `id`                    int              NOT NULL AUTO_INCREMENT,
     `workflow`              varbinary(1000)           DEFAULT NULL,

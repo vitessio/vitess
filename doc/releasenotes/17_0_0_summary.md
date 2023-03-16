@@ -12,6 +12,9 @@
     - [VTtablet Error count with code ](#vttablet-error-count-with-code)
   - **[Deprecations and Deletions](#deprecations-and-deletions)**
     - [Deprecated Stats](#deprecated-stats)
+  - **[VTTablet](#vttablet)**
+    - [VTTablet: Initializing all replicas with super_read_only](#vttablet-initialization)
+    - [Deprecated Flags](#deprecated-flags)
 
 ## <a id="major-changes"/> Major Changes
 
@@ -214,3 +217,15 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+
+### <a id="vttablet"/> VTTablet
+#### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
+In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
+global variable `super_read_only` value set to `ON`. During failovers, we set `super_read_only` to `OFF` for the promoted primary tablet. This will allow the
+primary to accept writes. All of the shard's tablets, except the current primary, will still have their global variable `super_read_only` set to `ON`. This will make sure that apart from
+MySQL replication no other component, offline system or operator can write directly to a replica.
+
+Reference PR for this change is [PR #12206](https://github.com/vitessio/vitess/pull/12206)
+
+#### <a id="deprecated-flags"/> Deprecated Flags
+The flag `use_super_read_only` is deprecated and will be removed in a later release.
