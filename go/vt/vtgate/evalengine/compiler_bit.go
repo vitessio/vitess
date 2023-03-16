@@ -21,11 +21,11 @@ import "vitess.io/vitess/go/sqltypes"
 func (c *compiler) compileBitwise(expr *BitwiseExpr) (ctype, error) {
 	switch expr.Op.(type) {
 	case *opBitAnd:
-		return c.compileBitwiseOp(expr.Left, expr.Right, and)
+		return c.compileBitwiseOp(expr.Left, expr.Right, c.asm.BitOp_and_bb, c.asm.BitOp_and_uu)
 	case *opBitOr:
-		return c.compileBitwiseOp(expr.Left, expr.Right, or)
+		return c.compileBitwiseOp(expr.Left, expr.Right, c.asm.BitOp_or_bb, c.asm.BitOp_or_uu)
 	case *opBitXor:
-		return c.compileBitwiseOp(expr.Left, expr.Right, xor)
+		return c.compileBitwiseOp(expr.Left, expr.Right, c.asm.BitOp_xor_bb, c.asm.BitOp_xor_uu)
 	case *opBitShl:
 		return c.compileBitwiseShift(expr.Left, expr.Right, -1)
 	case *opBitShr:
@@ -35,15 +35,7 @@ func (c *compiler) compileBitwise(expr *BitwiseExpr) (ctype, error) {
 	}
 }
 
-type bitwiseOp int
-
-const (
-	and bitwiseOp = iota
-	or
-	xor
-)
-
-func (c *compiler) compileBitwiseOp(left Expr, right Expr, op bitwiseOp) (ctype, error) {
+func (c *compiler) compileBitwiseOp(left Expr, right Expr, asm_ins_bb, asm_ins_uu func()) (ctype, error) {
 	lt, err := c.compileExpr(left)
 	if err != nil {
 		return ctype{}, err
@@ -58,7 +50,7 @@ func (c *compiler) compileBitwiseOp(left Expr, right Expr, op bitwiseOp) (ctype,
 
 	if lt.Type == sqltypes.VarBinary && rt.Type == sqltypes.VarBinary {
 		if !lt.isHexOrBitLiteral() || !rt.isHexOrBitLiteral() {
-			c.asm.BitOp_bb(op)
+			asm_ins_bb()
 			c.asm.jumpDestination(skip)
 			return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 		}
@@ -67,7 +59,7 @@ func (c *compiler) compileBitwiseOp(left Expr, right Expr, op bitwiseOp) (ctype,
 	lt = c.compileToBitwiseUint64(lt, 2)
 	rt = c.compileToBitwiseUint64(rt, 1)
 
-	c.asm.BitOp_uu(op)
+	asm_ins_uu()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
 }

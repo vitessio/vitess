@@ -48,11 +48,11 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 	case *builtinChangeCase:
 		return c.compileFn_CCASE(call)
 	case *builtinCharLength:
-		return c.compileFn_LENGTH(call, charLen)
+		return c.compileFn_xLENGTH(call, c.asm.Fn_CHAR_LENGTH)
 	case *builtinLength:
-		return c.compileFn_LENGTH(call, byteLen)
+		return c.compileFn_xLENGTH(call, c.asm.Fn_LENGTH)
 	case *builtinBitLength:
-		return c.compileFn_LENGTH(call, bitLen)
+		return c.compileFn_xLENGTH(call, c.asm.Fn_BIT_LENGTH)
 	case *builtinASCII:
 		return c.compileFn_ASCII(call)
 	case *builtinHex:
@@ -293,15 +293,7 @@ func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
 
-type lengthOp int
-
-const (
-	charLen lengthOp = iota
-	byteLen
-	bitLen
-)
-
-func (c *compiler) compileFn_LENGTH(call callable, op lengthOp) (ctype, error) {
+func (c *compiler) compileFn_xLENGTH(call callable, asm_ins func()) (ctype, error) {
 	str, err := c.compileExpr(call.callable()[0])
 	if err != nil {
 		return ctype{}, err
@@ -315,7 +307,7 @@ func (c *compiler) compileFn_LENGTH(call callable, op lengthOp) (ctype, error) {
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
 
-	c.asm.Fn_LENGTH(op)
+	asm_ins()
 	c.asm.jumpDestination(skip)
 
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil

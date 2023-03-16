@@ -171,84 +171,88 @@ func (asm *assembler) BitCount_u() {
 	}, "BIT_COUNT UINT64(SP-1)")
 }
 
-func (asm *assembler) BitOp_bb(op bitwiseOp) {
+func (asm *assembler) BitOp_and_bb() {
 	asm.adjustStack(-1)
-
-	switch op {
-	case and:
-		asm.emit(func(vm *VirtualMachine) int {
-			l := vm.stack[vm.sp-2].(*evalBytes)
-			r := vm.stack[vm.sp-1].(*evalBytes)
-			if len(l.bytes) != len(r.bytes) {
-				vm.err = errBitwiseOperandsLength
-				return 0
-			}
-			for i := range l.bytes {
-				l.bytes[i] = l.bytes[i] & r.bytes[i]
-			}
-			vm.sp--
-			return 1
-		}, "AND BINARY(SP-2), BINARY(SP-1)")
-	case or:
-		asm.emit(func(vm *VirtualMachine) int {
-			l := vm.stack[vm.sp-2].(*evalBytes)
-			r := vm.stack[vm.sp-1].(*evalBytes)
-			if len(l.bytes) != len(r.bytes) {
-				vm.err = errBitwiseOperandsLength
-				return 0
-			}
-			for i := range l.bytes {
-				l.bytes[i] = l.bytes[i] | r.bytes[i]
-			}
-			vm.sp--
-			return 1
-		}, "OR BINARY(SP-2), BINARY(SP-1)")
-	case xor:
-		asm.emit(func(vm *VirtualMachine) int {
-			l := vm.stack[vm.sp-2].(*evalBytes)
-			r := vm.stack[vm.sp-1].(*evalBytes)
-			if len(l.bytes) != len(r.bytes) {
-				vm.err = errBitwiseOperandsLength
-				return 0
-			}
-			for i := range l.bytes {
-				l.bytes[i] = l.bytes[i] ^ r.bytes[i]
-			}
-			vm.sp--
-			return 1
-		}, "XOR BINARY(SP-2), BINARY(SP-1)")
-	}
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalBytes)
+		r := vm.stack[vm.sp-1].(*evalBytes)
+		if len(l.bytes) != len(r.bytes) {
+			vm.err = errBitwiseOperandsLength
+			return 0
+		}
+		for i := range l.bytes {
+			l.bytes[i] = l.bytes[i] & r.bytes[i]
+		}
+		vm.sp--
+		return 1
+	}, "AND BINARY(SP-2), BINARY(SP-1)")
 }
 
-func (asm *assembler) BitOp_uu(op bitwiseOp) {
+func (asm *assembler) BitOp_or_bb() {
 	asm.adjustStack(-1)
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalBytes)
+		r := vm.stack[vm.sp-1].(*evalBytes)
+		if len(l.bytes) != len(r.bytes) {
+			vm.err = errBitwiseOperandsLength
+			return 0
+		}
+		for i := range l.bytes {
+			l.bytes[i] = l.bytes[i] | r.bytes[i]
+		}
+		vm.sp--
+		return 1
+	}, "OR BINARY(SP-2), BINARY(SP-1)")
+}
 
-	switch op {
-	case and:
-		asm.emit(func(vm *VirtualMachine) int {
-			l := vm.stack[vm.sp-2].(*evalUint64)
-			r := vm.stack[vm.sp-1].(*evalUint64)
-			l.u = l.u & r.u
-			vm.sp--
-			return 1
-		}, "AND UINT64(SP-2), UINT64(SP-1)")
-	case or:
-		asm.emit(func(vm *VirtualMachine) int {
-			l := vm.stack[vm.sp-2].(*evalUint64)
-			r := vm.stack[vm.sp-1].(*evalUint64)
-			l.u = l.u | r.u
-			vm.sp--
-			return 1
-		}, "OR UINT64(SP-2), UINT64(SP-1)")
-	case xor:
-		asm.emit(func(vm *VirtualMachine) int {
-			l := vm.stack[vm.sp-2].(*evalUint64)
-			r := vm.stack[vm.sp-1].(*evalUint64)
-			l.u = l.u ^ r.u
-			vm.sp--
-			return 1
-		}, "XOR UINT64(SP-2), UINT64(SP-1)")
-	}
+func (asm *assembler) BitOp_xor_bb() {
+	asm.adjustStack(-1)
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalBytes)
+		r := vm.stack[vm.sp-1].(*evalBytes)
+		if len(l.bytes) != len(r.bytes) {
+			vm.err = errBitwiseOperandsLength
+			return 0
+		}
+		for i := range l.bytes {
+			l.bytes[i] = l.bytes[i] ^ r.bytes[i]
+		}
+		vm.sp--
+		return 1
+	}, "XOR BINARY(SP-2), BINARY(SP-1)")
+}
+
+func (asm *assembler) BitOp_and_uu() {
+	asm.adjustStack(-1)
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		l.u = l.u & r.u
+		vm.sp--
+		return 1
+	}, "AND UINT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) BitOp_or_uu() {
+	asm.adjustStack(-1)
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		l.u = l.u | r.u
+		vm.sp--
+		return 1
+	}, "OR UINT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) BitOp_xor_uu() {
+	asm.adjustStack(-1)
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		l.u = l.u ^ r.u
+		vm.sp--
+		return 1
+	}, "XOR UINT64(SP-2), UINT64(SP-1)")
 }
 
 func (asm *assembler) BitShiftLeft_bu() {
@@ -1365,34 +1369,35 @@ func (asm *assembler) Fn_JSON_UNQUOTE() {
 	}, "FN JSON_UNQUOTE (SP-1)")
 }
 
-func (asm *assembler) Fn_LENGTH(op lengthOp) {
-	switch op {
-	case charLen:
-		asm.emit(func(vm *VirtualMachine) int {
-			arg := vm.stack[vm.sp-1].(*evalBytes)
+func (asm *assembler) Fn_CHAR_LENGTH() {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalBytes)
 
-			if sqltypes.IsBinary(arg.SQLType()) {
-				vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes)))
-			} else {
-				coll := arg.col.Collation.Get()
-				count := charset.Length(coll.Charset(), arg.bytes)
-				vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(count))
-			}
-			return 1
-		}, "FN CHAR_LENGTH VARCHAR(SP-1)")
-	case byteLen:
-		asm.emit(func(vm *VirtualMachine) int {
-			arg := vm.stack[vm.sp-1].(*evalBytes)
+		if sqltypes.IsBinary(arg.SQLType()) {
 			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes)))
-			return 1
-		}, "FN LENGTH VARCHAR(SP-1)")
-	case bitLen:
-		asm.emit(func(vm *VirtualMachine) int {
-			arg := vm.stack[vm.sp-1].(*evalBytes)
-			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes) * 8))
-			return 1
-		}, "FN BIT_LENGTH VARCHAR(SP-1)")
-	}
+		} else {
+			coll := arg.col.Collation.Get()
+			count := charset.Length(coll.Charset(), arg.bytes)
+			vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(count))
+		}
+		return 1
+	}, "FN CHAR_LENGTH VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_LENGTH() {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalBytes)
+		vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes)))
+		return 1
+	}, "FN LENGTH VARCHAR(SP-1)")
+}
+
+func (asm *assembler) Fn_BIT_LENGTH() {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalBytes)
+		vm.stack[vm.sp-1] = vm.arena.newEvalInt64(int64(len(arg.bytes) * 8))
+		return 1
+	}, "FN BIT_LENGTH VARCHAR(SP-1)")
 }
 
 func (asm *assembler) Fn_LUCASE(upcase bool) {
