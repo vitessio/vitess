@@ -79,6 +79,8 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_ATAN2(call)
 	case *builtinCos:
 		return c.compileFn_COS(call)
+	case *builtinCot:
+		return c.compileFn_COT(call)
 	case *builtinSin:
 		return c.compileFn_SIN(call)
 	case *builtinTan:
@@ -587,6 +589,25 @@ func (c *compiler) compileFn_COS(expr *builtinCos) (ctype, error) {
 	}
 
 	c.asm.Fn_COS()
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileFn_COT(expr *builtinCot) (ctype, error) {
+	arg, err := c.compileExpr(expr.Arguments[0])
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch {
+	case sqltypes.IsFloat(arg.Type):
+	default:
+		c.asm.Convert_xf(1)
+	}
+
+	c.asm.Fn_COT()
 	c.asm.jumpDestination(skip)
 	return ctype{Type: sqltypes.Float64, Col: collationNumeric}, nil
 }

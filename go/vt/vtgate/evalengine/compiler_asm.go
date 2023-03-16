@@ -1119,6 +1119,14 @@ func (asm *assembler) Fn_COS() {
 	}, "FN COS FLOAT64(SP-1)")
 }
 
+func (asm *assembler) Fn_COT() {
+	asm.emit(func(vm *VirtualMachine) int {
+		f := vm.stack[vm.sp-1].(*evalFloat)
+		f.f = 1.0 / math.Tan(f.f)
+		return 1
+	}, "FN COT FLOAT64(SP-1)")
+}
+
 func (asm *assembler) Fn_SIN() {
 	asm.emit(func(vm *VirtualMachine) int {
 		f := vm.stack[vm.sp-1].(*evalFloat)
