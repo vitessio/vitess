@@ -84,93 +84,12 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 
 	switch {
 	case compareAsStrings(lt.Type, rt.Type):
-		var merged collations.TypedCollation
-		var coerceLeft collations.Coercion
-		var coerceRight collations.Coercion
-		var env = collations.Local()
-
-		if lt.Col.Collation != rt.Col.Collation {
-			merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
-				ConvertToSuperset:   true,
-				ConvertWithCoercion: true,
-			})
-		} else {
-			merged = lt.Col
-		}
-		if err != nil {
+		if err := c.compareAsStrings(lt, rt, err); err != nil {
 			return ctype{}, err
 		}
 
-		if coerceLeft == nil && coerceRight == nil {
-			c.asm.CmpString_collate(merged.Collation.Get())
-		} else {
-			if coerceLeft == nil {
-				coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
-			}
-			if coerceRight == nil {
-				coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
-			}
-			c.asm.CmpString_coerce(&compiledCoercion{
-				col:   merged.Collation.Get(),
-				left:  coerceLeft,
-				right: coerceRight,
-			})
-		}
-
 	case compareAsSameNumericType(lt.Type, rt.Type) || compareAsDecimal(lt.Type, rt.Type):
-		switch lt.Type {
-		case sqltypes.Int64:
-			switch rt.Type {
-			case sqltypes.Int64:
-				c.asm.CmpNum_ii()
-			case sqltypes.Uint64:
-				c.asm.CmpNum_iu(2, 1)
-			case sqltypes.Float64:
-				c.asm.CmpNum_if(2, 1)
-			case sqltypes.Decimal:
-				c.asm.CmpNum_id(2, 1)
-			}
-		case sqltypes.Uint64:
-			switch rt.Type {
-			case sqltypes.Int64:
-				c.asm.CmpNum_iu(1, 2)
-				swapped = true
-			case sqltypes.Uint64:
-				c.asm.CmpNum_uu()
-			case sqltypes.Float64:
-				c.asm.CmpNum_uf(2, 1)
-			case sqltypes.Decimal:
-				c.asm.CmpNum_ud(2, 1)
-			}
-		case sqltypes.Float64:
-			switch rt.Type {
-			case sqltypes.Int64:
-				c.asm.CmpNum_if(1, 2)
-				swapped = true
-			case sqltypes.Uint64:
-				c.asm.CmpNum_uf(1, 2)
-				swapped = true
-			case sqltypes.Float64:
-				c.asm.CmpNum_ff()
-			case sqltypes.Decimal:
-				c.asm.CmpNum_fd(2, 1)
-			}
-
-		case sqltypes.Decimal:
-			switch rt.Type {
-			case sqltypes.Int64:
-				c.asm.CmpNum_id(1, 2)
-				swapped = true
-			case sqltypes.Uint64:
-				c.asm.CmpNum_ud(1, 2)
-				swapped = true
-			case sqltypes.Float64:
-				c.asm.CmpNum_fd(1, 2)
-				swapped = true
-			case sqltypes.Decimal:
-				c.asm.CmpNum_dd()
-			}
-		}
+		swapped = c.compareNumericTypes(lt, rt)
 
 	case compareAsDates(lt.Type, rt.Type) || compareAsDateAndString(lt.Type, rt.Type) || compareAsDateAndNumeric(lt.Type, rt.Type):
 		return ctype{}, c.unsupported(expr)
@@ -223,6 +142,99 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 
 	c.asm.jumpDestination(skip)
 	return cmptype, nil
+}
+
+func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
+	switch lt.Type {
+	case sqltypes.Int64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_ii()
+		case sqltypes.Uint64:
+			c.asm.CmpNum_iu(2, 1)
+		case sqltypes.Float64:
+			c.asm.CmpNum_if(2, 1)
+		case sqltypes.Decimal:
+			c.asm.CmpNum_id(2, 1)
+		}
+	case sqltypes.Uint64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_iu(1, 2)
+			swapped = true
+		case sqltypes.Uint64:
+			c.asm.CmpNum_uu()
+		case sqltypes.Float64:
+			c.asm.CmpNum_uf(2, 1)
+		case sqltypes.Decimal:
+			c.asm.CmpNum_ud(2, 1)
+		}
+	case sqltypes.Float64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_if(1, 2)
+			swapped = true
+		case sqltypes.Uint64:
+			c.asm.CmpNum_uf(1, 2)
+			swapped = true
+		case sqltypes.Float64:
+			c.asm.CmpNum_ff()
+		case sqltypes.Decimal:
+			c.asm.CmpNum_fd(2, 1)
+		}
+
+	case sqltypes.Decimal:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.CmpNum_id(1, 2)
+			swapped = true
+		case sqltypes.Uint64:
+			c.asm.CmpNum_ud(1, 2)
+			swapped = true
+		case sqltypes.Float64:
+			c.asm.CmpNum_fd(1, 2)
+			swapped = true
+		case sqltypes.Decimal:
+			c.asm.CmpNum_dd()
+		}
+	}
+	return
+}
+
+func (c *compiler) compareAsStrings(lt ctype, rt ctype, err error) error {
+	var merged collations.TypedCollation
+	var coerceLeft collations.Coercion
+	var coerceRight collations.Coercion
+	var env = collations.Local()
+
+	if lt.Col.Collation != rt.Col.Collation {
+		merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
+			ConvertToSuperset:   true,
+			ConvertWithCoercion: true,
+		})
+	} else {
+		merged = lt.Col
+	}
+	if err != nil {
+		return err
+	}
+
+	if coerceLeft == nil && coerceRight == nil {
+		c.asm.CmpString_collate(merged.Collation.Get())
+	} else {
+		if coerceLeft == nil {
+			coerceLeft = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		if coerceRight == nil {
+			coerceRight = func(dst, in []byte) ([]byte, error) { return in, nil }
+		}
+		c.asm.CmpString_coerce(&compiledCoercion{
+			col:   merged.Collation.Get(),
+			left:  coerceLeft,
+			right: coerceRight,
+		})
+	}
+	return nil
 }
 
 func (c *compiler) compileCheckTrue(when ctype, offset int) error {
