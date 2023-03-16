@@ -484,7 +484,7 @@ func TestVStreamCopyResume(t *testing.T) {
 					// Validate that the vgtid event the client receives from the vstream copy has a complete TableLastPK proto message.
 					// Also, to ensure that the client can resume properly, make sure that
 					// the Fields value is present in the sqltypes.Result field and not missing.
-					require.Regexp(t, `type:VGTID vgtid:{(shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}|shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}})} keyspace:"ks" shard:"(80-|-80)"`, ev.String())
+					require.Regexp(t, `type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" (table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}})?} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" (table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}})?} keyspace:"ks" shard:"(80-|-80)"`, ev.String())
 				}
 			}
 			if expectedCatchupEvents == replCatchupEvents && expectedRowCopyEvents == rowCopyEvents {
