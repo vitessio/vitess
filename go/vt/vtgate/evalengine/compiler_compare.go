@@ -84,7 +84,7 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 
 	switch {
 	case compareAsStrings(lt.Type, rt.Type):
-		if err := c.compareAsStrings(lt, rt, err); err != nil {
+		if err := c.compareAsStrings(lt, rt); err != nil {
 			return ctype{}, err
 		}
 
@@ -201,11 +201,12 @@ func (c *compiler) compareNumericTypes(lt ctype, rt ctype) (swapped bool) {
 	return
 }
 
-func (c *compiler) compareAsStrings(lt ctype, rt ctype, err error) error {
+func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
 	var merged collations.TypedCollation
 	var coerceLeft collations.Coercion
 	var coerceRight collations.Coercion
 	var env = collations.Local()
+	var err error
 
 	if lt.Col.Collation != rt.Col.Collation {
 		merged, coerceLeft, coerceRight, err = env.MergeCollations(lt.Col, rt.Col, collations.CoercionOptions{
