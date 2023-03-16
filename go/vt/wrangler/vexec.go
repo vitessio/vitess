@@ -333,6 +333,7 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		// the workflow for the changes to take effect and we
 		// return result of the restart.
 		action = "start"
+	default:
 	}
 	unusedFlag := &pflag.Flag{}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, unusedFlag, unusedFlag, unusedFlag)
