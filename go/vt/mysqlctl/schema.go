@@ -24,6 +24,7 @@ import (
 	"strings"
 	"sync"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -109,6 +110,16 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 
 			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
 			if err != nil {
+				// there's a possible race condition: it could happen that a table was dropped in between reading
+				// the list of tables (collectBasicTableData(), earlier) and the point above where we investigate
+				// the table.
+				// This is fine. We identify the situation and continue to remove the table from our records
+				sqlErr, isSQLErr := mysql.NewSQLErrorFromError(err).(*mysql.SQLError)
+				if isSQLErr && sqlErr != nil && sqlErr.Number() == mysql.ERNoSuchTable {
+					td.Fields = nil
+					return
+				}
+
 				allErrors.RecordError(err)
 				cancel()
 				return
@@ -121,6 +132,8 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 	}
 
 	// Get primary columns concurrently.
+	// The below runs a single query on `INFORMATION_SCHEMA` and does not interact with the actual tables.
+	// It is therefore safe to run even if some tables are dropped in the interim.
 	colMap := map[string][]string{}
 	if len(tableNames) > 0 {
 		wg.Add(1)
@@ -146,7 +159,18 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 		td.PrimaryKeyColumns = colMap[td.Name]
 	}
 
-	sd.TableDefinitions = tds
+	sd.TableDefinitions = []*tabletmanagerdatapb.TableDefinition{}
+	for _, td := range tds {
+		if td.Fields == nil {
+			// means table was dropped before we called GetColumns
+			continue
+		}
+		if td.PrimaryKeyColumns == nil {
+			// means the table was dropped before we called getPrimaryKeyColumns()
+			continue
+		}
+		sd.TableDefinitions = append(sd.TableDefinitions, td)
+	}
 
 	tmutils.GenerateSchemaVersion(sd)
 	return sd, nil
