@@ -224,6 +224,36 @@ func (mysqlctl *MysqlctlProcess) CleanupFiles(tabletUID int) {
 	os.RemoveAll(path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)))
 }
 
+func (mysqlctl *MysqlctlProcess) CleanupFilesWithRetry(tabletUID int) error {
+	var lastError error
+	retries := 5
+	retryDelay := 1 * time.Second
+	paths := []string{
+		path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/data", tabletUID)),
+		path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/relay-logs", tabletUID)),
+		path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/tmp", tabletUID)),
+		path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/bin-logs", tabletUID)),
+		path.Join(os.Getenv("VTDATAROOT"), fmt.Sprintf("/vt_%010d/innodb", tabletUID)),
+	}
+
+	for _, path := range paths {
+		// something failed after all retries
+		if lastError != nil {
+			return lastError
+		}
+		for i := 1; i <= retries; i++ {
+			log.Infof("deleting directory %s", path)
+			lastError = os.RemoveAll(path)
+			if lastError == nil {
+				break
+			}
+			time.Sleep(retryDelay)
+		}
+	}
+
+	return lastError
+}
+
 // Connect returns a new connection to the underlying MySQL server
 func (mysqlctl *MysqlctlProcess) Connect(ctx context.Context, username string) (*mysql.Conn, error) {
 	params := mysql.ConnParams{

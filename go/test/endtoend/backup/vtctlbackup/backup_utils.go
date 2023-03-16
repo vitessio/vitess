@@ -231,9 +231,9 @@ func LaunchCluster(setupType int, streamMode string, stripes int, cDetails *Comp
 		return 1, err
 	}
 
-	if err := localCluster.StartVTOrc(keyspaceName); err != nil {
-		return 1, err
-	}
+	//if err := localCluster.StartVTOrc(keyspaceName); err != nil {
+	//	return 1, err
+	//}
 
 	return 0, nil
 }
@@ -399,6 +399,10 @@ type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 //  13. verify that don't have the data added after the first backup
 //  14. remove the backups
 func primaryBackup(t *testing.T) {
+	// We don't want VTOrc to fix this.
+	//localCluster.DisableVTOrcRecoveries(t)
+	//defer localCluster.EnableVTOrcRecoveries(t)
+
 	verifyInitialReplication(t)
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
@@ -715,7 +719,8 @@ func stopAllTablets() {
 		proc.Wait()
 	}
 	for _, tablet := range []*cluster.Vttablet{primary, replica1} {
-		os.RemoveAll(tablet.VttabletProcess.Directory)
+		tablet.MysqlctlProcess.CleanupFilesWithRetry(tablet.TabletUID)
+		//os.RemoveAll(tablet.VttabletProcess.Directory)
 	}
 }
 
@@ -780,21 +785,22 @@ func terminatedRestore(t *testing.T) {
 // Args:
 // tablet_type: 'replica' or 'rdonly'.
 func vtctlBackup(t *testing.T, tabletType string) {
+	restoreWaitForBackup(t, tabletType, nil, true)
 	// Start vtorc before running backups
-	vtorcProcess := localCluster.NewVTOrcProcess(cluster.VTOrcConfiguration{})
-	err := vtorcProcess.Setup()
-	require.NoError(t, err)
-	localCluster.VTOrcProcesses = append(localCluster.VTOrcProcesses, vtorcProcess)
+	//vtorcProcess := localCluster.NewVTOrcProcess(cluster.VTOrcConfiguration{})
+	//err := vtorcProcess.Setup()
+	//require.NoError(t, err)
+	//localCluster.VTOrcProcesses = append(localCluster.VTOrcProcesses, vtorcProcess)
 
 	// StopReplication on replica1. We verify that the replication works fine later in
 	// verifyInitialReplication. So this will also check that VTOrc is running.
-	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
-	require.Nil(t, err)
+	//err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
+	//require.Nil(t, err)
 
 	verifyInitialReplication(t)
-	restoreWaitForBackup(t, tabletType, nil, true)
+	//restoreWaitForBackup(t, tabletType, nil, true)
 
-	err = localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
+	err := localCluster.VtctlclientProcess.ExecuteCommand("Backup", replica1.Alias)
 	require.Nil(t, err)
 
 	backups := localCluster.VerifyBackupCount(t, shardKsName, 1)
@@ -809,9 +815,9 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
 
 	// Stop VTOrc
-	err = localCluster.VTOrcProcesses[0].TearDown()
-	localCluster.VTOrcProcesses = nil
-	require.NoError(t, err)
+	//err = localCluster.VTOrcProcesses[0].TearDown()
+	//localCluster.VTOrcProcesses = nil
+	//require.NoError(t, err)
 
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)
