@@ -719,7 +719,7 @@ var commands = []commandGroup{
 			{
 				name:   "Workflow",
 				method: commandWorkflow,
-				params: "[--dry-run] [--cells=<cells>] [--tablet-types=<types>] [--on-ddl=<value>] <ks.workflow> <action>",
+				params: "[--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]",
 				help:   "Start/Stop/Update/Delete/Show/ListAll/Tags Workflow on all target tablets in workflow. Example: Workflow merchant.morders Start",
 			},
 		},
@@ -3609,7 +3609,7 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 }
 
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
-	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] keyspace[.workflow] start/stop/update/delete/show/listall/tags [<tags>]"
+	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]"
 	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of Workflow and only reports the final query and list of tablets on which the operation will be applied")
 	subFlags.String("cells", "", "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
 	subFlags.String("tablet-types", "", "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
