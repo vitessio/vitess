@@ -282,23 +282,23 @@ func (c *Conn) parseRow(data []byte, fields []*querypb.Field, reader func([]byte
 //
 // 1. if the server closes the connection when no command is in flight:
 //
-//   1.1 unix: WriteComQuery will fail with a 'broken pipe', and we'll
-//       return CRServerGone(2006).
+//		1.1 unix: WriteComQuery will fail with a 'broken pipe', and we'll
+//		    return CRServerGone(2006).
 //
-//   1.2 tcp: WriteComQuery will most likely work, but readComQueryResponse
-//       will fail, and we'll return CRServerLost(2013).
+//		1.2 tcp: WriteComQuery will most likely work, but readComQueryResponse
+//		    will fail, and we'll return CRServerLost(2013).
 //
-//       This is because closing a TCP socket on the server side sends
-//       a FIN to the client (telling the client the server is done
-//       writing), but on most platforms doesn't send a RST.  So the
-//       client has no idea it can't write. So it succeeds writing data, which
-//       *then* triggers the server to send a RST back, received a bit
-//       later. By then, the client has already started waiting for
-//       the response, and will just return a CRServerLost(2013).
-//       So CRServerGone(2006) will almost never be seen with TCP.
+//		    This is because closing a TCP socket on the server side sends
+//		    a FIN to the client (telling the client the server is done
+//		    writing), but on most platforms doesn't send a RST.  So the
+//		    client has no idea it can't write. So it succeeds writing data, which
+//		    *then* triggers the server to send a RST back, received a bit
+//		    later. By then, the client has already started waiting for
+//		    the response, and will just return a CRServerLost(2013).
+//		    So CRServerGone(2006) will almost never be seen with TCP.
 //
-// 2. if the server closes the connection when a command is in flight,
-//    readComQueryResponse will fail, and we'll return CRServerLost(2013).
+//	 2. if the server closes the connection when a command is in flight,
+//	    readComQueryResponse will fail, and we'll return CRServerLost(2013).
 func (c *Conn) ExecuteFetch(query string, maxrows int, wantfields bool) (result *sqltypes.Result, err error) {
 	result, _, err = c.ExecuteFetchMulti(query, maxrows, wantfields)
 	return result, err
@@ -576,7 +576,7 @@ func (c *Conn) parseComStmtExecute(prepareData map[uint32]*PrepareData, data []b
 	}
 
 	if prepare.ParamsCount > 0 {
-		bitMap, pos, ok = readBytes(payload, pos, int((prepare.ParamsCount+7)/8))
+		bitMap, pos, ok = readBytes(payload, pos, (int(prepare.ParamsCount)+7)/8)
 		if !ok {
 			return stmtID, 0, NewSQLError(CRMalformedPacket, SSUnknownSQLState, "reading NULL-bitmap failed")
 		}

@@ -18,11 +18,16 @@ package vtgate
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	_ "github.com/go-sql-driver/mysql"
 
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/test/endtoend/cluster"
@@ -874,4 +879,48 @@ func TestCast(t *testing.T) {
 	utils.AssertMatches(t, conn, "select cast('3.2' as float)", `[[FLOAT32(3.2)]]`)
 	utils.AssertMatches(t, conn, "select cast('3.2' as double)", `[[FLOAT64(3.2)]]`)
 	utils.AssertMatches(t, conn, "select cast('3.2' as unsigned)", `[[UINT64(3)]]`)
+}
+
+// This test ensures that we support PREPARE statement with 65530 parameters.
+// It opens a MySQL connection using the go-mysql driver and execute a select query
+// it then checks the result contains the proper rows and that it's not failing.
+func TestHighNumberOfParams(t *testing.T) {
+	defer cluster.PanicHandler(t)
+	ctx := context.Background()
+	conn, err := mysql.Connect(ctx, &vtParams)
+	require.NoError(t, err)
+	defer conn.Close()
+
+	utils.Exec(t, conn, "insert into t1(id1, id2) values (0, 0), (1, 1), (2, 2), (3, 3), (4, 4)")
+
+	paramCount := 65530
+
+	// create the value and argument slices used to build the prepare stmt
+	var vals []any
+	var params []string
+	for i := 0; i < paramCount; i++ {
+		vals = append(vals, strconv.Itoa(i))
+		params = append(params, "?")
+	}
+
+	// connect to the vitess cluster
+	db, err := sql.Open("mysql", fmt.Sprintf("@tcp(%s:%v)/%s", vtParams.Host, vtParams.Port, vtParams.DbName))
+	require.NoError(t, err)
+
+	// run the query
+	r, err := db.Query(fmt.Sprintf("SELECT /*vt+ PLANNER=Gen4 QUERY_TIMEOUT_MS=10000 */ id1 FROM t1 WHERE id1 in (%s) ORDER BY id1 ASC", strings.Join(params, ", ")), vals...)
+	require.NoError(t, err)
+
+	// check the results we got, we should get 5 rows with each: 0, 1, 2, 3, 4
+	// count is the row number we are currently visiting, also correspond to the
+	// column value we expect.
+	count := 0
+	for r.Next() {
+		j := -1
+		err := r.Scan(&j)
+		require.NoError(t, err)
+		require.Equal(t, j, count)
+		count++
+	}
+	require.Equal(t, 5, count)
 }
