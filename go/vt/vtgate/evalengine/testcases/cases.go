@@ -46,6 +46,7 @@ var Cases = []TestCase{
 	{Run: FloatFormatting},
 	{Run: UnderscoreAndPercentage},
 	{Run: Types},
+	{Run: Arithmetic},
 	{Run: HexArithmetic},
 	{Run: NumericTypes},
 	{Run: NegateArithmetic},
@@ -532,6 +533,24 @@ func Types(yield Query) {
 
 	for _, query := range queries {
 		yield(query, nil)
+	}
+}
+
+func Arithmetic(yield Query) {
+	operators := []string{"+", "-", "*", "/"}
+
+	for _, op := range operators {
+		for _, lhs := range inputConversions {
+			for _, rhs := range inputConversions {
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+			}
+		}
+
+		for _, lhs := range inputBitwise {
+			for _, rhs := range inputBitwise {
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+			}
+		}
 	}
 }
 

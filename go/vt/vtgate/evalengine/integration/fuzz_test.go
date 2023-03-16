@@ -296,7 +296,13 @@ type mismatch struct {
 
 const tolerance = 1e-14
 
-func close(a, b float64) bool {
+func close(a, b float64, decimals uint32) bool {
+	if decimals > 0 {
+		ratio := math.Pow(10, float64(decimals))
+		a = math.Round(a*ratio) / ratio
+		b = math.Round(b*ratio) / ratio
+	}
+
 	if a == b {
 		return true
 	}
@@ -306,7 +312,7 @@ func close(a, b float64) bool {
 	return math.Abs((a-b)/b) < tolerance
 }
 
-func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID) string {
+func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) string {
 	if localErr != nil {
 		if remoteErr == nil {
 			return fmt.Sprintf("%v; mysql response: %s", localErr, remoteVal)
@@ -344,7 +350,7 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 		if err != nil {
 			return fmt.Sprintf("error converting remote value to float: %v", err)
 		}
-		if !close(localFloat, remoteFloat) {
+		if !close(localFloat, remoteFloat, decimals) {
 			return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
@@ -362,5 +368,5 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 }
 
 func (cr *mismatch) Error() string {
-	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown)
+	return compareResult(cr.localErr, cr.remoteErr, cr.localVal, cr.remoteVal, collations.Unknown, collations.Unknown, 0)
 }

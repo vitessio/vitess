@@ -251,6 +251,10 @@ func TestCompiler(t *testing.T) {
 			expression: `CAST(CAST(true AS JSON) AS BINARY)`,
 			result:     `BLOB("true")`,
 		},
+		{
+			expression: `JSON_ARRAY(true, 1.0)`,
+			result:     `JSON("[true, 1.0]")`,
+		},
 	}
 
 	for _, tc := range testCases {

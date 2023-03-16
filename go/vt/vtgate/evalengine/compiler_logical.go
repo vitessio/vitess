@@ -27,7 +27,7 @@ func (c *compiler) compileIs(is *IsExpr) (ctype, error) {
 		return ctype{}, err
 	}
 	c.asm.Is(is.Check)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
 
 func (c *compiler) compileCase(cs *CaseExpr) (ctype, error) {

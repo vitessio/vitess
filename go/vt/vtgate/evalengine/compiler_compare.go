@@ -28,7 +28,7 @@ func (c *compiler) compileComparisonTuple(expr *ComparisonExpr) (ctype, error) {
 	switch expr.Op.(type) {
 	case compareNullSafeEQ:
 		c.asm.CmpTupleNullsafe()
-		return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+		return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 	case compareEQ:
 		c.asm.CmpTuple(true)
 		c.asm.Cmp_eq_n()
@@ -50,7 +50,7 @@ func (c *compiler) compileComparisonTuple(expr *ComparisonExpr) (ctype, error) {
 	default:
 		panic("invalid comparison operator")
 	}
-	return ctype{Type: sqltypes.Int64, Flag: flagNullable, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
 }
 
 func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
@@ -100,7 +100,7 @@ func (c *compiler) compileComparison(expr *ComparisonExpr) (ctype, error) {
 		c.asm.CmpNum_ff()
 	}
 
-	cmptype := ctype{Type: sqltypes.Int64, Col: collationNumeric}
+	cmptype := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}
 
 	switch expr.Op.(type) {
 	case compareEQ:
@@ -323,7 +323,7 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 	}
 
 	c.asm.jumpDestination(skip)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
 
 func (c *compiler) compileInTable(lhs ctype, rhs TupleExpr) map[vthash.Hash]struct{} {
@@ -374,5 +374,5 @@ func (c *compiler) compileIn(expr *InExpr) (ctype, error) {
 		}
 		c.asm.In_slow(expr.Negate)
 	}
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }

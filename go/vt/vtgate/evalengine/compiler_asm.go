@@ -819,10 +819,21 @@ func (asm *assembler) Convert_iu(offset int) {
 	}, "CONV INT64(SP-%d), UINT64", offset)
 }
 
-func (asm *assembler) Convert_nj(offset int) {
+func (asm *assembler) Convert_nj(offset int, isBool bool) {
 	asm.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-offset].(evalNumeric)
-		vm.stack[vm.sp-offset] = evalConvert_nj(arg)
+		if intArg, ok := arg.(*evalInt64); isBool && ok {
+			switch intArg.i {
+			case 0:
+				vm.stack[vm.sp-offset] = json.ValueFalse
+			case 1:
+				vm.stack[vm.sp-offset] = json.ValueTrue
+			default:
+				vm.stack[vm.sp-offset] = json.NewNumber(intArg.ToRawBytes())
+			}
+		} else {
+			vm.stack[vm.sp-offset] = json.NewNumber(arg.ToRawBytes())
+		}
 		return 1
 	}, "CONV numeric(SP-%d), JSON")
 }
@@ -1988,24 +1999,6 @@ func (asm *assembler) PushColumn_u(offset int) {
 
 func (asm *assembler) PushLiteral(lit eval) error {
 	asm.adjustStack(1)
-
-	if lit == evalBoolTrue {
-		asm.emit(func(vm *VirtualMachine) int {
-			vm.stack[vm.sp] = evalBoolTrue
-			vm.sp++
-			return 1
-		}, "PUSH true")
-		return nil
-	}
-
-	if lit == evalBoolFalse {
-		asm.emit(func(vm *VirtualMachine) int {
-			vm.stack[vm.sp] = evalBoolFalse
-			vm.sp++
-			return 1
-		}, "PUSH false")
-		return nil
-	}
 
 	switch lit := lit.(type) {
 	case *evalInt64:

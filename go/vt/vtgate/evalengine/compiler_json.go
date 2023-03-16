@@ -53,7 +53,7 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 	case sqltypes.Float64:
 		c.asm.Convert_fj(offset)
 	case sqltypes.Int64, sqltypes.Uint64, sqltypes.Decimal:
-		c.asm.Convert_nj(offset)
+		c.asm.Convert_nj(offset, doct.Flag&flagIsBoolean != 0)
 	case sqltypes.VarChar:
 		c.asm.Convert_cj(offset)
 	case sqltypes.VarBinary:
@@ -224,7 +224,7 @@ func (c *compiler) compileFn_JSON_CONTAINS_PATH(call *builtinJSONContainsPath) (
 	}
 
 	c.asm.Fn_JSON_CONTAINS_PATH(match, paths)
-	return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
+	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
 
 func (c *compiler) compileFn_JSON_KEYS(call *builtinJSONKeys) (ctype, error) {

@@ -141,6 +141,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 
 	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
+	var decimals uint32
 	if localErr == nil {
 		v := local.Value()
 		if debugCheckCollations {
@@ -166,6 +167,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	if remoteErr == nil {
 		if debugNormalize {
 			remoteVal = normalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
+			decimals = remote.Fields[0].Decimals
 		} else {
 			remoteVal = remote.Rows[0][0]
 		}
@@ -179,7 +181,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		}
 	}
 
-	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation); diff != "" {
+	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); diff != "" {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", diff, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
 		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
