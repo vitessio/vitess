@@ -24,6 +24,7 @@ package txthrottler
 import (
 	"testing"
 	"time"
+
 	"vitess.io/vitess/go/vt/throttler"
 
 	"github.com/golang/mock/gomock"

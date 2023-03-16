@@ -147,7 +147,7 @@ func newThrottlerFromConfig(manager *managerImpl, name, unit string, threadCount
 	if err != nil {
 		return nil, fmt.Errorf("invalid max replication lag config: %w", err)
 	}
-	if maxRateModuleMaxRate >= 0 {
+	if maxRateModuleMaxRate < 0 {
 		return nil, fmt.Errorf("maxRate must be >= 0: %v", maxRateModuleMaxRate)
 	}
 
