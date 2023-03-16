@@ -23,7 +23,7 @@ import (
 
 	"vitess.io/vitess/go/vt/log"
 
-	"github.com/rohit-nayak-ps/ajson"
+	"github.com/spyzhov/ajson"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )

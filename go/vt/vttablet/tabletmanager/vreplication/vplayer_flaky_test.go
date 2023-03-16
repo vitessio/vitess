@@ -29,7 +29,7 @@ import (
 
 	"vitess.io/vitess/go/mysql"
 
-	"github.com/rohit-nayak-ps/ajson"
+	"github.com/spyzhov/ajson"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/vt/log"
