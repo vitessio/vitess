@@ -3870,14 +3870,14 @@ func TestSelectAggregationRandom(t *testing.T) {
 		conns = append(conns, sbc)
 
 		sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-			sqltypes.MakeTestFields("a|b|c", "int64|int64|int64"),
-			"null|null|null",
+			sqltypes.MakeTestFields("a|b", "int64|int64"),
+			"null|null",
 		)})
 	}
 
 	conns[0].SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
-		sqltypes.MakeTestFields("a|b|c", "int64|int64|int64"),
-		"10|1|10",
+		sqltypes.MakeTestFields("a|b", "int64|int64"),
+		"10|1",
 	)})
 
 	executor := createExecutor(serv, cell, resolver)
