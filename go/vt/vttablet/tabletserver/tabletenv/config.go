@@ -32,9 +32,11 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 )
 
 // These constants represent values for various config parameters.
@@ -71,6 +73,7 @@ var (
 	unhealthyThreshold           time.Duration
 	transitionGracePeriod        time.Duration
 	enableReplicationReporter    bool
+	txThrottlerTabletTypes       []string
 )
 
 func init() {
@@ -142,7 +145,7 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
 	flagutil.DualFormatStringVar(fs, &currentConfig.TxThrottlerConfig, "tx_throttler_config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message.")
 	flagutil.DualFormatStringListVar(fs, &currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
-	fs.Var((*topoproto.TabletTypeListFlag)(&currentConfig.TxThrottlerTabletTypes), "tx-throttler-tablet-types", "A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly.")
+	fs.StringSliceVar(&txThrottlerTabletTypes, "tx-throttler-tablet-types", []string{"replica"}, "A comma-separated list of tablet types. Only tablets of this type are monitored for replication lag by the transaction throttler. Supported types are replica and/or rdonly.")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	fs.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -454,6 +457,9 @@ func (c *TabletConfig) Verify() error {
 	if err := c.verifyTransactionLimitConfig(); err != nil {
 		return err
 	}
+	if err := c.verifyTxThrottlerConfig(); err != nil {
+		return err
+	}
 	if v := c.HotRowProtection.MaxQueueSize; v <= 0 {
 		return fmt.Errorf("-hot_row_protection_max_queue_size must be > 0 (specified value: %v)", v)
 	}
@@ -495,6 +501,27 @@ func (c *TabletConfig) verifyTransactionLimitConfig() error {
 	}
 	if limit := int(c.TransactionLimitPerUser * float64(c.TxPool.Size)); limit == 0 {
 		return fmt.Errorf("effective transaction limit per user is 0 due to rounding, increase -transaction_limit_per_user")
+	}
+	return nil
+}
+
+// verifyTxThrottlerConfig checks the TxThrottler related config for sanity.
+func (c *TabletConfig) verifyTxThrottlerConfig() error {
+	for _, tabletTypeName := range txThrottlerTabletTypes {
+		tabletType, err := topoproto.ParseTabletType(tabletTypeName)
+		if err != nil {
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "cannot parse tablet type: %v", err)
+		}
+
+		switch tabletType {
+		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
+			currentConfig.TxThrottlerTabletTypes = append(
+				currentConfig.TxThrottlerTabletTypes,
+				tabletType,
+			)
+		default:
+			return vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported tablet type %q", tabletType)
+		}
 	}
 	return nil
 }
@@ -565,7 +592,7 @@ var defaultConfig = TabletConfig{
 	EnableTxThrottler:           false,
 	TxThrottlerConfig:           defaultTxThrottlerConfig(),
 	TxThrottlerHealthCheckCells: []string{},
-	TxThrottlerTabletTypes:      []topodatapb.TabletType{topodatapb.TabletType_REPLICA},
+	TxThrottlerTabletTypes:      []topodatapb.TabletType{},
 
 	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
 

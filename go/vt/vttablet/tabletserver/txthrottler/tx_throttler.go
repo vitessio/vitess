@@ -119,15 +119,6 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrott
 		return newTxThrottler(env, &txThrottlerConfig{enabled: false})
 	}
 
-	for _, tabletType := range env.Config().TxThrottlerTabletTypes {
-		switch tabletType {
-		case topodatapb.TabletType_REPLICA, topodatapb.TabletType_RDONLY:
-			continue
-		default:
-			return nil, fmt.Errorf("%q tablet type is not supported", tabletType)
-		}
-	}
-
 	var throttlerConfig throttlerdatapb.Configuration
 	if err := prototext.Unmarshal([]byte(env.Config().TxThrottlerConfig), &throttlerConfig); err != nil {
 		return nil, err
@@ -141,7 +132,7 @@ func tryCreateTxThrottler(env tabletenv.Env, topoServer *topo.Server) (*TxThrott
 	return newTxThrottler(env, &txThrottlerConfig{
 		enabled:          true,
 		topoServer:       topoServer,
-		tabletConfig:     env.Config(),
+		tabletTypes:      env.Config().TxThrottlerTabletTypes,
 		throttlerConfig:  &throttlerConfig,
 		healthCheckCells: healthCheckCells,
 	})
@@ -156,11 +147,13 @@ type txThrottlerConfig struct {
 	enabled bool
 
 	topoServer      *topo.Server
-	tabletConfig    *tabletenv.TabletConfig
 	throttlerConfig *throttlerdatapb.Configuration
 	// healthCheckCells stores the cell names in which running vttablets will be monitored for
 	// replication lag.
 	healthCheckCells []string
+
+	// tabletTypes stores the tablet types for throttling
+	tabletTypes []topodatapb.TabletType
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -187,7 +180,7 @@ type TopologyWatcherInterface interface {
 
 // txThrottlerState holds the state of an open TxThrottler object.
 type txThrottlerState struct {
-	tabletConfig *tabletenv.TabletConfig
+	config *txThrottlerConfig
 
 	// throttleMu serializes calls to throttler.Throttler.Throttle(threadId).
 	// That method is required to be called in serial for each threadId.
@@ -312,8 +305,8 @@ func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string
 		return nil, err
 	}
 	result := &txThrottlerState{
-		tabletConfig: config.tabletConfig,
-		throttler:    t,
+		config:    config,
+		throttler: t,
 	}
 	createTxThrottlerHealthCheck(config, result, cell)
 
@@ -383,7 +376,7 @@ func (ts *txThrottlerState) deallocateResources() {
 func (ts *txThrottlerState) StatsUpdate(tabletStats *discovery.TabletHealth) {
 	// Monitor tablets for replication lag if they have a tablet
 	// type specified by the --tx_throttler_tablet_types flag.
-	for _, expectedTabletType := range ts.tabletConfig.TxThrottlerTabletTypes {
+	for _, expectedTabletType := range ts.config.tabletTypes {
 		if tabletStats.Target.TabletType == expectedTabletType {
 			ts.throttler.RecordReplicationLag(time.Now(), tabletStats)
 			return

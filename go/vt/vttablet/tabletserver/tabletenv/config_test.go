@@ -324,3 +324,21 @@ func TestFlags(t *testing.T) {
 	want.SanitizeLogMessages = true
 	assert.Equal(t, want, currentConfig)
 }
+
+func TestVerifyTxThrottlerConfig(t *testing.T) {
+	{
+		txThrottlerTabletTypes = []string{""}
+		config := NewDefaultConfig()
+		assert.NotNil(t, config.verifyTxThrottlerConfig())
+	}
+	{
+		txThrottlerTabletTypes = []string{"thisshouldfail"}
+		config := NewDefaultConfig()
+		assert.NotNil(t, config.verifyTxThrottlerConfig())
+	}
+	{
+		txThrottlerTabletTypes = []string{"replica", "rdonly"}
+		config := NewDefaultConfig()
+		assert.Nil(t, config.verifyTxThrottlerConfig())
+	}
+}
