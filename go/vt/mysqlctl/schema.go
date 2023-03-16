@@ -165,10 +165,6 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 			// means table was dropped before we called GetColumns
 			continue
 		}
-		if td.PrimaryKeyColumns == nil {
-			// means the table was dropped before we called getPrimaryKeyColumns()
-			continue
-		}
 		sd.TableDefinitions = append(sd.TableDefinitions, td)
 	}
 
