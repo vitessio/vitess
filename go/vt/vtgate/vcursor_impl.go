@@ -841,6 +841,12 @@ func (vc *vcursorImpl) SetPlannerVersion(v plancontext.PlannerVersion) {
 	vc.safeSession.GetOrCreateOptions().PlannerVersion = v
 }
 
+func (vc *vcursorImpl) SetCriticality(criticality string) {
+	if criticality != "" {
+		vc.safeSession.GetOrCreateOptions().Criticality = criticality
+	}
+}
+
 // SetConsolidator implements the SessionActions interface
 func (vc *vcursorImpl) SetConsolidator(consolidator querypb.ExecuteOptions_Consolidator) {
 	// Avoid creating session Options when they do not yet exist and the

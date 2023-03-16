@@ -137,9 +137,11 @@ func registerTabletEnvFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&currentConfig.TwoPCEnable, "twopc_enable", defaultConfig.TwoPCEnable, "if the flag is on, 2pc is enabled. Other 2pc flags must be supplied.")
 	fs.StringVar(&currentConfig.TwoPCCoordinatorAddress, "twopc_coordinator_address", defaultConfig.TwoPCCoordinatorAddress, "address of the (VTGate) process(es) that will be used to notify of abandoned transactions.")
 	SecondsVar(fs, &currentConfig.TwoPCAbandonAge, "twopc_abandon_age", defaultConfig.TwoPCAbandonAge, "time in seconds. Any unresolved transaction older than this time will be sent to the coordinator to be resolved.")
+	// Tx throttler config
 	flagutil.DualFormatBoolVar(fs, &currentConfig.EnableTxThrottler, "enable_tx_throttler", defaultConfig.EnableTxThrottler, "If true replication-lag-based throttling on transactions will be enabled.")
 	flagutil.DualFormatStringVar(fs, &currentConfig.TxThrottlerConfig, "tx_throttler_config", defaultConfig.TxThrottlerConfig, "The configuration of the transaction throttler as a text formatted throttlerdata.Configuration protocol buffer message")
 	flagutil.DualFormatStringListVar(fs, &currentConfig.TxThrottlerHealthCheckCells, "tx_throttler_healthcheck_cells", defaultConfig.TxThrottlerHealthCheckCells, "A comma-separated list of cells. Only tabletservers running in these cells will be monitored for replication lag by the transaction throttler.")
+	fs.IntVar(&currentConfig.TxThrottlerDefaultCriticality, "tx-throttler-default-criticality", defaultConfig.TxThrottlerDefaultCriticality, "Default criticality assigned to queries that lack criticality information.")
 
 	fs.BoolVar(&enableHotRowProtection, "enable_hot_row_protection", false, "If true, incoming transactions for the same row (range) will be queued and cannot consume all txpool slots.")
 	fs.BoolVar(&enableHotRowProtectionDryRun, "enable_hot_row_protection_dry_run", false, "If true, hot row protection is not enforced but logs if transactions would have been queued.")
@@ -312,9 +314,10 @@ type TabletConfig struct {
 	TwoPCCoordinatorAddress string  `json:"-"`
 	TwoPCAbandonAge         Seconds `json:"-"`
 
-	EnableTxThrottler           bool     `json:"-"`
-	TxThrottlerConfig           string   `json:"-"`
-	TxThrottlerHealthCheckCells []string `json:"-"`
+	EnableTxThrottler             bool     `json:"-"`
+	TxThrottlerConfig             string   `json:"-"`
+	TxThrottlerHealthCheckCells   []string `json:"-"`
+	TxThrottlerDefaultCriticality int      `json:"-"`
 
 	EnableLagThrottler bool `json:"-"`
 	EnableTableGC      bool `json:"-"` // can be turned off programmatically by tests
@@ -562,9 +565,10 @@ var defaultConfig = TabletConfig{
 	DeprecatedCacheResultFields:             true,
 	SignalWhenSchemaChange:                  true,
 
-	EnableTxThrottler:           false,
-	TxThrottlerConfig:           defaultTxThrottlerConfig(),
-	TxThrottlerHealthCheckCells: []string{},
+	EnableTxThrottler:             false,
+	TxThrottlerConfig:             defaultTxThrottlerConfig(),
+	TxThrottlerHealthCheckCells:   []string{},
+	TxThrottlerDefaultCriticality: 0, // This leads to all queries being candidates to throttle
 
 	EnableLagThrottler: false, // Feature flag; to switch to 'true' at some stage in the future
 

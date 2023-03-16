@@ -490,7 +490,14 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 		target, options, false, /* allowOnShutdown */
 		func(ctx context.Context, logStats *tabletenv.LogStats) error {
 			startTime := time.Now()
-			if tsv.txThrottler.Throttle() {
+			criticality := tsv.config.TxThrottlerDefaultCriticality
+			if options != nil && options.Criticality != "" {
+				optionsCriticality, err := strconv.Atoi(options.Criticality)
+				if err == nil && optionsCriticality >= 0 && optionsCriticality <= 100 {
+					criticality = optionsCriticality
+				}
+			}
+			if tsv.txThrottler.Throttle(criticality) {
 				return vterrors.Errorf(vtrpcpb.Code_RESOURCE_EXHAUSTED, "Transaction throttled")
 			}
 			var connSetting *pools.Setting

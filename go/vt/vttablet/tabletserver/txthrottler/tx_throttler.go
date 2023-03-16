@@ -18,6 +18,7 @@ package txthrottler
 
 import (
 	"fmt"
+	"math/rand"
 	"strings"
 	"sync"
 	"time"
@@ -269,7 +270,7 @@ func (t *TxThrottler) Close() {
 // It returns true if the transaction should not proceed (the caller
 // should back off). Throttle requires that Open() was previously called
 // successfully.
-func (t *TxThrottler) Throttle() (result bool) {
+func (t *TxThrottler) Throttle(criticality int) (result bool) {
 	if !t.config.enabled {
 		return false
 	}
@@ -281,7 +282,10 @@ func (t *TxThrottler) Throttle() (result bool) {
 	if result {
 		t.requestsThrottled.Add(1)
 	}
-	return result
+
+	// Throttle according to both what the throttle state says, and the criticality. Workloads with higher criticality
+	// are less likely to be throttled.
+	return result && rand.Intn(100) < 100-int(criticality)
 }
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
