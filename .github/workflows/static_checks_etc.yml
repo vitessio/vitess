@@ -222,3 +222,4 @@ jobs:
           echo 'We wish to maintain a consistent changelog directory, please run `go run ./go/tools/releases/releases.go`, commit and push again.'
           echo 'Running `go run ./go/tools/releases/releases.go` on CI yields the following changes:'
           echo "$output"
+          echo ""

@@ -92,7 +92,7 @@ func main() {
 }
 
 func execReadMeTemplateWithDir(d dir, tmpl string) error {
-	rootRM, err := os.OpenFile(path.Join(d.Path, "README.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0666)
+	rootRM, err := os.OpenFile(path.Join(d.Path, "README.md"), os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0640)
 	if err != nil {
 		return err
 	}
@@ -129,7 +129,7 @@ func getDirs(curDir dir) (dir, error) {
 			curDir.Changelog = entry.Name()
 		case strings.Contains(entry.Name(), "release_notes.md"):
 			curDir.ReleaseNotes = entry.Name()
-		case strings.Contains(entry.Name(), "TEAM.md"):
+		case strings.Contains(entry.Name(), "team.md"):
 			curDir.Team = entry.Name()
 		}
 	}

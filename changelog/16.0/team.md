@@ -1,4 +1,4 @@
-## Release Team for v17
+## Release Team for v16
 
 - **Lead:** Manan Gupta ([GuptaManan100](https://github.com/GuptaManan100)) manan@planetscale.com
 - **Shadow:** Matt Lord ([mattlord](https://github.com/mattlord)) mlord@planetscale.com
