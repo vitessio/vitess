@@ -278,7 +278,7 @@ INPUT
 select mbrwithin(ST_GeomFromText("point(2 4)"), ST_GeomFromText("point(2 4)"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('point(2 4)'), ST_GeomFromText('point(2 4)')) from dual
+select mbrwithin(st_geomfromtext('point(2 4)'), st_geomfromtext('point(2 4)')) from dual
 END
 INPUT
 select concat(@a, table_name), @a, table_name from information_schema.tables where table_schema = 'test' order by table_name;
@@ -440,7 +440,7 @@ INPUT
 select ST_Crosses(ST_GeomFromText('MULTIPOINT(1 0,15 0,10 10)'),ST_GeomFromText('MULTILINESTRING((15 0,20 0,20 20),(10 10,20 20,15 0))')) as result;
 END
 OUTPUT
-select ST_Crosses(ST_GeomFromText('MULTIPOINT(1 0,15 0,10 10)'), ST_GeomFromText('MULTILINESTRING((15 0,20 0,20 20),(10 10,20 20,15 0))')) as result from dual
+select ST_Crosses(st_geomfromtext('MULTIPOINT(1 0,15 0,10 10)'), st_geomfromtext('MULTILINESTRING((15 0,20 0,20 20),(10 10,20 20,15 0))')) as result from dual
 END
 INPUT
 select std(s1/s2) from bug22555 where i=1 group by i;
@@ -800,7 +800,7 @@ INPUT
 select st_contains(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_contains(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_contains(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select space(-18446744073709551617);
@@ -860,7 +860,7 @@ INPUT
 select ST_astext(ST_intersection(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 1, 0 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_intersection(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
+select ST_astext(ST_intersection(st_geomfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geomfromtext('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
 END
 INPUT
 select * from t1 left join t2 on m_id = id where match(d, e, f) against ('+aword +bword' in boolean mode);
@@ -1178,7 +1178,7 @@ INPUT
 select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_difference(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select a as like_l from t1 where a like 'l%';
@@ -1238,13 +1238,13 @@ INPUT
 select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_crosses(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select ST_astext(st_intersection(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_intersection(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_intersection(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select distinct t1.a from t1,t2 order by t2.a;
@@ -1622,7 +1622,7 @@ INPUT
 select st_touches(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'));
 END
 OUTPUT
-select st_touches(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')) from dual
+select st_touches(st_geometryfromtext('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')) from dual
 END
 INPUT
 select 'c' like '_' as want0;
@@ -1778,7 +1778,7 @@ INPUT
 select mbrcontains(ST_GeomFromText("polygon((2 2, 10 2, 10 10, 2 10, 2 2))"), ST_GeomFromText("point(2 4)"));
 END
 OUTPUT
-select mbrcontains(ST_GeomFromText('polygon((2 2, 10 2, 10 10, 2 10, 2 2))'), ST_GeomFromText('point(2 4)')) from dual
+select mbrcontains(st_geomfromtext('polygon((2 2, 10 2, 10 10, 2 10, 2 2))'), st_geomfromtext('point(2 4)')) from dual
 END
 INPUT
 select t1.*,t2.* from { oj t2 left outer join t1 on (t1.a=t2.a) };
@@ -2036,7 +2036,7 @@ INPUT
 select mbrwithin(ST_GeomFromText("point(2 4)"), ST_GeomFromText("polygon((2 2, 10 2, 10 10, 2 10, 2 2))"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('point(2 4)'), ST_GeomFromText('polygon((2 2, 10 2, 10 10, 2 10, 2 2))')) from dual
+select mbrwithin(st_geomfromtext('point(2 4)'), st_geomfromtext('polygon((2 2, 10 2, 10 10, 2 10, 2 2))')) from dual
 END
 INPUT
 select locate('HE','hello' collate utf8_bin);
@@ -2060,7 +2060,7 @@ INPUT
 select ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))'));
 END
 OUTPUT
-select ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))')) from dual
+select ST_Disjoint(st_geomfromtext('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), st_geomfromtext('POLYGON((10 10, 10 15, 15 15, 15 10, 10 10))')) from dual
 END
 INPUT
 select insert('hello', -4294967295, 1, 'hi');
@@ -2180,7 +2180,7 @@ INPUT
 select mbrwithin(ST_GeomFromText("linestring(1 0, 2 0)"), ST_GeomFromText("linestring(0 0, 3 0)"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('linestring(1 0, 2 0)'), ST_GeomFromText('linestring(0 0, 3 0)')) from dual
+select mbrwithin(st_geomfromtext('linestring(1 0, 2 0)'), st_geomfromtext('linestring(0 0, 3 0)')) from dual
 END
 INPUT
 select locate(_utf8mb4 0xD0B1, _utf8mb4 0xD0B0D091D0B2 collate utf8mb4_bin);
@@ -2402,7 +2402,7 @@ INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result;
 END
 OUTPUT
-select ST_astext(st_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
+select ST_astext(st_symdifference(st_geomfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geomfromtext('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
 END
 INPUT
 select TRIGGER_NAME from information_schema.triggers where trigger_schema='test';
@@ -2570,7 +2570,7 @@ INPUT
 select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(0 0, 4 4)')));
 END
 OUTPUT
-select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(0 0, 4 4)'))) from dual
+select ST_astext(st_difference(st_geomfromtext('multipoint(2 2, 3 3)'), st_geomfromtext('multipoint(0 0, 4 4)'))) from dual
 END
 INPUT
 select a1,a2,b, max(c) from t1 where (c > 'b1') or (c <= 'g1') group by a1,a2,b;
@@ -2714,7 +2714,7 @@ INPUT
 select st_touches(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_touches(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_touches(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select a, t1.* as 'with_alias' from t1;
@@ -2852,7 +2852,7 @@ INPUT
 select ST_Contains(ST_GeomFromText('POLYGON((0 0,5 0,5 5,0 5,0 0))'),ST_GeomFromText('LINESTRING(1 2,5 5)')) as result;
 END
 OUTPUT
-select ST_Contains(ST_GeomFromText('POLYGON((0 0,5 0,5 5,0 5,0 0))'), ST_GeomFromText('LINESTRING(1 2,5 5)')) as result from dual
+select ST_Contains(st_geomfromtext('POLYGON((0 0,5 0,5 5,0 5,0 0))'), st_geomfromtext('LINESTRING(1 2,5 5)')) as result from dual
 END
 INPUT
 select * from t1 where a like '%PESA%';
@@ -2882,7 +2882,7 @@ INPUT
 select ST_astext(st_symdifference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_symdifference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_symdifference(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select @@session.transaction_isolation;
@@ -3044,7 +3044,7 @@ INPUT
 select st_disjoint(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_disjoint(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_disjoint(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select _latin1 0xFF regexp _latin1 '[[:lower:]]' COLLATE latin1_bin;
@@ -3608,7 +3608,7 @@ INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 1)'));
 END
 OUTPUT
-select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 1)')) from dual
+select st_touches(st_geomfromtext('polygon((0 0, 2 2, 0 4, 0 0))'), st_geomfromtext('point(1 1)')) from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL 1 MINUTE);
@@ -3662,7 +3662,7 @@ INPUT
 select ST_astext(st_intersection(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_intersection(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_intersection(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_difference(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select 'a' union select concat('a', -0.0);
@@ -3704,7 +3704,7 @@ INPUT
 select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 1 2, 2 1, 0 0))'), ST_GeomFromText('linestring(0 1, 1 0)'));
 END
 OUTPUT
-select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 1 2, 2 1, 0 0))'), ST_GeomFromText('linestring(0 1, 1 0)')) from dual
+select ST_DISTANCE(st_geomfromtext('polygon((0 0, 1 2, 2 1, 0 0))'), st_geomfromtext('linestring(0 1, 1 0)')) from dual
 END
 INPUT
 select mod(12.0, NULL) as 'NULL';
@@ -3746,7 +3746,7 @@ INPUT
 select ST_area(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))'));
 END
 OUTPUT
-select ST_area(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
+select ST_area(st_polygonfromtext('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
 END
 INPUT
 select min(a3) from t1 where a2 = 2 and a3 >= 'SEA' and a3 = 'MIN';
@@ -3950,7 +3950,7 @@ INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_symdifference(st_geomfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select 2;
@@ -4166,7 +4166,7 @@ INPUT
 select ST_astext(ST_buffer(ST_geometryfromtext('point(1 1)'), 1));
 END
 OUTPUT
-select ST_astext(ST_buffer(ST_geometryfromtext('point(1 1)'), 1)) from dual
+select ST_astext(ST_buffer(st_geometryfromtext('point(1 1)'), 1)) from dual
 END
 INPUT
 select concat(a,if(b<10,_ucs2 0x00C0,_ucs2 0x0062)) from t1;
@@ -4316,7 +4316,7 @@ INPUT
 select ST_astext(st_intersection(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_intersection(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_intersection(st_geomfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 1 0, 1 1, 0 1, 0 0))'), st_geomfromtext('polygon((2 0, 3 0, 3 1, 2 1, 2 0))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 2 0, 2 1, 0 1, 0 0))'), st_geomfromtext('polygon((1 0, 3 0, 3 1, 1 1, 1 0))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 1 0, 1 1, 0 1, 0 0))'), st_geomfromtext('polygon((1 0, 2 0, 2 1, 1 1, 1 0))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 3, 4 3, 4 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 2, 6 2, 6 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 4 3, 4 2, 6 2, 6 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 4 3, 4 0, 6 0, 6 3, 5 3, 5 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 3, 4 3, 4 2, 6 2, 6 5, 0 5))'))) select st_astext(st_intersection( st_geomfromtext('polygon((0 0, 10 0, 10 3, 0 3, 0 0))'), st_geomfromtext('polygon((0 5, 1 3, 2 5, 3 3, 4 3, 4 0, 10 0, 10 3, 6 3, 6 5, 0 5))'))) SELECT ST_AsText(ST_GeomFromText("POINT(10 11) POINT(11 12)")) as result;
@@ -4550,7 +4550,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200)'))) from dual
+select ST_astext(ST_Intersection(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('LINESTRING(-10 -10, 200 200)'))) from dual
 END
 INPUT
 select TABLE_SCHEMA,TABLE_NAME FROM information_schema.TABLES where TABLE_SCHEMA ='mysqltest_LC2';
@@ -4808,7 +4808,7 @@ INPUT
 select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POLYGON((50 5, 55 10, 0 45, 50 5))'));
 END
 OUTPUT
-select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POLYGON((50 5, 55 10, 0 45, 50 5))')) from dual
+select 1, ST_Intersects(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('POLYGON((50 5, 55 10, 0 45, 50 5))')) from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','aaa',2);
@@ -4952,7 +4952,7 @@ INPUT
 select st_distance(ST_GeomFromText('geometrycollection(geometrycollection(),polygon((0 0,0 10,10 10,10 0,0 0)))'),ST_GeomFromText('point(100 100)'));
 END
 OUTPUT
-select st_distance(ST_GeomFromText('geometrycollection(geometrycollection(),polygon((0 0,0 10,10 10,10 0,0 0)))'), ST_GeomFromText('point(100 100)')) from dual
+select st_distance(st_geomfromtext('geometrycollection(geometrycollection(),polygon((0 0,0 10,10 10,10 0,0 0)))'), st_geomfromtext('point(100 100)')) from dual
 END
 INPUT
 select group_concat(c1 order by c1) from t1 group by c1 collate utf8_polish_ci;
@@ -5042,7 +5042,7 @@ INPUT
 select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_crosses(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select * from v1c;
@@ -5498,7 +5498,7 @@ INPUT
 select st_intersects(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_intersects(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_intersects(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select * from t1 where id=000000000001;
@@ -5612,7 +5612,7 @@ INPUT
 select st_crosses(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_crosses(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_crosses(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd',_latin2'd',2);
@@ -5726,7 +5726,7 @@ INPUT
 select 1, ST_Within(ST_GeomFromText('POLYGON((1 1,20 10,10 30, 1 1))'), ST_GeomFromText('POLYGON((0 0,30 5,10 40, 0 0))'));
 END
 OUTPUT
-select 1, ST_Within(ST_GeomFromText('POLYGON((1 1,20 10,10 30, 1 1))'), ST_GeomFromText('POLYGON((0 0,30 5,10 40, 0 0))')) from dual
+select 1, ST_Within(st_geomfromtext('POLYGON((1 1,20 10,10 30, 1 1))'), st_geomfromtext('POLYGON((0 0,30 5,10 40, 0 0))')) from dual
 END
 INPUT
 select hex(substr(_utf16 0x00e400e50068,-2));
@@ -5738,7 +5738,7 @@ INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 2)'));
 END
 OUTPUT
-select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 2)')) from dual
+select st_touches(st_geomfromtext('polygon((0 0, 2 2, 0 4, 0 0))'), st_geomfromtext('point(1 2)')) from dual
 END
 INPUT
 select a1,a2,b, max(c) from t1 where (a1 = 'b' or a1 = 'd' or a1 = 'a' or a1 = 'c') and (a2 > 'a') group by a1,a2,b;
@@ -5834,7 +5834,7 @@ INPUT
 select ST_astext(st_union(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_union(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_union(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select column_type from information_schema.columns where table_schema="information_schema" and table_name="COLUMNS" and (column_name="character_set_name" or column_name="collation_name");
@@ -6104,7 +6104,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Contains(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g);
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Contains(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
+select ST_astext(g) from t1 where ST_Contains(st_geomfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
 END
 INPUT
 select timestamp("2001-12-01", "25:01:01");
@@ -6164,7 +6164,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
+select ST_astext(ST_Intersection(st_geometryfromtext('point(1 1)'), st_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
 END
 INPUT
 select (select d from t2 where d > a) as 'x', t1.* from t1;
@@ -6302,7 +6302,7 @@ INPUT
 select mbrwithin(ST_GeomFromText("linestring(1 0, 2 0)"), ST_GeomFromText("polygon((0 0, 3 0, 3 3, 0 3, 0 0))"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('linestring(1 0, 2 0)'), ST_GeomFromText('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
+select mbrwithin(st_geomfromtext('linestring(1 0, 2 0)'), st_geomfromtext('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
 END
 INPUT
 select ST_astext(ST_convexhull(ST_PolyFromWKB(ST_AsWKB(Polygon(LineString(Point(0, 0), Point(30, 0), Point(30, 30), Point(1, 0), Point(0, 0)))))));
@@ -6860,7 +6860,7 @@ INPUT
 select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_contains(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select table_name, index_type from information_schema.statistics where table_schema = 'test' and table_name like 't%' and index_name = 'l' order by table_name;
@@ -7412,7 +7412,7 @@ INPUT
 select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_union(st_geometryfromtext('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select COLUMN_NAME,COLUMN_TYPE, CHARACTER_MAXIMUM_LENGTH, CHARACTER_OCTET_LENGTH, NUMERIC_PRECISION, NUMERIC_SCALE from information_schema.columns where table_name= 't1';
@@ -7496,7 +7496,7 @@ INPUT
 select mbrwithin(ST_GeomFromText("linestring(1 1, 2 1)"), ST_GeomFromText("polygon((0 0, 3 0, 3 3, 0 3, 0 0))"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('linestring(1 1, 2 1)'), ST_GeomFromText('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
+select mbrwithin(st_geomfromtext('linestring(1 1, 2 1)'), st_geomfromtext('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
 END
 INPUT
 select ST_GeomFromText('linestring(7 6, 15 4)') into @l;
@@ -7520,7 +7520,7 @@ INPUT
 select st_equals(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_equals(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_equals(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select table_schema, table_name, column_name from information_schema.columns where table_schema not in ('performance_schema', 'sys', 'mysql') and data_type = 'longtext' order by table_name, column_name;
@@ -7706,7 +7706,7 @@ INPUT
 select st_astext(st_symdifference(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_symdifference(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_symdifference(st_geometryfromtext('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select mysqltest1.f1();
@@ -7724,7 +7724,7 @@ INPUT
 select st_disjoint(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_disjoint(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_disjoint(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select substring('hello', 1, -18446744073709551617);
@@ -7748,7 +7748,7 @@ INPUT
 select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 3 6, 6 3, 0 0),(2 2, 3 4, 4 3, 2 2))'), ST_GeomFromText('point(3 3)'));
 END
 OUTPUT
-select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 3 6, 6 3, 0 0),(2 2, 3 4, 4 3, 2 2))'), ST_GeomFromText('point(3 3)')) from dual
+select ST_DISTANCE(st_geomfromtext('polygon((0 0, 3 6, 6 3, 0 0),(2 2, 3 4, 4 3, 2 2))'), st_geomfromtext('point(3 3)')) from dual
 END
 INPUT
 select hex(min(binary a)),count(*) from t1 group by a;
@@ -7874,7 +7874,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
+select ST_astext(ST_Intersection(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
 END
 INPUT
 select cast('18446744073709551616' as signed);
@@ -8360,7 +8360,7 @@ INPUT
 select st_astext(st_difference(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_difference(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_difference(st_geometryfromtext('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "1:1" DAY_HOUR);
@@ -8372,7 +8372,7 @@ INPUT
 select ST_astext(ST_Union(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_Union(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
+select ST_astext(ST_Union(st_geometryfromtext('point(1 1)'), st_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
 END
 INPUT
 select hex(convert(_big5 0xC84041 using ucs2));
@@ -8690,7 +8690,7 @@ INPUT
 select mbrcovers(ST_GeomFromText("polygon((2 2, 10 2, 10 10, 2 10, 2 2))"), ST_GeomFromText("point(2 4)"));
 END
 OUTPUT
-select mbrcovers(ST_GeomFromText('polygon((2 2, 10 2, 10 10, 2 10, 2 2))'), ST_GeomFromText('point(2 4)')) from dual
+select mbrcovers(st_geomfromtext('polygon((2 2, 10 2, 10 10, 2 10, 2 2))'), st_geomfromtext('point(2 4)')) from dual
 END
 INPUT
 select uncompress(b) from t1;
@@ -8720,7 +8720,7 @@ INPUT
 select mbrwithin(ST_GeomFromText("point(2 4)"), ST_GeomFromText("linestring(2 0, 2 6)"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('point(2 4)'), ST_GeomFromText('linestring(2 0, 2 6)')) from dual
+select mbrwithin(st_geomfromtext('point(2 4)'), st_geomfromtext('linestring(2 0, 2 6)')) from dual
 END
 INPUT
 select st_astext(st_makeenvelope(st_geomfromtext('point(0 0)'), st_geomfromtext('point(-22 -11)')));
@@ -8876,7 +8876,7 @@ INPUT
 select st_astext(st_symdifference(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_symdifference(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_symdifference(st_geometryfromtext('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select distinct t1.a from t1,t3 where t1.a=t3.a;
@@ -9074,7 +9074,7 @@ INPUT
 select st_intersects(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_intersects(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_intersects(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select t1.* as 'with_alias', (select a from t2 where d > a) as 'x' from t1;
@@ -9512,7 +9512,7 @@ INPUT
 select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 3 6, 6 3, 0 0))'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))'));
 END
 OUTPUT
-select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 3 6, 6 3, 0 0))'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))')) from dual
+select ST_DISTANCE(st_geomfromtext('polygon((0 0, 3 6, 6 3, 0 0))'), st_geomfromtext('polygon((2 2, 3 4, 4 3, 2 2))')) from dual
 END
 INPUT
 select (with recursive dt as (select t1.a as a union select a+1 from dt where a<10) select concat(count(*), ' - ', avg(dt.a)) from dt ) as subq from t1;
@@ -9554,13 +9554,13 @@ INPUT
 select mbrwithin(ST_GeomFromText("point(2 4)"), ST_GeomFromText("linestring(2 0, 2 4)"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('point(2 4)'), ST_GeomFromText('linestring(2 0, 2 4)')) from dual
+select mbrwithin(st_geomfromtext('point(2 4)'), st_geomfromtext('linestring(2 0, 2 4)')) from dual
 END
 INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(0 0, 4 4)')));
 END
 OUTPUT
-select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(0 0, 4 4)'))) from dual
+select ST_astext(st_symdifference(st_geomfromtext('multipoint(2 2, 3 3)'), st_geomfromtext('multipoint(0 0, 4 4)'))) from dual
 END
 INPUT
 select count(b), sum(b), avg(b), std(b), min(b), max(b), bit_and(b), bit_or(b) from t1;
@@ -9704,7 +9704,7 @@ INPUT
 select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_difference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_difference(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_difference(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select * from information_schema.user_privileges where grantee like "'mysqltest_8'%";
@@ -9944,7 +9944,7 @@ INPUT
 select 0, ST_Within(ST_GeomFromText('LINESTRING(15 15, 50 50, 60 60)'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))'));
 END
 OUTPUT
-select 0, ST_Within(ST_GeomFromText('LINESTRING(15 15, 50 50, 60 60)'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
+select 0, ST_Within(st_geomfromtext('LINESTRING(15 15, 50 50, 60 60)'), st_geomfromtext('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
 END
 INPUT
 select a from t1 as t1 left join t1 as t2 using (a) left join t1 as t3 using (a) left join t1 as t4 using (a) left join t1 as t5 using (a) left join t1 as t6 using (a) left join t1 as t7 using (a) left join t1 as t8 using (a) left join t1 as t9 using (a) left join t1 as t10 using (a) left join t1 as t11 using (a) left join t1 as t12 using (a) left join t1 as t13 using (a) left join t1 as t14 using (a) left join t1 as t15 using (a) left join t1 as t16 using (a) left join t1 as t17 using (a) left join t1 as t18 using (a) left join t1 as t19 using (a) left join t1 as t20 using (a) left join t1 as t21 using (a) left join t1 as t22 using (a) left join t1 as t23 using (a) left join t1 as t24 using (a) left join t1 as t25 using (a) left join t1 as t26 using (a) left join t1 as t27 using (a) left join t1 as t28 using (a) left join t1 as t29 using (a) left join t1 as t30 using (a) left join t1 as t31 using (a) left join t1 as t32 using (a) left join t1 as t33 using (a) left join t1 as t34 using (a) left join t1 as t35 using (a) left join t1 as t36 using (a) left join t1 as t37 using (a) left join t1 as t38 using (a) left join t1 as t39 using (a) left join t1 as t40 using (a) left join t1 as t41 using (a) left join t1 as t42 using (a) left join t1 as t43 using (a) left join t1 as t44 using (a) left join t1 as t45 using (a) left join t1 as t46 using (a) left join t1 as t47 using (a) left join t1 as t48 using (a) left join t1 as t49 using (a) left join t1 as t50 using (a) left join t1 as t51 using (a) left join t1 as t52 using (a) left join t1 as t53 using (a) left join t1 as t54 using (a) left join t1 as t55 using (a) left join t1 as t56 using (a) left join t1 as t57 using (a) left join t1 as t58 using (a) left join t1 as t59 using (a) left join t1 as t60 using (a) left join t1 as t61 using (a) left join t1 as t62 using (a) left join t1 as t63 using (a) left join t1 as t64 using (a) left join t1 as t65 using (a);
@@ -9974,7 +9974,7 @@ INPUT
 select st_overlaps(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'));
 END
 OUTPUT
-select st_overlaps(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))')) from dual
+select st_overlaps(st_geometryfromtext('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))')) from dual
 END
 INPUT
 select 1, min(1) from t1i where 1=99;
@@ -10100,7 +10100,7 @@ INPUT
 select 1, ST_Intersects(ST_GeomFromText('LINESTRING(15 15, 50 50)'), ST_GeomFromText('LINESTRING(50 15, 15 50)'));
 END
 OUTPUT
-select 1, ST_Intersects(ST_GeomFromText('LINESTRING(15 15, 50 50)'), ST_GeomFromText('LINESTRING(50 15, 15 50)')) from dual
+select 1, ST_Intersects(st_geomfromtext('LINESTRING(15 15, 50 50)'), st_geomfromtext('LINESTRING(50 15, 15 50)')) from dual
 END
 INPUT
 select UNIQUE_CONSTRAINT_NAME from information_schema.referential_constraints where constraint_schema = schema();
@@ -10196,7 +10196,7 @@ INPUT
 select ST_Touches(ST_GeomFromText('LINESTRING(15 5,15 25)'),ST_GeomFromText('LINESTRING(15 5,15 25)')) as result;
 END
 OUTPUT
-select ST_Touches(ST_GeomFromText('LINESTRING(15 5,15 25)'), ST_GeomFromText('LINESTRING(15 5,15 25)')) as result from dual
+select ST_Touches(st_geomfromtext('LINESTRING(15 5,15 25)'), st_geomfromtext('LINESTRING(15 5,15 25)')) as result from dual
 END
 INPUT
 select distinct a from t1 order by rand(10);
@@ -10244,7 +10244,7 @@ INPUT
 select st_touches(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_touches(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_touches(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select column_name as 'Field',column_type as 'Type',is_nullable as 'Null',column_key as 'Key',column_default as 'Default',extra as 'Extra' from information_schema.columns where table_schema='mysqltest_db1' and table_name='t_column_priv_only';
@@ -10430,7 +10430,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POINT(20 20)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POINT(20 20)'))) from dual
+select ST_astext(ST_Intersection(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('POINT(20 20)'))) from dual
 END
 INPUT
 select group_concat(bar order by concat(bar,bar)) from t1;
@@ -10544,7 +10544,7 @@ INPUT
 select mbrtouches(ST_GeomFromText("point(2 4)"), ST_GeomFromText("linestring(2 0, 2 6)"));
 END
 OUTPUT
-select mbrtouches(ST_GeomFromText('point(2 4)'), ST_GeomFromText('linestring(2 0, 2 6)')) from dual
+select mbrtouches(st_geomfromtext('point(2 4)'), st_geomfromtext('linestring(2 0, 2 6)')) from dual
 END
 INPUT
 select substring_index('aaaaaaaaa1','aa',-1);
@@ -11102,7 +11102,7 @@ INPUT
 select mbrwithin(ST_GeomFromText("linestring(0 1, 3 1)"), ST_GeomFromText("polygon((0 0, 3 0, 3 3, 0 3, 0 0))"));
 END
 OUTPUT
-select mbrwithin(ST_GeomFromText('linestring(0 1, 3 1)'), ST_GeomFromText('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
+select mbrwithin(st_geomfromtext('linestring(0 1, 3 1)'), st_geomfromtext('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
 END
 INPUT
 select a, count(a) from t1 group by a with rollup;
@@ -11204,7 +11204,7 @@ INPUT
 select st_overlaps(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_overlaps(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_overlaps(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select * from (t4 natural join t5) natural join t1 where t4.y > 7;
@@ -11342,7 +11342,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POLYGON((50 5, 55 10, 0 45, 50 5))')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POLYGON((50 5, 55 10, 0 45, 50 5))'))) from dual
+select ST_astext(ST_Intersection(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('POLYGON((50 5, 55 10, 0 45, 50 5))'))) from dual
 END
 INPUT
 select strcmp(concat(utc_date(),' ',utc_time()),utc_timestamp())=0;
@@ -11570,7 +11570,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Contains(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1), (5.01 3.01, 6 5, 9 5, 8 3, 5.01 3.01))'), g);
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Contains(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1), (5.01 3.01, 6 5, 9 5, 8 3, 5.01 3.01))'), g)
+select ST_astext(g) from t1 where ST_Contains(st_geomfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1), (5.01 3.01, 6 5, 9 5, 8 3, 5.01 3.01))'), g)
 END
 INPUT
 select week(19981231,0) as '0', week(19981231,1) as '1', week(19981231,2) as '2', week(19981231,3) as '3', week(19981231,4) as '4', week(19981231,5) as '5', week(19981231,6) as '6', week(19981231,7) as '7';
@@ -11654,13 +11654,13 @@ INPUT
 select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 0,20 20,0 20,0 0))'), ST_GeomFromText('POLYGON((10 10,30 10,30 30,10 30,10 10))'));
 END
 OUTPUT
-select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 0,20 20,0 20,0 0))'), ST_GeomFromText('POLYGON((10 10,30 10,30 30,10 30,10 10))')) from dual
+select 1, ST_Intersects(st_geomfromtext('POLYGON((0 0,20 0,20 20,0 20,0 0))'), st_geomfromtext('POLYGON((10 10,30 10,30 30,10 30,10 10))')) from dual
 END
 INPUT
 select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_union(st_geometryfromtext('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select _latin1'a' regexp _latin1'A' collate latin1_general_ci;
@@ -11786,7 +11786,7 @@ INPUT
 select ST_DISTANCE(ST_GeomFromText('linestring(0 0, 3 6, 6 3, 0 0)'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))'));
 END
 OUTPUT
-select ST_DISTANCE(ST_GeomFromText('linestring(0 0, 3 6, 6 3, 0 0)'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))')) from dual
+select ST_DISTANCE(st_geomfromtext('linestring(0 0, 3 6, 6 3, 0 0)'), st_geomfromtext('polygon((2 2, 3 4, 4 3, 2 2))')) from dual
 END
 INPUT
 select distinct t1_outer.a from t1 t1_outer order by (select max(t1_outer.b+t1_inner.b) from t1 t1_inner);
@@ -12068,13 +12068,13 @@ INPUT
 select ST_Crosses(ST_GeomFromText('MULTIPOINT(1 0,15 0,10 10)'),ST_GeomFromText('MULTILINESTRING((15 0,20 0,20 20,15 0))')) as result;
 END
 OUTPUT
-select ST_Crosses(ST_GeomFromText('MULTIPOINT(1 0,15 0,10 10)'), ST_GeomFromText('MULTILINESTRING((15 0,20 0,20 20,15 0))')) as result from dual
+select ST_Crosses(st_geomfromtext('MULTIPOINT(1 0,15 0,10 10)'), st_geomfromtext('MULTILINESTRING((15 0,20 0,20 20,15 0))')) as result from dual
 END
 INPUT
 select ST_AsText(a) from t1 where MBRContains(ST_GeomFromText('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) or MBRContains(ST_GeomFromText('Polygon((2 2, 2 5, 5 5, 5 2, 2 2))'), a);
 END
 OUTPUT
-select ST_AsText(a) from t1 where MBRContains(ST_GeomFromText('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) or MBRContains(ST_GeomFromText('Polygon((2 2, 2 5, 5 5, 5 2, 2 2))'), a)
+select ST_AsText(a) from t1 where MBRContains(st_geomfromtext('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) or MBRContains(st_geomfromtext('Polygon((2 2, 2 5, 5 5, 5 2, 2 2))'), a)
 END
 INPUT
 select date_add("1997-12-31 23:59:59",INTERVAL "10000:1" DAY_HOUR);
@@ -12086,7 +12086,7 @@ INPUT
 select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_contains(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select hex(soundex(_ucs2 0x041004110412));
@@ -12194,7 +12194,7 @@ INPUT
 select st_disjoint(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_disjoint(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_disjoint(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select cast(-5 as unsigned) -1, cast(-5 as unsigned) + 1;
@@ -12476,7 +12476,7 @@ INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('polygon((1 1, 1 0, 2 0, 1 1))'));
 END
 OUTPUT
-select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('polygon((1 1, 1 0, 2 0, 1 1))')) from dual
+select st_touches(st_geomfromtext('polygon((0 0, 2 2, 0 4, 0 0))'), st_geomfromtext('polygon((1 1, 1 0, 2 0, 1 1))')) from dual
 END
 INPUT
 select t1.* as 'with_alias', (select a from t2 where d > a) from t1;
@@ -12494,7 +12494,7 @@ INPUT
 select mbrcoveredby(ST_GeomFromText("point(2 4)"), ST_GeomFromText("polygon((2 2, 10 2, 10 10, 2 10, 2 2))"));
 END
 OUTPUT
-select mbrcoveredby(ST_GeomFromText('point(2 4)'), ST_GeomFromText('polygon((2 2, 10 2, 10 10, 2 10, 2 2))')) from dual
+select mbrcoveredby(st_geomfromtext('point(2 4)'), st_geomfromtext('polygon((2 2, 10 2, 10 10, 2 10, 2 2))')) from dual
 END
 INPUT
 select date,format,str_to_date(date, format) as str_to_date from t1;
@@ -12506,7 +12506,7 @@ INPUT
 select ST_astext(st_symdifference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_symdifference(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_difference(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_symdifference(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_difference(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select user() like _latin1"%@%";
@@ -12590,7 +12590,7 @@ INPUT
 select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 1 2, 2 1, 0 0))'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))'));
 END
 OUTPUT
-select ST_DISTANCE(ST_GeomFromText('polygon((0 0, 1 2, 2 1, 0 0))'), ST_GeomFromText('polygon((2 2, 3 4, 4 3, 2 2))')) from dual
+select ST_DISTANCE(st_geomfromtext('polygon((0 0, 1 2, 2 1, 0 0))'), st_geomfromtext('polygon((2 2, 3 4, 4 3, 2 2))')) from dual
 END
 INPUT
 select p from t1;
@@ -13142,7 +13142,7 @@ INPUT
 select ST_geomfromtext(col9,col89) as a from t1;
 END
 OUTPUT
-select ST_geomfromtext(col9, col89) as a from t1
+select st_geomfromtext(col9, col89) as a from t1
 END
 INPUT
 select * from t4 order by b,a limit 3;
@@ -13196,7 +13196,7 @@ INPUT
 select mbrtouches(ST_GeomFromText("point(2 4)"), ST_GeomFromText("polygon((2 2, 6 2, 6 6, 2 6, 2 2))"));
 END
 OUTPUT
-select mbrtouches(ST_GeomFromText('point(2 4)'), ST_GeomFromText('polygon((2 2, 6 2, 6 6, 2 6, 2 2))')) from dual
+select mbrtouches(st_geomfromtext('point(2 4)'), st_geomfromtext('polygon((2 2, 6 2, 6 6, 2 6, 2 2))')) from dual
 END
 INPUT
 select * from t1, t2 where t1.start between t2.ctime1 and t2.ctime2;
@@ -13532,7 +13532,7 @@ INPUT
 select st_touches(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'));
 END
 OUTPUT
-select st_touches(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')) from dual
+select st_touches(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')) from dual
 END
 INPUT
 select left(_utf8 0xD0B0D0B1D0B2,1);
@@ -13580,7 +13580,7 @@ INPUT
 select 0, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POLYGON((10 40, 40 50, 20 70, 10 40))'));
 END
 OUTPUT
-select 0, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POLYGON((10 40, 40 50, 20 70, 10 40))')) from dual
+select 0, ST_Intersects(st_geomfromtext('POLYGON((0 0,20 10,10 30, 0 0))'), st_geomfromtext('POLYGON((10 40, 40 50, 20 70, 10 40))')) from dual
 END
 INPUT
 select a, group_concat(distinct b order by b) from t1 group by a with rollup;
@@ -13640,7 +13640,7 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geomfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
 END
 INPUT
 select 1 from t1 group by b;
@@ -13748,7 +13748,7 @@ INPUT
 select ST_Crosses(ST_GeomFromText('MULTIPOINT(1 0,15 0,10 10)'),ST_GeomFromText('LINESTRING(15 0,20 0,10 10,20 20)')) as result;
 END
 OUTPUT
-select ST_Crosses(ST_GeomFromText('MULTIPOINT(1 0,15 0,10 10)'), ST_GeomFromText('LINESTRING(15 0,20 0,10 10,20 20)')) as result from dual
+select ST_Crosses(st_geomfromtext('MULTIPOINT(1 0,15 0,10 10)'), st_geomfromtext('LINESTRING(15 0,20 0,10 10,20 20)')) as result from dual
 END
 INPUT
 select date_sub("0000-00-00 00:00:00",INTERVAL 1 SECOND);
@@ -14078,7 +14078,7 @@ INPUT
 select mbrtouches(ST_GeomFromText("point (2 4)"), ST_GeomFromText("point (2 4)"));
 END
 OUTPUT
-select mbrtouches(ST_GeomFromText('point (2 4)'), ST_GeomFromText('point (2 4)')) from dual
+select mbrtouches(st_geomfromtext('point (2 4)'), st_geomfromtext('point (2 4)')) from dual
 END
 INPUT
 select distinct t1.a1,t2.a1 from t1,t2;
@@ -14366,7 +14366,7 @@ INPUT
 select ST_Touches(ST_GeomFromText('POLYGON((0 0,5 0,5 5,0 5,0 0),(1 1,3 1,3 3,1 3,1 1))'),ST_GeomFromText('LINESTRING(3 3,10 10)')) as result;
 END
 OUTPUT
-select ST_Touches(ST_GeomFromText('POLYGON((0 0,5 0,5 5,0 5,0 0),(1 1,3 1,3 3,1 3,1 1))'), ST_GeomFromText('LINESTRING(3 3,10 10)')) as result from dual
+select ST_Touches(st_geomfromtext('POLYGON((0 0,5 0,5 5,0 5,0 0),(1 1,3 1,3 3,1 3,1 1))'), st_geomfromtext('LINESTRING(3 3,10 10)')) as result from dual
 END
 INPUT
 select strcmp(_koi8r'a', _koi8r'A' COLLATE koi8r_general_ci);
@@ -14570,7 +14570,7 @@ INPUT
 select ST_AsText(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))'));
 END
 OUTPUT
-select ST_AsText(ST_PolygonFromText('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
+select ST_AsText(st_polygonfromtext('POLYGON((10 10,20 10,20 20,10 20, 10 10))')) from dual
 END
 INPUT
 select 10.0+'10';
@@ -14672,7 +14672,7 @@ INPUT
 select ST_contains(ST_GeomFromText('MULTIPOLYGON(((0 0, 0 5, 5 5, 5 0, 0 0)), ((6 6, 6 11, 11 11, 11 6, 6 6)))'), ST_GeomFromText('POINT(5 10)'));
 END
 OUTPUT
-select ST_contains(ST_GeomFromText('MULTIPOLYGON(((0 0, 0 5, 5 5, 5 0, 0 0)), ((6 6, 6 11, 11 11, 11 6, 6 6)))'), ST_GeomFromText('POINT(5 10)')) from dual
+select ST_contains(st_geomfromtext('MULTIPOLYGON(((0 0, 0 5, 5 5, 5 0, 0 0)), ((6 6, 6 11, 11 11, 11 6, 6 6)))'), st_geomfromtext('POINT(5 10)')) from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_unicode_520_ci;
@@ -15356,7 +15356,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('LINESTRING(0 0, 50 45, 40 50, 0 0)'), ST_GeomFromText('LINESTRING(50 5, 55 10, 0 45, 50 5)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(ST_GeomFromText('LINESTRING(0 0, 50 45, 40 50, 0 0)'), ST_GeomFromText('LINESTRING(50 5, 55 10, 0 45, 50 5)'))) from dual
+select ST_astext(ST_Intersection(st_geomfromtext('LINESTRING(0 0, 50 45, 40 50, 0 0)'), st_geomfromtext('LINESTRING(50 5, 55 10, 0 45, 50 5)'))) from dual
 END
 INPUT
 select load_file("/proc/self/fd/0");
@@ -15380,7 +15380,7 @@ INPUT
 select st_astext(st_intersection(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_intersection(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_intersection(st_geometryfromtext('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select Fld1, max(Fld2) from t1 group by Fld1 having std(Fld2) is not null;
@@ -15434,13 +15434,13 @@ INPUT
 select 1, ST_Intersects(ST_GeomFromText('LINESTRING(15 15, 50 50)'), ST_GeomFromText('LINESTRING(16 16, 51 51)'));
 END
 OUTPUT
-select 1, ST_Intersects(ST_GeomFromText('LINESTRING(15 15, 50 50)'), ST_GeomFromText('LINESTRING(16 16, 51 51)')) from dual
+select 1, ST_Intersects(st_geomfromtext('LINESTRING(15 15, 50 50)'), st_geomfromtext('LINESTRING(16 16, 51 51)')) from dual
 END
 INPUT
 select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(2 2, 3 3)')));
 END
 OUTPUT
-select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(2 2, 3 3)'))) from dual
+select ST_astext(st_difference(st_geomfromtext('multipoint(2 2, 3 3)'), st_geomfromtext('multipoint(2 2, 3 3)'))) from dual
 END
 INPUT
 select bit_length(';
@@ -15458,7 +15458,7 @@ INPUT
 select st_astext(st_difference(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_difference(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_difference(st_geometryfromtext('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select coercibility(col1), collation(col1)from v2;
@@ -15506,7 +15506,7 @@ INPUT
 select st_touches(ST_GeomFromText('point(1 1)'), ST_GeomFromText('point(1 1)'));
 END
 OUTPUT
-select st_touches(ST_GeomFromText('point(1 1)'), ST_GeomFromText('point(1 1)')) from dual
+select st_touches(st_geomfromtext('point(1 1)'), st_geomfromtext('point(1 1)')) from dual
 END
 INPUT
 select SUBSTRING_INDEX(_latin1'abcdabcdabcd' COLLATE latin1_bin,_latin1'd',2);
@@ -15530,7 +15530,7 @@ INPUT
 select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_within(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select timediff("1997-01-01 23:59:59.000001","1995-12-31 23:59:59.000002");
@@ -15554,7 +15554,7 @@ INPUT
 select ST_astext(ST_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 0, 0 0,0 1, 0 0))'))) as result;
 END
 OUTPUT
-select ST_astext(ST_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 0, 0 0,0 1, 0 0))'))) as result from dual
+select ST_astext(ST_symdifference(st_geomfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geomfromtext('polygon((0 0, 1 0, 0 0,0 1, 0 0))'))) as result from dual
 END
 INPUT
 select extract(HOUR_SECOND FROM "10:11:12");
@@ -15662,7 +15662,7 @@ INPUT
 select st_crosses(ST_GeometryFromText('geometrycollection(multipoint(0 0, 1 0, 1 1, 0 1, 0 0))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'));
 END
 OUTPUT
-select st_crosses(ST_GeometryFromText('geometrycollection(multipoint(0 0, 1 0, 1 1, 0 1, 0 0))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')) from dual
+select st_crosses(st_geometryfromtext('geometrycollection(multipoint(0 0, 1 0, 1 1, 0 1, 0 0))'), st_geometryfromtext('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')) from dual
 END
 INPUT
 select a1,a2,min(b),c from t2 where (a2 = 'a') and (c = 'a111') group by a1;
@@ -15740,7 +15740,7 @@ INPUT
 select st_distance(ST_GeomFromText('geometrycollection(geometrycollection(),polygon((0 0,0 10,10 10,10 0,0 0)))'),ST_GeomFromText('linestring(0 0,10 10)'));
 END
 OUTPUT
-select st_distance(ST_GeomFromText('geometrycollection(geometrycollection(),polygon((0 0,0 10,10 10,10 0,0 0)))'), ST_GeomFromText('linestring(0 0,10 10)')) from dual
+select st_distance(st_geomfromtext('geometrycollection(geometrycollection(),polygon((0 0,0 10,10 10,10 0,0 0)))'), st_geomfromtext('linestring(0 0,10 10)')) from dual
 END
 INPUT
 select day("1997-12-31 23:59:59.000001");
@@ -15842,7 +15842,7 @@ INPUT
 select 1, ST_Within(ST_GeomFromText('LINESTRING(15 15, 16 16)'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))'));
 END
 OUTPUT
-select 1, ST_Within(ST_GeomFromText('LINESTRING(15 15, 16 16)'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
+select 1, ST_Within(st_geomfromtext('LINESTRING(15 15, 16 16)'), st_geomfromtext('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
 END
 INPUT
 select count(distinct n) from t1;
@@ -16604,7 +16604,7 @@ INPUT
 select ST_astext(st_union(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_union(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_union(st_geomfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select * from t3_trans;
@@ -16646,7 +16646,7 @@ INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 0)'));
 END
 OUTPUT
-select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('point(1 0)')) from dual
+select st_touches(st_geomfromtext('polygon((0 0, 2 2, 0 4, 0 0))'), st_geomfromtext('point(1 0)')) from dual
 END
 INPUT
 select distinct s1 from t1 order by s2,s1;
@@ -17018,7 +17018,7 @@ INPUT
 select st_overlaps(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_overlaps(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_overlaps(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select _latin1'B' between _latin1'a' collate latin1_bin and _latin1'c';
@@ -17030,7 +17030,7 @@ INPUT
 select st_overlaps(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_overlaps(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_overlaps(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select locate('HE','hello' collate utf8mb4_bin);
@@ -17078,7 +17078,7 @@ INPUT
 select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))'));
 END
 OUTPUT
-select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
+select 1, ST_Intersects(st_geomfromtext('POLYGON((0 0,20 10,10 30, 0 0))'), st_geomfromtext('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
 END
 INPUT
 select concat("-",a,"-",b,"-") from t1 where a="hello";
@@ -17954,7 +17954,7 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geomfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
 END
 INPUT
 select count(distinct vs) from t1;
@@ -18104,7 +18104,7 @@ INPUT
 select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('polygon((1 1.2, 1 0, 2 0, 1 1.2))'));
 END
 OUTPUT
-select st_touches(ST_GeomFromText('polygon((0 0, 2 2, 0 4, 0 0))'), ST_GeomFromText('polygon((1 1.2, 1 0, 2 0, 1 1.2))')) from dual
+select st_touches(st_geomfromtext('polygon((0 0, 2 2, 0 4, 0 0))'), st_geomfromtext('polygon((1 1.2, 1 0, 2 0, 1 1.2))')) from dual
 END
 INPUT
 select ifnull(NULL, _utf8mb4'string');
@@ -18200,7 +18200,7 @@ INPUT
 select mbrtouches(ST_GeomFromText("linestring(1 0, 2 0)"), ST_GeomFromText("polygon((0 0, 3 0, 3 3, 0 3, 0 0))"));
 END
 OUTPUT
-select mbrtouches(ST_GeomFromText('linestring(1 0, 2 0)'), ST_GeomFromText('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
+select mbrtouches(st_geomfromtext('linestring(1 0, 2 0)'), st_geomfromtext('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
 END
 INPUT
 select count(*) from information_schema.events where event_schema = database() and event_name = 'event_35981' and on_completion = 'NOT PRESERVE';
@@ -18386,7 +18386,7 @@ INPUT
 select mbrtouches(ST_GeomFromText("point(2 4)"), ST_GeomFromText("linestring(2 0, 2 4)"));
 END
 OUTPUT
-select mbrtouches(ST_GeomFromText('point(2 4)'), ST_GeomFromText('linestring(2 0, 2 4)')) from dual
+select mbrtouches(st_geomfromtext('point(2 4)'), st_geomfromtext('linestring(2 0, 2 4)')) from dual
 END
 INPUT
 select distinct a1,a2,b,c from t2 where (a2 >= 'b') and (b = 'a') and (c = 'i121') group by a1,a2,b;
@@ -18722,7 +18722,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Intersects(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g);
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Intersects(ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
+select ST_astext(g) from t1 where ST_Intersects(st_geomfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'), g)
 END
 INPUT
 select t1.f1,t.* from t1, t1 t group by 1;
@@ -18914,7 +18914,7 @@ INPUT
 select 0, ST_Within(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))'));
 END
 OUTPUT
-select 0, ST_Within(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
+select 0, ST_Within(st_geomfromtext('POLYGON((0 0,20 10,10 30, 0 0))'), st_geomfromtext('POLYGON((10 10,30 20,20 40, 10 10))')) from dual
 END
 INPUT
 select c cz from t1 where c='z';
@@ -19220,7 +19220,7 @@ INPUT
 select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(2 2, 3 3)')));
 END
 OUTPUT
-select ST_astext(st_symdifference(ST_GeomFromText('multipoint(2 2, 3 3)'), ST_GeomFromText('multipoint(2 2, 3 3)'))) from dual
+select ST_astext(st_symdifference(st_geomfromtext('multipoint(2 2, 3 3)'), st_geomfromtext('multipoint(2 2, 3 3)'))) from dual
 END
 INPUT
 select t2.fld3 FROM t2 where fld3 >= 'honeysuckle' and fld3 <= 'honoring' order by fld3;
@@ -19376,7 +19376,7 @@ INPUT
 select ST_Crosses(ST_GeomFromText('MULTIPOINT(0 0,3 3)'),ST_GeomFromText('LINESTRING(1 1,10 10)')) as result;
 END
 OUTPUT
-select ST_Crosses(ST_GeomFromText('MULTIPOINT(0 0,3 3)'), ST_GeomFromText('LINESTRING(1 1,10 10)')) as result from dual
+select ST_Crosses(st_geomfromtext('MULTIPOINT(0 0,3 3)'), st_geomfromtext('LINESTRING(1 1,10 10)')) as result from dual
 END
 INPUT
 select 7;
@@ -19472,7 +19472,7 @@ INPUT
 select ST_Intersects(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POLYGON((50 5, 55 10, 0 45, 50 5))'));
 END
 OUTPUT
-select ST_Intersects(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('POLYGON((50 5, 55 10, 0 45, 50 5))')) from dual
+select ST_Intersects(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('POLYGON((50 5, 55 10, 0 45, 50 5))')) from dual
 END
 INPUT
 select crc32("123");
@@ -19598,7 +19598,7 @@ INPUT
 select ST_astext(ST_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 1, 0 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_symdifference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
+select ST_astext(ST_symdifference(st_geomfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geomfromtext('polygon((0 0, 1 1, 0 2, 0 0))'))) from dual
 END
 INPUT
 select ifnull(group_concat(concat(t1.id, ':', t1.name)), 'shortname') as 'without distinct: how it should be' from t1;
@@ -19814,7 +19814,7 @@ INPUT
 select ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 4, 4 4, 4 10, 10 10))'));
 END
 OUTPUT
-select ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 4, 4 4, 4 10, 10 10))')) from dual
+select ST_Overlaps(st_geomfromtext('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), st_geomfromtext('POLYGON((10 10, 10 4, 4 4, 4 10, 10 10))')) from dual
 END
 INPUT
 select spid,count(*) from t1 where spid between 1 and 2 group by spid order by spid desc;
@@ -20078,7 +20078,7 @@ INPUT
 select ST_astext(ST_Intersection(ST_GeomFromText('LINESTRING(0 0, 50 45, 40 50)'), ST_GeomFromText('LINESTRING(50 5, 55 10, 0 45)')));
 END
 OUTPUT
-select ST_astext(ST_Intersection(ST_GeomFromText('LINESTRING(0 0, 50 45, 40 50)'), ST_GeomFromText('LINESTRING(50 5, 55 10, 0 45)'))) from dual
+select ST_astext(ST_Intersection(st_geomfromtext('LINESTRING(0 0, 50 45, 40 50)'), st_geomfromtext('LINESTRING(50 5, 55 10, 0 45)'))) from dual
 END
 INPUT
 select distinct ifnull(group_concat(concat(t1.id, ':', t1.name)), 'shortname') as 'with distinct: cutoff at length of shortname' from t1;
@@ -20522,7 +20522,7 @@ INPUT
 select ST_astext(g) from t1 where ST_Within(g, ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'));
 END
 OUTPUT
-select ST_astext(g) from t1 where ST_Within(g, ST_GeomFromText('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'))
+select ST_astext(g) from t1 where ST_Within(g, st_geomfromtext('POLYGON((5 1, 7 1, 7 7, 5 7, 3 3, 5 3, 5 1))'))
 END
 INPUT
 select table_name, is_updatable from information_schema.views where table_schema != 'sys' order by table_name;
@@ -20654,7 +20654,7 @@ INPUT
 select st_intersects(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_intersects(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_intersects(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select count(*), min(7), max(7) from t1m, t2i;
@@ -20948,7 +20948,7 @@ INPUT
 select ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((1 1, 1 4, 4 4, 4 1, 1 1))'));
 END
 OUTPUT
-select ST_Overlaps(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((1 1, 1 4, 4 4, 4 1, 1 1))')) from dual
+select ST_Overlaps(st_geomfromtext('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), st_geomfromtext('POLYGON((1 1, 1 4, 4 4, 4 1, 1 1))')) from dual
 END
 INPUT
 select length(@test_compress_string);
@@ -20960,13 +20960,13 @@ INPUT
 select st_astext(st_intersection(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_intersection(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_intersection(st_geometryfromtext('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select st_equals(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_equals(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_equals(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select distinct *,if(1,'',f1) from t1;
@@ -21068,7 +21068,7 @@ INPUT
 select st_touches(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_touches(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_touches(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select i, count(*), variance(s1/s2) from bug22555 group by i order by i;
@@ -21212,7 +21212,7 @@ INPUT
 select ST_astext(st_difference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result;
 END
 OUTPUT
-select ST_astext(st_difference(ST_GeomFromText('polygon((0 0, 1 0, 0 1, 0 0))'), ST_GeomFromText('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
+select ST_astext(st_difference(st_geomfromtext('polygon((0 0, 1 0, 0 1, 0 0))'), st_geomfromtext('polygon((0 0, 0 1, 1 1, 1 0, 0 0))'))) as result from dual
 END
 INPUT
 select distinct a1,a2,b from t2 where (a2 >= 'b') and (b = 'a') group by a1,a2,b;
@@ -21428,7 +21428,7 @@ INPUT
 select ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 4, 4 4, 4 10, 10 10))'));
 END
 OUTPUT
-select ST_Disjoint(ST_GeomFromText('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), ST_GeomFromText('POLYGON((10 10, 10 4, 4 4, 4 10, 10 10))')) from dual
+select ST_Disjoint(st_geomfromtext('POLYGON((0 0, 0 5, 5 5, 5 0, 0 0))'), st_geomfromtext('POLYGON((10 10, 10 4, 4 4, 4 10, 10 10))')) from dual
 END
 INPUT
 select insert(_ucs2 0x006100620063,10,2,_ucs2 0x006400650066);
@@ -21560,7 +21560,7 @@ INPUT
 select st_within(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_within(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_within(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select collation(group_concat(a)) from t1;
@@ -21632,7 +21632,7 @@ INPUT
 select st_equals(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_equals(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_equals(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select cast(_latin1'ab' AS char) as c1, cast(_latin1'a ' AS char) as c2, cast(_latin1'abc' AS char(2)) as c3, cast(_latin1'a ' AS char(2)) as c4, hex(cast(_latin1'a' AS char(2))) as c5;
@@ -21842,7 +21842,7 @@ INPUT
 select mbrtouches(ST_GeomFromText("linestring(3 2, 4 2)"), ST_GeomFromText("polygon((0 0, 3 0, 3 3, 0 3, 0 0))"));
 END
 OUTPUT
-select mbrtouches(ST_GeomFromText('linestring(3 2, 4 2)'), ST_GeomFromText('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
+select mbrtouches(st_geomfromtext('linestring(3 2, 4 2)'), st_geomfromtext('polygon((0 0, 3 0, 3 3, 0 3, 0 0))')) from dual
 END
 INPUT
 select round(1.1e1, 4294967295), truncate(1.1e1, 4294967295);
@@ -21992,7 +21992,7 @@ INPUT
 select ST_astext(ST_UNION(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)')));
 END
 OUTPUT
-select ST_astext(ST_UNION(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
+select ST_astext(ST_UNION(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
 END
 INPUT
 select substring_index('.tcx.se','.',-2),substring_index('.tcx.se','.tcx',-1);
@@ -22310,7 +22310,7 @@ INPUT
 select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POINT(10 10)'));
 END
 OUTPUT
-select 1, ST_Intersects(ST_GeomFromText('POLYGON((0 0,20 10,10 30, 0 0))'), ST_GeomFromText('POINT(10 10)')) from dual
+select 1, ST_Intersects(st_geomfromtext('POLYGON((0 0,20 10,10 30, 0 0))'), st_geomfromtext('POINT(10 10)')) from dual
 END
 INPUT
 select week("0000-00-00"),week(d),week(dt),week(t),week(c) from t1;
@@ -22322,7 +22322,7 @@ INPUT
 select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_difference(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_difference(st_geomfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select * from v1b;
@@ -22436,7 +22436,7 @@ INPUT
 select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_within(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select distinct a,c from t1 group by b,c,a having a > 2 order by a desc;
@@ -22484,7 +22484,7 @@ INPUT
 select ST_Intersects(ST_GeomFromText('LINESTRING(15 10,10 0)'),ST_GeomFromText('POINT(15 10)')) as result;
 END
 OUTPUT
-select ST_Intersects(ST_GeomFromText('LINESTRING(15 10,10 0)'), ST_GeomFromText('POINT(15 10)')) as result from dual
+select ST_Intersects(st_geomfromtext('LINESTRING(15 10,10 0)'), st_geomfromtext('POINT(15 10)')) as result from dual
 END
 INPUT
 select date_add(date,INTERVAL 1 SECOND) from t1;
@@ -22646,7 +22646,7 @@ INPUT
 select ST_geometryfromtext(b) IS NULL, ST_geometryfromwkb(b) IS NULL, ST_astext(b) IS NULL, ST_aswkb(b) IS NULL, ST_geometrytype(b) IS NULL, ST_centroid(b) IS NULL, ST_envelope(b) IS NULL, ST_startpoint(b) IS NULL, ST_endpoint(b) IS NULL, ST_exteriorring(b) IS NULL, ST_pointn(b, 1) IS NULL, ST_geometryn(b, 1) IS NULL, ST_interiorringn(b, 1) IS NULL, multipoint(b) IS NULL, ST_isempty(b) IS NULL, ST_issimple(b) IS NULL, ST_isclosed(b) IS NULL, ST_dimension(b) IS NULL, ST_numgeometries(b) IS NULL, ST_numinteriorrings(b) IS NULL, ST_numpoints(b) IS NULL, ST_area(b) IS NULL, ST_length(b) IS NULL, ST_srid(b) IS NULL, ST_x(b) IS NULL, ST_y(b) IS NULL from t1;
 END
 OUTPUT
-select ST_geometryfromtext(b) is null, ST_geometryfromwkb(b) is null, ST_astext(b) is null, ST_aswkb(b) is null, ST_geometrytype(b) is null, ST_centroid(b) is null, ST_envelope(b) is null, ST_startpoint(b) is null, ST_endpoint(b) is null, ST_exteriorring(b) is null, ST_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, ST_isempty(b) is null, ST_issimple(b) is null, ST_isclosed(b) is null, ST_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, ST_numpoints(b) is null, ST_area(b) is null, ST_length(b) is null, ST_srid(b) is null, ST_x(b) is null, ST_y(b) is null from t1
+select st_geometryfromtext(b) is null, ST_geometryfromwkb(b) is null, ST_astext(b) is null, ST_aswkb(b) is null, ST_geometrytype(b) is null, ST_centroid(b) is null, ST_envelope(b) is null, ST_startpoint(b) is null, ST_endpoint(b) is null, ST_exteriorring(b) is null, ST_pointn(b, 1) is null, ST_geometryn(b, 1) is null, ST_interiorringn(b, 1) is null, multipoint(b) is null, ST_isempty(b) is null, ST_issimple(b) is null, ST_isclosed(b) is null, ST_dimension(b) is null, ST_numgeometries(b) is null, ST_numinteriorrings(b) is null, ST_numpoints(b) is null, ST_area(b) is null, ST_length(b) is null, ST_srid(b) is null, ST_x(b) is null, ST_y(b) is null from t1
 END
 INPUT
 select inet6_ntoa(null),inet6_aton(null);
@@ -22760,7 +22760,7 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result from dual
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf32_esperanto_ci;
@@ -22910,7 +22910,7 @@ INPUT
 select ST_AsText(a) from t1 where MBRContains(ST_GeomFromText('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) and MBRContains(ST_GeomFromText('Polygon((0 0, 0 7, 7 7, 7 0, 0 0))'), a);
 END
 OUTPUT
-select ST_AsText(a) from t1 where MBRContains(ST_GeomFromText('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) and MBRContains(ST_GeomFromText('Polygon((0 0, 0 7, 7 7, 7 0, 0 0))'), a)
+select ST_AsText(a) from t1 where MBRContains(st_geomfromtext('Polygon((0 0, 0 2, 2 2, 2 0, 0 0))'), a) and MBRContains(st_geomfromtext('Polygon((0 0, 0 7, 7 7, 7 0, 0 0))'), a)
 END
 INPUT
 select group_concat(c1 order by binary c1 separator '') from t1 group by c1 collate utf16_spanish_ci;

@@ -212,6 +212,75 @@ var (
 		input:  "select ST_ASTEXT(MULTIPOLYGON(polygons)) from polygonTable",
 		output: "select ST_ASTEXT(multipolygon(polygons)) from polygonTable",
 	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
+		output: "select ST_AsText(st_geomcollfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
+		output: "select ST_AsText(st_geomcollfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
+		output: "select ST_AsText(st_geomcollfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
+		output: "select ST_AsText(st_geomfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
+		output: "select ST_AsText(st_geomfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
+		output: "select ST_AsText(st_geomfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
+		output: "select ST_AsText(st_multilinestringfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
+		output: "select ST_AsText(st_multilinestringfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultilinestringFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
+		output: "select ST_AsText(st_multilinestringfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromText('LINESTRING((10 10, 11 11))'))",
+		output: "select ST_AsText(st_linestringfromtext('LINESTRING((10 10, 11 11))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromText('LINESTRING((10 10, 11 11))', 4326))",
+		output: "select ST_AsText(st_linestringfromtext('LINESTRING((10 10, 11 11))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_LinestringFromText('LINESTRING((10 10, 11 11))', 4326, 'axis-order=lat-long'))",
+		output: "select ST_AsText(st_linestringfromtext('LINESTRING((10 10, 11 11))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromText('POINT(10 10)'))",
+		output: "select ST_AsText(st_pointfromtext('POINT(10 10)')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PointFromText('POINT(10 10)', 4326))",
+		output: "select ST_AsText(st_pointfromtext('POINT(10 10)', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromText('MULTIPOINT((10 10, 11 11))'))",
+		output: "select ST_AsText(st_multipointfromtext('MULTIPOINT((10 10, 11 11))')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromText('MULTIPOINT((10 10, 11 11))', 4326))",
+		output: "select ST_AsText(st_multipointfromtext('MULTIPOINT((10 10, 11 11))', 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPointFromText('MULTIPOINT((10 10, 11 11))', 4326, 'axis-order=lat-long'))",
+		output: "select ST_AsText(st_multipointfromtext('MULTIPOINT((10 10, 11 11))', 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(@g))",
+		output: "select ST_AsText(st_multipolygonfromtext(@g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(@g, 4326))",
+		output: "select ST_AsText(st_multipolygonfromtext(@g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_MultiPolygonFromText(@g, 4326, 'axis-order=lat-long'))",
+		output: "select ST_AsText(st_multipolygonfromtext(@g, 4326, 'axis-order=lat-long')) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(@g))",
+		output: "select ST_AsText(st_polygonfromtext(@g)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(@g, 4326))",
+		output: "select ST_AsText(st_polygonfromtext(@g, 4326)) from dual",
+	}, {
+		input:  "SELECT ST_AsText(ST_PolygonFromText(@g, 4326, 'axis-order=long-lat'))",
+		output: "select ST_AsText(st_polygonfromtext(@g, 4326, 'axis-order=long-lat')) from dual",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {

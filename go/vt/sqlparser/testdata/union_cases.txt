@@ -2,7 +2,7 @@ INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_ENVELOPE(ST_GEOMFROMTEXT('LINESTRING(5 9,-1 10,-2 -6,2 9,2 0,3 6,-3 3,9 -2,-3 -10,-7 -4,1 4)')),                        ST_UNION(ST_GEOMFROMTEXT('MULTILINESTRING((6 -8,10 -8,3 0,-6 1,0 8,-1 8,-3 -3,6 -6,0 6,1 -6,-1 7,8 3),(-9 -10,-4 0,0 1,-9 1,6 9,-8 7,-2 -6,2 10,-1 -5,3 -5,-1 -10))'),                                  ST_GEOMFROMTEXT('MULTILINESTRING((8 7,2 6,-6 -8,-2 10,4 1,9 7,5 9,4 1,8 2,-2 10,8 -5))')))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_ENVELOPE(ST_GEOMFROMTEXT('LINESTRING(5 9,-1 10,-2 -6,2 9,2 0,3 6,-3 3,9 -2,-3 -10,-7 -4,1 4)')), ST_UNION(ST_GEOMFROMTEXT('MULTILINESTRING((6 -8,10 -8,3 0,-6 1,0 8,-1 8,-3 -3,6 -6,0 6,1 -6,-1 7,8 3),(-9 -10,-4 0,0 1,-9 1,6 9,-8 7,-2 -6,2 10,-1 -5,3 -5,-1 -10))'), ST_GEOMFROMTEXT('MULTILINESTRING((8 7,2 6,-6 -8,-2 10,4 1,9 7,5 9,4 1,8 2,-2 10,8 -5))')))) as result from dual
+select ST_ASTEXT(ST_UNION(ST_ENVELOPE(st_geomfromtext('LINESTRING(5 9,-1 10,-2 -6,2 9,2 0,3 6,-3 3,9 -2,-3 -10,-7 -4,1 4)')), ST_UNION(st_geomfromtext('MULTILINESTRING((6 -8,10 -8,3 0,-6 1,0 8,-1 8,-3 -3,6 -6,0 6,1 -6,-1 7,8 3),(-9 -10,-4 0,0 1,-9 1,6 9,-8 7,-2 -6,2 10,-1 -5,3 -5,-1 -10))'), st_geomfromtext('MULTILINESTRING((8 7,2 6,-6 -8,-2 10,4 1,9 7,5 9,4 1,8 2,-2 10,8 -5))')))) as result from dual
 END
 INPUT
 SELECT i FROM t2 UNION SELECT c FROM t1;
@@ -50,7 +50,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(0 1, 4 1))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(0 1, 4 1))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(0 1, 4 1))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 select ST_astext(st_union(              st_intersection(                                multipoint(point(-1,-1)),                                point(1,-1)                                   ),               st_difference(                               multipoint(point(-1,1)),                               point(-1,-1)                                  )));
@@ -68,7 +68,7 @@ INPUT
 select ST_astext(st_union(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                         st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_union(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_union(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 SELECT sleep(0.5) FROM t17059925 UNION ALL SELECT * FROM t17059925 WHERE a= 10 AND a= 20 UNION ALL SELECT * FROM t2;
@@ -140,7 +140,7 @@ INPUT
 select st_overlaps(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                     st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_overlaps(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_overlaps(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 (SELECT * FROM t1 LIMIT 5) UNION ALL (SELECT * FROM t2 LIMIT 4) LIMIT 7;
@@ -224,7 +224,7 @@ INPUT
 select st_touches(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                    st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_touches(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_touches(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 SELECT 1 UNION SELECT 1 INTO @var FOR UPDATE;
@@ -236,13 +236,13 @@ INPUT
 select st_intersects(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                       st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_intersects(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_intersects(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select ST_astext(ST_UNION(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)')));
 END
 OUTPUT
-select ST_astext(ST_UNION(ST_GeomFromText('POLYGON((0 0, 50 45, 40 50, 0 0))'), ST_GeomFromText('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
+select ST_astext(ST_UNION(st_geomfromtext('POLYGON((0 0, 50 45, 40 50, 0 0))'), st_geomfromtext('LINESTRING(-10 -10, 200 200, 199 201, -11 -9)'))) from dual
 END
 INPUT
 SELECT NULL as "my_col1",2 AS "my_col2" UNION SELECT NULL,1;
@@ -254,19 +254,19 @@ INPUT
 select st_contains(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                     st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_contains(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_contains(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(LINESTRING(4 1, 6 1),                            LINESTRING(0 1, 4 1))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(4 1, 6 1),                            LINESTRING(0 1, 4 1))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(LINESTRING(4 1, 6 1),                            LINESTRING(0 1, 4 1))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10)))'), ST_GEOMFROMTEXT('MULTIPOLYGON(((10 10,10 20,20 10,10 10)),((20 10,30 20,30 10,20 10)),((10 20,10 30,20 20,10 20)),((20 20,30 30,30 20,20 20)))')));
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10)))'), ST_GEOMFROMTEXT('MULTIPOLYGON(((10 10,10 20,20 10,10 10)),((20 10,30 20,30 10,20 10)),((10 20,10 30,20 20,10 20)),((20 20,30 30,30 20,20 20)))'))) from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('MULTIPOLYGON(((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10)))'), st_geomfromtext('MULTIPOLYGON(((10 10,10 20,20 10,10 10)),((20 10,30 20,30 10,20 10)),((10 20,10 30,20 20,10 20)),((20 20,30 30,30 20,20 20)))'))) from dual
 END
 INPUT
 (SELECT * FROM t1 LIMIT 5 OFFSET 4) UNION (SELECT * FROM t2 LIMIT 4 OFFSET 2) ORDER BY a LIMIT 7 OFFSET 1;
@@ -302,7 +302,7 @@ INPUT
 SELECT ST_CONTAINS(ST_UNION(ST_INTERSECTION(ST_GEOMFROMTEXT('POINT(-3 3)'),                                             ST_GEOMFROMTEXT('POLYGON((8 3,-2 9,-10 2,-10 -9,7 -1,4 1,7 6,5 -10,5 3,2 1,-10 0, 8 3))')),                              ST_CONVEXHULL(ST_GEOMFROMTEXT('MULTIPOINT(8 -8,-7 5)'))),                     ST_UNION(ST_GEOMFROMTEXT('POINT(4 1)'),                              ST_GEOMFROMTEXT('MULTIPOINT(-10 -10,5 -2,-6 -7,1 5,-3 0)'))) as result;
 END
 OUTPUT
-select ST_CONTAINS(ST_UNION(ST_INTERSECTION(ST_GEOMFROMTEXT('POINT(-3 3)'), ST_GEOMFROMTEXT('POLYGON((8 3,-2 9,-10 2,-10 -9,7 -1,4 1,7 6,5 -10,5 3,2 1,-10 0, 8 3))')), ST_CONVEXHULL(ST_GEOMFROMTEXT('MULTIPOINT(8 -8,-7 5)'))), ST_UNION(ST_GEOMFROMTEXT('POINT(4 1)'), ST_GEOMFROMTEXT('MULTIPOINT(-10 -10,5 -2,-6 -7,1 5,-3 0)'))) as result from dual
+select ST_CONTAINS(ST_UNION(ST_INTERSECTION(st_geomfromtext('POINT(-3 3)'), st_geomfromtext('POLYGON((8 3,-2 9,-10 2,-10 -9,7 -1,4 1,7 6,5 -10,5 3,2 1,-10 0, 8 3))')), ST_CONVEXHULL(st_geomfromtext('MULTIPOINT(8 -8,-7 5)'))), ST_UNION(st_geomfromtext('POINT(4 1)'), st_geomfromtext('MULTIPOINT(-10 -10,5 -2,-6 -7,1 5,-3 0)'))) as result from dual
 END
 INPUT
 select * from (select * from t1 union all select * from t1 limit 2) a;
@@ -344,7 +344,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(3 1, 4 1))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(3 1, 4 1))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(3 1, 4 1))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 select 'a' union select concat('a', -concat('3',4));
@@ -392,13 +392,13 @@ INPUT
 select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_union(st_geometryfromtext('geometrycollection(polygon((0 0, 2 0, 2 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 3 0, 3 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select st_equals(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                   st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_equals(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_equals(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 (SELECT * FROM t1 LIMIT 5) UNION ALL SELECT * FROM t2 ORDER BY a LIMIT 8;
@@ -410,7 +410,7 @@ INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 6,-11 -6,6 0,0 6),(3 1,5 0,-2 0,3 1))'), ST_GEOMFROMTEXT('POLYGON((5 4,6 0,9 12,-7 -12,5 -19,5 4))')));
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 6,-11 -6,6 0,0 6),(3 1,5 0,-2 0,3 1))'), ST_GEOMFROMTEXT('POLYGON((5 4,6 0,9 12,-7 -12,5 -19,5 4))'))) from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('POLYGON((0 6,-11 -6,6 0,0 6),(3 1,5 0,-2 0,3 1))'), st_geomfromtext('POLYGON((5 4,6 0,9 12,-7 -12,5 -19,5 4))'))) from dual
 END
 INPUT
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5 OFFSET 4) UNION ALL (SELECT * FROM t2 ORDER BY a DESC LIMIT 4 OFFSET 2) LIMIT 7 OFFSET 1;
@@ -428,7 +428,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(POLYGON((0 0, 5 0, 5 5, 0 5,0 0)),                            POLYGON((5 0,10 0, 10 3,5 3,5 0)))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((0 0, 5 0, 5 5, 0 5,0 0)),                            POLYGON((5 0,10 0, 10 3,5 3,5 0)))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(POLYGON((0 0, 5 0, 5 5, 0 5,0 0)),                            POLYGON((5 0,10 0, 10 3,5 3,5 0)))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 select f1 from t1 union select f1 from t1;
@@ -446,7 +446,7 @@ INPUT
 select st_intersects(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                       st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_intersects(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_intersects(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*)) UNION ALL SELECT a FROM t1;
@@ -554,7 +554,7 @@ INPUT
 select st_disjoint(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                     st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_disjoint(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_disjoint(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 SELECT alias2 . `col_int_nokey` AS field1 FROM ( CC AS alias1 INNER JOIN ( ( BB AS alias2 INNER JOIN        (  SELECT   SQ1_alias1 . * FROM C AS SQ1_alias1  ) AS alias3          ON (alias3 . `col_int_key` = alias2 . `col_int_nokey`  ) ) )        ON (alias3 . `col_varchar_nokey` = alias2 . `col_varchar_key`  ) ) WHERE (  ( alias2 . `pk` , alias3 . `col_int_nokey` ) IN   ( SELECT 4 , 7  UNION  SELECT 137, 6 ) )     AND alias1 . `pk` > 149 AND alias1 . `pk` < ( 149 + 7 )     OR alias3 . `col_varchar_key` < 'o';
@@ -584,13 +584,13 @@ INPUT
 SELECT ST_AsText(st_union(ST_GeomFromText('GeometryCollection(GeometryCollection(Point(1 1)), GeometryCollection(linestring(1 1, 2 2)))'),                        ST_GeomFromText('GeometryCollection(GeometryCollection(Point(1 1)))')));
 END
 OUTPUT
-select ST_AsText(st_union(ST_GeomFromText('GeometryCollection(GeometryCollection(Point(1 1)), GeometryCollection(linestring(1 1, 2 2)))'), ST_GeomFromText('GeometryCollection(GeometryCollection(Point(1 1)))'))) from dual
+select ST_AsText(st_union(st_geomfromtext('GeometryCollection(GeometryCollection(Point(1 1)), GeometryCollection(linestring(1 1, 2 2)))'), st_geomfromtext('GeometryCollection(GeometryCollection(Point(1 1)))'))) from dual
 END
 INPUT
 select ST_astext(st_union(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))));
 END
 OUTPUT
-select ST_astext(st_union(ST_GeomFromText('multipoint(2 2, 3 3)'), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')))) from dual
+select ST_astext(st_union(st_geomfromtext('multipoint(2 2, 3 3)'), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)')))) from dual
 END
 INPUT
 select group_concat('x') UNION ALL select 1;
@@ -626,7 +626,7 @@ INPUT
 select st_equals(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                   st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_equals(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_equals(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 (SELECT * FROM t1 LIMIT 5 OFFSET 4) UNION ALL (SELECT * FROM t2 LIMIT 4 OFFSET 2) ORDER BY a LIMIT 7 OFFSET 1;
@@ -644,7 +644,7 @@ INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10))'), ST_GEOMFROMTEXT('POLYGON((5 15,5 30,30 15,5 15))')));
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10))'), ST_GEOMFROMTEXT('POLYGON((5 15,5 30,30 15,5 15))'))) from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('POLYGON((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10))'), st_geomfromtext('POLYGON((5 15,5 30,30 15,5 15))'))) from dual
 END
 INPUT
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5) UNION ALL (SELECT * FROM t2 ORDER BY a DESC LIMIT 4) LIMIT 7;
@@ -674,19 +674,19 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),GEOMETRYCOLLECTION(MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20))),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geomfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
 END
 INPUT
 SELECT ST_ISVALID(   ST_UNION(     ST_GEOMFROMTEXT('       LINESTRING(-9 -17,17 -11)     '),     ST_GEOMFROMTEXT('       GEOMETRYCOLLECTION(         LINESTRING(8 16,-8 -3),         POLYGON((2 3,-9 -7,12 -13,2 3)),         MULTILINESTRING((-2 2,11 -10),(6 0,-15 0,16 0))       )     ')   ) ) AS valid;
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('       LINESTRING(-9 -17,17 -11)     '), ST_GEOMFROMTEXT('       GEOMETRYCOLLECTION(         LINESTRING(8 16,-8 -3),         POLYGON((2 3,-9 -7,12 -13,2 3)),         MULTILINESTRING((-2 2,11 -10),(6 0,-15 0,16 0))       )     '))) as valid from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('       LINESTRING(-9 -17,17 -11)     '), st_geomfromtext('       GEOMETRYCOLLECTION(         LINESTRING(8 16,-8 -3),         POLYGON((2 3,-9 -7,12 -13,2 3)),         MULTILINESTRING((-2 2,11 -10),(6 0,-15 0,16 0))       )     '))) as valid from dual
 END
 INPUT
 select ST_astext(ST_Union(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))')));
 END
 OUTPUT
-select ST_astext(ST_Union(ST_geometryfromtext('point(1 1)'), ST_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
+select ST_astext(ST_Union(st_geometryfromtext('point(1 1)'), st_geometryfromtext('polygon((0 0, 2 0, 1 2, 0 0))'))) from dual
 END
 INPUT
 SELECT 1 as a FROM (SELECT 1 UNION SELECT a) b;
@@ -722,7 +722,7 @@ INPUT
 select st_touches(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                    st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_touches(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_touches(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5 OFFSET 4) UNION ALL (SELECT * FROM t2 ORDER BY a DESC LIMIT 4 OFFSET 2) ORDER BY a LIMIT 7 OFFSET 1;
@@ -764,7 +764,7 @@ INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'),                          ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)))'), st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17))'))) as result from dual
 END
 INPUT
 SELECT 1 LOCK IN SHARE MODE UNION SELECT 2;
@@ -824,7 +824,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(MULTIPOINT(0 0,100 100), MULTIPOINT(1 1, 2 2)))'),                        ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(MULTIPOINT(0 0,100 100), MULTIPOINT(1 1, 2 2)))'), ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(MULTIPOINT(0 0,100 100), MULTIPOINT(1 1, 2 2)))'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
 END
 INPUT
 SELECT (a DIV 254576881) FROM t1 UNION ALL    SELECT (a DIV 254576881) FROM t1;
@@ -848,7 +848,7 @@ INPUT
 select st_crosses(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                    st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_crosses(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_crosses(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 SELECT 1 UNION SELECT 2 FOR UPDATE;
@@ -860,7 +860,7 @@ INPUT
 select st_disjoint(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                     st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_disjoint(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_disjoint(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 (SELECT MAX(f1) FROM t1) UNION (SELECT MAX(f1) FROM t1);
@@ -884,7 +884,7 @@ INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10)))'), ST_GEOMFROMTEXT('MULTIPOLYGON(((15 10,10 15,10 17,15 10)),((15 10,10 20,10 22,15 10)),((15 10,10 25,10 27,15 10)),((25 10,30 17,30 15,25 10)),((25 10,30 22,30 20,25 10)),((25 10,30 27,30 25,25 10)),((18 10,20 30,19 10,18 10)),((21 10,20 30,22 10,21 10)))')));
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10)))'), ST_GEOMFROMTEXT('MULTIPOLYGON(((15 10,10 15,10 17,15 10)),((15 10,10 20,10 22,15 10)),((15 10,10 25,10 27,15 10)),((25 10,30 17,30 15,25 10)),((25 10,30 22,30 20,25 10)),((25 10,30 27,30 25,25 10)),((18 10,20 30,19 10,18 10)),((21 10,20 30,22 10,21 10)))'))) from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('MULTIPOLYGON(((0 0,0 40,40 40,40 0,0 0),(10 10,30 10,30 30,10 30,10 10)))'), st_geomfromtext('MULTIPOLYGON(((15 10,10 15,10 17,15 10)),((15 10,10 20,10 22,15 10)),((15 10,10 25,10 27,15 10)),((25 10,30 17,30 15,25 10)),((25 10,30 22,30 20,25 10)),((25 10,30 27,30 25,25 10)),((18 10,20 30,19 10,18 10)),((21 10,20 30,22 10,21 10)))'))) from dual
 END
 INPUT
 SELECT a, SUM(a), SUM(a)+1, CONCAT(SUM(a),'x'), SUM(a)+SUM(a), SUM(a)   FROM (SELECT 1 a, 2 b UNION SELECT 2,3 UNION SELECT 5,6 ) d       GROUP BY a WITH ROLLUP ORDER BY GROUPING(a),a;
@@ -896,13 +896,13 @@ INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom from dual
 END
 INPUT
 SELECT ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(linestring(0 0,100 100), MULTIPOINT(1 1, 2 2)))'),                        ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(linestring(0 0,100 100), MULTIPOINT(1 1, 2 2)))'), ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(linestring(0 0,100 100), MULTIPOINT(1 1, 2 2)))'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
 END
 INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1) UNION (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
@@ -944,13 +944,13 @@ INPUT
 select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                     st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_contains(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_contains(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(LINESTRING(3 1, 6 1),                            LINESTRING(0 1, 4 1))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(3 1, 6 1),                            LINESTRING(0 1, 4 1))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(LINESTRING(3 1, 6 1),                            LINESTRING(0 1, 4 1))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 select * from (select * from t1 union all select * from t1) a;
@@ -1022,7 +1022,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(polygon((0 0,10 0, 10 10, 0 10, 0 0)), MULTIPOINT(1 1, 2 2)))'),                        ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(polygon((0 0,10 0, 10 10, 0 10, 0 0)), MULTIPOINT(1 1, 2 2)))'), ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(polygon((0 0,10 0, 10 10, 0 10, 0 0)), MULTIPOINT(1 1, 2 2)))'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
 END
 INPUT
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5 OFFSET 4) UNION ALL SELECT * FROM t2 LIMIT 8 OFFSET 1;
@@ -1034,7 +1034,7 @@ INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('LINESTRING(12 6,9 4,-9 1,-4 -6,12 -9,-9 -17,17 -11,-16 17,19 -19,0 -16,6 -5,15 3,14 -5,18 13,-9 10,-11 8)'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((-18 2,1 7),(-19 -3,-16 -12),(10 0,3 8,12 19,8 -15)),MULTILINESTRING((8 16,-8 -3),(18 3,8 12),(-19 4,20 14)),POLYGON((2 3,-9 -7,12 -13,2 3)),MULTILINESTRING((16 -7,-2 2,11 -10,-1 8),(6 0,-15 0,16 0,-6 -14)))')));
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('LINESTRING(12 6,9 4,-9 1,-4 -6,12 -9,-9 -17,17 -11,-16 17,19 -19,0 -16,6 -5,15 3,14 -5,18 13,-9 10,-11 8)'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((-18 2,1 7),(-19 -3,-16 -12),(10 0,3 8,12 19,8 -15)),MULTILINESTRING((8 16,-8 -3),(18 3,8 12),(-19 4,20 14)),POLYGON((2 3,-9 -7,12 -13,2 3)),MULTILINESTRING((16 -7,-2 2,11 -10,-1 8),(6 0,-15 0,16 0,-6 -14)))'))) from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('LINESTRING(12 6,9 4,-9 1,-4 -6,12 -9,-9 -17,17 -11,-16 17,19 -19,0 -16,6 -5,15 3,14 -5,18 13,-9 10,-11 8)'), st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((-18 2,1 7),(-19 -3,-16 -12),(10 0,3 8,12 19,8 -15)),MULTILINESTRING((8 16,-8 -3),(18 3,8 12),(-19 4,20 14)),POLYGON((2 3,-9 -7,12 -13,2 3)),MULTILINESTRING((16 -7,-2 2,11 -10,-1 8),(6 0,-15 0,16 0,-6 -14)))'))) from dual
 END
 INPUT
 select s1 from t1 where s1 in (select version from information_schema.tables) union select version from information_schema.tables;
@@ -1058,7 +1058,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(MULTIPOINT(0 0,100 100), linestring(1 1, 2 2)))'),                        ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(MULTIPOINT(0 0,100 100), linestring(1 1, 2 2)))'), ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(MULTIPOINT(0 0,100 100), linestring(1 1, 2 2)))'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
 END
 INPUT
 SELECT 'case+union+test' UNION  SELECT CASE '1' WHEN '2' THEN 'BUG' ELSE 'nobug' END;
@@ -1070,7 +1070,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(3 0, 3 1, 4 2))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(3 0, 3 1, 4 2))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(POLYGON((0 0, 3 0, 3 3, 0 3, 0 0)),                            LINESTRING(3 0, 3 1, 4 2))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 SELECT 1 UNION SELECT 1 FOR UPDATE INTO @var;
@@ -1082,7 +1082,7 @@ INPUT
 SELECT ST_ASTEXT(ST_VALIDATE(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((-7 -9,-3 7,0 -10,-6 5,10 10,-3 -4,7 9,2 -9)),((1 -10,-3 10,-2 5)))'),                                       ST_GEOMFROMTEXT('POLYGON((6 10,-7 10,-1 -6,0 5,5 4,1 -9,1 3,-10 -7,-10 8))')))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_VALIDATE(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((-7 -9,-3 7,0 -10,-6 5,10 10,-3 -4,7 9,2 -9)),((1 -10,-3 10,-2 5)))'), ST_GEOMFROMTEXT('POLYGON((6 10,-7 10,-1 -6,0 5,5 4,1 -9,1 3,-10 -7,-10 8))')))) as result from dual
+select ST_ASTEXT(ST_VALIDATE(ST_UNION(st_geomfromtext('MULTIPOLYGON(((-7 -9,-3 7,0 -10,-6 5,10 10,-3 -4,7 9,2 -9)),((1 -10,-3 10,-2 5)))'), st_geomfromtext('POLYGON((6 10,-7 10,-1 -6,0 5,5 4,1 -9,1 3,-10 -7,-10 8))')))) as result from dual
 END
 INPUT
 SELECT a, SUM(a), SUM(a)+1, CONCAT(SUM(a),'x'), SUM(a)+SUM(a), SUM(a)   FROM (SELECT 1 a, 2 b UNION SELECT 2,3 UNION SELECT 5,6 ) d       GROUP BY a WITH ROLLUP ORDER BY SUM(a);
@@ -1100,7 +1100,7 @@ INPUT
 select st_within(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                   st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_within(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_within(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1) UNION ALL (SELECT a FROM t1 ORDER BY COUNT(*) LIMIT 1 OFFSET 1);
@@ -1118,7 +1118,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GeomFromText('MULTIPOINT(0 0,100 100)'),                        ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GeomFromText('MULTIPOINT(0 0,100 100)'), ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('MULTIPOINT(0 0,100 100)'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
 END
 INPUT
 SELECT * FROM t1 UNION ALL SELECT * FROM t2 ORDER BY a LIMIT 5;
@@ -1136,7 +1136,7 @@ INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((4 5,12 11,-12 -3,4 5))'), ST_GEOMFROMTEXT('MULTIPOLYGON(((5 4,-14 0,1 0,5 4)),((1 6,13 0,10 12,1 6)))')));
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((4 5,12 11,-12 -3,4 5))'), ST_GEOMFROMTEXT('MULTIPOLYGON(((5 4,-14 0,1 0,5 4)),((1 6,13 0,10 12,1 6)))'))) from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('POLYGON((4 5,12 11,-12 -3,4 5))'), st_geomfromtext('MULTIPOLYGON(((5 4,-14 0,1 0,5 4)),((1 6,13 0,10 12,1 6)))'))) from dual
 END
 INPUT
 select 1 as a from t1 union all select 1 from dual limit 1;
@@ -1160,13 +1160,13 @@ INPUT
 select st_overlaps(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                     st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_overlaps(st_union(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_intersection(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_overlaps(st_union(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_intersection(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(LINESTRING(3 1, 3 3),                            LINESTRING(0 1, 4 1))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(3 1, 3 3),                            LINESTRING(0 1, 4 1))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(LINESTRING(3 1, 3 3),                            LINESTRING(0 1, 4 1))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 SELECT * FROM t1 UNION ALL SELECT * FROM t2 LIMIT 5;
@@ -1196,7 +1196,7 @@ INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(POINT(1 1), GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(POINT(1 1), GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(POINT(1 1), GEOMETRYCOLLECTION(GEOMETRYCOLLECTION())))'))) as geom from dual
 END
 INPUT
 select 'a' union select concat('a', -4.5);
@@ -1232,13 +1232,13 @@ INPUT
 select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                    st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_crosses(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_crosses(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('GEOMETRYCOLLECTION(MULTILINESTRING((0 -14,13 -8),(-5 -3,8 7),(-6 18,17 -11,-12 19,19 5),(16 11,9 -5),(17 -5,5 10),(-4 17,6 4),(-12 15,17 13,-18 11,15 10),(7 0,2 -16,-18 13,-6 4),(-17 -6,-6 -7,1 4,-18 0)),MULTIPOINT(0 14,-9 -11),MULTILINESTRING((-11 -2,17 -14),(18 -12,18 -8),(-13 -16,9 16,9 -10,-7 20),(-14 -5,10 -9,4 1,17 -8),(-9 -4,-2 -12,9 -13,-5 4),(15 17,13 20)),MULTIPOINT(16 1,-9 -17,-16 6,-17 3),POINT(-18 13))'), st_geomfromtext('GEOMETRYCOLLECTION(POINT(7 0),MULTILINESTRING((-13 -18,-16 0),(17 11,-1 11,-18 -19,-4 -18),(-8 -8,-15 -13,3 -18,6 8)),LINESTRING(5 16,0 -9,-6 4,-15 17),MULTIPOINT(-9 -5,5 15,12 -11,12 11))'))) as result from dual
 END
 INPUT
 SELECT * FROM t1 UNION SELECT * FROM t2 LIMIT 5 OFFSET 6;
@@ -1268,7 +1268,7 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(POLYGON((5 0,0 10,10 10,5 0)),                            POLYGON((5 0,0 -10,10 -10,5 0)))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(POLYGON((5 0,0 10,10 10,5 0)),                            POLYGON((5 0,0 -10,10 -10,5 0)))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(POLYGON((5 0,0 10,10 10,5 0)),                            POLYGON((5 0,0 -10,10 -10,5 0)))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 SELECT a DIV 2 FROM t1 UNION SELECT a DIV 2 FROM t1;
@@ -1286,7 +1286,7 @@ INPUT
 SELECT ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((-7 -9,-3 7,0 -10,-6 5,10 10,-3 -4,7 9,2 -9)),((1 -10,-3 10,-2 5)))'),                           ST_GEOMFROMTEXT('POLYGON((6 10,-7 10,-1 -6,0 5,5 4,1 -9,1 3,-10 -7,-10 8))'))) as result;
 END
 OUTPUT
-select ST_ASTEXT(ST_UNION(ST_GEOMFROMTEXT('MULTIPOLYGON(((-7 -9,-3 7,0 -10,-6 5,10 10,-3 -4,7 9,2 -9)),((1 -10,-3 10,-2 5)))'), ST_GEOMFROMTEXT('POLYGON((6 10,-7 10,-1 -6,0 5,5 4,1 -9,1 3,-10 -7,-10 8))'))) as result from dual
+select ST_ASTEXT(ST_UNION(st_geomfromtext('MULTIPOLYGON(((-7 -9,-3 7,0 -10,-6 5,10 10,-3 -4,7 9,2 -9)),((1 -10,-3 10,-2 5)))'), st_geomfromtext('POLYGON((6 10,-7 10,-1 -6,0 5,5 4,1 -9,1 3,-10 -7,-10 8))'))) as result from dual
 END
 INPUT
 (SELECT * FROM t1 LIMIT 5) UNION ALL (SELECT * FROM t2 LIMIT 4) ORDER BY a LIMIT 7;
@@ -1340,25 +1340,25 @@ INPUT
 SELECT ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(polygon((0 0,10 0, 10 10, 0 10, 0 0)), polygon((0 0, 1 0, 1 1, 0 1, 0 0))))'),                        ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(polygon((0 0,10 0, 10 10, 0 10, 0 0)), polygon((0 0, 1 0, 1 1, 0 1, 0 0))))'), ST_GeomFromText('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(polygon((0 0,10 0, 10 10, 0 10, 0 0)), polygon((0 0, 1 0, 1 1, 0 1, 0 0))))'), st_geomfromtext('GEOMETRYCOLLECTION(GEOMETRYCOLLECTION(),GEOMETRYCOLLECTION())'))) as result from dual
 END
 INPUT
 select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))')));
 END
 OUTPUT
-select st_astext(st_union(ST_GeometryFromText('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), ST_GeometryFromText('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
+select st_astext(st_union(st_geometryfromtext('geometrycollection(polygon((0 0, 1 0, 1 1, 0 1, 0 0)))'), st_geometryfromtext('geometrycollection(polygon((1 0, 2 0, 2 1, 1 1, 1 0)))'))) from dual
 END
 INPUT
 select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')),                   st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)')));
 END
 OUTPUT
-select st_within(st_intersection(ST_GeomFromText('point(1 1)'), ST_GeomFromText('multipoint(2 2, 3 3)')), st_union(ST_GeomFromText('point(0 0)'), ST_GeomFromText('point(1 1)'))) from dual
+select st_within(st_intersection(st_geomfromtext('point(1 1)'), st_geomfromtext('multipoint(2 2, 3 3)')), st_union(st_geomfromtext('point(0 0)'), st_geomfromtext('point(1 1)'))) from dual
 END
 INPUT
 SELECT ST_AsText(ST_Union(ST_GEOMFROMTEXT(        'GEOMETRYCOLLECTION(LINESTRING(3 0, 3 3),                            LINESTRING(0 1, 4 1))'),                           ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result;
 END
 OUTPUT
-select ST_AsText(ST_Union(ST_GEOMFROMTEXT('GEOMETRYCOLLECTION(LINESTRING(3 0, 3 3),                            LINESTRING(0 1, 4 1))'), ST_GEOMFROMTEXT('GEOMETRYCOLLECTION()'))) as result from dual
+select ST_AsText(ST_Union(st_geomfromtext('GEOMETRYCOLLECTION(LINESTRING(3 0, 3 3),                            LINESTRING(0 1, 4 1))'), st_geomfromtext('GEOMETRYCOLLECTION()'))) as result from dual
 END
 INPUT
 (SELECT * FROM t1 ORDER BY a DESC LIMIT 5 OFFSET 4) UNION SELECT * FROM t2 ORDER BY a LIMIT 8 OFFSET 1;
@@ -1388,7 +1388,7 @@ INPUT
 SELECT ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 0,10 10,20 0,0 0))'), ST_GEOMFROMTEXT('POLYGON((10 5,20 7,10 10,30 10,20 0,20 5,10 5))')));
 END
 OUTPUT
-select ST_ISVALID(ST_UNION(ST_GEOMFROMTEXT('POLYGON((0 0,10 10,20 0,0 0))'), ST_GEOMFROMTEXT('POLYGON((10 5,20 7,10 10,30 10,20 0,20 5,10 5))'))) from dual
+select ST_ISVALID(ST_UNION(st_geomfromtext('POLYGON((0 0,10 10,20 0,0 0))'), st_geomfromtext('POLYGON((10 5,20 7,10 10,30 10,20 0,20 5,10 5))'))) from dual
 END
 INPUT
 select * from t1 union select * from t2 order by 1, 2;

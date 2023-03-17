@@ -500,6 +500,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFromTextExpr:
+		b, ok := inB.(*GeomFromTextExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromTextExpr(a, b)
 	case GroupBy:
 		b, ok := inB.(GroupBy)
 		if !ok {
@@ -2527,6 +2533,20 @@ func (cmp *Comparator) RefOfGTIDFuncExpr(a, b *GTIDFuncExpr) bool {
 		cmp.Expr(a.Set2, b.Set2) &&
 		cmp.Expr(a.Timeout, b.Timeout) &&
 		cmp.Expr(a.Channel, b.Channel)
+}
+
+// RefOfGeomFromTextExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfGeomFromTextExpr(a, b *GeomFromTextExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Type == b.Type &&
+		cmp.Expr(a.WktText, b.WktText) &&
+		cmp.Expr(a.Srid, b.Srid) &&
+		cmp.Expr(a.AxisOrderOpt, b.AxisOrderOpt)
 }
 
 // GroupBy does deep equals between the two objects.
@@ -4980,6 +5000,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFromTextExpr:
+		b, ok := inB.(*GeomFromTextExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromTextExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
@@ -5652,6 +5678,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfGTIDFuncExpr(a, b)
+	case *GeomFromTextExpr:
+		b, ok := inB.(*GeomFromTextExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfGeomFromTextExpr(a, b)
 	case *GroupConcatExpr:
 		b, ok := inB.(*GroupConcatExpr)
 		if !ok {
