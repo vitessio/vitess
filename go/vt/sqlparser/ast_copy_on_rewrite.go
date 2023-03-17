@@ -294,6 +294,12 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfMin(n, parent)
 	case *ModifyColumn:
 		return c.copyOnRewriteRefOfModifyColumn(n, parent)
+	case *MultiLinestringExpr:
+		return c.copyOnRewriteRefOfMultiLinestringExpr(n, parent)
+	case *MultiPointExpr:
+		return c.copyOnRewriteRefOfMultiPointExpr(n, parent)
+	case *MultiPolygonExpr:
+		return c.copyOnRewriteRefOfMultiPolygonExpr(n, parent)
 	case *NTHValueExpr:
 		return c.copyOnRewriteRefOfNTHValueExpr(n, parent)
 	case *NamedWindow:
@@ -3597,6 +3603,72 @@ func (c *cow) copyOnRewriteRefOfModifyColumn(n *ModifyColumn, parent SQLNode) (o
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfMultiLinestringExpr(n *MultiLinestringExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_LinestringParams, changedLinestringParams := c.copyOnRewriteExprs(n.LinestringParams, n)
+		if changedLinestringParams {
+			res := *n
+			res.LinestringParams, _ = _LinestringParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfMultiPointExpr(n *MultiPointExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_PointParams, changedPointParams := c.copyOnRewriteExprs(n.PointParams, n)
+		if changedPointParams {
+			res := *n
+			res.PointParams, _ = _PointParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
+func (c *cow) copyOnRewriteRefOfMultiPolygonExpr(n *MultiPolygonExpr, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_PolygonParams, changedPolygonParams := c.copyOnRewriteExprs(n.PolygonParams, n)
+		if changedPolygonParams {
+			res := *n
+			res.PolygonParams, _ = _PolygonParams.(Exprs)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfNTHValueExpr(n *NTHValueExpr, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6309,6 +6381,12 @@ func (c *cow) copyOnRewriteCallable(n Callable, parent SQLNode) (out SQLNode, ch
 		return c.copyOnRewriteRefOfMemberOfExpr(n, parent)
 	case *Min:
 		return c.copyOnRewriteRefOfMin(n, parent)
+	case *MultiLinestringExpr:
+		return c.copyOnRewriteRefOfMultiLinestringExpr(n, parent)
+	case *MultiPointExpr:
+		return c.copyOnRewriteRefOfMultiPointExpr(n, parent)
+	case *MultiPolygonExpr:
+		return c.copyOnRewriteRefOfMultiPolygonExpr(n, parent)
 	case *NTHValueExpr:
 		return c.copyOnRewriteRefOfNTHValueExpr(n, parent)
 	case *NamedWindow:
@@ -6569,6 +6647,12 @@ func (c *cow) copyOnRewriteExpr(n Expr, parent SQLNode) (out SQLNode, changed bo
 		return c.copyOnRewriteRefOfMemberOfExpr(n, parent)
 	case *Min:
 		return c.copyOnRewriteRefOfMin(n, parent)
+	case *MultiLinestringExpr:
+		return c.copyOnRewriteRefOfMultiLinestringExpr(n, parent)
+	case *MultiPointExpr:
+		return c.copyOnRewriteRefOfMultiPointExpr(n, parent)
+	case *MultiPolygonExpr:
+		return c.copyOnRewriteRefOfMultiPolygonExpr(n, parent)
 	case *NTHValueExpr:
 		return c.copyOnRewriteRefOfNTHValueExpr(n, parent)
 	case *NamedWindow:
