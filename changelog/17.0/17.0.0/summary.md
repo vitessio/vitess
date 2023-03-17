@@ -216,6 +216,14 @@ Vtbackup fetches the last backup, restores it to an empty mysql installation, re
 
 _DurationByPhaseSeconds_ exports timings for these individual phases.
 
+##### Instrumented components
+
+The following components are instrumented at this time:
+
+ * Builtin backup engine
+ * File backup storage
+ * S3 backup storage
+
 ##### Example
 
 **A snippet of vtbackup metrics after running it against the local example after creating the initial cluster**
