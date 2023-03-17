@@ -83,11 +83,11 @@ func TestInitErrors(t *testing.T) {
 		return conn.ExecuteFetch(query, maxRows, true)
 	}
 
-	require.Equal(t, int64(0), GetDDLCount())
+	require.Equal(t, int64(0), getDDLCount())
 	err = Init(ctx, exec)
 	require.NoError(t, err)
-	require.Equal(t, int64(len(sidecarTables)-len(schemaErrors)), GetDDLCount())
-	require.Equal(t, int64(len(schemaErrors)), GetDDLErrorCount())
+	require.Equal(t, int64(len(sidecarTables)-len(schemaErrors)), getDDLCount())
+	require.Equal(t, int64(len(schemaErrors)), getDDLErrorCount())
 
 	var want []string
 	for _, e := range schemaErrors {
@@ -95,7 +95,7 @@ func TestInitErrors(t *testing.T) {
 	}
 	// sort expected and reported errors for easy comparison
 	sort.Strings(want)
-	got := GetDDLErrorHistory()
+	got := getDDLErrorHistory()
 	sort.Slice(got, func(i, j int) bool {
 		return got[i].tableName < got[j].tableName
 	})
@@ -153,10 +153,10 @@ func TestMiscSidecarDB(t *testing.T) {
 	// tests init on empty db
 	ddlErrorCount.Set(0)
 	ddlCount.Set(0)
-	require.Equal(t, int64(0), GetDDLCount())
+	require.Equal(t, int64(0), getDDLCount())
 	err = Init(ctx, exec)
 	require.NoError(t, err)
-	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
+	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
 
 	// Include the table DDLs in the expected queries.
 	// This causes them to NOT be created again.
@@ -165,7 +165,7 @@ func TestMiscSidecarDB(t *testing.T) {
 	// tests init on already inited db
 	err = Init(ctx, exec)
 	require.NoError(t, err)
-	require.Equal(t, int64(len(sidecarTables)), GetDDLCount())
+	require.Equal(t, int64(len(sidecarTables)), getDDLCount())
 
 	// tests misc paths not covered above
 	si := &schemaInit{
