@@ -234,6 +234,10 @@ func (ast *astCompiler) translateBinaryExpr(binary *sqlparser.BinaryExpr) (Expr,
 		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithMul{}}, nil
 	case sqlparser.DivOp:
 		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithDiv{}}, nil
+	case sqlparser.IntDivOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithIntDiv{}}, nil
+	case sqlparser.ModOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithMod{}}, nil
 	case sqlparser.BitAndOp:
 		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &opBitAnd{}}, nil
 	case sqlparser.BitOrOp:

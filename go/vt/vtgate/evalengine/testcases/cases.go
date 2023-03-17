@@ -537,7 +537,7 @@ func Types(yield Query) {
 }
 
 func Arithmetic(yield Query) {
-	operators := []string{"+", "-", "*", "/"}
+	operators := []string{"+", "-", "*", "/", "DIV", "%", "MOD"}
 
 	for _, op := range operators {
 		for _, lhs := range inputConversions {

@@ -16,7 +16,11 @@ limitations under the License.
 
 package evalengine
 
-import "vitess.io/vitess/go/sqltypes"
+import (
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/vterrors"
+)
 
 func (c *compiler) compileNegate(expr *NegateExpr) (ctype, error) {
 	arg, err := c.compileExpr(expr.Inner)
@@ -64,8 +68,12 @@ func (c *compiler) compileArithmetic(expr *ArithmeticExpr) (ctype, error) {
 		return c.compileArithmeticMul(expr.Left, expr.Right)
 	case *opArithDiv:
 		return c.compileArithmeticDiv(expr.Left, expr.Right)
+	case *opArithIntDiv:
+		return c.compileArithmeticIntDiv(expr.Left, expr.Right)
+	case *opArithMod:
+		return c.compileArithmeticMod(expr.Left, expr.Right)
 	default:
-		panic("unexpected arithmetic operator")
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "not implemented")
 	}
 }
 
@@ -298,4 +306,153 @@ func (c *compiler) compileArithmeticDiv(left, right Expr) (ctype, error) {
 		c.asm.jumpDestination(skip)
 		return ctype{Type: sqltypes.Decimal, Col: collationNumeric}, nil
 	}
+}
+
+func (c *compiler) compileArithmeticIntDiv(left, right Expr) (ctype, error) {
+	lt, err := c.compileExpr(left)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	rt, err := c.compileExpr(right)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(lt, rt)
+	lt = c.compileToNumeric(lt, 2)
+	rt = c.compileToNumeric(rt, 1)
+
+	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}
+	switch lt.Type {
+	case sqltypes.Int64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.IntDiv_ii()
+		case sqltypes.Uint64:
+			ct.Type = sqltypes.Uint64
+			c.asm.IntDiv_iu()
+		case sqltypes.Float64:
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.Convert_xd(1, 0, 0)
+			c.asm.IntDiv_di()
+		case sqltypes.Decimal:
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.IntDiv_di()
+		}
+	case sqltypes.Uint64:
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.IntDiv_ui()
+		case sqltypes.Uint64:
+			ct.Type = sqltypes.Uint64
+			c.asm.IntDiv_uu()
+		case sqltypes.Float64:
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.Convert_xd(1, 0, 0)
+			c.asm.IntDiv_du()
+		case sqltypes.Decimal:
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.IntDiv_du()
+		}
+	case sqltypes.Float64:
+		switch rt.Type {
+		case sqltypes.Decimal:
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.IntDiv_di()
+		case sqltypes.Uint64:
+			ct.Type = sqltypes.Uint64
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.Convert_xd(1, 0, 0)
+			c.asm.IntDiv_du()
+		default:
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.Convert_xd(1, 0, 0)
+			c.asm.IntDiv_di()
+		}
+	case sqltypes.Decimal:
+		switch rt.Type {
+		case sqltypes.Decimal:
+			c.asm.IntDiv_di()
+		case sqltypes.Uint64:
+			ct.Type = sqltypes.Uint64
+			c.asm.Convert_xd(1, 0, 0)
+			c.asm.IntDiv_du()
+		default:
+			c.asm.Convert_xd(1, 0, 0)
+			c.asm.IntDiv_di()
+		}
+	}
+	c.asm.jumpDestination(skip)
+	return ct, nil
+}
+
+func (c *compiler) compileArithmeticMod(left, right Expr) (ctype, error) {
+	lt, err := c.compileExpr(left)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	rt, err := c.compileExpr(right)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	skip := c.compileNullCheck2(lt, rt)
+	lt = c.compileToNumeric(lt, 2)
+	rt = c.compileToNumeric(rt, 1)
+
+	ct := ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagNullable}
+	switch lt.Type {
+	case sqltypes.Int64:
+		ct.Type = sqltypes.Int64
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.Mod_ii()
+		case sqltypes.Uint64:
+			c.asm.Mod_iu()
+		case sqltypes.Float64:
+			ct.Type = sqltypes.Float64
+			c.asm.Convert_xf(2)
+			c.asm.Mod_ff()
+		case sqltypes.Decimal:
+			ct.Type = sqltypes.Decimal
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.Mod_dd()
+		}
+	case sqltypes.Uint64:
+		ct.Type = sqltypes.Uint64
+		switch rt.Type {
+		case sqltypes.Int64:
+			c.asm.Mod_ui()
+		case sqltypes.Uint64:
+			c.asm.Mod_uu()
+		case sqltypes.Float64:
+			ct.Type = sqltypes.Float64
+			c.asm.Convert_xf(2)
+			c.asm.Mod_ff()
+		case sqltypes.Decimal:
+			ct.Type = sqltypes.Decimal
+			c.asm.Convert_xd(2, 0, 0)
+			c.asm.Mod_dd()
+		}
+	case sqltypes.Decimal:
+		ct.Type = sqltypes.Decimal
+		switch rt.Type {
+		case sqltypes.Float64:
+			ct.Type = sqltypes.Float64
+			c.asm.Convert_xf(2)
+			c.asm.Mod_ff()
+		default:
+			c.asm.Convert_xd(1, 0, 0)
+			c.asm.Mod_dd()
+		}
+	case sqltypes.Float64:
+		ct.Type = sqltypes.Float64
+		c.asm.Convert_xf(1)
+		c.asm.Mod_ff()
+	}
+
+	c.asm.jumpDestination(skip)
+	return ct, nil
 }

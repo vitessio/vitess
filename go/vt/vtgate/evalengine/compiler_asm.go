@@ -984,6 +984,203 @@ func (asm *assembler) Div_ff() {
 	}, "DIV FLOAT64(SP-2), FLOAT64(SP-1)")
 }
 
+func (asm *assembler) IntDiv_ii() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.i = l.i / r.i
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV INT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_iu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			r.u, vm.err = mathIntDiv_iu0(l.i, r.u)
+			vm.stack[vm.sp-2] = r
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV INT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_ui() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u, vm.err = mathIntDiv_ui0(l.u, r.i)
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV UINT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_uu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u = l.u / r.u
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV UINT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_di() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalDecimal)
+		r := vm.stack[vm.sp-1].(*evalDecimal)
+		if r.dec.IsZero() {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			var res int64
+			res, vm.err = mathIntDiv_di0(l, r)
+			vm.stack[vm.sp-2] = vm.arena.newEvalInt64(res)
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV DECIMAL(SP-2), DECIMAL(SP-1)")
+}
+
+func (asm *assembler) IntDiv_du() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalDecimal)
+		r := vm.stack[vm.sp-1].(*evalDecimal)
+		if r.dec.IsZero() {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			var res uint64
+			res, vm.err = mathIntDiv_du0(l, r)
+			vm.stack[vm.sp-2] = vm.arena.newEvalUint64(res)
+		}
+		vm.sp--
+		return 1
+	}, "UINTDIV DECIMAL(SP-2), DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Mod_ii() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.i = l.i % r.i
+		}
+		vm.sp--
+		return 1
+	}, "MOD INT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) Mod_iu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.i = mathMod_iu0(l.i, r.u)
+		}
+		vm.sp--
+		return 1
+	}, "MOD INT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) Mod_ui() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u, vm.err = mathMod_ui0(l.u, r.i)
+		}
+		vm.sp--
+		return 1
+	}, "MOD UINT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) Mod_uu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u = l.u % r.u
+		}
+		vm.sp--
+		return 1
+	}, "MOD UINT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) Mod_ff() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalFloat)
+		r := vm.stack[vm.sp-1].(*evalFloat)
+		if r.f == 0.0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.f = math.Mod(l.f, r.f)
+		}
+		vm.sp--
+		return 1
+	}, "MOD FLOAT64(SP-2), FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Mod_dd() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalDecimal)
+		r := vm.stack[vm.sp-1].(*evalDecimal)
+		if r.dec.IsZero() {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.dec, l.length = mathMod_dd0(l, r)
+		}
+		vm.sp--
+		return 1
+	}, "MOD DECIMAL(SP-2), DECIMAL(SP-1)")
+}
+
 func (asm *assembler) Fn_ASCII() {
 	asm.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-1].(*evalBytes)
