@@ -231,17 +231,17 @@ func GetCreateQuery() string {
 
 // GetDDLCount metric returns the count of sidecardb DDLs that
 // have been run as part of this vttablet's init process.
-func GetDDLCount() int64 {
+func getDDLCount() int64 {
 	return ddlCount.Get()
 }
 
 // GetDDLErrorCount returns the count of sidecardb DDLs that have been errored out as part of this vttablet's init process.
-func GetDDLErrorCount() int64 {
+func getDDLErrorCount() int64 {
 	return ddlErrorCount.Get()
 }
 
 // GetDDLErrorHistory returns the errors encountered as part of this vttablet's init process..
-func GetDDLErrorHistory() []*ddlError {
+func getDDLErrorHistory() []*ddlError {
 	var errors []*ddlError
 	for _, e := range ddlErrorHistory.Records() {
 		ddle, ok := e.(*ddlError)
