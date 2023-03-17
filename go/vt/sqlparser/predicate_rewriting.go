@@ -29,22 +29,29 @@ type RewriteState bool
 // so ColName.Metadata will be nil:ed out as part of this rewrite
 func RewritePredicate(ast SQLNode) SQLNode {
 	for {
-		finishedRewrite := true
-		ast = SafeRewrite(ast, nil, func(cursor *Cursor) bool {
-			if e, isExpr := cursor.node.(Expr); isExpr {
-				rewritten, state := simplifyExpression(e)
-				if state == Changed {
-					finishedRewrite = false
-					cursor.Replace(rewritten)
-				}
+		changed := false
+		stopOnChange := func(SQLNode, SQLNode) bool {
+			return !changed
+		}
+		ast = SafeRewrite(ast, stopOnChange, func(cursor *Cursor) bool {
+			e, isExpr := cursor.node.(Expr)
+			if !isExpr {
+				return true
 			}
+
+			rewritten, state := simplifyExpression(e)
+			if state == Changed {
+				changed = true
+				cursor.Replace(rewritten)
+			}
+
 			if col, isCol := cursor.node.(*ColName); isCol {
 				col.Metadata = nil
 			}
-			return true
+			return !changed
 		})
 
-		if finishedRewrite {
+		if !changed {
 			return ast
 		}
 	}
@@ -243,15 +250,21 @@ func simplifyAnd(expr *AndExpr) (Expr, RewriteState) {
 	if or, ok := and.Left.(*OrExpr); ok {
 		// Simplification
 		// (A OR B) AND A => A
-		if Equals.Expr(or.Left, and.Right) || Equals.Expr(or.Right, and.Right) {
+		if Equals.Expr(or.Left, and.Right) {
+			return and.Right, Changed
+		}
+		if Equals.Expr(or.Right, and.Right) {
 			return and.Right, Changed
 		}
 	}
 	if or, ok := and.Right.(*OrExpr); ok {
 		// Simplification
-		// A OR (A AND B) => A
-		if Equals.Expr(or.Left, and.Left) || Equals.Expr(or.Right, and.Left) {
-			return or.Left, Changed
+		// A AND (A OR B) => A
+		if Equals.Expr(or.Left, and.Left) {
+			return and.Left, Changed
+		}
+		if Equals.Expr(or.Right, and.Left) {
+			return and.Left, Changed
 		}
 	}
 

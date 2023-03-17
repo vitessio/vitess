@@ -120,6 +120,9 @@ func TestRewritePredicate(in *testing.T) {
 	}, {
 		in:       "(a=1 or a IN (1,2)) or (a = 2 or a = 3)",
 		expected: "a in (1, 2, 3)",
+	}, {
+		in:       "A and (B or A)",
+		expected: "A",
 	}}
 
 	for _, tc := range tests {
