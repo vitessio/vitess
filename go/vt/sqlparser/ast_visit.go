@@ -294,6 +294,12 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfMin(in, f)
 	case *ModifyColumn:
 		return VisitRefOfModifyColumn(in, f)
+	case *MultiLinestringExpr:
+		return VisitRefOfMultiLinestringExpr(in, f)
+	case *MultiPointExpr:
+		return VisitRefOfMultiPointExpr(in, f)
+	case *MultiPolygonExpr:
+		return VisitRefOfMultiPolygonExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NamedWindow:
@@ -2453,6 +2459,42 @@ func VisitRefOfModifyColumn(in *ModifyColumn, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfMultiLinestringExpr(in *MultiLinestringExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.LinestringParams, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfMultiPointExpr(in *MultiPointExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PointParams, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfMultiPolygonExpr(in *MultiPolygonExpr, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitExprs(in.PolygonParams, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfNTHValueExpr(in *NTHValueExpr, f Visit) error {
 	if in == nil {
 		return nil
@@ -4245,6 +4287,12 @@ func VisitCallable(in Callable, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *Min:
 		return VisitRefOfMin(in, f)
+	case *MultiLinestringExpr:
+		return VisitRefOfMultiLinestringExpr(in, f)
+	case *MultiPointExpr:
+		return VisitRefOfMultiPointExpr(in, f)
+	case *MultiPolygonExpr:
+		return VisitRefOfMultiPolygonExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NamedWindow:
@@ -4505,6 +4553,12 @@ func VisitExpr(in Expr, f Visit) error {
 		return VisitRefOfMemberOfExpr(in, f)
 	case *Min:
 		return VisitRefOfMin(in, f)
+	case *MultiLinestringExpr:
+		return VisitRefOfMultiLinestringExpr(in, f)
+	case *MultiPointExpr:
+		return VisitRefOfMultiPointExpr(in, f)
+	case *MultiPolygonExpr:
+		return VisitRefOfMultiPolygonExpr(in, f)
 	case *NTHValueExpr:
 		return VisitRefOfNTHValueExpr(in, f)
 	case *NamedWindow:

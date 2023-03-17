@@ -295,6 +295,12 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfMin(in)
 	case *ModifyColumn:
 		return CloneRefOfModifyColumn(in)
+	case *MultiLinestringExpr:
+		return CloneRefOfMultiLinestringExpr(in)
+	case *MultiPointExpr:
+		return CloneRefOfMultiPointExpr(in)
+	case *MultiPolygonExpr:
+		return CloneRefOfMultiPolygonExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
@@ -1953,6 +1959,36 @@ func CloneRefOfModifyColumn(n *ModifyColumn) *ModifyColumn {
 	return &out
 }
 
+// CloneRefOfMultiLinestringExpr creates a deep clone of the input.
+func CloneRefOfMultiLinestringExpr(n *MultiLinestringExpr) *MultiLinestringExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.LinestringParams = CloneExprs(n.LinestringParams)
+	return &out
+}
+
+// CloneRefOfMultiPointExpr creates a deep clone of the input.
+func CloneRefOfMultiPointExpr(n *MultiPointExpr) *MultiPointExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PointParams = CloneExprs(n.PointParams)
+	return &out
+}
+
+// CloneRefOfMultiPolygonExpr creates a deep clone of the input.
+func CloneRefOfMultiPolygonExpr(n *MultiPolygonExpr) *MultiPolygonExpr {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.PolygonParams = CloneExprs(n.PolygonParams)
+	return &out
+}
+
 // CloneRefOfNTHValueExpr creates a deep clone of the input.
 func CloneRefOfNTHValueExpr(n *NTHValueExpr) *NTHValueExpr {
 	if n == nil {
@@ -3352,6 +3388,12 @@ func CloneCallable(in Callable) Callable {
 		return CloneRefOfMemberOfExpr(in)
 	case *Min:
 		return CloneRefOfMin(in)
+	case *MultiLinestringExpr:
+		return CloneRefOfMultiLinestringExpr(in)
+	case *MultiPointExpr:
+		return CloneRefOfMultiPointExpr(in)
+	case *MultiPolygonExpr:
+		return CloneRefOfMultiPolygonExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
@@ -3624,6 +3666,12 @@ func CloneExpr(in Expr) Expr {
 		return CloneRefOfMemberOfExpr(in)
 	case *Min:
 		return CloneRefOfMin(in)
+	case *MultiLinestringExpr:
+		return CloneRefOfMultiLinestringExpr(in)
+	case *MultiPointExpr:
+		return CloneRefOfMultiPointExpr(in)
+	case *MultiPolygonExpr:
+		return CloneRefOfMultiPolygonExpr(in)
 	case *NTHValueExpr:
 		return CloneRefOfNTHValueExpr(in)
 	case *NamedWindow:
