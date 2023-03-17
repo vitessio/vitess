@@ -428,3 +428,13 @@ func TestScalarAggregate(t *testing.T) {
 	mcmp.Exec("insert into aggr_test(id, val1, val2) values(1,'a',1), (2,'A',1), (3,'b',1), (4,'c',3), (5,'c',4)")
 	mcmp.AssertMatches("select /*vt+ PLANNER=gen4 */ count(distinct val1) from aggr_test", `[[INT64(3)]]`)
 }
+
+func TestAggregationRandomOnAnAggregatedValue(t *testing.T) {
+	mcmp, closer := start(t)
+	defer closer()
+
+	mcmp.Exec("insert into t11(k, a, b) values (0, 100, 10), (10, 200, 20);")
+
+	mcmp.AssertMatchesNoOrder("select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from t11 where a = 100) A;",
+		`[[DECIMAL(100) DECIMAL(10) DECIMAL(10.0000)]]`)
+}

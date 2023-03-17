@@ -307,7 +307,7 @@ func (d ExprDependencies) dependencies(expr sqlparser.Expr) (deps TableSet) {
 // We need `foo` to be translated to `id+42` on the inside of the derived table
 func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr, error) {
 	newExpr := sqlparser.CloneExpr(expr)
-	sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
+	n := sqlparser.Rewrite(newExpr, func(cursor *sqlparser.Cursor) bool {
 		switch node := cursor.Node().(type) {
 		case *sqlparser.ColName:
 			exp, err := vt.getExprFor(node.Name.String())
@@ -323,7 +323,7 @@ func RewriteDerivedExpression(expr sqlparser.Expr, vt TableInfo) (sqlparser.Expr
 		}
 		return true
 	}, nil)
-	return newExpr, nil
+	return n.(sqlparser.Expr), nil
 }
 
 // FindSubqueryReference goes over the sub queries and searches for it by value equality instead of reference equality

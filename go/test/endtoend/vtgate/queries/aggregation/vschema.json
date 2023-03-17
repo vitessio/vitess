@@ -123,6 +123,14 @@
           "name": "hash"
         }
       ]
+    },
+    "t11": {
+      "column_vindexes": [
+        {
+          "column": "k",
+          "name": "hash"
+        }
+      ]
     }
   }
 }
