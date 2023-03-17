@@ -21,6 +21,7 @@ import (
 
 	"context"
 
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/event"
@@ -209,6 +210,17 @@ func (ts *Server) GetKeyspaceDurability(ctx context.Context, keyspace string) (s
 		return keyspaceInfo.GetDurabilityPolicy(), nil
 	}
 	return "none", nil
+}
+
+func (ts *Server) GetSidecarDBName(ctx context.Context, keyspace string) (string, error) {
+	keyspaceInfo, err := ts.GetKeyspace(ctx, keyspace)
+	if err != nil {
+		return "", err
+	}
+	if keyspaceInfo.SidecarDbName != "" {
+		return keyspaceInfo.SidecarDbName, nil
+	}
+	return sidecardb.DefaultName, nil
 }
 
 func (ts *Server) GetThrottlerConfig(ctx context.Context, keyspace string) (*topodatapb.ThrottlerConfig, error) {

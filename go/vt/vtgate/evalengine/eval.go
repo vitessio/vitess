@@ -36,6 +36,8 @@ const (
 	flagNull typeFlag = 1 << 0
 	// flagNullable marks that this value CAN be null
 	flagNullable typeFlag = 1 << 1
+	// flagIsBoolean marks that this value should be interpreted as boolean
+	flagIsBoolean typeFlag = 1 << 2
 
 	// flagIntegerUdf marks that this value is math.MinInt64, and will underflow if negated
 	flagIntegerUdf typeFlag = 1 << 5
@@ -51,6 +53,10 @@ const (
 	flagBit typeFlag = 1 << 9
 	// flagExplicitCollation marks that this value has an explicit collation
 	flagExplicitCollation typeFlag = 1 << 10
+
+	// flagAmbiguousType marks that the type of this value depends on the value at runtime
+	// and cannot be computed accurately
+	flagAmbiguousType typeFlag = 1 << 11
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf

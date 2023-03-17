@@ -18,7 +18,6 @@ package schema
 
 import (
 	"context"
-	"fmt"
 	"sort"
 	"sync"
 
@@ -26,6 +25,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
@@ -33,7 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
-const getSchemaVersions = "select id, pos, ddl, time_updated, schemax from _vt.schema_version where id > %d order by id asc"
+const getSchemaVersions = "select id, pos, ddl, time_updated, schemax from %s.schema_version where id > %d order by id asc"
 
 // vl defines the glog verbosity level for the package
 const vl = 10
@@ -113,8 +113,9 @@ func (h *historian) Close() {
 	log.Info("Historian: closed")
 }
 
-// RegisterVersionEvent is called by the vstream when it encounters a version event (an insert into _vt.schema_tracking)
-// It triggers the historian to load the newer rows from the database to update its cache
+// RegisterVersionEvent is called by the vstream when it encounters a version event (an
+// insert into the schema_tracking table). It triggers the historian to load the newer
+// rows from the database to update its cache.
 func (h *historian) RegisterVersionEvent() error {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -162,7 +163,8 @@ func (h *historian) loadFromDB(ctx context.Context) error {
 		return err
 	}
 	defer conn.Recycle()
-	tableData, err := conn.Exec(ctx, fmt.Sprintf(getSchemaVersions, h.lastID), 10000, true)
+	tableData, err := conn.Exec(ctx, sqlparser.BuildParsedQuery(getSchemaVersions, sidecardb.GetIdentifier(),
+		h.lastID).Query, 10000, true)
 	if err != nil {
 		log.Infof("Error reading schema_tracking table %v, will operate with the latest available schema", err)
 		return nil

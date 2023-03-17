@@ -2036,7 +2036,7 @@ type (
 		SQLNode
 	}
 
-	// TableName represents a table  name.
+	// TableName represents a table name.
 	// Qualifier, if specified, represents a database or keyspace.
 	// TableName is a value struct whose fields are case sensitive.
 	// This means two TableName vars can be compared for equality
@@ -2715,6 +2715,11 @@ type (
 		PointParams Exprs
 	}
 
+	//PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
+	PolygonExpr struct {
+		LinestringParams Exprs
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3043,6 +3048,7 @@ func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
 func (*PointExpr) iExpr()                          {}
 func (*LineStringExpr) iExpr()                     {}
+func (*PolygonExpr) iExpr()                        {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3098,6 +3104,7 @@ func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
 func (*PointExpr) iCallable()                          {}
 func (*LineStringExpr) iCallable()                     {}
+func (*PolygonExpr) iCallable()                        {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

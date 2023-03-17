@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-CREATE TABLE IF NOT EXISTS _vt.heartbeat
+CREATE TABLE IF NOT EXISTS heartbeat
 (
     keyspaceShard VARBINARY(256)  NOT NULL,
     tabletUid     INT UNSIGNED    NOT NULL,

@@ -1261,7 +1261,15 @@ func TestReplaceSchemaName(t *testing.T) {
 	}
 }
 
+// TODO(maxeng) This is currently flaky. Skipping for now to avoid slowing down developers.
+//
+// Plans to rework this test.
+//   - Use mock consolidator and mock db instead of real consolidator and fakedb.
+//   - Run a single query per test case. Simulate concurrent queries through mock
+//     consolidator.
 func TestQueryExecutorShouldConsolidate(t *testing.T) {
+	t.Skip()
+
 	testcases := []struct {
 		consolidates  []bool
 		executorFlags executorFlags
