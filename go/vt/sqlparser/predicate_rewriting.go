@@ -32,11 +32,24 @@ var logger *log.Logger
 // Set☝️to something not nil to get debug output
 // var logger *log.Logger = log.New(os.Stdout, "", 0)
 
-func printRule(rule string, expr Expr) {
+func f(e Expr) func() Expr {
+	return func() Expr {
+		return e
+	}
+}
+
+func printRule(rule string, expr func() Expr) {
 	if logger == nil {
 		return
 	}
-	logger.Printf("Rule: %s   ON   %s", rule, String(expr))
+	logger.Printf("Rule: %s   ON   %s", rule, String(expr()))
+}
+
+func printExpr(expr SQLNode) {
+	if logger == nil {
+		return
+	}
+	logger.Printf("Current: %s", String(expr))
 }
 
 // RewritePredicate walks the input AST and rewrites any boolean logic into a simpler form
@@ -45,7 +58,7 @@ func printRule(rule string, expr Expr) {
 // so ColName.Metadata will be nil:ed out as part of this rewrite
 func RewritePredicate(ast SQLNode) SQLNode {
 	for {
-		logger.Println("Current: " + String(ast))
+		printExpr(ast)
 		changed := false
 		stopOnChange := func(SQLNode, SQLNode) bool {
 			return !changed
@@ -91,13 +104,13 @@ func simplifyExpression(expr Expr) (Expr, RewriteState) {
 func simplifyNot(expr *NotExpr) (Expr, RewriteState) {
 	switch child := expr.Expr.(type) {
 	case *NotExpr:
-		printRule("NOT NOT A => A", expr)
+		printRule("NOT NOT A => A", f(expr))
 		return child.Expr, Changed
 	case *OrExpr:
-		printRule("NOT (A OR B) => NOT A AND NOT B", expr)
+		printRule("NOT (A OR B) => NOT A AND NOT B", f(expr))
 		return &AndExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, Changed
 	case *AndExpr:
-		printRule("NOT (A AND B) => NOT A OR NOT B", expr)
+		printRule("NOT (A AND B) => NOT A OR NOT B", f(expr))
 		return &OrExpr{Right: &NotExpr{Expr: child.Right}, Left: &NotExpr{Expr: child.Left}}, Changed
 	}
 	return expr, NoChange
@@ -132,7 +145,7 @@ func ExtractINFromOR(expr *OrExpr) []Expr {
 		}
 	}
 
-	return ins
+	return uniquefy(ins)
 }
 
 func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
@@ -143,41 +156,44 @@ func simplifyOr(expr *OrExpr) (Expr, RewriteState) {
 	rand, rok := or.Right.(*AndExpr)
 	switch {
 	case lok && rok:
+		// (<> AND <>) OR (<> AND <>)
 		var a, b, c Expr
 		switch {
 		case Equals.Expr(land.Left, rand.Left):
-			printRule("(A and B) or (A and C) => A AND (B OR C)", expr)
+			printRule("(A and B) or (A and C) => A AND (B OR C)", f(expr))
 			a, b, c = land.Left, land.Right, rand.Right
 		case Equals.Expr(land.Left, rand.Right):
-			printRule("(A and B) or (C and A) => A AND (B OR C)", expr)
+			printRule("(A and B) or (C and A) => A AND (B OR C)", f(expr))
 			a, b, c = land.Left, land.Right, rand.Left
 		case Equals.Expr(land.Right, rand.Left):
-			printRule("(B and A) or (A and C) => A AND (B OR C)", expr)
+			printRule("(B and A) or (A and C) => A AND (B OR C)", f(expr))
 			a, b, c = land.Right, land.Left, rand.Right
 		case Equals.Expr(land.Right, rand.Right):
-			printRule("(B and A) or (C and A) => A AND (B OR C)", expr)
+			printRule("(B and A) or (C and A) => A AND (B OR C)", f(expr))
 			a, b, c = land.Right, land.Left, rand.Left
 		default:
 			return expr, NoChange
 		}
 		return &AndExpr{Left: a, Right: &OrExpr{Left: b, Right: c}}, Changed
 	case lok:
+		// (<> AND <>) OR <>
 		// Simplification
 		if Equals.Expr(or.Right, land.Left) || Equals.Expr(or.Right, land.Right) {
-			printRule("(A AND B) OR A => A", expr)
+			printRule("(A AND B) OR A => A", f(expr))
 			return or.Right, Changed
 		}
 		// Distribution Law
-		printRule("(A AND B) OR C => (A OR C) AND (B OR C)", expr)
+		printRule("(A AND B) OR C => (A OR C) AND (B OR C)", f(expr))
 		return &AndExpr{Left: &OrExpr{Left: land.Left, Right: or.Right}, Right: &OrExpr{Left: land.Right, Right: or.Right}}, Changed
 	case rok:
+		// <> OR (<> AND <>)
 		// Simplification
 		if Equals.Expr(or.Left, rand.Left) || Equals.Expr(or.Left, rand.Right) {
-			printRule("A OR (A AND B) => A", expr)
+			printRule("A OR (A AND B) => A", f(expr))
 			return or.Left, Changed
 		}
 		// Distribution Law
-		printRule("C OR (A AND B) => (C OR A) AND (C OR B)", expr)
+		printRule("C OR (A AND B) => (C OR A) AND (C OR B)", f(expr))
 		return &AndExpr{Left: &OrExpr{Left: or.Left, Right: rand.Left}, Right: &OrExpr{Left: or.Left, Right: rand.Right}}, Changed
 	}
 
@@ -203,33 +219,42 @@ func tryTurningOrIntoIn(l, r *ComparisonExpr) (Expr, RewriteState) {
 	}
 
 	var tuple ValTuple
-
+	var ruleStr string
 	switch l.Operator {
 	case EqualOp:
 		tuple = ValTuple{l.Right}
+		ruleStr = "A = <>"
 	case InOp:
 		lft, ok := l.Right.(ValTuple)
 		if !ok {
 			return nil, NoChange
 		}
 		tuple = lft
+		ruleStr = "A IN (<>, <>)"
 	default:
 		return nil, NoChange
 	}
 
+	ruleStr += " OR "
+
 	switch r.Operator {
 	case EqualOp:
 		tuple = append(tuple, r.Right)
+		ruleStr += "A = <>"
 	case InOp:
 		lft, ok := r.Right.(ValTuple)
 		if !ok {
 			return nil, NoChange
 		}
 		tuple = append(tuple, lft...)
+		ruleStr += "A IN (<>, <>)"
 	default:
 		return nil, NoChange
 	}
 
+	ruleStr += " => A IN (<>, <>)"
+
+	printRule(ruleStr, f(&OrExpr{Left: l, Right: r}))
 	return &ComparisonExpr{
 		Operator: InOp,
 		Left:     col,
@@ -252,7 +277,7 @@ outer:
 
 func simplifyXor(expr *XorExpr) (Expr, RewriteState) {
 	// DeMorgan Rewriter
-	// (A XOR B) => (A OR B) AND NOT (A AND B)
+	printRule("(A XOR B) => (A OR B) AND NOT (A AND B)", f(expr))
 	return &AndExpr{Left: &OrExpr{Left: expr.Left, Right: expr.Right}, Right: &NotExpr{Expr: &AndExpr{Left: expr.Left, Right: expr.Right}}}, Changed
 }
 
@@ -266,22 +291,22 @@ func simplifyAnd(expr *AndExpr) (Expr, RewriteState) {
 		// Simplification
 
 		if Equals.Expr(or.Left, and.Right) {
-			printRule("(A OR B) AND A => A", expr)
+			printRule("(A OR B) AND A => A", f(expr))
 			return and.Right, Changed
 		}
 		if Equals.Expr(or.Right, and.Right) {
-			printRule("(A OR B) AND B => B", expr)
+			printRule("(A OR B) AND B => B", f(expr))
 			return and.Right, Changed
 		}
 	}
 	if or, ok := and.Right.(*OrExpr); ok {
 		// Simplification
 		if Equals.Expr(or.Left, and.Left) {
-			printRule("A AND (A OR B) => A", expr)
+			printRule("A AND (A OR B) => A", f(expr))
 			return and.Left, Changed
 		}
 		if Equals.Expr(or.Right, and.Left) {
-			printRule("A AND (B OR A) => A", expr)
+			printRule("A AND (B OR A) => A", f(expr))
 			return and.Left, Changed
 		}
 	}
@@ -315,6 +340,7 @@ outer1:
 		leaves = leaves[1:]
 		for _, alreadyIn := range predicates {
 			if Equals.Expr(alreadyIn, curr) {
+				printRule("A OR A => A", f(&AndExpr{Left: alreadyIn, Right: curr}))
 				continue outer1
 			}
 		}
@@ -340,26 +366,24 @@ func distinctAnd(in *AndExpr) (Expr, RewriteState) {
 	for len(todo) > 0 {
 		curr := todo[0]
 		todo = todo[1:]
-		addAnd := func(in Expr) {
-			and, ok := in.(*AndExpr)
-			if ok {
+		addExpr := func(in Expr) {
+			if and, ok := in.(*AndExpr); ok {
 				todo = append(todo, and)
 			} else {
 				leaves = append(leaves, in)
 			}
 		}
-		addAnd(curr.Left)
-		addAnd(curr.Right)
+		addExpr(curr.Left)
+		addExpr(curr.Right)
 	}
 	original := len(leaves)
 	var predicates []Expr
 
 outer1:
-	for len(leaves) > 0 {
-		curr := leaves[0]
-		leaves = leaves[1:]
+	for _, curr := range leaves {
 		for _, alreadyIn := range predicates {
 			if Equals.Expr(alreadyIn, curr) {
+				printRule("A AND A => A", f(&AndExpr{Left: alreadyIn, Right: curr}))
 				continue outer1
 			}
 		}
@@ -376,5 +400,5 @@ outer1:
 		}
 		result = &AndExpr{Left: result, Right: curr}
 	}
-	return result, Changed
+	return AndExpressions(leaves...), Changed
 }
