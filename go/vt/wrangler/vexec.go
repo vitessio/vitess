@@ -57,7 +57,7 @@ const (
 	// we replace the existing value within the string. When we no
 	// longer have to support MySQL 5.7 we can use this much simpler
 	// query:
-	// 	if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:[A-Z_]+', 'on_ddl:%s'))"
+	// 	"if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:[A-Z_]+', 'on_ddl:%s'))"
 	// Until then... this 5.7 compatible ugliness:
 	updateOnDDLInSource = "trim(both ' ' from if(locate('on_ddl:', source) = 0, concat(source, ' on_ddl:%s'), insert(source, locate('on_ddl:', source) + length('on_ddl:'), if(locate(' ', source, locate('on_ddl:', source) + length('on_ddl:')) = 0, -1, length(source) - locate(' ', source, locate('on_ddl:', source) + length('on_ddl:'))), '%s ')))"
 )
