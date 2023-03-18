@@ -3675,8 +3675,7 @@ func (node *MultiLinestringExpr) formatFast(buf *TrackedBuffer) {
 
 // formatFast formats the node
 func (node *GeomFromTextExpr) formatFast(buf *TrackedBuffer) {
-	buf.WriteString("st_")
-	buf.WriteString(node.Type)
+	buf.WriteString(node.Type.ToString())
 	buf.WriteByte('(')
 	buf.printExpr(node, node.WktText, true)
 	if node.Srid != nil {

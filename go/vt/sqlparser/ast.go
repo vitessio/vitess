@@ -2742,8 +2742,11 @@ type (
 		PolygonParams Exprs
 	}
 
+	// GeomFromWktType is an enum to get the types of wkt functions with possible values: GeometryFromText GeometryCollectionFromText PointFromText LineStringFromText PolygonFromText MultiPointFromText MultiPolygonFromText MultiLinestringFromText
+	GeomFromWktType int8
+
 	GeomFromTextExpr struct {
-		Type         string
+		Type         GeomFromWktType
 		WktText      Expr
 		Srid         Expr
 		AxisOrderOpt Expr

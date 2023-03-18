@@ -1443,8 +1443,6 @@ func (cached *GeomFromTextExpr) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(64)
 	}
-	// field Type string
-	size += hack.RuntimeAllocSize(int64(len(cached.Type)))
 	// field WktText vitess.io/vitess/go/vt/sqlparser.Expr
 	if cc, ok := cached.WktText.(cachedObject); ok {
 		size += cc.CachedSize(true)

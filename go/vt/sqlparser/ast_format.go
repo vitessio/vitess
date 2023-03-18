@@ -2798,7 +2798,7 @@ func (node *MultiLinestringExpr) Format(buf *TrackedBuffer) {
 
 // Format formats the node
 func (node *GeomFromTextExpr) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "st_%s(%v", node.Type, node.WktText)
+	buf.astPrintf(node, "%s(%v", node.Type.ToString(), node.WktText)
 	if node.Srid != nil {
 		buf.astPrintf(node, ", %v", node.Srid)
 	}

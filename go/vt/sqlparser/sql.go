@@ -17965,7 +17965,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6080
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geomfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1187:
@@ -17973,7 +17973,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6084
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geomfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1188:
@@ -17981,7 +17981,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6088
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geomfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1189:
@@ -17989,7 +17989,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6092
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometryfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1190:
@@ -17997,7 +17997,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6096
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometryfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1191:
@@ -18005,7 +18005,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6100
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometryfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1192:
@@ -18013,7 +18013,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6104
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geomcollfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1193:
@@ -18021,7 +18021,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6108
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geomcollfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1194:
@@ -18029,7 +18029,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6112
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geomcollfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1195:
@@ -18037,7 +18037,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6116
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometrycollectionfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1196:
@@ -18045,7 +18045,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6120
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometrycollectionfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1197:
@@ -18053,7 +18053,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6124
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometrycollectionfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1198:
@@ -18061,7 +18061,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6128
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometrycollfromtxt", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1199:
@@ -18069,7 +18069,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6132
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometrycollfromtxt", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1200:
@@ -18077,7 +18077,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6136
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "geometrycollfromtxt", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: GeometryCollectionFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1201:
@@ -18085,7 +18085,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6140
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "linestringfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1202:
@@ -18093,7 +18093,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6144
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "linestringfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1203:
@@ -18101,7 +18101,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6148
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "linestringfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1204:
@@ -18109,7 +18109,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6152
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "linefromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1205:
@@ -18117,7 +18117,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6156
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "linefromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1206:
@@ -18125,7 +18125,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6160
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "linefromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: LineStringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1207:
@@ -18133,7 +18133,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6164
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multilinestringfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1208:
@@ -18141,7 +18141,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6168
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multilinestringfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1209:
@@ -18149,7 +18149,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6172
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multilinestringfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1210:
@@ -18157,7 +18157,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6176
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mlinefromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1211:
@@ -18165,7 +18165,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6180
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mlinefromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1212:
@@ -18173,7 +18173,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6184
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mlinefromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiLinestringFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1213:
@@ -18181,7 +18181,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6188
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mpointfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1214:
@@ -18189,7 +18189,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6192
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mpointfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1215:
@@ -18197,7 +18197,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6196
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mpointfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1216:
@@ -18205,7 +18205,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6200
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multipointfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1217:
@@ -18213,7 +18213,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6204
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multipointfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1218:
@@ -18221,7 +18221,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6208
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multipointfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1219:
@@ -18229,7 +18229,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6212
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mpolyfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1220:
@@ -18237,7 +18237,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6216
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mpolyfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1221:
@@ -18245,7 +18245,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6220
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "mpolyfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1222:
@@ -18253,7 +18253,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6224
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multipolygonfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1223:
@@ -18261,7 +18261,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6228
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multipolygonfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1224:
@@ -18269,7 +18269,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6232
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "multipolygonfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: MultiPolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1225:
@@ -18277,7 +18277,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6236
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "pointfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1226:
@@ -18285,7 +18285,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6240
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "pointfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1227:
@@ -18293,7 +18293,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6244
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "pointfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PointFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1228:
@@ -18301,7 +18301,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6248
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "polyfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1229:
@@ -18309,7 +18309,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6252
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "polyfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1230:
@@ -18317,7 +18317,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6256
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "polyfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1231:
@@ -18325,7 +18325,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6260
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "polygonfromtext", WktText: yyDollar[3].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1232:
@@ -18333,7 +18333,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6264
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "polygonfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1233:
@@ -18341,7 +18341,7 @@ yydefault:
 		var yyLOCAL Expr
 //line sql.y:6268
 		{
-			yyLOCAL = &GeomFromTextExpr{Type: "polygonfromtext", WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
+			yyLOCAL = &GeomFromTextExpr{Type: PolygonFromText, WktText: yyDollar[3].exprUnion(), Srid: yyDollar[5].exprUnion(), AxisOrderOpt: yyDollar[7].exprUnion()}
 		}
 		yyVAL.union = yyLOCAL
 	case 1234:

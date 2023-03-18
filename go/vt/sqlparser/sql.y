@@ -6078,195 +6078,195 @@ UTC_DATE func_paren_opt
   }
 | ST_GeomFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geomfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3 }
   }
 | ST_GeomFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geomfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5 }
   }
 | ST_GeomFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geomfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_GeometryFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometryfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3 }
   }
 | ST_GeometryFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometryfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5 }
   }
 | ST_GeometryFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometryfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_GeomCollFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geomcollfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3 }
   }
 | ST_GeomCollFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geomcollfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5 }
   }
 | ST_GeomCollFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geomcollfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 |  ST_GeometryCollectionFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometrycollectionfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3 }
   }
 | ST_GeometryCollectionFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometrycollectionfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5 }
   }
 | ST_GeometryCollectionFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometrycollectionfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 |  ST_GeomCollFromTxt openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometrycollfromtxt", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3 }
   }
 | ST_GeomCollFromTxt openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometrycollfromtxt", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5 }
   }
 | ST_GeomCollFromTxt openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "geometrycollfromtxt", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_LineStringFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "linestringfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3 }
   }
 | ST_LineStringFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "linestringfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5 }
   }
 | ST_LineStringFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "linestringfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_LineFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "linefromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3 }
   }
 | ST_LineFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "linefromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5 }
   }
 | ST_LineFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "linefromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   } 
 | ST_MultiLineStringFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multilinestringfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3 }
   }
 | ST_MultiLineStringFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multilinestringfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5 }
   }
 | ST_MultiLineStringFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multilinestringfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_MLineFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mlinefromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3 }
   }
 | ST_MLineFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mlinefromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5 }
   }
 | ST_MLineFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mlinefromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_MPointFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mpointfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3 }
   }
 | ST_MPointFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mpointfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5 }
   }
 | ST_MPointFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mpointfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_MultiPointFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multipointfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3 }
   }
 | ST_MultiPointFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multipointfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5 }
   }
 | ST_MultiPointFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multipointfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_MPolyFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mpolyfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3 }
   }
 | ST_MPolyFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mpolyfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5 }
   }
 | ST_MPolyFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "mpolyfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_MultiPolygonFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multipolygonfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3 }
   }
 | ST_MultiPolygonFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multipolygonfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5 }
   }
 | ST_MultiPolygonFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "multipolygonfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_PointFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "pointfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: PointFromText, WktText: $3 }
   }
 | ST_PointFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "pointfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: PointFromText, WktText: $3, Srid: $5 }
   }
 | ST_PointFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "pointfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: PointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_PolyFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "polyfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3 }
   }
 | ST_PolyFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "polyfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5 }
   }
 | ST_PolyFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "polyfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_PolygonFromText openb expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "polygonfromtext", WktText: $3 }
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3 }
   }
 | ST_PolygonFromText openb expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "polygonfromtext", WktText: $3, Srid: $5 }
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5 }
   }
 | ST_PolygonFromText openb expression ',' expression ',' expression closeb
   {
-    $$ = &GeomFromTextExpr{ Type: "polygonfromtext", WktText: $3, Srid: $5, AxisOrderOpt: $7 }
+    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | JSON_OBJECT openb json_object_param_opt closeb
   {

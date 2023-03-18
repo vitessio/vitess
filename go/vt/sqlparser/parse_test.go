@@ -213,22 +213,22 @@ var (
 		output: "select ST_ASTEXT(multipolygon(polygons)) from polygonTable",
 	}, {
 		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
-		output: "select ST_AsText(st_geomcollfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+		output: "select ST_AsText(st_geometrycollectionfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
 	}, {
 		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
-		output: "select ST_AsText(st_geomcollfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+		output: "select ST_AsText(st_geometrycollectionfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
 	}, {
 		input:  "SELECT ST_AsText(ST_GeomCollFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
-		output: "select ST_AsText(st_geomcollfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+		output: "select ST_AsText(st_geometrycollectionfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
 	}, {
 		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
-		output: "select ST_AsText(st_geomfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
+		output: "select ST_AsText(st_geometryfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
 	}, {
 		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326))",
-		output: "select ST_AsText(st_geomfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
+		output: "select ST_AsText(st_geometryfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326)) from dual",
 	}, {
 		input:  "SELECT ST_AsText(ST_GeomFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long'))",
-		output: "select ST_AsText(st_geomfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
+		output: "select ST_AsText(st_geometryfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))', 4326, 'axis-order=lat-long')) from dual",
 	}, {
 		input:  "SELECT ST_AsText(ST_MultilinestringFromText('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))'))",
 		output: "select ST_AsText(st_multilinestringfromtext('MULTILINESTRING((10 10, 11 11), (9 9, 10 10))')) from dual",
