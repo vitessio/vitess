@@ -443,6 +443,11 @@ func primaryBackup(t *testing.T) {
 		"--new_primary", replica2.Alias)
 	require.Nil(t, err)
 
+	localCluster.DisableVTOrcRecoveries(t)
+	defer func() {
+		localCluster.EnableVTOrcRecoveries(t)
+	}()
+
 	// Delete the current primary tablet (replica2) so that the original primary tablet (primary) can be restored from the
 	// older/first backup w/o it replicating the subsequent insert done after the first backup was taken
 	err = localCluster.VtctlclientProcess.ExecuteCommand("DeleteTablet", "--", "--allow_primary=true", replica2.Alias)
@@ -800,15 +805,9 @@ func terminatedRestore(t *testing.T) {
 // Args:
 // tablet_type: 'replica' or 'rdonly'.
 func vtctlBackup(t *testing.T, tabletType string) {
-	// Start vtorc before running backups
-	vtorcProcess := localCluster.NewVTOrcProcess(cluster.VTOrcConfiguration{})
-	err := vtorcProcess.Setup()
-	require.NoError(t, err)
-	localCluster.VTOrcProcesses = append(localCluster.VTOrcProcesses, vtorcProcess)
-
 	// StopReplication on replica1. We verify that the replication works fine later in
 	// verifyInitialReplication. So this will also check that VTOrc is running.
-	err = localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
+	err := localCluster.VtctlclientProcess.ExecuteCommand("StopReplication", replica1.Alias)
 	require.Nil(t, err)
 
 	verifyInitialReplication(t)
@@ -829,12 +828,6 @@ func vtctlBackup(t *testing.T, tabletType string) {
 	cluster.VerifyRowsInTablet(t, replica2, keyspaceName, 2)
 
 	verifyAfterRemovingBackupNoBackupShouldBePresent(t, backups)
-
-	// Stop VTOrc
-	err = localCluster.VTOrcProcesses[0].TearDown()
-	localCluster.VTOrcProcesses = nil
-	require.NoError(t, err)
-
 	err = replica2.VttabletProcess.TearDown()
 	require.Nil(t, err)
 
