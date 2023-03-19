@@ -20,6 +20,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -226,9 +227,9 @@ func analyzeDDL(stmt sqlparser.DDLStatement, viewsEnabled bool) (*Plan, error) {
 func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 	switch viewDDL := stmt.(type) {
 	case *sqlparser.CreateView:
-		query := mysql.InsertIntoViewsTable
+		query := sqlparser.BuildParsedQuery(mysql.InsertIntoViewsTable, sidecardb.GetIdentifier()).Query
 		if viewDDL.IsReplace {
-			query = mysql.ReplaceIntoViewsTable
+			query = sqlparser.BuildParsedQuery(mysql.ReplaceIntoViewsTable, sidecardb.GetIdentifier()).Query
 		}
 		insert, err := sqlparser.Parse(query)
 		if err != nil {
@@ -236,13 +237,13 @@ func analyzeViewsDDL(stmt sqlparser.DDLStatement) (*Plan, error) {
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(insert), FullStmt: viewDDL}, nil
 	case *sqlparser.AlterView:
-		update, err := sqlparser.Parse(mysql.UpdateViewsTable)
+		update, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.UpdateViewsTable, sidecardb.GetIdentifier()).Query)
 		if err != nil {
 			return nil, err
 		}
 		return &Plan{PlanID: PlanViewDDL, FullQuery: GenerateFullQuery(update), FullStmt: viewDDL}, nil
 	case *sqlparser.DropView:
-		del, err := sqlparser.Parse(mysql.DeleteFromViewsTable)
+		del, err := sqlparser.Parse(sqlparser.BuildParsedQuery(mysql.DeleteFromViewsTable, sidecardb.GetIdentifier()).Query)
 		if err != nil {
 			return nil, err
 		}

@@ -29,6 +29,8 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
+	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/srvtopo"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/connpool"
@@ -58,6 +60,8 @@ const (
 
 	shardStoreName = "shard"
 	selfStoreName  = "self"
+
+	defaultReplicationLagQuery = "select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from %s.heartbeat"
 )
 
 var (
@@ -86,8 +90,6 @@ func registerThrottlerFlags(fs *pflag.FlagSet) {
 }
 
 var (
-	replicationLagQuery = `select unix_timestamp(now(6))-max(ts/1000000000) as replication_lag from _vt.heartbeat`
-
 	ErrThrottlerNotReady = errors.New("throttler not enabled/ready")
 )
 
@@ -202,16 +204,10 @@ func NewThrottler(env tabletenv.Env, srvTopoServer srvtopo.Server, ts *topo.Serv
 	throttler.initThrottleTabletTypes()
 	throttler.check = NewThrottlerCheck(throttler)
 
-	throttler.metricsQuery.Store(replicationLagQuery) // default
-	if throttleMetricQuery != "" {
-		throttler.metricsQuery.Store(throttleMetricQuery) // override
-	}
 	throttler.StoreMetricsThreshold(throttleThreshold.Seconds()) //default
 	if throttleMetricThreshold != math.MaxFloat64 {
 		throttler.StoreMetricsThreshold(throttleMetricThreshold) // override
 	}
-
-	throttler.initConfig()
 
 	return throttler
 }
@@ -313,7 +309,7 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	}
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
-	if throttler.isEnabled > 0 {
+	if throttler.IsEnabled() {
 		// throttler is running and we should apply the config change through Operate() or else we get into race conditions
 		go func() {
 			throttler.throttlerConfigChan <- throttlerConfig
@@ -333,7 +329,7 @@ func (throttler *Throttler) applyThrottlerConfig(ctx context.Context, throttlerC
 		return
 	}
 	if throttlerConfig.CustomQuery == "" {
-		throttler.metricsQuery.Store(replicationLagQuery)
+		throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query)
 	} else {
 		throttler.metricsQuery.Store(throttlerConfig.CustomQuery)
 	}
@@ -356,7 +352,7 @@ func (throttler *Throttler) Enable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if throttler.isEnabled > 0 {
+	if throttler.IsEnabled() {
 		return false
 	}
 	atomic.StoreInt64(&throttler.isEnabled, 1)
@@ -377,7 +373,7 @@ func (throttler *Throttler) Disable(ctx context.Context) bool {
 	throttler.enableMutex.Lock()
 	defer throttler.enableMutex.Unlock()
 
-	if throttler.isEnabled == 0 {
+	if !throttler.IsEnabled() {
 		return false
 	}
 	// _ = throttler.updateConfig(ctx, false, throttler.MetricsThreshold.Get()) // TODO(shlomi)
@@ -401,6 +397,14 @@ func (throttler *Throttler) Open() error {
 		return nil
 	}
 	ctx := context.Background()
+	// The query needs to be dynamically built because the sidecar database name
+	// is not known when the TabletServer is created, which in turn creates the
+	// Throttler.
+	throttler.metricsQuery.Store(sqlparser.BuildParsedQuery(defaultReplicationLagQuery, sidecardb.GetIdentifier()).Query) // default
+	if throttleMetricQuery != "" {
+		throttler.metricsQuery.Store(throttleMetricQuery) // override
+	}
+	throttler.initConfig()
 	throttler.pool.Open(throttler.env.Config().DB.AppWithDB(), throttler.env.Config().DB.DbaWithDB(), throttler.env.Config().DB.AppDebugWithDB())
 	atomic.StoreInt64(&throttler.isOpen, 1)
 
@@ -413,7 +417,7 @@ func (throttler *Throttler) Open() error {
 		// However, we want to handle a situation where the read errors out.
 		// So we kick a loop that keeps retrying reading the config, for as long as this throttler is open.
 		go func() {
-			retryTicker := time.NewTicker(time.Minute)
+			retryTicker := time.NewTicker(30 * time.Second)
 			defer retryTicker.Stop()
 			for {
 				if atomic.LoadInt64(&throttler.isOpen) == 0 {

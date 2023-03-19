@@ -306,6 +306,7 @@ func GetPasswordUpdateSQL(localCluster *LocalProcessCluster) string {
 					SET PASSWORD FOR 'vt_allprivs'@'localhost' = 'VtAllprivsPass';
 					SET PASSWORD FOR 'vt_repl'@'%' = 'VtReplPass';
 					SET PASSWORD FOR 'vt_filtered'@'localhost' = 'VtFilteredPass';
+					SET PASSWORD FOR 'vt_appdebug'@'localhost' = 'VtDebugPass';
 					FLUSH PRIVILEGES;
 					`
 	return pwdChangeCmd
@@ -383,6 +384,20 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	}
 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
+}
+
+// GetSidecarDBName returns the sidecar database name configured for
+// the keyspace in the topo server.
+func (cluster LocalProcessCluster) GetSidecarDBName(keyspace string) (string, error) {
+	res, err := cluster.VtctldClientProcess.ExecuteCommandWithOutput("GetKeyspace", keyspace)
+	if err != nil {
+		return "", err
+	}
+	sdbn, err := jsonparser.GetString([]byte(res), "sidecar_db_name")
+	if err != nil {
+		return "", err
+	}
+	return sdbn, nil
 }
 
 // WaitForHealthyShard waits for the given shard info record in the topo

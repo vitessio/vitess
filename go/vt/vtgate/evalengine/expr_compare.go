@@ -21,7 +21,6 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vthash"
 )
 
 type (
@@ -45,7 +44,6 @@ type (
 	InExpr struct {
 		BinaryExpr
 		Negate bool
-		Hashed map[vthash.Hash]int
 	}
 
 	ComparisonOp interface {
@@ -276,6 +274,37 @@ func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return sqltypes.Int64, f1 | f2
 }
 
+func evalInExpr(lhs eval, rhs *evalTuple) (boolean, error) {
+	if lhs == nil {
+		return boolNULL, nil
+	}
+
+	var foundNull, found bool
+	for _, rtuple := range rhs.t {
+		numeric, isNull, err := evalCompareAll(lhs, rtuple, true)
+		if err != nil {
+			return boolNULL, err
+		}
+		if isNull {
+			foundNull = true
+			continue
+		}
+		if numeric == 0 {
+			found = true
+			break
+		}
+	}
+
+	switch {
+	case found:
+		return boolTrue, nil
+	case foundNull:
+		return boolNULL, nil
+	default:
+		return boolFalse, nil
+	}
+}
+
 // eval implements the ComparisonOp interface
 func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	left, right, err := i.arguments(env)
@@ -286,53 +315,14 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	if !ok {
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "rhs of an In operation should be a tuple")
 	}
-	if left == nil {
-		return nil, nil
+	in, err := evalInExpr(left, rtuple)
+	if err != nil {
+		return nil, err
 	}
-
-	var foundNull, found bool
-	var hasher = vthash.New()
-	if i.Hashed != nil {
-		if left, ok := left.(hashable); ok {
-			left.Hash(&hasher)
-
-			hash := hasher.Sum128()
-			hasher.Reset()
-
-			if idx, ok := i.Hashed[hash]; ok {
-				var numeric int
-				numeric, foundNull, err = evalCompareAll(left, rtuple.t[idx], true)
-				if err != nil {
-					return nil, err
-				}
-				found = numeric == 0
-			}
-		}
-	} else {
-		for _, rtuple := range rtuple.t {
-			numeric, isNull, err := evalCompareAll(left, rtuple, true)
-			if err != nil {
-				return nil, err
-			}
-			if isNull {
-				foundNull = true
-				continue
-			}
-			if numeric == 0 {
-				found = true
-				break
-			}
-		}
+	if i.Negate {
+		in = in.not()
 	}
-
-	switch {
-	case found:
-		return newEvalBool(!i.Negate), nil
-	case foundNull:
-		return nil, nil
-	default:
-		return newEvalBool(i.Negate), nil
-	}
+	return in.eval(), nil
 }
 
 func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

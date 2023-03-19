@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"math"
 	"strings"
 
 	"golang.org/x/exp/constraints"
@@ -193,7 +194,7 @@ func mathSub_iu(v1 int64, v2 uint64) (*evalUint64, error) {
 }
 
 func mathSub_iu0(v1 int64, v2 uint64) (uint64, error) {
-	if v1 < 0 || v1 < int64(v2) {
+	if v1 < 0 {
 		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
 	return mathSub_uu0(uint64(v1), v2)
@@ -218,12 +219,12 @@ func mathSub_ui(v1 uint64, v2 int64) (*evalUint64, error) {
 }
 
 func mathSub_ui0(v1 uint64, v2 int64) (uint64, error) {
-	if int64(v1) < v2 && v2 > 0 {
+	if v2 > 0 && v1 < uint64(v2) {
 		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "-")
 	}
 	// uint - (- int) = uint + int
 	if v2 < 0 {
-		return mathAdd_ui0(v1, -v2)
+		return mathAdd_uu0(v1, uint64(-v2))
 	}
 	return mathSub_uu0(v1, uint64(v2))
 }
@@ -237,7 +238,7 @@ func mathMul_ui0(v1 uint64, v2 int64) (uint64, error) {
 	if v1 == 0 || v2 == 0 {
 		return 0, nil
 	}
-	if v2 < 0 || int64(v1) < 0 {
+	if v2 < 0 {
 		return 0, dataOutOfRangeError(v1, v2, "BIGINT UNSIGNED", "*")
 	}
 	return mathMul_uu0(v1, uint64(v2))
@@ -405,11 +406,9 @@ func mathDiv_ff(v1, v2 float64) (eval, error) {
 
 func mathDiv_ff0(v1, v2 float64) (float64, error) {
 	result := v1 / v2
-	divisorLessThanOne := v2 < 1
-	resultMismatch := v2*result != v1
 
-	if divisorLessThanOne && resultMismatch {
-		return 0, dataOutOfRangeError(v1, v2, "BIGINT", "/")
+	if math.IsInf(result, 1) || math.IsInf(result, -1) {
+		return 0, dataOutOfRangeError(v1, v2, "DOUBLE", "/")
 	}
 	return result, nil
 }

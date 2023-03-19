@@ -178,13 +178,21 @@ That includes:
   > - While the Vitess Operator is located in a different repository, we also need to do a release for it.
   > - The Operator follows the same cycle: RC1 -> GA -> Patches.
   > - Documentation for the pre-release of the Vitess Operator is available [here](https://github.com/planetscale/vitess-operator/blob/main/docs/release-process.md#prepare-for-release).
+- **Update the release notes on `main`.**
+  > - One Pull Request against `main` must be created, it will contain the new release notes that we are adding in the Release Pull Request.
+  > - We open this Pull Request now to avoid waiting on the CI during release day.
+  > - All future changes to the release notes during the code freeze will need to be ported to both PRs: the one on `main` and the Release Pull Request.
 
 ### Release
 
 On the release day, there are several things to do:
 
+- **Merge the Release Pull Request.**
+  > - During the code freeze, we created a Release Pull Request. It must be merged.
 - **Tag the Vitess release.**
   > - A guide on how to tag a version is available in the [How To Release Vitess](#how-to-release-vitess) section.
+- **Update the release notes on `main`.**
+  > - During the code freeze, we created a Pull Request against `main` to update the release notes. It must be merged.
 - **Create the corresponding Vitess operator release.**
   > - Applies only to versions greater or equal to `v14.0.0`.
   > - If we are doing an RC release, then we will need to create the Vitess Operator RC too. If we are doing a GA release, we're also doing a GA release in the Operator.
@@ -206,8 +214,6 @@ On the release day, there are several things to do:
   > - After a while, those elements will finish their execution and their status will be green.
   > - This step is even more important for GA releases as we often include a link to _arewefastyet_ in the blog post.
   > - The benchmarks need to complete before announcing the blog posts or before they get cross-posted.
-- **Update the release notes on `main`.**
-  > - One Pull Request against `main` must be created, it will contain the new release notes. 
 - **Go back to dev mode on the release branch.**
   > - The version constants across the codebase must be updated to `SNAPSHOT`. 
 - **Build k8s Docker images and publish them**
@@ -376,6 +382,8 @@ Finally, let's run the code freeze script:
 
 The script will prompt the command that will allow you to push the code freeze change. Once pushed, open a PR that will be merged on `release-15.0`.
 
+Remember, you should also disable the Launchable integration from the newly created release branch.
+
 ### How To Merge During Code Freeze
 
 > **Warning:** It is not advised to merge a PR during code-freeze. If it is deemed absolutely necessary, then the following steps can be followed.
@@ -406,7 +414,7 @@ You will need administrator privileges on the vitess repository to be able to ma
     git checkout v12.0.0
     ```
 
-2. Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key.
+2. Run `gpg-agent` to avoid that Maven will constantly prompt you for the password of your private key. Note that this can print error messages that can be ignored on Mac.
 
     ```bash
     eval $(gpg-agent --daemon --no-grab --write-env-file $HOME/.gpg-agent-info)
@@ -425,7 +433,9 @@ You will need administrator privileges on the vitess repository to be able to ma
     > **Warning:** After the deployment, the Java packages will be automatically released. Once released, you cannot delete them. The only option is to upload a newer version (e.g. increment the patch level).</p>
 
     ```bash
+    cd ./java/
     mvn clean deploy -P release -DskipTests
     cd ..
     ```
+
 5. It will take some time for artifacts to appear on [maven directory](https://mvnrepository.com/artifact/io.vitess/vitess-client)
