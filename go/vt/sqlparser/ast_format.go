@@ -2773,6 +2773,15 @@ func (node *PolygonExpr) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
+func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "purge binary logs")
+	if node.To != "" {
+		buf.astPrintf(node, " to '%#s'", node.To)
+	} else {
+		buf.astPrintf(node, " before '%#s'", node.Before)
+	}
+}
+
 func (node *MultiPolygonExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "multipolygon(%v)", node.PolygonParams)
 }

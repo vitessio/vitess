@@ -3015,6 +3015,20 @@ func (cached *PrepareStmt) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
+func (cached *PurgeBinaryLogs) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(32)
+	}
+	// field To string
+	size += hack.RuntimeAllocSize(int64(len(cached.To)))
+	// field Before string
+	size += hack.RuntimeAllocSize(int64(len(cached.Before)))
+	return size
+}
 func (cached *ReferenceDefinition) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
