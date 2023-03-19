@@ -1046,6 +1046,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPrepareStmt(a, b)
+	case *PurgeBinaryLogs:
+		b, ok := inB.(*PurgeBinaryLogs)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPurgeBinaryLogs(a, b)
 	case ReferenceAction:
 		b, ok := inB.(ReferenceAction)
 		if !ok {
@@ -3620,6 +3626,18 @@ func (cmp *Comparator) RefOfPrepareStmt(a, b *PrepareStmt) bool {
 	return cmp.IdentifierCI(a.Name, b.Name) &&
 		cmp.Expr(a.Statement, b.Statement) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
+}
+
+// RefOfPurgeBinaryLogs does deep equals between the two objects.
+func (cmp *Comparator) RefOfPurgeBinaryLogs(a, b *PurgeBinaryLogs) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.To == b.To &&
+		a.Before == b.Before
 }
 
 // RefOfReferenceDefinition does deep equals between the two objects.
@@ -6396,6 +6414,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfPrepareStmt(a, b)
+	case *PurgeBinaryLogs:
+		b, ok := inB.(*PurgeBinaryLogs)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPurgeBinaryLogs(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {

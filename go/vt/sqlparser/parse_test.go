@@ -1834,11 +1834,14 @@ var (
 		input:  "flush no_write_to_binlog slow logs, status, user_resources, relay logs, relay logs for channel s",
 		output: "flush local slow logs, status, user_resources, relay logs, relay logs for channel s",
 	}, {
-		input:  "show binary logs",
-		output: "show binary logs",
+		input: "show binary logs",
 	}, {
 		input:  "show binlog events",
 		output: "show binlog",
+	}, {
+		input: "purge binary logs to 'x'",
+	}, {
+		input: "purge binary logs before '2020-02-02 20:20:20'",
 	}, {
 		input:  "show character set",
 		output: "show charset",

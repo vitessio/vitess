@@ -363,6 +363,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfPolygonExpr(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
+	case *PurgeBinaryLogs:
+		return CloneRefOfPurgeBinaryLogs(in)
 	case ReferenceAction:
 		return in
 	case *ReferenceDefinition:
@@ -2325,6 +2327,15 @@ func CloneRefOfPrepareStmt(n *PrepareStmt) *PrepareStmt {
 	return &out
 }
 
+// CloneRefOfPurgeBinaryLogs creates a deep clone of the input.
+func CloneRefOfPurgeBinaryLogs(n *PurgeBinaryLogs) *PurgeBinaryLogs {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	return &out
+}
+
 // CloneRefOfReferenceDefinition creates a deep clone of the input.
 func CloneRefOfReferenceDefinition(n *ReferenceDefinition) *ReferenceDefinition {
 	if n == nil {
@@ -3890,6 +3901,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfOtherRead(in)
 	case *PrepareStmt:
 		return CloneRefOfPrepareStmt(in)
+	case *PurgeBinaryLogs:
+		return CloneRefOfPurgeBinaryLogs(in)
 	case *Release:
 		return CloneRefOfRelease(in)
 	case *RenameTable:

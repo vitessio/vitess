@@ -362,6 +362,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfPolygonExpr(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
+	case *PurgeBinaryLogs:
+		return c.copyOnRewriteRefOfPurgeBinaryLogs(n, parent)
 	case ReferenceAction:
 		return c.copyOnRewriteReferenceAction(n, parent)
 	case *ReferenceDefinition:
@@ -4345,6 +4347,18 @@ func (c *cow) copyOnRewriteRefOfPrepareStmt(n *PrepareStmt, parent SQLNode) (out
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfPurgeBinaryLogs(n *PurgeBinaryLogs, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfReferenceDefinition(n *ReferenceDefinition, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6859,6 +6873,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfOtherRead(n, parent)
 	case *PrepareStmt:
 		return c.copyOnRewriteRefOfPrepareStmt(n, parent)
+	case *PurgeBinaryLogs:
+		return c.copyOnRewriteRefOfPurgeBinaryLogs(n, parent)
 	case *Release:
 		return c.copyOnRewriteRefOfRelease(n, parent)
 	case *RenameTable:

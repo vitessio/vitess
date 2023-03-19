@@ -362,6 +362,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfPolygonExpr(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
+	case *PurgeBinaryLogs:
+		return VisitRefOfPurgeBinaryLogs(in, f)
 	case ReferenceAction:
 		return VisitReferenceAction(in, f)
 	case *ReferenceDefinition:
@@ -2924,6 +2926,15 @@ func VisitRefOfPrepareStmt(in *PrepareStmt, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfPurgeBinaryLogs(in *PurgeBinaryLogs, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	return nil
+}
 func VisitRefOfReferenceDefinition(in *ReferenceDefinition, f Visit) error {
 	if in == nil {
 		return nil
@@ -4765,6 +4776,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfOtherRead(in, f)
 	case *PrepareStmt:
 		return VisitRefOfPrepareStmt(in, f)
+	case *PurgeBinaryLogs:
+		return VisitRefOfPurgeBinaryLogs(in, f)
 	case *Release:
 		return VisitRefOfRelease(in, f)
 	case *RenameTable:
