@@ -6191,6 +6191,18 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| MULTIPOLYGON openb expression_list closeb
+  {
+    $$ = &MultiPolygonExpr{ PolygonParams:$3 }
+  }
+| MULTIPOINT openb expression_list closeb
+  {
+    $$ = &MultiPointExpr{ PointParams:$3 }
+  }
+| MULTILINESTRING openb expression_list closeb
+  {
+    $$ = &MultiLinestringExpr{ LinestringParams:$3 }
+  }
 | POLYGON openb expression_list closeb
   {
     $$ = &PolygonExpr{ LinestringParams:$3 }
@@ -7768,9 +7780,9 @@ non_reserved_keyword:
 | MIN_ROWS
 | MODE
 | MODIFY
-| MULTILINESTRING
-| MULTIPOINT
-| MULTIPOLYGON
+| MULTILINESTRING %prec FUNCTION_CALL_NON_KEYWORD
+| MULTIPOINT %prec FUNCTION_CALL_NON_KEYWORD
+| MULTIPOLYGON %prec FUNCTION_CALL_NON_KEYWORD
 | NAME
 | NAMES
 | NCHAR

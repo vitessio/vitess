@@ -842,6 +842,24 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfModifyColumn(a, b)
+	case *MultiLinestringExpr:
+		b, ok := inB.(*MultiLinestringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiLinestringExpr(a, b)
+	case *MultiPointExpr:
+		b, ok := inB.(*MultiPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPointExpr(a, b)
+	case *MultiPolygonExpr:
+		b, ok := inB.(*MultiPolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPolygonExpr(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -3190,6 +3208,39 @@ func (cmp *Comparator) RefOfModifyColumn(a, b *ModifyColumn) bool {
 		cmp.RefOfColName(a.After, b.After)
 }
 
+// RefOfMultiLinestringExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfMultiLinestringExpr(a, b *MultiLinestringExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.LinestringParams, b.LinestringParams)
+}
+
+// RefOfMultiPointExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfMultiPointExpr(a, b *MultiPointExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.PointParams, b.PointParams)
+}
+
+// RefOfMultiPolygonExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfMultiPolygonExpr(a, b *MultiPolygonExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.PolygonParams, b.PolygonParams)
+}
+
 // RefOfNTHValueExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfNTHValueExpr(a, b *NTHValueExpr) bool {
 	if a == b {
@@ -5109,6 +5160,24 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfMin(a, b)
+	case *MultiLinestringExpr:
+		b, ok := inB.(*MultiLinestringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiLinestringExpr(a, b)
+	case *MultiPointExpr:
+		b, ok := inB.(*MultiPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPointExpr(a, b)
+	case *MultiPolygonExpr:
+		b, ok := inB.(*MultiPolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPolygonExpr(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -5799,6 +5868,24 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfMin(a, b)
+	case *MultiLinestringExpr:
+		b, ok := inB.(*MultiLinestringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiLinestringExpr(a, b)
+	case *MultiPointExpr:
+		b, ok := inB.(*MultiPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPointExpr(a, b)
+	case *MultiPolygonExpr:
+		b, ok := inB.(*MultiPolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPolygonExpr(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {

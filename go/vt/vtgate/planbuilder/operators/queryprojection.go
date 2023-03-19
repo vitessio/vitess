@@ -418,7 +418,85 @@ func (qp *QueryProjection) NeedsAggregation() bool {
 	return qp.HasAggr || len(qp.groupByExprs) > 0
 }
 
-func (qp QueryProjection) onlyAggr() bool {
+// NeedsProjecting returns true if we have projections that need to be evaluated at the vtgate level
+// and can't be pushed down to MySQL
+func (qp *QueryProjection) NeedsProjecting(
+	ctx *plancontext.PlanningContext,
+	pusher func(expr *sqlparser.AliasedExpr) (int, error),
+) (needsVtGateEval bool, expressions []sqlparser.Expr, colNames []string, err error) {
+	for _, se := range qp.SelectExprs {
+		var ae *sqlparser.AliasedExpr
+		ae, err = se.GetAliasedExpr()
+		if err != nil {
+			return false, nil, nil, err
+		}
+
+		expr := ae.Expr
+		colNames = append(colNames, ae.ColumnName())
+
+		if _, isCol := expr.(*sqlparser.ColName); isCol {
+			offset, err := pusher(ae)
+			if err != nil {
+				return false, nil, nil, err
+			}
+			expressions = append(expressions, sqlparser.NewOffset(offset, expr))
+			continue
+		}
+
+		stopOnError := func(sqlparser.SQLNode, sqlparser.SQLNode) bool {
+			return err == nil
+		}
+		rewriter := func(cursor *sqlparser.CopyOnWriteCursor) {
+			col, isCol := cursor.Node().(*sqlparser.ColName)
+			if !isCol {
+				return
+			}
+			var tableInfo semantics.TableInfo
+			tableInfo, err = ctx.SemTable.TableInfoForExpr(col)
+			if err != nil {
+				return
+			}
+			dt, isDT := tableInfo.(*semantics.DerivedTable)
+			if !isDT {
+				return
+			}
+
+			rewritten := semantics.RewriteDerivedTableExpression(col, dt)
+			if sqlparser.ContainsAggregation(rewritten) {
+				offset, tErr := pusher(&sqlparser.AliasedExpr{Expr: col})
+				if tErr != nil {
+					err = tErr
+					return
+				}
+
+				cursor.Replace(sqlparser.NewOffset(offset, col))
+			}
+		}
+		newExpr := sqlparser.CopyOnRewrite(expr, stopOnError, rewriter, nil)
+
+		if err != nil {
+			return
+		}
+
+		if newExpr != expr {
+			// if we changed the expression, it means that we have to evaluate the rest at the vtgate level
+			expressions = append(expressions, newExpr.(sqlparser.Expr))
+			needsVtGateEval = true
+			continue
+		}
+
+		// we did not need to push any parts of this expression down. Let's check if we can push all of it
+		offset, err := pusher(ae)
+		if err != nil {
+			return false, nil, nil, err
+		}
+		expressions = append(expressions, sqlparser.NewOffset(offset, expr))
+	}
+
+	return
+}
+
+func (qp *QueryProjection) onlyAggr() bool {
 	if !qp.HasAggr {
 		return false
 	}

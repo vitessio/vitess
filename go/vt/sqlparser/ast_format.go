@@ -2781,3 +2781,17 @@ func (node *PurgeBinaryLogs) Format(buf *TrackedBuffer) {
 		buf.astPrintf(node, " before '%#s'", node.Before)
 	}
 }
+
+func (node *MultiPolygonExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "multipolygon(%v)", node.PolygonParams)
+}
+
+// Format formats the node.
+func (node *MultiPointExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "multipoint(%v)", node.PointParams)
+}
+
+// Format formats the node.
+func (node *MultiLinestringExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "multilinestring(%v)", node.LinestringParams)
+}

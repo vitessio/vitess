@@ -52,6 +52,9 @@ func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, typeFlag) {
 		if e.i == math.MinInt64 {
 			f |= flagIntegerUdf
 		}
+		if e == evalBoolTrue || e == evalBoolFalse {
+			f |= flagIsBoolean
+		}
 	case *evalUint64:
 		if e.hexLiteral {
 			f |= flagHex

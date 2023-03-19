@@ -95,8 +95,14 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationReadyToComplete = `UPDATE _vt.schema_migrations
-			SET ready_to_complete=%a
+	sqlSetMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=1,
+			ready_to_complete_timestamp=NOW(6)
+		WHERE
+			migration_uuid=%a
+	`
+	sqlClearMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=0
 		WHERE
 			migration_uuid=%a
 	`
@@ -381,6 +387,7 @@ const (
 			retain_artifacts_seconds,
 			is_view,
 			ready_to_complete,
+			ready_to_complete_timestamp is not null as was_ready_to_complete,
 			reverted_uuid,
 			rows_copied,
 			vitess_liveness_indicator,

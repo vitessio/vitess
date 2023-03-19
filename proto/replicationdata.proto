@@ -93,4 +93,5 @@ message FullStatus {
   uint32 semi_sync_primary_clients = 18;
   uint64 semi_sync_primary_timeout = 19;
   uint32 semi_sync_wait_for_replica_count = 20;
+  bool super_read_only = 21;
 }

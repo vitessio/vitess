@@ -3652,3 +3652,23 @@ func (node *PurgeBinaryLogs) formatFast(buf *TrackedBuffer) {
 		buf.WriteByte('\'')
 	}
 }
+
+func (node *MultiPolygonExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("multipolygon(")
+	node.PolygonParams.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *MultiPointExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("multipoint(")
+	node.PointParams.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *MultiLinestringExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("multilinestring(")
+	node.LinestringParams.formatFast(buf)
+	buf.WriteByte(')')
+}

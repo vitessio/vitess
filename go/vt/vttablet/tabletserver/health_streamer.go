@@ -28,6 +28,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 
 	"vitess.io/vitess/go/sqltypes"
 
@@ -384,10 +385,10 @@ func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpo
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
 
-	schemaChangeQuery := mysql.DetectSchemaChange
+	schemaChangeQuery := sqlparser.BuildParsedQuery(mysql.DetectSchemaChange, sidecardb.GetIdentifier()).Query
 	// If views are enabled, then views are tracked/handled separately and schema change does not need to track them.
 	if hs.viewsEnabled {
-		schemaChangeQuery = mysql.DetectSchemaChangeOnlyBaseTable
+		schemaChangeQuery = sqlparser.BuildParsedQuery(mysql.DetectSchemaChangeOnlyBaseTable, sidecardb.GetIdentifier()).Query
 	}
 	err := conn.Stream(ctx, schemaChangeQuery, callback, alloc, bufferSize, 0)
 	if err != nil {
@@ -400,8 +401,8 @@ func (hs *healthStreamer) getChangedTableNames(ctx context.Context, conn *connpo
 	}
 
 	tableNamePredicate := fmt.Sprintf("table_name IN (%s)", strings.Join(tableNames, ", "))
-	del := fmt.Sprintf("%s AND %s", mysql.ClearSchemaCopy, tableNamePredicate)
-	upd := fmt.Sprintf("%s AND %s", mysql.InsertIntoSchemaCopy, tableNamePredicate)
+	del := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.ClearSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
+	upd := fmt.Sprintf("%s AND %s", sqlparser.BuildParsedQuery(mysql.InsertIntoSchemaCopy, sidecardb.GetIdentifier()).Query, tableNamePredicate)
 
 	// Reload the schema in a transaction.
 	_, err = conn.Exec(ctx, "begin", 1, false)
@@ -445,7 +446,8 @@ func (hs *healthStreamer) getChangedViewNames(ctx context.Context, conn *connpoo
 	}
 	alloc := func() *sqltypes.Result { return &sqltypes.Result{} }
 	bufferSize := 1000
-	err := conn.Stream(ctx, mysql.SelectAllViews, callback, alloc, bufferSize, 0)
+	err := conn.Stream(ctx, sqlparser.BuildParsedQuery(mysql.SelectAllViews, sidecardb.GetIdentifier()).Query,
+		callback, alloc, bufferSize, 0)
 	if err != nil {
 		return nil, err
 	}
