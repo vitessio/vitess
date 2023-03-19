@@ -376,3 +376,102 @@ func (c *compiler) compileIn(expr *InExpr) (ctype, error) {
 	}
 	return ctype{Type: sqltypes.Int64, Col: collationNumeric, Flag: flagIsBoolean}, nil
 }
+
+func (c *compiler) compileNot(expr *NotExpr) (ctype, error) {
+	arg, err := c.compileExpr(expr.Inner)
+	if err != nil {
+		return ctype{}, nil
+	}
+
+	skip := c.compileNullCheck1(arg)
+
+	switch arg.Type {
+	case sqltypes.Null:
+		// No-op.
+	case sqltypes.Int64:
+		c.asm.Not_i()
+	case sqltypes.Uint64:
+		c.asm.Not_u()
+	case sqltypes.Float64:
+		c.asm.Not_f()
+	case sqltypes.Decimal:
+		c.asm.Not_d()
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if arg.isHexOrBitLiteral() {
+			c.asm.Convert_xu(1)
+			c.asm.Not_u()
+		} else {
+			c.asm.Convert_bB(1)
+			c.asm.Not_i()
+		}
+	case sqltypes.TypeJSON:
+		c.asm.Convert_jB(1)
+		c.asm.Not_i()
+	default:
+		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "unsupported Not check: %s", arg.Type)
+	}
+	c.asm.jumpDestination(skip)
+	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+}
+
+func (c *compiler) compileLogical(expr *LogicalExpr) (ctype, error) {
+	lt, err := c.compileExpr(expr.Left)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch lt.Type {
+	case sqltypes.Null, sqltypes.Int64:
+		// No-op.
+	case sqltypes.Uint64:
+		c.asm.Convert_uB(1)
+	case sqltypes.Float64:
+		c.asm.Convert_fB(1)
+	case sqltypes.Decimal:
+		c.asm.Convert_dB(1)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if lt.isHexOrBitLiteral() {
+			c.asm.Convert_xu(1)
+			c.asm.Convert_uB(1)
+		} else {
+			c.asm.Convert_bB(1)
+		}
+	case sqltypes.TypeJSON:
+		c.asm.Convert_jB(1)
+	default:
+		c.asm.Convert_bB(1)
+	}
+
+	jump := c.asm.LogicalLeft(expr.opname)
+
+	rt, err := c.compileExpr(expr.Right)
+	if err != nil {
+		return ctype{}, err
+	}
+
+	switch rt.Type {
+	case sqltypes.Null, sqltypes.Int64:
+		// No-op.
+	case sqltypes.Uint64:
+		c.asm.Convert_uB(1)
+	case sqltypes.Float64:
+		c.asm.Convert_fB(1)
+	case sqltypes.Decimal:
+		c.asm.Convert_dB(1)
+	case sqltypes.VarChar, sqltypes.VarBinary:
+		if rt.isHexOrBitLiteral() {
+			c.asm.Convert_xu(1)
+			c.asm.Convert_uB(1)
+		} else {
+			c.asm.Convert_bB(1)
+		}
+	case sqltypes.TypeJSON:
+		c.asm.Convert_jB(1)
+	default:
+		c.asm.Convert_bB(1)
+	}
+
+	c.asm.LogicalRight(expr.opname)
+	c.asm.jumpDestination(jump)
+	return ctype{Type: sqltypes.Int64, Flag: flagNullable | flagIsBoolean, Col: collationNumeric}, nil
+}

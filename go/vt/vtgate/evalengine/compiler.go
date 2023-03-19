@@ -148,6 +148,12 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 	case *InExpr:
 		return c.compileIn(expr)
 
+	case *NotExpr:
+		return c.compileNot(expr)
+
+	case *LogicalExpr:
+		return c.compileLogical(expr)
+
 	case callable:
 		return c.compileFn(expr)
 

@@ -106,14 +106,14 @@ func (ast *astCompiler) translateLogicalExpr(opname string, left, right sqlparse
 		return nil, err
 	}
 
-	var logic func(l, r boolean) boolean
+	var logic func(l, r Expr, env *ExpressionEnv) (boolean, error)
 	switch opname {
 	case "AND":
-		logic = func(l, r boolean) boolean { return l.and(r) }
+		logic = func(l, r Expr, env *ExpressionEnv) (boolean, error) { return opAnd(l, r, env) }
 	case "OR":
-		logic = func(l, r boolean) boolean { return l.or(r) }
+		logic = func(l, r Expr, env *ExpressionEnv) (boolean, error) { return opOr(l, r, env) }
 	case "XOR":
-		logic = func(l, r boolean) boolean { return l.xor(r) }
+		logic = func(l, r Expr, env *ExpressionEnv) (boolean, error) { return opXor(l, r, env) }
 	default:
 		panic("unexpected logical operator")
 	}

@@ -53,8 +53,13 @@ var _ opArith = (*opArithIntDiv)(nil)
 var _ opArith = (*opArithMod)(nil)
 
 func (b *ArithmeticExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := b.arguments(env)
-	if left == nil || right == nil || err != nil {
+	left, err := b.Left.eval(env)
+	if left == nil || err != nil {
+		return nil, err
+	}
+
+	right, err := b.Right.eval(env)
+	if right == nil || err != nil {
 		return nil, err
 	}
 	return b.Op.eval(left, right)

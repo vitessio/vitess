@@ -261,16 +261,21 @@ func (c *compiler) compileFn_FROM_BASE64(call *builtinFromBase64) (ctype, error)
 
 	skip := c.compileNullCheck1(str)
 
+	t := sqltypes.VarBinary
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Blob
+	}
+
 	switch {
 	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarBinary, c.defaultCollation, 0, false)
+		c.asm.Convert_xc(1, t, c.defaultCollation, 0, false)
 	}
 
-	c.asm.Fn_FROM_BASE64()
+	c.asm.Fn_FROM_BASE64(t)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+	return ctype{Type: t, Col: collationBinary}, nil
 }
 
 func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
