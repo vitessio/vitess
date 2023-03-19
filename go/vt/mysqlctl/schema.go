@@ -110,7 +110,7 @@ func (mysqld *Mysqld) GetSchema(ctx context.Context, dbName string, request *tab
 
 			fields, columns, schema, err := mysqld.collectSchema(ctx, dbName, td.Name, td.Type, request.TableSchemaOnly)
 			if err != nil {
-				// there's a possible race condition: it could happen that a table was dropped in between reading
+				// There's a possible race condition: it could happen that a table was dropped in between reading
 				// the list of tables (collectBasicTableData(), earlier) and the point above where we investigate
 				// the table.
 				// This is fine. We identify the situation and keep the table without any fields/columns/key information
