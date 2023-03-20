@@ -25,10 +25,9 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 type (
@@ -75,7 +74,7 @@ type (
 	Aggr struct {
 		Original *sqlparser.AliasedExpr
 		Func     sqlparser.AggrFunc
-		OpCode   engine.AggregateOpcode
+		OpCode   popcode.AggregateOpcode
 		Alias    string
 		// The index at which the user expects to see this aggregated function. Set to nil, if the user does not ask for it
 		Index    *int
@@ -551,7 +550,7 @@ orderBy:
 			if !qp.isExprInGroupByExprs(ctx, expr) {
 				out = append(out, Aggr{
 					Original: aliasedExpr,
-					OpCode:   engine.AggregateRandom,
+					OpCode:   popcode.AggregateRandom,
 					Alias:    aliasedExpr.ColumnName(),
 					Index:    &idxCopy,
 				})
@@ -563,14 +562,14 @@ orderBy:
 			return nil, vterrors.VT12001("in scatter query: complex aggregate expression")
 		}
 
-		opcode, found := engine.SupportedAggregates[strings.ToLower(fnc.AggrName())]
+		opcode, found := popcode.SupportedAggregates[strings.ToLower(fnc.AggrName())]
 		if !found {
 			return nil, vterrors.VT12001(fmt.Sprintf("in scatter query: aggregation function '%s'", fnc.AggrName()))
 		}
 
-		if opcode == engine.AggregateCount {
+		if opcode == popcode.AggregateCount {
 			if _, isStar := fnc.(*sqlparser.CountStar); isStar {
-				opcode = engine.AggregateCountStar
+				opcode = popcode.AggregateCountStar
 			}
 		}
 
@@ -578,10 +577,10 @@ orderBy:
 
 		if aggr.IsDistinct() {
 			switch opcode {
-			case engine.AggregateCount:
-				opcode = engine.AggregateCountDistinct
-			case engine.AggregateSum:
-				opcode = engine.AggregateSumDistinct
+			case popcode.AggregateCount:
+				opcode = popcode.AggregateCountDistinct
+			case popcode.AggregateSum:
+				opcode = popcode.AggregateSumDistinct
 			}
 		}
 

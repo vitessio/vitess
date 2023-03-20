@@ -22,22 +22,20 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/log"
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-	"vitess.io/vitess/go/vt/sidecardb"
-
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
@@ -568,7 +566,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		PreProcess: true,
 		Aggregates: []*engine.AggregateParams{
 			{
-				Opcode: engine.AggregateGtid,
+				Opcode: popcode.AggregateGtid,
 				Col:    1,
 				Alias:  "global vgtid_executed",
 			},

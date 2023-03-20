@@ -33,6 +33,7 @@ import (
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 func TestBuildPlanSuccess(t *testing.T) {
@@ -418,10 +419,10 @@ func TestBuildPlanSuccess(t *testing.T) {
 				Direction: sqlparser.AscOrder,
 			}},
 			aggregates: []*engine.AggregateParams{{
-				Opcode: engine.AggregateSum,
+				Opcode: opcode.AggregateSum,
 				Col:    2,
 			}, {
-				Opcode: engine.AggregateSum,
+				Opcode: opcode.AggregateSum,
 				Col:    3,
 			}},
 		},
