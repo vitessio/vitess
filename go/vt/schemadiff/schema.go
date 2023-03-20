@@ -841,7 +841,7 @@ func (s *Schema) ValidateViewReferences() error {
 	return errs.AggrError(vterrors.Aggregate)
 }
 
-// getTableColumnNames returns the names of columns in given table.
+// getEntityColumnNames returns the names of columns in given entity (either a table or a view)
 func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *declarativeSchemaInformation) (
 	columnNames []*sqlparser.IdentifierCI,
 	err error,
