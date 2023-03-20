@@ -76,6 +76,7 @@ Usage of vttestserver:
       --mysql_server_version string                                      MySQL server version to advertise. (default "8.0.30-Vitess")
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
+      --mysqld_commands strings                                          mysqld commands to lookup when starting mysqld. (default [mysqld_safe,mysqld])
       --null_probability float                                           The probability to initialize a field with 'NULL'  if --initialize_with_random_data is true. Only applies to fields that can contain NULL values. (default 0.1)
       --num_shards strings                                               Comma separated shard count (one per keyspace) (default [2])
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)

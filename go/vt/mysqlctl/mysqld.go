@@ -76,6 +76,7 @@ var (
 
 	mycnfTemplateFile string
 	socketFile        string
+	mysqldCommands    = []string{"mysqld_safe", "mysqld"}
 
 	replicationConnectRetry = 10 * time.Second
 
@@ -115,6 +116,7 @@ func registerMySQLDFlags(fs *pflag.FlagSet) {
 	fs.DurationVar(&PoolDynamicHostnameResolution, "pool_hostname_resolve_interval", PoolDynamicHostnameResolution, "if set force an update to all hostnames and reconnect if changed, defaults to 0 (disabled)")
 	fs.StringVar(&mycnfTemplateFile, "mysqlctl_mycnf_template", mycnfTemplateFile, "template file to use for generating the my.cnf file during server init")
 	fs.StringVar(&socketFile, "mysqlctl_socket", socketFile, "socket file to use for remote mysqlctl actions (empty for local actions)")
+	fs.StringSliceVar(&mysqldCommands, "mysqld_commands", mysqldCommands, "mysqld commands to lookup when starting mysqld.")
 	fs.DurationVar(&replicationConnectRetry, "replication_connect_retry", replicationConnectRetry, "how long to wait in between replica reconnect attempts. Only precise to the second.")
 }
 
@@ -376,89 +378,98 @@ func (mysqld *Mysqld) startNoWait(ctx context.Context, cnf *Mycnf, mysqldArgs ..
 		// hook exists and worked, we can keep going
 		name = "mysqld_start hook" // nolint
 	case hook.HOOK_DOES_NOT_EXIST:
-		// hook doesn't exist, run mysqld_safe ourselves
-		log.Infof("%v: No mysqld_start hook, running mysqld_safe directly", ts)
-		vtMysqlRoot, err := vtenv.VtMysqlRoot()
-		if err != nil {
-			return err
-		}
-		name, err = binaryPath(vtMysqlRoot, "mysqld_safe")
-		if err != nil {
-			// The movement to use systemd means that mysqld_safe is not always provided.
-			// This should not be considered an issue do not generate a warning.
-			log.Infof("%v: trying to launch mysqld instead", err)
-			name, err = binaryPath(vtMysqlRoot, "mysqld")
-			// If this also fails, return an error.
-			if err != nil {
-				return err
-			}
-		}
-		mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
-		if err != nil {
-			return err
-		}
-		args := []string{
-			"--defaults-file=" + cnf.Path,
-			"--basedir=" + mysqlBaseDir,
-		}
-		args = append(args, mysqldArgs...)
-		env, err := buildLdPaths()
-		if err != nil {
-			return err
-		}
-
-		cmd := exec.Command(name, args...)
-		cmd.Dir = vtMysqlRoot
-		cmd.Env = env
-		log.Infof("%v %#v", ts, cmd)
-		stderr, err := cmd.StderrPipe()
-		if err != nil {
-			return err
-		}
-		stdout, err := cmd.StdoutPipe()
-		if err != nil {
-			return err
-		}
-		go func() {
-			scanner := bufio.NewScanner(stderr)
-			for scanner.Scan() {
-				log.Infof("%v stderr: %v", ts, scanner.Text())
-			}
-		}()
-		go func() {
-			scanner := bufio.NewScanner(stdout)
-			for scanner.Scan() {
-				log.Infof("%v stdout: %v", ts, scanner.Text())
-			}
-		}()
-		err = cmd.Start()
-		if err != nil {
-			return err
-		}
-
-		mysqld.mutex.Lock()
-		mysqld.cancelWaitCmd = make(chan struct{})
-		go func(cancel <-chan struct{}) {
-			// Wait regardless of cancel, so we don't generate defunct processes.
-			err := cmd.Wait()
-			log.Infof("%v exit: %v", ts, err)
-
-			// The process exited. Trigger OnTerm callbacks, unless we were cancelled.
-			select {
-			case <-cancel:
-			default:
-				mysqld.mutex.Lock()
-				for _, callback := range mysqld.onTermFuncs {
-					go callback()
-				}
-				mysqld.mutex.Unlock()
-			}
-		}(mysqld.cancelWaitCmd)
-		mysqld.mutex.Unlock()
+		// fallback to mysqld*(1) commands.
 	default:
 		// hook failed, we report error
 		return fmt.Errorf("mysqld_start hook failed: %v", hr.String())
 	}
+
+	if len(mysqldCommands) == 0 {
+		return fmt.Errorf("must specify at least one mysqld command in --mysqld_commands")
+	}
+
+	log.Infof("%v: No mysqld_start hook, trying %v", ts, mysqldCommands)
+
+	root, err := vtenv.VtMysqlRoot()
+	if err != nil {
+		return err
+	}
+
+	for _, cmd := range mysqldCommands {
+		if path, err := binaryPath(root, cmd); err == nil {
+			name = path
+			break
+		}
+	}
+
+	if len(name) == 0 {
+		return fmt.Errorf("cannot find any of the commands %v in $PATH", mysqldCommands)
+	}
+
+	log.Infof("%v: starting %s", ts, name)
+
+	mysqlBaseDir, err := vtenv.VtMysqlBaseDir()
+	if err != nil {
+		return err
+	}
+	args := []string{
+		"--defaults-file=" + cnf.Path,
+		"--basedir=" + mysqlBaseDir,
+	}
+	args = append(args, mysqldArgs...)
+	env, err := buildLdPaths()
+	if err != nil {
+		return err
+	}
+
+	cmd := exec.Command(name, args...)
+	cmd.Dir = root
+	cmd.Env = env
+	log.Infof("%v %#v", ts, cmd)
+	stderr, err := cmd.StderrPipe()
+	if err != nil {
+		return err
+	}
+	stdout, err := cmd.StdoutPipe()
+	if err != nil {
+		return err
+	}
+	go func() {
+		scanner := bufio.NewScanner(stderr)
+		for scanner.Scan() {
+			log.Infof("%v stderr: %v", ts, scanner.Text())
+		}
+	}()
+	go func() {
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			log.Infof("%v stdout: %v", ts, scanner.Text())
+		}
+	}()
+	err = cmd.Start()
+	if err != nil {
+		return err
+	}
+
+	mysqld.mutex.Lock()
+	mysqld.cancelWaitCmd = make(chan struct{})
+	go func(cancel <-chan struct{}) {
+		// Wait regardless of cancel, so we don't generate defunct processes.
+		err := cmd.Wait()
+		log.Infof("%v exit: %v", ts, err)
+
+		// The process exited. Trigger OnTerm callbacks, unless we were cancelled.
+		select {
+		case <-cancel:
+		default:
+			mysqld.mutex.Lock()
+			for _, callback := range mysqld.onTermFuncs {
+				go callback()
+			}
+			mysqld.mutex.Unlock()
+		}
+	}(mysqld.cancelWaitCmd)
+	mysqld.mutex.Unlock()
 
 	return nil
 }

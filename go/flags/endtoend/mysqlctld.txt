@@ -72,6 +72,7 @@ Usage of mysqlctld:
       --mysql_socket string                                              Path to the mysqld socket file
       --mysqlctl_mycnf_template string                                   template file to use for generating the my.cnf file during server init
       --mysqlctl_socket string                                           socket file to use for remote mysqlctl actions (empty for local actions)
+      --mysqld_commands strings                                          mysqld commands to lookup when starting mysqld. (default [mysqld_safe,mysqld])
       --onclose_timeout duration                                         wait no more than this for OnClose handlers before stopping (default 10s)
       --onterm_timeout duration                                          wait no more than this for OnTermSync handlers before stopping (default 10s)
       --pid_file string                                                  If set, the process will write its pid to the named file, and delete it on graceful shutdown.
