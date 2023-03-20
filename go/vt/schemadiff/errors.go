@@ -7,6 +7,39 @@ import (
 	"vitess.io/vitess/go/sqlescape"
 )
 
+// Wrapped is used to unwrap an error created by errors.Join() in Go 1.20
+type Wrapped interface {
+	Unwrap() []error
+}
+
+// Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components
+func Unwrap(err error) []error {
+	if u, ok := err.(Wrapped); ok {
+		return u.Unwrap()
+	}
+	return nil
+}
+
+// Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components, recursively
+func UnwrapAll(err error) (errs []error) {
+	if u, ok := err.(Wrapped); ok {
+		for _, e := range u.Unwrap() {
+			errs = append(errs, UnwrapAll(e)...)
+		}
+		return errs
+	}
+	return []error{err}
+}
+
+// Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components, recursively,
+// and returns one (the first) unwrapped error
+func UnwrapOne(err error) error {
+	if err == nil {
+		return nil
+	}
+	return UnwrapAll(err)[0]
+}
+
 var (
 	ErrEntityTypeMismatch             = errors.New("mismatched entity type")
 	ErrStrictIndexOrderingUnsupported = errors.New("strict index ordering is unsupported")
