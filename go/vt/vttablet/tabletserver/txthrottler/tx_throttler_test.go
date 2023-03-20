@@ -25,12 +25,11 @@ import (
 	"testing"
 	"time"
 
-	"vitess.io/vitess/go/vt/throttler"
-
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 
 	"vitess.io/vitess/go/vt/discovery"
+	"vitess.io/vitess/go/vt/throttler"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/memorytopo"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
