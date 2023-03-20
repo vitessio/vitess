@@ -123,7 +123,7 @@ func JSONObject(yield Query) {
 
 func CharsetConversionOperators(yield Query) {
 	var introducers = []string{
-		"", "_lat21	in1", "_utf8mb4", "_utf8", "_binary",
+		"", "_latin1", "_utf8mb4", "_utf8", "_binary",
 	}
 	var contents = []string{
 		`"foobar"`, `X'4D7953514C'`,
@@ -729,13 +729,16 @@ func IsStatement(yield Query) {
 }
 
 func NotStatement(yield Query) {
-	for _, i := range inputConversions {
-		yield(fmt.Sprintf("NOT %s", i), nil)
+	var ops = []string{"NOT", "!"}
+	for _, op := range ops {
+		for _, i := range inputConversions {
+			yield(fmt.Sprintf("%s %s", op, i), nil)
+		}
 	}
 }
 
 func LogicalStatement(yield Query) {
-	var ops = []string{"AND", "OR", "XOR"}
+	var ops = []string{"AND", "&&", "OR", "||", "XOR"}
 	for _, op := range ops {
 		for _, l := range inputConversions {
 			for _, r := range inputConversions {
