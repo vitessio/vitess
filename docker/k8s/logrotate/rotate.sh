@@ -25,7 +25,7 @@
 ###                                                                         ###
 ### For example, this invocation will change the wilcard expression:        ###
 ###                                                                         ###
-###     rotate.sh --wildcard-path /some/other/location/*.log                ###
+###     WILDCARD_PATH=/some/other/location/*.log rotate.sh                  ###
 ###                                                                         ###
 ### Rather than relying on the wildcard expression, it is recommended to    ###
 ### instead disable this behavior and specify the individual log files to   ###
@@ -33,10 +33,10 @@
 ### discover the location of the general log, and disables rotation of      ###
 ### files matching a wildcard:                                              ###
 ###                                                                         ###
-###     rotate.sh \                                                         ###
-###         --general-log-discover-path \                                   ###
-###         --mysql-socket /vt/mysql.sock \                                 ###
-###         --wildcard-path /dev/zero                                       ###
+###     export GENERAL_LOG_DISCOVER_PATH=1                                  ###
+###     export MYSQL_SOCKET=/vt/mysql.sock                                  ###
+###     export WILDCARD_PATH=/dev/zero                                      ###
+###     rotate.sh                                                           ###
 ###                                                                         ###
 ###############################################################################
 
@@ -237,144 +237,27 @@ term_handler() {
 }
 
 ###
-### PARSE CLI ARGUMENTS
-###
-### Very unfancy cli arg parsing. Only understands --[flag] [value]. Does not
-### understand --[flag]=[value] or positional args.
-###
-
-while [ $# -gt 0 ]; do
-  arg=$1
-  case $arg in
-    --audit-log-discover-path)
-      AUDIT_LOG_DISCOVER_PATH=1
-      ;;
-    --audit-log-path)
-      AUDIT_LOG_PATH=$2
-      shift
-      ;;
-    --audit-log-rotate)
-      AUDIT_LOG_ROTATE=$2
-      shift
-      ;;
-    --audit-log-size)
-      AUDIT_LOG_SIZE=$2
-      shift
-      ;;
-    --create-group)
-      CREATE_GROUP=$2
-      shift
-      ;;
-    --create-user)
-      CREATE_USER=$2
-      shift
-      ;;
-    --default-rotate)
-      DEFAULT_ROTATE=$2
-      shift
-      ;;
-    --default-size)
-      DEFAULT_SIZE=$2
-      shift
-      ;;
-    --error-log-discover-path)
-      ERROR_LOG_DISCOVER_PATH=1
-      ;;
-    --error-log-path)
-      ERROR_LOG_PATH=$2
-      shift
-      ;;
-    --error-log-rotate)
-      ERROR_LOG_ROTATE=$2
-      shift
-      ;;
-    --error-log-size)
-      ERROR_LOG_SIZE=$2
-      shift
-      ;;
-    --general-log-discover-path)
-      GENERAL_LOG_DISCOVER_PATH=1
-      ;;
-    --general-log-path)
-      GENERAL_LOG_PATH=$2
-      shift
-      ;;
-    --general-log-rotate)
-      GENERAL_LOG_ROTATE=$2
-      shift
-      ;;
-    --general-log-size)
-      GENERAL_LOG_SIZE=$2
-      shift
-      ;;
-    --mysql-host)
-      MYSQL_HOST=$2
-      shift
-      ;;
-    --mysql-socket)
-      MYSQL_SOCKET=$2
-      shift
-      ;;
-    --mysql-user)
-      MYSQL_USER=$2
-      shift
-      ;;
-    --print-logrotate-conf)
-      PRINT_LOGROTATE_CONF=1
-      ;;
-    --rotate-interval)
-      ROTATE_INTERVAL=$2
-      shift
-      ;;
-    --slow-query-log-discover-path)
-      SLOW_QUERY_LOG_DISCOVER_PATH=1
-      ;;
-    --slow-query-log-path)
-      SLOW_QUERY_LOG_PATH=$2
-      shift
-      ;;
-    --slow-query-log-rotate)
-      SLOW_QUERY_LOG_ROTATE=$2
-      shift
-      ;;
-    --slow-query-log-size)
-      SLOW_QUERY_LOG_SIZE=$2
-      shift
-      ;;
-    --wildcard-path)
-      WILDCARD_PATH=$2
-      shift
-      ;;
-    --wildcard-rotate)
-      WILDCARD_ROTATE=$2
-      shift
-      ;;
-    --wildcard-size)
-      WILDCARD_SIZE=$2
-      shift
-      ;;
-  esac
-  shift
-done
-
-###
 ### VALIDATE ARGS
 ###
 
 if [ -n "$AUDIT_LOG_PATH" ] && [ "$AUDIT_LOG_DISCOVER_PATH" = "1" ]; then
-  log_exit "mutually exclusive: [--audit-log-path, --audit-log-discover-path]"
+  # shellcheck disable=SC2016
+  log_exit 'mutually exclusive: [$AUDIT_LOG_PATH, $AUDIT_LOG_DISCOVER_PATH]'
 fi
 
 if [ -n "$ERROR_LOG_PATH" ] && [ "$ERROR_LOG_DISCOVER_PATH" = "1" ]; then
-  log_exit "mutually exclusive: [--error-log-path, --error-log-discover-path]"
+  # shellcheck disable=SC2016
+  log_exit 'mutually exclusive: [$ERROR_LOG_PATH, $ERROR_LOG_DISCOVER_PATH]'
 fi
 
 if [ -n "$GENERAL_LOG_PATH" ] && [ "$GENERAL_LOG_DISCOVER_PATH" = "1" ]; then
-  log_exit "mutually exclusive: [--general-log-path, --general-log-discover-path]"
+  # shellcheck disable=SC2016
+  log_exit 'mutually exclusive: [$GENERAL_LOG_PATH, $GENERAL_LOG_DISCOVER_PATH]'
 fi
 
 if [ -n "$SLOW_QUERY_LOG_PATH" ] && [ "$SLOW_QUERY_LOG_DISCOVER_PATH" = "1" ]; then
-  log_exit "mutually exclusive: [--slow-query-log-path, --slow-query-log-discover-path]"
+  # shellcheck disable=SC2016
+  log_exit 'mutually exclusive: [$SLOW_QUERY_LOG_PATH, $SLOW_QUERY_LOG_DISCOVER_PATH]'
 fi
 
 ###
