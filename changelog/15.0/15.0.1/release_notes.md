@@ -16,7 +16,7 @@ This issue is fixed in 15.0.1. The full issue can be found [here](https://github
 
 ------------
 
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/15_0_1_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/15.0/15.0.1/changelog.md).
 
 The release includes 25 commits (excluding merges)
 

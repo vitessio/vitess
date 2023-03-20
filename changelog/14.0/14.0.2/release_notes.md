@@ -18,7 +18,7 @@ Since the end-of-life of MariaDB 10.2, its Docker image is unavailable, and we d
 You can find more information on the list of supported databases on our documentation website, [here](https://vitess.io/docs/14.0/overview/supported-databases/).
 
 ------------
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/14_0_2_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/14.0/14.0.2/changelog.md).
 
 The release includes 23 commits (excluding merges)
 

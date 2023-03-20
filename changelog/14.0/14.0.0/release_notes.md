@@ -319,7 +319,7 @@ Work has gone into making the advisory locks (`get_lock()`, `release_lock()`, et
 A long time ago, the sharding column and type were specified at the keyspace level. This syntax is now deprecated and will be removed in v15.
 
 ------------
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/14_0_0_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/14.0/14.0.0/changelog.md).
 
 The release includes 1101 commits (excluding merges)
 

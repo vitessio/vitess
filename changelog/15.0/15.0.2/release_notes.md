@@ -12,7 +12,7 @@ Below is a summary of this patch release. You can learn more [here](https://grou
 
 ------------
 
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/15_0_2_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/15.0/15.0.2/changelog.md).
 
 The release includes 14 commits (excluding merges)
 
