@@ -26,6 +26,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 type tablePlan struct {
@@ -99,7 +100,7 @@ func (td *tableDiffer) buildTablePlan() (*tablePlan, error) {
 					// but will need to be revisited when we add such support to vreplication
 					aggregateFuncType := "sum"
 					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: engine.SupportedAggregates[aggregateFuncType],
+						Opcode: opcode.SupportedAggregates[aggregateFuncType],
 						Col:    len(sourceSelect.SelectExprs) - 1,
 					})
 				}
