@@ -25,22 +25,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/pflag"
 	"golang.org/x/text/cases"
 	"golang.org/x/text/language"
 
-	"github.com/spf13/pflag"
-
-	"vitess.io/vitess/go/vt/servenv"
-
-	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstats"
-	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	"vitess.io/vitess/go/vt/mysqlctl/backupstorage"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/vterrors"
 
+	stats "vitess.io/vitess/go/vt/mysqlctl/backupstats"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -388,21 +385,6 @@ func Restore(ctx context.Context, params RestoreParams) (*BackupManifest, error)
 	err = params.Mysqld.Start(context.Background(), params.Cnf, "--skip-grant-tables", "--skip-networking")
 	if err != nil {
 		return nil, err
-	}
-
-	// We disable super_read_only, in case it is in the default MySQL startup
-	// parameters and will be blocking the writes we need to do in
-	// PopulateMetadataTables().  We do it blindly, since
-	// this will fail on MariaDB, which doesn't have super_read_only
-	// This is safe, since we're restarting MySQL after the restore anyway
-	params.Logger.Infof("Restore: disabling super_read_only")
-	if err := params.Mysqld.SetSuperReadOnly(false); err != nil {
-		if strings.Contains(err.Error(), mysql.ERUnknownSystemVariable.ToString()) {
-			params.Logger.Warningf("Restore: server does not know about super_read_only, continuing anyway...")
-		} else {
-			params.Logger.Errorf("Restore: unexpected error while trying to set super_read_only: %v", err)
-			return nil, err
-		}
 	}
 
 	params.Logger.Infof("Restore: running mysql_upgrade")

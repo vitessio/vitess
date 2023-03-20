@@ -82,8 +82,8 @@ func formatTwoOptionsNicely(a, b string) string {
 	return a + "_" + b
 }
 
-// ErrWrongNumberOfColumnsInSelect is an error
-var ErrWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
+// errWrongNumberOfColumnsInSelect is an error
+var errWrongNumberOfColumnsInSelect = vterrors.NewErrorf(vtrpcpb.Code_FAILED_PRECONDITION, vterrors.WrongNumberOfColumnsInSelect, "The used SELECT statements have a different number of columns")
 
 // TryExecute performs a non-streaming exec.
 func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
@@ -106,7 +106,7 @@ func (c *Concatenate) TryExecute(ctx context.Context, vcursor VCursor, bindVars 
 		if len(rows) > 0 &&
 			len(r.Rows) > 0 &&
 			len(rows[0]) != len(r.Rows[0]) {
-			return nil, ErrWrongNumberOfColumnsInSelect
+			return nil, errWrongNumberOfColumnsInSelect
 		}
 
 		rows = append(rows, r.Rows...)
@@ -350,7 +350,7 @@ func (c *Concatenate) description() PrimitiveDescription {
 
 func (c *Concatenate) compareFields(fields1 []*querypb.Field, fields2 []*querypb.Field) error {
 	if len(fields1) != len(fields2) {
-		return ErrWrongNumberOfColumnsInSelect
+		return errWrongNumberOfColumnsInSelect
 	}
 	for i, field1 := range fields1 {
 		if _, found := c.NoNeedToTypeCheck[i]; found {

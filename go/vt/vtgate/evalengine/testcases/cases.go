@@ -23,100 +23,65 @@ import (
 	"strconv"
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
-type TestCase interface {
-	Test(yield Iterator)
-	Environment() *evalengine.ExpressionEnv
-}
-
-type Iterator func(query string, row []sqltypes.Value)
-
-type defaultEnv struct{}
-
-func (defaultEnv) Environment() *evalengine.ExpressionEnv {
-	return evalengine.EnvWithBindVars(nil, collations.CollationUtf8mb4ID)
-}
-
-type JSONPathOperations struct{ defaultEnv }
-type JSONArray struct{ defaultEnv }
-type JSONObject struct{ defaultEnv }
-type CharsetConversionOperators struct{ defaultEnv }
-type CaseExprWithPredicate struct{ defaultEnv }
-type Ceil struct{ defaultEnv }
-type CaseExprWithValue struct{ defaultEnv }
-type Base64 struct{ defaultEnv }
-type Conversion struct{ defaultEnv }
-type LargeDecimals struct{ defaultEnv }
-type LargeIntegers struct{ defaultEnv }
-type DecimalClamping struct{ defaultEnv }
-type BitwiseOperatorsUnary struct{ defaultEnv }
-type BitwiseOperators struct{ defaultEnv }
-type WeightString struct{ defaultEnv }
-type FloatFormatting struct{ defaultEnv }
-type UnderscoreAndPercentage struct{ defaultEnv }
-type Types struct{ defaultEnv }
-type HexArithmetic struct{ defaultEnv }
-type NumericTypes struct{ defaultEnv }
-type NegateArithmetic struct{ defaultEnv }
-type CollationOperations struct{ defaultEnv }
-type LikeComparison struct{ defaultEnv }
-type MultiComparisons struct{ defaultEnv }
-type IsStatement struct{ defaultEnv }
-type TupleComparisons struct{ defaultEnv }
-type Comparisons struct{ defaultEnv }
-type JSONExtract struct{}
-type FnLower struct{ defaultEnv }
-type FnUpper struct{ defaultEnv }
-type FnCharLength struct{ defaultEnv }
-type FnLength struct{ defaultEnv }
-type FnBitLength struct{ defaultEnv }
-type FnAscii struct{ defaultEnv }
-type FnRepeat struct{ defaultEnv }
-
 var Cases = []TestCase{
-	JSONExtract{},
-	JSONPathOperations{},
-	JSONArray{},
-	JSONObject{},
-	CharsetConversionOperators{},
-	CaseExprWithPredicate{},
-	Ceil{},
-	CaseExprWithValue{},
-	Base64{},
-	Conversion{},
-	LargeDecimals{},
-	LargeIntegers{},
-	DecimalClamping{},
-	BitwiseOperatorsUnary{},
-	BitwiseOperators{},
-	WeightString{},
-	FloatFormatting{},
-	UnderscoreAndPercentage{},
-	Types{},
-	HexArithmetic{},
-	NumericTypes{},
-	NegateArithmetic{},
-	CollationOperations{},
-	LikeComparison{},
-	MultiComparisons{},
-	IsStatement{},
-	TupleComparisons{},
-	Comparisons{},
-	FnLower{},
-	FnUpper{},
-	FnCharLength{},
-	FnLength{},
-	FnBitLength{},
-	FnAscii{},
-	FnRepeat{},
+	{Run: JSONExtract, Schema: JSONExtract_Schema},
+	{Run: JSONPathOperations},
+	{Run: JSONArray},
+	{Run: JSONObject},
+	{Run: CharsetConversionOperators},
+	{Run: CaseExprWithPredicate},
+	{Run: CaseExprWithValue},
+	{Run: Base64},
+	{Run: Conversion},
+	{Run: LargeDecimals},
+	{Run: LargeIntegers},
+	{Run: DecimalClamping},
+	{Run: BitwiseOperatorsUnary},
+	{Run: BitwiseOperators},
+	{Run: WeightString},
+	{Run: FloatFormatting},
+	{Run: UnderscoreAndPercentage},
+	{Run: Types},
+	{Run: Arithmetic},
+	{Run: HexArithmetic},
+	{Run: NumericTypes},
+	{Run: NegateArithmetic},
+	{Run: CollationOperations},
+	{Run: LikeComparison},
+	{Run: MultiComparisons},
+	{Run: IsStatement},
+	{Run: TupleComparisons},
+	{Run: Comparisons},
+	{Run: InStatement},
+	{Run: FnLower},
+	{Run: FnUpper},
+	{Run: FnCharLength},
+	{Run: FnLength},
+	{Run: FnBitLength},
+	{Run: FnAscii},
+	{Run: FnRepeat},
+	{Run: FnHex},
+	{Run: FnCeil},
+	{Run: FnFloor},
+	{Run: FnAbs},
+	{Run: FnPi},
+	{Run: FnAcos},
+	{Run: FnAsin},
+	{Run: FnAtan},
+	{Run: FnAtan2},
+	{Run: FnCos},
+	{Run: FnCot},
+	{Run: FnSin},
+	{Run: FnTan},
+	{Run: FnDegrees},
+	{Run: FnRadians},
 }
 
-func (JSONPathOperations) Test(yield Iterator) {
+func JSONPathOperations(yield Query) {
 	for _, obj := range inputJSONObjects {
 		yield(fmt.Sprintf("JSON_KEYS('%s')", obj), nil)
 
@@ -135,7 +100,7 @@ func (JSONPathOperations) Test(yield Iterator) {
 	}
 }
 
-func (JSONArray) Test(yield Iterator) {
+func JSONArray(yield Query) {
 	for _, a := range inputJSONPrimitives {
 		yield(fmt.Sprintf("JSON_ARRAY(%s)", a), nil)
 		for _, b := range inputJSONPrimitives {
@@ -145,7 +110,7 @@ func (JSONArray) Test(yield Iterator) {
 	yield("JSON_ARRAY()", nil)
 }
 
-func (JSONObject) Test(yield Iterator) {
+func JSONObject(yield Query) {
 	for _, a := range inputJSONPrimitives {
 		for _, b := range inputJSONPrimitives {
 			yield(fmt.Sprintf("JSON_OBJECT(%s, %s)", a, b), nil)
@@ -154,7 +119,7 @@ func (JSONObject) Test(yield Iterator) {
 	yield("JSON_OBJECT()", nil)
 }
 
-func (CharsetConversionOperators) Test(yield Iterator) {
+func CharsetConversionOperators(yield Query) {
 	var introducers = []string{
 		"", "_latin1", "_utf8mb4", "_utf8", "_binary",
 	}
@@ -174,7 +139,7 @@ func (CharsetConversionOperators) Test(yield Iterator) {
 	}
 }
 
-func (CaseExprWithPredicate) Test(yield Iterator) {
+func CaseExprWithPredicate(yield Query) {
 	var predicates = []string{
 		"true",
 		"false",
@@ -204,7 +169,7 @@ func (CaseExprWithPredicate) Test(yield Iterator) {
 	})
 }
 
-func (Ceil) Test(yield Iterator) {
+func FnCeil(yield Query) {
 	var ceilInputs = []string{
 		"0",
 		"1",
@@ -222,43 +187,177 @@ func (Ceil) Test(yield Iterator) {
 		yield(fmt.Sprintf("CEIL(%s)", num), nil)
 		yield(fmt.Sprintf("CEILING(%s)", num), nil)
 	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("CEIL(%s)", num), nil)
+		yield(fmt.Sprintf("CEILING(%s)", num), nil)
+	}
 }
 
-// HACK: for CASE comparisons, the expression is supposed to decompose like this:
-//
-//	CASE a WHEN b THEN bb WHEN c THEN cc ELSE d
-//		=> CASE WHEN a = b THEN bb WHEN a == c THEN cc ELSE d
-//
-// See: https://dev.mysql.com/doc/refman/5.7/en/flow-control-functions.html#operator_case
-// However, MySQL does not seem to be using the real `=` operator for some of these comparisons
-// namely, numerical comparisons are coerced into an unsigned form when they shouldn't.
-// Example:
-//
-//	SELECT -1 = 18446744073709551615
-//		=> 0
-//	SELECT -1 WHEN 18446744073709551615 THEN 1 ELSE 0 END
-//		=> 1
-//
-// This does not happen for other types, which all follow the behavior of the `=` operator,
-// so we're going to assume this is a bug for now.
-func comparisonSkip(a, b string) bool {
-	if a == "-1" && b == "18446744073709551615" {
-		return true
+func FnFloor(yield Query) {
+	var floorInputs = []string{
+		"0",
+		"1",
+		"-1",
+		"'1.5'",
+		"NULL",
+		"'ABC'",
+		"1.5e0",
+		"-1.5e0",
+		"9223372036854775810.4",
+		"-9223372036854775810.4",
 	}
-	if b == "-1" && a == "18446744073709551615" {
-		return true
+
+	for _, num := range floorInputs {
+		yield(fmt.Sprintf("FLOOR(%s)", num), nil)
 	}
-	return false
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("FLOOR(%s)", num), nil)
+	}
 }
 
-func (CaseExprWithValue) Test(yield Iterator) {
+func FnAbs(yield Query) {
+	var absInputs = []string{
+		"0",
+		"1",
+		"-1",
+		"'1.5'",
+		"NULL",
+		"'ABC'",
+		"1.5e0",
+		"-1.5e0",
+		"9223372036854775810.4",
+		"-9223372036854775810.4",
+	}
+
+	for _, num := range absInputs {
+		yield(fmt.Sprintf("ABS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ABS(%s)", num), nil)
+	}
+}
+
+func FnPi(yield Query) {
+	yield("PI()+0.000000000000000000", nil)
+}
+
+func FnAcos(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ACOS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ACOS(%s)", num), nil)
+	}
+}
+
+func FnAsin(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ASIN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ASIN(%s)", num), nil)
+	}
+}
+
+func FnAtan(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("ATAN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("ATAN(%s)", num), nil)
+	}
+}
+
+func FnAtan2(yield Query) {
+	for _, num1 := range radianInputs {
+		for _, num2 := range radianInputs {
+			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil)
+		}
+	}
+
+	for _, num1 := range inputBitwise {
+		for _, num2 := range inputBitwise {
+			yield(fmt.Sprintf("ATAN(%s, %s)", num1, num2), nil)
+			yield(fmt.Sprintf("ATAN2(%s, %s)", num1, num2), nil)
+		}
+	}
+}
+
+func FnCos(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("COS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("COS(%s)", num), nil)
+	}
+}
+
+func FnCot(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("COT(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("COT(%s)", num), nil)
+	}
+}
+
+func FnSin(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("SIN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("SIN(%s)", num), nil)
+	}
+}
+
+func FnTan(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("TAN(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("TAN(%s)", num), nil)
+	}
+}
+
+func FnDegrees(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("DEGREES(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("DEGREES(%s)", num), nil)
+	}
+}
+
+func FnRadians(yield Query) {
+	for _, num := range radianInputs {
+		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
+	}
+
+	for _, num := range inputBitwise {
+		yield(fmt.Sprintf("RADIANS(%s)", num), nil)
+	}
+}
+
+func CaseExprWithValue(yield Query) {
 	var elements []string
 	elements = append(elements, inputBitwise...)
 	elements = append(elements, inputComparisonElement...)
 
 	for _, cmpbase := range elements {
 		for _, val1 := range elements {
-			if comparisonSkip(cmpbase, val1) {
+			if !(bugs{}).CanCompare(cmpbase, val1) {
 				continue
 			}
 			yield(fmt.Sprintf("case %s when %s then 1 else 0 end", cmpbase, val1), nil)
@@ -266,7 +365,7 @@ func (CaseExprWithValue) Test(yield Iterator) {
 	}
 }
 
-func (Base64) Test(yield Iterator) {
+func Base64(yield Query) {
 	var inputs = []string{
 		`'bGlnaHQgdw=='`,
 		`'bGlnaHQgd28='`,
@@ -284,17 +383,9 @@ func (Base64) Test(yield Iterator) {
 	}
 }
 
-func (Conversion) Test(yield Iterator) {
-	var right = []string{
-		"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
-		"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
-		"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
-		"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
-		"DOUBLE", "REAL",
-		"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
-	}
+func Conversion(yield Query) {
 	for _, lhs := range inputConversions {
-		for _, rhs := range right {
+		for _, rhs := range inputConversionTypes {
 			yield(fmt.Sprintf("CAST(%s AS %s)", lhs, rhs), nil)
 			yield(fmt.Sprintf("CONVERT(%s, %s)", lhs, rhs), nil)
 			yield(fmt.Sprintf("CAST(CAST(%s AS JSON) AS %s)", lhs, rhs), nil)
@@ -302,7 +393,7 @@ func (Conversion) Test(yield Iterator) {
 	}
 }
 
-func (LargeDecimals) Test(yield Iterator) {
+func LargeDecimals(yield Query) {
 	var largepi = inputPi + inputPi
 
 	for pos := 0; pos < len(largepi); pos++ {
@@ -311,7 +402,7 @@ func (LargeDecimals) Test(yield Iterator) {
 	}
 }
 
-func (LargeIntegers) Test(yield Iterator) {
+func LargeIntegers(yield Query) {
 	var largepi = inputPi + inputPi
 
 	for pos := 1; pos < len(largepi); pos++ {
@@ -320,7 +411,7 @@ func (LargeIntegers) Test(yield Iterator) {
 	}
 }
 
-func (DecimalClamping) Test(yield Iterator) {
+func DecimalClamping(yield Query) {
 	for pos := 0; pos < len(inputPi); pos++ {
 		for m := 0; m < min(len(inputPi), 67); m += 2 {
 			for d := 0; d <= min(m, 33); d += 2 {
@@ -330,7 +421,7 @@ func (DecimalClamping) Test(yield Iterator) {
 	}
 }
 
-func (BitwiseOperatorsUnary) Test(yield Iterator) {
+func BitwiseOperatorsUnary(yield Query) {
 	for _, op := range []string{"~", "BIT_COUNT"} {
 		for _, rhs := range inputBitwise {
 			yield(fmt.Sprintf("%s(%s)", op, rhs), nil)
@@ -338,7 +429,7 @@ func (BitwiseOperatorsUnary) Test(yield Iterator) {
 	}
 }
 
-func (BitwiseOperators) Test(yield Iterator) {
+func BitwiseOperators(yield Query) {
 	for _, op := range []string{"&", "|", "^", "<<", ">>"} {
 		for _, lhs := range inputBitwise {
 			for _, rhs := range inputBitwise {
@@ -348,7 +439,7 @@ func (BitwiseOperators) Test(yield Iterator) {
 	}
 }
 
-func (WeightString) Test(yield Iterator) {
+func WeightString(yield Query) {
 	var inputs = []string{
 		`'foobar'`, `_latin1 'foobar'`,
 		`'foobar' as char(12)`, `'foobar' as binary(12)`,
@@ -362,7 +453,7 @@ func (WeightString) Test(yield Iterator) {
 	}
 }
 
-func (FloatFormatting) Test(yield Iterator) {
+func FloatFormatting(yield Query) {
 	var floats = []string{
 		`18446744073709551615`,
 		`9223372036854775807`,
@@ -390,7 +481,7 @@ func (FloatFormatting) Test(yield Iterator) {
 	}
 }
 
-func (UnderscoreAndPercentage) Test(yield Iterator) {
+func UnderscoreAndPercentage(yield Query) {
 	var queries = []string{
 		`'pokemon' LIKE 'poke%'`,
 		`'pokemon' LIKE 'poke\%'`,
@@ -414,7 +505,7 @@ func (UnderscoreAndPercentage) Test(yield Iterator) {
 	}
 }
 
-func (Types) Test(yield Iterator) {
+func Types(yield Query) {
 	var queries = []string{
 		"1 > 3",
 		"3 > 1",
@@ -445,7 +536,25 @@ func (Types) Test(yield Iterator) {
 	}
 }
 
-func (HexArithmetic) Test(yield Iterator) {
+func Arithmetic(yield Query) {
+	operators := []string{"+", "-", "*", "/"}
+
+	for _, op := range operators {
+		for _, lhs := range inputConversions {
+			for _, rhs := range inputConversions {
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+			}
+		}
+
+		for _, lhs := range inputBitwise {
+			for _, rhs := range inputBitwise {
+				yield(fmt.Sprintf("%s %s %s", lhs, op, rhs), nil)
+			}
+		}
+	}
+}
+
+func HexArithmetic(yield Query) {
 	var cases = []string{
 		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
 		`X'00'`, `X'1234'`, `X'ff'`,
@@ -462,7 +571,7 @@ func (HexArithmetic) Test(yield Iterator) {
 	}
 }
 
-func (NumericTypes) Test(yield Iterator) {
+func NumericTypes(yield Query) {
 	var numbers = []string{
 		`1234`, `-1234`,
 		`18446744073709551614`,
@@ -489,7 +598,7 @@ func (NumericTypes) Test(yield Iterator) {
 	}
 }
 
-func (NegateArithmetic) Test(yield Iterator) {
+func NegateArithmetic(yield Query) {
 	var cases = []string{
 		`0`, `1`, `1.0`, `0.0`, `1.0e0`, `0.0e0`,
 		`X'00'`, `X'1234'`, `X'ff'`,
@@ -507,7 +616,7 @@ func (NegateArithmetic) Test(yield Iterator) {
 	}
 }
 
-func (CollationOperations) Test(yield Iterator) {
+func CollationOperations(yield Query) {
 	var cases = []string{
 		"COLLATION('foobar')",
 		"COLLATION(_latin1 'foobar')",
@@ -521,7 +630,7 @@ func (CollationOperations) Test(yield Iterator) {
 	}
 }
 
-func (LikeComparison) Test(yield Iterator) {
+func LikeComparison(yield Query) {
 	var left = []string{
 		`'foobar'`, `'FOOBAR'`,
 		`'1234'`, `1234`,
@@ -544,12 +653,16 @@ func (LikeComparison) Test(yield Iterator) {
 	}
 }
 
-func (MultiComparisons) Test(yield Iterator) {
+func MultiComparisons(yield Query) {
 	var numbers = []string{
 		`0`, `-1`, `1`, `0.0`, `1.0`, `-1.0`, `1.0E0`, `-1.0E0`, `0.0E0`,
 		strconv.FormatUint(math.MaxUint64, 10),
 		strconv.FormatUint(math.MaxInt64, 10),
 		strconv.FormatInt(math.MinInt64, 10),
+		`CAST(0 AS UNSIGNED)`,
+		`CAST(1 AS UNSIGNED)`,
+		`CAST(2 AS UNSIGNED)`,
+		`CAST(420 AS UNSIGNED)`,
 		`'foobar'`, `'FOOBAR'`,
 		`"0"`, `"-1"`, `"1"`,
 		`_utf8mb4 'foobar'`, `_utf8mb4 'FOOBAR'`,
@@ -584,7 +697,7 @@ func (MultiComparisons) Test(yield Iterator) {
 	}
 }
 
-func (IsStatement) Test(yield Iterator) {
+func IsStatement(yield Query) {
 	var left = []string{
 		"NULL", "TRUE", "FALSE",
 		`1`, `0`, `1.0`, `0.0`, `-1`, `666`,
@@ -607,7 +720,7 @@ func (IsStatement) Test(yield Iterator) {
 	}
 }
 
-func (TupleComparisons) Test(yield Iterator) {
+func TupleComparisons(yield Query) {
 	var elems = []string{"NULL", "-1", "0", "1"}
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 
@@ -625,7 +738,7 @@ func (TupleComparisons) Test(yield Iterator) {
 	}
 }
 
-func (Comparisons) Test(yield Iterator) {
+func Comparisons(yield Query) {
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 	for _, op := range operators {
 		for i := 0; i < len(inputComparisonElement); i++ {
@@ -636,7 +749,7 @@ func (Comparisons) Test(yield Iterator) {
 	}
 }
 
-func (JSONExtract) Test(yield Iterator) {
+func JSONExtract(yield Query) {
 	var cases = []struct {
 		Operator string
 		Path     string
@@ -676,64 +789,88 @@ func (JSONExtract) Test(yield Iterator) {
 	}
 }
 
-func (JSONExtract) Environment() *evalengine.ExpressionEnv {
-	env := new(evalengine.ExpressionEnv)
-	env.DefaultCollation = collations.CollationUtf8mb4ID
-	env.Fields = []*querypb.Field{
-		{
-			Name:       "column0",
-			Type:       sqltypes.TypeJSON,
-			ColumnType: "JSON",
-		},
-	}
-	return env
+var JSONExtract_Schema = []*querypb.Field{
+	{
+		Name:       "column0",
+		Type:       sqltypes.TypeJSON,
+		ColumnType: "JSON",
+	},
 }
 
-func (FnLower) Test(yield Iterator) {
+func FnLower(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("LOWER(%s)", str), nil)
 		yield(fmt.Sprintf("LCASE(%s)", str), nil)
 	}
 }
 
-func (FnUpper) Test(yield Iterator) {
+func FnUpper(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("UPPER(%s)", str), nil)
 		yield(fmt.Sprintf("UCASE(%s)", str), nil)
 	}
 }
 
-func (FnCharLength) Test(yield Iterator) {
+func FnCharLength(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("CHAR_LENGTH(%s)", str), nil)
 		yield(fmt.Sprintf("CHARACTER_LENGTH(%s)", str), nil)
 	}
 }
 
-func (FnLength) Test(yield Iterator) {
+func FnLength(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("LENGTH(%s)", str), nil)
 		yield(fmt.Sprintf("OCTET_LENGTH(%s)", str), nil)
 	}
 }
 
-func (FnBitLength) Test(yield Iterator) {
+func FnBitLength(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("BIT_LENGTH(%s)", str), nil)
 	}
 }
 
-func (FnAscii) Test(yield Iterator) {
+func FnAscii(yield Query) {
 	for _, str := range inputStrings {
 		yield(fmt.Sprintf("ASCII(%s)", str), nil)
 	}
 }
 
-func (FnRepeat) Test(yield Iterator) {
-	counts := []string{"-1", "1.2", "3"}
+func FnRepeat(yield Query) {
+	counts := []string{"-1", "1.2", "3", "1073741825"}
 	for _, str := range inputStrings {
 		for _, cnt := range counts {
 			yield(fmt.Sprintf("repeat(%s, %s)", str, cnt), nil)
 		}
 	}
+}
+
+func FnHex(yield Query) {
+	for _, str := range inputStrings {
+		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+
+	for _, str := range inputConversions {
+		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+
+	for _, str := range inputBitwise {
+		yield(fmt.Sprintf("hex(%s)", str), nil)
+	}
+}
+
+func InStatement(yield Query) {
+	roots := append([]string(nil), inputBitwise...)
+	roots = append(roots, inputComparisonElement...)
+
+	genSubsets(roots, 3, func(inputs []string) {
+		if !(bugs{}).CanCompare(inputs...) {
+			return
+		}
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[0], inputs[1], inputs[2]), nil)
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[2], inputs[1], inputs[0]), nil)
+		yield(fmt.Sprintf("%s IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
+		yield(fmt.Sprintf("%s IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
+	})
 }

@@ -183,7 +183,9 @@ func addTablet(t *testing.T, tabletUID int, tabletType string) *cluster.Vttablet
 		Alias:     fmt.Sprintf("%s-%010d", cell, tabletUID),
 	}
 	// Start Mysqlctl process
-	tablet.MysqlctlProcess = *cluster.MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory, !clusterInstance.ReusingVTDATAROOT)
+	mysqlctlProcess, err := cluster.MysqlCtlProcessInstanceOptionalInit(tablet.TabletUID, tablet.MySQLPort, clusterInstance.TmpDirectory, !clusterInstance.ReusingVTDATAROOT)
+	require.Nil(t, err)
+	tablet.MysqlctlProcess = *mysqlctlProcess
 	proc, err := tablet.MysqlctlProcess.StartProcess()
 	require.Nil(t, err)
 

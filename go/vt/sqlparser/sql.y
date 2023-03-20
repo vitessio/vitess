@@ -334,6 +334,9 @@ func bindVariable(yylex yyLexer, bvar string) {
 // Type Modifiers
 %token <str> NULLX AUTO_INCREMENT APPROXNUM SIGNED UNSIGNED ZEROFILL
 
+// PURGE tokens
+%token <str> PURGE BEFORE
+
 // SHOW tokens
 %token <str> CODE COLLATION COLUMNS DATABASES ENGINES EVENT EXTENDED FIELDS FULL FUNCTION GTID_EXECUTED
 %token <str> KEYSPACES OPEN PLUGINS PRIVILEGES PROCESSLIST SCHEMAS TABLES TRIGGERS USER
@@ -424,7 +427,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %type <databaseOption> collate character_set encryption
 %type <databaseOptions> create_options create_options_opt
 %type <boolean> default_optional first_opt linear_opt jt_exists_opt jt_path_opt partition_storage_opt
-%type <statement> analyze_statement show_statement use_statement other_statement
+%type <statement> analyze_statement show_statement use_statement purge_statement other_statement
 %type <statement> begin_statement commit_statement rollback_statement savepoint_statement release_statement load_statement
 %type <statement> lock_statement unlock_statement call_statement
 %type <statement> revert_statement
@@ -633,6 +636,7 @@ command:
 | drop_statement
 | truncate_statement
 | analyze_statement
+| purge_statement
 | show_statement
 | use_statement
 | begin_statement
@@ -3952,6 +3956,16 @@ analyze_statement:
     $$ = &OtherRead{}
   }
 
+purge_statement:
+  PURGE BINARY LOGS TO STRING
+  {
+    $$ = &PurgeBinaryLogs{To: string($5)}
+  }
+| PURGE BINARY LOGS BEFORE STRING
+  {
+    $$ = &PurgeBinaryLogs{Before: string($5)}
+  }
+
 show_statement:
   SHOW charset_or_character_set like_or_where_opt
   {
@@ -6177,6 +6191,22 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONUnquoteExpr{JSONValue:$3}
   }
+| MULTIPOLYGON openb expression_list closeb
+  {
+    $$ = &MultiPolygonExpr{ PolygonParams:$3 }
+  }
+| MULTIPOINT openb expression_list closeb
+  {
+    $$ = &MultiPointExpr{ PointParams:$3 }
+  }
+| MULTILINESTRING openb expression_list closeb
+  {
+    $$ = &MultiLinestringExpr{ LinestringParams:$3 }
+  }
+| POLYGON openb expression_list closeb
+  {
+    $$ = &PolygonExpr{ LinestringParams:$3 }
+  }
 | LINESTRING openb expression_list closeb
   {
     $$ = &LineStringExpr{ PointParams:$3 }
@@ -7565,6 +7595,7 @@ non_reserved_keyword:
 | AUTOEXTEND_SIZE
 | AVG %prec FUNCTION_CALL_NON_KEYWORD
 | AVG_ROW_LENGTH
+| BEFORE
 | BEGIN
 | BIGINT
 | BIT
@@ -7749,9 +7780,9 @@ non_reserved_keyword:
 | MIN_ROWS
 | MODE
 | MODIFY
-| MULTILINESTRING
-| MULTIPOINT
-| MULTIPOLYGON
+| MULTILINESTRING %prec FUNCTION_CALL_NON_KEYWORD
+| MULTIPOINT %prec FUNCTION_CALL_NON_KEYWORD
+| MULTIPOLYGON %prec FUNCTION_CALL_NON_KEYWORD
 | NAME
 | NAMES
 | NCHAR
@@ -7794,10 +7825,11 @@ non_reserved_keyword:
 | PS_THREAD_ID %prec FUNCTION_CALL_NON_KEYWORD
 | PLUGINS
 | POINT %prec FUNCTION_CALL_NON_KEYWORD
-| POLYGON
+| POLYGON %prec FUNCTION_CALL_NON_KEYWORD
 | POSITION %prec FUNCTION_CALL_NON_KEYWORD
 | PROCEDURE
 | PROCESSLIST
+| PURGE
 | QUERIES
 | QUERY
 | RANDOM

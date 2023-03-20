@@ -19,6 +19,9 @@ package testcases
 import (
 	"math"
 	"strconv"
+
+	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var inputJSONObjects = []string{
@@ -48,13 +51,34 @@ var inputBitwise = []string{
 	"0.0e0", "1.0e0", "255.0", "1.5e0", "-1.5e0", "1.1e0", "-1e0", "-255e0", "7e0", "9e0", "13e0",
 	strconv.FormatUint(math.MaxUint64, 10),
 	strconv.FormatUint(math.MaxInt64, 10),
+	strconv.FormatUint(math.MaxInt64+1, 10),
 	strconv.FormatInt(math.MinInt64, 10),
+	"18446744073709551616",
+	"-9223372036854775809",
 	`"foobar"`, `"foobar1234"`, `"0"`, "0x1", "-0x1", "X'ff'", "X'00'",
 	`"1abcd"`, "NULL", `_binary "foobar"`, `_binary "foobar1234"`,
 	"64", "'64'", "_binary '64'", "X'40'", "_binary X'40'",
 }
 
-var inputComparisonElement = []string{"NULL", "-1", "0", "1",
+var radianInputs = []string{
+	"0",
+	"1",
+	"-1",
+	"'1.5'",
+	"NULL",
+	"'ABC'",
+	"1.5e0",
+	"-1.5e0",
+	"9223372036854775810.4",
+	"-9223372036854775810.4",
+	string(evalengine.FormatFloat(sqltypes.Float64, math.Pi)),
+	string(evalengine.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
+	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
+	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
+}
+
+var inputComparisonElement = []string{
+	"NULL", "-1", "0", "1",
 	`'foo'`, `'bar'`, `'FOO'`, `'BAR'`,
 	`'foo' collate utf8mb4_0900_as_cs`,
 	`'FOO' collate utf8mb4_0900_as_cs`,
@@ -106,4 +130,13 @@ var inputStrings = []string{
 	// "_utf16 'AabcÅå'",
 	// "_utf32 'AabcÅå'",
 	// "_ucs2 'AabcÅå'",
+}
+
+var inputConversionTypes = []string{
+	"BINARY", "BINARY(1)", "BINARY(0)", "BINARY(16)", "BINARY(-1)",
+	"CHAR", "CHAR(1)", "CHAR(0)", "CHAR(16)", "CHAR(-1)",
+	"NCHAR", "NCHAR(1)", "NCHAR(0)", "NCHAR(16)", "NCHAR(-1)",
+	"DECIMAL", "DECIMAL(0, 4)", "DECIMAL(12, 0)", "DECIMAL(12, 4)",
+	"DOUBLE", "REAL",
+	"SIGNED", "UNSIGNED", "SIGNED INTEGER", "UNSIGNED INTEGER", "JSON",
 }

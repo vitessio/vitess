@@ -552,6 +552,12 @@ type (
 	Load struct {
 	}
 
+	// PurgeBinaryLogs represents a PURGE BINARY LOGS statement
+	PurgeBinaryLogs struct {
+		To     string
+		Before string
+	}
+
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -739,6 +745,7 @@ func (*ExplainTab) iStatement()          {}
 func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
 func (*DeallocateStmt) iStatement()      {}
+func (*PurgeBinaryLogs) iStatement()     {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -2036,7 +2043,7 @@ type (
 		SQLNode
 	}
 
-	// TableName represents a table  name.
+	// TableName represents a table name.
 	// Qualifier, if specified, represents a database or keyspace.
 	// TableName is a value struct whose fields are case sensitive.
 	// This means two TableName vars can be compared for equality
@@ -2715,6 +2722,26 @@ type (
 		PointParams Exprs
 	}
 
+	//PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
+	PolygonExpr struct {
+		LinestringParams Exprs
+	}
+
+	//MultiPoint represents a geometry collection for points
+	MultiPointExpr struct {
+		PointParams Exprs
+	}
+
+	//MultiPoint represents a geometry collection for linestrings
+	MultiLinestringExpr struct {
+		LinestringParams Exprs
+	}
+
+	//MultiPolygon represents a geometry collection for polygons
+	MultiPolygonExpr struct {
+		PolygonParams Exprs
+	}
+
 	AggrFunc interface {
 		Expr
 		AggrName() string
@@ -3043,6 +3070,10 @@ func (*Variance) iExpr()                           {}
 func (*Variable) iExpr()                           {}
 func (*PointExpr) iExpr()                          {}
 func (*LineStringExpr) iExpr()                     {}
+func (*PolygonExpr) iExpr()                        {}
+func (*MultiPolygonExpr) iExpr()                   {}
+func (*MultiPointExpr) iExpr()                     {}
+func (*MultiLinestringExpr) iExpr()                {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3098,6 +3129,10 @@ func (*PerformanceSchemaFuncExpr) iCallable()          {}
 func (*GTIDFuncExpr) iCallable()                       {}
 func (*PointExpr) iCallable()                          {}
 func (*LineStringExpr) iCallable()                     {}
+func (*PolygonExpr) iCallable()                        {}
+func (*MultiPolygonExpr) iCallable()                   {}
+func (*MultiPointExpr) iCallable()                     {}
+func (*MultiLinestringExpr) iCallable()                {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}
