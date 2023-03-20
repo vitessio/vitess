@@ -337,22 +337,15 @@ func (e *ViewDependencyUnresolvedError) Error() string {
 
 type InvalidColumnReferencedInViewError struct {
 	View      string
-	Table     string
 	Column    string
 	Ambiguous bool
 }
 
 func (e *InvalidColumnReferencedInViewError) Error() string {
-	switch {
-	case e.Column == "":
-		return fmt.Sprintf("view %s references non-existent table %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table))
-	case e.Table != "":
-		return fmt.Sprintf("view %s references non-existent column %s.%s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Table), sqlescape.EscapeID(e.Column))
-	case e.Ambiguous:
+	if e.Ambiguous {
 		return fmt.Sprintf("view %s references unqualified but non unique column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
-	default:
-		return fmt.Sprintf("view %s references unqualified but non-existent column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
 	}
+	return fmt.Sprintf("view %s references unqualified but non-existent column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
 }
 
 type InvalidStarExprInViewError struct {
