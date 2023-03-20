@@ -389,8 +389,14 @@ func updateBootstrapVersionInCodebase(old, new float64, newGoVersion *version.Ve
 
 	for _, file := range files {
 		err = replaceInFile(
-			[]*regexp.Regexp{regexp.MustCompile(`(?i)ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*([0-9.]+)`)},
-			[]string{fmt.Sprintf("ARG bootstrap_version=%-1g", new)},
+			[]*regexp.Regexp{
+				regexp.MustCompile(`(?i)ARG[[:space:]]*bootstrap_version[[:space:]]*=[[:space:]]*[0-9.]+`), // Dockerfile
+				regexp.MustCompile(`(?i)BOOTSTRAP_VERSION[[:space:]]*=[[:space:]]*[0-9.]+`),                // Makefile
+			},
+			[]string{
+				fmt.Sprintf("ARG bootstrap_version=%-1g", new), // Dockerfile
+				fmt.Sprintf("BOOTSTRAP_VERSION=%-1g", new),     // Makefile
+			},
 			file,
 		)
 		if err != nil {
