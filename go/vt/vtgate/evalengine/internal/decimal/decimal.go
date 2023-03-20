@@ -263,7 +263,7 @@ func (d Decimal) rescale(exp int32) Decimal {
 }
 
 // abs returns the absolute value of the decimal.
-func (d Decimal) abs() Decimal {
+func (d Decimal) Abs() Decimal {
 	if d.Sign() >= 0 {
 		return d
 	}
@@ -438,7 +438,7 @@ func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
 	// now rv2 = abs(r.value) * 2
 	r2 := Decimal{value: &rv2, exp: r.exp + precision}
 	// r2 is now 2 * r * 10 ^ precision
-	var c = r2.Cmp(d2.abs())
+	var c = r2.Cmp(d2.Abs())
 
 	if c < 0 {
 		return q
@@ -471,6 +471,20 @@ func (d Decimal) Ceil() Decimal {
 	if m.Cmp(zeroInt) != 0 {
 		z.Add(z, oneInt)
 	}
+	return Decimal{value: z, exp: 0}
+}
+
+func (d Decimal) Floor() Decimal {
+	if d.isInteger() {
+		return d
+	}
+
+	exp := big.NewInt(10)
+
+	// NOTE(vadim): must negate after casting to prevent int32 overflow
+	exp.Exp(exp, big.NewInt(-int64(d.exp)), nil)
+
+	z, _ := new(big.Int).DivMod(d.value, exp, new(big.Int))
 	return Decimal{value: z, exp: 0}
 }
 

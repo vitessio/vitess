@@ -22,14 +22,13 @@ object to pool these DBConnections.
 package dbconnpool
 
 import (
+	"context"
 	"errors"
 	"net"
 	"sync"
 	"time"
 
 	"vitess.io/vitess/go/netutil"
-
-	"context"
 
 	"vitess.io/vitess/go/pools"
 	"vitess.io/vitess/go/stats"
