@@ -72,7 +72,7 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 		}
 	}
 	if err := schema.normalize(); err != nil {
-		return nil, err
+		return schema, err
 	}
 	return schema, nil
 }
@@ -165,6 +165,8 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
+	errs := &concurrency.AllErrorRecorder{}
+
 	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
 	s.sorted = make([]Entity, 0, len(s.tables)+len(s.views))
 	// Verify no two entities share same name
@@ -317,15 +319,13 @@ func (s *Schema) normalize() error {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We return the first one.
-				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
+				errs.RecordError(&ViewDependencyUnresolvedError{View: v.ViewName.Name.String()})
 			}
 		}
 	}
 
 	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
-	if err := s.ValidateViewReferences(); err != nil {
-		return err
-	}
+	_ = s.ValidateViewReferences(errs) // We aggregate any errors and proceed with validation
 
 	// Validate table definitions
 	for _, t := range s.tables {
@@ -391,7 +391,7 @@ func (s *Schema) normalize() error {
 			}
 		}
 	}
-	return nil
+	return errs.AggrError(vterrors.Aggregate)
 }
 
 // Entities returns this schema's entities in good order (may be applied without error)
@@ -771,8 +771,7 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 	return dup, nil
 }
 
-func (s *Schema) ValidateViewReferences() error {
-	errs := &concurrency.AllErrorRecorder{}
+func (s *Schema) ValidateViewReferences(errs *concurrency.AllErrorRecorder) error {
 	schemaInformation := newDeclarativeSchemaInformation()
 
 	// Remember that s.Entities() is already ordered by dependency. ie. tables first, then views
