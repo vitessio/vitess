@@ -271,7 +271,7 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 
 	skip := c.compileNullCheck2(lt, rt)
 
-	if !sqltypes.IsText(lt.Type) && !sqltypes.IsBinary(lt.Type) {
+	if !lt.isTextual() {
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.defaultCollation, 0, false)
 		lt.Col = collations.TypedCollation{
 			Collation:    c.defaultCollation,
@@ -280,7 +280,7 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 		}
 	}
 
-	if !sqltypes.IsText(rt.Type) && !sqltypes.IsBinary(rt.Type) {
+	if !rt.isTextual() {
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 		rt.Col = collations.TypedCollation{
 			Collation:    c.defaultCollation,

@@ -316,7 +316,7 @@ func (c *compiler) compileToDecimal(ct ctype, offset int) ctype {
 }
 
 func (c *compiler) compileNullCheck1(ct ctype) *jump {
-	if ct.Flag&flagNullable != 0 {
+	if ct.nullable() {
 		j := c.asm.jumpFrom()
 		c.asm.NullCheck1(j)
 		return j
@@ -325,7 +325,7 @@ func (c *compiler) compileNullCheck1(ct ctype) *jump {
 }
 
 func (c *compiler) compileNullCheck2(lt, rt ctype) *jump {
-	if lt.Flag&flagNullable != 0 || rt.Flag&flagNullable != 0 {
+	if lt.nullable() || rt.nullable() {
 		j := c.asm.jumpFrom()
 		c.asm.NullCheck2(j)
 		return j
