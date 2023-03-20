@@ -46,6 +46,7 @@ import (
 	"vitess.io/vitess/go/vt/vtctl/workflow"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tabletconn"
 	"vitess.io/vitess/go/vt/vttablet/tabletmanager/vreplication"
@@ -576,7 +577,7 @@ func (df *vdiff) buildTablePlan(table *tabletmanagerdatapb.TableDefinition, quer
 					// but will need to be revisited when we add such support to vreplication
 					aggregateFuncType := "sum"
 					aggregates = append(aggregates, &engine.AggregateParams{
-						Opcode: engine.SupportedAggregates[aggregateFuncType],
+						Opcode: opcode.SupportedAggregates[aggregateFuncType],
 						Col:    len(sourceSelect.SelectExprs) - 1,
 					})
 				}

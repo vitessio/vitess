@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	"vitess.io/vitess/go/sqltypes"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 
@@ -423,11 +424,11 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 			offset = incomingOffset
 		}
 
-		opcode := engine.AggregateSum
+		opcode := popcode.AggregateSum
 		switch aggr.OpCode {
-		case engine.AggregateMin, engine.AggregateMax, engine.AggregateRandom:
+		case popcode.AggregateMin, popcode.AggregateMax, popcode.AggregateRandom:
 			opcode = aggr.OpCode
-		case engine.AggregateCount, engine.AggregateCountStar, engine.AggregateCountDistinct, engine.AggregateSumDistinct:
+		case popcode.AggregateCount, popcode.AggregateCountStar, popcode.AggregateCountDistinct, popcode.AggregateSumDistinct:
 			if !pushed {
 				opcode = aggr.OpCode
 			}
