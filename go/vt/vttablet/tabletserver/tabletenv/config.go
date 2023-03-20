@@ -520,7 +520,7 @@ func (c *TabletConfig) verifyTxThrottlerConfig() error {
 				tabletType,
 			)
 		default:
-			return vterrors.Errorf(vtrpc.Code_INTERNAL, "unsupported tablet type %q", tabletType)
+			return vterrors.Errorf(vtrpc.Code_INVALID_ARGUMENT, "unsupported tablet type %q", tabletType)
 		}
 	}
 	return nil
