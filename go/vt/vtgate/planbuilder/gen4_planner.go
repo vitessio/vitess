@@ -209,6 +209,8 @@ func newBuildSelectPlan(
 		return nil, err
 	}
 
+	optimizePlan(plan)
+
 	sel, isSel := selStmt.(*sqlparser.Select)
 	if isSel {
 		if err := setMiscFunc(plan, sel); err != nil {
@@ -226,6 +228,27 @@ func newBuildSelectPlan(
 	}
 
 	return plan, nil
+}
+
+func optimizePlan(plan logicalPlan) {
+	for _, lp := range plan.Inputs() {
+		optimizePlan(lp)
+	}
+
+	this, ok := plan.(*simpleProjection)
+	if !ok {
+		return
+	}
+
+	input, ok := this.input.(*simpleProjection)
+	if !ok {
+		return
+	}
+
+	for i, col := range this.eSimpleProj.Cols {
+		this.eSimpleProj.Cols[i] = input.eSimpleProj.Cols[col]
+	}
+	this.input = input.input
 }
 
 func gen4UpdateStmtPlanner(

@@ -5273,5 +5273,42 @@
         ]
       }
     }
+  },
+  {
+    "comment": "Aggregations from derived table used in arithmetic outside derived table",
+    "query": "select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from user) A",
+    "v3-plan": "unsupported: expression on results of a cross-shard subquery",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select A.a, A.b, (A.a / A.b) as d from (select sum(a) as a, sum(b) as b from user) A",
+      "Instructions": {
+        "OperatorType": "Projection",
+        "Expressions": [
+          "[COLUMN 0] as a",
+          "[COLUMN 1] as b",
+          "[COLUMN 0] / [COLUMN 1] as d"
+        ],
+        "Inputs": [
+          {
+            "OperatorType": "Aggregate",
+            "Variant": "Scalar",
+            "Aggregates": "sum(0) AS a, sum(1) AS b",
+            "Inputs": [
+              {
+                "OperatorType": "Route",
+                "Variant": "Scatter",
+                "Keyspace": {
+                  "Name": "user",
+                  "Sharded": true
+                },
+                "FieldQuery": "select sum(a) as a, sum(b) as b from `user` where 1 != 1",
+                "Query": "select sum(a) as a, sum(b) as b from `user`",
+                "Table": "`user`"
+              }
+            ]
+          }
+        ]
+      }
+    }
   }
 ]

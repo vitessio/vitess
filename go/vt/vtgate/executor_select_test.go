@@ -3707,3 +3707,37 @@ func TestSelectAggregationData(t *testing.T) {
 		})
 	}
 }
+
+func TestSelectAggregationRandom(t *testing.T) {
+	cell := "aa"
+	hc := discovery.NewFakeHealthCheck(nil)
+	createSandbox(KsTestSharded).VSchema = executorVSchema
+	getSandbox(KsTestUnsharded).VSchema = unshardedVSchema
+	serv := newSandboxForCells([]string{cell})
+	resolver := newTestResolver(hc, serv, cell)
+	shards := []string{"-20", "20-40", "40-60", "60-80", "80-a0", "a0-c0", "c0-e0", "e0-"}
+	var conns []*sandboxconn.SandboxConn
+	for _, shard := range shards {
+		sbc := hc.AddTestTablet(cell, shard, 1, KsTestSharded, shard, topodatapb.TabletType_PRIMARY, true, 1, nil)
+		conns = append(conns, sbc)
+
+		sbc.SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+			sqltypes.MakeTestFields("a|b", "int64|int64"),
+			"null|null",
+		)})
+	}
+
+	conns[0].SetResults([]*sqltypes.Result{sqltypes.MakeTestResult(
+		sqltypes.MakeTestFields("a|b", "int64|int64"),
+		"10|1",
+	)})
+
+	executor := createExecutor(serv, cell, resolver)
+	executor.pv = querypb.ExecuteOptions_Gen4
+	session := NewAutocommitSession(&vtgatepb.Session{})
+
+	rs, err := executor.Execute(context.Background(), "TestSelectCFC", session,
+		"select /*vt+ PLANNER=gen4 */ A.a, A.b, (A.a / A.b) as c from (select sum(a) as a, sum(b) as b from user) A", nil)
+	require.NoError(t, err)
+	assert.Equal(t, `[[INT64(10) INT64(1) DECIMAL(10.0000)]]`, fmt.Sprintf("%v", rs.Rows))
+}
