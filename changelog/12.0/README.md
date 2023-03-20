@@ -1,12 +1,4 @@
 ## v12.0
-* **[12.0.6](12.0.6)**
-	* [Changelog](12.0.6/changelog.md)
-	* [Release Notes](12.0.6/release_notes.md)
-
-* **[12.0.5](12.0.5)**
-	* [Changelog](12.0.5/changelog.md)
-	* [Release Notes](12.0.5/release_notes.md)
-
 * **[12.0.4](12.0.4)**
 	* [Release Notes](12.0.4/release_notes.md)
 
