@@ -87,7 +87,6 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 		if err != nil {
 			return nil, err
 		}
-		// We just use xxhash blindly;  we could make this configurable.
 		vindex, err := CreateVindex(s, name+"_hash", map[string]string{})
 		if err != nil {
 			return nil, err
