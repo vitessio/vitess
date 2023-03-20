@@ -17,6 +17,9 @@ limitations under the License.
 package schemadiff
 
 import (
+	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/vt/key"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
@@ -28,18 +31,28 @@ var semanticKS = &vindexes.Keyspace{
 	Sharded: false,
 }
 
+var _ semantics.SchemaInformation = (*declarativeSchemaInformation)(nil)
+
 // declarativeSchemaInformation is a utility wrapper arounf FakeSI, and adds a few utility functions
 // to make it more simple and accessible to schemadiff's logic.
 type declarativeSchemaInformation struct {
-	semantics.FakeSI
+	Tables map[string]*vindexes.Table
 }
 
 func newDeclarativeSchemaInformation() *declarativeSchemaInformation {
 	return &declarativeSchemaInformation{
-		semantics.FakeSI{
-			Tables: make(map[string]*vindexes.Table),
-		},
+		Tables: make(map[string]*vindexes.Table),
 	}
+}
+
+// FindTableOrVindex implements the SchemaInformation interface
+func (si *declarativeSchemaInformation) FindTableOrVindex(tablename sqlparser.TableName) (*vindexes.Table, vindexes.Vindex, string, topodatapb.TabletType, key.Destination, error) {
+	table := si.Tables[sqlparser.String(tablename)]
+	return table, nil, "", 0, nil, nil
+}
+
+func (si *declarativeSchemaInformation) ConnCollation() collations.ID {
+	return 45
 }
 
 // addTable adds a fake table with an empty column list
