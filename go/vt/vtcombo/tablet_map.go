@@ -869,7 +869,7 @@ func (itmc *internalTabletManagerClient) VReplicationWaitForPos(context.Context,
 	return fmt.Errorf("not implemented in vtcombo")
 }
 
-func (itmc *internalTabletManagerClient) UpdateVRWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*querypb.QueryResult, error) {
+func (itmc *internalTabletManagerClient) UpdateVRWorkflow(context.Context, *topodatapb.Tablet, *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	return nil, fmt.Errorf("not implemented in vtcombo")
 }
 

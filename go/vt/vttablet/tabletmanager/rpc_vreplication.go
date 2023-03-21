@@ -51,7 +51,7 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 	return tm.VREngine.WaitForPos(ctx, id, pos)
 }
 
-func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*querypb.QueryResult, error) {
+func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	restart := false
 	query := "select id, state, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	bindVars := map[string]*querypb.BindVariable{
@@ -77,7 +77,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	cells := row.AsString("cells", "")
 	tabletTypes := row.AsString("tablet_types", "")
 	// If the stream was running then we will stop and restart it.
-	if state != "Stoppped" {
+	if state == "Running" {
 		state = "Stopped"
 		restart = true
 	}
@@ -121,7 +121,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 		return nil, err
 	}
 	if !restart {
-		return sqltypes.ResultToProto3(res), nil
+		return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 	}
 
 	state = "Running"
@@ -141,5 +141,5 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	return sqltypes.ResultToProto3(res), nil
+	return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }

@@ -706,7 +706,7 @@ func (client *Client) VReplicationWaitForPos(ctx context.Context, tablet *topoda
 	return nil
 }
 
-func (client *Client) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*querypb.QueryResult, error) {
+func (client *Client) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	c, closer, err := client.dialer.dial(ctx, tablet)
 	if err != nil {
 		return nil, err
@@ -716,7 +716,7 @@ func (client *Client) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.T
 	if err != nil {
 		return nil, err
 	}
-	return response.Result, nil
+	return response, nil
 }
 
 // VDiff is part of the tmclient.TabletManagerClient interface.

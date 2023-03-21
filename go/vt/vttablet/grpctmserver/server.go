@@ -362,8 +362,7 @@ func (s *server) UpdateVRWorkflow(ctx context.Context, request *tabletmanagerdat
 	defer s.tm.HandleRPCPanic(ctx, "UpdateVRWorkflow", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
 	response = &tabletmanagerdatapb.UpdateVRWorkflowResponse{}
-	response.Result, err = s.tm.UpdateVRWorkflow(ctx, request)
-	return response, err
+	return s.tm.UpdateVRWorkflow(ctx, request)
 }
 
 func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest) (response *tabletmanagerdatapb.VDiffResponse, err error) {

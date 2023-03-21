@@ -416,7 +416,8 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 		}
 		if !dryRun {
 			callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-				return wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req)
+				res, err := wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req)
+				return res.Result, err
 			}
 		}
 	}
