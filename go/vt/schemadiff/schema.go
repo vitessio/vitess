@@ -325,7 +325,7 @@ func (s *Schema) normalize() error {
 
 	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
 	if err := s.ValidateViewReferences(); err != nil {
-		return err
+		errs = errors.Join(errs, err)
 	}
 
 	// Validate table definitions
