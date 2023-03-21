@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -138,7 +139,7 @@ func pushProjectionIntoOA(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 		return 0, false, err
 	}
 	node.aggregates = append(node.aggregates, &engine.AggregateParams{
-		Opcode:   engine.AggregateRandom,
+		Opcode:   popcode.AggregateRandom,
 		Col:      offset,
 		Alias:    expr.ColumnName(),
 		Expr:     expr.Expr,

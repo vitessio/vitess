@@ -60,6 +60,13 @@ func (a *Arena) newEvalDecimal(dec decimal.Decimal, m, d int32) *evalDecimal {
 	return a.newEvalDecimalWithPrec(dec.Clamp(m-d, d), d)
 }
 
+func (a *Arena) newEvalBool(b bool) *evalInt64 {
+	if b {
+		return a.newEvalInt64(1)
+	}
+	return a.newEvalInt64(0)
+}
+
 func (a *Arena) newEvalInt64(i int64) *evalInt64 {
 	if cap(a.aInt64) > len(a.aInt64) {
 		a.aInt64 = a.aInt64[:len(a.aInt64)+1]

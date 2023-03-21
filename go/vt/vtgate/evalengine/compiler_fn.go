@@ -211,7 +211,7 @@ func (c *compiler) compileFn_REPEAT(expr *builtinRepeat) (ctype, error) {
 	skip := c.compileNullCheck2(str, repeat)
 
 	switch {
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	case str.isTextual():
 	default:
 		c.asm.Convert_xc(2, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
@@ -236,7 +236,7 @@ func (c *compiler) compileFn_TO_BASE64(call *builtinToBase64) (ctype, error) {
 	}
 
 	switch {
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	case str.isTextual():
 	default:
 		c.asm.Convert_xc(1, t, c.defaultCollation, 0, false)
 	}
@@ -261,16 +261,21 @@ func (c *compiler) compileFn_FROM_BASE64(call *builtinFromBase64) (ctype, error)
 
 	skip := c.compileNullCheck1(str)
 
-	switch {
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
-	default:
-		c.asm.Convert_xc(1, sqltypes.VarBinary, c.defaultCollation, 0, false)
+	t := sqltypes.VarBinary
+	if str.Type == sqltypes.Blob || str.Type == sqltypes.TypeJSON {
+		t = sqltypes.Blob
 	}
 
-	c.asm.Fn_FROM_BASE64()
+	switch {
+	case str.isTextual():
+	default:
+		c.asm.Convert_xc(1, t, c.defaultCollation, 0, false)
+	}
+
+	c.asm.Fn_FROM_BASE64(t)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
+	return ctype{Type: t, Col: collationBinary}, nil
 }
 
 func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
@@ -282,7 +287,7 @@ func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
 	skip := c.compileNullCheck1(str)
 
 	switch {
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	case str.isTextual():
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
@@ -302,7 +307,7 @@ func (c *compiler) compileFn_xLENGTH(call callable, asm_ins func()) (ctype, erro
 	skip := c.compileNullCheck1(str)
 
 	switch {
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	case str.isTextual():
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
@@ -322,7 +327,7 @@ func (c *compiler) compileFn_ASCII(call *builtinASCII) (ctype, error) {
 	skip := c.compileNullCheck1(str)
 
 	switch {
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	case str.isTextual():
 	default:
 		c.asm.Convert_xc(1, sqltypes.VarChar, c.defaultCollation, 0, false)
 	}
@@ -355,7 +360,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	switch {
 	case sqltypes.IsNumber(str.Type), sqltypes.IsDecimal(str.Type):
 		c.asm.Fn_HEX_d(col)
-	case sqltypes.IsText(str.Type) || sqltypes.IsBinary(str.Type):
+	case str.isTextual():
 		c.asm.Fn_HEX_c(t, col)
 	default:
 		c.asm.Convert_xc(1, t, c.defaultCollation, 0, false)

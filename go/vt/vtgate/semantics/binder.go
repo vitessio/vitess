@@ -19,7 +19,7 @@ package semantics
 import (
 	"strings"
 
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -211,16 +211,16 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 	sq := &sqlparser.ExtractedSubquery{
 		Subquery: subq,
 		Original: subq,
-		OpCode:   int(engine.PulloutValue),
+		OpCode:   int(opcode.PulloutValue),
 	}
 
 	switch par := cursor.Parent().(type) {
 	case *sqlparser.ComparisonExpr:
 		switch par.Operator {
 		case sqlparser.InOp:
-			sq.OpCode = int(engine.PulloutIn)
+			sq.OpCode = int(opcode.PulloutIn)
 		case sqlparser.NotInOp:
-			sq.OpCode = int(engine.PulloutNotIn)
+			sq.OpCode = int(opcode.PulloutNotIn)
 		}
 		subq, exp := GetSubqueryAndOtherSide(par)
 		sq.Original = &sqlparser.ComparisonExpr{
@@ -230,7 +230,7 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 		}
 		sq.OtherSide = exp
 	case *sqlparser.ExistsExpr:
-		sq.OpCode = int(engine.PulloutExists)
+		sq.OpCode = int(opcode.PulloutExists)
 		sq.Original = par
 	}
 	return sq, nil

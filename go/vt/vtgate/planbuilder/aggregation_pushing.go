@@ -22,7 +22,7 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
@@ -231,7 +231,7 @@ func countStarAggr() *operators.Aggr {
 
 	return &operators.Aggr{
 		Original: &sqlparser.AliasedExpr{Expr: f},
-		OpCode:   engine.AggregateCountStar,
+		OpCode:   popcode.AggregateCountStar,
 		Alias:    "count(*)",
 	}
 }
@@ -420,17 +420,17 @@ func (hp *horizonPlanning) filteredPushAggregation(
 	return newplan, groupingOffsets, outputAggrs, pushed, nil
 }
 
-func isMinOrMax(in engine.AggregateOpcode) bool {
+func isMinOrMax(in popcode.AggregateOpcode) bool {
 	switch in {
-	case engine.AggregateMin, engine.AggregateMax:
+	case popcode.AggregateMin, popcode.AggregateMax:
 		return true
 	default:
 		return false
 	}
 }
 
-func isRandom(in engine.AggregateOpcode) bool {
-	return in == engine.AggregateRandom
+func isRandom(in popcode.AggregateOpcode) bool {
+	return in == popcode.AggregateRandom
 }
 
 func splitAggregationsToLeftAndRight(
