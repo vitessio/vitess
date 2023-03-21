@@ -161,8 +161,9 @@ That includes:
   > - This includes write access to the Vitess repository and to the Maven repository. 
 - **Preparing and cleaning the release notes summary.**
   > - One or more Pull Requests have to be submitted in advance to create and update the release summary.
-  > - The summary files are located in: `./doc/releasenotes/*_*_*_summary.md`.
+  > - The summary files are located in: `./changelog/*.0/*.*.*/summary.md`.
   > - The summary file for a release candidate is the same as the one for the GA release.
+  > - Make sure to run `go run ./go/tools/releases/releases.go` to update the `changelog` directory with the latest release notes.
 - **Finishing the blog post, and coordinating with the different organizations for cross-posting. Usually CNCF and PlanetScale. This step applies only for GA releases.**
   > - The blog post must be finished and reviewed.
   > - A Pull Request on the website repository of Vitess has to be created so we can easily publish the blog during the release day.
@@ -255,14 +256,14 @@ We need to verify that _arewefastyet_ has finished the benchmark too.
     2. Run the following command to generate the release notes:
         1. Release Candidate:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./changelog/15.0/15.0.0/summary.md" release-notes  
             ```
         2. General Availability:
             ```shell
-            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./doc/releasenotes/15_0_0_summary.md" release-notes  
+            make VERSION="v15.0.0-rc1" FROM="v14.0.3" TO="HEAD" SUMMARY="./changelog/15.0/15.0.0/summary.md" release-notes  
             ```
        This command will generate the release notes by looking at all the commits between the tag `v14.0.3` and the reference `HEAD`.
-       It will also use the file located in `./doc/releasenotes/15_0_0_summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
+       It will also use the file located in `./changelog/15.0/15.0.0/summary.md` to prefix the release notes with a text that the maintainers wrote before the release.
        Please verify the generated release notes to make sure it is well-formatted and all the bookmarks are generated properly.
 
 
@@ -301,7 +302,7 @@ This section is divided into two parts:
    git tag v15.0.0 && git tag v0.15.0 && git push origin v15.0.0 && git push origin v0.15.0
    ```
 
-4. Create a Pull Request against the `main` branch with the release notes found in `doc/releasenotes/15_0_0_*.md`.
+4. Create a Pull Request against the `main` branch with the release notes found in `./changelog/15.0/15.0.0/15_0_0_*.md`.
 
 5. Run the back to dev mode tool.
    ```shell
