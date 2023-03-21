@@ -27,6 +27,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
@@ -50,11 +51,11 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 	return tm.VREngine.WaitForPos(ctx, id, pos)
 }
 
-func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, workflow, cells, tabletTypes string, onDDL binlogdatapb.OnDDLAction) (*querypb.QueryResult, error) {
+func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*querypb.QueryResult, error) {
 	restart := false
 	query := "select id, state, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	bindVars := map[string]*querypb.BindVariable{
-		"wf": sqltypes.StringBindVariable(workflow),
+		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
 	parsed := sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":wf")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
@@ -67,12 +68,14 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, workflow, cells, 
 		return nil, err
 	}
 	if res == nil || len(res.Rows) == 0 {
-		return nil, fmt.Errorf("no stream found for workflow %s", workflow)
+		return nil, fmt.Errorf("no stream found for workflow %s", req.Workflow)
 	}
 
 	row := res.Named().Row()
 	id := row.AsInt64("id", 0)
 	state := row.AsString("state", "")
+	cells := row.AsString("cells", "")
+	tabletTypes := row.AsString("tablet_types", "")
 	// If the stream was running then we will stop and restart it.
 	if state != "Stoppped" {
 		state = "Stopped"
@@ -80,19 +83,19 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, workflow, cells, 
 	}
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
-	if cells == sqltypes.NULL.String() {
-		cells = row.AsString("cell", "") // Keep current value
+	if req.Cells != sqltypes.NULL.String() { // Update the value
+		cells = req.Cells
 	}
-	if tabletTypes == sqltypes.NULL.String() {
-		tabletTypes = row.AsString("tablet_types", "") // Keep current value
+	if tabletTypes != sqltypes.NULL.String() {
+		tabletTypes = req.TabletTypes // Update the value
 	}
 	if err = prototext.Unmarshal(source, bls); err != nil {
 		return nil, err
 	}
 	// If we don't want to update the existing value pass -1 or any
 	// other invalid value.
-	if _, ok := binlogdatapb.OnDDLAction_name[int32(onDDL)]; ok {
-		bls.OnDdl = onDDL
+	if _, ok := binlogdatapb.OnDDLAction_name[int32(req.OnDdl)]; ok {
+		bls.OnDdl = req.OnDdl
 	}
 	source, err = prototext.Marshal(bls)
 	if err != nil {

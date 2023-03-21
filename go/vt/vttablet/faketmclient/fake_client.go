@@ -33,6 +33,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	logutilpb "vitess.io/vitess/go/vt/proto/logutil"
+	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	replicationdatapb "vitess.io/vitess/go/vt/proto/replicationdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -60,6 +61,10 @@ type FakeTabletManagerClient struct {
 	// This is to let us essentially fake out only part of the interface, while deferring
 	// to the real implementation for things that we don't need to fake out yet.
 	tmc tmclient.TabletManagerClient
+}
+
+func (client *FakeTabletManagerClient) UpdateVRWorkflow(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*query.QueryResult, error) {
+	return nil, nil
 }
 
 func (client *FakeTabletManagerClient) VDiff(ctx context.Context, tablet *topodatapb.Tablet, req *tabletmanagerdatapb.VDiffRequest) (*tabletmanagerdatapb.VDiffResponse, error) {
