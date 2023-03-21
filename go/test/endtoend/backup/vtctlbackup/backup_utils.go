@@ -400,6 +400,10 @@ type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 //  13. verify that don't have the data added after the first backup
 //  14. remove the backups
 func primaryBackup(t *testing.T) {
+	localCluster.DisableVTOrcRecoveries(t)
+	defer func() {
+		localCluster.EnableVTOrcRecoveries(t)
+	}()
 	verifyInitialReplication(t)
 
 	output, err := localCluster.VtctlclientProcess.ExecuteCommandWithOutput("Backup", primary.Alias)
@@ -442,11 +446,6 @@ func primaryBackup(t *testing.T) {
 		"--keyspace_shard", shardKsName,
 		"--new_primary", replica2.Alias)
 	require.Nil(t, err)
-
-	localCluster.DisableVTOrcRecoveries(t)
-	defer func() {
-		localCluster.EnableVTOrcRecoveries(t)
-	}()
 
 	// Delete the current primary tablet (replica2) so that the original primary tablet (primary) can be restored from the
 	// older/first backup w/o it replicating the subsequent insert done after the first backup was taken
