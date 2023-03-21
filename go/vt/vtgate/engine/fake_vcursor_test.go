@@ -25,6 +25,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/test/utils"
@@ -262,7 +263,7 @@ func (t *noopVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion) {
 	panic("implement me")
 }
 
-func (t *noopVCursor) SetCriticality(int64) {
+func (t *noopVCursor) SetCriticality(string) {
 	panic("implement me")
 }
 
@@ -697,7 +698,7 @@ func (f *loggingVCursor) SetPlannerVersion(querypb.ExecuteOptions_PlannerVersion
 	panic("implement me")
 }
 
-func (f *loggingVCursor) SetCriticality(int64) {
+func (f *loggingVCursor) SetCriticality(string) {
 	panic("implement me")
 }
 
