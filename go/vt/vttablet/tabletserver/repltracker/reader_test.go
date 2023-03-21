@@ -42,6 +42,8 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	tr := newReader(db, mockNowFunc)
 	defer tr.Close()
 
+	tr.pool.Open(tr.env.Config().DB.AppWithDB(), tr.env.Config().DB.DbaWithDB(), tr.env.Config().DB.AppDebugWithDB())
+
 	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", "_vt", tr.keyspaceShard), &sqltypes.Result{
 		Fields: []*querypb.Field{
 			{Name: "ts", Type: sqltypes.Int64},
@@ -79,6 +81,32 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	utils.MustMatch(t, expectedHisto, heartbeatLagNsHistogram.Counts(), "wrong counts in histogram")
 }
 
+func TestReaderCloseSetsCurrentLagToZero(t *testing.T) {
+	db := fakesqldb.New(t)
+	defer db.Close()
+	tr := newReader(db, nil)
+
+	db.AddQuery(fmt.Sprintf("SELECT ts FROM %s.heartbeat WHERE keyspaceShard='%s'", "_vt", tr.keyspaceShard), &sqltypes.Result{
+		Fields: []*querypb.Field{
+			{Name: "ts", Type: sqltypes.Int64},
+		},
+		Rows: [][]sqltypes.Value{{
+			sqltypes.NewInt64(now.Add(-10 * time.Second).UnixNano()),
+		}},
+	})
+
+	currentLagNs.Reset()
+
+	tr.Open()
+	time.Sleep(2 * time.Second)
+
+	assert.Greater(t, currentLagNs.Get(), int64(0), "lag should be greater than zero")
+
+	tr.Close()
+
+	assert.Equal(t, int64(0), currentLagNs.Get(), "lag should be be zero after closing the reader.")
+}
+
 // TestReaderReadHeartbeatError tests that we properly account for errors
 // encountered in the reading of heartbeat.
 func TestReaderReadHeartbeatError(t *testing.T) {
@@ -86,6 +114,8 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	defer db.Close()
 	tr := newReader(db, mockNowFunc)
 	defer tr.Close()
+
+	tr.pool.Open(tr.env.Config().DB.AppWithDB(), tr.env.Config().DB.DbaWithDB(), tr.env.Config().DB.AppDebugWithDB())
 
 	cumulativeLagNs.Reset()
 	readErrors.Reset()
@@ -107,11 +137,14 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatReader {
 	params, _ := db.ConnParams().MysqlParams()
 	cp := *params
 	dbc := dbconfigs.NewTestDBConfigs(cp, cp, "")
+	config.DB = dbc
 
 	tr := newHeartbeatReader(tabletenv.NewEnv(config, "ReaderTest"))
 	tr.keyspaceShard = "test:0"
-	tr.now = nowFunc
-	tr.pool.Open(dbc.AppWithDB(), dbc.DbaWithDB(), dbc.AppDebugWithDB())
+
+	if nowFunc != nil {
+		tr.now = nowFunc
+	}
 
 	return tr
 }
