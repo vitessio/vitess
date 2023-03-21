@@ -4693,6 +4693,29 @@ func (e *Executor) SubmitMigration(
 	return result, nil
 }
 
+// ShowMigrations shows migrations, optionally filtered by a condition
+func (e *Executor) ShowMigrations(ctx context.Context, stmt *sqlparser.ShowMigrations) (result *sqltypes.Result, err error) {
+	if atomic.LoadInt64(&e.isOpen) == 0 {
+		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
+	}
+
+	whereExpr := ""
+	if stmt.Filter != nil {
+		if stmt.Filter.Filter != nil {
+			whereExpr = fmt.Sprintf(" where %s", sqlparser.String(stmt.Filter.Filter))
+		} else if stmt.Filter.Like != "" {
+			lit := sqlparser.String(sqlparser.NewStrLiteral(stmt.Filter.Like))
+			whereExpr = fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
+		}
+	}
+
+	e.migrationMutex.Lock()
+	defer e.migrationMutex.Unlock()
+	query := sqlparser.BuildParsedQuery(sqlShowMigrationsWhere, whereExpr).Query
+	result, err = e.execQuery(ctx, query)
+	return result, err
+}
+
 // ShowMigrationLogs reads the migration log for a given migration
 func (e *Executor) ShowMigrationLogs(ctx context.Context, stmt *sqlparser.ShowMigrationLogs) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {

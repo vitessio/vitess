@@ -54,6 +54,7 @@ func BuildPermissions(stmt sqlparser.Statement) []Permission {
 	case
 		*sqlparser.AlterMigration,
 		*sqlparser.RevertMigration,
+		*sqlparser.ShowMigrations,
 		*sqlparser.ShowMigrationLogs,
 		*sqlparser.ShowThrottledApps,
 		*sqlparser.ShowThrottlerStatus:
