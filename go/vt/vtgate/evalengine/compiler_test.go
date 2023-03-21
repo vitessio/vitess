@@ -186,7 +186,7 @@ func (d *debugCompiler) Stack(old, new int) {
 	d.t.Logf("\tsp = %d -> %d", old, new)
 }
 
-func TestCompiler(t *testing.T) {
+func TestCompilerSingle(t *testing.T) {
 	var testCases = []struct {
 		expression string
 		values     []sqltypes.Value
@@ -255,6 +255,22 @@ func TestCompiler(t *testing.T) {
 			expression: `JSON_ARRAY(true, 1.0)`,
 			result:     `JSON("[true, 1.0]")`,
 		},
+		{
+			expression: `cast(true as json) + 0`,
+			result:     `FLOAT64(1)`,
+		},
+		{
+			expression: `CAST(CAST(0 AS JSON) AS CHAR(16))`,
+			result:     `VARCHAR("0")`,
+		},
+		{
+			expression: `1 OR cast('invalid' as json)`,
+			result:     `INT64(1)`,
+		},
+		{
+			expression: `NULL AND 1`,
+			result:     `NULL`,
+		},
 	}
 
 	for _, tc := range testCases {
@@ -267,6 +283,16 @@ func TestCompiler(t *testing.T) {
 			converted, err := evalengine.TranslateEx(expr, &evalengine.LookupIntegrationTest{collations.CollationUtf8mb4ID}, false)
 			if err != nil {
 				t.Fatal(err)
+			}
+
+			env := evalengine.EmptyExpressionEnv()
+			env.Row = tc.values
+			expected, err := env.Evaluate(converted)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if expected.String() != tc.result {
+				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
 			}
 
 			compiled, err := evalengine.Compile(converted, makeFields(tc.values), evalengine.WithAssemblerLog(&debugCompiler{t}))
@@ -283,7 +309,7 @@ func TestCompiler(t *testing.T) {
 				}
 
 				if res.String() != tc.result {
-					t.Fatalf("bad evaluation: got %s, want %s (iteration %d)", res, tc.result, i)
+					t.Fatalf("bad evaluation from compiler: got %s, want %s (iteration %d)", res, tc.result, i)
 				}
 			}
 		})

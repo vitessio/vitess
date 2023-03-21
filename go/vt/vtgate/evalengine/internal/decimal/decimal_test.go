@@ -746,11 +746,11 @@ func TestDecimal_QuoRem(t *testing.T) {
 		d, _ := NewFromString(inp4.d)
 		d2, _ := NewFromString(inp4.d2)
 		prec := inp4.exp
-		q, r := d.quoRem(d2, prec)
+		q, r := d.QuoRem(d2, prec)
 		expectedQ, _ := NewFromString(inp4.q)
 		expectedR, _ := NewFromString(inp4.r)
 		if !q.Equal(expectedQ) || !r.Equal(expectedR) {
-			t.Errorf("bad quoRem division %s , %s , %d got %v, %v expected %s , %s",
+			t.Errorf("bad QuoRem division %s , %s , %d got %v, %v expected %s , %s",
 				inp4.d, inp4.d2, prec, q, r, inp4.q, inp4.r)
 		}
 		if !d.Equal(d2.mul(q).Add(r)) {
@@ -813,7 +813,7 @@ func TestDecimal_QuoRem2(t *testing.T) {
 		}
 		d2 := tc.d2
 		prec := tc.prec
-		q, r := d.quoRem(d2, prec)
+		q, r := d.QuoRem(d2, prec)
 		// rule 1: d = d2*q +r
 		if !d.Equal(d2.mul(q).Add(r)) {
 			t.Errorf("not fitting, d=%v, d2=%v, prec=%d, q=%v, r=%v",
