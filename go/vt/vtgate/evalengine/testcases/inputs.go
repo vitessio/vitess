@@ -97,6 +97,12 @@ var inputConversions = []string{
 	"18446744073709540000e0",
 	"-18446744073709540000e0",
 	"JSON_OBJECT()", "JSON_ARRAY()",
+	"cast(0 as json)", "cast(1 as json)",
+	"cast(true as json)", "cast(false as json)",
+	"cast('{}' as json)", "cast('[]' as json)",
+	"cast('null' as json)", "cast('true' as json)", "cast('false' as json)",
+	"cast('1' as json)", "cast('1.1' as json)", "cast('-1.1' as json)",
+	"cast('\"foo\"' as json)", "cast('invalid' as json)",
 }
 
 const inputPi = "314159265358979323846264338327950288419716939937510582097494459"

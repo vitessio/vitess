@@ -111,9 +111,9 @@ func evalToNumeric(e eval) evalNumeric {
 	case *evalJSON:
 		switch e.Type() {
 		case json.TypeTrue:
-			return newEvalBool(true)
+			return &evalFloat{f: 1.0}
 		case json.TypeFalse:
-			return newEvalBool(false)
+			return &evalFloat{f: 0.0}
 		case json.TypeNumber, json.TypeString:
 			return &evalFloat{f: parseStringToFloat(e.Raw())}
 		default:
