@@ -84,9 +84,6 @@ func NewNumericStaticMap(name string, params map[string]string) (Vindex, error) 
 	var hashVdx Hashing
 
 	if s, ok := params["fallback_type"]; ok {
-		if err != nil {
-			return nil, err
-		}
 		vindex, err := CreateVindex(s, name+"_hash", map[string]string{})
 		if err != nil {
 			return nil, err
@@ -156,7 +153,7 @@ func (vind *NumericStaticMap) Hash(id sqltypes.Value) ([]byte, error) {
 	}
 	lookupNum, ok := vind.lookup[num]
 	if !ok {
-		// Not in lookup, us fallback hash
+		// Not in lookup, use fallback hash
 		if vind.hashVdx != nil {
 			return vind.hashVdx.Hash(id)
 		}
