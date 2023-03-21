@@ -228,11 +228,10 @@ func PushOutputColumns(ctx *plancontext.PlanningContext, op abstract.PhysicalOpe
 			var pos int
 			op.ColumnsOffset, pos = addToIntSlice(op.ColumnsOffset, i)
 			offsets = append(offsets, pos)
-			// skip adding to columns as it exists already.
+			op.Columns = append(op.Columns, col)
 			if i > -1 {
 				continue
 			}
-			op.Columns = append(op.Columns, col)
 			noQualifierNames = append(noQualifierNames, sqlparser.NewColName(col.Name.String()))
 		}
 		if len(noQualifierNames) > 0 {
