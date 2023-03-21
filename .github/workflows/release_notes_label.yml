@@ -17,7 +17,7 @@ jobs:
       - name: Release Notes label
         run: |
           if [[ "${{contains( github.event.pull_request.labels.*.name, 'release notes (needs details)')}}" == "true" ]]; then
-            echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary "('./doc/releasenotes/16_0_0_summary.md')". Once documented, the "release notes (needs details)" label can be removed.
+            echo The "release notes (needs details)" label is set. The changes made in this Pull Request need to be documented in the release notes summary "('./changelog/14.0/14.0.5/summary.md')". Once documented, the "release notes (needs details)" label can be removed.
             exit 1
           fi
 

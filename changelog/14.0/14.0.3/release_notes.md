@@ -12,7 +12,7 @@ This problem could be resolved by restarting the VTOrc so that it discovers all 
 frequently, this posed a greater challenge, since some pods when evicted and rescheduled on a different node, would sometimes fail to be discovered by VTOrc.
 This has problem has been addressed in this patch by the fix https://github.com/vitessio/vitess/pull/10662.
 ------------
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/14_0_3_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/14.0/14.0.3/changelog.md).
 
 The release includes 12 commits (excluding merges)
 
