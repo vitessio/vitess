@@ -139,8 +139,7 @@ func testValues(t *testing.T, env *evalengine.ExpressionEnv, i int, original, si
 	}
 }
 
-type lookup struct {
-}
+type lookup struct{}
 
 func (l lookup) ColumnLookup(col *sqlparser.ColName) (int, error) {
 	offsetStr := col.Name.String()[1:]
