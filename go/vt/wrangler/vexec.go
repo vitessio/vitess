@@ -38,6 +38,7 @@ import (
 	"vitess.io/vitess/go/vt/concurrency"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
@@ -50,21 +51,18 @@ const (
 	vreplicationTableName           = "vreplication"
 	sqlVReplicationDelete           = "delete from _vt.vreplication"
 	errWorkflowUpdateWithoutChanges = "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values"
+)
 
-	// The vreplication.source column contains a prototext value. If
-	// there's currently no on_ddl value (which would mean it's the
-	// default of 0/IGNORE) then we append the new value. Otherwise,
-	// we replace the existing value within the string. When we no
-	// longer have to support MySQL 5.7 we can use this much simpler
-	// query:
-	// 	"if(regexp_instr(source, 'on_ddl:') = 0, concat(source, ' on_ddl:%s'), regexp_replace(source, 'on_ddl:[A-Z_]+', 'on_ddl:%s'))"
-	// Until then... this 5.7 compatible ugliness:
-	updateOnDDLInSource = "trim(both ' ' from if(locate('on_ddl:', source) = 0, concat(source, ' on_ddl:%s'), insert(source, locate('on_ddl:', source) + length('on_ddl:'), if(locate(' ', source, locate('on_ddl:', source) + length('on_ddl:')) = 0, -1, length(source) - locate(' ', source, locate('on_ddl:', source) + length('on_ddl:'))), '%s ')))"
+type action int
+
+const (
+	actionUpdate action = iota
+	actionDelete
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
 // interface, like vtctl or vtgate.
-// vexec parses, analyzes and plans th equery, and maintains state of each such step's result.
+// vexec parses, analyzes and plans the query, and maintains state of each such step's result.
 type vexec struct {
 	ctx      context.Context
 	workflow string
@@ -166,7 +164,7 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 	if wr.VExecFunc != nil {
 		return wr.VExecFunc(ctx, workflow, keyspace, query, dryRun)
 	}
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, dryRun)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, dryRun)
 	retResults := make(map[*topo.TabletInfo]*sqltypes.Result)
 	for tablet, result := range results {
 		retResults[tablet] = sqltypes.Proto3ToResult(result)
@@ -175,21 +173,25 @@ func (wr *Wrangler) VExec(ctx context.Context, workflow, keyspace, query string,
 }
 
 // runVexec is the main function that runs a dry or wet execution of 'query' on backend shards.
-func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query string, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error), dryRun bool) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	vx := newVExec(ctx, workflow, keyspace, query, wr)
 
 	if err := vx.getPrimaries(); err != nil {
 		return nil, err
 	}
-	plan, err := vx.parseAndPlan(ctx)
-	if err != nil {
-		return nil, err
+	if callback == nil {
+		plan, err := vx.parseAndPlan(ctx)
+		if err != nil {
+			return nil, err
+		}
+		vx.plannedQuery = plan.parsedQuery.Query
+		if dryRun {
+			return nil, vx.outputDryRunInfo(ctx)
+		}
+		return vx.exec()
+	} else {
+		return vx.execActionCallback(actionUpdate, callback)
 	}
-	vx.plannedQuery = plan.parsedQuery.Query
-	if dryRun {
-		return nil, vx.outputDryRunInfo(ctx)
-	}
-	return vx.exec()
 }
 
 // parseAndPlan parses and analyses the query, then generates a plan
@@ -231,6 +233,37 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 				// If we deleted a workflow then let's make a best effort attempt to clean
 				// up any related data.
 				if vx.query == sqlVReplicationDelete {
+					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
+					vx.wr.optimizeCopyStateTable(primary.Tablet)
+				}
+				mu.Lock()
+				results[primary] = qr
+				mu.Unlock()
+			}
+		}(ctx, primary)
+	}
+	wg.Wait()
+	return results, allErrors.AggrError(vterrors.Aggregate)
+}
+
+func (vx *vexec) execActionCallback(actiontyp action, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
+	var mu sync.Mutex
+	ctx, cancel := context.WithTimeout(vx.ctx, 10*time.Second)
+	defer cancel()
+	for _, primary := range vx.primaries {
+		wg.Add(1)
+		go func(ctx context.Context, primary *topo.TabletInfo) {
+			defer wg.Done()
+			qr, err := callback(ctx, primary)
+			if err != nil {
+				allErrors.RecordError(err)
+			} else {
+				// If we deleted a workflow then let's make a best effort attempt to clean
+				// up any related data.
+				if actiontyp == actionDelete {
 					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
 					vx.wr.optimizeCopyStateTable(primary.Tablet)
 				}
@@ -323,20 +356,9 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		}
 		wr.printWorkflowList(keyspace, workflows)
 		return nil, err
-	case "update":
-		// This is the only place we use the cells, tabletTypes, and
-		// onDDL variables.
-		if _, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, cells, tabletTypes, onDDL); err != nil {
-			return nil, vterrors.Wrapf(err, "failed to update the %s.%s workflow", keyspace, workflow)
-		}
-		// The workflow is stopped when updated, so now we restart
-		// the workflow for the changes to take effect and we
-		// return result of the restart.
-		action = "start"
 	default:
 	}
-	unusedFlag := &pflag.Flag{}
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, unusedFlag, unusedFlag, unusedFlag)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, cells, tabletTypes, onDDL)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -357,49 +379,52 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 }
 
 func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes, onDDL *pflag.Flag) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	var callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) = nil
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
 		return nil, err
 	}
 	if action == "update" {
 		changes := false
-		bindVars := []*querypb.BindVariable{}
+		req := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			Workflow: workflow,
+		}
 		if cells.Changed {
 			changes = true
-			query += ", cell=%a"
-			bindVars = append(bindVars, sqltypes.StringBindVariable(strings.TrimSpace(cells.Value.String())))
+			req.Cells = strings.TrimSpace(cells.Value.String())
+		} else { // Indicate that we do NOT want to set the value to an empty string.
+			req.Cells = sqltypes.NULL.String()
 		}
 		if tabletTypes.Changed {
 			changes = true
-			query += ", tablet_types=%a"
-			bindVars = append(bindVars, sqltypes.StringBindVariable(strings.TrimSpace(tabletTypes.Value.String())))
+			req.TabletTypes = strings.TrimSpace(tabletTypes.Value.String())
+		} else { // Indicate that we do NOT want to set the value to an empty string.
+			req.TabletTypes = sqltypes.NULL.String()
 		}
 		if onDDL.Changed {
 			changes = true
-			onDDLVal := strings.ToUpper(onDDL.Value.String())
-			if _, ok := binlogdatapb.OnDDLAction_value[onDDLVal]; !ok {
-				return nil, fmt.Errorf("invalid value provided for on-ddl: %v", onDDLVal)
+			onddl, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(onDDL.Value.String())]
+			if !ok {
+				return nil, fmt.Errorf("invalid value provided for on-ddl: %v", onDDL.Value.String())
 			}
-			sb := strings.Builder{}
-			sb.WriteString(", source = ")
-			sb.WriteString(fmt.Sprintf(updateOnDDLInSource, onDDLVal, onDDLVal))
-			query += sb.String()
+			req.OnDdl = binlogdatapb.OnDDLAction(onddl)
+		} else { // Indicate that we do NOT want to update the value.
+			req.OnDdl = -1
 		}
 		if !changes {
 			return nil, fmt.Errorf(errWorkflowUpdateWithoutChanges)
 		}
-		query, err = sqlparser.ParseAndBind(query, bindVars...)
-		if err != nil {
-			return nil, err
+		callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+			return wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req)
 		}
 	}
-	return wr.runVexec(ctx, workflow, keyspace, query, dryRun)
+	return wr.runVexec(ctx, workflow, keyspace, query, callback, dryRun)
 }
 
 // WorkflowTagAction sets or clears the tags for a workflow in a keyspace
 func (wr *Wrangler) WorkflowTagAction(ctx context.Context, keyspace string, workflow string, tags string) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	query := fmt.Sprintf("update _vt.vreplication set tags = %s", encodeString(tags))
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -639,7 +664,7 @@ func (wr *Wrangler) getStreams(ctx context.Context, workflow, keyspace string) (
 		defer_secondary_keys,
 		rows_copied
 	from _vt.vreplication`
-	results, err := wr.runVexec(ctx, workflow, keyspace, query, false)
+	results, err := wr.runVexec(ctx, workflow, keyspace, query, nil, false)
 	if err != nil {
 		return nil, err
 	}

@@ -36,8 +36,11 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/proto/query"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
+	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -329,6 +332,10 @@ func (tmc *testWranglerTMClient) VReplicationExec(ctx context.Context, tablet *t
 		return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
 	}
 	return result, nil
+}
+
+func (tmc *testWranglerTMClient) UpdateVRWorkflow(ctx context.Context, tablet *topodata.Tablet, req *tabletmanagerdata.UpdateVRWorkflowRequest) (*query.QueryResult, error) {
+	return nil, nil
 }
 
 func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {
