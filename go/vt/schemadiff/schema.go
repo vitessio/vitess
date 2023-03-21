@@ -24,7 +24,11 @@ import (
 	"sort"
 	"strings"
 
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/semantics"
 )
 
 // Schema represents a database schema, which may contain entities such as tables and views.
@@ -316,6 +320,11 @@ func (s *Schema) normalize() error {
 				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
 			}
 		}
+	}
+
+	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
+	if err := s.ValidateViewReferences(); err != nil {
+		return err
 	}
 
 	// Validate table definitions
@@ -760,4 +769,148 @@ func (s *Schema) Apply(diffs []EntityDiff) (*Schema, error) {
 		return nil, err
 	}
 	return dup, nil
+}
+
+func (s *Schema) ValidateViewReferences() error {
+	errs := &concurrency.AllErrorRecorder{}
+	schemaInformation := newDeclarativeSchemaInformation()
+
+	// Remember that s.Entities() is already ordered by dependency. ie. tables first, then views
+	// that only depend on those tables (or on dual), then 2nd tier views, etc.
+	// Thus, the order of iteration below is valid and sufficient, to build
+	for _, e := range s.Entities() {
+		entityColumns, err := s.getEntityColumnNames(e.Name(), schemaInformation)
+		if err != nil {
+			errs.RecordError(err)
+			continue
+		}
+		schemaInformation.addTable(e.Name())
+		for _, col := range entityColumns {
+			schemaInformation.addColumn(e.Name(), col.Lowered())
+		}
+	}
+
+	// Add dual table with no explicit columns for dual style expressions in views.
+	schemaInformation.addTable("dual")
+
+	for _, view := range s.Views() {
+		sel := sqlparser.CloneSelectStatement(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
+		_, err := semantics.Analyze(sel, semanticKS.Name, schemaInformation)
+		extractColName := func(arg any) string {
+			switch arg := arg.(type) {
+			case string:
+				return arg
+			case *sqlparser.ColName:
+				return arg.Name.String()
+			default:
+				return "" // unexpected
+			}
+		}
+		formalizeErr := func(err error) error {
+			if err == nil {
+				return nil
+			}
+			semErr, ok := err.(*semantics.Error)
+			if !ok {
+				return err
+			}
+			if len(semErr.Args()) == 0 {
+				return err
+			}
+			switch semErr.Code {
+			case semantics.AmbiguousColumn:
+				if colName := extractColName(semErr.Args()[0]); colName != "" {
+					return &InvalidColumnReferencedInViewError{
+						View:      view.Name(),
+						Column:    colName,
+						Ambiguous: true,
+					}
+				}
+			case semantics.ColumnNotFound:
+				if colName := extractColName(semErr.Args()[0]); colName != "" {
+					return &InvalidColumnReferencedInViewError{
+						View:   view.Name(),
+						Column: colName,
+					}
+				}
+			}
+			return err
+		}
+		errs.RecordError(formalizeErr(err))
+	}
+	return errs.AggrError(vterrors.Aggregate)
+}
+
+// getEntityColumnNames returns the names of columns in given entity (either a table or a view)
+func (s *Schema) getEntityColumnNames(entityName string, schemaInformation *declarativeSchemaInformation) (
+	columnNames []*sqlparser.IdentifierCI,
+	err error,
+) {
+	entity := s.Entity(entityName)
+	if entity == nil {
+		if strings.ToLower(entityName) == "dual" {
+			// this is fine. DUAL does not exist but is allowed
+			return nil, nil
+		}
+		return nil, &EntityNotFoundError{Name: entityName}
+	}
+	// The entity is either a table or a view
+	switch entity := entity.(type) {
+	case *CreateTableEntity:
+		return s.getTableColumnNames(entity), nil
+	case *CreateViewEntity:
+		return s.getViewColumnNames(entity, schemaInformation)
+	}
+	return nil, vterrors.Errorf(vtrpc.Code_INTERNAL, "unexpected entity type for %v", entityName)
+}
+
+// getTableColumnNames returns the names of columns in given table.
+func (s *Schema) getTableColumnNames(t *CreateTableEntity) (columnNames []*sqlparser.IdentifierCI) {
+	for _, c := range t.TableSpec.Columns {
+		columnNames = append(columnNames, &c.Name)
+	}
+	return columnNames
+}
+
+// getViewColumnNames returns the names of aliased columns returned by a given view.
+func (s *Schema) getViewColumnNames(v *CreateViewEntity, schemaInformation *declarativeSchemaInformation) (
+	columnNames []*sqlparser.IdentifierCI,
+	err error,
+) {
+	for _, node := range v.Select.GetColumns() {
+		switch node := node.(type) {
+		case *sqlparser.StarExpr:
+			if tableName := node.TableName.Name.String(); tableName != "" {
+				for _, col := range schemaInformation.Tables[tableName].Columns {
+					name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
+					columnNames = append(columnNames, name)
+				}
+			} else {
+				dependentNames, err := getViewDependentTableNames(v.CreateView)
+				if err != nil {
+					return nil, err
+				}
+				// add all columns from all referenced tables and views
+				for _, entityName := range dependentNames {
+					if schemaInformation.Tables[entityName] != nil { // is nil for dual/DUAL
+						for _, col := range schemaInformation.Tables[entityName].Columns {
+							name := sqlparser.CloneRefOfIdentifierCI(&col.Name)
+							columnNames = append(columnNames, name)
+						}
+					}
+				}
+			}
+			if len(columnNames) == 0 {
+				return nil, &InvalidStarExprInViewError{View: v.Name()}
+			}
+		case *sqlparser.AliasedExpr:
+			ci := sqlparser.NewIdentifierCI(node.ColumnName())
+			columnNames = append(columnNames, &ci)
+		}
+	}
+
+	if err != nil {
+		return nil, err
+	}
+	return columnNames, nil
 }
