@@ -24,7 +24,6 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 
-	"vitess.io/vitess/go/vt/log"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -51,6 +50,8 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 	return tm.VREngine.WaitForPos(ctx, id, pos)
 }
 
+// UpdateVRWorkflow updates the sidecar databases's vreplication record
+// for this tablet's vreplication workflow stream.
 func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	restart := false
 	query := "select id, state, source, cell, tablet_types from %s.vreplication where workflow = %a"
@@ -62,7 +63,6 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("UpdateVRWorkflow: %v", stmt)
 	res, err := tm.VREngine.Exec(stmt)
 	if err != nil {
 		return nil, err
@@ -83,11 +83,14 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	}
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
-	if req.Cells != sqltypes.NULL.String() { // Update the value
+	// For the string values, we use NULL to differentiate from
+	// an empty string. The NULL value indicates that we should
+	// not update the existing value.
+	if req.Cells != sqltypes.NULL.String() {
 		cells = req.Cells
 	}
 	if tabletTypes != sqltypes.NULL.String() {
-		tabletTypes = req.TabletTypes // Update the value
+		tabletTypes = req.TabletTypes
 	}
 	if err = prototext.Unmarshal(source, bls); err != nil {
 		return nil, err
@@ -114,7 +117,6 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("UpdateVRWorkflow: %v", stmt)
 	res, err = tm.VREngine.Exec(stmt)
 
 	if err != nil {
@@ -135,7 +137,6 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	log.Errorf("UpdateVRWorkflow: %v", stmt)
 	res, err = tm.VREngine.Exec(stmt)
 
 	if err != nil {

@@ -486,12 +486,13 @@ func TestWorkflowUpdate(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 	tests := []struct {
-		name        string
-		cells       *pflag.Flag
-		tabletTypes *pflag.Flag
-		onDDL       *pflag.Flag
-		wantErr     string
-		dryRun      bool
+		name            string
+		cells           *pflag.Flag
+		tabletTypes     *pflag.Flag
+		onDDL           *pflag.Flag
+		wantErr         string
+		dryRun          bool
+		workflowStopped bool
 	}{
 		{
 			name:        "no flags",
@@ -560,7 +561,26 @@ func TestWorkflowUpdate(t *testing.T) {
 			},
 		},
 		{
-			name: "all flags",
+			name: "all flags workflow not running",
+			cells: &pflag.Flag{
+				Name:    "cells",
+				Value:   stringValue{"zone1,zone2"},
+				Changed: true,
+			},
+			tabletTypes: &pflag.Flag{
+				Name:    "tablet-types",
+				Value:   stringValue{"rdonly,spare"},
+				Changed: true,
+			},
+			onDDL: &pflag.Flag{
+				Name:    "on-ddl",
+				Value:   stringValue{"EXEC"},
+				Changed: true,
+			},
+			workflowStopped: true,
+		},
+		{
+			name: "all flags dry run",
 			cells: &pflag.Flag{
 				Name:    "cells",
 				Value:   stringValue{"zone1,zone2"},
@@ -582,7 +602,13 @@ func TestWorkflowUpdate(t *testing.T) {
 
 	blsStr := `keyspace:"target" shard:"0" filter:{rules:{match:"customer" filter:"select * from customer"} rules:{match:"corder" filter:"select * from corder"}}`
 	query := fmt.Sprintf("select id, state, source, cell, tablet_types from _vt.vreplication where workflow = %s", workflow)
-	queryRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+	runningRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"id|state|source|cell|tablet_types",
+		"int64|varchar|varchar|varchar|varchar"),
+		fmt.Sprintf("1|Stopped|%s|cell1|primary,replica", blsStr),
+	)
+
+	stoppedRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
 		"id|state|source|cell|tablet_types",
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|Stopped|%s|cell1|primary,replica", blsStr),
@@ -620,6 +646,11 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 			require.NotNil(t, tcase.tabletTypes)
 			require.NotNil(t, tcase.onDDL)
 
+			queryRes := runningRes
+			if tcase.workflowStopped {
+				queryRes = stoppedRes
+			}
+
 			env.tmc.setVRResults(env.tmc.tablets[200].tablet, query, queryRes)
 			env.tmc.setVRResults(env.tmc.tablets[210].tablet, query, queryRes)
 
@@ -647,11 +678,15 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 				id).Query
 			env.tmc.setVRResults(env.tmc.tablets[200].tablet, updateQuery, &sqltypes.Result{})
 			env.tmc.setVRResults(env.tmc.tablets[210].tablet, updateQuery, &sqltypes.Result{})
-			// Then we restart the workflow for the config changes to take
-			// effect on both target primaries.
-			restartQuery := fmt.Sprintf("update _vt.vreplication set state = 'Running' where id = %d", id)
-			env.tmc.setVRResults(env.tmc.tablets[200].tablet, restartQuery, &sqltypes.Result{})
-			env.tmc.setVRResults(env.tmc.tablets[210].tablet, restartQuery, &sqltypes.Result{})
+
+			// We only restart the workflow if it was running before.
+			if !tcase.workflowStopped {
+				// Then we restart the workflow for the config changes to take
+				// effect on both target primaries.
+				restartQuery := fmt.Sprintf("update _vt.vreplication set state = 'Running' where id = %d", id)
+				env.tmc.setVRResults(env.tmc.tablets[200].tablet, restartQuery, &sqltypes.Result{})
+				env.tmc.setVRResults(env.tmc.tablets[210].tablet, restartQuery, &sqltypes.Result{})
+			}
 
 			res, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", tcase.dryRun, tcase.cells, tcase.tabletTypes, tcase.onDDL)
 			if tcase.wantErr != "" {
