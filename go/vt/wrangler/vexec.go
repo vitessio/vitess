@@ -53,13 +53,6 @@ const (
 	errWorkflowUpdateWithoutChanges = "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values"
 )
 
-type action int
-
-const (
-	actionUpdate action = iota
-	actionDelete
-)
-
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
 // interface, like vtctl or vtgate.
 // vexec parses, analyzes and plans the query, and maintains state of each such step's result.
@@ -179,7 +172,7 @@ func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query stri
 	if err := vx.getPrimaries(); err != nil {
 		return nil, err
 	}
-	if callback == nil {
+	if callback == nil { // Using legacy SQL query path
 		plan, err := vx.parseAndPlan(ctx)
 		if err != nil {
 			return nil, err
@@ -189,8 +182,8 @@ func (wr *Wrangler) runVexec(ctx context.Context, workflow, keyspace, query stri
 			return nil, vx.outputDryRunInfo(ctx)
 		}
 		return vx.exec()
-	} else {
-		return vx.execActionCallback(actionUpdate, callback)
+	} else { // Using new (RPC) callback path
+		return vx.execCallback(callback)
 	}
 }
 
@@ -246,7 +239,10 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	return results, allErrors.AggrError(vterrors.Aggregate)
 }
 
-func (vx *vexec) execActionCallback(actiontyp action, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+// execCallback runs the provided callback function on backend shard primaries.
+// It collects query results from all shards and returns an aggregate (UNION
+// ALL -like) result.
+func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
@@ -261,12 +257,6 @@ func (vx *vexec) execActionCallback(actiontyp action, callback func(context.Cont
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
-				// If we deleted a workflow then let's make a best effort attempt to clean
-				// up any related data.
-				if actiontyp == actionDelete {
-					vx.wr.deleteWorkflowVDiffData(ctx, primary.Tablet, vx.workflow)
-					vx.wr.optimizeCopyStateTable(primary.Tablet)
-				}
 				mu.Lock()
 				results[primary] = qr
 				mu.Unlock()
