@@ -14469,7 +14469,7 @@ yydefault:
 		var yyLOCAL Statement
 //line sql.y:4095
 		{
-			yyLOCAL = &Show{&ShowBasic{Command: VitessMigrations, Filter: yyDollar[4].showFilterUnion(), DbName: yyDollar[3].identifierCS}}
+			yyLOCAL = &ShowMigrations{Filter: yyDollar[4].showFilterUnion(), DbName: yyDollar[3].identifierCS}
 		}
 		yyVAL.union = yyLOCAL
 	case 749:

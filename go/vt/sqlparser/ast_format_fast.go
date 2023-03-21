@@ -434,6 +434,16 @@ func (node *RevertMigration) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
+func (node *ShowMigrations) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("show vitess_migrations")
+	if !node.DbName.IsEmpty() {
+		buf.WriteString(" from ")
+		node.DbName.formatFast(buf)
+	}
+	node.Filter.formatFast(buf)
+}
+
+// formatFast formats the node.
 func (node *ShowMigrationLogs) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("show vitess_migration '")
 	buf.WriteString(node.UUID)

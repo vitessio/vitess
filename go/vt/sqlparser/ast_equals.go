@@ -1214,6 +1214,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfShowMigrationLogs(a, b)
+	case *ShowMigrations:
+		b, ok := inB.(*ShowMigrations)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowMigrations(a, b)
 	case *ShowOther:
 		b, ok := inB.(*ShowOther)
 		if !ok {
@@ -3977,6 +3983,18 @@ func (cmp *Comparator) RefOfShowMigrationLogs(a, b *ShowMigrationLogs) bool {
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
 }
 
+// RefOfShowMigrations does deep equals between the two objects.
+func (cmp *Comparator) RefOfShowMigrations(a, b *ShowMigrations) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.IdentifierCS(a.DbName, b.DbName) &&
+		cmp.RefOfShowFilter(a.Filter, b.Filter)
+}
+
 // RefOfShowOther does deep equals between the two objects.
 func (cmp *Comparator) RefOfShowOther(a, b *ShowOther) bool {
 	if a == b {
@@ -6480,6 +6498,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfShowMigrationLogs(a, b)
+	case *ShowMigrations:
+		b, ok := inB.(*ShowMigrations)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfShowMigrations(a, b)
 	case *ShowThrottledApps:
 		b, ok := inB.(*ShowThrottledApps)
 		if !ok {

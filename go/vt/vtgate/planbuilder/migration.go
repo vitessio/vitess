@@ -110,3 +110,53 @@ func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, enabl
 	}
 	return newPlanResult(send), nil
 }
+
+// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
+// It invokes queries on the sidecar database's schema_migrations table
+// on all PRIMARY tablets in the keyspace's shards.
+func buildShowVMigrationsPlan(show *sqlparser.ShowMigrations, vschema plancontext.VSchema) (*planResult, error) {
+	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
+	if err != nil {
+		return nil, err
+	}
+	if ks == nil {
+		return nil, vterrors.VT09005()
+	}
+
+	if tabletType != topodatapb.TabletType_PRIMARY {
+		return nil, vterrors.VT09006("SHOW")
+	}
+
+	if dest == nil {
+		dest = key.DestinationAllShards{}
+	}
+
+	send := &engine.Send{
+		Keyspace:          ks,
+		TargetDestination: dest,
+		Query:             sqlparser.String(show),
+	}
+	return newPlanResult(send), nil
+
+	// sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(ks.Name)
+	// if err != nil {
+	// 	log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v", ks.Name, err)
+	// 	return nil, vterrors.VT14005(ks.Name)
+	// }
+
+	// sql := sqlparser.BuildParsedQuery("SELECT * FROM %s.schema_migrations", sidecarDBID).Query
+
+	// if show.Filter != nil {
+	// 	if show.Filter.Filter != nil {
+	// 		sql += fmt.Sprintf(" where %s", sqlparser.String(show.Filter.Filter))
+	// 	} else if show.Filter.Like != "" {
+	// 		lit := sqlparser.String(sqlparser.NewStrLiteral(show.Filter.Like))
+	// 		sql += fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
+	// 	}
+	// }
+	// return &engine.Send{
+	// 	Keyspace:          ks,
+	// 	TargetDestination: dest,
+	// 	Query:             sql,
+	// }, nil
+}

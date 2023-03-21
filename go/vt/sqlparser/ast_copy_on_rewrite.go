@@ -418,6 +418,8 @@ func (c *cow) copyOnRewriteSQLNode(n SQLNode, parent SQLNode) (out SQLNode, chan
 		return c.copyOnRewriteRefOfShowFilter(n, parent)
 	case *ShowMigrationLogs:
 		return c.copyOnRewriteRefOfShowMigrationLogs(n, parent)
+	case *ShowMigrations:
+		return c.copyOnRewriteRefOfShowMigrations(n, parent)
 	case *ShowOther:
 		return c.copyOnRewriteRefOfShowOther(n, parent)
 	case *ShowThrottledApps:
@@ -4980,6 +4982,30 @@ func (c *cow) copyOnRewriteRefOfShowMigrationLogs(n *ShowMigrationLogs, parent S
 	}
 	return
 }
+func (c *cow) copyOnRewriteRefOfShowMigrations(n *ShowMigrations, parent SQLNode) (out SQLNode, changed bool) {
+	if n == nil || c.cursor.stop {
+		return n, false
+	}
+	out = n
+	if c.pre == nil || c.pre(n, parent) {
+		_DbName, changedDbName := c.copyOnRewriteIdentifierCS(n.DbName, n)
+		_Filter, changedFilter := c.copyOnRewriteRefOfShowFilter(n.Filter, n)
+		if changedDbName || changedFilter {
+			res := *n
+			res.DbName, _ = _DbName.(IdentifierCS)
+			res.Filter, _ = _Filter.(*ShowFilter)
+			out = &res
+			if c.cloned != nil {
+				c.cloned(n, out)
+			}
+			changed = true
+		}
+	}
+	if c.post != nil {
+		out, changed = c.postVisit(out, parent, changed)
+	}
+	return
+}
 func (c *cow) copyOnRewriteRefOfShowOther(n *ShowOther, parent SQLNode) (out SQLNode, changed bool) {
 	if n == nil || c.cursor.stop {
 		return n, false
@@ -6895,6 +6921,8 @@ func (c *cow) copyOnRewriteStatement(n Statement, parent SQLNode) (out SQLNode, 
 		return c.copyOnRewriteRefOfShow(n, parent)
 	case *ShowMigrationLogs:
 		return c.copyOnRewriteRefOfShowMigrationLogs(n, parent)
+	case *ShowMigrations:
+		return c.copyOnRewriteRefOfShowMigrations(n, parent)
 	case *ShowThrottledApps:
 		return c.copyOnRewriteRefOfShowThrottledApps(n, parent)
 	case *ShowThrottlerStatus:

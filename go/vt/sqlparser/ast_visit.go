@@ -418,6 +418,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfShowFilter(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
+	case *ShowMigrations:
+		return VisitRefOfShowMigrations(in, f)
 	case *ShowOther:
 		return VisitRefOfShowOther(in, f)
 	case *ShowThrottledApps:
@@ -3349,6 +3351,21 @@ func VisitRefOfShowMigrationLogs(in *ShowMigrationLogs, f Visit) error {
 	}
 	return nil
 }
+func VisitRefOfShowMigrations(in *ShowMigrations, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
+		return err
+	}
+	if err := VisitIdentifierCS(in.DbName, f); err != nil {
+		return err
+	}
+	if err := VisitRefOfShowFilter(in.Filter, f); err != nil {
+		return err
+	}
+	return nil
+}
 func VisitRefOfShowOther(in *ShowOther, f Visit) error {
 	if in == nil {
 		return nil
@@ -4798,6 +4815,8 @@ func VisitStatement(in Statement, f Visit) error {
 		return VisitRefOfShow(in, f)
 	case *ShowMigrationLogs:
 		return VisitRefOfShowMigrationLogs(in, f)
+	case *ShowMigrations:
+		return VisitRefOfShowMigrations(in, f)
 	case *ShowThrottledApps:
 		return VisitRefOfShowThrottledApps(in, f)
 	case *ShowThrottlerStatus:

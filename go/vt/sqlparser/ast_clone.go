@@ -419,6 +419,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfShowFilter(in)
 	case *ShowMigrationLogs:
 		return CloneRefOfShowMigrationLogs(in)
+	case *ShowMigrations:
+		return CloneRefOfShowMigrations(in)
 	case *ShowOther:
 		return CloneRefOfShowOther(in)
 	case *ShowThrottledApps:
@@ -2628,6 +2630,17 @@ func CloneRefOfShowMigrationLogs(n *ShowMigrationLogs) *ShowMigrationLogs {
 	return &out
 }
 
+// CloneRefOfShowMigrations creates a deep clone of the input.
+func CloneRefOfShowMigrations(n *ShowMigrations) *ShowMigrations {
+	if n == nil {
+		return nil
+	}
+	out := *n
+	out.DbName = CloneIdentifierCS(n.DbName)
+	out.Filter = CloneRefOfShowFilter(n.Filter)
+	return &out
+}
+
 // CloneRefOfShowOther creates a deep clone of the input.
 func CloneRefOfShowOther(n *ShowOther) *ShowOther {
 	if n == nil {
@@ -3923,6 +3936,8 @@ func CloneStatement(in Statement) Statement {
 		return CloneRefOfShow(in)
 	case *ShowMigrationLogs:
 		return CloneRefOfShowMigrationLogs(in)
+	case *ShowMigrations:
+		return CloneRefOfShowMigrations(in)
 	case *ShowThrottledApps:
 		return CloneRefOfShowThrottledApps(in)
 	case *ShowThrottlerStatus:
