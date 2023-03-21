@@ -26,17 +26,13 @@ import (
 
 type (
 	ErrType int
-	// Error should be implemented by all errors in this package that arise from a semantic problem
-	Error interface {
-		Error() string
-		Info() *ErrorInfo
+
+	identifiableError interface {
+		id() string
 	}
-	// ErrorInfo provides additional information about a semantic error
-	ErrorInfo struct {
-		code  vtrpcpb.Code
-		state vterrors.State
-		typ   ErrType
-		id    string
+
+	typedError interface {
+		typ() ErrType
 	}
 )
 
@@ -48,47 +44,23 @@ const (
 	BugErrorType
 )
 
-func printf(e Error, msg string, args ...any) string {
+func printf(e error, msg string, args ...any) string {
 	format := msg
 
-	if e.Info().id != "" {
-		format = fmt.Sprintf("%s: %s", e.Info().id, format)
+	if eId, ok := e.(identifiableError); ok {
+		format = fmt.Sprintf("%s: %s", eId.id(), format)
 	}
 
-	switch e.Info().typ {
-	case UnsupportedErrorType:
-		format = "VT12001: unsupported: " + format
-	case BugErrorType:
-		format = "VT13001: [BUG] " + format
+	if eTyp, ok := e.(typedError); ok {
+		switch eTyp.typ() {
+		case UnsupportedErrorType:
+			format = "VT12001: unsupported: " + format
+		case BugErrorType:
+			format = "VT13001: [BUG] " + format
+		}
 	}
+
 	return fmt.Sprintf(format, args...)
-}
-
-func (c *ErrorInfo) ErrorCode() vtrpcpb.Code {
-	if c.code == UndefinedErrorCode {
-		return vtrpcpb.Code_UNKNOWN
-	}
-
-	switch c.typ {
-	case UnsupportedErrorType:
-		return vtrpcpb.Code_UNIMPLEMENTED
-	case BugErrorType:
-		return vtrpcpb.Code_INTERNAL
-	default:
-		return c.code
-	}
-}
-
-func (c *ErrorInfo) State() vterrors.State {
-	return c.state
-}
-
-func (c *ErrorInfo) ErrorType() ErrType {
-	return c.typ
-}
-
-func (c *ErrorInfo) Id() string {
-	return c.id
 }
 
 // Specific error implementations follow
@@ -99,14 +71,16 @@ type UnionColumnsDoNotMatchError struct {
 	SecondProj int
 }
 
-var _ Error = (*UnionColumnsDoNotMatchError)(nil)
+func (e *UnionColumnsDoNotMatchError) ErrorState() vterrors.State {
+	return vterrors.WrongNumberOfColumnsInSelect
+}
+
+func (e *UnionColumnsDoNotMatchError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_FAILED_PRECONDITION
+}
 
 func (e *UnionColumnsDoNotMatchError) Error() string {
 	return printf(e, "The used SELECT statements have a different number of columns: %v, %v", e.FirstProj, e.SecondProj)
-}
-
-func (e *UnionColumnsDoNotMatchError) Info() *ErrorInfo {
-	return &ErrorInfo{code: vtrpcpb.Code_FAILED_PRECONDITION, state: vterrors.WrongNumberOfColumnsInSelect}
 }
 
 // UnsupportedMultiTablesInUpdateError
@@ -114,8 +88,6 @@ type UnsupportedMultiTablesInUpdateError struct {
 	ExprCount int
 	NotAlias  bool
 }
-
-var _ Error = (*UnsupportedMultiTablesInUpdateError)(nil)
 
 func (e *UnsupportedMultiTablesInUpdateError) Error() string {
 	switch {
@@ -126,8 +98,8 @@ func (e *UnsupportedMultiTablesInUpdateError) Error() string {
 	}
 }
 
-func (e *UnsupportedMultiTablesInUpdateError) Info() *ErrorInfo {
-	return &ErrorInfo{typ: UnsupportedErrorType}
+func (e *UnsupportedMultiTablesInUpdateError) typ() ErrType {
+	return UnsupportedErrorType
 }
 
 // UnsupportedNaturalJoinError
@@ -135,28 +107,24 @@ type UnsupportedNaturalJoinError struct {
 	JoinExpr *sqlparser.JoinTableExpr
 }
 
-var _ Error = (*UnsupportedNaturalJoinError)(nil)
-
 func (e *UnsupportedNaturalJoinError) Error() string {
 	return printf(e, "%s", e.JoinExpr.Join.ToString())
 }
 
-func (e *UnsupportedNaturalJoinError) Info() *ErrorInfo {
-	return &ErrorInfo{typ: UnsupportedErrorType}
+func (e *UnsupportedNaturalJoinError) typ() ErrType {
+	return UnsupportedErrorType
 }
 
 // UnionWithSQLCalcFoundRowsError
 type UnionWithSQLCalcFoundRowsError struct {
 }
 
-var _ Error = (*UnionWithSQLCalcFoundRowsError)(nil)
-
 func (e *UnionWithSQLCalcFoundRowsError) Error() string {
 	return printf(e, "SQL_CALC_FOUND_ROWS not supported with union")
 }
 
-func (e *UnionWithSQLCalcFoundRowsError) Info() *ErrorInfo {
-	return &ErrorInfo{typ: UnsupportedErrorType}
+func (e *UnionWithSQLCalcFoundRowsError) typ() ErrType {
+	return UnsupportedErrorType
 }
 
 // TableNotUpdatableError
@@ -164,28 +132,28 @@ type TableNotUpdatableError struct {
 	Table string
 }
 
-var _ Error = (*TableNotUpdatableError)(nil)
-
 func (e *TableNotUpdatableError) Error() string {
 	return printf(e, "The target table %s of the UPDATE is not updatable", e.Table)
 }
 
-func (e *TableNotUpdatableError) Info() *ErrorInfo {
-	return &ErrorInfo{state: vterrors.NonUpdateableTable, code: vtrpcpb.Code_INVALID_ARGUMENT}
+func (e *TableNotUpdatableError) ErrorState() vterrors.State {
+	return vterrors.NonUpdateableTable
+}
+
+func (e *TableNotUpdatableError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
 // SQLCalcFoundRowsUsageError
 type SQLCalcFoundRowsUsageError struct {
 }
 
-var _ Error = (*SQLCalcFoundRowsUsageError)(nil)
-
 func (e *SQLCalcFoundRowsUsageError) Error() string {
 	return printf(e, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
 }
 
-func (e *SQLCalcFoundRowsUsageError) Info() *ErrorInfo {
-	return &ErrorInfo{code: vtrpcpb.Code_INVALID_ARGUMENT}
+func (e *SQLCalcFoundRowsUsageError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
 // CantUseOptionHereError
@@ -193,14 +161,16 @@ type CantUseOptionHereError struct {
 	Msg string
 }
 
-var _ Error = (*CantUseOptionHereError)(nil)
-
 func (e *CantUseOptionHereError) Error() string {
 	return printf(e, "Incorrect usage/placement of '%s'", e.Msg)
 }
 
-func (e *CantUseOptionHereError) Info() *ErrorInfo {
-	return &ErrorInfo{state: vterrors.CantUseOptionHere, code: vtrpcpb.Code_INVALID_ARGUMENT}
+func (e *CantUseOptionHereError) ErrorState() vterrors.State {
+	return vterrors.CantUseOptionHere
+}
+
+func (e *CantUseOptionHereError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
 // MissingInVSchemaError
@@ -208,15 +178,13 @@ type MissingInVSchemaError struct {
 	Table TableInfo
 }
 
-var _ Error = (*MissingInVSchemaError)(nil)
-
 func (e *MissingInVSchemaError) Error() string {
 	tableName, _ := e.Table.Name()
 	return printf(e, "Table information is not provided in vschema for table `%s`", sqlparser.String(tableName))
 }
 
-func (e *MissingInVSchemaError) Info() *ErrorInfo {
-	return &ErrorInfo{code: vtrpcpb.Code_INVALID_ARGUMENT}
+func (e *MissingInVSchemaError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
 // NotSequenceTableError
@@ -224,14 +192,12 @@ type NotSequenceTableError struct {
 	Table string
 }
 
-var _ Error = (*NotSequenceTableError)(nil)
-
 func (e *NotSequenceTableError) Error() string {
 	return printf(e, "NEXT used on a non-sequence table `%s`", e.Table)
 }
 
-func (e *NotSequenceTableError) Info() *ErrorInfo {
-	return &ErrorInfo{code: vtrpcpb.Code_INVALID_ARGUMENT}
+func (e *NotSequenceTableError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
 }
 
 // NextWithMultipleTablesError
@@ -239,14 +205,12 @@ type NextWithMultipleTablesError struct {
 	CountTables int
 }
 
-var _ Error = (*NextWithMultipleTablesError)(nil)
-
 func (e *NextWithMultipleTablesError) Error() string {
 	return printf(e, "Next statement should not contain multiple tables: found %d tables", e.CountTables)
 }
 
-func (e *NextWithMultipleTablesError) Info() *ErrorInfo {
-	return &ErrorInfo{typ: BugErrorType}
+func (e *NextWithMultipleTablesError) typ() ErrType {
+	return BugErrorType
 }
 
 // LockOnlyWithDualError
@@ -254,14 +218,12 @@ type LockOnlyWithDualError struct {
 	Node *sqlparser.LockingFunc
 }
 
-var _ Error = (*LockOnlyWithDualError)(nil)
-
 func (e *LockOnlyWithDualError) Error() string {
 	return printf(e, "%v allowed only with dual", sqlparser.String(e.Node))
 }
 
-func (e *LockOnlyWithDualError) Info() *ErrorInfo {
-	return &ErrorInfo{code: vtrpcpb.Code_UNIMPLEMENTED}
+func (e *LockOnlyWithDualError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_UNIMPLEMENTED
 }
 
 // QualifiedOrderInUnionError
@@ -269,14 +231,8 @@ type QualifiedOrderInUnionError struct {
 	Table string
 }
 
-var _ Error = (*QualifiedOrderInUnionError)(nil)
-
 func (e *QualifiedOrderInUnionError) Error() string {
 	return printf(e, "Table `%s` from one of the SELECTs cannot be used in global ORDER clause", e.Table)
-}
-
-func (e *QualifiedOrderInUnionError) Info() *ErrorInfo {
-	return &ErrorInfo{}
 }
 
 // JSONTablesError
@@ -284,14 +240,12 @@ type JSONTablesError struct {
 	Table string
 }
 
-var _ Error = (*JSONTablesError)(nil)
-
 func (e *JSONTablesError) Error() string {
 	return printf(e, "json_table expressions")
 }
 
-func (e *JSONTablesError) Info() *ErrorInfo {
-	return &ErrorInfo{typ: UnsupportedErrorType}
+func (e *JSONTablesError) typ() ErrType {
+	return UnsupportedErrorType
 }
 
 // BuggyError is used for checking conditions that should never occur
@@ -299,14 +253,12 @@ type BuggyError struct {
 	Msg string
 }
 
-var _ Error = (*BuggyError)(nil)
-
 func (e *BuggyError) Error() string {
 	return printf(e, e.Msg)
 }
 
-func (e *BuggyError) Info() *ErrorInfo {
-	return &ErrorInfo{typ: BugErrorType}
+func (e *BuggyError) typ() ErrType {
+	return BugErrorType
 }
 
 // ColumnNotFoundError
@@ -314,14 +266,16 @@ type ColumnNotFoundError struct {
 	Column *sqlparser.ColName
 }
 
-var _ Error = (*ColumnNotFoundError)(nil)
-
 func (e *ColumnNotFoundError) Error() string {
 	return printf(e, "symbol %s not found", sqlparser.String(e.Column))
 }
 
-func (e *ColumnNotFoundError) Info() *ErrorInfo {
-	return &ErrorInfo{state: vterrors.BadFieldError, code: vtrpcpb.Code_INVALID_ARGUMENT}
+func (e *ColumnNotFoundError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
+}
+
+func (e *ColumnNotFoundError) ErrorState() vterrors.State {
+	return vterrors.BadFieldError
 }
 
 // AmbiguousColumnError
@@ -329,12 +283,14 @@ type AmbiguousColumnError struct {
 	Column string
 }
 
-var _ Error = (*AmbiguousColumnError)(nil)
-
 func (e *AmbiguousColumnError) Error() string {
 	return printf(e, "Column '%s' in field list is ambiguous", e.Column)
 }
 
-func (e *AmbiguousColumnError) Info() *ErrorInfo {
-	return &ErrorInfo{state: vterrors.BadFieldError, code: vtrpcpb.Code_INVALID_ARGUMENT}
+func (e *AmbiguousColumnError) ErrorState() vterrors.State {
+	return vterrors.BadFieldError
+}
+
+func (e *AmbiguousColumnError) ErrorCode() vtrpcpb.Code {
+	return vtrpcpb.Code_INVALID_ARGUMENT
 }
