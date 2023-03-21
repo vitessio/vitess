@@ -78,7 +78,7 @@ func (tc testCase) createPredicate(lvl int) sqlparser.Expr {
 			Right: tc.createPredicate(lvl + 1),
 		}
 	}
-	panic("oops")
+	panic("unexpected nodeType")
 }
 
 func TestFuzzRewriting(t *testing.T) {
