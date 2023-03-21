@@ -131,32 +131,15 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowMigrations, vschema plancontex
 		dest = key.DestinationAllShards{}
 	}
 
-	send := &engine.Send{
+	// v17 introduces ShowMigrations ast, but vttablets may still be on v16 and not know this statement.
+	// For this reason, we create a new primitive, `engine.ShowMigrations` that supports both new and
+	// old methods.
+	// TODO: (shlomi) in v18, remove engine.ShowMigrations and use a simple Send.
+	prim := &engine.ShowMigrations{
 		Keyspace:          ks,
 		TargetDestination: dest,
+		Stmt:              show,
 		Query:             sqlparser.String(show),
 	}
-	return newPlanResult(send), nil
-
-	// sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(ks.Name)
-	// if err != nil {
-	// 	log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v", ks.Name, err)
-	// 	return nil, vterrors.VT14005(ks.Name)
-	// }
-
-	// sql := sqlparser.BuildParsedQuery("SELECT * FROM %s.schema_migrations", sidecarDBID).Query
-
-	// if show.Filter != nil {
-	// 	if show.Filter.Filter != nil {
-	// 		sql += fmt.Sprintf(" where %s", sqlparser.String(show.Filter.Filter))
-	// 	} else if show.Filter.Like != "" {
-	// 		lit := sqlparser.String(sqlparser.NewStrLiteral(show.Filter.Like))
-	// 		sql += fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
-	// 	}
-	// }
-	// return &engine.Send{
-	// 	Keyspace:          ks,
-	// 	TargetDestination: dest,
-	// 	Query:             sql,
-	// }, nil
+	return newPlanResult(prim), nil
 }
