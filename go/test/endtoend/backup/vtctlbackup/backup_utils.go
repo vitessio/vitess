@@ -400,6 +400,10 @@ type restoreMethod func(t *testing.T, tablet *cluster.Vttablet)
 //  13. verify that don't have the data added after the first backup
 //  14. remove the backups
 func primaryBackup(t *testing.T) {
+	// Having the VTOrc in this test causes a lot of flakiness. For example when we delete the tablet `replica2` which
+	// is the current primary and then try to restore from backup the old primary (`primary.Alias`), but before that sometimes the VTOrc
+	// promotes the `replica1` to primary right after we delete the replica2 (current primary).
+	// This can result in unexpected behavior. Therefore, disabling the VTOrc in this test to remove flakiness.
 	localCluster.DisableVTOrcRecoveries(t)
 	defer func() {
 		localCluster.EnableVTOrcRecoveries(t)
