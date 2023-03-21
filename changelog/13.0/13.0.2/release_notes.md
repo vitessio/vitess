@@ -9,7 +9,7 @@ Below is a summary of this patch release. You can learn more [here](https://go.d
 
 > go1.17.12 (released 2022-07-12) includes security fixes to the compress/gzip, encoding/gob, encoding/xml, go/parser, io/fs, net/http, and path/filepath packages, as well as bug fixes to the compiler, the go command, the runtime, and the runtime/metrics package. [See the Go 1.17.12 milestone](https://github.com/golang/go/issues?q=milestone%3AGo1.17.12+label%3ACherryPickApproved) on our issue tracker for details.
 ------------
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/13_0_2_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/13.0/13.0.2/changelog.md).
 The release includes 28 commits (excluding merges)
 
 Thanks to all our contributors: @GuptaManan100, @aquarapid, @frouioui, @harshit-gangal, @mattlord, @rohit-nayak-ps, @systay, @vitess-bot[bot], @vmg

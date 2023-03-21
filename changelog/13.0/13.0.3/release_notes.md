@@ -15,7 +15,7 @@ This change is documented on our website [here](https://vitess.io/docs/13.0/over
 
 
 ------------
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/doc/releasenotes/13_0_3_changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/13.0/13.0.3/changelog.md).
 
 The release includes 17 commits(excluding merges)
 
