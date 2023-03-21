@@ -27,9 +27,12 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var unusedFlag = &pflag.Flag{}
@@ -473,7 +476,6 @@ func TestVExecValidations(t *testing.T) {
 	}
 }
 
-/*
 func TestWorkflowUpdate(t *testing.T) {
 	ctx := context.Background()
 	id := 1
@@ -489,13 +491,14 @@ func TestWorkflowUpdate(t *testing.T) {
 		tabletTypes *pflag.Flag
 		onDDL       *pflag.Flag
 		wantErr     string
+		dryRun      bool
 	}{
 		{
 			name:        "no flags",
 			cells:       &pflag.Flag{},
 			tabletTypes: &pflag.Flag{},
 			onDDL:       &pflag.Flag{},
-			wantErr:     fmt.Sprintf("failed to update the %s.%s workflow: %s", keyspace, workflow, errWorkflowUpdateWithoutChanges),
+			wantErr:     errWorkflowUpdateWithoutChanges,
 		},
 		{
 			name: "only cells",
@@ -536,7 +539,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				Value:   stringValue{"WUT"},
 				Changed: true,
 			},
-			wantErr: fmt.Sprintf("failed to update the %s.%s workflow: invalid value provided for on-ddl: WUT", keyspace, workflow),
+			wantErr: "invalid value provided for on-ddl: WUT",
 		},
 		{
 			name: "all flags",
@@ -556,6 +559,25 @@ func TestWorkflowUpdate(t *testing.T) {
 				Changed: true,
 			},
 		},
+		{
+			name: "all flags",
+			cells: &pflag.Flag{
+				Name:    "cells",
+				Value:   stringValue{"zone1,zone2"},
+				Changed: true,
+			},
+			tabletTypes: &pflag.Flag{
+				Name:    "tablet-types",
+				Value:   stringValue{"rdonly,spare"},
+				Changed: true,
+			},
+			onDDL: &pflag.Flag{
+				Name:    "on-ddl",
+				Value:   stringValue{"EXEC"},
+				Changed: true,
+			},
+			dryRun: true,
+		},
 	}
 
 	blsStr := `keyspace:"target" shard:"0" filter:{rules:{match:"customer" filter:"select * from customer"} rules:{match:"corder" filter:"select * from corder"}}`
@@ -565,6 +587,32 @@ func TestWorkflowUpdate(t *testing.T) {
 		"int64|varchar|varchar|varchar|varchar"),
 		fmt.Sprintf("1|Stopped|%s|cell1|primary,replica", blsStr),
 	)
+
+	successfulResults := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Tablet|RowsAffected",
+		"varchar|int64"),
+		"zone1-0000000200|1",
+		"zone1-0000000210|1",
+	)
+
+	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
+will be run on the following streams in keyspace target for workflow wrWorkflow:
+
+
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
+|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
++----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
+
+
+
+
+`
 
 	for _, tcase := range tests {
 		t.Run(tcase.name, func(t *testing.T) {
@@ -605,53 +653,27 @@ func TestWorkflowUpdate(t *testing.T) {
 			env.tmc.setVRResults(env.tmc.tablets[200].tablet, restartQuery, &sqltypes.Result{})
 			env.tmc.setVRResults(env.tmc.tablets[210].tablet, restartQuery, &sqltypes.Result{})
 
-			results, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, tcase.cells, tcase.tabletTypes, tcase.onDDL)
+			res, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", tcase.dryRun, tcase.cells, tcase.tabletTypes, tcase.onDDL)
 			if tcase.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, err.Error(), tcase.wantErr)
 			} else {
 				require.NoError(t, err)
-				require.Equal(t, "map[]", fmt.Sprintf("%v", results))
-				dryRunResult := fmt.Sprintf(`Query: %s
-will be run on the following streams in keyspace target for workflow wrWorkflow:
-
-
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-
-
-
-
-Query: update _vt.vreplication set state = 'Running' where id = 1
-will be run on the following streams in keyspace target for workflow wrWorkflow:
-
-
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-
-
-
-
-`, updateQuery)
-
-				require.Equal(t, dryRunResult, logger.String())
+				if tcase.dryRun {
+					require.Equal(t, dryRunResult, logger.String())
+				} else {
+					require.Equal(t, 2, len(res))
+					tres := &sqltypes.Result{}
+					for _, val := range res {
+						tres.AppendResult(val)
+					}
+					sort.Slice(tres.Rows, func(i, j int) bool {
+						return tres.Rows[i][0].ToString() < tres.Rows[j][0].ToString()
+					})
+					require.Equal(t, successfulResults, tres)
+				}
 			}
 			logger.Clear()
 		})
 	}
 }
-*/

@@ -335,7 +335,12 @@ func (tmc *testWranglerTMClient) VReplicationExec(ctx context.Context, tablet *t
 }
 
 func (tmc *testWranglerTMClient) UpdateVRWorkflow(ctx context.Context, tablet *topodata.Tablet, req *tabletmanagerdata.UpdateVRWorkflowRequest) (*query.QueryResult, error) {
-	return nil, nil
+	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
+		"Tablet|RowsAffected",
+		"varchar|int64"),
+		fmt.Sprintf("%s-0000000%d|1", tablet.Alias.Cell, tablet.Alias.Uid),
+	)
+	return sqltypes.ResultToProto3(res), nil
 }
 
 func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {

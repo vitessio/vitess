@@ -414,8 +414,10 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 		if !changes {
 			return nil, fmt.Errorf(errWorkflowUpdateWithoutChanges)
 		}
-		callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-			return wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req)
+		if !dryRun {
+			callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+				return wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req)
+			}
 		}
 	}
 	return wr.runVexec(ctx, workflow, keyspace, query, callback, dryRun)
