@@ -70,3 +70,8 @@ CREATE TABLE t2 (
     PRIMARY KEY (id)
 ) ENGINE InnoDB;
 
+CREATE TABLE t11 (
+    k BIGINT PRIMARY KEY,
+    a INT,
+    b INT
+);

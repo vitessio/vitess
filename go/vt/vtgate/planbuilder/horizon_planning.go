@@ -59,7 +59,8 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	// a simpleProjection. We create a new Route that contains the derived table in the
 	// FROM clause. Meaning that, when we push expressions to the select list of this
 	// new Route, we do not want them to rewrite them.
-	if _, isSimpleProj := plan.(*simpleProjection); isSimpleProj {
+	sp, derivedTable := plan.(*simpleProjection)
+	if derivedTable {
 		oldRewriteDerivedExpr := ctx.RewriteDerivedExpr
 		defer func() {
 			ctx.RewriteDerivedExpr = oldRewriteDerivedExpr
@@ -74,10 +75,11 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 	}
 
 	needsOrdering := len(hp.qp.OrderExprs) > 0
-	canShortcut := isRoute && hp.sel.Having == nil && !needsOrdering
 
 	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
 	// so it probably has aggregations
+	canShortcut := isRoute && hp.sel.Having == nil && !needsOrdering
+
 	switch {
 	case hp.qp.NeedsAggregation() || hp.sel.Having != nil:
 		plan, err = hp.planAggregations(ctx, plan)
@@ -90,6 +92,26 @@ func (hp *horizonPlanning) planHorizon(ctx *plancontext.PlanningContext, plan lo
 		err = planSingleShardRoutePlan(hp.sel, rb)
 		if err != nil {
 			return nil, err
+		}
+	case derivedTable:
+		pusher := func(ae *sqlparser.AliasedExpr) (int, error) {
+			offset, _, err := pushProjection(ctx, ae, sp.input, true, true, false)
+			return offset, err
+		}
+		needsVtGate, projections, colNames, err := hp.qp.NeedsProjecting(ctx, pusher)
+		if err != nil {
+			return nil, err
+		}
+		if !needsVtGate {
+			break
+		}
+
+		// there were some expressions we could not push down entirely,
+		// so replace the simpleProjection with a real projection
+		plan = &projection{
+			source:      sp.input,
+			columns:     projections,
+			columnNames: colNames,
 		}
 	default:
 		err = pushProjections(ctx, plan, hp.qp.SelectExprs)
