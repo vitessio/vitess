@@ -67,9 +67,8 @@ func NewIdentifierCache(loadFunc func(context.Context, string) (string, error)) 
 func GetIdentifierCache() (*IdentifierCache, error) {
 	if identifierCache.Load() == nil {
 		return nil, vterrors.New(vtrpcpb.Code_INTERNAL, errIdentifierCacheUninitialized)
-	} else {
-		return identifierCache.Load().(*IdentifierCache), nil
 	}
+	return identifierCache.Load().(*IdentifierCache), nil
 }
 
 // Get returns an sqlparser string built from an IdentifierCS using

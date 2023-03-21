@@ -20,13 +20,12 @@ import (
 	"fmt"
 	"testing"
 
-	"vitess.io/vitess/go/vt/vtgate/engine"
-
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -528,32 +527,32 @@ func TestScopeForSubqueries(t *testing.T) {
 func TestSubqueriesMappingWhereClause(t *testing.T) {
 	tcs := []struct {
 		sql           string
-		opCode        engine.PulloutOpcode
+		opCode        opcode.PulloutOpcode
 		otherSideName string
 	}{
 		{
 			sql:           "select id from t1 where id in (select uid from t2)",
-			opCode:        engine.PulloutIn,
+			opCode:        opcode.PulloutIn,
 			otherSideName: "id",
 		},
 		{
 			sql:           "select id from t1 where id not in (select uid from t2)",
-			opCode:        engine.PulloutNotIn,
+			opCode:        opcode.PulloutNotIn,
 			otherSideName: "id",
 		},
 		{
 			sql:           "select id from t where col1 = (select uid from t2 order by uid desc limit 1)",
-			opCode:        engine.PulloutValue,
+			opCode:        opcode.PulloutValue,
 			otherSideName: "col1",
 		},
 		{
 			sql:           "select id from t where exists (select uid from t2 where uid = 42)",
-			opCode:        engine.PulloutExists,
+			opCode:        opcode.PulloutExists,
 			otherSideName: "",
 		},
 		{
 			sql:           "select id from t where col1 >= (select uid from t2 where uid = 42)",
-			opCode:        engine.PulloutValue,
+			opCode:        opcode.PulloutValue,
 			otherSideName: "col1",
 		},
 	}
@@ -608,7 +607,7 @@ func TestSubqueriesMappingSelectExprs(t *testing.T) {
 			extractedSubq := semTable.SubqueryRef[subq]
 			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Subquery, subq))
 			assert.True(t, sqlparser.Equals.Expr(extractedSubq.Original, subq))
-			assert.EqualValues(t, engine.PulloutValue, extractedSubq.OpCode)
+			assert.EqualValues(t, opcode.PulloutValue, extractedSubq.OpCode)
 		})
 	}
 }

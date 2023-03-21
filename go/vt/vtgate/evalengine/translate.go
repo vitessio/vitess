@@ -60,7 +60,6 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 		return &InExpr{
 			BinaryExpr: binaryExpr,
 			Negate:     op == sqlparser.NotInOp,
-			Hashed:     nil,
 		}, nil
 	}
 

@@ -18,6 +18,7 @@ package integration
 
 import (
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -56,6 +57,29 @@ func init() {
 	servenv.SetMySQLServerVersionForTest(mySQLVersion)
 	collationEnv = collations.NewEnvironment(mySQLVersion)
 	servenv.OnParse(registerFlags)
+}
+
+// normalizeValue returns a normalized form of this value that matches the output
+// of the evaluation engine. This is used to mask quirks in the way MySQL sends SQL
+// values over the wire, to allow comparing our implementation against MySQL's in
+// integration tests.
+func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
+	typ := v.Type()
+	if typ == sqltypes.VarChar && coll == collations.CollationBinaryID {
+		return sqltypes.NewVarBinary(string(v.Raw()))
+	}
+	if typ == sqltypes.Float32 || typ == sqltypes.Float64 {
+		var bitsize = 64
+		if typ == sqltypes.Float32 {
+			bitsize = 32
+		}
+		f, err := strconv.ParseFloat(v.RawStr(), bitsize)
+		if err != nil {
+			panic(err)
+		}
+		return sqltypes.MakeTrusted(typ, evalengine.FormatFloat(typ, f))
+	}
+	return v
 }
 
 func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string) {
@@ -115,8 +139,9 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	local, localType, localErr := evaluateLocalEvalengine(env, localQuery)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
-	var localVal, remoteVal string
+	var localVal, remoteVal sqltypes.Value
 	var localCollation, remoteCollation collations.ID
+	var decimals uint32
 	if localErr == nil {
 		v := local.Value()
 		if debugCheckCollations {
@@ -127,11 +152,11 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 			}
 		}
 		if debugNormalize {
-			localVal = evalengine.NormalizeValue(v, local.Collation())
+			localVal = normalizeValue(v, local.Collation())
 		} else {
-			localVal = v.String()
+			localVal = v
 		}
-		if debugCheckTypes {
+		if debugCheckTypes && localType != -1 {
 			tt := v.Type()
 			if tt != sqltypes.Null && tt != localType {
 				t.Errorf("evaluation type mismatch: eval=%v vs typeof=%v\nlocal: %s\nquery: %s (SIMPLIFY=%v)",
@@ -141,9 +166,10 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	}
 	if remoteErr == nil {
 		if debugNormalize {
-			remoteVal = evalengine.NormalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
+			remoteVal = normalizeValue(remote.Rows[0][0], collations.ID(remote.Fields[0].Charset))
+			decimals = remote.Fields[0].Decimals
 		} else {
-			remoteVal = remote.Rows[0][0].String()
+			remoteVal = remote.Rows[0][0]
 		}
 		if debugCheckCollations {
 			if remote.Rows[0][0].IsNull() {
@@ -155,10 +181,10 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		}
 	}
 
-	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation); diff != "" {
+	if diff := compareResult(localErr, remoteErr, localVal, remoteVal, localCollation, remoteCollation, decimals); diff != "" {
 		t.Errorf("%s\nquery: %s (SIMPLIFY=%v)\nrow: %v", diff, localQuery, debugSimplify, env.Row)
 	} else if debugPrintAll {
-		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal, remoteVal, localQuery, env.Row)
+		t.Logf("local=%s mysql=%s\nquery: %s\nrow: %v", localVal.String(), remoteVal.String(), localQuery, env.Row)
 	}
 }
 
@@ -167,9 +193,10 @@ func TestMySQL(t *testing.T) {
 	defer conn.Close()
 
 	for _, tc := range testcases.Cases {
-		t.Run(fmt.Sprintf("%T", tc), func(t *testing.T) {
-			env := tc.Environment()
-			tc.Test(func(query string, row []sqltypes.Value) {
+		t.Run(tc.Name(), func(t *testing.T) {
+			env := evalengine.EmptyExpressionEnv()
+			env.Fields = tc.Schema
+			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
 				compareRemoteExprEnv(t, env, conn, query)
 			})
