@@ -53,9 +53,11 @@ func (asm *assembler) jumpFrom() *jump {
 	return &jump{from: len(asm.ins)}
 }
 
-func (asm *assembler) jumpDestination(j *jump) {
-	if j != nil {
-		j.to = len(asm.ins)
+func (asm *assembler) jumpDestination(jumps ...*jump) {
+	for _, j := range jumps {
+		if j != nil {
+			j.to = len(asm.ins)
+		}
 	}
 }
 
@@ -2191,6 +2193,17 @@ func (asm *assembler) NullCheck1(j *jump) {
 		}
 		return 1
 	}, "NULLCHECK SP-1")
+}
+
+func (asm *assembler) NullCheck1r(j *jump) {
+	asm.emit(func(vm *VirtualMachine) int {
+		if vm.stack[vm.sp-1] == nil {
+			vm.stack[vm.sp-2] = nil
+			vm.sp--
+			return j.offset()
+		}
+		return 1
+	}, "NULLCHECK SP-1, SP-2")
 }
 
 func (asm *assembler) NullCheck2(j *jump) {

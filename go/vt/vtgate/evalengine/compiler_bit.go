@@ -48,13 +48,12 @@ func (c *compiler) compileBitwiseOp(left Expr, right Expr, asm_ins_bb, asm_ins_u
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
 
 	if lt.Type == sqltypes.VarBinary && rt.Type == sqltypes.VarBinary {
 		if !lt.isHexOrBitLiteral() || !rt.isHexOrBitLiteral() {
 			asm_ins_bb()
-			c.asm.jumpDestination(skip1)
-			c.asm.jumpDestination(skip2)
+			c.asm.jumpDestination(skip1, skip2)
 			return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 		}
 	}
@@ -63,8 +62,7 @@ func (c *compiler) compileBitwiseOp(left Expr, right Expr, asm_ins_bb, asm_ins_u
 	rt = c.compileToBitwiseUint64(rt, 1)
 
 	asm_ins_uu()
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
 }
 
@@ -81,7 +79,7 @@ func (c *compiler) compileBitwiseShift(left Expr, right Expr, i int) (ctype, err
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
 
 	if lt.Type == sqltypes.VarBinary && !lt.isHexOrBitLiteral() {
 		_ = c.compileToUint64(rt, 1)
@@ -90,8 +88,7 @@ func (c *compiler) compileBitwiseShift(left Expr, right Expr, i int) (ctype, err
 		} else {
 			c.asm.BitShiftRight_bu()
 		}
-		c.asm.jumpDestination(skip1)
-		c.asm.jumpDestination(skip2)
+		c.asm.jumpDestination(skip1, skip2)
 		return ctype{Type: sqltypes.VarBinary, Col: collationBinary}, nil
 	}
 
@@ -104,8 +101,7 @@ func (c *compiler) compileBitwiseShift(left Expr, right Expr, i int) (ctype, err
 		c.asm.BitShiftRight_uu()
 	}
 
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
 }
 
