@@ -418,8 +418,6 @@ func (a *application) rewriteSQLNode(parent SQLNode, node SQLNode, replacer repl
 		return a.rewriteRefOfShowFilter(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
-	case *ShowMigrations:
-		return a.rewriteRefOfShowMigrations(parent, node, replacer)
 	case *ShowOther:
 		return a.rewriteRefOfShowOther(parent, node, replacer)
 	case *ShowThrottledApps:
@@ -6715,38 +6713,6 @@ func (a *application) rewriteRefOfShowMigrationLogs(parent SQLNode, node *ShowMi
 	}
 	return true
 }
-func (a *application) rewriteRefOfShowMigrations(parent SQLNode, node *ShowMigrations, replacer replacerFunc) bool {
-	if node == nil {
-		return true
-	}
-	if a.pre != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.pre(&a.cur) {
-			return true
-		}
-	}
-	if !a.rewriteIdentifierCS(node, node.DbName, func(newNode, parent SQLNode) {
-		parent.(*ShowMigrations).DbName = newNode.(IdentifierCS)
-	}) {
-		return false
-	}
-	if !a.rewriteRefOfShowFilter(node, node.Filter, func(newNode, parent SQLNode) {
-		parent.(*ShowMigrations).Filter = newNode.(*ShowFilter)
-	}) {
-		return false
-	}
-	if a.post != nil {
-		a.cur.replacer = replacer
-		a.cur.parent = parent
-		a.cur.node = node
-		if !a.post(&a.cur) {
-			return false
-		}
-	}
-	return true
-}
 func (a *application) rewriteRefOfShowOther(parent SQLNode, node *ShowOther, replacer replacerFunc) bool {
 	if node == nil {
 		return true
@@ -9156,8 +9122,6 @@ func (a *application) rewriteStatement(parent SQLNode, node Statement, replacer 
 		return a.rewriteRefOfShow(parent, node, replacer)
 	case *ShowMigrationLogs:
 		return a.rewriteRefOfShowMigrationLogs(parent, node, replacer)
-	case *ShowMigrations:
-		return a.rewriteRefOfShowMigrations(parent, node, replacer)
 	case *ShowThrottledApps:
 		return a.rewriteRefOfShowThrottledApps(parent, node, replacer)
 	case *ShowThrottlerStatus:

@@ -1060,8 +1060,8 @@ func (qre *QueryExecutor) execRevertMigration() (*sqltypes.Result, error) {
 }
 
 func (qre *QueryExecutor) execShowMigrations() (*sqltypes.Result, error) {
-	if showMigrationStmt, ok := qre.plan.FullStmt.(*sqlparser.ShowMigrations); ok {
-		return qre.tsv.onlineDDLExecutor.ShowMigrations(qre.ctx, showMigrationStmt)
+	if showStmt, ok := qre.plan.FullStmt.(*sqlparser.Show); ok {
+		return qre.tsv.onlineDDLExecutor.ShowMigrations(qre.ctx, showStmt)
 	}
 	return nil, vterrors.New(vtrpcpb.Code_INTERNAL, "Expecting SHOW VITESS_MIGRATIONS plan")
 }

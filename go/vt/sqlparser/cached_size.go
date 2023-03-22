@@ -3483,20 +3483,6 @@ func (cached *ShowMigrationLogs) CachedSize(alloc bool) int64 {
 	size += cached.Comments.CachedSize(true)
 	return size
 }
-func (cached *ShowMigrations) CachedSize(alloc bool) int64 {
-	if cached == nil {
-		return int64(0)
-	}
-	size := int64(0)
-	if alloc {
-		size += int64(24)
-	}
-	// field DbName vitess.io/vitess/go/vt/sqlparser.IdentifierCS
-	size += cached.DbName.CachedSize(false)
-	// field Filter *vitess.io/vitess/go/vt/sqlparser.ShowFilter
-	size += cached.Filter.CachedSize(true)
-	return size
-}
 func (cached *ShowOther) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)

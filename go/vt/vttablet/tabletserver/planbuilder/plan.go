@@ -227,8 +227,6 @@ func Build(statement sqlparser.Statement, tables map[string]*schema.Table, dbNam
 		plan, err = &Plan{PlanID: PlanAlterMigration, FullStmt: stmt}, nil
 	case *sqlparser.RevertMigration:
 		plan, err = &Plan{PlanID: PlanRevertMigration, FullStmt: stmt}, nil
-	case *sqlparser.ShowMigrations:
-		plan, err = &Plan{PlanID: PlanShowMigrations, FullStmt: stmt}, nil
 	case *sqlparser.ShowMigrationLogs:
 		plan, err = &Plan{PlanID: PlanShowMigrationLogs, FullStmt: stmt}, nil
 	case *sqlparser.ShowThrottledApps:

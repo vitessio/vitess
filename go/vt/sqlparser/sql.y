@@ -4093,7 +4093,7 @@ show_statement:
   }
 | SHOW VITESS_MIGRATIONS from_database_opt like_or_where_opt
   {
-    $$ = &ShowMigrations{Filter: $4, DbName: $3}
+    $$ = &Show{&ShowBasic{Command: VitessMigrations, Filter: $4, DbName: $3}}
   }
 | SHOW VITESS_MIGRATION STRING LOGS
   {

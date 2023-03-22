@@ -4694,26 +4694,28 @@ func (e *Executor) SubmitMigration(
 }
 
 // ShowMigrations shows migrations, optionally filtered by a condition
-func (e *Executor) ShowMigrations(ctx context.Context, stmt *sqlparser.ShowMigrations) (result *sqltypes.Result, err error) {
+func (e *Executor) ShowMigrations(ctx context.Context, show *sqlparser.Show) (result *sqltypes.Result, err error) {
 	if atomic.LoadInt64(&e.isOpen) == 0 {
 		return nil, vterrors.New(vtrpcpb.Code_FAILED_PRECONDITION, "online ddl is disabled")
 	}
-
+	showBasic, ok := show.Internal.(*sqlparser.ShowBasic)
+	if !ok {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] ShowMigrations expects a ShowBasic statement. Got: %s", sqlparser.String(show))
+	}
+	if showBasic.Command != sqlparser.VitessMigrations {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] ShowMigrations expects a VitessMigrations command, got %v. Statement: %s", sqlparser.VitessMigrations, sqlparser.String(show))
+	}
 	whereExpr := ""
-	if stmt.Filter != nil {
-		if stmt.Filter.Filter != nil {
-			whereExpr = fmt.Sprintf(" where %s", sqlparser.String(stmt.Filter.Filter))
-		} else if stmt.Filter.Like != "" {
-			lit := sqlparser.String(sqlparser.NewStrLiteral(stmt.Filter.Like))
+	if showBasic.Filter != nil {
+		if showBasic.Filter.Filter != nil {
+			whereExpr = fmt.Sprintf(" where %s", sqlparser.String(showBasic.Filter.Filter))
+		} else if showBasic.Filter.Like != "" {
+			lit := sqlparser.String(sqlparser.NewStrLiteral(showBasic.Filter.Like))
 			whereExpr = fmt.Sprintf(" where migration_uuid LIKE %s OR migration_context LIKE %s OR migration_status LIKE %s", lit, lit, lit)
 		}
 	}
-
-	e.migrationMutex.Lock()
-	defer e.migrationMutex.Unlock()
 	query := sqlparser.BuildParsedQuery(sqlShowMigrationsWhere, whereExpr).Query
-	result, err = e.execQuery(ctx, query)
-	return result, err
+	return e.execQuery(ctx, query)
 }
 
 // ShowMigrationLogs reads the migration log for a given migration

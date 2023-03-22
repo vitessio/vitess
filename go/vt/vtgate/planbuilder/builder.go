@@ -236,8 +236,6 @@ func createInstructionFor(query string, stmt sqlparser.Statement, reservedVars *
 		return buildAlterMigrationPlan(query, vschema, enableOnlineDDL)
 	case *sqlparser.RevertMigration:
 		return buildRevertMigrationPlan(query, stmt, vschema, enableOnlineDDL)
-	case *sqlparser.ShowMigrations:
-		return buildShowVMigrationsPlan(stmt, vschema)
 	case *sqlparser.ShowMigrationLogs:
 		return buildShowMigrationLogsPlan(query, vschema, enableOnlineDDL)
 	case *sqlparser.ShowThrottledApps:

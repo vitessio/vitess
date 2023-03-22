@@ -110,36 +110,3 @@ func buildShowMigrationLogsPlan(query string, vschema plancontext.VSchema, enabl
 	}
 	return newPlanResult(send), nil
 }
-
-// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
-// It invokes queries on the sidecar database's schema_migrations table
-// on all PRIMARY tablets in the keyspace's shards.
-func buildShowVMigrationsPlan(show *sqlparser.ShowMigrations, vschema plancontext.VSchema) (*planResult, error) {
-	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
-	if err != nil {
-		return nil, err
-	}
-	if ks == nil {
-		return nil, vterrors.VT09005()
-	}
-
-	if tabletType != topodatapb.TabletType_PRIMARY {
-		return nil, vterrors.VT09006("SHOW")
-	}
-
-	if dest == nil {
-		dest = key.DestinationAllShards{}
-	}
-
-	// v17 introduces ShowMigrations ast, but vttablets may still be on v16 and not know this statement.
-	// For this reason, we create a new primitive, `engine.ShowMigrations` that supports both new and
-	// old methods.
-	// TODO: (shlomi) in v18, remove engine.ShowMigrations and use a simple Send.
-	prim := &engine.ShowMigrations{
-		Keyspace:          ks,
-		TargetDestination: dest,
-		Stmt:              show,
-		Query:             sqlparser.String(show),
-	}
-	return newPlanResult(prim), nil
-}

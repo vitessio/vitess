@@ -443,12 +443,6 @@ type (
 		AutoIncSpec *AutoIncSpec
 	}
 
-	// ShowMigrations represents a SHOW VITESS_MIGRATIONS statement
-	ShowMigrations struct {
-		DbName IdentifierCS
-		Filter *ShowFilter
-	}
-
 	// ShowMigrationLogs represents a SHOW VITESS_MIGRATION '<uuid>' LOGS statement
 	ShowMigrationLogs struct {
 		UUID     string
@@ -737,7 +731,6 @@ func (*AlterTable) iStatement()          {}
 func (*AlterVschema) iStatement()        {}
 func (*AlterMigration) iStatement()      {}
 func (*RevertMigration) iStatement()     {}
-func (*ShowMigrations) iStatement()      {}
 func (*ShowMigrationLogs) iStatement()   {}
 func (*ShowThrottledApps) iStatement()   {}
 func (*ShowThrottlerStatus) iStatement() {}

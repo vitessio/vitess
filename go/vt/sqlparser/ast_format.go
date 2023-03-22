@@ -301,15 +301,6 @@ func (node *RevertMigration) Format(buf *TrackedBuffer) {
 }
 
 // Format formats the node.
-func (node *ShowMigrations) Format(buf *TrackedBuffer) {
-	buf.astPrintf(node, "show vitess_migrations")
-	if !node.DbName.IsEmpty() {
-		buf.astPrintf(node, " from %v", node.DbName)
-	}
-	buf.astPrintf(node, "%v", node.Filter)
-}
-
-// Format formats the node.
 func (node *ShowMigrationLogs) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "show vitess_migration '%#s' logs", node.UUID)
 }
