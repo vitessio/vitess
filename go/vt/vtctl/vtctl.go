@@ -3656,7 +3656,8 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		if err != nil {
 			return err
 		}
-		if action == "show" {
+		if action == "show" || action == "listall" || (action == "update" && *dryRun) {
+			// No final results left to print.
 			return nil
 		}
 	}
