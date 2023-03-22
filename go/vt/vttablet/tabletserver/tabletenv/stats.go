@@ -24,6 +24,9 @@ import (
 	"vitess.io/vitess/go/vt/servenv"
 )
 
+// startTime is the time tabletserver/vttablet started.
+var startTime = time.Now()
+
 // Stats contains tracked by various parts of TabletServer.
 type Stats struct {
 	MySQLTimings           *servenv.TimingsWrapper        // Time spent executing MySQL commands
@@ -43,6 +46,7 @@ type Stats struct {
 	TableaclAllowed        *stats.CountersWithMultiLabels // Number of allows
 	TableaclDenied         *stats.CountersWithMultiLabels // Number of denials
 	TableaclPseudoDenied   *stats.CountersWithMultiLabels // Number of pseudo denials
+	Uptime                 *stats.GaugeFunc               // Number of seconds of uptime
 
 	UserActiveReservedCount *stats.CountersWithSingleLabel // Per CallerID active reserved connection counts
 	UserReservedCount       *stats.CountersWithSingleLabel // Per CallerID reserved connection counts
@@ -90,6 +94,7 @@ func NewStats(exporter *servenv.Exporter) *Stats {
 		TableaclAllowed:        exporter.NewCountersWithMultiLabels("TableACLAllowed", "ACL acceptances", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclDenied:         exporter.NewCountersWithMultiLabels("TableACLDenied", "ACL denials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
 		TableaclPseudoDenied:   exporter.NewCountersWithMultiLabels("TableACLPseudoDenied", "ACL pseudodenials", []string{"TableName", "TableGroup", "PlanID", "Username"}),
+		Uptime:                 exporter.NewGaugeFunc("Uptime", "Uptime in seconds", func() int64 { return int64(time.Since(startTime).Seconds()) }),
 
 		UserActiveReservedCount: exporter.NewCountersWithSingleLabel("UserActiveReservedCount", "active reserved connection for each CallerID", "CallerID"),
 		UserReservedCount:       exporter.NewCountersWithSingleLabel("UserReservedCount", "reserved connection received for each CallerID", "CallerID"),
