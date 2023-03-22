@@ -25,41 +25,24 @@ import (
 )
 
 type (
-	ErrType int
-
-	identifiableError interface {
-		id() string
+	unsupportedError interface {
+		error
+		unsupported()
 	}
 
-	typedError interface {
-		typ() ErrType
+	bugError interface {
+		error
+		bug()
 	}
 )
 
-const (
-	UndefinedErrorCode = 0
-
-	UndefinedErrorType ErrType = iota
-	UnsupportedErrorType
-	BugErrorType
-)
-
-func printf(e error, msg string, args ...any) string {
-	format := msg
-
-	if eId, ok := e.(identifiableError); ok {
-		format = fmt.Sprintf("%s: %s", eId.id(), format)
+func eprintf(e error, format string, args ...any) string {
+	switch e.(type) {
+	case unsupportedError:
+		format = "VT12001: unsupported: " + format
+	case bugError:
+		format = "VT13001: [BUG] " + format
 	}
-
-	if eTyp, ok := e.(typedError); ok {
-		switch eTyp.typ() {
-		case UnsupportedErrorType:
-			format = "VT12001: unsupported: " + format
-		case BugErrorType:
-			format = "VT13001: [BUG] " + format
-		}
-	}
-
 	return fmt.Sprintf(format, args...)
 }
 
@@ -80,7 +63,7 @@ func (e *UnionColumnsDoNotMatchError) ErrorCode() vtrpcpb.Code {
 }
 
 func (e *UnionColumnsDoNotMatchError) Error() string {
-	return printf(e, "The used SELECT statements have a different number of columns: %v, %v", e.FirstProj, e.SecondProj)
+	return eprintf(e, "The used SELECT statements have a different number of columns: %v, %v", e.FirstProj, e.SecondProj)
 }
 
 // UnsupportedMultiTablesInUpdateError
@@ -92,15 +75,13 @@ type UnsupportedMultiTablesInUpdateError struct {
 func (e *UnsupportedMultiTablesInUpdateError) Error() string {
 	switch {
 	case e.NotAlias:
-		return printf(e, "unaliased multiple tables in update")
+		return eprintf(e, "unaliased multiple tables in update")
 	default:
-		return printf(e, "multiple (%d) tables in update", e.ExprCount)
+		return eprintf(e, "multiple (%d) tables in update", e.ExprCount)
 	}
 }
 
-func (e *UnsupportedMultiTablesInUpdateError) typ() ErrType {
-	return UnsupportedErrorType
-}
+func (e *UnsupportedMultiTablesInUpdateError) unsupported() {}
 
 // UnsupportedNaturalJoinError
 type UnsupportedNaturalJoinError struct {
@@ -108,24 +89,20 @@ type UnsupportedNaturalJoinError struct {
 }
 
 func (e *UnsupportedNaturalJoinError) Error() string {
-	return printf(e, "%s", e.JoinExpr.Join.ToString())
+	return eprintf(e, "%s", e.JoinExpr.Join.ToString())
 }
 
-func (e *UnsupportedNaturalJoinError) typ() ErrType {
-	return UnsupportedErrorType
-}
+func (e *UnsupportedNaturalJoinError) unsupported() {}
 
 // UnionWithSQLCalcFoundRowsError
 type UnionWithSQLCalcFoundRowsError struct {
 }
 
 func (e *UnionWithSQLCalcFoundRowsError) Error() string {
-	return printf(e, "SQL_CALC_FOUND_ROWS not supported with union")
+	return eprintf(e, "SQL_CALC_FOUND_ROWS not supported with union")
 }
 
-func (e *UnionWithSQLCalcFoundRowsError) typ() ErrType {
-	return UnsupportedErrorType
-}
+func (e *UnionWithSQLCalcFoundRowsError) unsupported() {}
 
 // TableNotUpdatableError
 type TableNotUpdatableError struct {
@@ -133,7 +110,7 @@ type TableNotUpdatableError struct {
 }
 
 func (e *TableNotUpdatableError) Error() string {
-	return printf(e, "The target table %s of the UPDATE is not updatable", e.Table)
+	return eprintf(e, "The target table %s of the UPDATE is not updatable", e.Table)
 }
 
 func (e *TableNotUpdatableError) ErrorState() vterrors.State {
@@ -149,7 +126,7 @@ type SQLCalcFoundRowsUsageError struct {
 }
 
 func (e *SQLCalcFoundRowsUsageError) Error() string {
-	return printf(e, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
+	return eprintf(e, "Incorrect usage/placement of 'SQL_CALC_FOUND_ROWS'")
 }
 
 func (e *SQLCalcFoundRowsUsageError) ErrorCode() vtrpcpb.Code {
@@ -162,7 +139,7 @@ type CantUseOptionHereError struct {
 }
 
 func (e *CantUseOptionHereError) Error() string {
-	return printf(e, "Incorrect usage/placement of '%s'", e.Msg)
+	return eprintf(e, "Incorrect usage/placement of '%s'", e.Msg)
 }
 
 func (e *CantUseOptionHereError) ErrorState() vterrors.State {
@@ -180,7 +157,7 @@ type MissingInVSchemaError struct {
 
 func (e *MissingInVSchemaError) Error() string {
 	tableName, _ := e.Table.Name()
-	return printf(e, "Table information is not provided in vschema for table `%s`", sqlparser.String(tableName))
+	return eprintf(e, "Table information is not provided in vschema for table `%s`", sqlparser.String(tableName))
 }
 
 func (e *MissingInVSchemaError) ErrorCode() vtrpcpb.Code {
@@ -193,7 +170,7 @@ type NotSequenceTableError struct {
 }
 
 func (e *NotSequenceTableError) Error() string {
-	return printf(e, "NEXT used on a non-sequence table `%s`", e.Table)
+	return eprintf(e, "NEXT used on a non-sequence table `%s`", e.Table)
 }
 
 func (e *NotSequenceTableError) ErrorCode() vtrpcpb.Code {
@@ -206,12 +183,10 @@ type NextWithMultipleTablesError struct {
 }
 
 func (e *NextWithMultipleTablesError) Error() string {
-	return printf(e, "Next statement should not contain multiple tables: found %d tables", e.CountTables)
+	return eprintf(e, "Next statement should not contain multiple tables: found %d tables", e.CountTables)
 }
 
-func (e *NextWithMultipleTablesError) typ() ErrType {
-	return BugErrorType
-}
+func (e *NextWithMultipleTablesError) bug() {}
 
 // LockOnlyWithDualError
 type LockOnlyWithDualError struct {
@@ -219,7 +194,7 @@ type LockOnlyWithDualError struct {
 }
 
 func (e *LockOnlyWithDualError) Error() string {
-	return printf(e, "%v allowed only with dual", sqlparser.String(e.Node))
+	return eprintf(e, "%v allowed only with dual", sqlparser.String(e.Node))
 }
 
 func (e *LockOnlyWithDualError) ErrorCode() vtrpcpb.Code {
@@ -232,7 +207,7 @@ type QualifiedOrderInUnionError struct {
 }
 
 func (e *QualifiedOrderInUnionError) Error() string {
-	return printf(e, "Table `%s` from one of the SELECTs cannot be used in global ORDER clause", e.Table)
+	return eprintf(e, "Table `%s` from one of the SELECTs cannot be used in global ORDER clause", e.Table)
 }
 
 // JSONTablesError
@@ -241,12 +216,10 @@ type JSONTablesError struct {
 }
 
 func (e *JSONTablesError) Error() string {
-	return printf(e, "json_table expressions")
+	return eprintf(e, "json_table expressions")
 }
 
-func (e *JSONTablesError) typ() ErrType {
-	return UnsupportedErrorType
-}
+func (e *JSONTablesError) unsupported() {}
 
 // BuggyError is used for checking conditions that should never occur
 type BuggyError struct {
@@ -254,12 +227,10 @@ type BuggyError struct {
 }
 
 func (e *BuggyError) Error() string {
-	return printf(e, e.Msg)
+	return eprintf(e, e.Msg)
 }
 
-func (e *BuggyError) typ() ErrType {
-	return BugErrorType
-}
+func (e *BuggyError) bug() {}
 
 // ColumnNotFoundError
 type ColumnNotFoundError struct {
@@ -267,7 +238,7 @@ type ColumnNotFoundError struct {
 }
 
 func (e *ColumnNotFoundError) Error() string {
-	return printf(e, "symbol %s not found", sqlparser.String(e.Column))
+	return eprintf(e, "symbol %s not found", sqlparser.String(e.Column))
 }
 
 func (e *ColumnNotFoundError) ErrorCode() vtrpcpb.Code {
@@ -284,7 +255,7 @@ type AmbiguousColumnError struct {
 }
 
 func (e *AmbiguousColumnError) Error() string {
-	return printf(e, "Column '%s' in field list is ambiguous", e.Column)
+	return eprintf(e, "Column '%s' in field list is ambiguous", e.Column)
 }
 
 func (e *AmbiguousColumnError) ErrorState() vterrors.State {
