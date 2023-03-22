@@ -976,7 +976,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		err = handler.ComQuery(c, sql, func(qr *sqltypes.Result, more bool) error {
 			// only send meta data, no rows
 			if len(qr.Fields) == 0 {
-				return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
+				return NewSQLErrorFromError(errors.New("unexpected: query ended with fields and no error"))
 			}
 
 			// for COM_FIELD_LIST response, don't send the number of fields first.
@@ -1123,7 +1123,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		queryStart := time.Now()
 		stmtID, cursorType, err := c.parseComStmtExecute(c.PrepareData, data)
-		log.Errorf("EXECUTE: stmtID: %d, cursorType: %d", stmtID, cursorType)
 		c.recycleReadPacket()
 
 		if stmtID != uint32(0) {
@@ -1248,31 +1247,41 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
-		// TODO: how to handle multiple cursors
 		if stmtID != c.cs.stmtID {
-			log.Errorf("stmtID does not match. Client %v, returning error: %v", c.ConnectionID, data)
+			log.Errorf("Requested stmtID does not match stmtID of open cursor. Client %v, returning error: %v", c.ConnectionID, data)
 			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
 				log.Error("Error writing error packet to client: %v", err)
 				return err
 			}
 		}
 
-		// If fetching, we definitely have a cursor
+		// If fetching, we definitely have a cursor open
 		c.StatusFlags |= uint16(ServerCursorExists)
 
-		// Drain rows from next to pending
-		for len(c.cs.pending.Rows) < int(numRows) {
+		// while we are still expecting rows
+		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
+			// drain rows from next to cs.pending
 			newqr, ok := <-c.cs.next
-			// no more rows
+
+			// channel is closed, meaning there are no more rows
 			if !ok {
+				// check if there was an error
 				if err = <- c.cs.done; err != nil {
 					return err
 				}
 				break
 			}
-			c.cs.pending.Rows = append(c.cs.pending.Rows, newqr.Rows...)
 
-			// write out some rows
+			// move rows into buffer
+			if c.cs.pending == nil {
+				c.cs.pending = newqr
+			} else {
+				c.cs.pending.Rows = append(c.cs.pending.Rows, newqr.Rows...)
+			}
+
+			// TODO: why not immediately just write them out as we get them?
+
+			// write out some rows to prevent buffer from getting too large
 			if len(c.cs.pending.Rows) > 128 {
 				pendingRows := c.cs.pending.Rows[128:]
 				c.cs.pending.Rows = c.cs.pending.Rows[:128]
@@ -1302,7 +1311,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 
-		// retain rest of rows; assume numRows is never 0
+		// retain rest of rows
 		if len(origRows) == int(numRows) {
 			c.cs.pending.Rows = nil
 		} else {
@@ -1408,7 +1417,7 @@ func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (s
 	if !fieldSent {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
 		}
 		if werr := c.writeErrorPacketFromError(err); werr != nil {
 			// If we can't even write the error, we're done.
@@ -1436,28 +1445,6 @@ func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (s
 	}
 
 	return remainder, nil
-}
-
-// execFetchStatement is the same as execPrepareStatement except we assume the field has already been sent
-// TODO: change this to actually use cursor into a temporary table instead of this janky solution
-func (c *Conn) execFetchStatement(stmtID, numRows uint32, handler Handler) error {
-	prepare := c.PrepareData[stmtID]
-	// TODO: eventually create/call handler.ComStmtFetch() instead
-	err := handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
-		if len(qr.Rows) > int(numRows) {
-			qr.Rows = qr.Rows[:numRows]
-		}
-		return c.writeBinaryRows(qr)
-	})
-	if err != nil {
-		log.Errorf("Error in the middle of a stream to %s: %v", c, err)
-		return err
-	}
-	if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-		log.Errorf("Error writing result to %s: %v", c, err)
-		return err
-	}
-	return nil
 }
 
 // execPrepareStatement runs the query identified by the statement ID, and writes the expected packets to the connection
@@ -1496,6 +1483,7 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 
 		go func() {
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+				// block until query results are sent or receive signal to quit
 				select {
 				case c.cs.next <- qr:
 					return nil
@@ -1503,19 +1491,21 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 					return err
 				}
 			})
-
+			// pass along error
 			close(c.cs.next)
 			c.cs.done <- err
 		}()
 
-		// TODO: try to merge the logic of this with the block above
 		// Immediately get the very first query result, to write the fields
 		if qr, ok := <- c.cs.next; ok {
-			fieldSent = true
-			if err = c.writeFields(qr); err != nil {
-				c.cs.quit <- err
-				<- c.cs.done
-				c.cs = nil
+			if !fieldSent {
+				fieldSent = true
+				if len(qr.Fields) == 0 {
+					sendFinished = true
+					err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+				} else {
+					err = c.writeFields(qr)
+				}
 			}
 			c.cs.pending = qr
 		} else {
@@ -1527,7 +1517,7 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 	if !fieldSent {
 		// This is just a failsafe. Should never happen.
 		if err == nil || err == io.EOF {
-			err = NewSQLErrorFromError(errors.New("unexpected: query ended without no results and no error"))
+			err = NewSQLErrorFromError(errors.New("unexpected: query ended with no results and no error"))
 		}
 		if werr := c.writeErrorPacketFromError(err); werr != nil {
 			// If we can't even write the error, we're done.
