@@ -934,6 +934,10 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 		buf.WriteString(qre.marginComments.Leading)
 		qre.marginComments.Leading = buf.String()
 	}
+	if qre.tsv.config.QueryTimeoutMethod == "mysql" {
+		timeout := qre.tsv.config.Oltp.QueryTimeout
+		query = addMySQLMaxExecutionTimeComment(query, qre.tsv.config.QueryTimeout)
+	}
 
 	if qre.marginComments.Leading == "" && qre.marginComments.Trailing == "" {
 		return query, query, nil
@@ -945,6 +949,15 @@ func (qre *QueryExecutor) generateFinalSQL(parsedQuery *sqlparser.ParsedQuery, b
 	buf.WriteString(query)
 	buf.WriteString(qre.marginComments.Trailing)
 	return buf.String(), query, nil
+}
+
+func addMySQLMaxExecutionTimeComment(query string, queryTimeoutMs int64) string {
+	fields := strings.SplitN(query, " ", 2)
+	return strings.Join([]string{
+		fields[0],
+		fmt.Sprintf("/*+ MAX_EXECUTION_TIME(%d) */", queryTimeoutMs),
+		fields[1],
+	}, " ")
 }
 
 func rewriteOUTParamError(err error) error {
