@@ -63,10 +63,10 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		VREngine:            vre,
 	}
 	defer func() {
+		vre.Close()
 		dbClient.Close()
 		mysqld.Close()
 		db.Close()
-		vre.Close()
 	}()
 	selectQuery, err := sqlparser.ParseAndBind("select id, source, cell, tablet_types from _vt.vreplication where workflow = %a",
 		sqltypes.StringBindVariable(workflow))
