@@ -3,8 +3,8 @@
 package collations
 
 import (
-	charset "vitess.io/vitess/go/mysql/collations/internal/charset"
-	eightbit "vitess.io/vitess/go/mysql/collations/internal/charset/eightbit"
+	charset "vitess.io/vitess/go/mysql/collations/charset"
+	eightbit "vitess.io/vitess/go/mysql/collations/charset/eightbit"
 	uca "vitess.io/vitess/go/mysql/collations/internal/uca"
 )
 
@@ -3698,8 +3698,8 @@ func (contractor_utf8mb4_zh_0900_as_cs) FindContextual(cp1, cp0 rune) []uint16 {
 
 var contractor_utf8mb4_zh_0900_as_cs_weights = [...]uint16{0xbe27, 0x0020, 0x0002, 0x0000, 0x0119, 0x0021, 0xbe27, 0x0020, 0x0002, 0x0000, 0x0117, 0x0021, 0xbe27, 0x0020, 0x0002, 0x0000, 0x0116, 0x0021, 0xbe27, 0x0020, 0x0002, 0x0000, 0x0118, 0x0021, 0xbf27, 0x001f, 0x0002, 0x0000, 0x0119, 0x0021, 0xbf27, 0x001f, 0x0002, 0x0000, 0x0116, 0x0021, 0xbf27, 0x001f, 0x0002, 0x0000, 0x0118, 0x0021, 0xbf36, 0x001f, 0x0002, 0x0000, 0x0116, 0x0021, 0xbe27, 0x0020, 0x0002, 0x0000, 0x0119, 0x0000, 0xbe27, 0x0020, 0x0002, 0x0000, 0x0117, 0x0000, 0xbe27, 0x0020, 0x0002, 0x0000, 0x0116, 0x0000, 0xbe27, 0x0020, 0x0002, 0x0000, 0x0118, 0x0000, 0xbf27, 0x001f, 0x0002, 0x0000, 0x0119, 0x0000, 0xbf27, 0x001f, 0x0002, 0x0000, 0x0116, 0x0000, 0xbf27, 0x001f, 0x0002, 0x0000, 0x0118, 0x0000, 0xbf36, 0x001f, 0x0002, 0x0000, 0x0116, 0x0000, 0x848c, 0x0020, 0x0002, 0xa41b, 0x0020, 0x0002, 0xf645, 0x0000, 0x0000, 0xb166, 0x0020, 0x0002, 0x9523, 0x0020, 0x0002, 0xf645, 0x0000, 0x0000, 0x2ad7, 0x0020, 0x0002, 0x7bc5, 0x0020, 0x0002, 0xf645, 0x0000, 0x0000}
 
-func init() {
-	register(&Collation_8bit_simple_ci{
+var collationsById = [...]Collation{
+	0x3: &Collation_8bit_simple_ci{
 		id:   0x3,
 		name: "dec8_swedish_ci",
 		simpletables: simpletables{
@@ -3713,8 +3713,8 @@ func init() {
 			ToUnicode:   &tounicode_dec8_swedish_ci,
 			FromUnicode: fromunicode_dec8_swedish_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x4: &Collation_8bit_simple_ci{
 		id:   0x4,
 		name: "cp850_general_ci",
 		simpletables: simpletables{
@@ -3728,8 +3728,8 @@ func init() {
 			ToUnicode:   &tounicode_cp850_general_ci,
 			FromUnicode: fromunicode_cp850_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x5: &Collation_8bit_simple_ci{
 		id:   0x5,
 		name: "latin1_german1_ci",
 		simpletables: simpletables{
@@ -3739,8 +3739,8 @@ func init() {
 			sort:    &sortorder_latin1_german1_ci,
 		},
 		charset: charset.Charset_latin1{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x6: &Collation_8bit_simple_ci{
 		id:   0x6,
 		name: "hp8_english_ci",
 		simpletables: simpletables{
@@ -3754,8 +3754,8 @@ func init() {
 			ToUnicode:   &tounicode_hp8_english_ci,
 			FromUnicode: fromunicode_hp8_english_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x7: &Collation_8bit_simple_ci{
 		id:   0x7,
 		name: "koi8r_general_ci",
 		simpletables: simpletables{
@@ -3769,8 +3769,8 @@ func init() {
 			ToUnicode:   &tounicode_koi8r_general_ci,
 			FromUnicode: fromunicode_koi8r_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x8: &Collation_8bit_simple_ci{
 		id:   0x8,
 		name: "latin1_swedish_ci",
 		simpletables: simpletables{
@@ -3780,8 +3780,8 @@ func init() {
 			sort:    &sortorder_dec8_swedish_ci,
 		},
 		charset: charset.Charset_latin1{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x9: &Collation_8bit_simple_ci{
 		id:   0x9,
 		name: "latin2_general_ci",
 		simpletables: simpletables{
@@ -3795,8 +3795,8 @@ func init() {
 			ToUnicode:   &tounicode_latin2_general_ci,
 			FromUnicode: fromunicode_latin2_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0xa: &Collation_8bit_simple_ci{
 		id:   0xa,
 		name: "swe7_swedish_ci",
 		simpletables: simpletables{
@@ -3810,8 +3810,8 @@ func init() {
 			ToUnicode:   &tounicode_swe7_swedish_ci,
 			FromUnicode: fromunicode_swe7_swedish_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0xb: &Collation_8bit_simple_ci{
 		id:   0xb,
 		name: "ascii_general_ci",
 		simpletables: simpletables{
@@ -3825,20 +3825,20 @@ func init() {
 			ToUnicode:   &tounicode_ascii_general_ci,
 			FromUnicode: fromunicode_ascii_general_ci,
 		},
-	})
-	register(&Collation_multibyte{
+	},
+	0xc: &Collation_multibyte{
 		id:      0xc,
 		name:    "ujis_japanese_ci",
 		sort:    &toupper_ascii_general_ci,
 		charset: charset.Charset_ujis{},
-	})
-	register(&Collation_multibyte{
+	},
+	0xd: &Collation_multibyte{
 		id:      0xd,
 		name:    "sjis_japanese_ci",
 		sort:    &toupper_ascii_general_ci,
 		charset: charset.Charset_sjis{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0xe: &Collation_8bit_simple_ci{
 		id:   0xe,
 		name: "cp1251_bulgarian_ci",
 		simpletables: simpletables{
@@ -3852,8 +3852,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1251_bulgarian_ci,
 			FromUnicode: fromunicode_cp1251_bulgarian_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0xf: &Collation_8bit_simple_ci{
 		id:   0xf,
 		name: "latin1_danish_ci",
 		simpletables: simpletables{
@@ -3863,8 +3863,8 @@ func init() {
 			sort:    &sortorder_latin1_danish_ci,
 		},
 		charset: charset.Charset_latin1{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x10: &Collation_8bit_simple_ci{
 		id:   0x10,
 		name: "hebrew_general_ci",
 		simpletables: simpletables{
@@ -3878,14 +3878,14 @@ func init() {
 			ToUnicode:   &tounicode_hebrew_general_ci,
 			FromUnicode: fromunicode_hebrew_general_ci,
 		},
-	})
-	register(&Collation_multibyte{
+	},
+	0x13: &Collation_multibyte{
 		id:      0x13,
 		name:    "euckr_korean_ci",
 		sort:    &toupper_ascii_general_ci,
 		charset: charset.Charset_euckr{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x14: &Collation_8bit_simple_ci{
 		id:   0x14,
 		name: "latin7_estonian_cs",
 		simpletables: simpletables{
@@ -3899,8 +3899,8 @@ func init() {
 			ToUnicode:   &tounicode_latin7_estonian_cs,
 			FromUnicode: fromunicode_latin7_estonian_cs,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x15: &Collation_8bit_simple_ci{
 		id:   0x15,
 		name: "latin2_hungarian_ci",
 		simpletables: simpletables{
@@ -3914,8 +3914,8 @@ func init() {
 			ToUnicode:   &tounicode_latin2_general_ci,
 			FromUnicode: fromunicode_latin2_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x16: &Collation_8bit_simple_ci{
 		id:   0x16,
 		name: "koi8u_general_ci",
 		simpletables: simpletables{
@@ -3929,8 +3929,8 @@ func init() {
 			ToUnicode:   &tounicode_koi8u_general_ci,
 			FromUnicode: fromunicode_koi8u_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x17: &Collation_8bit_simple_ci{
 		id:   0x17,
 		name: "cp1251_ukrainian_ci",
 		simpletables: simpletables{
@@ -3944,14 +3944,14 @@ func init() {
 			ToUnicode:   &tounicode_cp1251_bulgarian_ci,
 			FromUnicode: fromunicode_cp1251_bulgarian_ci,
 		},
-	})
-	register(&Collation_multibyte{
+	},
+	0x18: &Collation_multibyte{
 		id:      0x18,
 		name:    "gb2312_chinese_ci",
 		sort:    &sortorder_gb2312_chinese_ci,
 		charset: charset.Charset_gb2312{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x19: &Collation_8bit_simple_ci{
 		id:   0x19,
 		name: "greek_general_ci",
 		simpletables: simpletables{
@@ -3965,8 +3965,8 @@ func init() {
 			ToUnicode:   &tounicode_greek_general_ci,
 			FromUnicode: fromunicode_greek_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x1a: &Collation_8bit_simple_ci{
 		id:   0x1a,
 		name: "cp1250_general_ci",
 		simpletables: simpletables{
@@ -3980,8 +3980,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1250_general_ci,
 			FromUnicode: fromunicode_cp1250_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x1b: &Collation_8bit_simple_ci{
 		id:   0x1b,
 		name: "latin2_croatian_ci",
 		simpletables: simpletables{
@@ -3995,8 +3995,8 @@ func init() {
 			ToUnicode:   &tounicode_latin2_general_ci,
 			FromUnicode: fromunicode_latin2_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x1d: &Collation_8bit_simple_ci{
 		id:   0x1d,
 		name: "cp1257_lithuanian_ci",
 		simpletables: simpletables{
@@ -4010,8 +4010,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1257_lithuanian_ci,
 			FromUnicode: fromunicode_cp1257_lithuanian_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x1e: &Collation_8bit_simple_ci{
 		id:   0x1e,
 		name: "latin5_turkish_ci",
 		simpletables: simpletables{
@@ -4025,8 +4025,8 @@ func init() {
 			ToUnicode:   &tounicode_latin5_turkish_ci,
 			FromUnicode: fromunicode_latin5_turkish_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x20: &Collation_8bit_simple_ci{
 		id:   0x20,
 		name: "armscii8_general_ci",
 		simpletables: simpletables{
@@ -4040,20 +4040,20 @@ func init() {
 			ToUnicode:   &tounicode_armscii8_general_ci,
 			FromUnicode: fromunicode_armscii8_general_ci,
 		},
-	})
-	register(&Collation_unicode_general_ci{
+	},
+	0x21: &Collation_unicode_general_ci{
 		id:      0x21,
-		name:    "utf8_general_ci",
+		name:    "utf8mb3_general_ci",
 		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf8mb3{},
-	})
-	register(&Collation_unicode_general_ci{
+	},
+	0x23: &Collation_unicode_general_ci{
 		id:      0x23,
 		name:    "ucs2_general_ci",
 		unicase: unicaseInfo_default,
 		charset: charset.Charset_ucs2{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x24: &Collation_8bit_simple_ci{
 		id:   0x24,
 		name: "cp866_general_ci",
 		simpletables: simpletables{
@@ -4067,8 +4067,8 @@ func init() {
 			ToUnicode:   &tounicode_cp866_general_ci,
 			FromUnicode: fromunicode_cp866_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x25: &Collation_8bit_simple_ci{
 		id:   0x25,
 		name: "keybcs2_general_ci",
 		simpletables: simpletables{
@@ -4082,8 +4082,8 @@ func init() {
 			ToUnicode:   &tounicode_keybcs2_general_ci,
 			FromUnicode: fromunicode_keybcs2_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x26: &Collation_8bit_simple_ci{
 		id:   0x26,
 		name: "macce_general_ci",
 		simpletables: simpletables{
@@ -4097,8 +4097,8 @@ func init() {
 			ToUnicode:   &tounicode_macce_general_ci,
 			FromUnicode: fromunicode_macce_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x27: &Collation_8bit_simple_ci{
 		id:   0x27,
 		name: "macroman_general_ci",
 		simpletables: simpletables{
@@ -4112,8 +4112,8 @@ func init() {
 			ToUnicode:   &tounicode_macroman_general_ci,
 			FromUnicode: fromunicode_macroman_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x28: &Collation_8bit_simple_ci{
 		id:   0x28,
 		name: "cp852_general_ci",
 		simpletables: simpletables{
@@ -4127,8 +4127,8 @@ func init() {
 			ToUnicode:   &tounicode_cp852_general_ci,
 			FromUnicode: fromunicode_cp852_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x29: &Collation_8bit_simple_ci{
 		id:   0x29,
 		name: "latin7_general_ci",
 		simpletables: simpletables{
@@ -4142,8 +4142,8 @@ func init() {
 			ToUnicode:   &tounicode_latin7_estonian_cs,
 			FromUnicode: fromunicode_latin7_estonian_cs,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x2a: &Collation_8bit_simple_ci{
 		id:   0x2a,
 		name: "latin7_general_cs",
 		simpletables: simpletables{
@@ -4157,8 +4157,8 @@ func init() {
 			ToUnicode:   &tounicode_latin7_estonian_cs,
 			FromUnicode: fromunicode_latin7_estonian_cs,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x2b: &Collation_8bit_bin{
 		id:   0x2b,
 		name: "macce_bin",
 		simpletables: simpletables{
@@ -4171,8 +4171,8 @@ func init() {
 			ToUnicode:   &tounicode_macce_general_ci,
 			FromUnicode: fromunicode_macce_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x2c: &Collation_8bit_simple_ci{
 		id:   0x2c,
 		name: "cp1250_croatian_ci",
 		simpletables: simpletables{
@@ -4186,19 +4186,19 @@ func init() {
 			ToUnicode:   &tounicode_cp1250_general_ci,
 			FromUnicode: fromunicode_cp1250_general_ci,
 		},
-	})
-	register(&Collation_unicode_general_ci{
+	},
+	0x2d: &Collation_unicode_general_ci{
 		id:      0x2d,
 		name:    "utf8mb4_general_ci",
 		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf8mb4{},
-	})
-	register(&Collation_unicode_bin{
+	},
+	0x2e: &Collation_unicode_bin{
 		id:      0x2e,
 		name:    "utf8mb4_bin",
 		charset: charset.Charset_utf8mb4{},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x2f: &Collation_8bit_bin{
 		id:   0x2f,
 		name: "latin1_bin",
 		simpletables: simpletables{
@@ -4207,8 +4207,8 @@ func init() {
 			toupper: &toupper_dec8_swedish_ci,
 		},
 		charset: charset.Charset_latin1{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x30: &Collation_8bit_simple_ci{
 		id:   0x30,
 		name: "latin1_general_ci",
 		simpletables: simpletables{
@@ -4218,8 +4218,8 @@ func init() {
 			sort:    &sortorder_latin1_general_ci,
 		},
 		charset: charset.Charset_latin1{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x31: &Collation_8bit_simple_ci{
 		id:   0x31,
 		name: "latin1_general_cs",
 		simpletables: simpletables{
@@ -4229,8 +4229,8 @@ func init() {
 			sort:    &sortorder_latin1_general_cs,
 		},
 		charset: charset.Charset_latin1{},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x32: &Collation_8bit_bin{
 		id:   0x32,
 		name: "cp1251_bin",
 		simpletables: simpletables{
@@ -4243,8 +4243,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1251_bulgarian_ci,
 			FromUnicode: fromunicode_cp1251_bulgarian_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x33: &Collation_8bit_simple_ci{
 		id:   0x33,
 		name: "cp1251_general_ci",
 		simpletables: simpletables{
@@ -4258,8 +4258,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1251_bulgarian_ci,
 			FromUnicode: fromunicode_cp1251_bulgarian_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x34: &Collation_8bit_simple_ci{
 		id:   0x34,
 		name: "cp1251_general_cs",
 		simpletables: simpletables{
@@ -4273,8 +4273,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1251_bulgarian_ci,
 			FromUnicode: fromunicode_cp1251_bulgarian_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x35: &Collation_8bit_bin{
 		id:   0x35,
 		name: "macroman_bin",
 		simpletables: simpletables{
@@ -4287,25 +4287,25 @@ func init() {
 			ToUnicode:   &tounicode_macroman_general_ci,
 			FromUnicode: fromunicode_macroman_general_ci,
 		},
-	})
-	register(&Collation_unicode_general_ci{
+	},
+	0x36: &Collation_unicode_general_ci{
 		id:      0x36,
 		name:    "utf16_general_ci",
 		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf16{},
-	})
-	register(&Collation_unicode_bin{
+	},
+	0x37: &Collation_unicode_bin{
 		id:      0x37,
 		name:    "utf16_bin",
 		charset: charset.Charset_utf16{},
-	})
-	register(&Collation_unicode_general_ci{
+	},
+	0x38: &Collation_unicode_general_ci{
 		id:      0x38,
 		name:    "utf16le_general_ci",
 		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf16le{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x39: &Collation_8bit_simple_ci{
 		id:   0x39,
 		name: "cp1256_general_ci",
 		simpletables: simpletables{
@@ -4319,8 +4319,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1256_general_ci,
 			FromUnicode: fromunicode_cp1256_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x3a: &Collation_8bit_bin{
 		id:   0x3a,
 		name: "cp1257_bin",
 		simpletables: simpletables{
@@ -4333,8 +4333,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1257_lithuanian_ci,
 			FromUnicode: fromunicode_cp1257_lithuanian_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x3b: &Collation_8bit_simple_ci{
 		id:   0x3b,
 		name: "cp1257_general_ci",
 		simpletables: simpletables{
@@ -4348,24 +4348,25 @@ func init() {
 			ToUnicode:   &tounicode_cp1257_lithuanian_ci,
 			FromUnicode: fromunicode_cp1257_lithuanian_ci,
 		},
-	})
-	register(&Collation_unicode_general_ci{
+	},
+	0x3c: &Collation_unicode_general_ci{
 		id:      0x3c,
 		name:    "utf32_general_ci",
 		unicase: unicaseInfo_default,
 		charset: charset.Charset_utf32{},
-	})
-	register(&Collation_unicode_bin{
+	},
+	0x3d: &Collation_unicode_bin{
 		id:      0x3d,
 		name:    "utf32_bin",
 		charset: charset.Charset_utf32{},
-	})
-	register(&Collation_unicode_bin{
+	},
+	0x3e: &Collation_unicode_bin{
 		id:      0x3e,
 		name:    "utf16le_bin",
 		charset: charset.Charset_utf16le{},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x3f: &Collation_binary{},
+	0x40: &Collation_8bit_bin{
 		id:   0x40,
 		name: "armscii8_bin",
 		simpletables: simpletables{
@@ -4378,8 +4379,8 @@ func init() {
 			ToUnicode:   &tounicode_armscii8_general_ci,
 			FromUnicode: fromunicode_armscii8_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x41: &Collation_8bit_bin{
 		id:   0x41,
 		name: "ascii_bin",
 		simpletables: simpletables{
@@ -4392,8 +4393,8 @@ func init() {
 			ToUnicode:   &tounicode_ascii_general_ci,
 			FromUnicode: fromunicode_ascii_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x42: &Collation_8bit_bin{
 		id:   0x42,
 		name: "cp1250_bin",
 		simpletables: simpletables{
@@ -4406,8 +4407,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1250_general_ci,
 			FromUnicode: fromunicode_cp1250_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x43: &Collation_8bit_bin{
 		id:   0x43,
 		name: "cp1256_bin",
 		simpletables: simpletables{
@@ -4420,8 +4421,8 @@ func init() {
 			ToUnicode:   &tounicode_cp1256_general_ci,
 			FromUnicode: fromunicode_cp1256_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x44: &Collation_8bit_bin{
 		id:   0x44,
 		name: "cp866_bin",
 		simpletables: simpletables{
@@ -4434,8 +4435,8 @@ func init() {
 			ToUnicode:   &tounicode_cp866_general_ci,
 			FromUnicode: fromunicode_cp866_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x45: &Collation_8bit_bin{
 		id:   0x45,
 		name: "dec8_bin",
 		simpletables: simpletables{
@@ -4448,8 +4449,8 @@ func init() {
 			ToUnicode:   &tounicode_dec8_swedish_ci,
 			FromUnicode: fromunicode_dec8_swedish_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x46: &Collation_8bit_bin{
 		id:   0x46,
 		name: "greek_bin",
 		simpletables: simpletables{
@@ -4462,8 +4463,8 @@ func init() {
 			ToUnicode:   &tounicode_greek_general_ci,
 			FromUnicode: fromunicode_greek_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x47: &Collation_8bit_bin{
 		id:   0x47,
 		name: "hebrew_bin",
 		simpletables: simpletables{
@@ -4476,8 +4477,8 @@ func init() {
 			ToUnicode:   &tounicode_hebrew_general_ci,
 			FromUnicode: fromunicode_hebrew_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x48: &Collation_8bit_bin{
 		id:   0x48,
 		name: "hp8_bin",
 		simpletables: simpletables{
@@ -4490,8 +4491,8 @@ func init() {
 			ToUnicode:   &tounicode_hp8_english_ci,
 			FromUnicode: fromunicode_hp8_english_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x49: &Collation_8bit_bin{
 		id:   0x49,
 		name: "keybcs2_bin",
 		simpletables: simpletables{
@@ -4504,8 +4505,8 @@ func init() {
 			ToUnicode:   &tounicode_keybcs2_general_ci,
 			FromUnicode: fromunicode_keybcs2_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x4a: &Collation_8bit_bin{
 		id:   0x4a,
 		name: "koi8r_bin",
 		simpletables: simpletables{
@@ -4518,8 +4519,8 @@ func init() {
 			ToUnicode:   &tounicode_koi8r_general_ci,
 			FromUnicode: fromunicode_koi8r_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x4b: &Collation_8bit_bin{
 		id:   0x4b,
 		name: "koi8u_bin",
 		simpletables: simpletables{
@@ -4532,8 +4533,8 @@ func init() {
 			ToUnicode:   &tounicode_koi8u_general_ci,
 			FromUnicode: fromunicode_koi8u_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x4d: &Collation_8bit_bin{
 		id:   0x4d,
 		name: "latin2_bin",
 		simpletables: simpletables{
@@ -4546,8 +4547,8 @@ func init() {
 			ToUnicode:   &tounicode_latin2_general_ci,
 			FromUnicode: fromunicode_latin2_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x4e: &Collation_8bit_bin{
 		id:   0x4e,
 		name: "latin5_bin",
 		simpletables: simpletables{
@@ -4560,8 +4561,8 @@ func init() {
 			ToUnicode:   &tounicode_latin5_turkish_ci,
 			FromUnicode: fromunicode_latin5_turkish_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x4f: &Collation_8bit_bin{
 		id:   0x4f,
 		name: "latin7_bin",
 		simpletables: simpletables{
@@ -4574,8 +4575,8 @@ func init() {
 			ToUnicode:   &tounicode_latin7_estonian_cs,
 			FromUnicode: fromunicode_latin7_estonian_cs,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x50: &Collation_8bit_bin{
 		id:   0x50,
 		name: "cp850_bin",
 		simpletables: simpletables{
@@ -4588,8 +4589,8 @@ func init() {
 			ToUnicode:   &tounicode_cp850_general_ci,
 			FromUnicode: fromunicode_cp850_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x51: &Collation_8bit_bin{
 		id:   0x51,
 		name: "cp852_bin",
 		simpletables: simpletables{
@@ -4602,8 +4603,8 @@ func init() {
 			ToUnicode:   &tounicode_cp852_general_ci,
 			FromUnicode: fromunicode_cp852_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x52: &Collation_8bit_bin{
 		id:   0x52,
 		name: "swe7_bin",
 		simpletables: simpletables{
@@ -4616,38 +4617,38 @@ func init() {
 			ToUnicode:   &tounicode_swe7_swedish_ci,
 			FromUnicode: fromunicode_swe7_swedish_ci,
 		},
-	})
-	register(&Collation_unicode_bin{
+	},
+	0x53: &Collation_unicode_bin{
 		id:      0x53,
-		name:    "utf8_bin",
+		name:    "utf8mb3_bin",
 		charset: charset.Charset_utf8mb3{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x55: &Collation_multibyte{
 		id:      0x55,
 		name:    "euckr_bin",
 		charset: charset.Charset_euckr{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x56: &Collation_multibyte{
 		id:      0x56,
 		name:    "gb2312_bin",
 		charset: charset.Charset_gb2312{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x58: &Collation_multibyte{
 		id:      0x58,
 		name:    "sjis_bin",
 		charset: charset.Charset_sjis{},
-	})
-	register(&Collation_unicode_bin{
+	},
+	0x5a: &Collation_unicode_bin{
 		id:      0x5a,
 		name:    "ucs2_bin",
 		charset: charset.Charset_ucs2{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x5b: &Collation_multibyte{
 		id:      0x5b,
 		name:    "ujis_bin",
 		charset: charset.Charset_ujis{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x5c: &Collation_8bit_simple_ci{
 		id:   0x5c,
 		name: "geostd8_general_ci",
 		simpletables: simpletables{
@@ -4661,8 +4662,8 @@ func init() {
 			ToUnicode:   &tounicode_geostd8_general_ci,
 			FromUnicode: fromunicode_geostd8_general_ci,
 		},
-	})
-	register(&Collation_8bit_bin{
+	},
+	0x5d: &Collation_8bit_bin{
 		id:   0x5d,
 		name: "geostd8_bin",
 		simpletables: simpletables{
@@ -4675,8 +4676,8 @@ func init() {
 			ToUnicode:   &tounicode_geostd8_general_ci,
 			FromUnicode: fromunicode_geostd8_general_ci,
 		},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x5e: &Collation_8bit_simple_ci{
 		id:   0x5e,
 		name: "latin1_spanish_ci",
 		simpletables: simpletables{
@@ -4686,30 +4687,30 @@ func init() {
 			sort:    &sortorder_latin1_spanish_ci,
 		},
 		charset: charset.Charset_latin1{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x5f: &Collation_multibyte{
 		id:      0x5f,
 		name:    "cp932_japanese_ci",
 		sort:    &toupper_ascii_general_ci,
 		charset: charset.Charset_cp932{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x60: &Collation_multibyte{
 		id:      0x60,
 		name:    "cp932_bin",
 		charset: charset.Charset_cp932{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x61: &Collation_multibyte{
 		id:      0x61,
 		name:    "eucjpms_japanese_ci",
 		sort:    &toupper_ascii_general_ci,
 		charset: charset.Charset_eucjpms{},
-	})
-	register(&Collation_multibyte{
+	},
+	0x62: &Collation_multibyte{
 		id:      0x62,
 		name:    "eucjpms_bin",
 		charset: charset.Charset_eucjpms{},
-	})
-	register(&Collation_8bit_simple_ci{
+	},
+	0x63: &Collation_8bit_simple_ci{
 		id:   0x63,
 		name: "cp1250_polish_ci",
 		simpletables: simpletables{
@@ -4723,1344 +4724,921 @@ func init() {
 			ToUnicode:   &tounicode_cp1250_general_ci,
 			FromUnicode: fromunicode_cp1250_general_ci,
 		},
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_unicode_ci",
-		id:           0x65,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_icelandic_ci",
-		id:           0x66,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_icelandic_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_latvian_ci",
-		id:           0x67,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_latvian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_romanian_ci",
-		id:           0x68,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_romanian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_slovenian_ci",
-		id:           0x69,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovenian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_polish_ci",
-		id:           0x6a,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_polish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_estonian_ci",
-		id:           0x6b,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_estonian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_spanish_ci",
-		id:           0x6c,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_swedish_ci",
-		id:           0x6d,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_swedish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_turkish_ci",
-		id:           0x6e,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_turkish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_czech_ci",
-		id:           0x6f,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_czech_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_danish_ci",
-		id:           0x70,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_danish_ci,
-		contract:     contractor_utf16_danish_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_lithuanian_ci",
-		id:           0x71,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_lithuanian_ci,
-		contract:     contractor_utf16_lithuanian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_slovak_ci",
-		id:           0x72,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovak_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_spanish2_ci",
-		id:           0x73,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		contract:     contractor_utf16_spanish2_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_roman_ci",
-		id:           0x74,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_roman_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_persian_ci",
-		id:           0x75,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_persian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_esperanto_ci",
-		id:           0x76,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_esperanto_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_hungarian_ci",
-		id:           0x77,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_hungarian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_sinhala_ci",
-		id:           0x78,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_sinhala_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_german2_ci",
-		id:           0x79,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_german2_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_croatian_ci",
-		id:           0x7a,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_croatian_ci,
-		contract:     contractor_utf16_croatian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_unicode_520_ci",
-		id:           0x7b,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca520,
-		maxCodepoint: 0x10FFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf16_vietnamese_ci",
-		id:           0x7c,
-		charset:      charset.Charset_utf16{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_vietnamese_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_unicode_ci",
-		id:           0x80,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_icelandic_ci",
-		id:           0x81,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_icelandic_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_latvian_ci",
-		id:           0x82,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_latvian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_romanian_ci",
-		id:           0x83,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_romanian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_slovenian_ci",
-		id:           0x84,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovenian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_polish_ci",
-		id:           0x85,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_polish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_estonian_ci",
-		id:           0x86,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_estonian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_spanish_ci",
-		id:           0x87,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_swedish_ci",
-		id:           0x88,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_swedish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_turkish_ci",
-		id:           0x89,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_turkish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_czech_ci",
-		id:           0x8a,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_czech_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_danish_ci",
-		id:           0x8b,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_danish_ci,
-		contract:     contractor_utf16_danish_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_lithuanian_ci",
-		id:           0x8c,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_lithuanian_ci,
-		contract:     contractor_utf16_lithuanian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_slovak_ci",
-		id:           0x8d,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovak_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_spanish2_ci",
-		id:           0x8e,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		contract:     contractor_utf16_spanish2_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_roman_ci",
-		id:           0x8f,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_roman_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_persian_ci",
-		id:           0x90,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_persian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_esperanto_ci",
-		id:           0x91,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_esperanto_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_hungarian_ci",
-		id:           0x92,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_hungarian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_sinhala_ci",
-		id:           0x93,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_sinhala_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_german2_ci",
-		id:           0x94,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_german2_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_croatian_ci",
-		id:           0x95,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_croatian_ci,
-		contract:     contractor_utf16_croatian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_unicode_520_ci",
-		id:           0x96,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca520,
-		maxCodepoint: 0x10FFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "ucs2_vietnamese_ci",
-		id:           0x97,
-		charset:      charset.Charset_ucs2{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_vietnamese_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_unicode_ci",
-		id:           0xa0,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_icelandic_ci",
-		id:           0xa1,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_icelandic_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_latvian_ci",
-		id:           0xa2,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_latvian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_romanian_ci",
-		id:           0xa3,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_romanian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_slovenian_ci",
-		id:           0xa4,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovenian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_polish_ci",
-		id:           0xa5,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_polish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_estonian_ci",
-		id:           0xa6,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_estonian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_spanish_ci",
-		id:           0xa7,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_swedish_ci",
-		id:           0xa8,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_swedish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_turkish_ci",
-		id:           0xa9,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_turkish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_czech_ci",
-		id:           0xaa,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_czech_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_danish_ci",
-		id:           0xab,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_danish_ci,
-		contract:     contractor_utf16_danish_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_lithuanian_ci",
-		id:           0xac,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_lithuanian_ci,
-		contract:     contractor_utf16_lithuanian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_slovak_ci",
-		id:           0xad,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovak_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_spanish2_ci",
-		id:           0xae,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		contract:     contractor_utf16_spanish2_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_roman_ci",
-		id:           0xaf,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_roman_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_persian_ci",
-		id:           0xb0,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_persian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_esperanto_ci",
-		id:           0xb1,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_esperanto_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_hungarian_ci",
-		id:           0xb2,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_hungarian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_sinhala_ci",
-		id:           0xb3,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_sinhala_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_german2_ci",
-		id:           0xb4,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_german2_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_croatian_ci",
-		id:           0xb5,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_croatian_ci,
-		contract:     contractor_utf16_croatian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_unicode_520_ci",
-		id:           0xb6,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca520,
-		maxCodepoint: 0x10FFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf32_vietnamese_ci",
-		id:           0xb7,
-		charset:      charset.Charset_utf32{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_vietnamese_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_unicode_ci",
-		id:           0xc0,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_icelandic_ci",
-		id:           0xc1,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_icelandic_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_latvian_ci",
-		id:           0xc2,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_latvian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_romanian_ci",
-		id:           0xc3,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_romanian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_slovenian_ci",
-		id:           0xc4,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovenian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_polish_ci",
-		id:           0xc5,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_polish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_estonian_ci",
-		id:           0xc6,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_estonian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_spanish_ci",
-		id:           0xc7,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_swedish_ci",
-		id:           0xc8,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_swedish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_turkish_ci",
-		id:           0xc9,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_turkish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_czech_ci",
-		id:           0xca,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_czech_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_danish_ci",
-		id:           0xcb,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_danish_ci,
-		contract:     contractor_utf16_danish_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_lithuanian_ci",
-		id:           0xcc,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_lithuanian_ci,
-		contract:     contractor_utf16_lithuanian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_slovak_ci",
-		id:           0xcd,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovak_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_spanish2_ci",
-		id:           0xce,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		contract:     contractor_utf16_spanish2_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_roman_ci",
-		id:           0xcf,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_roman_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_persian_ci",
-		id:           0xd0,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_persian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_esperanto_ci",
-		id:           0xd1,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_esperanto_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_hungarian_ci",
-		id:           0xd2,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_hungarian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_sinhala_ci",
-		id:           0xd3,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_sinhala_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_german2_ci",
-		id:           0xd4,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_german2_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_croatian_ci",
-		id:           0xd5,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_croatian_ci,
-		contract:     contractor_utf16_croatian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_unicode_520_ci",
-		id:           0xd6,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca520,
-		maxCodepoint: 0x10FFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8_vietnamese_ci",
-		id:           0xd7,
-		charset:      charset.Charset_utf8mb3{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_vietnamese_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_unicode_ci",
-		id:           0xe0,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_icelandic_ci",
-		id:           0xe1,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_icelandic_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_latvian_ci",
-		id:           0xe2,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_latvian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_romanian_ci",
-		id:           0xe3,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_romanian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_slovenian_ci",
-		id:           0xe4,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovenian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_polish_ci",
-		id:           0xe5,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_polish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_estonian_ci",
-		id:           0xe6,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_estonian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_spanish_ci",
-		id:           0xe7,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_swedish_ci",
-		id:           0xe8,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_swedish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_turkish_ci",
-		id:           0xe9,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_turkish_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_czech_ci",
-		id:           0xea,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_czech_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_danish_ci",
-		id:           0xeb,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_danish_ci,
-		contract:     contractor_utf16_danish_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_lithuanian_ci",
-		id:           0xec,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_lithuanian_ci,
-		contract:     contractor_utf16_lithuanian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_slovak_ci",
-		id:           0xed,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_slovak_ci,
-		contract:     contractor_utf16_czech_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_spanish2_ci",
-		id:           0xee,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_spanish_ci,
-		contract:     contractor_utf16_spanish2_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_roman_ci",
-		id:           0xef,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_roman_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_persian_ci",
-		id:           0xf0,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_persian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_esperanto_ci",
-		id:           0xf1,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_esperanto_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_hungarian_ci",
-		id:           0xf2,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_hungarian_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_sinhala_ci",
-		id:           0xf3,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_sinhala_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_german2_ci",
-		id:           0xf4,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_german2_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_croatian_ci",
-		id:           0xf5,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_croatian_ci,
-		contract:     contractor_utf16_croatian_ci{},
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_unicode_520_ci",
-		id:           0xf6,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca520,
-		maxCodepoint: 0x10FFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "utf8mb4_vietnamese_ci",
-		id:           0xf7,
-		charset:      charset.Charset_utf8mb4{},
-		weights:      weightTable_uca400,
-		tailoring:    weightTailoring_utf16_vietnamese_ci,
-		maxCodepoint: 0xFFFF,
-	})
-	register(&Collation_uca_legacy{
-		name:         "gb18030_unicode_520_ci",
-		id:           0xfa,
-		charset:      charset.Charset_gb18030{},
-		weights:      weightTable_uca520,
-		maxCodepoint: 0x10FFFF,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_0900_ai_ci",
-		id:               0xff,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_de_pb_0900_ai_ci",
-		id:               0x100,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_de_pb_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_is_0900_ai_ci",
-		id:               0x101,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_is_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_lv_0900_ai_ci",
-		id:               0x102,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_lv_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_ro_0900_ai_ci",
-		id:               0x103,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_ro_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_sl_0900_ai_ci",
-		id:               0x104,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_sl_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_pl_0900_ai_ci",
-		id:               0x105,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_pl_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_et_0900_ai_ci",
-		id:               0x106,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_et_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_es_0900_ai_ci",
-		id:               0x107,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_es_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_sv_0900_ai_ci",
-		id:               0x108,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_sv_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_tr_0900_ai_ci",
-		id:               0x109,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_tr_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_cs_0900_ai_ci",
-		id:               0x10a,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_cs_0900_ai_ci,
-		contract:         contractor_utf8mb4_cs_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_da_0900_ai_ci",
-		id:               0x10b,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_da_0900_ai_ci,
-		contract:         contractor_utf8mb4_da_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_lt_0900_ai_ci",
-		id:               0x10c,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_lt_0900_ai_ci,
-		contract:         contractor_utf8mb4_lt_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_sk_0900_ai_ci",
-		id:               0x10d,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_sk_0900_ai_ci,
-		contract:         contractor_utf8mb4_cs_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_es_trad_0900_ai_ci",
-		id:               0x10e,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_es_0900_ai_ci,
-		contract:         contractor_utf8mb4_es_trad_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_la_0900_ai_ci",
-		id:               0x10f,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_la_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_eo_0900_ai_ci",
-		id:               0x111,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_eo_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_hu_0900_ai_ci",
-		id:               0x112,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_hu_0900_ai_ci,
-		contract:         contractor_utf8mb4_hu_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_hr_0900_ai_ci",
-		id:               0x113,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_hr_0900_ai_ci,
-		contract:         contractor_utf8mb4_hr_0900_ai_ci{},
-		reorder:          reorder_utf8mb4_hr_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_vi_0900_ai_ci",
-		id:               0x115,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_vi_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_0900_as_cs",
-		id:               0x116,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_de_pb_0900_as_cs",
-		id:               0x117,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_de_pb_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_is_0900_as_cs",
-		id:               0x118,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_is_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_lv_0900_as_cs",
-		id:               0x119,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_lv_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_ro_0900_as_cs",
-		id:               0x11a,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_ro_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_sl_0900_as_cs",
-		id:               0x11b,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_sl_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_pl_0900_as_cs",
-		id:               0x11c,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_pl_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_et_0900_as_cs",
-		id:               0x11d,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_et_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_es_0900_as_cs",
-		id:               0x11e,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_es_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_sv_0900_as_cs",
-		id:               0x11f,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_sv_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_tr_0900_as_cs",
-		id:               0x120,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_tr_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_cs_0900_as_cs",
-		id:               0x121,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_cs_0900_ai_ci,
-		contract:         contractor_utf8mb4_cs_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_da_0900_as_cs",
-		id:               0x122,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_da_0900_as_cs,
-		contract:         contractor_utf8mb4_da_0900_as_cs{},
-		upperCaseFirst:   true,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_lt_0900_as_cs",
-		id:               0x123,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_lt_0900_ai_ci,
-		contract:         contractor_utf8mb4_lt_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_sk_0900_as_cs",
-		id:               0x124,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_sk_0900_ai_ci,
-		contract:         contractor_utf8mb4_cs_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_es_trad_0900_as_cs",
-		id:               0x125,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_es_0900_ai_ci,
-		contract:         contractor_utf8mb4_es_trad_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_la_0900_as_cs",
-		id:               0x126,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_la_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_eo_0900_as_cs",
-		id:               0x128,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_eo_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_hu_0900_as_cs",
-		id:               0x129,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_hu_0900_ai_ci,
-		contract:         contractor_utf8mb4_hu_0900_ai_ci{},
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_hr_0900_as_cs",
-		id:               0x12a,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_hr_0900_ai_ci,
-		contract:         contractor_utf8mb4_hr_0900_ai_ci{},
-		reorder:          reorder_utf8mb4_hr_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_vi_0900_as_cs",
-		id:               0x12c,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		tailoring:        weightTailoring_utf8mb4_vi_0900_as_cs,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_ja_0900_as_cs",
-		id:               0x12f,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900_ja,
-		contract:         contractor_utf8mb4_ja_0900_as_cs{},
-		reorder:          reorder_utf8mb4_ja_0900_as_cs,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_ja_0900_as_cs_ks",
-		id:               0x130,
-		levelsForCompare: 4,
-		weights:          weightTable_uca900_ja,
-		contract:         contractor_utf8mb4_ja_0900_as_cs{},
-		reorder:          reorder_utf8mb4_ja_0900_as_cs,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_0900_as_ci",
-		id:               0x131,
-		levelsForCompare: 2,
-		weights:          weightTable_uca900,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_ru_0900_ai_ci",
-		id:               0x132,
-		levelsForCompare: 1,
-		weights:          weightTable_uca900,
-		reorder:          reorder_utf8mb4_ru_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_ru_0900_as_cs",
-		id:               0x133,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900,
-		reorder:          reorder_utf8mb4_ru_0900_ai_ci,
-	})
-	register(&Collation_utf8mb4_uca_0900{
-		name:             "utf8mb4_zh_0900_as_cs",
-		id:               0x134,
-		levelsForCompare: 3,
-		weights:          weightTable_uca900_zh,
-		contract:         contractor_utf8mb4_zh_0900_as_cs{},
-	})
+	},
+	0x65: &Collation_uca_legacy{
+		name: "utf16_unicode_ci",
+		id:   0x65,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, nil, nil, 0xffff),
+	},
+	0x66: &Collation_uca_legacy{
+		name: "utf16_icelandic_ci",
+		id:   0x66,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_icelandic_ci, nil, 0xffff),
+	},
+	0x67: &Collation_uca_legacy{
+		name: "utf16_latvian_ci",
+		id:   0x67,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_latvian_ci, nil, 0xffff),
+	},
+	0x68: &Collation_uca_legacy{
+		name: "utf16_romanian_ci",
+		id:   0x68,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_romanian_ci, nil, 0xffff),
+	},
+	0x69: &Collation_uca_legacy{
+		name: "utf16_slovenian_ci",
+		id:   0x69,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_slovenian_ci, nil, 0xffff),
+	},
+	0x6a: &Collation_uca_legacy{
+		name: "utf16_polish_ci",
+		id:   0x6a,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_polish_ci, nil, 0xffff),
+	},
+	0x6b: &Collation_uca_legacy{
+		name: "utf16_estonian_ci",
+		id:   0x6b,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_estonian_ci, nil, 0xffff),
+	},
+	0x6c: &Collation_uca_legacy{
+		name: "utf16_spanish_ci",
+		id:   0x6c,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, nil, 0xffff),
+	},
+	0x6d: &Collation_uca_legacy{
+		name: "utf16_swedish_ci",
+		id:   0x6d,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_swedish_ci, nil, 0xffff),
+	},
+	0x6e: &Collation_uca_legacy{
+		name: "utf16_turkish_ci",
+		id:   0x6e,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_turkish_ci, nil, 0xffff),
+	},
+	0x6f: &Collation_uca_legacy{
+		name: "utf16_czech_ci",
+		id:   0x6f,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_czech_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0x70: &Collation_uca_legacy{
+		name: "utf16_danish_ci",
+		id:   0x70,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_danish_ci, contractor_utf16_danish_ci{}, 0xffff),
+	},
+	0x71: &Collation_uca_legacy{
+		name: "utf16_lithuanian_ci",
+		id:   0x71,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_lithuanian_ci, contractor_utf16_lithuanian_ci{}, 0xffff),
+	},
+	0x72: &Collation_uca_legacy{
+		name: "utf16_slovak_ci",
+		id:   0x72,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_slovak_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0x73: &Collation_uca_legacy{
+		name: "utf16_spanish2_ci",
+		id:   0x73,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, contractor_utf16_spanish2_ci{}, 0xffff),
+	},
+	0x74: &Collation_uca_legacy{
+		name: "utf16_roman_ci",
+		id:   0x74,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_roman_ci, nil, 0xffff),
+	},
+	0x75: &Collation_uca_legacy{
+		name: "utf16_persian_ci",
+		id:   0x75,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_persian_ci, nil, 0xffff),
+	},
+	0x76: &Collation_uca_legacy{
+		name: "utf16_esperanto_ci",
+		id:   0x76,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_esperanto_ci, nil, 0xffff),
+	},
+	0x77: &Collation_uca_legacy{
+		name: "utf16_hungarian_ci",
+		id:   0x77,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_hungarian_ci, nil, 0xffff),
+	},
+	0x78: &Collation_uca_legacy{
+		name: "utf16_sinhala_ci",
+		id:   0x78,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_sinhala_ci, nil, 0xffff),
+	},
+	0x79: &Collation_uca_legacy{
+		name: "utf16_german2_ci",
+		id:   0x79,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_german2_ci, nil, 0xffff),
+	},
+	0x7a: &Collation_uca_legacy{
+		name: "utf16_croatian_ci",
+		id:   0x7a,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_croatian_ci, contractor_utf16_croatian_ci{}, 0xffff),
+	},
+	0x7b: &Collation_uca_legacy{
+		name: "utf16_unicode_520_ci",
+		id:   0x7b,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca520, nil, nil, 0x10ffff),
+	},
+	0x7c: &Collation_uca_legacy{
+		name: "utf16_vietnamese_ci",
+		id:   0x7c,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf16{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
+	},
+	0x80: &Collation_uca_legacy{
+		name: "ucs2_unicode_ci",
+		id:   0x80,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, nil, nil, 0xffff),
+	},
+	0x81: &Collation_uca_legacy{
+		name: "ucs2_icelandic_ci",
+		id:   0x81,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_icelandic_ci, nil, 0xffff),
+	},
+	0x82: &Collation_uca_legacy{
+		name: "ucs2_latvian_ci",
+		id:   0x82,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_latvian_ci, nil, 0xffff),
+	},
+	0x83: &Collation_uca_legacy{
+		name: "ucs2_romanian_ci",
+		id:   0x83,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_romanian_ci, nil, 0xffff),
+	},
+	0x84: &Collation_uca_legacy{
+		name: "ucs2_slovenian_ci",
+		id:   0x84,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_slovenian_ci, nil, 0xffff),
+	},
+	0x85: &Collation_uca_legacy{
+		name: "ucs2_polish_ci",
+		id:   0x85,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_polish_ci, nil, 0xffff),
+	},
+	0x86: &Collation_uca_legacy{
+		name: "ucs2_estonian_ci",
+		id:   0x86,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_estonian_ci, nil, 0xffff),
+	},
+	0x87: &Collation_uca_legacy{
+		name: "ucs2_spanish_ci",
+		id:   0x87,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, nil, 0xffff),
+	},
+	0x88: &Collation_uca_legacy{
+		name: "ucs2_swedish_ci",
+		id:   0x88,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_swedish_ci, nil, 0xffff),
+	},
+	0x89: &Collation_uca_legacy{
+		name: "ucs2_turkish_ci",
+		id:   0x89,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_turkish_ci, nil, 0xffff),
+	},
+	0x8a: &Collation_uca_legacy{
+		name: "ucs2_czech_ci",
+		id:   0x8a,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_czech_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0x8b: &Collation_uca_legacy{
+		name: "ucs2_danish_ci",
+		id:   0x8b,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_danish_ci, contractor_utf16_danish_ci{}, 0xffff),
+	},
+	0x8c: &Collation_uca_legacy{
+		name: "ucs2_lithuanian_ci",
+		id:   0x8c,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_lithuanian_ci, contractor_utf16_lithuanian_ci{}, 0xffff),
+	},
+	0x8d: &Collation_uca_legacy{
+		name: "ucs2_slovak_ci",
+		id:   0x8d,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_slovak_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0x8e: &Collation_uca_legacy{
+		name: "ucs2_spanish2_ci",
+		id:   0x8e,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, contractor_utf16_spanish2_ci{}, 0xffff),
+	},
+	0x8f: &Collation_uca_legacy{
+		name: "ucs2_roman_ci",
+		id:   0x8f,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_roman_ci, nil, 0xffff),
+	},
+	0x90: &Collation_uca_legacy{
+		name: "ucs2_persian_ci",
+		id:   0x90,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_persian_ci, nil, 0xffff),
+	},
+	0x91: &Collation_uca_legacy{
+		name: "ucs2_esperanto_ci",
+		id:   0x91,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_esperanto_ci, nil, 0xffff),
+	},
+	0x92: &Collation_uca_legacy{
+		name: "ucs2_hungarian_ci",
+		id:   0x92,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_hungarian_ci, nil, 0xffff),
+	},
+	0x93: &Collation_uca_legacy{
+		name: "ucs2_sinhala_ci",
+		id:   0x93,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_sinhala_ci, nil, 0xffff),
+	},
+	0x94: &Collation_uca_legacy{
+		name: "ucs2_german2_ci",
+		id:   0x94,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_german2_ci, nil, 0xffff),
+	},
+	0x95: &Collation_uca_legacy{
+		name: "ucs2_croatian_ci",
+		id:   0x95,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_croatian_ci, contractor_utf16_croatian_ci{}, 0xffff),
+	},
+	0x96: &Collation_uca_legacy{
+		name: "ucs2_unicode_520_ci",
+		id:   0x96,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca520, nil, nil, 0x10ffff),
+	},
+	0x97: &Collation_uca_legacy{
+		name: "ucs2_vietnamese_ci",
+		id:   0x97,
+		uca:  uca.NewCollationLegacy(charset.Charset_ucs2{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
+	},
+	0xa0: &Collation_uca_legacy{
+		name: "utf32_unicode_ci",
+		id:   0xa0,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, nil, nil, 0xffff),
+	},
+	0xa1: &Collation_uca_legacy{
+		name: "utf32_icelandic_ci",
+		id:   0xa1,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_icelandic_ci, nil, 0xffff),
+	},
+	0xa2: &Collation_uca_legacy{
+		name: "utf32_latvian_ci",
+		id:   0xa2,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_latvian_ci, nil, 0xffff),
+	},
+	0xa3: &Collation_uca_legacy{
+		name: "utf32_romanian_ci",
+		id:   0xa3,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_romanian_ci, nil, 0xffff),
+	},
+	0xa4: &Collation_uca_legacy{
+		name: "utf32_slovenian_ci",
+		id:   0xa4,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_slovenian_ci, nil, 0xffff),
+	},
+	0xa5: &Collation_uca_legacy{
+		name: "utf32_polish_ci",
+		id:   0xa5,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_polish_ci, nil, 0xffff),
+	},
+	0xa6: &Collation_uca_legacy{
+		name: "utf32_estonian_ci",
+		id:   0xa6,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_estonian_ci, nil, 0xffff),
+	},
+	0xa7: &Collation_uca_legacy{
+		name: "utf32_spanish_ci",
+		id:   0xa7,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, nil, 0xffff),
+	},
+	0xa8: &Collation_uca_legacy{
+		name: "utf32_swedish_ci",
+		id:   0xa8,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_swedish_ci, nil, 0xffff),
+	},
+	0xa9: &Collation_uca_legacy{
+		name: "utf32_turkish_ci",
+		id:   0xa9,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_turkish_ci, nil, 0xffff),
+	},
+	0xaa: &Collation_uca_legacy{
+		name: "utf32_czech_ci",
+		id:   0xaa,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_czech_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0xab: &Collation_uca_legacy{
+		name: "utf32_danish_ci",
+		id:   0xab,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_danish_ci, contractor_utf16_danish_ci{}, 0xffff),
+	},
+	0xac: &Collation_uca_legacy{
+		name: "utf32_lithuanian_ci",
+		id:   0xac,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_lithuanian_ci, contractor_utf16_lithuanian_ci{}, 0xffff),
+	},
+	0xad: &Collation_uca_legacy{
+		name: "utf32_slovak_ci",
+		id:   0xad,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_slovak_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0xae: &Collation_uca_legacy{
+		name: "utf32_spanish2_ci",
+		id:   0xae,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, contractor_utf16_spanish2_ci{}, 0xffff),
+	},
+	0xaf: &Collation_uca_legacy{
+		name: "utf32_roman_ci",
+		id:   0xaf,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_roman_ci, nil, 0xffff),
+	},
+	0xb0: &Collation_uca_legacy{
+		name: "utf32_persian_ci",
+		id:   0xb0,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_persian_ci, nil, 0xffff),
+	},
+	0xb1: &Collation_uca_legacy{
+		name: "utf32_esperanto_ci",
+		id:   0xb1,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_esperanto_ci, nil, 0xffff),
+	},
+	0xb2: &Collation_uca_legacy{
+		name: "utf32_hungarian_ci",
+		id:   0xb2,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_hungarian_ci, nil, 0xffff),
+	},
+	0xb3: &Collation_uca_legacy{
+		name: "utf32_sinhala_ci",
+		id:   0xb3,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_sinhala_ci, nil, 0xffff),
+	},
+	0xb4: &Collation_uca_legacy{
+		name: "utf32_german2_ci",
+		id:   0xb4,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_german2_ci, nil, 0xffff),
+	},
+	0xb5: &Collation_uca_legacy{
+		name: "utf32_croatian_ci",
+		id:   0xb5,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_croatian_ci, contractor_utf16_croatian_ci{}, 0xffff),
+	},
+	0xb6: &Collation_uca_legacy{
+		name: "utf32_unicode_520_ci",
+		id:   0xb6,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca520, nil, nil, 0x10ffff),
+	},
+	0xb7: &Collation_uca_legacy{
+		name: "utf32_vietnamese_ci",
+		id:   0xb7,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf32{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
+	},
+	0xc0: &Collation_uca_legacy{
+		name: "utf8mb3_unicode_ci",
+		id:   0xc0,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, nil, nil, 0xffff),
+	},
+	0xc1: &Collation_uca_legacy{
+		name: "utf8mb3_icelandic_ci",
+		id:   0xc1,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_icelandic_ci, nil, 0xffff),
+	},
+	0xc2: &Collation_uca_legacy{
+		name: "utf8mb3_latvian_ci",
+		id:   0xc2,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_latvian_ci, nil, 0xffff),
+	},
+	0xc3: &Collation_uca_legacy{
+		name: "utf8mb3_romanian_ci",
+		id:   0xc3,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_romanian_ci, nil, 0xffff),
+	},
+	0xc4: &Collation_uca_legacy{
+		name: "utf8mb3_slovenian_ci",
+		id:   0xc4,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_slovenian_ci, nil, 0xffff),
+	},
+	0xc5: &Collation_uca_legacy{
+		name: "utf8mb3_polish_ci",
+		id:   0xc5,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_polish_ci, nil, 0xffff),
+	},
+	0xc6: &Collation_uca_legacy{
+		name: "utf8mb3_estonian_ci",
+		id:   0xc6,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_estonian_ci, nil, 0xffff),
+	},
+	0xc7: &Collation_uca_legacy{
+		name: "utf8mb3_spanish_ci",
+		id:   0xc7,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, nil, 0xffff),
+	},
+	0xc8: &Collation_uca_legacy{
+		name: "utf8mb3_swedish_ci",
+		id:   0xc8,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_swedish_ci, nil, 0xffff),
+	},
+	0xc9: &Collation_uca_legacy{
+		name: "utf8mb3_turkish_ci",
+		id:   0xc9,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_turkish_ci, nil, 0xffff),
+	},
+	0xca: &Collation_uca_legacy{
+		name: "utf8mb3_czech_ci",
+		id:   0xca,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_czech_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0xcb: &Collation_uca_legacy{
+		name: "utf8mb3_danish_ci",
+		id:   0xcb,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_danish_ci, contractor_utf16_danish_ci{}, 0xffff),
+	},
+	0xcc: &Collation_uca_legacy{
+		name: "utf8mb3_lithuanian_ci",
+		id:   0xcc,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_lithuanian_ci, contractor_utf16_lithuanian_ci{}, 0xffff),
+	},
+	0xcd: &Collation_uca_legacy{
+		name: "utf8mb3_slovak_ci",
+		id:   0xcd,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_slovak_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0xce: &Collation_uca_legacy{
+		name: "utf8mb3_spanish2_ci",
+		id:   0xce,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, contractor_utf16_spanish2_ci{}, 0xffff),
+	},
+	0xcf: &Collation_uca_legacy{
+		name: "utf8mb3_roman_ci",
+		id:   0xcf,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_roman_ci, nil, 0xffff),
+	},
+	0xd0: &Collation_uca_legacy{
+		name: "utf8mb3_persian_ci",
+		id:   0xd0,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_persian_ci, nil, 0xffff),
+	},
+	0xd1: &Collation_uca_legacy{
+		name: "utf8mb3_esperanto_ci",
+		id:   0xd1,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_esperanto_ci, nil, 0xffff),
+	},
+	0xd2: &Collation_uca_legacy{
+		name: "utf8mb3_hungarian_ci",
+		id:   0xd2,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_hungarian_ci, nil, 0xffff),
+	},
+	0xd3: &Collation_uca_legacy{
+		name: "utf8mb3_sinhala_ci",
+		id:   0xd3,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_sinhala_ci, nil, 0xffff),
+	},
+	0xd4: &Collation_uca_legacy{
+		name: "utf8mb3_german2_ci",
+		id:   0xd4,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_german2_ci, nil, 0xffff),
+	},
+	0xd5: &Collation_uca_legacy{
+		name: "utf8mb3_croatian_ci",
+		id:   0xd5,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_croatian_ci, contractor_utf16_croatian_ci{}, 0xffff),
+	},
+	0xd6: &Collation_uca_legacy{
+		name: "utf8mb3_unicode_520_ci",
+		id:   0xd6,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca520, nil, nil, 0x10ffff),
+	},
+	0xd7: &Collation_uca_legacy{
+		name: "utf8mb3_vietnamese_ci",
+		id:   0xd7,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb3{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
+	},
+	0xe0: &Collation_uca_legacy{
+		name: "utf8mb4_unicode_ci",
+		id:   0xe0,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, nil, nil, 0xffff),
+	},
+	0xe1: &Collation_uca_legacy{
+		name: "utf8mb4_icelandic_ci",
+		id:   0xe1,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_icelandic_ci, nil, 0xffff),
+	},
+	0xe2: &Collation_uca_legacy{
+		name: "utf8mb4_latvian_ci",
+		id:   0xe2,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_latvian_ci, nil, 0xffff),
+	},
+	0xe3: &Collation_uca_legacy{
+		name: "utf8mb4_romanian_ci",
+		id:   0xe3,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_romanian_ci, nil, 0xffff),
+	},
+	0xe4: &Collation_uca_legacy{
+		name: "utf8mb4_slovenian_ci",
+		id:   0xe4,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_slovenian_ci, nil, 0xffff),
+	},
+	0xe5: &Collation_uca_legacy{
+		name: "utf8mb4_polish_ci",
+		id:   0xe5,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_polish_ci, nil, 0xffff),
+	},
+	0xe6: &Collation_uca_legacy{
+		name: "utf8mb4_estonian_ci",
+		id:   0xe6,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_estonian_ci, nil, 0xffff),
+	},
+	0xe7: &Collation_uca_legacy{
+		name: "utf8mb4_spanish_ci",
+		id:   0xe7,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, nil, 0xffff),
+	},
+	0xe8: &Collation_uca_legacy{
+		name: "utf8mb4_swedish_ci",
+		id:   0xe8,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_swedish_ci, nil, 0xffff),
+	},
+	0xe9: &Collation_uca_legacy{
+		name: "utf8mb4_turkish_ci",
+		id:   0xe9,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_turkish_ci, nil, 0xffff),
+	},
+	0xea: &Collation_uca_legacy{
+		name: "utf8mb4_czech_ci",
+		id:   0xea,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_czech_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0xeb: &Collation_uca_legacy{
+		name: "utf8mb4_danish_ci",
+		id:   0xeb,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_danish_ci, contractor_utf16_danish_ci{}, 0xffff),
+	},
+	0xec: &Collation_uca_legacy{
+		name: "utf8mb4_lithuanian_ci",
+		id:   0xec,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_lithuanian_ci, contractor_utf16_lithuanian_ci{}, 0xffff),
+	},
+	0xed: &Collation_uca_legacy{
+		name: "utf8mb4_slovak_ci",
+		id:   0xed,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_slovak_ci, contractor_utf16_czech_ci{}, 0xffff),
+	},
+	0xee: &Collation_uca_legacy{
+		name: "utf8mb4_spanish2_ci",
+		id:   0xee,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_spanish_ci, contractor_utf16_spanish2_ci{}, 0xffff),
+	},
+	0xef: &Collation_uca_legacy{
+		name: "utf8mb4_roman_ci",
+		id:   0xef,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_roman_ci, nil, 0xffff),
+	},
+	0xf0: &Collation_uca_legacy{
+		name: "utf8mb4_persian_ci",
+		id:   0xf0,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_persian_ci, nil, 0xffff),
+	},
+	0xf1: &Collation_uca_legacy{
+		name: "utf8mb4_esperanto_ci",
+		id:   0xf1,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_esperanto_ci, nil, 0xffff),
+	},
+	0xf2: &Collation_uca_legacy{
+		name: "utf8mb4_hungarian_ci",
+		id:   0xf2,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_hungarian_ci, nil, 0xffff),
+	},
+	0xf3: &Collation_uca_legacy{
+		name: "utf8mb4_sinhala_ci",
+		id:   0xf3,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_sinhala_ci, nil, 0xffff),
+	},
+	0xf4: &Collation_uca_legacy{
+		name: "utf8mb4_german2_ci",
+		id:   0xf4,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_german2_ci, nil, 0xffff),
+	},
+	0xf5: &Collation_uca_legacy{
+		name: "utf8mb4_croatian_ci",
+		id:   0xf5,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_croatian_ci, contractor_utf16_croatian_ci{}, 0xffff),
+	},
+	0xf6: &Collation_uca_legacy{
+		name: "utf8mb4_unicode_520_ci",
+		id:   0xf6,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca520, nil, nil, 0x10ffff),
+	},
+	0xf7: &Collation_uca_legacy{
+		name: "utf8mb4_vietnamese_ci",
+		id:   0xf7,
+		uca:  uca.NewCollationLegacy(charset.Charset_utf8mb4{}, weightTable_uca400, weightTailoring_utf16_vietnamese_ci, nil, 0xffff),
+	},
+	0xfa: &Collation_uca_legacy{
+		name: "gb18030_unicode_520_ci",
+		id:   0xfa,
+		uca:  uca.NewCollationLegacy(charset.Charset_gb18030{}, weightTable_uca520, nil, nil, 0x10ffff),
+	},
+	0xff: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_0900_ai_ci",
+		id:   0xff,
+		uca:  uca.NewCollation("utf8mb4_0900_ai_ci", weightTable_uca900, nil, nil, nil, false, 1),
+	},
+	0x100: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_de_pb_0900_ai_ci",
+		id:   0x100,
+		uca:  uca.NewCollation("utf8mb4_de_pb_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_de_pb_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x101: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_is_0900_ai_ci",
+		id:   0x101,
+		uca:  uca.NewCollation("utf8mb4_is_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_is_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x102: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_lv_0900_ai_ci",
+		id:   0x102,
+		uca:  uca.NewCollation("utf8mb4_lv_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_lv_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x103: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_ro_0900_ai_ci",
+		id:   0x103,
+		uca:  uca.NewCollation("utf8mb4_ro_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_ro_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x104: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sl_0900_ai_ci",
+		id:   0x104,
+		uca:  uca.NewCollation("utf8mb4_sl_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_sl_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x105: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_pl_0900_ai_ci",
+		id:   0x105,
+		uca:  uca.NewCollation("utf8mb4_pl_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_pl_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x106: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_et_0900_ai_ci",
+		id:   0x106,
+		uca:  uca.NewCollation("utf8mb4_et_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_et_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x107: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_es_0900_ai_ci",
+		id:   0x107,
+		uca:  uca.NewCollation("utf8mb4_es_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_es_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x108: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sv_0900_ai_ci",
+		id:   0x108,
+		uca:  uca.NewCollation("utf8mb4_sv_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_sv_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x109: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_tr_0900_ai_ci",
+		id:   0x109,
+		uca:  uca.NewCollation("utf8mb4_tr_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_tr_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x10a: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_cs_0900_ai_ci",
+		id:   0x10a,
+		uca:  uca.NewCollation("utf8mb4_cs_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_cs_0900_ai_ci, nil, contractor_utf8mb4_cs_0900_ai_ci{}, false, 1),
+	},
+	0x10b: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_da_0900_ai_ci",
+		id:   0x10b,
+		uca:  uca.NewCollation("utf8mb4_da_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_da_0900_ai_ci, nil, contractor_utf8mb4_da_0900_ai_ci{}, false, 1),
+	},
+	0x10c: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_lt_0900_ai_ci",
+		id:   0x10c,
+		uca:  uca.NewCollation("utf8mb4_lt_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_lt_0900_ai_ci, nil, contractor_utf8mb4_lt_0900_ai_ci{}, false, 1),
+	},
+	0x10d: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sk_0900_ai_ci",
+		id:   0x10d,
+		uca:  uca.NewCollation("utf8mb4_sk_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_sk_0900_ai_ci, nil, contractor_utf8mb4_cs_0900_ai_ci{}, false, 1),
+	},
+	0x10e: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_es_trad_0900_ai_ci",
+		id:   0x10e,
+		uca:  uca.NewCollation("utf8mb4_es_trad_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_es_0900_ai_ci, nil, contractor_utf8mb4_es_trad_0900_ai_ci{}, false, 1),
+	},
+	0x10f: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_la_0900_ai_ci",
+		id:   0x10f,
+		uca:  uca.NewCollation("utf8mb4_la_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_la_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x111: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_eo_0900_ai_ci",
+		id:   0x111,
+		uca:  uca.NewCollation("utf8mb4_eo_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_eo_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x112: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_hu_0900_ai_ci",
+		id:   0x112,
+		uca:  uca.NewCollation("utf8mb4_hu_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_hu_0900_ai_ci, nil, contractor_utf8mb4_hu_0900_ai_ci{}, false, 1),
+	},
+	0x113: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_hr_0900_ai_ci",
+		id:   0x113,
+		uca:  uca.NewCollation("utf8mb4_hr_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_hr_0900_ai_ci, reorder_utf8mb4_hr_0900_ai_ci, contractor_utf8mb4_hr_0900_ai_ci{}, false, 1),
+	},
+	0x115: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_vi_0900_ai_ci",
+		id:   0x115,
+		uca:  uca.NewCollation("utf8mb4_vi_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_vi_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x116: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_0900_as_cs",
+		id:   0x116,
+		uca:  uca.NewCollation("utf8mb4_0900_as_cs", weightTable_uca900, nil, nil, nil, false, 3),
+	},
+	0x117: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_de_pb_0900_as_cs",
+		id:   0x117,
+		uca:  uca.NewCollation("utf8mb4_de_pb_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_de_pb_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x118: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_is_0900_as_cs",
+		id:   0x118,
+		uca:  uca.NewCollation("utf8mb4_is_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_is_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x119: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_lv_0900_as_cs",
+		id:   0x119,
+		uca:  uca.NewCollation("utf8mb4_lv_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_lv_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x11a: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_ro_0900_as_cs",
+		id:   0x11a,
+		uca:  uca.NewCollation("utf8mb4_ro_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_ro_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x11b: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sl_0900_as_cs",
+		id:   0x11b,
+		uca:  uca.NewCollation("utf8mb4_sl_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_sl_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x11c: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_pl_0900_as_cs",
+		id:   0x11c,
+		uca:  uca.NewCollation("utf8mb4_pl_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_pl_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x11d: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_et_0900_as_cs",
+		id:   0x11d,
+		uca:  uca.NewCollation("utf8mb4_et_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_et_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x11e: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_es_0900_as_cs",
+		id:   0x11e,
+		uca:  uca.NewCollation("utf8mb4_es_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_es_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x11f: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sv_0900_as_cs",
+		id:   0x11f,
+		uca:  uca.NewCollation("utf8mb4_sv_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_sv_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x120: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_tr_0900_as_cs",
+		id:   0x120,
+		uca:  uca.NewCollation("utf8mb4_tr_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_tr_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x121: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_cs_0900_as_cs",
+		id:   0x121,
+		uca:  uca.NewCollation("utf8mb4_cs_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_cs_0900_ai_ci, nil, contractor_utf8mb4_cs_0900_ai_ci{}, false, 3),
+	},
+	0x122: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_da_0900_as_cs",
+		id:   0x122,
+		uca:  uca.NewCollation("utf8mb4_da_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_da_0900_as_cs, nil, contractor_utf8mb4_da_0900_as_cs{}, true, 3),
+	},
+	0x123: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_lt_0900_as_cs",
+		id:   0x123,
+		uca:  uca.NewCollation("utf8mb4_lt_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_lt_0900_ai_ci, nil, contractor_utf8mb4_lt_0900_ai_ci{}, false, 3),
+	},
+	0x124: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sk_0900_as_cs",
+		id:   0x124,
+		uca:  uca.NewCollation("utf8mb4_sk_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_sk_0900_ai_ci, nil, contractor_utf8mb4_cs_0900_ai_ci{}, false, 3),
+	},
+	0x125: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_es_trad_0900_as_cs",
+		id:   0x125,
+		uca:  uca.NewCollation("utf8mb4_es_trad_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_es_0900_ai_ci, nil, contractor_utf8mb4_es_trad_0900_ai_ci{}, false, 3),
+	},
+	0x126: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_la_0900_as_cs",
+		id:   0x126,
+		uca:  uca.NewCollation("utf8mb4_la_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_la_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x128: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_eo_0900_as_cs",
+		id:   0x128,
+		uca:  uca.NewCollation("utf8mb4_eo_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_eo_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x129: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_hu_0900_as_cs",
+		id:   0x129,
+		uca:  uca.NewCollation("utf8mb4_hu_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_hu_0900_ai_ci, nil, contractor_utf8mb4_hu_0900_ai_ci{}, false, 3),
+	},
+	0x12a: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_hr_0900_as_cs",
+		id:   0x12a,
+		uca:  uca.NewCollation("utf8mb4_hr_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_hr_0900_ai_ci, reorder_utf8mb4_hr_0900_ai_ci, contractor_utf8mb4_hr_0900_ai_ci{}, false, 3),
+	},
+	0x12c: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_vi_0900_as_cs",
+		id:   0x12c,
+		uca:  uca.NewCollation("utf8mb4_vi_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_vi_0900_as_cs, nil, nil, false, 3),
+	},
+	0x12f: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_ja_0900_as_cs",
+		id:   0x12f,
+		uca:  uca.NewCollation("utf8mb4_ja_0900_as_cs", weightTable_uca900_ja, nil, reorder_utf8mb4_ja_0900_as_cs, contractor_utf8mb4_ja_0900_as_cs{}, false, 3),
+	},
+	0x130: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_ja_0900_as_cs_ks",
+		id:   0x130,
+		uca:  uca.NewCollation("utf8mb4_ja_0900_as_cs_ks", weightTable_uca900_ja, nil, reorder_utf8mb4_ja_0900_as_cs, contractor_utf8mb4_ja_0900_as_cs{}, false, 4),
+	},
+	0x131: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_0900_as_ci",
+		id:   0x131,
+		uca:  uca.NewCollation("utf8mb4_0900_as_ci", weightTable_uca900, nil, nil, nil, false, 2),
+	},
+	0x132: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_ru_0900_ai_ci",
+		id:   0x132,
+		uca:  uca.NewCollation("utf8mb4_ru_0900_ai_ci", weightTable_uca900, nil, reorder_utf8mb4_ru_0900_ai_ci, nil, false, 1),
+	},
+	0x133: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_ru_0900_as_cs",
+		id:   0x133,
+		uca:  uca.NewCollation("utf8mb4_ru_0900_as_cs", weightTable_uca900, nil, reorder_utf8mb4_ru_0900_ai_ci, nil, false, 3),
+	},
+	0x134: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_zh_0900_as_cs",
+		id:   0x134,
+		uca:  uca.NewCollation("utf8mb4_zh_0900_as_cs", weightTable_uca900_zh, nil, nil, contractor_utf8mb4_zh_0900_as_cs{}, false, 3),
+	},
+	0x135: &Collation_utf8mb4_0900_bin{},
+	0x136: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_nb_0900_ai_ci",
+		id:   0x136,
+		uca:  uca.NewCollation("utf8mb4_nb_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_da_0900_ai_ci, nil, contractor_utf8mb4_da_0900_ai_ci{}, false, 1),
+	},
+	0x137: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_nb_0900_as_cs",
+		id:   0x137,
+		uca:  uca.NewCollation("utf8mb4_nb_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_da_0900_ai_ci, nil, contractor_utf8mb4_da_0900_ai_ci{}, false, 3),
+	},
+	0x138: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_nn_0900_ai_ci",
+		id:   0x138,
+		uca:  uca.NewCollation("utf8mb4_nn_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_da_0900_ai_ci, nil, contractor_utf8mb4_da_0900_ai_ci{}, false, 1),
+	},
+	0x139: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_nn_0900_as_cs",
+		id:   0x139,
+		uca:  uca.NewCollation("utf8mb4_nn_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_da_0900_ai_ci, nil, contractor_utf8mb4_da_0900_ai_ci{}, false, 3),
+	},
+	0x13a: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sr_latn_0900_ai_ci",
+		id:   0x13a,
+		uca:  uca.NewCollation("utf8mb4_sr_latn_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_hr_0900_ai_ci, reorder_utf8mb4_hr_0900_ai_ci, contractor_utf8mb4_hr_0900_ai_ci{}, false, 1),
+	},
+	0x13b: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_sr_latn_0900_as_cs",
+		id:   0x13b,
+		uca:  uca.NewCollation("utf8mb4_sr_latn_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_hr_0900_ai_ci, reorder_utf8mb4_hr_0900_ai_ci, contractor_utf8mb4_hr_0900_ai_ci{}, false, 3),
+	},
+	0x13c: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_bs_0900_ai_ci",
+		id:   0x13c,
+		uca:  uca.NewCollation("utf8mb4_bs_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_hr_0900_ai_ci, reorder_utf8mb4_hr_0900_ai_ci, contractor_utf8mb4_hr_0900_ai_ci{}, false, 1),
+	},
+	0x13d: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_bs_0900_as_cs",
+		id:   0x13d,
+		uca:  uca.NewCollation("utf8mb4_bs_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_hr_0900_ai_ci, reorder_utf8mb4_hr_0900_ai_ci, contractor_utf8mb4_hr_0900_ai_ci{}, false, 3),
+	},
+	0x13e: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_bg_0900_ai_ci",
+		id:   0x13e,
+		uca:  uca.NewCollation("utf8mb4_bg_0900_ai_ci", weightTable_uca900, nil, reorder_utf8mb4_ru_0900_ai_ci, nil, false, 1),
+	},
+	0x13f: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_bg_0900_as_cs",
+		id:   0x13f,
+		uca:  uca.NewCollation("utf8mb4_bg_0900_as_cs", weightTable_uca900, nil, reorder_utf8mb4_ru_0900_ai_ci, nil, false, 3),
+	},
+	0x140: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_gl_0900_ai_ci",
+		id:   0x140,
+		uca:  uca.NewCollation("utf8mb4_gl_0900_ai_ci", weightTable_uca900, weightTailoring_utf8mb4_es_0900_ai_ci, nil, nil, false, 1),
+	},
+	0x141: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_gl_0900_as_cs",
+		id:   0x141,
+		uca:  uca.NewCollation("utf8mb4_gl_0900_as_cs", weightTable_uca900, weightTailoring_utf8mb4_es_0900_ai_ci, nil, nil, false, 3),
+	},
+	0x142: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_mn_cyrl_0900_ai_ci",
+		id:   0x142,
+		uca:  uca.NewCollation("utf8mb4_mn_cyrl_0900_ai_ci", weightTable_uca900, nil, reorder_utf8mb4_ru_0900_ai_ci, nil, false, 1),
+	},
+	0x143: &Collation_utf8mb4_uca_0900{
+		name: "utf8mb4_mn_cyrl_0900_as_cs",
+		id:   0x143,
+		uca:  uca.NewCollation("utf8mb4_mn_cyrl_0900_as_cs", weightTable_uca900, nil, reorder_utf8mb4_ru_0900_ai_ci, nil, false, 3),
+	},
 }

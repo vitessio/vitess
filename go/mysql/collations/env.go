@@ -32,29 +32,13 @@ type colldefaults struct {
 type Environment struct {
 	version     collver
 	byName      map[string]Collation
-	byID        map[ID]Collation
 	byCharset   map[string]*colldefaults
 	unsupported map[string]ID
 }
 
-// LookupByName returns the collation with the given name. The collation
-// is initialized if it's the first time being accessed.
+// LookupByName returns the collation with the given name.
 func (env *Environment) LookupByName(name string) Collation {
-	if coll, ok := env.byName[name]; ok {
-		coll.Init()
-		return coll
-	}
-	return nil
-}
-
-// LookupByID returns the collation with the given numerical identifier. The collation
-// is initialized if it's the first time being accessed.
-func (env *Environment) LookupByID(id ID) Collation {
-	if coll, ok := env.byID[id]; ok {
-		coll.Init()
-		return coll
-	}
-	return nil
+	return env.byName[name]
 }
 
 // LookupID returns the collation ID for the given name, and whether
@@ -72,10 +56,7 @@ func (env *Environment) LookupID(name string) (ID, bool) {
 // DefaultCollationForCharset returns the default collation for a charset
 func (env *Environment) DefaultCollationForCharset(charset string) Collation {
 	if defaults, ok := env.byCharset[charset]; ok {
-		if defaults.Default != nil {
-			defaults.Default.Init()
-			return defaults.Default
-		}
+		return defaults.Default
 	}
 	return nil
 }
@@ -83,21 +64,15 @@ func (env *Environment) DefaultCollationForCharset(charset string) Collation {
 // BinaryCollationForCharset returns the default binary collation for a charset
 func (env *Environment) BinaryCollationForCharset(charset string) Collation {
 	if defaults, ok := env.byCharset[charset]; ok {
-		if defaults.Binary != nil {
-			defaults.Binary.Init()
-			return defaults.Binary
-		}
+		return defaults.Binary
 	}
 	return nil
 }
 
-// AllCollations returns a slice with all known collations in Vitess. This is an expensive call because
-// it will initialize the internal state of all the collations before returning them.
-// Used for testing/debugging.
+// AllCollations returns a slice with all known collations in Vitess.
 func (env *Environment) AllCollations() (all []Collation) {
-	all = make([]Collation, 0, len(env.byID))
-	for _, col := range env.byID {
-		col.Init()
+	all = make([]Collation, 0, len(env.byName))
+	for _, col := range env.byName {
 		all = append(all, col)
 	}
 	return
@@ -160,7 +135,6 @@ func makeEnv(version collver) *Environment {
 	env := &Environment{
 		version:     version,
 		byName:      make(map[string]Collation),
-		byID:        make(map[ID]Collation),
 		byCharset:   make(map[string]*colldefaults),
 		unsupported: make(map[string]ID),
 	}
@@ -176,8 +150,11 @@ func makeEnv(version collver) *Environment {
 			continue
 		}
 
-		collation, ok := globalAllCollations[collid]
-		if !ok {
+		var collation Collation
+		if int(collid) < len(collationsById) {
+			collation = collationsById[collid]
+		}
+		if collation == nil {
 			for _, name := range ournames {
 				env.unsupported[name] = collid
 			}
@@ -187,7 +164,6 @@ func makeEnv(version collver) *Environment {
 		for _, name := range ournames {
 			env.byName[name] = collation
 		}
-		env.byID[collid] = collation
 
 		csname := collation.Charset().Name()
 		if _, ok := env.byCharset[csname]; !ok {
@@ -222,6 +198,9 @@ const (
 	CollationUtf8mb4ID = 255
 	CollationBinaryID  = 63
 )
+
+// Binary is the default Binary collation
+var Binary = ID(CollationBinaryID).Get()
 
 // CharsetAlias returns the internal charset name for the given charset.
 // For now, this only maps `utf8` to `utf8mb3`; in future versions of MySQL,
@@ -267,7 +246,7 @@ func (env *Environment) CollationAlias(collation string) (string, bool) {
 func (env *Environment) DefaultConnectionCharset() uint8 {
 	switch env.version {
 	case collverMySQL80:
-		return CollationUtf8mb4ID
+		return uint8(CollationUtf8mb4ID)
 	default:
 		return 45
 	}

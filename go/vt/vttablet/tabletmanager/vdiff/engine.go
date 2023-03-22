@@ -64,8 +64,6 @@ type Engine struct {
 	// because we stop/start vreplication workflows during this process
 	snapshotMu sync.Mutex
 
-	vdiffSchemaCreateOnce sync.Once
-
 	// This should only be set when the engine is being used in tests. It then provides
 	// modified behavior for that env, e.g. not starting the retry goroutine. This should
 	// NOT be set in production.

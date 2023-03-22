@@ -19,11 +19,11 @@ package collations
 import (
 	"math"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
-//go:generate go run ./tools/makecolldata/ -embed=true
+//go:generate go run ./tools/makecolldata/ --embed=true
 
 // CaseAwareCollation implements lowercase and uppercase conventions for collations.
 type CaseAwareCollation interface {
@@ -35,15 +35,25 @@ type CaseAwareCollation interface {
 // ID is a numeric identifier for a collation. These identifiers are defined by MySQL, not by Vitess.
 type ID uint16
 
+// Get returns the Collation identified by this ID. If the ID is invalid, this returns nil
+func (i ID) Get() Collation {
+	if int(i) < len(collationsById) {
+		return collationsById[i]
+	}
+	return nil
+}
+
+// Valid returns whether this Collation ID is valid (i.e. identifies a valid collation)
+func (i ID) Valid() bool {
+	return int(i) < len(collationsById) && collationsById[i] != nil
+}
+
 // Unknown is the default ID for an unknown collation.
 const Unknown ID = 0
 
 // Collation implements a MySQL-compatible collation. It defines how to compare
 // for sorting order and equality two strings with the same encoding.
 type Collation interface {
-	// Init initializes the internal state for the collation the first time it is used
-	Init()
-
 	// ID returns the numerical identifier for this collation. This is the same
 	// value that is returned by MySQL in a query's headers to identify the collation
 	// for a given column
@@ -148,7 +158,7 @@ type Collation interface {
 	Wildcard(pat []byte, matchOne, matchMany, escape rune) WildcardPattern
 
 	// Charset returns the Charset with which this collation is encoded
-	Charset() charset.Charset
+	Charset() Charset
 
 	// IsBinary returns whether this collation is a binary collation
 	IsBinary() bool
@@ -160,6 +170,8 @@ type WildcardPattern interface {
 	Match(in []byte) bool
 }
 
+type Charset = charset.Charset
+
 const PadToMax = math.MaxInt32
 
 func minInt(i1, i2 int) int {
@@ -167,43 +179,4 @@ func minInt(i1, i2 int) int {
 		return i1
 	}
 	return i2
-}
-
-var globalAllCollations = make(map[ID]Collation)
-
-func register(c Collation) {
-	if _, found := globalAllCollations[c.ID()]; found {
-		panic("duplicated collation registered")
-	}
-	globalAllCollations[c.ID()] = c
-}
-
-// Slice returns the substring in `input[from:to]`, where `from` and `to`
-// are collation-aware character indices instead of bytes.
-func Slice(collation Collation, input []byte, from, to int) []byte {
-	return charset.Slice(collation.Charset(), input, from, to)
-}
-
-// Validate returns whether the given `input` is properly encoded with the
-// character set for the given collation.
-func Validate(collation Collation, input []byte) bool {
-	return charset.Validate(collation.Charset(), input)
-}
-
-// Convert converts the bytes in `src`, which are encoded in `srcCollation`'s charset,
-// into a byte slice encoded in `dstCollation`'s charset. The resulting byte slice is
-// appended to `dst` and returned.
-func Convert(dst []byte, dstCollation Collation, src []byte, srcCollation Collation) ([]byte, error) {
-	return charset.Convert(dst, dstCollation.Charset(), src, srcCollation.Charset())
-}
-
-// Length returns the number of codepoints in the input based on the given collation
-func Length(collation Collation, input []byte) int {
-	return charset.Length(collation.Charset(), input)
-}
-
-// ConvertForJSON behaves like Convert, but the output string is always utf8mb4 encoded,
-// as it is required for JSON strings in MySQL.
-func ConvertForJSON(dst []byte, src []byte, srcCollation Collation) ([]byte, error) {
-	return charset.Convert(dst, charset.Charset_utf8mb4{}, src, srcCollation.Charset())
 }

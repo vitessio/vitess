@@ -17,7 +17,9 @@ limitations under the License.
 package schemadiff
 
 import (
+	"fmt"
 	"regexp"
+	"strings"
 )
 
 // constraint name examples:
@@ -30,9 +32,19 @@ import (
 // - check1, isnegative, employee_id -- are the original constraints names
 var constraintVitessNameRegexp = regexp.MustCompile(`^(.*?)(_([0-9a-z]{25}))?$`)
 
-func ExtractConstraintOriginalName(constraintName string) string {
+// ExtractConstraintOriginalName extracts what used to be the constraint name
+// before schemadiff/vitess generated a replacement name.
+// e.g. input: "check1_7no794p1x6zw6je1gfqmt7bca", output: "check1"
+func ExtractConstraintOriginalName(tableName string, constraintName string) string {
+	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_chk_", tableName)) {
+		return constraintName[len(tableName)+1:]
+	}
+	if strings.HasPrefix(constraintName, fmt.Sprintf("%s_fk_", tableName)) {
+		return constraintName[len(tableName)+1:]
+	}
 	if submatch := constraintVitessNameRegexp.FindStringSubmatch(constraintName); len(submatch) > 0 {
 		return submatch[1]
 	}
+
 	return constraintName
 }

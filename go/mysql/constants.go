@@ -33,6 +33,9 @@ const (
 	// protocolVersion is the current version of the protocol.
 	// Always 10.
 	protocolVersion = 10
+
+	// https://dev.mysql.com/doc/refman/en/identifier-length.html
+	MaxIdentifierLength = 64
 )
 
 // AuthMethodDescription is the type for different supported and

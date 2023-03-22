@@ -22,6 +22,7 @@ import (
 	"time"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/vterrors"
 
 	"vitess.io/vitess/go/vt/callerid"
@@ -110,7 +111,14 @@ func (t *Tracker) loadTables(conn queryservice.QueryService, target *querypb.Tar
 		return nil
 	}
 
-	ftRes, err := conn.Execute(t.ctx, target, mysql.FetchTables, nil, 0, 0, nil)
+	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(target.Keyspace)
+	if err != nil {
+		return vterrors.VT14005(target.Keyspace)
+	}
+
+	ftRes, err := conn.Execute(t.ctx, target,
+		sqlparser.BuildParsedQuery(mysql.FetchTables, sidecarDBID).Query,
+		nil, 0, 0, nil)
 	if err != nil {
 		return err
 	}
@@ -258,11 +266,21 @@ func (t *Tracker) updatedTableSchema(th *discovery.TabletHealth) bool {
 	tablesUpdated := th.Stats.TableSchemaChanged
 	tables, err := sqltypes.BuildBindVariable(tablesUpdated)
 	if err != nil {
-		log.Errorf("failed to read updated tables from TabletHealth: %v", err)
+		log.Errorf("Failed to read updated tables from TabletHealth: %v", err)
 		return false
 	}
+
+	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(th.Target.Keyspace)
+	if err != nil {
+		log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v",
+			th.Target.Keyspace, err)
+		return false
+	}
+
 	bv := map[string]*querypb.BindVariable{"tableNames": tables}
-	res, err := th.Conn.Execute(t.ctx, th.Target, mysql.FetchUpdatedTables, bv, 0, 0, nil)
+	res, err := th.Conn.Execute(t.ctx, th.Target,
+		sqlparser.BuildParsedQuery(mysql.FetchUpdatedTables, sidecarDBID).Query,
+		bv, 0, 0, nil)
 	if err != nil {
 		t.tracked[th.Target.Keyspace].setLoaded(false)
 		// TODO: optimize for the tables that got errored out.

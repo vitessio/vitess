@@ -188,6 +188,30 @@ var (
 		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (LINESTRING(POINT(7.0, 3.0))))",
 		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (linestring(point(7.0, 3.0)))\n)",
 	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (POLYGON(LINESTRING(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9)))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (polygon(linestring(point(4, 5), point(4.6, 7.9), point(4.6, 7.9))))\n)",
+	}, {
+		input:  "select ST_ASTEXT(POLYGON(linestrings)) from linestringTable",
+		output: "select ST_ASTEXT(polygon(linestrings)) from linestringTable",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTIPOINT(POINT(4, 5), POINT(4.6, 7.9), POINT(4.6, 7.9))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multipoint(point(4, 5), point(4.6, 7.9), point(4.6, 7.9)))\n)",
+	}, {
+		input:  "select ST_ASTEXT(MULTIPOINT(points)) from pointsTable",
+		output: "select ST_ASTEXT(multipoint(points)) from pointsTable",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTILINESTRING(LINESTRING(POINT(8,9), POINT(8,9)))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multilinestring(linestring(point(8, 9), point(8, 9))))\n)",
+	}, {
+		input:  "select ST_ASTEXT(MULTILINESTRING(linestrings)) from linestringsTable",
+		output: "select ST_ASTEXT(multilinestring(linestrings)) from linestringsTable",
+	}, {
+		input:  "create table x(location GEOMETRYCOLLECTION DEFAULT (MULTIPOLYGON(POINT(7.0, 3.0), POINT(7.0, 3.0))))",
+		output: "create table x (\n\tlocation GEOMETRYCOLLECTION default (multipolygon(point(7.0, 3.0), point(7.0, 3.0)))\n)",
+	}, {
+		input:  "select ST_ASTEXT(MULTIPOLYGON(polygons)) from polygonTable",
+		output: "select ST_ASTEXT(multipolygon(polygons)) from polygonTable",
+	}, {
 		input:  "WITH RECURSIVE  odd_num_cte (id, n) AS (SELECT 1, 1 union all SELECT id+1, n+2 from odd_num_cte where id < 5) SELECT * FROM odd_num_cte",
 		output: "with recursive odd_num_cte(id, n) as (select 1, 1 from dual union all select id + 1, n + 2 from odd_num_cte where id < 5) select * from odd_num_cte",
 	}, {
@@ -1810,11 +1834,14 @@ var (
 		input:  "flush no_write_to_binlog slow logs, status, user_resources, relay logs, relay logs for channel s",
 		output: "flush local slow logs, status, user_resources, relay logs, relay logs for channel s",
 	}, {
-		input:  "show binary logs",
-		output: "show binary logs",
+		input: "show binary logs",
 	}, {
 		input:  "show binlog events",
 		output: "show binlog",
+	}, {
+		input: "purge binary logs to 'x'",
+	}, {
+		input: "purge binary logs before '2020-02-02 20:20:20'",
 	}, {
 		input:  "show character set",
 		output: "show charset",

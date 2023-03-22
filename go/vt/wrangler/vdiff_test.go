@@ -25,6 +25,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 
 	"context"
 
@@ -395,10 +396,10 @@ func TestVDiffPlanSuccess(t *testing.T) {
 			selectPks:        []int{0},
 			sourcePrimitive: &engine.OrderedAggregate{
 				Aggregates: []*engine.AggregateParams{{
-					Opcode: engine.AggregateSum,
+					Opcode: opcode.AggregateSum,
 					Col:    2,
 				}, {
-					Opcode: engine.AggregateSum,
+					Opcode: opcode.AggregateSum,
 					Col:    3,
 				}},
 				GroupByKeys: []*engine.GroupByParams{{KeyCol: 0, WeightStringCol: -1}},
@@ -490,7 +491,7 @@ func TestVDiffPlanFailure(t *testing.T) {
 }
 
 func TestVDiffUnsharded(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -767,7 +768,7 @@ func TestVDiffUnsharded(t *testing.T) {
 func TestVDiffSharded(t *testing.T) {
 	// Also test that highest position ""MariaDB/5-456-892" will be used
 	// if lower positions are found.
-	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
+	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "", map[string]string{
 		"-40-80": "MariaDB/5-456-890",
 		"40-80-": "MariaDB/5-456-891",
 	})
@@ -838,7 +839,7 @@ func TestVDiffSharded(t *testing.T) {
 }
 
 func TestVDiffAggregates(t *testing.T) {
-	env := newTestVDiffEnv([]string{"-40", "40-"}, []string{"-80", "80-"}, "select c1, count(*) c2, sum(c3) c3 from t group by c1", nil)
+	env := newTestVDiffEnv(t, []string{"-40", "40-"}, []string{"-80", "80-"}, "select c1, count(*) c2, sum(c3) c3 from t group by c1", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -905,7 +906,7 @@ func TestVDiffAggregates(t *testing.T) {
 }
 
 func TestVDiffDefaults(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{
@@ -958,7 +959,7 @@ func TestVDiffDefaults(t *testing.T) {
 }
 
 func TestVDiffReplicationWait(t *testing.T) {
-	env := newTestVDiffEnv([]string{"0"}, []string{"0"}, "", nil)
+	env := newTestVDiffEnv(t, []string{"0"}, []string{"0"}, "", nil)
 	defer env.close()
 
 	schm := &tabletmanagerdatapb.SchemaDefinition{

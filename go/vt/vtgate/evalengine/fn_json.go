@@ -17,7 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -75,11 +74,8 @@ func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	// if any of the arguments are NULL, return NULL
-	for _, arg := range args {
-		if arg == nil {
-			return nil, nil
-		}
+	if args[0] == nil {
+		return nil, nil
 	}
 
 	doc, err := intoJSON(call.Method, args[0])
@@ -87,10 +83,18 @@ func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	var matches = make([]*json.Value, 0, 4)
-	var multi = len(args) > 2
+	return builtin_JSON_EXTRACT(doc, args[1:])
+}
 
-	for _, p := range args[1:] {
+func builtin_JSON_EXTRACT(doc *json.Value, paths []eval) (eval, error) {
+	matches := make([]*json.Value, 0, 4)
+	multi := len(paths) > 1
+
+	for _, p := range paths {
+		if p == nil {
+			return nil, nil
+		}
+
 		path, err := intoJSONPath(p)
 		if err != nil {
 			return nil, err
@@ -104,7 +108,6 @@ func (call *builtinJSONExtract) eval(env *ExpressionEnv) (eval, error) {
 			matches = append(matches, v)
 		})
 	}
-
 	if len(matches) == 0 {
 		return nil, nil
 	}
@@ -142,6 +145,8 @@ func (call *builtinJSONUnquote) typeof(env *ExpressionEnv) (sqltypes.Type, typeF
 	return sqltypes.Blob, f
 }
 
+var errJSONKeyIsNil = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+
 func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 	j := json.NewObject()
 	obj, _ := j.Object()
@@ -152,9 +157,9 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 			return nil, err
 		}
 		if key == nil {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "JSON documents may not contain NULL member names.")
+			return nil, errJSONKeyIsNil
 		}
-		key1, err := evalToVarchar(key, collations.CollationUtf8mb4ID, true)
+		key1, err := evalToVarchar(key, env.DefaultCollation, true)
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +168,7 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		val1, err := evalToJSON(val)
+		val1, err := argToJSON(val)
 		if err != nil {
 			return nil, err
 		}
@@ -184,7 +189,7 @@ func (call *builtinJSONArray) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		arg1, err := evalToJSON(arg)
+		arg1, err := argToJSON(arg)
 		if err != nil {
 			return nil, err
 		}
@@ -276,7 +281,7 @@ func (call *builtinJSONContainsPath) eval(env *ExpressionEnv) (eval, error) {
 		return nil, err
 	}
 
-	all, err := intoOneOrAll("JSON_CONTAINS_PATH", args[1])
+	match, err := intoOneOrAll("JSON_CONTAINS_PATH", evalToBinary(args[1]).string())
 	if err != nil {
 		return nil, err
 	}
@@ -288,25 +293,48 @@ func (call *builtinJSONContainsPath) eval(env *ExpressionEnv) (eval, error) {
 		}
 		var matched bool
 		jp.Match(doc, true, func(*json.Value) { matched = true })
-		if matched && !all {
+		if matched && match == jsonMatchOne {
 			return newEvalBool(true), nil
 		}
-		if !matched && all {
+		if !matched && match == jsonMatchAll {
 			return newEvalBool(false), nil
 		}
 	}
-	return newEvalBool(all), nil
+	return newEvalBool(match == jsonMatchAll), nil
 }
 
-func intoOneOrAll(fname string, e eval) (bool, error) {
-	switch evalToBinary(e).string() {
-	case "one":
-		return false, nil
-	case "all":
-		return true, nil
+type jsonMatch int8
+
+const (
+	jsonMatchInvalid           = -1
+	jsonMatchOne     jsonMatch = 0
+	jsonMatchAll     jsonMatch = 1
+)
+
+func (jm jsonMatch) String() string {
+	switch jm {
+	case jsonMatchOne:
+		return "one"
+	case jsonMatchAll:
+		return "all"
 	default:
-		return false, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "The oneOrAll argument to %s may take these values: 'one' or 'all'.", fname)
+		return "<INVALID>"
 	}
+}
+
+func intoOneOrAll(fname, value string) (jsonMatch, error) {
+	switch value {
+	case "one":
+		return jsonMatchOne, nil
+	case "all":
+		return jsonMatchAll, nil
+	default:
+		return jsonMatchInvalid, errOneOrAll(fname)
+	}
+}
+
+func errOneOrAll(fname string) error {
+	return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "The oneOrAll argument to %s may take these values: 'one' or 'all'.", fname)
 }
 
 func (call *builtinJSONContainsPath) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

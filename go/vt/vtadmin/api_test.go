@@ -4601,8 +4601,6 @@ func TestGetWorkflows(t *testing.T) {
 }
 
 func TestVTExplain(t *testing.T) {
-	t.Parallel()
-
 	tests := []struct {
 		name          string
 		keyspaces     []*vtctldatapb.Keyspace
@@ -4826,8 +4824,6 @@ func TestVTExplain(t *testing.T) {
 		tt := tt
 
 		t.Run(tt.name, func(t *testing.T) {
-			t.Parallel()
-
 			toposerver := memorytopo.NewServer("c0_cell1")
 
 			tmc := testutil.TabletManagerClient{

@@ -201,3 +201,7 @@ func (n *Error) ErrorCode() vtrpcpb.Code {
 		return f.code
 	}
 }
+
+func (n *Error) Args() []any {
+	return n.args
+}

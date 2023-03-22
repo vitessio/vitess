@@ -54,6 +54,21 @@ func (c *ConvertExpr) returnUnsupportedError() error {
 	return err
 }
 
+func (c *ConvertExpr) decimalPrecision() (int32, int32) {
+	m := 10
+	d := 0
+	if c.HasLength {
+		m = c.Length
+	}
+	if c.HasScale {
+		d = c.Scale
+	}
+	if m == 0 && d == 0 {
+		m = 10
+	}
+	return int32(m), int32(d)
+}
+
 func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := c.Inner.eval(env)
 	if err != nil {
@@ -84,18 +99,8 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 		t.tt = int16(c.convertToCharType(e.SQLType()))
 		return t, nil
 	case "DECIMAL":
-		m := 10
-		d := 0
-		if c.HasLength {
-			m = c.Length
-		}
-		if c.HasScale {
-			d = c.Scale
-		}
-		if m == 0 && d == 0 {
-			m = 10
-		}
-		return evalToNumeric(e).toDecimal(int32(m), int32(d)), nil
+		m, d := c.decimalPrecision()
+		return evalToNumeric(e).toDecimal(m, d), nil
 	case "DOUBLE", "REAL":
 		f, _ := evalToNumeric(e).toFloat()
 		return f, nil
@@ -160,7 +165,7 @@ func (c *ConvertExpr) convertToBinaryType(tt sqltypes.Type) sqltypes.Type {
 
 func (c *ConvertExpr) convertToCharType(tt sqltypes.Type) sqltypes.Type {
 	if c.HasLength {
-		col := collations.Local().LookupByID(c.Collation)
+		col := c.Collation.Get()
 		length := c.Length * col.Charset().MaxWidth()
 		if length > 64*1024 {
 			return sqltypes.Text

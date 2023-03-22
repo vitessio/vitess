@@ -19,7 +19,7 @@ package collations
 import (
 	"math"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -29,8 +29,6 @@ type Collation_multibyte struct {
 	sort    *[256]byte
 	charset charset.Charset
 }
-
-func (c *Collation_multibyte) Init() {}
 
 func (c *Collation_multibyte) ID() ID {
 	return c.id

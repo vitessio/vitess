@@ -95,8 +95,14 @@ const (
 		WHERE
 			migration_uuid=%a
 	`
-	sqlUpdateMigrationReadyToComplete = `UPDATE _vt.schema_migrations
-			SET ready_to_complete=%a
+	sqlSetMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=1,
+			ready_to_complete_timestamp=NOW(6)
+		WHERE
+			migration_uuid=%a
+	`
+	sqlClearMigrationReadyToComplete = `UPDATE _vt.schema_migrations SET
+			ready_to_complete=0
 		WHERE
 			migration_uuid=%a
 	`
@@ -128,6 +134,11 @@ const (
 	`
 	sqlUpdateArtifacts = `UPDATE _vt.schema_migrations
 			SET artifacts=concat(%a, ',', artifacts), cleanup_timestamp=NULL
+		WHERE
+			migration_uuid=%a
+	`
+	sqlClearSingleArtifact = `UPDATE _vt.schema_migrations
+			SET artifacts=replace(artifacts, concat(%a, ','), ''), cleanup_timestamp=NULL
 		WHERE
 			migration_uuid=%a
 	`
@@ -310,6 +321,7 @@ const (
 	`
 	sqlSelectPendingMigrations = `SELECT
 			migration_uuid,
+			migration_context,
 			keyspace,
 			mysql_table,
 			migration_status
@@ -375,6 +387,7 @@ const (
 			retain_artifacts_seconds,
 			is_view,
 			ready_to_complete,
+			ready_to_complete_timestamp is not null as was_ready_to_complete,
 			reverted_uuid,
 			rows_copied,
 			vitess_liveness_indicator,
@@ -491,13 +504,14 @@ const (
 		END,
 		COUNT_COLUMN_IN_INDEX
 	`
-	sqlDropTrigger      = "DROP TRIGGER IF EXISTS `%a`.`%a`"
-	sqlShowTablesLike   = "SHOW TABLES LIKE '%a'"
-	sqlDropTable        = "DROP TABLE `%a`"
-	sqlShowColumnsFrom  = "SHOW COLUMNS FROM `%a`"
-	sqlShowTableStatus  = "SHOW TABLE STATUS LIKE '%a'"
-	sqlShowCreateTable  = "SHOW CREATE TABLE `%a`"
-	sqlGetAutoIncrement = `
+	sqlDropTrigger       = "DROP TRIGGER IF EXISTS `%a`.`%a`"
+	sqlShowTablesLike    = "SHOW TABLES LIKE '%a'"
+	sqlDropTable         = "DROP TABLE `%a`"
+	sqlDropTableIfExists = "DROP TABLE IF EXISTS `%a`"
+	sqlShowColumnsFrom   = "SHOW COLUMNS FROM `%a`"
+	sqlShowTableStatus   = "SHOW TABLE STATUS LIKE '%a'"
+	sqlShowCreateTable   = "SHOW CREATE TABLE `%a`"
+	sqlGetAutoIncrement  = `
 		SELECT
 			AUTO_INCREMENT
 		FROM INFORMATION_SCHEMA.TABLES

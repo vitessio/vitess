@@ -67,7 +67,6 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txserializer"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/txthrottler"
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/vstreamer"
-	"vitess.io/vitess/go/vt/vttablet/vexec"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -182,7 +181,7 @@ func NewTabletServer(name string, config *tabletenv.TabletConfig, topoServer *to
 	tsv.tracker = schema.NewTracker(tsv, tsv.vstreamer, tsv.se)
 	tsv.watcher = NewBinlogWatcher(tsv, tsv.vstreamer, tsv.config)
 	tsv.qe = NewQueryEngine(tsv, tsv.se)
-	tsv.txThrottler = txthrottler.NewTxThrottler(tsv.config, topoServer)
+	tsv.txThrottler = txthrottler.NewTxThrottler(tsv, topoServer)
 	tsv.te = NewTxEngine(tsv)
 	tsv.messager = messager.NewEngine(tsv, tsv.se, tsv.vstreamer)
 
@@ -456,11 +455,6 @@ func (tsv *TabletServer) ClearQueryPlanCache() {
 // QueryService returns the QueryService part of TabletServer.
 func (tsv *TabletServer) QueryService() queryservice.QueryService {
 	return tsv
-}
-
-// OnlineDDLExecutor returns the onlineddl.Executor part of TabletServer.
-func (tsv *TabletServer) OnlineDDLExecutor() vexec.Executor {
-	return tsv.onlineDDLExecutor
 }
 
 // LagThrottler returns the throttle.Throttler part of TabletServer.
@@ -754,6 +748,7 @@ func (tsv *TabletServer) execute(ctx context.Context, target *querypb.Target, sq
 				bindVariables = make(map[string]*querypb.BindVariable)
 			}
 			query, comments := sqlparser.SplitMarginComments(sql)
+
 			plan, err := tsv.qe.GetPlan(ctx, logStats, query, skipQueryPlanCache(options))
 			if err != nil {
 				return err
@@ -1431,6 +1426,7 @@ func (tsv *TabletServer) execRequest(
 	span, ctx := trace.NewSpan(ctx, "TabletServer."+requestName)
 	if options != nil {
 		span.Annotate("isolation-level", options.TransactionIsolation)
+		span.Annotate("workload_name", options.WorkloadName)
 	}
 	trace.AnnotateSQL(span, sqlparser.Preview(sql))
 	if target != nil {
@@ -1438,6 +1434,7 @@ func (tsv *TabletServer) execRequest(
 		span.Annotate("shard", target.Shard)
 		span.Annotate("keyspace", target.Keyspace)
 	}
+
 	defer span.Finish()
 
 	logStats := tabletenv.NewLogStats(ctx, requestName)

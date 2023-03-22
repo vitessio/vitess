@@ -335,3 +335,32 @@ type ViewDependencyUnresolvedError struct {
 func (e *ViewDependencyUnresolvedError) Error() string {
 	return fmt.Sprintf("view %s has unresolved/loop dependencies", sqlescape.EscapeID(e.View))
 }
+
+type InvalidColumnReferencedInViewError struct {
+	View      string
+	Column    string
+	Ambiguous bool
+}
+
+func (e *InvalidColumnReferencedInViewError) Error() string {
+	if e.Ambiguous {
+		return fmt.Sprintf("view %s references unqualified but non unique column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
+	}
+	return fmt.Sprintf("view %s references unqualified but non-existent column %s", sqlescape.EscapeID(e.View), sqlescape.EscapeID(e.Column))
+}
+
+type InvalidStarExprInViewError struct {
+	View string
+}
+
+func (e *InvalidStarExprInViewError) Error() string {
+	return fmt.Sprintf("view %s has invalid star expression", sqlescape.EscapeID(e.View))
+}
+
+type EntityNotFoundError struct {
+	Name string
+}
+
+func (e *EntityNotFoundError) Error() string {
+	return fmt.Sprintf("entity %s not found", sqlescape.EscapeID(e.Name))
+}

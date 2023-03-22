@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"regexp"
 	"sort"
 	"sync"
 	"testing"
@@ -234,12 +235,7 @@ func TestVStreamCopyBasic(t *testing.T) {
 			printEvents(evs) // for debugging ci failures
 
 			if len(evs) == numExpectedEvents {
-				// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
-				// On the other hand, the last event should always be a fully COPY_COMPLETED event.
-				// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
-				sort.Slice(completedEvs[:len(completedEvs)-1], func(i, j int) bool {
-					return completedEvs[i].GetShard() < completedEvs[j].GetShard()
-				})
+				sortCopyCompletedEvents(completedEvs)
 				for i, ev := range completedEvs {
 					require.Regexp(t, expectedCompletedEvents[i], ev.String())
 				}
@@ -255,6 +251,139 @@ func TestVStreamCopyBasic(t *testing.T) {
 			log.Errorf("Returned err %v", err)
 			t.Fatalf("remote error: %v\n", err)
 		}
+	}
+}
+
+// TestVStreamCopyUnspecifiedShardGtid tests the case where the keyspace contains wildcards and/or the shard is not specified in the request.
+// Verify that the Vstream API resolves the unspecified ShardGtid input to a list of all the matching keyspaces and all the shards in the topology.
+// - If the keyspace contains wildcards and the shard is not specified, the copy operation should be performed on all shards of all matching keyspaces.
+// - If the keyspace is specified and the shard is not specified, the copy operation should be performed on all shards of the specified keyspace.
+func TestVStreamCopyUnspecifiedShardGtid(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	conn, err := mysql.Connect(ctx, &vtParams)
+	if err != nil {
+		require.NoError(t, err)
+	}
+	defer conn.Close()
+
+	_, err = conn.ExecuteFetch("insert into t1_copy_all(id1,id2) values(1,1), (2,2), (3,3), (4,4), (5,5), (6,6), (7,7), (8,8)", 1, false)
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	_, err = conn.ExecuteFetch("insert into t1_copy_all_ks2(id1,id2) values(10,10), (20,20)", 1, false)
+	if err != nil {
+		require.NoError(t, err)
+	}
+
+	filter := &binlogdatapb.Filter{
+		Rules: []*binlogdatapb.Rule{{
+			Match: "/t1_copy_all.*/",
+		}},
+	}
+	flags := &vtgatepb.VStreamFlags{}
+
+	// We have 2 shards in each keyspace. We assume the rows are
+	// evenly split across each shard. For each INSERT statement, which
+	// is a transaction and gets a global transaction identifier or GTID, we
+	// have 1 each of the following events:
+	//    begin, field, position, lastpk, commit (5)
+	// For each row created in the INSERT statement -- 8 on ks1 and
+	// 2 on ks2 -- we have 1 row event between the begin and commit.
+	// When we have copied all rows for a table in the shard, the shard
+	// also gets events marking the transition from the copy phase to
+	// the streaming phase for that table with 1 each of the following:
+	//    begin, vgtid, commit (3)
+	// As the copy phase completes for all tables on the shard, the shard
+	// gets 1 copy phase completed event.
+	// Lastly the stream has 1 final event to mark the final end to all
+	// copy phase operations in the vstream.
+	expectedKs1EventNum := 2 /* num shards */ * (9 /* begin/field/vgtid:pos/4 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
+	expectedKs2EventNum := 2 /* num shards */ * (6 /* begin/field/vgtid:pos/1 rowevents avg/vgitd: lastpk/commit) */ + 3 /* begin/vgtid/commit for completed table */ + 1 /* copy operation completed */)
+	expectedFullyCopyCompletedNum := 1
+
+	cases := []struct {
+		name                    string
+		shardGtid               *binlogdatapb.ShardGtid
+		expectedEventNum        int
+		expectedCompletedEvents []string
+	}{
+		{
+			name: "copy from all keyspaces",
+			shardGtid: &binlogdatapb.ShardGtid{
+				Keyspace: "/.*",
+			},
+			expectedEventNum: expectedKs1EventNum + expectedKs2EventNum + expectedFullyCopyCompletedNum,
+			expectedCompletedEvents: []string{
+				`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
+				`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
+				`type:COPY_COMPLETED keyspace:"ks2" shard:"-80"`,
+				`type:COPY_COMPLETED keyspace:"ks2" shard:"80-"`,
+				`type:COPY_COMPLETED`,
+			},
+		},
+		{
+			name: "copy from all shards in one keyspace",
+			shardGtid: &binlogdatapb.ShardGtid{
+				Keyspace: "ks",
+			},
+			expectedEventNum: expectedKs1EventNum + expectedFullyCopyCompletedNum,
+			expectedCompletedEvents: []string{
+				`type:COPY_COMPLETED keyspace:"ks" shard:"-80"`,
+				`type:COPY_COMPLETED keyspace:"ks" shard:"80-"`,
+				`type:COPY_COMPLETED`,
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			gconn, conn, mconn, closeConnections := initialize(ctx, t)
+			defer closeConnections()
+
+			var vgtid = &binlogdatapb.VGtid{}
+			vgtid.ShardGtids = []*binlogdatapb.ShardGtid{c.shardGtid}
+			reader, err := gconn.VStream(ctx, topodatapb.TabletType_PRIMARY, vgtid, filter, flags)
+			_, _ = conn, mconn
+			if err != nil {
+				require.NoError(t, err)
+			}
+			require.NotNil(t, reader)
+			var evs []*binlogdatapb.VEvent
+			var completedEvs []*binlogdatapb.VEvent
+			for {
+				e, err := reader.Recv()
+				switch err {
+				case nil:
+					evs = append(evs, e...)
+
+					for _, ev := range e {
+						if ev.Type == binlogdatapb.VEventType_COPY_COMPLETED {
+							completedEvs = append(completedEvs, ev)
+						}
+					}
+
+					if len(evs) == c.expectedEventNum {
+						sortCopyCompletedEvents(completedEvs)
+						for i, ev := range completedEvs {
+							require.Equal(t, c.expectedCompletedEvents[i], ev.String())
+						}
+						t.Logf("TestVStreamCopyUnspecifiedShardGtid was successful")
+						return
+					} else if c.expectedEventNum < len(evs) {
+						printEvents(evs) // for debugging ci failures
+						require.FailNow(t, fmt.Sprintf("len(events)=%d are not expected\n", len(evs)))
+					}
+				case io.EOF:
+					log.Infof("stream ended\n")
+					cancel()
+				default:
+					log.Errorf("Returned err %v", err)
+					require.FailNow(t, "remote error: %v\n", err)
+				}
+			}
+		})
 	}
 }
 
@@ -337,7 +466,11 @@ func TestVStreamCopyResume(t *testing.T) {
 		`type:ROW row_event:{table_name:"ks.t1_copy_resume" row_changes:{after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} keyspace:"ks" shard:"-80"`,
 		`type:ROW timestamp:[0-9]+ row_event:{table_name:"ks.t1_copy_resume" row_changes:{before:{lengths:1 lengths:1 values:"99"} after:{lengths:1 lengths:2 values:"990"}} keyspace:"ks" shard:"-80"} current_time:[0-9]+ keyspace:"ks" shard:"-80"`,
 	}
+	redash80 := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+"}} keyspace:"ks" shard:"(-80|80-)"`)
+	re80dash := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+"} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
+	both := regexp.MustCompile(`(?i)type:VGTID vgtid:{shard_gtids:{keyspace:"ks" shard:"-80" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}} shard_gtids:{keyspace:"ks" shard:"80-" gtid:".+" table_p_ks:{table_name:"t1_copy_resume" lastpk:{fields:{name:"id1" type:INT64} rows:{lengths:1 values:"[0-9]"}}}}} keyspace:"ks" shard:"(-80|80-)"`)
 	var evs []*binlogdatapb.VEvent
+
 	for {
 		e, err := reader.Recv()
 		switch err {
@@ -351,6 +484,19 @@ func TestVStreamCopyResume(t *testing.T) {
 						replCatchupEvents++
 					}
 					printEvents(evs) // for debugging ci failures
+				}
+				if ev.Type == binlogdatapb.VEventType_VGTID {
+					// Validate that the vgtid event the client receives from the vstream copy
+					// has a complete TableLastPK proto message.
+					// Also, to ensure that the client can resume properly, make sure that
+					// the Fields value is present in the sqltypes.Result field and not missing.
+					// It's not guaranteed that BOTH shards have streamed a row yet as the order
+					// of events in the stream is non-determinstic. So we check to be sure that
+					// at least one shard has copied rows and thus has a full TableLastPK proto
+					// message.
+					eventStr := ev.String()
+					require.True(t, redash80.MatchString(eventStr) || re80dash.MatchString(eventStr) || both.MatchString(eventStr),
+						"VGTID event does not have a complete TableLastPK proto message for either shard; event: %s", eventStr)
 				}
 			}
 			if expectedCatchupEvents == replCatchupEvents && expectedRowCopyEvents == rowCopyEvents {
@@ -562,4 +708,20 @@ func (v VEventSorter) Less(i, j int) bool {
 		return v[i].Timestamp < v[j].Timestamp
 	}
 	return valI < valJ
+}
+
+// The arrival order of COPY_COMPLETED events with keyspace/shard is not constant.
+// On the other hand, the last event should always be a fully COPY_COMPLETED event.
+// That's why the sort.Slice doesn't have to handle the last element in completedEvs.
+func sortCopyCompletedEvents(completedEvs []*binlogdatapb.VEvent) {
+	sortVEventByKeyspaceAndShard(completedEvs[:len(completedEvs)-1])
+}
+
+func sortVEventByKeyspaceAndShard(evs []*binlogdatapb.VEvent) {
+	sort.Slice(evs, func(i, j int) bool {
+		if evs[i].Keyspace == evs[j].Keyspace {
+			return evs[i].Shard < evs[j].Shard
+		}
+		return evs[i].Keyspace < evs[j].Keyspace
+	})
 }

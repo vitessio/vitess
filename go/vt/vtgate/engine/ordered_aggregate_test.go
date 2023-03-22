@@ -32,6 +32,7 @@ import (
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
+	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 var collationEnv *collations.Environment

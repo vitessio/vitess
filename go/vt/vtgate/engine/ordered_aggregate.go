@@ -25,13 +25,19 @@ import (
 
 	"vitess.io/vitess/go/vt/sqlparser"
 
-	"google.golang.org/protobuf/proto"
-
 	"vitess.io/vitess/go/sqltypes"
+	. "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+)
+
+var (
+	// Some predefined values
+	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
+	countOne  = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
+	sumZero   = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
 )
 
 var _ Primitive = (*OrderedAggregate)(nil)
@@ -87,7 +93,7 @@ func (gbp GroupByParams) String() string {
 	}
 
 	if gbp.CollationID != collations.Unknown {
-		collation := collations.Local().LookupByID(gbp.CollationID)
+		collation := gbp.CollationID.Get()
 		out += " COLLATE " + collation.Name()
 	}
 
@@ -129,8 +135,7 @@ func (ap *AggregateParams) String() string {
 		keyCol = fmt.Sprintf("%s|%d", keyCol, ap.WCol)
 	}
 	if ap.CollationID != collations.Unknown {
-		collation := collations.Local().LookupByID(ap.CollationID)
-		keyCol += " COLLATE " + collation.Name()
+		keyCol += " COLLATE " + ap.CollationID.Get().Name()
 	}
 	dispOrigOp := ""
 	if ap.OrigOpcode != AggregateUnassigned && ap.OrigOpcode != ap.Opcode {
@@ -140,70 +145,6 @@ func (ap *AggregateParams) String() string {
 		return fmt.Sprintf("%s%s(%s) AS %s", ap.Opcode.String(), dispOrigOp, keyCol, ap.Alias)
 	}
 	return fmt.Sprintf("%s%s(%s)", ap.Opcode.String(), dispOrigOp, keyCol)
-}
-
-// AggregateOpcode is the aggregation Opcode.
-type AggregateOpcode int
-
-// These constants list the possible aggregate opcodes.
-const (
-	AggregateUnassigned = AggregateOpcode(iota)
-	AggregateCount
-	AggregateSum
-	AggregateMin
-	AggregateMax
-	AggregateCountDistinct
-	AggregateSumDistinct
-	AggregateGtid
-	AggregateRandom
-	AggregateCountStar
-)
-
-var (
-	// OpcodeType keeps track of the known output types for different aggregate functions
-	OpcodeType = map[AggregateOpcode]querypb.Type{
-		AggregateCountDistinct: sqltypes.Int64,
-		AggregateCount:         sqltypes.Int64,
-		AggregateCountStar:     sqltypes.Int64,
-		AggregateSumDistinct:   sqltypes.Decimal,
-		AggregateSum:           sqltypes.Decimal,
-		AggregateGtid:          sqltypes.VarChar,
-	}
-	// Some predefined values
-	countZero = sqltypes.MakeTrusted(sqltypes.Int64, []byte("0"))
-	countOne  = sqltypes.MakeTrusted(sqltypes.Int64, []byte("1"))
-	sumZero   = sqltypes.MakeTrusted(sqltypes.Decimal, []byte("0"))
-)
-
-// SupportedAggregates maps the list of supported aggregate
-// functions to their opcodes.
-var SupportedAggregates = map[string]AggregateOpcode{
-	"count": AggregateCount,
-	"sum":   AggregateSum,
-	"min":   AggregateMin,
-	"max":   AggregateMax,
-	// These functions don't exist in mysql, but are used
-	// to display the plan.
-	"count_distinct": AggregateCountDistinct,
-	"sum_distinct":   AggregateSumDistinct,
-	"vgtid":          AggregateGtid,
-	"count_star":     AggregateCountStar,
-	"random":         AggregateRandom,
-}
-
-func (code AggregateOpcode) String() string {
-	for k, v := range SupportedAggregates {
-		if v == code {
-			return k
-		}
-	}
-	return "ERROR"
-}
-
-// MarshalJSON serializes the AggregateOpcode as a JSON string.
-// It's used for testing and diagnostics.
-func (code AggregateOpcode) MarshalJSON() ([]byte, error) {
-	return ([]byte)(fmt.Sprintf("\"%s\"", code.String())), nil
 }
 
 // RouteType returns a description of the query routing type used by the primitive
@@ -402,7 +343,7 @@ func convertRow(row []sqltypes.Value, preProcess bool, aggregates []*AggregatePa
 				Shard:    row[aggr.Col+1].ToString(),
 				Gtid:     row[aggr.Col].ToString(),
 			})
-			data, _ := proto.Marshal(vgtid)
+			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			newRow[aggr.Col] = val
 		}
@@ -516,7 +457,7 @@ func merge(
 			if err != nil {
 				return nil, nil, err
 			}
-			err = proto.Unmarshal(rowBytes, vgtid)
+			err = vgtid.UnmarshalVT(rowBytes)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -525,7 +466,7 @@ func merge(
 				Shard:    row2[aggr.Col+1].ToString(),
 				Gtid:     row2[aggr.Col].ToString(),
 			})
-			data, _ := proto.Marshal(vgtid)
+			data, _ := vgtid.MarshalVT()
 			val, _ := sqltypes.NewValue(sqltypes.VarBinary, data)
 			result[aggr.Col] = val
 		case AggregateRandom:
@@ -575,7 +516,7 @@ func convertFinal(current []sqltypes.Value, aggregates []*AggregateParams) ([]sq
 			if err != nil {
 				return nil, err
 			}
-			err = proto.Unmarshal(currentBytes, vgtid)
+			err = vgtid.UnmarshalVT(currentBytes)
 			if err != nil {
 				return nil, err
 			}

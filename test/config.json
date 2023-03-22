@@ -252,7 +252,7 @@
 		},
 		"onlineddl_ghost": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/ghost"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/ghost", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_ghost",
@@ -261,7 +261,7 @@
 		},
 		"onlineddl_vrepl": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/vrepl", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_vrepl",
@@ -297,7 +297,7 @@
 		},
 		"onlineddl_revert": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert", "-timeout", "20m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/revert", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_revert",
@@ -306,7 +306,7 @@
 		},
 		"onlineddl_scheduler": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "20m"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/onlineddl/scheduler", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "onlineddl_scheduler",
@@ -315,7 +315,7 @@
 		},
 		"schemadiff_vrepl": {
 			"File": "unused.go",
-			"Args": ["vitess.io/vitess/go/test/endtoend/schemadiff/vrepl"],
+			"Args": ["vitess.io/vitess/go/test/endtoend/schemadiff/vrepl", "-timeout", "30m"],
 			"Command": [],
 			"Manual": false,
 			"Shard": "schemadiff_vrepl",
