@@ -796,42 +796,21 @@ func (s *Schema) ValidateViewReferences() error {
 	for _, view := range s.Views() {
 		sel := sqlparser.CloneSelectStatement(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.Analyze(sel, semanticKS.Name, schemaInformation)
-		extractColName := func(arg any) string {
-			switch arg := arg.(type) {
-			case string:
-				return arg
-			case *sqlparser.ColName:
-				return arg.Name.String()
-			default:
-				return "" // unexpected
-			}
-		}
 		formalizeErr := func(err error) error {
 			if err == nil {
 				return nil
 			}
-			semErr, ok := err.(*semantics.Error)
-			if !ok {
-				return err
-			}
-			if len(semErr.Args()) == 0 {
-				return err
-			}
-			switch semErr.Code {
-			case semantics.AmbiguousColumn:
-				if colName := extractColName(semErr.Args()[0]); colName != "" {
-					return &InvalidColumnReferencedInViewError{
-						View:      view.Name(),
-						Column:    colName,
-						Ambiguous: true,
-					}
+			switch e := err.(type) {
+			case *semantics.AmbiguousColumnError:
+				return &InvalidColumnReferencedInViewError{
+					View:      view.Name(),
+					Column:    e.Column,
+					Ambiguous: true,
 				}
-			case semantics.ColumnNotFound:
-				if colName := extractColName(semErr.Args()[0]); colName != "" {
-					return &InvalidColumnReferencedInViewError{
-						View:   view.Name(),
-						Column: colName,
-					}
+			case *semantics.ColumnNotFoundError:
+				return &InvalidColumnReferencedInViewError{
+					View:   view.Name(),
+					Column: e.Column.Name.String(),
 				}
 			}
 			return err
