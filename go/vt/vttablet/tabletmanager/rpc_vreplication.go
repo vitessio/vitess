@@ -33,9 +33,9 @@ import (
 
 const (
 	// Retrieve the current configuration values for a workflow's vreplication stream.
-	selectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
+	sqlSelectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	// Update the configuration values for a workflow's vreplication stream.
-	updateVRWorkflowConfig = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
+	sqlUpdateVRWorkflowConfig = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
 )
 
 // VReplicationExec executes a vreplication command.
@@ -66,7 +66,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
-	parsed := sqlparser.BuildParsedQuery(selectVRWorkflowConfig, sidecardb.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVRWorkflowConfig, sidecardb.GetIdentifier(), ":wf")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -112,7 +112,7 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 		"tt": sqltypes.StringBindVariable(tabletTypes),
 		"id": sqltypes.Int64BindVariable(id),
 	}
-	parsed = sqlparser.BuildParsedQuery(updateVRWorkflowConfig, sidecardb.GetIdentifier(), ":sc", ":cl", ":tt", ":id")
+	parsed = sqlparser.BuildParsedQuery(sqlUpdateVRWorkflowConfig, sidecardb.GetIdentifier(), ":sc", ":cl", ":tt", ":id")
 	stmt, err = parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err

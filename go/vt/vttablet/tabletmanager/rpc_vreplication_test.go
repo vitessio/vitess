@@ -72,7 +72,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		mysqld.Close()
 		db.Close()
 	}()
-	parsed := sqlparser.BuildParsedQuery(selectVRWorkflowConfig, sidecardb.DefaultName, ":wf")
+	parsed := sqlparser.BuildParsedQuery(sqlSelectVRWorkflowConfig, sidecardb.DefaultName, ":wf")
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(workflow),
 	}
