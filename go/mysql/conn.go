@@ -1279,10 +1279,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				c.cs.pending.Rows = append(c.cs.pending.Rows, newqr.Rows...)
 			}
 
-			// TODO: why not immediately just write them out as we get them?
-
-			// write out some rows to prevent buffer from getting too large
-			if len(c.cs.pending.Rows) > 128 {
+			// write out some rows to prevent packets from getting too large
+			for len(c.cs.pending.Rows) < int(numRows) && len(c.cs.pending.Rows) > 128 {
 				pendingRows := c.cs.pending.Rows[128:]
 				c.cs.pending.Rows = c.cs.pending.Rows[:128]
 				if err = c.writeBinaryRows(c.cs.pending); err != nil {
