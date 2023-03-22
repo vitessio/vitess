@@ -414,7 +414,7 @@ func TestQueries(t *testing.T) {
 				sqltypes.MakeTrusted(querypb.Type_VARCHAR, []byte("nice name")),
 			},
 		},
-		RowsAffected: 99999, // TODO: just checking if these tests are even run
+		RowsAffected: 2,
 	})
 
 	// Typical Select with TYPE_ONLY.
