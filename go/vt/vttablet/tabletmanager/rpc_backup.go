@@ -73,6 +73,9 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	}
 	defer tm.endBackup(backupMode)
 
+	// create the loggers: tee to console and source
+	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
+
 	var originalType topodatapb.TabletType
 	if engine.ShouldDrainForBackup() {
 		if err := tm.lock(ctx); err != nil {
@@ -89,9 +92,19 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 		if err := tm.changeTypeLocked(ctx, topodatapb.TabletType_BACKUP, DBActionNone, SemiSyncActionUnset); err != nil {
 			return err
 		}
+
+		// adding defer to original value in case of any failures
+		defer func() {
+			bgCtx := context.Background()
+			// Change our type back to the original value.
+			// Original type could be primary so pass in a real value for PrimaryTermStartTime
+			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
+				if err != nil {
+					l.Errorf("mysql backup command returned error: %v", err)
+				}
+			}
+		}()
 	}
-	// create the loggers: tee to console and source
-	l := logutil.NewTeeLogger(logutil.NewConsoleLogger(), logger)
 
 	// now we can run the backup
 	backupParams := mysqlctl.BackupParams{

@@ -512,18 +512,22 @@ func (be *BuiltinBackupEngine) backupFiles(
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire(ctx, 1)
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			err = sema.Acquire(ctx, 1)
+			if err != nil {
+				log.Errorf("not able to acquire semaphore to backup file:%s  err: %s", fe, err.Error())
+				return
+			}
 			defer sema.Release(1)
+
 			if bh.HasErrors() {
 				return
 			}
 
 			// Backup the individual file.
 			name := fmt.Sprintf("%v", i)
-			bh.RecordError(be.backupFile(ctx, params, bh, &fes[i], name))
+			bh.RecordError(be.backupFile(ctx, params, bh, fe, name))
 		}(i)
 	}
 
@@ -882,16 +886,19 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
-
-			// Wait until we are ready to go, skip if we already
-			// encountered an error.
-			sema.Acquire(ctx, 1)
+			fe := &fes[i]
+			// Wait until we are ready to go, return if we encounter an error
+			err = sema.Acquire(ctx, 1)
+			if err != nil {
+				log.Errorf("not able to acquire semaphore to backup file:%s  err: %s", fe.Name, err.Error())
+				return
+			}
 			defer sema.Release(1)
+
 			if rec.HasErrors() {
 				return
 			}
 
-			fe := &fes[i]
 			fe.ParentPath = createdDir
 			// And restore the file.
 			name := fmt.Sprintf("%v", i)
