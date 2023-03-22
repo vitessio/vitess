@@ -2203,7 +2203,7 @@ func (asm *assembler) NullCheck1r(j *jump) {
 			return j.offset()
 		}
 		return 1
-	}, "NULLCHECK SP-1, SP-2")
+	}, "NULLCHECK SP-1 [rhs]")
 }
 
 func (asm *assembler) NullCheck2(j *jump) {
