@@ -30,18 +30,12 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tabletserver/tabletenv"
 )
 
-var (
-	now         = time.Now()
-	mockNowFunc = func() time.Time {
-		return now
-	}
-)
-
 func TestWriteHeartbeat(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	tw := newTestWriter(db, mockNowFunc)
+	now := time.Now()
+	tw := newTestWriter(db, &now)
 	upsert := fmt.Sprintf("INSERT INTO %s.heartbeat (ts, tabletUid, keyspaceShard) VALUES (%d, %d, '%s') ON DUPLICATE KEY UPDATE ts=VALUES(ts), tabletUid=VALUES(tabletUid)",
 		"_vt", now.UnixNano(), tw.tabletAlias.Uid, tw.keyspaceShard)
 	db.AddQuery(upsert, &sqltypes.Result{})
@@ -58,7 +52,8 @@ func TestWriteHeartbeatError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
 
-	tw := newTestWriter(db, mockNowFunc)
+	now := time.Now()
+	tw := newTestWriter(db, &now)
 
 	writes.Reset()
 	writeErrors.Reset()
@@ -68,7 +63,7 @@ func TestWriteHeartbeatError(t *testing.T) {
 	assert.Equal(t, int64(1), writeErrors.Get())
 }
 
-func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatWriter {
+func newTestWriter(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatWriter {
 	config := tabletenv.NewDefaultConfig()
 	config.ReplicationTracker.Mode = tabletenv.Heartbeat
 	config.ReplicationTracker.HeartbeatIntervalSeconds = 1
@@ -79,7 +74,13 @@ func newTestWriter(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatWriter 
 
 	tw := newHeartbeatWriter(tabletenv.NewEnv(config, "WriterTest"), &topodatapb.TabletAlias{Cell: "test", Uid: 1111})
 	tw.keyspaceShard = "test:0"
-	tw.now = nowFunc
+
+	if frozenTime != nil {
+		tw.now = func() time.Time {
+			return *frozenTime
+		}
+	}
+
 	tw.appPool.Open(dbc.AppWithDB())
 	tw.allPrivsPool.Open(dbc.AllPrivsWithDB())
 
