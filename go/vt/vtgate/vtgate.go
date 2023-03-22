@@ -283,8 +283,6 @@ func Init(
 
 	warnings = stats.NewCountersWithSingleLabel("VtGateWarnings", "Vtgate warnings", "type", "IgnoredSet", "ResultsExceeded", "WarnPayloadSizeExceeded")
 
-	_ = stats.NewGaugeFunc("Uptime", "Uptime in seconds", func() int64 { return int64(time.Since(startTime).Seconds()) })
-
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
 			f(rpcVTGate)

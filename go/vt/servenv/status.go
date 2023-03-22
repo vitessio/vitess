@@ -33,6 +33,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
+	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -311,4 +312,8 @@ func init() {
 	if err != nil {
 		log.Exitf("os.Hostname: %v", err)
 	}
+
+	_ = stats.NewGaugeFunc("Uptime", "Uptime in seconds", func() int64 {
+		return int64(time.Since(serverStart).Seconds())
+	})
 }
