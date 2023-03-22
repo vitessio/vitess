@@ -66,16 +66,10 @@ func planHorizon(ctx *plancontext.PlanningContext, in *Horizon) (ops.Operator, r
 	needsOrdering := len(qp.OrderExprs) > 0
 	canShortcut := isRoute && sel.Having == nil && !needsOrdering
 
-	// If we still have a HAVING clause, it's because it could not be pushed to the WHERE,
-	// so it probably has aggregations
-	switch {
-	case qp.NeedsAggregation() || sel.Having != nil:
-		return nil, rewrite.VisitChildren, errNotHorizonPlanned
-	case canShortcut && !needsOrdering && !qp.NeedsDistinct() && in.Select.GetLimit() == nil:
+	if !qp.NeedsAggregation() && sel.Having == nil && canShortcut && !needsOrdering && !qp.NeedsDistinct() && in.Select.GetLimit() == nil {
 		return planSingleRoute(rb, in)
-	default:
-		return nil, rewrite.VisitChildren, errNotHorizonPlanned
 	}
+	return nil, rewrite.VisitChildren, errNotHorizonPlanned
 }
 
 func planSingleRoute(rb *Route, horizon *Horizon) (ops.Operator, rewrite.VisitRule, error) {
