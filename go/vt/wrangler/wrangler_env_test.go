@@ -37,9 +37,7 @@ import (
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
-	"vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	"vitess.io/vitess/go/vt/proto/topodata"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -331,15 +329,6 @@ func (tmc *testWranglerTMClient) VReplicationExec(ctx context.Context, tablet *t
 		return nil, fmt.Errorf("query %q not found for tablet %d", query, tablet.Alias.Uid)
 	}
 	return result, nil
-}
-
-func (tmc *testWranglerTMClient) UpdateVRWorkflow(ctx context.Context, tablet *topodata.Tablet, req *tabletmanagerdata.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
-	res := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Tablet|RowsAffected",
-		"varchar|int64"),
-		fmt.Sprintf("%s-0000000%d|1", tablet.Alias.Cell, tablet.Alias.Uid),
-	)
-	return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
 }
 
 func (tmc *testWranglerTMClient) ExecuteFetchAsApp(ctx context.Context, tablet *topodatapb.Tablet, usePool bool, req *tabletmanagerdatapb.ExecuteFetchAsAppRequest) (*querypb.QueryResult, error) {

@@ -50,11 +50,13 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 	return tm.VREngine.WaitForPos(ctx, id, pos)
 }
 
-// UpdateVRWorkflow updates the sidecar databases's vreplication record
-// for this tablet's vreplication workflow stream.
+// UpdateVRWorkflow updates the sidecar databases's vreplication
+// record for this tablet's vreplication workflow stream.
+// Note: the VReplication engine creates a new controller for the
+// workflow when the record is updated, so we also in effect restart
+// the workflow via the update.
 func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
-	restart := false
-	query := "select id, state, source, cell, tablet_types from %s.vreplication where workflow = %a"
+	query := "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
@@ -73,14 +75,8 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 
 	row := res.Named().Row()
 	id := row.AsInt64("id", 0)
-	state := row.AsString("state", "")
 	cells := row.AsString("cells", "")
 	tabletTypes := row.AsString("tablet_types", "")
-	// If the stream was running then we will stop and restart it.
-	if state == "Running" {
-		state = "Stopped"
-		restart = true
-	}
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
 	// For the string values, we use NULL to differentiate from
@@ -104,35 +100,14 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	query = "update %s.vreplication set state = %a, source = %a, cell = %a, tablet_types = %a where id = %a"
+	query = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
 	bindVars = map[string]*querypb.BindVariable{
-		"st": sqltypes.StringBindVariable(state),
 		"sc": sqltypes.StringBindVariable(string(source)),
 		"cl": sqltypes.StringBindVariable(cells),
 		"tt": sqltypes.StringBindVariable(tabletTypes),
 		"id": sqltypes.Int64BindVariable(id),
 	}
-	parsed = sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":st", ":sc", ":cl", ":tt", ":id")
-	stmt, err = parsed.GenerateQuery(bindVars, nil)
-	if err != nil {
-		return nil, err
-	}
-	res, err = tm.VREngine.Exec(stmt)
-
-	if err != nil {
-		return nil, err
-	}
-	if !restart {
-		return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: sqltypes.ResultToProto3(res)}, nil
-	}
-
-	state = "Running"
-	query = "update %s.vreplication set state = %a where id = %a"
-	bindVars = map[string]*querypb.BindVariable{
-		"st": sqltypes.StringBindVariable(state),
-		"id": sqltypes.Int64BindVariable(id),
-	}
-	parsed = sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":st", ":id")
+	parsed = sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":sc", ":cl", ":tt", ":id")
 	stmt, err = parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err

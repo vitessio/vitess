@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -131,7 +132,6 @@ func (wr *Wrangler) QueryResultForTabletResults(results map[*topo.TabletInfo]*sq
 
 // VExecResult runs VExec and the naggregates the results into a single *sqltypes.Result
 func (wr *Wrangler) VExecResult(ctx context.Context, workflow, keyspace, query string, dryRun bool) (qr *sqltypes.Result, err error) {
-
 	results, err := wr.VExec(ctx, workflow, keyspace, query, dryRun)
 	if err != nil {
 		return nil, err
@@ -356,10 +356,12 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	var query string
 	updateSQL := "update _vt.vreplication set state = %s"
 	switch action {
-	case "stop", "update":
+	case "stop":
 		query = fmt.Sprintf(updateSQL, encodeString("Stopped"))
 	case "start":
 		query = fmt.Sprintf(updateSQL, encodeString("Running"))
+	case "update":
+		// We don't use the SQL interface, so this is only for dry-run purposes.
 	case "delete":
 		query = sqlVReplicationDelete
 	default:
@@ -376,18 +378,21 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 	}
 	if action == "update" {
 		changes := false
+		var dryRunChanges strings.Builder
 		req := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 			Workflow: workflow,
 		}
 		if cells.Changed {
 			changes = true
 			req.Cells = strings.TrimSpace(cells.Value.String())
+			dryRunChanges.WriteString(fmt.Sprintf("  cells=%q\n", req.Cells))
 		} else { // Indicate that we do NOT want to set the value to an empty string.
 			req.Cells = sqltypes.NULL.String()
 		}
 		if tabletTypes.Changed {
 			changes = true
 			req.TabletTypes = strings.TrimSpace(tabletTypes.Value.String())
+			dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", req.TabletTypes))
 		} else { // Indicate that we do NOT want to set the value to an empty string.
 			req.TabletTypes = sqltypes.NULL.String()
 		}
@@ -395,16 +400,34 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			changes = true
 			onddl, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(onDDL.Value.String())]
 			if !ok {
-				return nil, fmt.Errorf("invalid value provided for on-ddl: %v", onDDL.Value.String())
+				return nil, fmt.Errorf("invalid value provided for on-ddl: %s", onDDL.Value.String())
 			}
 			req.OnDdl = binlogdatapb.OnDDLAction(onddl)
+			dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", onDDL.Value.String()))
 		} else { // Indicate that we do NOT want to update the value.
 			req.OnDdl = -1
 		}
 		if !changes {
 			return nil, fmt.Errorf(errWorkflowUpdateWithoutChanges)
 		}
-		if !dryRun {
+		if dryRun {
+			wr.Logger().Printf("The following workflow fields will be updated:\n%s", dryRunChanges.String())
+			wr.Logger().Printf("On the following tablets in the %s keyspace for workflow %s:\n",
+				keyspace, workflow)
+			vx := newVExec(ctx, workflow, keyspace, "", wr)
+			if err := vx.getPrimaries(); err != nil {
+				return nil, err
+			}
+			tablets := vx.primaries
+			sort.Slice(tablets, func(i, j int) bool {
+				return tablets[i].AliasString() < tablets[j].AliasString()
+			})
+			for _, tablet := range tablets {
+				wr.Logger().Printf("  %s\n", tablet.AliasString())
+			}
+			wr.Logger().Printf("\n")
+			return nil, nil
+		} else {
 			callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
 				res, err := wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req)
 				return res.Result, err

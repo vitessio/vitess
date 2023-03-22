@@ -3656,7 +3656,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		if err != nil {
 			return err
 		}
-		if action == "show" || action == "listall" {
+		if action == "show" {
 			return nil
 		}
 	}

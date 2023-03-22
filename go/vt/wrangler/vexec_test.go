@@ -27,12 +27,9 @@ import (
 
 	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
-	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
-	"vitess.io/vitess/go/vt/sqlparser"
 )
 
 var unusedFlag = &pflag.Flag{}
@@ -476,9 +473,14 @@ func TestVExecValidations(t *testing.T) {
 	}
 }
 
+// TestWorkflowUpdate tests the vtctl client
+// Workflow command with the update action.
+// It only tests the dry-run output because
+// the actual execution happens in the
+// tabletmanager and the behavior is tested
+// there.
 func TestWorkflowUpdate(t *testing.T) {
 	ctx := context.Background()
-	id := 1
 	workflow := "wrWorkflow"
 	keyspace := "target"
 	env := newWranglerTestEnv(t, []string{"0"}, []string{"-80", "80-"}, "", nil, 1234)
@@ -486,13 +488,12 @@ func TestWorkflowUpdate(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 	tests := []struct {
-		name            string
-		cells           *pflag.Flag
-		tabletTypes     *pflag.Flag
-		onDDL           *pflag.Flag
-		wantErr         string
-		dryRun          bool
-		workflowStopped bool
+		name        string
+		cells       *pflag.Flag
+		tabletTypes *pflag.Flag
+		onDDL       *pflag.Flag
+		output      string
+		wantErr     string
 	}{
 		{
 			name:        "no flags",
@@ -510,6 +511,7 @@ func TestWorkflowUpdate(t *testing.T) {
 			},
 			tabletTypes: &pflag.Flag{},
 			onDDL:       &pflag.Flag{},
+			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
 		},
 		{
 			name:  "only tablet types",
@@ -519,7 +521,8 @@ func TestWorkflowUpdate(t *testing.T) {
 				Value:   stringValue{"primary,replica"},
 				Changed: true,
 			},
-			onDDL: &pflag.Flag{},
+			onDDL:  &pflag.Flag{},
+			output: "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
 		},
 		{
 			name:        "only on-ddl",
@@ -530,6 +533,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				Value:   stringValue{"EXEC_IGNORE"},
 				Changed: true,
 			},
+			output: "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
 		},
 		{
 			name:        "only on-ddl invalid",
@@ -559,86 +563,9 @@ func TestWorkflowUpdate(t *testing.T) {
 				Value:   stringValue{"EXEC"},
 				Changed: true,
 			},
-		},
-		{
-			name: "all flags workflow not running",
-			cells: &pflag.Flag{
-				Name:    "cells",
-				Value:   stringValue{"zone1,zone2"},
-				Changed: true,
-			},
-			tabletTypes: &pflag.Flag{
-				Name:    "tablet-types",
-				Value:   stringValue{"rdonly,spare"},
-				Changed: true,
-			},
-			onDDL: &pflag.Flag{
-				Name:    "on-ddl",
-				Value:   stringValue{"EXEC"},
-				Changed: true,
-			},
-			workflowStopped: true,
-		},
-		{
-			name: "all flags dry run",
-			cells: &pflag.Flag{
-				Name:    "cells",
-				Value:   stringValue{"zone1,zone2"},
-				Changed: true,
-			},
-			tabletTypes: &pflag.Flag{
-				Name:    "tablet-types",
-				Value:   stringValue{"rdonly,spare"},
-				Changed: true,
-			},
-			onDDL: &pflag.Flag{
-				Name:    "on-ddl",
-				Value:   stringValue{"EXEC"},
-				Changed: true,
-			},
-			dryRun: true,
+			output: "The following workflow fields will be updated:\n  cells=\"zone1,zone2\"\n  tablet_types=\"rdonly,spare\"\n  on_ddl=\"EXEC\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
 		},
 	}
-
-	blsStr := `keyspace:"target" shard:"0" filter:{rules:{match:"customer" filter:"select * from customer"} rules:{match:"corder" filter:"select * from corder"}}`
-	query := fmt.Sprintf("select id, state, source, cell, tablet_types from _vt.vreplication where workflow = %s", workflow)
-	runningRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|state|source|cell|tablet_types",
-		"int64|varchar|varchar|varchar|varchar"),
-		fmt.Sprintf("1|Stopped|%s|cell1|primary,replica", blsStr),
-	)
-
-	stoppedRes := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"id|state|source|cell|tablet_types",
-		"int64|varchar|varchar|varchar|varchar"),
-		fmt.Sprintf("1|Stopped|%s|cell1|primary,replica", blsStr),
-	)
-
-	successfulResults := sqltypes.MakeTestResult(sqltypes.MakeTestFields(
-		"Tablet|RowsAffected",
-		"varchar|int64"),
-		"zone1-0000000200|1",
-		"zone1-0000000210|1",
-	)
-
-	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
-will be run on the following streams in keyspace target for workflow wrWorkflow:
-
-
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-|        TABLET        | ID |          BINLOGSOURCE          |  STATE  |  DBNAME   |               CURRENT GTID               |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| -80/zone1-0000000200 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-| 80-/zone1-0000000210 |  1 | keyspace:"source" shard:"0"    | Copying | vt_target | 14b68925-696a-11ea-aee7-fec597a91f5e:1-3 |
-|                      |    | filter:{rules:{match:"t1"}}    |         |           |                                          |
-+----------------------+----+--------------------------------+---------+-----------+------------------------------------------+
-
-
-
-
-`
 
 	for _, tcase := range tests {
 		t.Run(tcase.name, func(t *testing.T) {
@@ -646,67 +573,15 @@ will be run on the following streams in keyspace target for workflow wrWorkflow:
 			require.NotNil(t, tcase.tabletTypes)
 			require.NotNil(t, tcase.onDDL)
 
-			queryRes := runningRes
-			if tcase.workflowStopped {
-				queryRes = stoppedRes
-			}
-
-			env.tmc.setVRResults(env.tmc.tablets[200].tablet, query, queryRes)
-			env.tmc.setVRResults(env.tmc.tablets[210].tablet, query, queryRes)
-
-			bls := &binlogdatapb.BinlogSource{}
-			err := prototext.Unmarshal([]byte(blsStr), bls)
-			require.NoError(t, err)
-			ublsStr, err := prototext.Marshal(bls)
-			require.NoError(t, err)
-
-			updateQuery := "update _vt.vreplication set state = 'Stopped'"
-			if tcase.onDDL.Changed {
-				bls.OnDdl = binlogdatapb.OnDDLAction(binlogdatapb.OnDDLAction_value[tcase.onDDL.Value.String()])
-			}
-			updateQuery += fmt.Sprintf(", source = '%s'", ublsStr)
-			if tcase.cells.Changed {
-				updateQuery += fmt.Sprintf(", cell = '%s'", tcase.cells.Value.String())
-			}
-			if tcase.tabletTypes.Changed {
-				updateQuery += fmt.Sprintf(", tablet_types = '%s'", tcase.tabletTypes.Value.String())
-			}
-
-			// First we stop the workflow and update the config on both
-			// target primaries.
-			updateQuery = sqlparser.BuildParsedQuery(updateQuery+" where id = %d",
-				id).Query
-			env.tmc.setVRResults(env.tmc.tablets[200].tablet, updateQuery, &sqltypes.Result{})
-			env.tmc.setVRResults(env.tmc.tablets[210].tablet, updateQuery, &sqltypes.Result{})
-
-			// We only restart the workflow if it was running before.
-			if !tcase.workflowStopped {
-				// Then we restart the workflow for the config changes to take
-				// effect on both target primaries.
-				restartQuery := fmt.Sprintf("update _vt.vreplication set state = 'Running' where id = %d", id)
-				env.tmc.setVRResults(env.tmc.tablets[200].tablet, restartQuery, &sqltypes.Result{})
-				env.tmc.setVRResults(env.tmc.tablets[210].tablet, restartQuery, &sqltypes.Result{})
-			}
-
-			res, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", tcase.dryRun, tcase.cells, tcase.tabletTypes, tcase.onDDL)
+			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, tcase.cells, tcase.tabletTypes, tcase.onDDL)
 			if tcase.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, err.Error(), tcase.wantErr)
 			} else {
+				// Logger.String() adds additional newlines to each log line.
+				output := strings.ReplaceAll(logger.String(), "\n\n", "\n")
 				require.NoError(t, err)
-				if tcase.dryRun {
-					require.Equal(t, dryRunResult, logger.String())
-				} else {
-					require.Equal(t, 2, len(res))
-					tres := &sqltypes.Result{}
-					for _, val := range res {
-						tres.AppendResult(val)
-					}
-					sort.Slice(tres.Rows, func(i, j int) bool {
-						return tres.Rows[i][0].ToString() < tres.Rows[j][0].ToString()
-					})
-					require.Equal(t, successfulResults, tres)
-				}
+				require.Equal(t, tcase.output, output)
 			}
 			logger.Clear()
 		})
