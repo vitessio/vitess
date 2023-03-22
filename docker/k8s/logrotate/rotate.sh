@@ -21,7 +21,7 @@
 ###                                                                         ###
 ###     /vtdataroot/tabletdata/*.log                                        ###
 ###                                                                         ###
-### This behavior may be changed via environmenet variables or cli args.    ###
+### This behavior may be changed via environment variables.                 ###
 ###                                                                         ###
 ### For example, this invocation will change the wilcard expression:        ###
 ###                                                                         ###
@@ -29,7 +29,7 @@
 ###                                                                         ###
 ### Rather than relying on the wildcard expression, it is recommended to    ###
 ### instead disable this behavior and specify the individual log files to   ###
-### be rotated. The invnocation below uses the provided mysql socket to     ###
+### be rotated. The invocation below uses the provided mysql socket to      ###
 ### discover the location of the general log, and disables rotation of      ###
 ### files matching a wildcard:                                              ###
 ###                                                                         ###
@@ -75,13 +75,10 @@ LOG_PATH_UNDEFINED="$LOGROTATEROOT/undefined.log"
 ### ENVIRONMENT VARIABLES
 ###
 ### These environment variables are used to configure the behavior of the
-### program. They are also used to store the values of cli args.
-###
-### Values set by cli args take precedence over values set by environment
-### variables.
+### program.
 ###
 
-# error_log settings
+# audit_log settings
 AUDIT_LOG_DISCOVER_PATH=${AUDIT_LOG_DISCOVER_PATH:-0}
 AUDIT_LOG_PATH=${AUDIT_LOG_PATH:-}
 AUDIT_LOG_ROTATE=${AUDIT_LOG_ROTATE:-}
@@ -112,7 +109,7 @@ GENERAL_LOG_SIZE=${GENERAL_LOG_SIZE:-}
 # interval (in seconds) between logrotate invocations
 ROTATE_INTERVAL=${ROTATE_INTERVAL:-3600}
 
-# mysql socket and user used to flush logs and discover log paths
+# mysql socket, host and user used to flush logs and discover log paths
 MYSQL_HOST=${MYSQL_HOST:-}
 MYSQL_SOCKET=${MYSQL_SOCKET:-/vtdataroot/tabletdata/mysql.sock}
 MYSQL_USER=${MYSQL_USER:-root}
