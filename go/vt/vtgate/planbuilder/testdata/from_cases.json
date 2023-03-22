@@ -114,7 +114,7 @@
     "comment": "select next from non-sequence table",
     "query": "select next value from user",
     "v3-plan": "VT03018: NEXT used on a non-sequence table",
-    "gen4-plan": "NEXT used on a non-sequence table"
+    "gen4-plan": "NEXT used on a non-sequence table `user`"
   },
   {
     "comment": "select next in derived table",
@@ -2766,7 +2766,7 @@
         "Table": "`user`"
       }
     },
-    "gen4-plan": "symbol id not found"
+    "gen4-plan": "symbol t.id not found"
   },
   {
     "comment": "push predicate on joined derived tables",
