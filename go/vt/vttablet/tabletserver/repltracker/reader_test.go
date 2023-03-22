@@ -39,7 +39,9 @@ import (
 func TestReaderReadHeartbeat(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	tr := newReader(db, mockNowFunc)
+
+	now := time.Now()
+	tr := newReader(db, &now)
 	defer tr.Close()
 
 	tr.pool.Open(tr.env.Config().DB.AppWithDB(), tr.env.Config().DB.DbaWithDB(), tr.env.Config().DB.AppDebugWithDB())
@@ -81,6 +83,8 @@ func TestReaderReadHeartbeat(t *testing.T) {
 	utils.MustMatch(t, expectedHisto, heartbeatLagNsHistogram.Counts(), "wrong counts in histogram")
 }
 
+// TestReaderCloseSetsCurrentLagToZero tests that when closing the heartbeat reader, the current lag is
+// set to zero.
 func TestReaderCloseSetsCurrentLagToZero(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
@@ -91,7 +95,7 @@ func TestReaderCloseSetsCurrentLagToZero(t *testing.T) {
 			{Name: "ts", Type: sqltypes.Int64},
 		},
 		Rows: [][]sqltypes.Value{{
-			sqltypes.NewInt64(now.Add(-10 * time.Second).UnixNano()),
+			sqltypes.NewInt64(time.Now().Add(-10 * time.Second).UnixNano()),
 		}},
 	})
 
@@ -112,7 +116,9 @@ func TestReaderCloseSetsCurrentLagToZero(t *testing.T) {
 func TestReaderReadHeartbeatError(t *testing.T) {
 	db := fakesqldb.New(t)
 	defer db.Close()
-	tr := newReader(db, mockNowFunc)
+
+	now := time.Now()
+	tr := newReader(db, &now)
 	defer tr.Close()
 
 	tr.pool.Open(tr.env.Config().DB.AppWithDB(), tr.env.Config().DB.DbaWithDB(), tr.env.Config().DB.AppDebugWithDB())
@@ -130,7 +136,7 @@ func TestReaderReadHeartbeatError(t *testing.T) {
 	assert.Equal(t, int64(1), readErrors.Get(), "wrong read error count")
 }
 
-func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatReader {
+func newReader(db *fakesqldb.DB, frozenTime *time.Time) *heartbeatReader {
 	config := tabletenv.NewDefaultConfig()
 	config.ReplicationTracker.Mode = tabletenv.Heartbeat
 	config.ReplicationTracker.HeartbeatIntervalSeconds = 1
@@ -142,8 +148,10 @@ func newReader(db *fakesqldb.DB, nowFunc func() time.Time) *heartbeatReader {
 	tr := newHeartbeatReader(tabletenv.NewEnv(config, "ReaderTest"))
 	tr.keyspaceShard = "test:0"
 
-	if nowFunc != nil {
-		tr.now = nowFunc
+	if frozenTime != nil {
+		tr.now = func() time.Time {
+			return *frozenTime
+		}
 	}
 
 	return tr
