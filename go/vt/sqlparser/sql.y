@@ -365,7 +365,7 @@ func bindVariable(yylex yyLexer, bvar string) {
 %token <str> ExtractValue UpdateXML
 %token <str> GET_LOCK RELEASE_LOCK RELEASE_ALL_LOCKS IS_FREE_LOCK IS_USED_LOCK
 %token <str> LOCATE POSITION
-%token <str> ST_GeomFromText ST_GeomCollFromText ST_GeometryCollectionFromText ST_GeomCollFromTxt ST_GeometryFromText ST_LineStringFromText ST_LineFromText ST_MultiLineStringFromText ST_MLineFromText ST_MPointFromText ST_MultiPointFromText ST_MPolyFromText ST_MultiPolygonFromText ST_PointFromText ST_PolyFromText ST_PolygonFromText
+%token <str> ST_GeometryCollectionFromText ST_GeometryFromText ST_LineStringFromText ST_MultiLineStringFromText ST_MultiPointFromText ST_MultiPolygonFromText ST_PointFromText ST_PolygonFromText
 
 // Match
 %token <str> MATCH AGAINST BOOLEAN LANGUAGE WITH QUERY EXPANSION WITHOUT VALIDATION
@@ -6076,18 +6076,6 @@ UTC_DATE func_paren_opt
   {
     $$ = &JSONArrayExpr{ Params:$3 }
   }
-| ST_GeomFromText openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3 }
-  }
-| ST_GeomFromText openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5 }
-  }
-| ST_GeomFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  }
 | ST_GeometryFromText openb expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3 }
@@ -6100,18 +6088,6 @@ UTC_DATE func_paren_opt
   {
     $$ = &GeomFromTextExpr{ Type: GeometryFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
-| ST_GeomCollFromText openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3 }
-  }
-| ST_GeomCollFromText openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5 }
-  }
-| ST_GeomCollFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  }
 |  ST_GeometryCollectionFromText openb expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3 }
@@ -6121,18 +6097,6 @@ UTC_DATE func_paren_opt
     $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5 }
   }
 | ST_GeometryCollectionFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  }
-|  ST_GeomCollFromTxt openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3 }
-  }
-| ST_GeomCollFromTxt openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5 }
-  }
-| ST_GeomCollFromTxt openb expression ',' expression ',' expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: GeometryCollectionFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
@@ -6148,18 +6112,6 @@ UTC_DATE func_paren_opt
   {
     $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
-| ST_LineFromText openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3 }
-  }
-| ST_LineFromText openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5 }
-  }
-| ST_LineFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: LineStringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  } 
 | ST_MultiLineStringFromText openb expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3 }
@@ -6172,30 +6124,6 @@ UTC_DATE func_paren_opt
   {
     $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
-| ST_MLineFromText openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3 }
-  }
-| ST_MLineFromText openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5 }
-  }
-| ST_MLineFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiLinestringFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  }
-| ST_MPointFromText openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3 }
-  }
-| ST_MPointFromText openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5 }
-  }
-| ST_MPointFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  }
 | ST_MultiPointFromText openb expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3 }
@@ -6207,18 +6135,6 @@ UTC_DATE func_paren_opt
 | ST_MultiPointFromText openb expression ',' expression ',' expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: MultiPointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  }
-| ST_MPolyFromText openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3 }
-  }
-| ST_MPolyFromText openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5 }
-  }
-| ST_MPolyFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: MultiPolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_MultiPolygonFromText openb expression closeb
   {
@@ -6243,18 +6159,6 @@ UTC_DATE func_paren_opt
 | ST_PointFromText openb expression ',' expression ',' expression closeb
   {
     $$ = &GeomFromTextExpr{ Type: PointFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
-  }
-| ST_PolyFromText openb expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3 }
-  }
-| ST_PolyFromText openb expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5 }
-  }
-| ST_PolyFromText openb expression ',' expression ',' expression closeb
-  {
-    $$ = &GeomFromTextExpr{ Type: PolygonFromText, WktText: $3, Srid: $5, AxisOrderOpt: $7 }
   }
 | ST_PolygonFromText openb expression closeb
   {
@@ -8088,21 +7992,13 @@ non_reserved_keyword:
 | STDDEV_POP %prec FUNCTION_CALL_NON_KEYWORD
 | STDDEV_SAMP %prec FUNCTION_CALL_NON_KEYWORD
 | STREAM
-| ST_GeomFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_GeomCollFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_GeometryCollectionFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_GeomCollFromTxt %prec FUNCTION_CALL_NON_KEYWORD 
 | ST_GeometryFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_LineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_LineFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiLineStringFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MLineFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MPointFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPointFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_MPolyFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_MultiPolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PointFromText %prec FUNCTION_CALL_NON_KEYWORD
-| ST_PolyFromText %prec FUNCTION_CALL_NON_KEYWORD
 | ST_PolygonFromText %prec FUNCTION_CALL_NON_KEYWORD
 | SUBPARTITION
 | SUBPARTITIONS
