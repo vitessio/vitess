@@ -70,6 +70,7 @@ type VTAdminClient interface {
 	// GetShardReplicationPositions returns shard replication positions grouped
 	// by cluster.
 	GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error)
+	GetSrvKeyspaces(ctx context.Context, in *GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*GetSrvKeyspacesResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(ctx context.Context, in *GetSrvVSchemaRequest, opts ...grpc.CallOption) (*SrvVSchema, error)
 	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters
@@ -328,6 +329,15 @@ func (c *vTAdminClient) GetSchemas(ctx context.Context, in *GetSchemasRequest, o
 func (c *vTAdminClient) GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error) {
 	out := new(GetShardReplicationPositionsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetShardReplicationPositions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetSrvKeyspaces(ctx context.Context, in *GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*GetSrvKeyspacesResponse, error) {
+	out := new(GetSrvKeyspacesResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetSrvKeyspaces", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -664,6 +674,7 @@ type VTAdminServer interface {
 	// GetShardReplicationPositions returns shard replication positions grouped
 	// by cluster.
 	GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error)
+	GetSrvKeyspaces(context.Context, *GetSrvKeyspacesRequest) (*GetSrvKeyspacesResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error)
 	// GetSrvVSchemas returns all SrvVSchemas across all (or specified) clusters
@@ -816,6 +827,9 @@ func (UnimplementedVTAdminServer) GetSchemas(context.Context, *GetSchemasRequest
 }
 func (UnimplementedVTAdminServer) GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShardReplicationPositions not implemented")
+}
+func (UnimplementedVTAdminServer) GetSrvKeyspaces(context.Context, *GetSrvKeyspacesRequest) (*GetSrvKeyspacesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspaces not implemented")
 }
 func (UnimplementedVTAdminServer) GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvVSchema not implemented")
@@ -1243,6 +1257,24 @@ func _VTAdmin_GetShardReplicationPositions_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetShardReplicationPositions(ctx, req.(*GetShardReplicationPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetSrvKeyspaces_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSrvKeyspacesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetSrvKeyspaces(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetSrvKeyspaces",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetSrvKeyspaces(ctx, req.(*GetSrvKeyspacesRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1883,6 +1915,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetShardReplicationPositions",
 			Handler:    _VTAdmin_GetShardReplicationPositions_Handler,
+		},
+		{
+			MethodName: "GetSrvKeyspaces",
+			Handler:    _VTAdmin_GetSrvKeyspaces_Handler,
 		},
 		{
 			MethodName: "GetSrvVSchema",

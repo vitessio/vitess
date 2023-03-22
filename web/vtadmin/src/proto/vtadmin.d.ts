@@ -275,6 +275,20 @@ export namespace vtadmin {
         public getShardReplicationPositions(request: vtadmin.IGetShardReplicationPositionsRequest): Promise<vtadmin.GetShardReplicationPositionsResponse>;
 
         /**
+         * Calls GetSrvKeyspaces.
+         * @param request GetSrvKeyspacesRequest message or plain object
+         * @param callback Node-style callback called with the error, if any, and GetSrvKeyspacesResponse
+         */
+        public getSrvKeyspaces(request: vtadmin.IGetSrvKeyspacesRequest, callback: vtadmin.VTAdmin.GetSrvKeyspacesCallback): void;
+
+        /**
+         * Calls GetSrvKeyspaces.
+         * @param request GetSrvKeyspacesRequest message or plain object
+         * @returns Promise
+         */
+        public getSrvKeyspaces(request: vtadmin.IGetSrvKeyspacesRequest): Promise<vtctldata.GetSrvKeyspacesResponse>;
+
+        /**
          * Calls GetSrvVSchema.
          * @param request GetSrvVSchemaRequest message or plain object
          * @param callback Node-style callback called with the error, if any, and SrvVSchema
@@ -836,6 +850,13 @@ export namespace vtadmin {
          * @param [response] GetShardReplicationPositionsResponse
          */
         type GetShardReplicationPositionsCallback = (error: (Error|null), response?: vtadmin.GetShardReplicationPositionsResponse) => void;
+
+        /**
+         * Callback as used by {@link vtadmin.VTAdmin#getSrvKeyspaces}.
+         * @param error Error, if any
+         * @param [response] GetSrvKeyspacesResponse
+         */
+        type GetSrvKeyspacesCallback = (error: (Error|null), response?: vtctldata.GetSrvKeyspacesResponse) => void;
 
         /**
          * Callback as used by {@link vtadmin.VTAdmin#getSrvVSchema}.
@@ -5563,6 +5584,108 @@ export namespace vtadmin {
 
         /**
          * Converts this GetShardReplicationPositionsResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a GetSrvKeyspacesRequest. */
+    interface IGetSrvKeyspacesRequest {
+
+        /** GetSrvKeyspacesRequest keyspace */
+        keyspace?: (string|null);
+
+        /** GetSrvKeyspacesRequest cluster_ids */
+        cluster_ids?: (string[]|null);
+
+        /** GetSrvKeyspacesRequest cells */
+        cells?: (string[]|null);
+    }
+
+    /** Represents a GetSrvKeyspacesRequest. */
+    class GetSrvKeyspacesRequest implements IGetSrvKeyspacesRequest {
+
+        /**
+         * Constructs a new GetSrvKeyspacesRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtadmin.IGetSrvKeyspacesRequest);
+
+        /** GetSrvKeyspacesRequest keyspace. */
+        public keyspace: string;
+
+        /** GetSrvKeyspacesRequest cluster_ids. */
+        public cluster_ids: string[];
+
+        /** GetSrvKeyspacesRequest cells. */
+        public cells: string[];
+
+        /**
+         * Creates a new GetSrvKeyspacesRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns GetSrvKeyspacesRequest instance
+         */
+        public static create(properties?: vtadmin.IGetSrvKeyspacesRequest): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message. Does not implicitly {@link vtadmin.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @param message GetSrvKeyspacesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtadmin.IGetSrvKeyspacesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified GetSrvKeyspacesRequest message, length delimited. Does not implicitly {@link vtadmin.GetSrvKeyspacesRequest.verify|verify} messages.
+         * @param message GetSrvKeyspacesRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtadmin.IGetSrvKeyspacesRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Decodes a GetSrvKeyspacesRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns GetSrvKeyspacesRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Verifies a GetSrvKeyspacesRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a GetSrvKeyspacesRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns GetSrvKeyspacesRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtadmin.GetSrvKeyspacesRequest;
+
+        /**
+         * Creates a plain object from a GetSrvKeyspacesRequest message. Also converts values to other types if specified.
+         * @param message GetSrvKeyspacesRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtadmin.GetSrvKeyspacesRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this GetSrvKeyspacesRequest to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
