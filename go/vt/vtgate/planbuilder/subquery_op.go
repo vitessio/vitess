@@ -77,7 +77,7 @@ func mergeSubQueryOpPlan(ctx *plancontext.PlanningContext, inner, outer logicalP
 		// Instead of looking for it in the AST, we have a copy in the subquery tree that we can update
 		n.Extracted.Merged = true
 		replaceSubQuery(ctx, oroute.Select)
-		return mergeSystemTableInformation(oroute, iroute)
+		return oroute
 	}
 	return nil
 }
@@ -87,7 +87,9 @@ func mergeSystemTableInformation(a *routeGen4, b *routeGen4) logicalPlan {
 	// safe to append system table schema and system table names, since either the routing will match or either side would be throwing an error
 	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
-	a.eroute.SysTableTableSchema = append(a.eroute.SysTableTableSchema, b.eroute.SysTableTableSchema...)
+	if a.eroute.SysTableSchema == nil {
+		a.eroute.SysTableSchema = b.eroute.SysTableSchema
+	}
 	for k, v := range b.eroute.SysTableTableName {
 		a.eroute.SysTableTableName[k] = v
 	}
@@ -103,7 +105,7 @@ func canMergeSubqueryPlans(ctx *plancontext.PlanningContext, a, b *routeGen4) bo
 	case engine.Unsharded, engine.Reference:
 		return a.eroute.Opcode == b.eroute.Opcode
 	case engine.DBA:
-		return canSelectDBAMerge(a, b)
+		return false
 	case engine.EqualUnique:
 		// Check if they target the same shard.
 		if b.eroute.Opcode == engine.EqualUnique &&

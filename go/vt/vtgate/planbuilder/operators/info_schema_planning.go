@@ -19,11 +19,11 @@ package operators
 import (
 	"strings"
 
+	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
@@ -39,19 +39,22 @@ import (
 // They are special because we usually don't know at plan-time
 // what keyspace the query go to, because we don't see normalized literal values
 type InfoSchemaRouting struct {
-	SysTableTableSchema []sqlparser.Expr
-	SysTableTableName   map[string]sqlparser.Expr
+	SysTableSchema    sqlparser.Expr
+	SysTableTableName map[string]sqlparser.Expr
+
+	KeyspaceRoutedTo    string
+	HasSchemaNameColumn bool
 	Table               *QueryTable
 }
 
 func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
-	rp.SysTableTableSchema = nil
-	for _, expr := range isr.SysTableTableSchema {
-		eexpr, err := evalengine.Translate(expr, &notImplementedSchemaInfoConverter{})
+	rp.SysTableSchema = nil
+	if isr.SysTableSchema != nil {
+		eexpr, err := evalengine.Translate(isr.SysTableSchema, &notImplementedSchemaInfoConverter{})
 		if err != nil {
 			return err
 		}
-		rp.SysTableTableSchema = append(rp.SysTableTableSchema, eexpr)
+		rp.SysTableSchema = eexpr
 	}
 
 	rp.SysTableTableName = make(map[string]evalengine.Expr, len(isr.SysTableTableName))
@@ -68,9 +71,9 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 
 func (isr *InfoSchemaRouting) Clone() Routing {
 	return &InfoSchemaRouting{
-		SysTableTableSchema: slices.Clone(isr.SysTableTableSchema),
-		SysTableTableName:   maps.Clone(isr.SysTableTableName),
-		Table:               isr.Table,
+		SysTableSchema:    sqlparser.CloneExpr(isr.SysTableSchema),
+		SysTableTableName: maps.Clone(isr.SysTableTableName),
+		Table:             isr.Table,
 	}
 }
 
@@ -85,14 +88,16 @@ func (isr *InfoSchemaRouting) updateRoutingLogic(ctx *plancontext.PlanningContex
 	}
 
 	if isTableSchema {
-		for _, s := range isr.SysTableTableSchema {
-			if sqlparser.Equals.Expr(out, s) {
-				// we already have this expression in the list
-				// stating it again does not add value
-				return isr, nil
-			}
+		if isr.SysTableSchema == nil {
+			isr.SysTableSchema = out
+			return isr, nil
 		}
-		isr.SysTableTableSchema = append(isr.SysTableTableSchema, out)
+
+		if ctx.SemTable.EqualsExpr(out, isr.SysTableSchema) {
+			return isr, nil
+		}
+
+		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
 	} else {
 		isr.SysTableTableName[bvName] = out
 	}
@@ -167,8 +172,8 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 	// we have already checked type earlier, so this should always be safe
 	isrA := routingA.(*InfoSchemaRouting)
 	isrB := routingB.(*InfoSchemaRouting)
-	emptyA := len(isrA.SysTableTableName) == 0 && len(isrA.SysTableTableSchema) == 0
-	emptyB := len(isrB.SysTableTableName) == 0 && len(isrB.SysTableTableSchema) == 0
+	emptyA := len(isrA.SysTableTableName) == 0 && isrA.SysTableSchema == nil
+	emptyB := len(isrB.SysTableTableName) == 0 && isrB.SysTableSchema == nil
 
 	switch {
 	// if either side has no predicates to help us route, we can merge them
@@ -178,7 +183,7 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 		return m.merge(lhsRoute, rhsRoute, isrA)
 
 	// if we have no schema predicates on either side, we can merge if the table info is the same
-	case len(isrA.SysTableTableSchema) == 0 && len(isrB.SysTableTableSchema) == 0:
+	case isrA.SysTableSchema == nil && isrB.SysTableSchema == nil:
 		for k, expr := range isrB.SysTableTableName {
 			if e, found := isrA.SysTableTableName[k]; found && !sqlparser.Equals.Expr(expr, e) {
 				// schema names are the same, but we have contradicting table names, so we give up
@@ -189,7 +194,7 @@ func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, 
 		return m.merge(lhsRoute, rhsRoute, isrA)
 
 	// if both sides have the same schema predicate, we can safely merge them
-	case sqlparser.Equals.Exprs(isrA.SysTableTableSchema, isrB.SysTableTableSchema):
+	case sqlparser.Equals.Expr(isrA.SysTableSchema, isrB.SysTableSchema):
 		for k, expr := range isrB.SysTableTableName {
 			isrA.SysTableTableName[k] = expr
 		}

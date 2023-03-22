@@ -110,7 +110,9 @@ func shouldRetryAfterPredicateRewriting(plan logicalPlan) bool {
 	case *routeGen4:
 		opcode = routePlan.eroute.Opcode
 		sysTableTableName = routePlan.eroute.SysTableTableName
-		sysTableTableSchema = routePlan.eroute.SysTableTableSchema
+		if routePlan.eroute.SysTableSchema != nil {
+			sysTableTableSchema = []evalengine.Expr{routePlan.eroute.SysTableSchema}
+		}
 	case *route:
 		opcode = routePlan.eroute.Opcode
 		sysTableTableName = routePlan.eroute.SysTableTableName

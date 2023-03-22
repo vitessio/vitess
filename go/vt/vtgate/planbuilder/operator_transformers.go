@@ -710,13 +710,10 @@ func canSelectDBAMerge(a, b *routeGen4) bool {
 	// safe to merge when any 1 table name or schema matches, since either the routing will match or either side would be throwing an error
 	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
-	for _, aExpr := range a.eroute.SysTableTableSchema {
-		for _, bExpr := range b.eroute.SysTableTableSchema {
-			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
-				return true
-			}
-		}
+	if a.eroute.SysTableSchema != nil && b.eroute.SysTableSchema != nil && evalengine.FormatExpr(a.eroute.SysTableSchema) == evalengine.FormatExpr(b.eroute.SysTableSchema) {
+		return true
 	}
+
 	for _, aExpr := range a.eroute.SysTableTableName {
 		for _, bExpr := range b.eroute.SysTableTableName {
 			if evalengine.FormatExpr(aExpr) == evalengine.FormatExpr(bExpr) {
@@ -726,8 +723,8 @@ func canSelectDBAMerge(a, b *routeGen4) bool {
 	}
 
 	// if either/both of the side does not have any routing information, then they can be merged.
-	return (len(a.eroute.SysTableTableSchema) == 0 && len(a.eroute.SysTableTableName) == 0) ||
-		(len(b.eroute.SysTableTableSchema) == 0 && len(b.eroute.SysTableTableName) == 0)
+	return (a.eroute.SysTableSchema == nil && len(a.eroute.SysTableTableName) == 0) ||
+		(b.eroute.SysTableSchema == nil && len(b.eroute.SysTableTableName) == 0)
 }
 
 func gen4ValuesEqual(ctx *plancontext.PlanningContext, a, b []sqlparser.Expr) bool {

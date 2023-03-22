@@ -455,6 +455,10 @@ func (route *Route) description() PrimitiveDescription {
 		}
 		other["Values"] = formattedValues
 	}
+	if route.SysTableSchema != nil {
+		other["SysTableTableSchema"] = "[" + evalengine.FormatExpr(route.SysTableSchema) + "]"
+	}
+
 	if len(route.SysTableTableSchema) != 0 {
 		sysTabSchema := "["
 		for idx, tableSchema := range route.SysTableTableSchema {

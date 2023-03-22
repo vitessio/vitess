@@ -107,8 +107,11 @@ type RoutingParameters struct {
 	Keyspace *vindexes.Keyspace
 
 	// The following two fields are used when routing information_schema queries
+	// SysTableTableSchema is only used for v3
 	SysTableTableSchema []evalengine.Expr
-	SysTableTableName   map[string]evalengine.Expr
+	// SysTableSchema is used for gen-4
+	SysTableSchema    evalengine.Expr
+	SysTableTableName map[string]evalengine.Expr
 
 	// TargetDestination specifies an explicit target destination to send the query to.
 	// This will bypass the routing logic.
@@ -186,7 +189,11 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		return destinations, vterrors.Wrapf(err, "failed to find information about keyspace `%s`", ks)
 	}
 
-	if len(rp.SysTableTableName) == 0 && len(rp.SysTableTableSchema) == 0 {
+	if rp.SysTableSchema != nil && len(rp.SysTableTableSchema) > 0 {
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "both SysTableSchema and SysTableTableSchema should not be non-empty")
+	}
+
+	if len(rp.SysTableTableName) == 0 && len(rp.SysTableTableSchema) == 0 && rp.SysTableSchema == nil {
 		return defaultRoute()
 	}
 
@@ -205,6 +212,16 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 			return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "specifying two different database in the query is not supported")
 		}
 	}
+
+	if rp.SysTableSchema != nil {
+		result, err := env.Evaluate(rp.SysTableSchema)
+		if err != nil {
+			return nil, err
+		}
+		ks := result.Value().ToString()
+		specifiedKS = ks
+	}
+
 	if specifiedKS != "" {
 		bindVars[sqltypes.BvSchemaName] = sqltypes.StringBindVariable(specifiedKS)
 	}

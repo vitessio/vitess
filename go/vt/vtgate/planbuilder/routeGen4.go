@@ -208,9 +208,9 @@ func (rb *routeGen4) unionCanMerge(other *routeGen4, distinct bool) bool {
 		return rb.eroute.Opcode == other.eroute.Opcode
 	case engine.DBA:
 		return other.eroute.Opcode == engine.DBA &&
-			len(rb.eroute.SysTableTableSchema) == 0 &&
+			rb.eroute.SysTableSchema == nil &&
 			len(rb.eroute.SysTableTableName) == 0 &&
-			len(other.eroute.SysTableTableSchema) == 0 &&
+			other.eroute.SysTableSchema == nil &&
 			len(other.eroute.SysTableTableName) == 0
 	case engine.EqualUnique:
 		// Check if they target the same shard.
