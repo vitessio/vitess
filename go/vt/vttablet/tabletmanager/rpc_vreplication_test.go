@@ -40,42 +40,52 @@ import (
 
 func TestUpdateVRWorkflow(t *testing.T) {
 	ctx := context.Background()
-	cell := "cell1"
+	cell := "zone1"
 	tabletTypes := "replica"
 	workflow := "testwf"
 	dbName := "test"
+	vreplID := 1
 	shortCircuitErr := fmt.Errorf("Short circuiting test")
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	ts := memorytopo.NewServer(cell)
 	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
 	dbClient := binlogplayer.NewMockDBClient(t)
+	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", dbName), &sqltypes.Result{}, nil)
+	vre := vreplication.NewSimpleTestEngine(ts, cell, mysqld, dbClientFactory, dbClientFactory, dbName, nil)
+	vre.Open(context.Background())
+	tm := &TabletManager{
+		MysqlDaemon:         mysqld,
+		DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, dbName),
+		QueryServiceControl: tabletservermock.NewController(),
+		VREngine:            vre,
+	}
 	defer func() {
 		dbClient.Close()
 		mysqld.Close()
 		db.Close()
+		vre.Close()
 	}()
-	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
 	selectQuery, err := sqlparser.ParseAndBind("select id, source, cell, tablet_types from _vt.vreplication where workflow = %a",
 		sqltypes.StringBindVariable(workflow))
 	require.NoError(t, err)
 	blsStr := fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"customer" filter:"select * from customer"} rules:{match:"corder" filter:"select * from corder"}}`,
 		keyspace, shard)
-	id := 1
 	selectRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id|source|cell|tablet_types",
 			"int64|varchar|varchar|varchar",
 		),
-		fmt.Sprintf("%d|%s|%s|%s", id, blsStr, cell, tabletTypes),
+		fmt.Sprintf("%d|%s|%s|%s", vreplID, blsStr, cell, tabletTypes),
 	)
-	idQuery := fmt.Sprintf("select id from _vt.vreplication where id = %d", id)
+	idQuery := fmt.Sprintf("select id from _vt.vreplication where id = %d", vreplID)
 	idRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id",
 			"int64",
 		),
-		fmt.Sprintf("%d", id),
+		fmt.Sprintf("%d", vreplID),
 	)
 
 	tests := []struct {
@@ -87,19 +97,39 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			name: "update cells",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow: workflow,
-				Cells:    cell,
+				Cells:    "zone2",
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '' where id in (%d)`,
-				keyspace, shard, cell, id),
+				keyspace, shard, "zone2", vreplID),
+		},
+		{
+			name: "update cells, NULL tablet_types",
+			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+				Workflow:    workflow,
+				Cells:       "zone3",
+				TabletTypes: sqltypes.NULL.String(), // So keep the current value of replica
+			},
+			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+				keyspace, shard, "zone3", tabletTypes, vreplID),
 		},
 		{
 			name: "update tablet_types",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
-				TabletTypes: tabletTypes,
+				TabletTypes: "in_order:rdonly,replica",
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, tabletTypes, id),
+				keyspace, shard, "in_order:rdonly,replica", vreplID),
+		},
+		{
+			name: "update tablet_types, NULL cells",
+			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+				Workflow:    workflow,
+				Cells:       sqltypes.NULL.String(), // So keep the current value of zone1
+				TabletTypes: "rdonly",
+			},
+			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
+				keyspace, shard, cell, "rdonly", vreplID),
 		},
 		{
 			name: "update on_ddl",
@@ -108,7 +138,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 				OnDdl:    binlogdatapb.OnDDLAction_EXEC,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '', tablet_types = '' where id in (%d)`,
-				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)], id),
+				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)], vreplID),
 		},
 		{
 			name: "update cell,tablet_types,on_ddl",
@@ -119,30 +149,31 @@ func TestUpdateVRWorkflow(t *testing.T) {
 				OnDdl:       binlogdatapb.OnDDLAction_EXEC,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)], cell, tabletTypes, id),
+				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)], cell, tabletTypes, vreplID),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			// This is needed because the MockDBClient uses FailNow
+			defer func() {
+				if err := recover(); err != nil {
+					t.Errorf("Recovered from panic: %v", err)
+				}
+			}()
+
 			require.NotNil(t, tt.request, "No request provided")
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
-			dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", dbName), &sqltypes.Result{}, nil)
+			// These are the same for each RPC call
 			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
-			vre := vreplication.NewSimpleTestEngine(ts, cell, mysqld, dbClientFactory, dbClientFactory, dbName, nil)
-			vre.Open(context.Background())
-			defer vre.Close()
-			tm := &TabletManager{
-				MysqlDaemon:         mysqld,
-				DBConfigs:           dbconfigs.NewTestDBConfigs(cp, cp, dbName),
-				QueryServiceControl: tabletservermock.NewController(),
-				VREngine:            vre,
-			}
 			dbClient.ExpectRequest(selectQuery, selectRes, nil)
-
 			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
 			dbClient.ExpectRequest(idQuery, idRes, nil)
+
+			// This is our expected query, which will also short circuit
+			// the test with an error as at this point we've tested what
+			// we wanted to test.
 			dbClient.ExpectRequest(tt.query, &sqltypes.Result{RowsAffected: 1}, shortCircuitErr)
 			_, err = tm.UpdateVRWorkflow(ctx, tt.request)
 			dbClient.Wait()

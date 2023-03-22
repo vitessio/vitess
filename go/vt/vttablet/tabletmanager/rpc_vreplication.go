@@ -75,17 +75,17 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 
 	row := res.Named().Row()
 	id := row.AsInt64("id", 0)
-	cells := row.AsString("cells", "")
+	cells := row.AsString("cell", "")
 	tabletTypes := row.AsString("tablet_types", "")
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
 	// For the string values, we use NULL to differentiate from
 	// an empty string. The NULL value indicates that we should
-	// not update the existing value.
+	// keep the existing value.
 	if req.Cells != sqltypes.NULL.String() {
 		cells = req.Cells
 	}
-	if tabletTypes != sqltypes.NULL.String() {
+	if req.TabletTypes != sqltypes.NULL.String() {
 		tabletTypes = req.TabletTypes
 	}
 	if err = prototext.Unmarshal(source, bls); err != nil {
