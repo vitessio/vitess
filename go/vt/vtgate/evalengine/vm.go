@@ -26,45 +26,87 @@ import (
 var errDeoptimize = errors.New("de-optimize")
 
 type VirtualMachine struct {
-	arena Arena
-	hash  vthash.Hasher
-	row   []sqltypes.Value
 	stack []eval
 	sp    int
 
+	row   []sqltypes.Value
+	arena Arena
+	hash  vthash.Hasher
 	err   error
+
 	flags struct {
 		cmp  int
 		null bool
 	}
 }
 
-type Program struct {
-	code     []frame
-	original Expr
-	stack    int
+func Deoptimize(expr Expr) Expr {
+	switch expr := expr.(type) {
+	case *CompiledExpr:
+		return expr.original
+	default:
+		return expr
+	}
 }
 
-func (vm *VirtualMachine) Run(p *Program, row []sqltypes.Value) (EvalResult, error) {
+type CompiledExpr struct {
+	code     []frame
+	stack    int
+	original Expr
+}
+
+func (p *CompiledExpr) eval(env *ExpressionEnv) (eval, error) {
+	if env.vm == nil {
+		env.vm = new(VirtualMachine)
+	}
+	return env.vm.eval(p, env.Row)
+}
+
+func (p *CompiledExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+	return p.original.typeof(env)
+}
+
+func (p *CompiledExpr) format(buf *formatter, depth int) {
+	p.original.format(buf, depth)
+}
+
+func (p *CompiledExpr) constant() bool {
+	return p.original.constant()
+}
+
+func (p *CompiledExpr) simplify(env *ExpressionEnv) error {
+	// No-op
+	return nil
+}
+
+var _ Expr = (*CompiledExpr)(nil)
+
+func (vm *VirtualMachine) eval(p *CompiledExpr, row []sqltypes.Value) (eval, error) {
 	vm.arena.reset()
 	vm.row = row
 	vm.sp = 0
+	vm.err = nil
 	if len(vm.stack) < p.stack {
 		vm.stack = make([]eval, p.stack)
 	}
-	e, err := vm.execute(p)
+	e, err := vm.run(p)
 	if err != nil {
 		if err == errDeoptimize {
 			var env ExpressionEnv
 			env.Row = row
-			return env.Evaluate(p.original)
+			return p.original.eval(&env)
 		}
-		return EvalResult{}, err
+		return nil, err
 	}
-	return EvalResult{e}, nil
+	return e, nil
 }
 
-func (vm *VirtualMachine) execute(p *Program) (eval, error) {
+func (vm *VirtualMachine) Evaluate(p *CompiledExpr, row []sqltypes.Value) (EvalResult, error) {
+	e, err := vm.eval(p, row)
+	return EvalResult{e}, err
+}
+
+func (vm *VirtualMachine) run(p *CompiledExpr) (eval, error) {
 	code := p.code
 	ip := 0
 
@@ -73,9 +115,6 @@ func (vm *VirtualMachine) execute(p *Program) (eval, error) {
 		if vm.err != nil {
 			return nil, vm.err
 		}
-	}
-	if vm.sp == 0 {
-		return nil, nil
 	}
 	return vm.stack[vm.sp-1], nil
 }

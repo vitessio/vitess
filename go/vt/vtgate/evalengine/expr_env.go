@@ -34,13 +34,12 @@ type (
 		// Row and Fields should line up
 		Row    []sqltypes.Value
 		Fields []*querypb.Field
+
+		vm *VirtualMachine
 	}
 )
 
 func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
-	if env == nil {
-		panic("ExpressionEnv == nil")
-	}
 	e, err := expr.eval(env)
 	return EvalResult{e}, err
 }

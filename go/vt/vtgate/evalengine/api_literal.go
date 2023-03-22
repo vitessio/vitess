@@ -211,11 +211,16 @@ func NewBindVarTuple(key string) Expr {
 }
 
 // NewColumn returns a column expression
-func NewColumn(offset int, collation collations.TypedCollation) Expr {
-	return &Column{
-		Offset: offset,
-		coll:   collation,
-	}
+func NewColumn(offset int) *Column {
+	return NewColumnWithCollation(offset, collations.TypedCollation{
+		Collation:    collations.Unknown,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireUnicode,
+	})
+}
+
+func NewColumnWithCollation(offset int, coll collations.TypedCollation) *Column {
+	return &Column{Offset: offset, Collation: coll}
 }
 
 // NewTupleExpr returns a tuple expression

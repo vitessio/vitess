@@ -42,7 +42,7 @@ func (j *jump) offset() int {
 
 type assembler struct {
 	ins   []frame
-	log   AssemblerLog
+	log   CompilerLog
 	stack struct {
 		cur int
 		max int

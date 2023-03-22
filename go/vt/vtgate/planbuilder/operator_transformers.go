@@ -64,13 +64,11 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		if err != nil {
 			return nil, err
 		}
-		scl := &simpleConverterLookup{
-			canPushProjection: true,
-			ctx:               ctx,
-			plan:              plan,
-		}
 		ast := ctx.SemTable.AndExpressions(op.Predicates...)
-		predicate, err := evalengine.Translate(ast, scl)
+		predicate, err := evalengine.Translate(ast, &evalengine.Options{
+			ResolveColumn: resolveFromPlan(ctx, plan, true),
+			Collation:     ctx.SemTable.Collation,
+		})
 		if err != nil {
 			return nil, err
 		}

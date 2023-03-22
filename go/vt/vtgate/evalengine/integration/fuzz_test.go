@@ -135,8 +135,15 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 				err = fmt.Errorf("PANIC during translate: %v", r)
 			}
 		}()
-		lookup := &evalengine.LookupIntegrationTest{Collation: collations.CollationUtf8mb4ID}
-		expr, err = evalengine.TranslateEx(astExpr, lookup, debugSimplify)
+		opt := evalengine.Options{
+			ResolveColumn: evalengine.FieldResolver(env.Fields).Column,
+			Collation:     collations.CollationUtf8mb4ID,
+			Optimization:  evalengine.OptimizationLevelNone,
+		}
+		if debugSimplify {
+			opt.Optimization = evalengine.OptimizationLevelSimplify
+		}
+		expr, err = evalengine.Translate(astExpr, &opt)
 		return
 	}()
 

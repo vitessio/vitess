@@ -21,12 +21,10 @@ import (
 	"strconv"
 
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
-	"vitess.io/vitess/go/vt/vtgate/semantics"
-
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
@@ -254,7 +252,7 @@ func (rb *route) procureValues(plan logicalPlan, jt *jointab, val sqlparser.Expr
 		joinVar := jt.Procure(plan, typedVal, rb.Order())
 		return evalengine.NewBindVar(joinVar, collations.TypedCollation{}), nil
 	default:
-		return evalengine.Translate(typedVal, semantics.EmptySemTable())
+		return evalengine.Translate(typedVal, nil)
 	}
 }
 

@@ -49,11 +49,20 @@ var errKnownBadQuery = errors.New("this query is known to give bad results in My
 func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("failed to parse '%s': %v", query, err)
+	}
+
+	ctx := &Options{
+		Collation: collations.CollationUtf8mb4ID,
+	}
+	if simplify {
+		ctx.Optimization = OptimizationLevelSimplify
+	} else {
+		ctx.Optimization = OptimizationLevelNone
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := TranslateEx(astExpr, &LookupIntegrationTest{collations.CollationUtf8mb4ID}, simplify)
+	converted, err := Translate(astExpr, ctx)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return nil, errKnownBadQuery

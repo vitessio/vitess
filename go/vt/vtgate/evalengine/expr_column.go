@@ -23,8 +23,10 @@ import (
 
 type (
 	Column struct {
-		Offset int
-		coll   collations.TypedCollation
+		Offset    int
+		Type      sqltypes.Type
+		Collation collations.TypedCollation
+		typed     bool
 	}
 )
 
@@ -32,11 +34,11 @@ var _ Expr = (*Column)(nil)
 
 // eval implements the Expr interface
 func (c *Column) eval(env *ExpressionEnv) (eval, error) {
-	return valueToEval(env.Row[c.Offset], c.coll)
+	return valueToEval(env.Row[c.Offset], c.Collation)
 }
 
 func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	// we'll try to do the best possible with the information we have
+	// if we have an active row in the expression Env, use that as an authoritative source
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
 		if value.IsNull() {
@@ -44,10 +46,5 @@ func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 		}
 		return value.Type(), typeFlag(0)
 	}
-
-	if c.Offset < len(env.Fields) {
-		return env.Fields[c.Offset].Type, flagNullable
-	}
-
-	panic("Column missing both data and field")
+	return c.Type, flagNullable
 }
