@@ -52,6 +52,7 @@ const (
 	vreplicationTableName           = "vreplication"
 	sqlVReplicationDelete           = "delete from _vt.vreplication"
 	errWorkflowUpdateWithoutChanges = "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values"
+	execTimeout                     = 10 * time.Second
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -213,7 +214,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
 	var mu sync.Mutex
-	ctx, cancel := context.WithTimeout(vx.ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
 	defer cancel()
 	for _, primary := range vx.primaries {
 		wg.Add(1)
@@ -247,7 +248,7 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 	allErrors := &concurrency.AllErrorRecorder{}
 	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
 	var mu sync.Mutex
-	ctx, cancel := context.WithTimeout(vx.ctx, 10*time.Second)
+	ctx, cancel := context.WithTimeout(vx.ctx, execTimeout)
 	defer cancel()
 	for _, primary := range vx.primaries {
 		wg.Add(1)
@@ -258,8 +259,8 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 				allErrors.RecordError(err)
 			} else {
 				mu.Lock()
+				defer mu.Unlock()
 				results[primary] = qr
-				mu.Unlock()
 			}
 		}(ctx, primary)
 	}
@@ -361,7 +362,8 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	case "start":
 		query = fmt.Sprintf(updateSQL, encodeString("Running"))
 	case "update":
-		// We don't use the SQL interface, so this is only for dry-run purposes.
+		// We don't use the SQL interface, so there's no query
+		// and no error.
 	case "delete":
 		query = sqlVReplicationDelete
 	default:

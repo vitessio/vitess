@@ -30,6 +30,7 @@ import (
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -71,8 +72,11 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		mysqld.Close()
 		db.Close()
 	}()
-	selectQuery, err := sqlparser.ParseAndBind("select id, source, cell, tablet_types from _vt.vreplication where workflow = %a",
-		sqltypes.StringBindVariable(workflow))
+	parsed := sqlparser.BuildParsedQuery(selectVRWorkflowConfig, sidecardb.DefaultName, ":wf")
+	bindVars := map[string]*querypb.BindVariable{
+		"wf": sqltypes.StringBindVariable(workflow),
+	}
+	selectQuery, err := parsed.GenerateQuery(bindVars, nil)
 	require.NoError(t, err)
 	blsStr := fmt.Sprintf(`keyspace:"%s" shard:"%s" filter:{rules:{match:"customer" filter:"select * from customer"} rules:{match:"corder" filter:"select * from corder"}}`,
 		keyspace, shard)

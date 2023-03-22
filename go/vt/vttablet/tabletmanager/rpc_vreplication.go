@@ -31,6 +31,13 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
+const (
+	// Retrieve the current configuration values for a workflow's vreplication stream.
+	selectVRWorkflowConfig = "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
+	// Update the configuration values for a workflow's vreplication stream.
+	updateVRWorkflowConfig = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
+)
+
 // VReplicationExec executes a vreplication command.
 func (tm *TabletManager) VReplicationExec(ctx context.Context, query string) (*querypb.QueryResult, error) {
 	// Replace any provided sidecar databsae qualifiers with the correct one.
@@ -56,11 +63,10 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 // workflow when the record is updated, so we also in effect restart
 // the workflow via the update.
 func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
-	query := "select id, source, cell, tablet_types from %s.vreplication where workflow = %a"
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),
 	}
-	parsed := sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":wf")
+	parsed := sqlparser.BuildParsedQuery(selectVRWorkflowConfig, sidecardb.GetIdentifier(), ":wf")
 	stmt, err := parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
@@ -100,14 +106,13 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err != nil {
 		return nil, err
 	}
-	query = "update %s.vreplication set source = %a, cell = %a, tablet_types = %a where id = %a"
 	bindVars = map[string]*querypb.BindVariable{
 		"sc": sqltypes.StringBindVariable(string(source)),
 		"cl": sqltypes.StringBindVariable(cells),
 		"tt": sqltypes.StringBindVariable(tabletTypes),
 		"id": sqltypes.Int64BindVariable(id),
 	}
-	parsed = sqlparser.BuildParsedQuery(query, sidecardb.GetIdentifier(), ":sc", ":cl", ":tt", ":id")
+	parsed = sqlparser.BuildParsedQuery(updateVRWorkflowConfig, sidecardb.GetIdentifier(), ":sc", ":cl", ":tt", ":id")
 	stmt, err = parsed.GenerateQuery(bindVars, nil)
 	if err != nil {
 		return nil, err
