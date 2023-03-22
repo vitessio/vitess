@@ -4703,7 +4703,7 @@ func (e *Executor) ShowMigrations(ctx context.Context, show *sqlparser.Show) (re
 		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] ShowMigrations expects a ShowBasic statement. Got: %s", sqlparser.String(show))
 	}
 	if showBasic.Command != sqlparser.VitessMigrations {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] ShowMigrations expects a VitessMigrations command, got %v. Statement: %s", sqlparser.VitessMigrations, sqlparser.String(show))
+		return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "[BUG] ShowMigrations expects a VitessMigrations command, got %v. Statement: %s", showBasic.Command, sqlparser.String(show))
 	}
 	whereExpr := ""
 	if showBasic.Filter != nil {
