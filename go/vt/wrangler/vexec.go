@@ -419,11 +419,12 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 				return nil, err
 			}
 			tablets := vx.primaries
+			// Sort the slice for deterministic output.
 			sort.Slice(tablets, func(i, j int) bool {
 				return tablets[i].AliasString() < tablets[j].AliasString()
 			})
 			for _, tablet := range tablets {
-				wr.Logger().Printf("  %s\n", tablet.AliasString())
+				wr.Logger().Printf("  %s (%s/%s)\n", tablet.AliasString(), tablet.Keyspace, tablet.Shard)
 			}
 			wr.Logger().Printf("\n")
 			return nil, nil

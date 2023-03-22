@@ -45,14 +45,15 @@ func TestUpdateVRWorkflow(t *testing.T) {
 	workflow := "testwf"
 	dbName := "test"
 	vreplID := 1
-	shortCircuitErr := fmt.Errorf("Short circuiting test")
+	shortCircuitErr := fmt.Errorf("short circuiting test")
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
 	ts := memorytopo.NewServer(cell)
 	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
-	dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", dbName), &sqltypes.Result{}, nil)
+	dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", dbName),
+		&sqltypes.Result{}, nil)
 	vre := vreplication.NewSimpleTestEngine(ts, cell, mysqld, dbClientFactory, dbClientFactory, dbName, nil)
 	vre.Open(context.Background())
 	tm := &TabletManager{

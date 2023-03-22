@@ -511,7 +511,7 @@ func TestWorkflowUpdate(t *testing.T) {
 			},
 			tabletTypes: &pflag.Flag{},
 			onDDL:       &pflag.Flag{},
-			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
+			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n\n",
 		},
 		{
 			name:  "only tablet types",
@@ -522,7 +522,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				Changed: true,
 			},
 			onDDL:  &pflag.Flag{},
-			output: "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
+			output: "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n\n",
 		},
 		{
 			name:        "only on-ddl",
@@ -533,7 +533,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				Value:   stringValue{"EXEC_IGNORE"},
 				Changed: true,
 			},
-			output: "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
+			output: "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n\n",
 		},
 		{
 			name:        "only on-ddl invalid",
@@ -563,7 +563,7 @@ func TestWorkflowUpdate(t *testing.T) {
 				Value:   stringValue{"EXEC"},
 				Changed: true,
 			},
-			output: "The following workflow fields will be updated:\n  cells=\"zone1,zone2\"\n  tablet_types=\"rdonly,spare\"\n  on_ddl=\"EXEC\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200\n  zone1-0000000210\n\n",
+			output: "The following workflow fields will be updated:\n  cells=\"zone1,zone2\"\n  tablet_types=\"rdonly,spare\"\n  on_ddl=\"EXEC\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n\n",
 		},
 	}
 
