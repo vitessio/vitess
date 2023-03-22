@@ -24,7 +24,6 @@ import (
 	"sort"
 	"strings"
 
-	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -72,7 +71,7 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 		}
 	}
 	if err := schema.normalize(); err != nil {
-		return nil, err
+		return schema, err
 	}
 	return schema, nil
 }
@@ -165,6 +164,8 @@ func getViewDependentTableNames(createView *sqlparser.CreateView) (names []strin
 // normalize is called as part of Schema creation process. The user may only get a hold of normalized schema.
 // It validates some cross-entity constraints, and orders entity based on dependencies (e.g. tables, views that read from tables, 2nd level views, etc.)
 func (s *Schema) normalize() error {
+	var errs error
+
 	s.named = make(map[string]Entity, len(s.tables)+len(s.views))
 	s.sorted = make([]Entity, 0, len(s.tables)+len(s.views))
 	// Verify no two entities share same name
@@ -311,20 +312,20 @@ func (s *Schema) normalize() error {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
 				// We return the first one.
-				return &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()}
+				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()})
 			}
 		}
 	}
 
 	// Validate views' referenced columns: do these columns actually exist in referenced tables/views?
 	if err := s.ValidateViewReferences(); err != nil {
-		return err
+		errs = errors.Join(errs, err)
 	}
 
 	// Validate table definitions
 	for _, t := range s.tables {
 		if err := t.validate(); err != nil {
-			return err
+			return errors.Join(errs, err)
 		}
 	}
 	colTypeEqualForForeignKey := func(a, b *sqlparser.ColumnType) bool {
@@ -368,24 +369,24 @@ func (s *Schema) normalize() error {
 			for i, col := range check.Source {
 				coveredColumn, ok := tableColumns[col.Lowered()]
 				if !ok {
-					return &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()}
+					return errors.Join(errs, &InvalidColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), Column: col.String()})
 				}
 				referencedColumnName := check.ReferenceDefinition.ReferencedColumns[i].Lowered()
 				referencedColumn, ok := referencedColumns[referencedColumnName]
 				if !ok {
-					return &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+					return errors.Join(errs, &InvalidReferencedColumnInForeignKeyConstraintError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 				if !colTypeEqualForForeignKey(coveredColumn.Type, referencedColumn.Type) {
-					return &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName}
+					return errors.Join(errs, &ForeignKeyColumnTypeMismatchError{Table: t.Name(), Constraint: cs.Name.String(), Column: coveredColumn.Name.String(), ReferencedTable: referencedTableName, ReferencedColumn: referencedColumnName})
 				}
 			}
 
 			if !referencedTable.columnsCoveredByInOrderIndex(check.ReferenceDefinition.ReferencedColumns) {
-				return &MissingForeignKeyReferencedIndexError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName}
+				return errors.Join(errs, &MissingForeignKeyReferencedIndexError{Table: t.Name(), Constraint: cs.Name.String(), ReferencedTable: referencedTableName})
 			}
 		}
 	}
-	return nil
+	return errs
 }
 
 // Entities returns this schema's entities in good order (may be applied without error)
@@ -872,7 +873,7 @@ func (s *Schema) SchemaDiff(other *Schema, hints *DiffHints) (*SchemaDiff, error
 }
 
 func (s *Schema) ValidateViewReferences() error {
-	errs := &concurrency.AllErrorRecorder{}
+	var errs error
 	schemaInformation := newDeclarativeSchemaInformation()
 
 	// Remember that s.Entities() is already ordered by dependency. ie. tables first, then views
@@ -881,7 +882,7 @@ func (s *Schema) ValidateViewReferences() error {
 	for _, e := range s.Entities() {
 		entityColumns, err := s.getEntityColumnNames(e.Name(), schemaInformation)
 		if err != nil {
-			errs.RecordError(err)
+			errs = errors.Join(errs, err)
 			continue
 		}
 		schemaInformation.addTable(e.Name())
@@ -896,49 +897,28 @@ func (s *Schema) ValidateViewReferences() error {
 	for _, view := range s.Views() {
 		sel := sqlparser.CloneSelectStatement(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
 		_, err := semantics.Analyze(sel, semanticKS.Name, schemaInformation)
-		extractColName := func(arg any) string {
-			switch arg := arg.(type) {
-			case string:
-				return arg
-			case *sqlparser.ColName:
-				return arg.Name.String()
-			default:
-				return "" // unexpected
-			}
-		}
 		formalizeErr := func(err error) error {
 			if err == nil {
 				return nil
 			}
-			semErr, ok := err.(*semantics.Error)
-			if !ok {
-				return err
-			}
-			if len(semErr.Args()) == 0 {
-				return err
-			}
-			switch semErr.Code {
-			case semantics.AmbiguousColumn:
-				if colName := extractColName(semErr.Args()[0]); colName != "" {
-					return &InvalidColumnReferencedInViewError{
-						View:      view.Name(),
-						Column:    colName,
-						Ambiguous: true,
-					}
+			switch e := err.(type) {
+			case *semantics.AmbiguousColumnError:
+				return &InvalidColumnReferencedInViewError{
+					View:      view.Name(),
+					Column:    e.Column,
+					Ambiguous: true,
 				}
-			case semantics.ColumnNotFound:
-				if colName := extractColName(semErr.Args()[0]); colName != "" {
-					return &InvalidColumnReferencedInViewError{
-						View:   view.Name(),
-						Column: colName,
-					}
+			case *semantics.ColumnNotFoundError:
+				return &InvalidColumnReferencedInViewError{
+					View:   view.Name(),
+					Column: e.Column.Name.String(),
 				}
 			}
 			return err
 		}
-		errs.RecordError(formalizeErr(err))
+		errs = errors.Join(errs, formalizeErr(err))
 	}
-	return errs.AggrError(vterrors.Aggregate)
+	return errs
 }
 
 // getEntityColumnNames returns the names of columns in given entity (either a table or a view)
