@@ -145,18 +145,19 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			name: "update cell,tablet_types,on_ddl",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
-				Cells:       cell,
-				TabletTypes: tabletTypes,
-				OnDdl:       binlogdatapb.OnDDLAction_EXEC,
+				Cells:       "zone1,zone2,zone3",
+				TabletTypes: "rdonly,replica,primary",
+				OnDdl:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC)], cell, tabletTypes, vreplID),
+				keyspace, shard, binlogdatapb.OnDDLAction_name[int32(binlogdatapb.OnDDLAction_EXEC_IGNORE)], "zone1,zone2,zone3", "rdonly,replica,primary", vreplID),
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// This is needed because the MockDBClient uses FailNow
+			// This is needed because MockDBClient uses t.Fatal()
+			// which doesn't play well with subtests.
 			defer func() {
 				if err := recover(); err != nil {
 					t.Errorf("Recovered from panic: %v", err)
@@ -166,7 +167,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			require.NotNil(t, tt.request, "No request provided")
 			require.NotEqual(t, "", tt.query, "No expected query provided")
 
-			// These are the same for each RPC call
+			// These are the same for each RPC call.
 			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
 			dbClient.ExpectRequest(selectQuery, selectRes, nil)
 			dbClient.ExpectRequest(fmt.Sprintf("use %s", sidecardb.DefaultName), &sqltypes.Result{}, nil)
