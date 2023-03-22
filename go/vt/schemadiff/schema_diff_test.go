@@ -229,9 +229,10 @@ func TestSchemaDiff(t *testing.T) {
 				"create table t2 (id int primary key, ts timestamp);",
 				"create view v1 as select the_id from t1",
 			},
-			expectDiffs: 2,
-			expectDeps:  1,
-			entityOrder: []string{"t1", "v1"},
+			expectDiffs:     2,
+			expectDeps:      1,
+			entityOrder:     []string{"t1", "v1"},
+			impossibleOrder: true,
 		},
 		{
 			name: "alter table, add view",
@@ -246,7 +247,7 @@ func TestSchemaDiff(t *testing.T) {
 			entityOrder: []string{"t2", "v2"},
 		},
 		{
-			name: "alter view (2 tables), alter table",
+			name: "create view depending on 2 tables, alter table",
 			toQueries: []string{
 				"create table t1 (id int primary key, info int not null);",
 				"create table t2 (id int primary key, ts timestamp, v varchar);",
@@ -257,19 +258,46 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  1,
 			entityOrder: []string{"t2", "v2"},
 		},
-		// {
-		// 	// This will become relevant when https://github.com/vitessio/vitess/pull/12147 is merged
-		// 	name: "alter view (2 tables), alter tables",
-		// 	toQueries: []string{
-		// 		"create table t1 (id int primary key, info int not null, dt datetime);",
-		// 		"create table t2 (id int primary key, ts timestamp, v varchar);",
-		// 		"create view v1 as select id from t1",
-		// 		"create view v2 as select info, v from t1, t2",
-		// 	},
-		// 	expectDiffs: 3,
-		// 	expectDeps:  2,
-		// 	entityOrder: []string{"t1", "t2", "v2"},
-		// },
+		{
+			name: "create view depending on 2 tables, alter other table",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, dt datetime);",
+				"create table t2 (id int primary key, ts timestamp);",
+				"create view v1 as select id from t1",
+				// "create view v2 as select id from t1",
+				"create view v2 as select info, ts from t1, t2",
+				// "create view v2 as select info, ts from t1, t2",
+			},
+			expectDiffs: 2,
+			expectDeps:  1,
+			entityOrder: []string{"t1", "v2"},
+		},
+		{
+			name: "create view depending on 2 tables, alter both tables",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, dt datetime);",
+				"create table t2 (id int primary key, ts timestamp, v varchar);",
+				"create view v1 as select id from t1",
+				// "create view v2 as select id from t1",
+				"create view v2 as select info, ts from t1, t2",
+				// "create view v2 as select info, ts from t1, t2",
+			},
+			expectDiffs: 3,
+			expectDeps:  2,
+			entityOrder: []string{"t1", "v2", "t2"},
+		},
+		{
+			name: "alter view depending on 2 tables, uses new column, alter tables",
+			toQueries: []string{
+				"create table t1 (id int primary key, info int not null, dt datetime);",
+				"create table t2 (id int primary key, ts timestamp, v varchar);",
+				"create view v1 as select id from t1",
+				"create view v2 as select info, v from t1, t2",
+			},
+			expectDiffs: 3,
+			expectDeps:  2,
+			entityOrder: []string{"t1", "t2", "v2"},
+		},
 		{
 			name: "drop view",
 			toQueries: []string{
@@ -354,21 +382,20 @@ func TestSchemaDiff(t *testing.T) {
 			expectDeps:  2,
 			entityOrder: []string{"t2", "v1", "v2"},
 		},
-		// {
-		// 	// This will become relevant when https://github.com/vitessio/vitess/pull/12147 is merged
-		// 	name: "alter table, alter view, impossible sequence",
-		// 	fromQueries: []string{
-		// 		"create table t1 (id int primary key, info int not null);",
-		// 		"create view v1 as select id, info from t1",
-		// 	},
-		// 	toQueries: []string{
-		// 		"create table t1 (id int primary key, newcol int not null);",
-		// 		"create view v1 as select id, newcol from t1",
-		// 	},
-		// 	expectDiffs:      2,
-		// 	expectDeps:       1,
-		// 	failOrderedDiffs: true,
-		// },
+		{
+			name: "alter table, alter view, impossible sequence",
+			fromQueries: []string{
+				"create table t1 (id int primary key, info int not null);",
+				"create view v1 as select id, info from t1",
+			},
+			toQueries: []string{
+				"create table t1 (id int primary key, newcol int not null);",
+				"create view v1 as select id, newcol from t1",
+			},
+			expectDiffs:     2,
+			expectDeps:      1,
+			impossibleOrder: true,
+		},
 
 		// FKs
 		{

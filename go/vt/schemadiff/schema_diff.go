@@ -220,17 +220,19 @@ func (d *SchemaDiff) OrderedDiffs() ([]EntityDiff, error) {
 		// We will now permutate the diffs in this equivalence class, and hopefully find
 		// a valid permutation (one where if we apply the diffs in-order, the schema remains valid throughout the process)
 		foundValidPathForClass := permutateDiffs(classDiffs, func(permutatedDiffs []EntityDiff) bool {
+			permutationSchema := lastGoodSchema
 			// We want to apply the changes one by one, and validate the schema after each change
+			var err error
 			for i := range permutatedDiffs {
-				permutationSchema, err := lastGoodSchema.Apply(permutatedDiffs[i : i+1])
+				permutationSchema, err = permutationSchema.Apply(permutatedDiffs[i : i+1])
 				if err != nil {
 					// permutation is invalid
 					return false // continue searching
 				}
-				lastGoodSchema = permutationSchema
 			}
 			// Good news, we managed to apply all of the permutations!
 			orderedDiffs = append(orderedDiffs, permutatedDiffs...)
+			lastGoodSchema = permutationSchema
 			return true // early break! No need to keep searching
 		})
 		if !foundValidPathForClass {
