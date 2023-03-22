@@ -186,9 +186,6 @@ var (
 
 	vstreamSkewDelayCount = stats.NewCounter("VStreamEventsDelayedBySkewAlignment",
 		"Number of events that had to wait because the skew across shards was too high")
-
-	// startTime is the time vtgate started.
-	startTime = time.Now()
 )
 
 // VTGate is the rpc interface to vtgate. Only one instance
@@ -350,8 +347,6 @@ func Init(
 	_ = stats.NewRates("ErrorsByKeyspace", stats.CounterForDimension(errorCounts, "Keyspace"), 15, 1*time.Minute)
 	_ = stats.NewRates("ErrorsByDbType", stats.CounterForDimension(errorCounts, "DbType"), 15, 1*time.Minute)
 	_ = stats.NewRates("ErrorsByCode", stats.CounterForDimension(errorCounts, "Code"), 15, 1*time.Minute)
-
-	_ = stats.NewGaugeFunc("Uptime", "Uptime in seconds", func() int64 { return int64(time.Since(startTime).Seconds()) })
 
 	servenv.OnRun(func() {
 		for _, f := range RegisterVTGates {
