@@ -14,6 +14,9 @@ type Wrapped interface {
 
 // Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components
 func Unwrap(err error) []error {
+	if err == nil {
+		return nil
+	}
 	if u, ok := err.(Wrapped); ok {
 		return u.Unwrap()
 	}
@@ -22,6 +25,9 @@ func Unwrap(err error) []error {
 
 // Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components, recursively
 func UnwrapAll(err error) (errs []error) {
+	if err == nil {
+		return nil
+	}
 	if u, ok := err.(Wrapped); ok {
 		for _, e := range u.Unwrap() {
 			errs = append(errs, UnwrapAll(e)...)
@@ -33,7 +39,7 @@ func UnwrapAll(err error) (errs []error) {
 
 // Unwrap unwraps an error created by errors.Join() in Go 1.20, into its components, recursively,
 // and returns one (the first) unwrapped error
-func UnwrapOne(err error) error {
+func UnwrapFirst(err error) error {
 	if err == nil {
 		return nil
 	}

@@ -152,8 +152,8 @@ func TestNewSchemaFromQueriesLoop(t *testing.T) {
 		"create view v8 as select * from t1, v7",
 	)
 	_, err := NewSchemaFromQueries(queries)
-	assert.Error(t, err)
-	err = UnwrapOne(err)
+	require.Error(t, err)
+	err = UnwrapFirst(err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
 }
 
@@ -701,7 +701,8 @@ func TestViewReferences(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, schema)
 			} else {
-				err = UnwrapOne(err)
+				require.Error(t, err)
+				err = UnwrapFirst(err)
 				require.Equal(t, ts.expectErr, err, "received error: %v", err)
 			}
 		})
