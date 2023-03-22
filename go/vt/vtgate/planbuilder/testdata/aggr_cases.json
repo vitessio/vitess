@@ -5324,8 +5324,8 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where `count` >= :v2",
+        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId order by null) as t1 where count >= :v2",
         "Table": "user_extra"
       }
     },
@@ -5339,13 +5339,10 @@
           "Name": "user",
           "Sharded": true
         },
-        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
-        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as `count` from user_extra where localDate > :v1 group by user_id, flowId having count(*) >= :v2 order by null) as t1",
+        "FieldQuery": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where 1 != 1 group by user_id, flowId) as t1 where 1 != 1",
+        "Query": "select t1.portalId, t1.flowId from (select portalId, flowId, count(*) as count from user_extra where localDate > :v1 group by user_id, flowId having count(*) >= :v2 order by null) as t1",
         "Table": "user_extra"
-      },
-      "TablesUsed": [
-        "user.user_extra"
-      ]
+      }
     }
   }
 ]
