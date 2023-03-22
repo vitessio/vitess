@@ -52,6 +52,9 @@ func TestUpdateVRWorkflow(t *testing.T) {
 	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
+	// Intentionally using Sprintf here as the query matching is exact
+	// and the engine uses `db_name=` w/o any spacing and the parser
+	// will add spacing.
 	dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", dbName),
 		&sqltypes.Result{}, nil)
 	vre := vreplication.NewSimpleTestEngine(ts, cell, mysqld, dbClientFactory, dbClientFactory, dbName, nil)
@@ -80,7 +83,9 @@ func TestUpdateVRWorkflow(t *testing.T) {
 		),
 		fmt.Sprintf("%d|%s|%s|%s", vreplID, blsStr, cell, tabletTypes),
 	)
-	idQuery := fmt.Sprintf("select id from _vt.vreplication where id = %d", vreplID)
+	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
+		sqltypes.Int64BindVariable(int64(vreplID)))
+	require.NoError(t, err)
 	idRes := sqltypes.MakeTestResult(
 		sqltypes.MakeTestFields(
 			"id",
