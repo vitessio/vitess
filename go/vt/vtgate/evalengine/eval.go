@@ -130,7 +130,22 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return makeboolean(true)
+			}
+			return makeboolean(hex.u != 0)
+		}
 		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeNumber:
+			return makeboolean(parseStringToFloat(e.Raw()) != 0.0)
+		default:
+			return makeboolean(true)
+		}
 	default:
 		panic("unhandled case: evalIsTruthy")
 	}

@@ -173,8 +173,13 @@ func (o opBitAnd) BitwiseOp() string { return "&" }
 var errBitwiseOperandsLength = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Binary operands of bitwise operators must be of equal length")
 
 func (bit *BitwiseExpr) eval(env *ExpressionEnv) (eval, error) {
-	l, r, err := bit.arguments(env)
-	if l == nil || r == nil || err != nil {
+	l, err := bit.Left.eval(env)
+	if l == nil || err != nil {
+		return nil, err
+	}
+
+	r, err := bit.Right.eval(env)
+	if r == nil || err != nil {
 		return nil, err
 	}
 

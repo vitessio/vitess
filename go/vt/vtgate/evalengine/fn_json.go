@@ -168,7 +168,7 @@ func (call *builtinJSONObject) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		val1, err := evalToJSON(val)
+		val1, err := argToJSON(val)
 		if err != nil {
 			return nil, err
 		}
@@ -189,7 +189,7 @@ func (call *builtinJSONArray) eval(env *ExpressionEnv) (eval, error) {
 		if err != nil {
 			return nil, err
 		}
-		arg1, err := evalToJSON(arg)
+		arg1, err := argToJSON(arg)
 		if err != nil {
 			return nil, err
 		}

@@ -362,7 +362,7 @@ func (d Decimal) Div(d2 Decimal, scaleIncr int32) Decimal {
 		scaleIncr = 0
 	}
 	scale := myBigDigits(fracLeft+fracRight+scaleIncr) * 9
-	q, _ := d.quoRem(d2, scale)
+	q, _ := d.QuoRem(d2, scale)
 	return q
 }
 
@@ -372,15 +372,15 @@ func (d Decimal) div(d2 Decimal) Decimal {
 	return d.divRound(d2, int32(divisionPrecision))
 }
 
-// quoRem does division with remainder
-// d.quoRem(d2,precision) returns quotient q and remainder r such that
+// QuoRem does division with remainder
+// d.QuoRem(d2,precision) returns quotient q and remainder r such that
 //
 //	d = d2 * q + r, q an integer multiple of 10^(-precision)
 //	0 <= r < abs(d2) * 10 ^(-precision) if d>=0
 //	0 >= r > -abs(d2) * 10 ^(-precision) if d<0
 //
 // Note that precision<0 is allowed as input.
-func (d Decimal) quoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
+func (d Decimal) QuoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
 	d.ensureInitialized()
 	d2.ensureInitialized()
 	if d2.value.Sign() == 0 {
@@ -389,7 +389,7 @@ func (d Decimal) quoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
 	scale := -precision
 	e := int64(d.exp - d2.exp - scale)
 	if e > math.MaxInt32 || e < math.MinInt32 {
-		panic("overflow in decimal quoRem")
+		panic("overflow in decimal QuoRem")
 	}
 	var aa, bb, expo big.Int
 	var scalerest int32
@@ -428,7 +428,7 @@ func (d Decimal) quoRem(d2 Decimal, precision int32) (Decimal, Decimal) {
 // Note that precision<0 is allowed as input.
 func (d Decimal) divRound(d2 Decimal, precision int32) Decimal {
 	// quoRem already checks initialization
-	q, r := d.quoRem(d2, precision)
+	q, r := d.QuoRem(d2, precision)
 
 	// the actual rounding decision is based on comparing r*10^precision and d2/2
 	// instead compare 2 r 10 ^precision and d2

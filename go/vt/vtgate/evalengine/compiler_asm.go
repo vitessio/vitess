@@ -363,7 +363,7 @@ func (asm *assembler) BitwiseNot_u() {
 func (asm *assembler) Cmp_eq() {
 	asm.adjustStack(1)
 	asm.emit(func(vm *VirtualMachine) int {
-		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp == 0)
+		vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp == 0)
 		vm.sp++
 		return 1
 	}, "CMPFLAG EQ")
@@ -375,7 +375,7 @@ func (asm *assembler) Cmp_eq_n() {
 		if vm.flags.null {
 			vm.stack[vm.sp] = nil
 		} else {
-			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp == 0)
+			vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp == 0)
 		}
 		vm.sp++
 		return 1
@@ -385,7 +385,7 @@ func (asm *assembler) Cmp_eq_n() {
 func (asm *assembler) Cmp_ge() {
 	asm.adjustStack(1)
 	asm.emit(func(vm *VirtualMachine) int {
-		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp >= 0)
+		vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp >= 0)
 		vm.sp++
 		return 1
 	}, "CMPFLAG GE")
@@ -397,7 +397,7 @@ func (asm *assembler) Cmp_ge_n() {
 		if vm.flags.null {
 			vm.stack[vm.sp] = nil
 		} else {
-			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp >= 0)
+			vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp >= 0)
 		}
 		vm.sp++
 		return 1
@@ -407,7 +407,7 @@ func (asm *assembler) Cmp_ge_n() {
 func (asm *assembler) Cmp_gt() {
 	asm.adjustStack(1)
 	asm.emit(func(vm *VirtualMachine) int {
-		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp > 0)
+		vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp > 0)
 		vm.sp++
 		return 1
 	}, "CMPFLAG GT")
@@ -419,7 +419,7 @@ func (asm *assembler) Cmp_gt_n() {
 		if vm.flags.null {
 			vm.stack[vm.sp] = nil
 		} else {
-			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp > 0)
+			vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp > 0)
 		}
 		vm.sp++
 		return 1
@@ -429,7 +429,7 @@ func (asm *assembler) Cmp_gt_n() {
 func (asm *assembler) Cmp_le() {
 	asm.adjustStack(1)
 	asm.emit(func(vm *VirtualMachine) int {
-		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp <= 0)
+		vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp <= 0)
 		vm.sp++
 		return 1
 	}, "CMPFLAG LE")
@@ -441,7 +441,7 @@ func (asm *assembler) Cmp_le_n() {
 		if vm.flags.null {
 			vm.stack[vm.sp] = nil
 		} else {
-			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp <= 0)
+			vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp <= 0)
 		}
 		vm.sp++
 		return 1
@@ -451,7 +451,7 @@ func (asm *assembler) Cmp_le_n() {
 func (asm *assembler) Cmp_lt() {
 	asm.adjustStack(1)
 	asm.emit(func(vm *VirtualMachine) int {
-		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp < 0)
+		vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp < 0)
 		vm.sp++
 		return 1
 	}, "CMPFLAG LT")
@@ -463,7 +463,7 @@ func (asm *assembler) Cmp_lt_n() {
 		if vm.flags.null {
 			vm.stack[vm.sp] = nil
 		} else {
-			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp < 0)
+			vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp < 0)
 		}
 		vm.sp++
 		return 1
@@ -472,7 +472,7 @@ func (asm *assembler) Cmp_lt_n() {
 func (asm *assembler) Cmp_ne() {
 	asm.adjustStack(1)
 	asm.emit(func(vm *VirtualMachine) int {
-		vm.stack[vm.sp] = newEvalBool(vm.flags.cmp != 0)
+		vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp != 0)
 		vm.sp++
 		return 1
 	}, "CMPFLAG NE")
@@ -484,7 +484,7 @@ func (asm *assembler) Cmp_ne_n() {
 		if vm.flags.null {
 			vm.stack[vm.sp] = nil
 		} else {
-			vm.stack[vm.sp] = newEvalBool(vm.flags.cmp != 0)
+			vm.stack[vm.sp] = vm.arena.newEvalBool(vm.flags.cmp != 0)
 		}
 		vm.sp++
 		return 1
@@ -701,7 +701,7 @@ func (asm *assembler) CmpTupleNullsafe() {
 		var equals bool
 		equals, vm.err = evalCompareTuplesNullSafe(l.t, r.t)
 
-		vm.stack[vm.sp-2] = newEvalBool(equals)
+		vm.stack[vm.sp-2] = vm.arena.newEvalBool(equals)
 		vm.sp -= 1
 		return 1
 	}, "CMP NULLSAFE TUPLE(SP-2), TUPLE(SP-1)")
@@ -719,9 +719,22 @@ func (asm *assembler) Collate(col collations.ID) {
 func (asm *assembler) Convert_bB(offset int) {
 	asm.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-offset]
-		vm.stack[vm.sp-offset] = newEvalBool(arg != nil && parseStringToFloat(arg.(*evalBytes).string()) != 0.0)
+		vm.stack[vm.sp-offset] = vm.arena.newEvalBool(arg != nil && parseStringToFloat(arg.(*evalBytes).string()) != 0.0)
 		return 1
 	}, "CONV VARBINARY(SP-%d), BOOL", offset)
+}
+
+func (asm *assembler) Convert_jB(offset int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-offset].(*evalJSON)
+		switch arg.Type() {
+		case json.TypeNumber:
+			vm.stack[vm.sp-offset] = vm.arena.newEvalBool(parseStringToFloat(arg.String()) != 0.0)
+		default:
+			vm.stack[vm.sp-offset] = vm.arena.newEvalBool(true)
+		}
+		return 1
+	}, "CONV JSON(SP-%d), BOOL", offset)
 }
 
 func (asm *assembler) Convert_bj(offset int) {
@@ -730,6 +743,14 @@ func (asm *assembler) Convert_bj(offset int) {
 		vm.stack[vm.sp-offset] = evalConvert_bj(arg)
 		return 1
 	}, "CONV VARBINARY(SP-%d), JSON", offset)
+}
+
+func (asm *assembler) ConvertArg_cj(offset int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-offset].(*evalBytes)
+		vm.stack[vm.sp-offset], vm.err = evalConvertArg_cj(arg)
+		return 1
+	}, "CONVA VARCHAR(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_cj(offset int) {
@@ -743,7 +764,7 @@ func (asm *assembler) Convert_cj(offset int) {
 func (asm *assembler) Convert_dB(offset int) {
 	asm.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-offset]
-		vm.stack[vm.sp-offset] = newEvalBool(arg != nil && !arg.(*evalDecimal).dec.IsZero())
+		vm.stack[vm.sp-offset] = vm.arena.newEvalBool(arg != nil && !arg.(*evalDecimal).dec.IsZero())
 		return 1
 	}, "CONV DECIMAL(SP-%d), BOOL", offset)
 }
@@ -763,7 +784,7 @@ func (asm *assembler) Convert_dbit(offset int) {
 func (asm *assembler) Convert_fB(offset int) {
 	asm.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-offset]
-		vm.stack[vm.sp-offset] = newEvalBool(arg != nil && arg.(*evalFloat).f != 0.0)
+		vm.stack[vm.sp-offset] = vm.arena.newEvalBool(arg != nil && arg.(*evalFloat).f != 0.0)
 		return 1
 	}, "CONV FLOAT64(SP-%d), BOOL", offset)
 }
@@ -790,7 +811,7 @@ func (asm *assembler) Convert_hex(offset int) {
 func (asm *assembler) Convert_iB(offset int) {
 	asm.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-offset]
-		vm.stack[vm.sp-offset] = newEvalBool(arg != nil && arg.(*evalInt64).i != 0)
+		vm.stack[vm.sp-offset] = vm.arena.newEvalBool(arg != nil && arg.(*evalInt64).i != 0)
 		return 1
 	}, "CONV INT64(SP-%d), BOOL", offset)
 }
@@ -848,7 +869,7 @@ func (asm *assembler) Convert_Nj(offset int) {
 func (asm *assembler) Convert_uB(offset int) {
 	asm.emit(func(vm *VirtualMachine) int {
 		arg := vm.stack[vm.sp-offset]
-		vm.stack[vm.sp-offset] = newEvalBool(arg != nil && arg.(*evalUint64).u != 0)
+		vm.stack[vm.sp-offset] = vm.arena.newEvalBool(arg != nil && arg.(*evalUint64).u != 0)
 		return 1
 	}, "CONV UINT64(SP-%d), BOOL", offset)
 }
@@ -982,6 +1003,203 @@ func (asm *assembler) Div_ff() {
 		vm.sp--
 		return 1
 	}, "DIV FLOAT64(SP-2), FLOAT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_ii() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.i = l.i / r.i
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV INT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_iu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			r.u, vm.err = mathIntDiv_iu0(l.i, r.u)
+			vm.stack[vm.sp-2] = r
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV INT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_ui() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u, vm.err = mathIntDiv_ui0(l.u, r.i)
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV UINT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_uu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u = l.u / r.u
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV UINT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) IntDiv_di() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalDecimal)
+		r := vm.stack[vm.sp-1].(*evalDecimal)
+		if r.dec.IsZero() {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			var res int64
+			res, vm.err = mathIntDiv_di0(l, r)
+			vm.stack[vm.sp-2] = vm.arena.newEvalInt64(res)
+		}
+		vm.sp--
+		return 1
+	}, "INTDIV DECIMAL(SP-2), DECIMAL(SP-1)")
+}
+
+func (asm *assembler) IntDiv_du() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalDecimal)
+		r := vm.stack[vm.sp-1].(*evalDecimal)
+		if r.dec.IsZero() {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			var res uint64
+			res, vm.err = mathIntDiv_du0(l, r)
+			vm.stack[vm.sp-2] = vm.arena.newEvalUint64(res)
+		}
+		vm.sp--
+		return 1
+	}, "UINTDIV DECIMAL(SP-2), DECIMAL(SP-1)")
+}
+
+func (asm *assembler) Mod_ii() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.i = l.i % r.i
+		}
+		vm.sp--
+		return 1
+	}, "MOD INT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) Mod_iu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalInt64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.i = mathMod_iu0(l.i, r.u)
+		}
+		vm.sp--
+		return 1
+	}, "MOD INT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) Mod_ui() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalInt64)
+		if r.i == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u, vm.err = mathMod_ui0(l.u, r.i)
+		}
+		vm.sp--
+		return 1
+	}, "MOD UINT64(SP-2), INT64(SP-1)")
+}
+
+func (asm *assembler) Mod_uu() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalUint64)
+		r := vm.stack[vm.sp-1].(*evalUint64)
+		if r.u == 0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.u = l.u % r.u
+		}
+		vm.sp--
+		return 1
+	}, "MOD UINT64(SP-2), UINT64(SP-1)")
+}
+
+func (asm *assembler) Mod_ff() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalFloat)
+		r := vm.stack[vm.sp-1].(*evalFloat)
+		if r.f == 0.0 {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.f = math.Mod(l.f, r.f)
+		}
+		vm.sp--
+		return 1
+	}, "MOD FLOAT64(SP-2), FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Mod_dd() {
+	asm.adjustStack(-1)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalDecimal)
+		r := vm.stack[vm.sp-1].(*evalDecimal)
+		if r.dec.IsZero() {
+			vm.stack[vm.sp-2] = nil
+		} else {
+			l.dec, l.length = mathMod_dd0(l, r)
+		}
+		vm.sp--
+		return 1
+	}, "MOD DECIMAL(SP-2), DECIMAL(SP-1)")
 }
 
 func (asm *assembler) Fn_ASCII() {
@@ -1182,7 +1400,7 @@ func (asm *assembler) Fn_COLLATION(col collations.TypedCollation) {
 	}, "FN COLLATION (SP-1)")
 }
 
-func (asm *assembler) Fn_FROM_BASE64() {
+func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 	asm.emit(func(vm *VirtualMachine) int {
 		str := vm.stack[vm.sp-1].(*evalBytes)
 
@@ -1193,7 +1411,7 @@ func (asm *assembler) Fn_FROM_BASE64() {
 			vm.stack[vm.sp-1] = nil
 			return 1
 		}
-		str.tt = int16(sqltypes.VarBinary)
+		str.tt = int16(t)
 		str.bytes = decoded[:n]
 		return 1
 	}, "FN FROM_BASE64 VARCHAR(SP-1)")
@@ -1242,7 +1460,7 @@ func (asm *assembler) Fn_JSON_CONTAINS_PATH(match jsonMatch, paths []*json.Path)
 					break
 				}
 			}
-			vm.stack[vm.sp-1] = newEvalBool(matched)
+			vm.stack[vm.sp-1] = vm.arena.newEvalBool(matched)
 			return 1
 		}, "FN JSON_CONTAINS_PATH, SP-1, 'one', [static]")
 	case jsonMatchAll:
@@ -1256,7 +1474,7 @@ func (asm *assembler) Fn_JSON_CONTAINS_PATH(match jsonMatch, paths []*json.Path)
 					break
 				}
 			}
-			vm.stack[vm.sp-1] = newEvalBool(matched)
+			vm.stack[vm.sp-1] = vm.arena.newEvalBool(matched)
 			return 1
 		}, "FN JSON_CONTAINS_PATH, SP-1, 'all', [static]")
 	}
@@ -1615,7 +1833,7 @@ func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
 				vm.hash.Reset()
 				lhs.(hashable).Hash(&vm.hash)
 				_, in := table[vm.hash.Sum128()]
-				vm.stack[vm.sp-1] = newEvalBool(!in)
+				vm.stack[vm.sp-1] = vm.arena.newEvalBool(!in)
 			}
 			return 1
 		}, "NOT IN (SP-1), [static table]")
@@ -1626,7 +1844,7 @@ func (asm *assembler) In_table(not bool, table map[vthash.Hash]struct{}) {
 				vm.hash.Reset()
 				lhs.(hashable).Hash(&vm.hash)
 				_, in := table[vm.hash.Sum128()]
-				vm.stack[vm.sp-1] = newEvalBool(in)
+				vm.stack[vm.sp-1] = vm.arena.newEvalBool(in)
 			}
 			return 1
 		}, "IN (SP-1), [static table]")
@@ -1665,9 +1883,147 @@ func (asm *assembler) In_slow(not bool) {
 
 func (asm *assembler) Is(check func(eval) bool) {
 	asm.emit(func(vm *VirtualMachine) int {
-		vm.stack[vm.sp-1] = newEvalBool(check(vm.stack[vm.sp-1]))
+		vm.stack[vm.sp-1] = vm.arena.newEvalBool(check(vm.stack[vm.sp-1]))
 		return 1
 	}, "IS (SP-1), [static]")
+}
+
+func (asm *assembler) Not_i() {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalInt64)
+		vm.stack[vm.sp-1] = vm.arena.newEvalBool(arg.i == 0)
+		return 1
+	}, "NOT INT64(SP-1)")
+}
+
+func (asm *assembler) Not_u() {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalUint64)
+		vm.stack[vm.sp-1] = vm.arena.newEvalBool(arg.u == 0)
+		return 1
+	}, "NOT UINT64(SP-1)")
+}
+
+func (asm *assembler) Not_f() {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalFloat)
+		vm.stack[vm.sp-1] = vm.arena.newEvalBool(arg.f == 0.0)
+		return 1
+	}, "NOT FLOAT64(SP-1)")
+}
+
+func (asm *assembler) Not_d() {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-1].(*evalDecimal)
+		vm.stack[vm.sp-1] = vm.arena.newEvalBool(arg.dec.IsZero())
+		return 1
+	}, "NOT DECIMAL(SP-1)")
+}
+
+func (asm *assembler) LogicalLeft(opname string) *jump {
+	switch opname {
+	case "AND":
+		j := asm.jumpFrom()
+		asm.emit(func(vm *VirtualMachine) int {
+			left, ok := vm.stack[vm.sp-1].(*evalInt64)
+			if ok && left.i == 0 {
+				return j.offset()
+			}
+			return 1
+		}, "AND CHECK INT64(SP-1)")
+		return j
+	case "OR":
+		j := asm.jumpFrom()
+		asm.emit(func(vm *VirtualMachine) int {
+			left, ok := vm.stack[vm.sp-1].(*evalInt64)
+			if ok && left.i != 0 {
+				left.i = 1
+				return j.offset()
+			}
+			return 1
+		}, "OR CHECK INT64(SP-1)")
+		return j
+	case "XOR":
+		j := asm.jumpFrom()
+		asm.emit(func(vm *VirtualMachine) int {
+			if vm.stack[vm.sp-1] == nil {
+				return j.offset()
+			}
+			return 1
+		}, "XOR CHECK INT64(SP-1)")
+		return j
+	}
+	return nil
+}
+
+func (asm *assembler) LogicalRight(opname string) {
+	asm.adjustStack(-1)
+	switch opname {
+	case "AND":
+		asm.emit(func(vm *VirtualMachine) int {
+			left, lok := vm.stack[vm.sp-2].(*evalInt64)
+			right, rok := vm.stack[vm.sp-1].(*evalInt64)
+
+			isLeft := lok && left.i != 0
+			isRight := rok && right.i != 0
+
+			if isLeft && isRight {
+				left.i = 1
+			} else if rok && !isRight {
+				vm.stack[vm.sp-2] = vm.arena.newEvalBool(false)
+			} else {
+				vm.stack[vm.sp-2] = nil
+			}
+			vm.sp--
+			return 1
+		}, "AND INT64(SP-2), INT64(SP-1)")
+	case "OR":
+		asm.emit(func(vm *VirtualMachine) int {
+			left, lok := vm.stack[vm.sp-2].(*evalInt64)
+			right, rok := vm.stack[vm.sp-1].(*evalInt64)
+
+			isLeft := lok && left.i != 0
+			isRight := rok && right.i != 0
+
+			switch {
+			case !lok:
+				if isRight {
+					vm.stack[vm.sp-2] = vm.arena.newEvalBool(true)
+				}
+			case !rok:
+				vm.stack[vm.sp-2] = nil
+			default:
+				if isLeft || isRight {
+					left.i = 1
+				} else {
+					left.i = 0
+				}
+			}
+			vm.sp--
+			return 1
+		}, "OR INT64(SP-2), INT64(SP-1)")
+	case "XOR":
+		asm.emit(func(vm *VirtualMachine) int {
+			left := vm.stack[vm.sp-2].(*evalInt64)
+			right, rok := vm.stack[vm.sp-1].(*evalInt64)
+
+			isLeft := left.i != 0
+			isRight := rok && right.i != 0
+
+			switch {
+			case !rok:
+				vm.stack[vm.sp-2] = nil
+			default:
+				if isLeft != isRight {
+					left.i = 1
+				} else {
+					left.i = 0
+				}
+			}
+			vm.sp--
+			return 1
+		}, "XOR INT64(SP-2), INT64(SP-1)")
+	}
 }
 
 func (asm *assembler) Like_coerce(expr *LikeExpr, coercion *compiledCoercion) {
@@ -1689,11 +2045,7 @@ func (asm *assembler) Like_coerce(expr *LikeExpr, coercion *compiledCoercion) {
 		}
 
 		match := expr.matchWildcard(bl, br, coercion.col.ID())
-		if match {
-			vm.stack[vm.sp-1] = evalBoolTrue
-		} else {
-			vm.stack[vm.sp-1] = evalBoolFalse
-		}
+		vm.stack[vm.sp-1] = vm.arena.newEvalBool(match)
 		return 1
 	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COERCE AND COLLATE '%s'", coercion.col.Name())
 }
@@ -1707,11 +2059,7 @@ func (asm *assembler) Like_collate(expr *LikeExpr, collation collations.Collatio
 		vm.sp--
 
 		match := expr.matchWildcard(l.bytes, r.bytes, collation.ID())
-		if match {
-			vm.stack[vm.sp-1] = evalBoolTrue
-		} else {
-			vm.stack[vm.sp-1] = evalBoolFalse
-		}
+		vm.stack[vm.sp-1] = vm.arena.newEvalBool(match)
 		return 1
 	}, "LIKE VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
@@ -2053,12 +2401,12 @@ func (asm *assembler) PushNull() {
 func (asm *assembler) SetBool(offset int, b bool) {
 	if b {
 		asm.emit(func(vm *VirtualMachine) int {
-			vm.stack[vm.sp-offset] = evalBoolTrue
+			vm.stack[vm.sp-offset] = vm.arena.newEvalBool(true)
 			return 1
 		}, "SET (SP-%d), BOOL(true)", offset)
 	} else {
 		asm.emit(func(vm *VirtualMachine) int {
-			vm.stack[vm.sp-offset] = evalBoolFalse
+			vm.stack[vm.sp-offset] = vm.arena.newEvalBool(false)
 			return 1
 		}, "SET (SP-%d), BOOL(false)", offset)
 	}
