@@ -48,11 +48,11 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 	case *builtinChangeCase:
 		return c.compileFn_CCASE(call)
 	case *builtinCharLength:
-		return c.compileFn_xLENGTH(call, c.asm.Fn_CHAR_LENGTH)
+		return c.compileFn_length(call, c.asm.Fn_CHAR_LENGTH)
 	case *builtinLength:
-		return c.compileFn_xLENGTH(call, c.asm.Fn_LENGTH)
+		return c.compileFn_length(call, c.asm.Fn_LENGTH)
 	case *builtinBitLength:
-		return c.compileFn_xLENGTH(call, c.asm.Fn_BIT_LENGTH)
+		return c.compileFn_length(call, c.asm.Fn_BIT_LENGTH)
 	case *builtinASCII:
 		return c.compileFn_ASCII(call)
 	case *builtinHex:
@@ -62,9 +62,9 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 	case *builtinCollation:
 		return c.compileFn_COLLATION(call)
 	case *builtinCeil:
-		return c.compileFn_CEIL(call)
+		return c.compileFn_rounding(call, c.asm.Fn_CEIL_f, c.asm.Fn_CEIL_d)
 	case *builtinFloor:
-		return c.compileFn_FLOOR(call)
+		return c.compileFn_rounding(call, c.asm.Fn_FLOOR_f, c.asm.Fn_FLOOR_d)
 	case *builtinAbs:
 		return c.compileFn_ABS(call)
 	case *builtinPi:
@@ -98,13 +98,13 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 
 func (c *compiler) compileFn_MULTICMP(call *builtinMultiComparison) (ctype, error) {
 	var (
-		integersI int
-		integersU int
-		floats    int
-		decimals  int
-		text      int
-		binary    int
-		args      []ctype
+		signed   int
+		unsigned int
+		floats   int
+		decimals int
+		text     int
+		binary   int
+		args     []ctype
 	)
 
 	/*
@@ -126,9 +126,9 @@ func (c *compiler) compileFn_MULTICMP(call *builtinMultiComparison) (ctype, erro
 
 		switch tt.Type {
 		case sqltypes.Int64:
-			integersI++
+			signed++
 		case sqltypes.Uint64:
-			integersU++
+			unsigned++
 		case sqltypes.Float64:
 			floats++
 		case sqltypes.Decimal:
@@ -142,12 +142,12 @@ func (c *compiler) compileFn_MULTICMP(call *builtinMultiComparison) (ctype, erro
 		}
 	}
 
-	if integersI+integersU == len(args) {
-		if integersI == len(args) {
+	if signed+unsigned == len(args) {
+		if signed == len(args) {
 			c.asm.Fn_MULTICMP_i(len(args), call.cmp < 0)
 			return ctype{Type: sqltypes.Int64, Col: collationNumeric}, nil
 		}
-		if integersU == len(args) {
+		if unsigned == len(args) {
 			c.asm.Fn_MULTICMP_u(len(args), call.cmp < 0)
 			return ctype{Type: sqltypes.Uint64, Col: collationNumeric}, nil
 		}
@@ -298,7 +298,7 @@ func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: str.Col}, nil
 }
 
-func (c *compiler) compileFn_xLENGTH(call callable, asm_ins func()) (ctype, error) {
+func (c *compiler) compileFn_length(call callable, asm_ins func()) (ctype, error) {
 	str, err := c.compileExpr(call.callable()[0])
 	if err != nil {
 		return ctype{}, err
@@ -392,58 +392,32 @@ func (c *compiler) compileFn_COLLATION(expr *builtinCollation) (ctype, error) {
 	return ctype{Type: sqltypes.VarChar, Col: col}, nil
 }
 
-func (c *compiler) compileFn_CEIL(expr *builtinCeil) (ctype, error) {
-	arg, err := c.compileExpr(expr.Arguments[0])
+func (c *compiler) compileFn_rounding(expr callable, asm_ins_f, asm_ins_d func()) (ctype, error) {
+	arg, err := c.compileExpr(expr.callable()[0])
 	if err != nil {
 		return ctype{}, err
+	}
+
+	if arg.Type == sqltypes.Int64 || arg.Type == sqltypes.Uint64 {
+		// No-op for integers.
+		return arg, nil
 	}
 
 	skip := c.compileNullCheck1(arg)
 
 	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
-	switch {
-	case sqltypes.IsIntegral(arg.Type):
-		// No-op for integers.
-	case sqltypes.IsFloat(arg.Type):
-		c.asm.Fn_CEIL_f()
-	case sqltypes.IsDecimal(arg.Type):
+	switch arg.Type {
+	case sqltypes.Float64:
+		asm_ins_f()
+	case sqltypes.Decimal:
 		// We assume here the most common case here is that
 		// the decimal fits into an integer.
 		convt.Type = sqltypes.Int64
-		c.asm.Fn_CEIL_d()
+		asm_ins_d()
 	default:
 		convt.Type = sqltypes.Float64
 		c.asm.Convert_xf(1)
-		c.asm.Fn_CEIL_f()
-	}
-
-	c.asm.jumpDestination(skip)
-	return convt, nil
-}
-
-func (c *compiler) compileFn_FLOOR(expr *builtinFloor) (ctype, error) {
-	arg, err := c.compileExpr(expr.Arguments[0])
-	if err != nil {
-		return ctype{}, err
-	}
-
-	skip := c.compileNullCheck1(arg)
-
-	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
-	switch {
-	case sqltypes.IsIntegral(arg.Type):
-		// No-op for integers.
-	case sqltypes.IsFloat(arg.Type):
-		c.asm.Fn_FLOOR_f()
-	case sqltypes.IsDecimal(arg.Type):
-		// We assume here the most common case here is that
-		// the decimal fits into an integer.
-		convt.Type = sqltypes.Int64
-		c.asm.Fn_FLOOR_d()
-	default:
-		convt.Type = sqltypes.Float64
-		c.asm.Convert_xf(1)
-		c.asm.Fn_FLOOR_f()
+		asm_ins_f()
 	}
 
 	c.asm.jumpDestination(skip)
@@ -456,17 +430,20 @@ func (c *compiler) compileFn_ABS(expr *builtinAbs) (ctype, error) {
 		return ctype{}, err
 	}
 
+	if arg.Type == sqltypes.Uint64 {
+		// No-op if it's unsigned since that's already positive.
+		return arg, nil
+	}
+
 	skip := c.compileNullCheck1(arg)
 
 	convt := ctype{Type: arg.Type, Col: collationNumeric, Flag: arg.Flag}
-	switch {
-	case sqltypes.IsUnsigned(arg.Type):
-		// No-op if it's unsigned since that's already positive.
-	case sqltypes.IsSigned(arg.Type):
+	switch arg.Type {
+	case sqltypes.Int64:
 		c.asm.Fn_ABS_i()
-	case sqltypes.IsFloat(arg.Type):
+	case sqltypes.Float64:
 		c.asm.Fn_ABS_f()
-	case sqltypes.IsDecimal(arg.Type):
+	case sqltypes.Decimal:
 		// We assume here the most common case here is that
 		// the decimal fits into an integer.
 		c.asm.Fn_ABS_d()

@@ -108,7 +108,8 @@ func (c *compiler) compileArithmeticAdd(left, right Expr) (ctype, error) {
 	}
 
 	swap := false
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
+
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
@@ -145,8 +146,7 @@ func (c *compiler) compileArithmeticAdd(left, right Expr) (ctype, error) {
 		sumtype = sqltypes.Float64
 	}
 
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: sumtype, Col: collationNumeric}, nil
 }
 
@@ -162,7 +162,7 @@ func (c *compiler) compileArithmeticSub(left, right Expr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 
@@ -224,8 +224,7 @@ func (c *compiler) compileArithmeticSub(left, right Expr) (ctype, error) {
 		panic("did not compile?")
 	}
 
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: subtype, Col: collationNumeric}, nil
 }
 
@@ -242,7 +241,7 @@ func (c *compiler) compileArithmeticMul(left, right Expr) (ctype, error) {
 	}
 
 	swap := false
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 	lt, rt, swap = c.compileNumericPriority(lt, rt)
@@ -279,8 +278,7 @@ func (c *compiler) compileArithmeticMul(left, right Expr) (ctype, error) {
 		multype = sqltypes.Decimal
 	}
 
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ctype{Type: multype, Col: collationNumeric}, nil
 }
 
@@ -295,7 +293,7 @@ func (c *compiler) compileArithmeticDiv(left, right Expr) (ctype, error) {
 	if err != nil {
 		return ctype{}, err
 	}
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
 
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
@@ -312,8 +310,7 @@ func (c *compiler) compileArithmeticDiv(left, right Expr) (ctype, error) {
 		c.compileToDecimal(rt, 1)
 		c.asm.Div_dd()
 	}
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ct, nil
 }
 
@@ -329,7 +326,7 @@ func (c *compiler) compileArithmeticIntDiv(left, right Expr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 
@@ -393,8 +390,7 @@ func (c *compiler) compileArithmeticIntDiv(left, right Expr) (ctype, error) {
 			c.asm.IntDiv_di()
 		}
 	}
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ct, nil
 }
 
@@ -410,7 +406,7 @@ func (c *compiler) compileArithmeticMod(left, right Expr) (ctype, error) {
 		return ctype{}, err
 	}
 
-	skip2 := c.compileNullCheck2(lt, rt)
+	skip2 := c.compileNullCheck1r(rt)
 	lt = c.compileToNumeric(lt, 2)
 	rt = c.compileToNumeric(rt, 1)
 
@@ -465,7 +461,6 @@ func (c *compiler) compileArithmeticMod(left, right Expr) (ctype, error) {
 		c.asm.Mod_ff()
 	}
 
-	c.asm.jumpDestination(skip1)
-	c.asm.jumpDestination(skip2)
+	c.asm.jumpDestination(skip1, skip2)
 	return ct, nil
 }

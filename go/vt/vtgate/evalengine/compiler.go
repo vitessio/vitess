@@ -324,6 +324,15 @@ func (c *compiler) compileNullCheck1(ct ctype) *jump {
 	return nil
 }
 
+func (c *compiler) compileNullCheck1r(ct ctype) *jump {
+	if ct.nullable() {
+		j := c.asm.jumpFrom()
+		c.asm.NullCheck1r(j)
+		return j
+	}
+	return nil
+}
+
 func (c *compiler) compileNullCheck2(lt, rt ctype) *jump {
 	if lt.nullable() || rt.nullable() {
 		j := c.asm.jumpFrom()
