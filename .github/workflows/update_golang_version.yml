@@ -26,13 +26,13 @@ jobs:
       - name: Detect new version and update codebase
         id: detect-and-update
         run: |
-          old_go_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_go_version)
+          old_go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get_go_version)
           echo "old-go-version=${old_go_version}" >> $GITHUB_OUTPUT
 
           if [ ${{ matrix.branch }} == "main" ]; then
-            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update --main --allow-major-upgrade
+            go run ./go/tools/go-upgrade/go-upgrade.go --no-workflow-update --main --allow-major-upgrade
           else
-            go run ./go/tools/go-upgrade/go_upgrade.go --no-workflow-update
+            go run ./go/tools/go-upgrade/go-upgrade.go --no-workflow-update
           fi
 
           output=$(git status -s)
@@ -41,8 +41,8 @@ jobs:
           fi
           echo "create-pr=true" >> $GITHUB_OUTPUT
 
-          go_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_go_version)
-          bootstrap_version=$(go run ./go/tools/go-upgrade/go_upgrade.go get_bootstrap_version)
+          go_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get_go_version)
+          bootstrap_version=$(go run ./go/tools/go-upgrade/go-upgrade.go get_bootstrap_version)
           echo "go-version=${go_version}" >> $GITHUB_OUTPUT
           echo "bootstrap-version=${bootstrap_version}" >> $GITHUB_OUTPUT
 
@@ -64,7 +64,7 @@ jobs:
               - [ ] Make sure you update the Golang version used in the previous and next release branches for the Upgrade/Downgrade tests.
               - [ ] Build and Push the bootstrap images to Docker Hub, the bot cannot handle that.
               - [ ] Update the `./.github/workflows/*.yml` files with the newer Golang version, the bot cannot handle that due to permissions.
-                - To accomplish this, run the following: `go run ./go/tools/go-upgrade/go_upgrade.go --go-from=${{steps.detect-and-update.outputs.old-go-version}} --go-to=${{steps.detect-and-update.outputs.go-version}} update_workflows`
+                - To accomplish this, run the following: `go run ./go/tools/go-upgrade/go-upgrade.go --go-from=${{steps.detect-and-update.outputs.old-go-version}} --go-to=${{steps.detect-and-update.outputs.go-version}} update_workflows`
           base: ${{ matrix.branch }}
           labels: |
             Skip CI
