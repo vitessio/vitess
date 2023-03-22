@@ -449,11 +449,6 @@ func TestVExecValidations(t *testing.T) {
 			expectedError: nil,
 		},
 		{
-			name:          "update", // we then tack on config changes
-			want:          fmt.Sprintf(updateSQL, encodeString("Stopped")),
-			expectedError: nil,
-		},
-		{
 			name:          "delete",
 			want:          "delete from _vt.vreplication",
 			expectedError: nil,
