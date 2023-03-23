@@ -3662,7 +3662,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			}
 			if subFlags.Lookup("tablet-types").Changed {
 				for _, tabletType := range *tabletTypes {
-					if _, ok := topodatapb.TabletType_value[strings.ToUpper(tabletType)]; !ok {
+					if _, ok := topodatapb.TabletType_value[strings.ToUpper(strings.TrimSpace(tabletType))]; !ok {
 						return fmt.Errorf("invalid tablet type: %s", tabletType)
 					}
 				}

@@ -112,13 +112,13 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
 	if !cmd.Flags().Lookup("cells").Changed {
-		workflowUpdateOptions.TabletTypes = textutil.SimulatedNullStringSlice
+		workflowUpdateOptions.Cells = textutil.SimulatedNullStringSlice
 	}
 	if !cmd.Flags().Lookup("tablet-types").Changed {
 		workflowUpdateOptions.TabletTypes = textutil.SimulatedNullStringSlice
 	} else { // Validate the provided value
 		for _, tabletType := range workflowUpdateOptions.TabletTypes {
-			if _, ok := topodatapb.TabletType_value[strings.ToUpper(tabletType)]; !ok {
+			if _, ok := topodatapb.TabletType_value[strings.ToUpper(strings.TrimSpace(tabletType))]; !ok {
 				return fmt.Errorf("invalid tablet type: %s", tabletType)
 			}
 		}
