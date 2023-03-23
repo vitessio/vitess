@@ -70,10 +70,8 @@ func NewSchemaFromEntities(entities []Entity) (*Schema, error) {
 			return nil, &UnsupportedEntityError{Entity: c.Name(), Statement: c.Create().CanonicalStatementString()}
 		}
 	}
-	if err := schema.normalize(); err != nil {
-		return schema, err
-	}
-	return schema, nil
+	err := schema.normalize()
+	return schema, err
 }
 
 // NewSchemaFromStatements creates a valid and normalized schema based on list of valid statements
@@ -309,7 +307,7 @@ func (s *Schema) normalize() error {
 		// - two or more views have a circular dependency
 		for _, t := range s.tables {
 			if _, ok := dependencyLevels[t.Name()]; !ok {
-				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
+				// We _know_ that in this iteration, at least one foreign key is not found.
 				// We return the first one.
 				return &ForeignKeyDependencyUnresolvedError{Table: t.Name()}
 			}
@@ -317,8 +315,10 @@ func (s *Schema) normalize() error {
 		for _, v := range s.views {
 			if _, ok := dependencyLevels[v.Name()]; !ok {
 				// We _know_ that in this iteration, at least one view is found unassigned a dependency level.
-				// We return the first one.
+				// We gather all the errors.
 				errs = errors.Join(errs, &ViewDependencyUnresolvedError{View: v.ViewName.Name.String()})
+				// We still add it so it shows up in the output if that is used for anything.
+				s.sorted = append(s.sorted, v)
 			}
 		}
 	}
