@@ -1480,7 +1480,9 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 					// We should not send any more packets after this.
 					return c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
 				}
-				return c.writeFields(qr)
+				if err = c.writeFields(qr); err != nil {
+					return err
+				}
 			}
 			return c.writeBinaryRows(qr)
 		})
