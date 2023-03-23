@@ -235,10 +235,14 @@ func (e *BuggyError) bug() {}
 // ColumnNotFoundError
 type ColumnNotFoundError struct {
 	Column *sqlparser.ColName
+	Table  *sqlparser.TableName
 }
 
 func (e *ColumnNotFoundError) Error() string {
-	return eprintf(e, "symbol %s not found", sqlparser.String(e.Column))
+	if e.Table == nil {
+		return eprintf(e, "column '%s' not found", sqlparser.String(e.Column))
+	}
+	return eprintf(e, "column '%s' not found in table '%s'", sqlparser.String(e.Column), sqlparser.String(e.Table))
 }
 
 func (e *ColumnNotFoundError) ErrorCode() vtrpcpb.Code {
