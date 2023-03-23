@@ -2916,8 +2916,8 @@
   {
     "comment": "unresolved symbol in inner subquery.",
     "query": "select id from user where id = :a and user.col in (select user_extra.col from user_extra where user_extra.user_id = :a and foo.id = 1)",
-    "v3-plan": "VT03019: symbol foo.id not found",
-    "gen4-plan": "symbol foo.id not found"
+    "v3-plan": "VT03019: column foo.id not found",
+    "gen4-plan": "column 'foo.id' not found"
   },
   {
     "comment": "outer and inner subquery route by same outermost column value",

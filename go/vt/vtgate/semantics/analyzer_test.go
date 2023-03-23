@@ -125,7 +125,7 @@ func TestBindingSingleTableNegative(t *testing.T) {
 			require.NoError(t, err)
 			_, err = Analyze(parse, "d", &FakeSI{})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "symbol")
+			require.Contains(t, err.Error(), "column")
 			require.Contains(t, err.Error(), "not found")
 		})
 	}
@@ -311,7 +311,7 @@ func TestMissingTable(t *testing.T) {
 			parse, _ := sqlparser.Parse(query)
 			_, err := Analyze(parse, "", &FakeSI{})
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "symbol t.col not found")
+			require.Contains(t, err.Error(), "column 't.col' not found")
 		})
 	}
 }
@@ -462,7 +462,7 @@ func TestScoping(t *testing.T) {
 	}{
 		{
 			query:        "select 1 from u1, u2 left join u3 on u1.a = u2.a",
-			errorMessage: "symbol u1.a not found",
+			errorMessage: "column 'u1.a' not found",
 		},
 	}
 	for _, query := range queries {
@@ -916,10 +916,10 @@ func TestInvalidQueries(t *testing.T) {
 		err: &JSONTablesError{},
 	}, {
 		sql:  "select does_not_exist from t1",
-		serr: "symbol t1.does_not_exist not found",
+		serr: "column 'does_not_exist' not found in table 't1'",
 	}, {
 		sql:  "select t1.does_not_exist from t1, t2",
-		serr: "symbol t1.does_not_exist not found",
+		serr: "column 't1.does_not_exist' not found",
 	}}
 
 	for _, tc := range tcases {
@@ -985,7 +985,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			expectation:          T2,
 		}, {
 			query:        "select t.id2 from (select foo as id from user) as t",
-			errorMessage: "symbol t.id2 not found",
+			errorMessage: "column 't.id2' not found",
 		}, {
 			query:                "select id from (select 42 as id) as t",
 			recursiveExpectation: T0,
@@ -996,7 +996,7 @@ func TestScopingWDerivedTables(t *testing.T) {
 			expectation:          T2,
 		}, {
 			query:        "select ks.t.id from (select 42 as id) as t",
-			errorMessage: "symbol ks.t.id not found",
+			errorMessage: "column 'ks.t.id' not found",
 		}, {
 			query:        "select * from (select id, id from user) as t",
 			errorMessage: "Duplicate column name 'id'",
@@ -1022,13 +1022,13 @@ func TestScopingWDerivedTables(t *testing.T) {
 			recursiveExpectation: T2,
 		}, {
 			query:        "select uu.test from (select id from t1) uu",
-			errorMessage: "symbol uu.test not found",
+			errorMessage: "column 'uu.test' not found",
 		}, {
 			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "symbol uu.id not found",
+			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:        "select uu.id from (select id as col from t1) uu",
-			errorMessage: "symbol uu.id not found",
+			errorMessage: "column 'uu.id' not found",
 		}, {
 			query:                "select uu.id from (select id from t1) as uu where exists (select * from t2 as uu where uu.id = uu.uid)",
 			expectation:          T2,
