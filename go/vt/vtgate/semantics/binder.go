@@ -239,6 +239,7 @@ func (b *binder) createExtractedSubquery(cursor *sqlparser.Cursor, currScope *sc
 func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allowMulti bool) (dependency, error) {
 	var thisDeps dependencies
 	first := true
+	var tableName *sqlparser.TableName
 	for current != nil {
 		var err error
 		thisDeps, err = b.resolveColumnInScope(current, colName, allowMulti)
@@ -266,13 +267,13 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 			// This is just used for a clearer error message
 			name, err := current.tables[0].Name()
 			if err == nil {
-				colName.Qualifier = name
+				tableName = &name
 			}
 		}
 		first = false
 		current = current.parent
 	}
-	return dependency{}, ShardedError{&ColumnNotFoundError{Column: colName}}
+	return dependency{}, ShardedError{&ColumnNotFoundError{Column: colName, Table: tableName}}
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {

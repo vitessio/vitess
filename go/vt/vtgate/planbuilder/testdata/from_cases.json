@@ -2701,7 +2701,7 @@
         "Table": "`user`, user_extra"
       }
     },
-    "gen4-plan": "symbol t.col not found"
+    "gen4-plan": "column 't.col' not found"
   },
   {
     "comment": "routing rules for derived table where the constraint is in the outer query",
@@ -2766,7 +2766,7 @@
         "Table": "`user`"
       }
     },
-    "gen4-plan": "symbol t.id not found"
+    "gen4-plan": "column 'id' not found in table 't'"
   },
   {
     "comment": "push predicate on joined derived tables",
@@ -4587,7 +4587,7 @@
   {
     "comment": "verify ',' vs JOIN precedence",
     "query": "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a",
-    "v3-plan": "VT03019: symbol u1.a not found",
+    "v3-plan": "VT03019: column u1.a not found",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a",
@@ -4615,7 +4615,7 @@
   {
     "comment": "table names should be case-sensitive",
     "query": "select unsharded.id from unsharded where Unsharded.val = 1",
-    "v3-plan": "VT03019: symbol Unsharded.val not found",
+    "v3-plan": "VT03019: column Unsharded.val not found",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select unsharded.id from unsharded where Unsharded.val = 1",
@@ -6419,7 +6419,7 @@
   {
     "comment": "missing and ambiguous column info is not valid when we have two different unsharded keyspaces in the query",
     "query": "select missing_column from unsharded, unsharded_tab",
-    "v3-plan": "VT03019: symbol missing_column not found",
+    "v3-plan": "VT03019: column missing_column not found",
     "gen4-plan": "Column 'missing_column' in field list is ambiguous"
   }
 ]
