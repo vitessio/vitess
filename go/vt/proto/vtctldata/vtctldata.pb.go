@@ -10857,7 +10857,7 @@ type WorkflowUpdateResponse_TabletInfo struct {
 	unknownFields protoimpl.UnknownFields
 
 	Tablet string `protobuf:"bytes,1,opt,name=tablet,proto3" json:"tablet,omitempty"`
-	// changed is true if any of the provided values were different
+	// Changed is true if any of the provided values were different
 	// than what was already stored. This is based on the query
 	// result's RowsAffected being 0 or 1.
 	Changed bool `protobuf:"varint,2,opt,name=changed,proto3" json:"changed,omitempty"`

@@ -28,6 +28,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/logutil"
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
@@ -466,8 +467,8 @@ func TestWorkflowUpdate(t *testing.T) {
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
-	nullSlice := []string{sqltypes.NULL.String()} // Used to represent a null value
-	nullOnDDL := binlogdatapb.OnDDLAction(-1)     // Used to represent a null value
+	nullSlice := textutil.SimulatedNullStringSlice                   // Used to represent a non-provided value
+	nullOnDDL := binlogdatapb.OnDDLAction(textutil.SimulatedNullInt) // Used to represent a non-provided value
 	tests := []struct {
 		name        string
 		cells       []string
