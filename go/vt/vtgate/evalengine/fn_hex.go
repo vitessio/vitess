@@ -19,11 +19,13 @@ package evalengine
 import (
 	"math/bits"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 type builtinHex struct {
 	CallExpr
+	collate collations.TypedCollation
 }
 
 var _ Expr = (*builtinHex)(nil)
@@ -47,9 +49,9 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 		encoded = hexEncodeBytes(arg.ToRawBytes())
 	}
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, env.collation()), nil
+		return newEvalRaw(sqltypes.Text, encoded, call.collate), nil
 	}
-	return newEvalText(encoded, env.collation()), nil
+	return newEvalText(encoded, call.collate), nil
 }
 
 func (call *builtinHex) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

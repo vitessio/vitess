@@ -127,7 +127,7 @@ func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[stri
 	if len(input.Rows) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	env.Row = input.Rows[0]
 	env.Fields = input.Fields
 	for _, setOp := range s.Ops {

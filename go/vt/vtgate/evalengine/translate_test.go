@@ -310,7 +310,7 @@ func TestEvaluate(t *testing.T) {
 					"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
 					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
 					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-				}, 0)
+				})
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)

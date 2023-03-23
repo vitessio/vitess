@@ -238,7 +238,7 @@ func (c *compiler) compileFn_TO_BASE64(call *builtinToBase64) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
+		c.asm.Convert_xb(1, t, 0, false)
 	}
 
 	col := collations.TypedCollation{
@@ -269,7 +269,7 @@ func (c *compiler) compileFn_FROM_BASE64(call *builtinFromBase64) (ctype, error)
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
+		c.asm.Convert_xb(1, t, 0, false)
 	}
 
 	c.asm.Fn_FROM_BASE64(t)

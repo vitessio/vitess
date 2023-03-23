@@ -29,7 +29,8 @@ import (
 type (
 	builtinChangeCase struct {
 		CallExpr
-		upcase bool
+		upcase  bool
+		collate collations.ID
 	}
 
 	builtinCharLength struct {
@@ -79,7 +80,7 @@ func (call *builtinChangeCase) eval(env *ExpressionEnv) (eval, error) {
 		return nil, nil
 
 	case evalNumeric:
-		return evalToVarchar(e, env.DefaultCollation, false)
+		return evalToVarchar(e, call.collate, false)
 
 	case *evalBytes:
 		coll := e.col.Collation.Get()
@@ -202,6 +203,7 @@ const maxRepeatLength = 1073741824
 
 type builtinRepeat struct {
 	CallExpr
+	collate collations.ID
 }
 
 func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
@@ -215,7 +217,7 @@ func (call *builtinRepeat) eval(env *ExpressionEnv) (eval, error) {
 
 	text, ok := arg1.(*evalBytes)
 	if !ok {
-		text, err = evalToVarchar(arg1, env.DefaultCollation, true)
+		text, err = evalToVarchar(arg1, call.collate, true)
 		if err != nil {
 			return nil, err
 		}

@@ -19,7 +19,6 @@ package evalengine
 import (
 	"errors"
 
-	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
@@ -28,8 +27,7 @@ type (
 	// ExpressionEnv contains the environment that the expression
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
-		BindVars         map[string]*querypb.BindVariable
-		DefaultCollation collations.ID
+		BindVars map[string]*querypb.BindVariable
 
 		// Row and Fields should line up
 		Row    []sqltypes.Value
@@ -54,23 +52,12 @@ func (env *ExpressionEnv) TypeOf(expr Expr) (sqltypes.Type, error) {
 	return ty, nil
 }
 
-func (env *ExpressionEnv) collation() collations.TypedCollation {
-	return collations.TypedCollation{
-		Collation:    env.DefaultCollation,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-}
-
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return EnvWithBindVars(map[string]*querypb.BindVariable{}, collations.Default())
+	return EnvWithBindVars(map[string]*querypb.BindVariable{})
 }
 
 // EnvWithBindVars returns an expression environment with no current row, but with bindvars
-func EnvWithBindVars(bindVars map[string]*querypb.BindVariable, coll collations.ID) *ExpressionEnv {
-	if coll == collations.Unknown {
-		coll = collations.Default()
-	}
-	return &ExpressionEnv{BindVars: bindVars, DefaultCollation: coll}
+func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
+	return &ExpressionEnv{BindVars: bindVars}
 }

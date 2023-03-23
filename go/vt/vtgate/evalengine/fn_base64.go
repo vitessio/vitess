@@ -19,12 +19,14 @@ package evalengine
 import (
 	"encoding/base64"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 )
 
 type (
 	builtinToBase64 struct {
 		CallExpr
+		collate collations.TypedCollation
 	}
 
 	builtinFromBase64 struct {
@@ -78,9 +80,9 @@ func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	encoded := mysqlBase64Encode(b.bytes)
 
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, env.collation()), nil
+		return newEvalRaw(sqltypes.Text, encoded, call.collate), nil
 	}
-	return newEvalText(encoded, env.collation()), nil
+	return newEvalText(encoded, call.collate), nil
 }
 
 func (call *builtinToBase64) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {

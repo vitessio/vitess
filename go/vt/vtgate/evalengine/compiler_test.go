@@ -110,7 +110,7 @@ func TestCompilerReference(t *testing.T) {
 					return
 				}
 
-				fields := evalengine.FieldResolver(env.Fields)
+				fields := evalengine.FieldResolver(tc.Schema)
 				cfg := &evalengine.Config{
 					ResolveColumn: fields.Column,
 					ResolveType:   fields.Type,

@@ -195,7 +195,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 	compareWithMySQL := func(expr sqlparser.Expr) *mismatch {
 		query := "SELECT " + sqlparser.String(expr)
 
-		env := evalengine.EnvWithBindVars(nil, 255)
+		env := evalengine.EnvWithBindVars(nil)
 		eval, _, localErr := evaluateLocalEvalengine(env, query)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 

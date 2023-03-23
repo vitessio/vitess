@@ -568,7 +568,6 @@ func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
 
 	if cfg.Optimization >= OptimizationLevelSimplify && cfg.Optimization != OptimizationLevelCompilerDebug {
 		var staticEnv ExpressionEnv
-		staticEnv.DefaultCollation = cfg.Collation
 		expr, err = simplifyExpr(&staticEnv, expr)
 	}
 
