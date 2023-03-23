@@ -436,7 +436,7 @@ func updateBootstrapChangelog(new float64, goVersion *version.Version) error {
 
 ## [%-1g] - %s
 ### Changes
-- Update build to golang %s`, new, time.Now().Format(time.DateOnly), goVersion.String())
+- Update build to golang %s`, new, time.Now().Format("2006-01-02"), goVersion.String())
 
 	_, err = file.WriteAt([]byte(newContent), s.Size())
 	if err != nil {
