@@ -921,10 +921,8 @@ func (node *Select) AddHaving(expr Expr) {
 		}
 		return
 	}
-	node.Having.Expr = &AndExpr{
-		Left:  node.Having.Expr,
-		Right: expr,
-	}
+	exprs := SplitAndExpression(nil, node.Having.Expr)
+	node.Having.Expr = AndExpressions(append(exprs, expr)...)
 }
 
 // AddGroupBy adds a grouping expression, unless it's already present

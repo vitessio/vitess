@@ -57,32 +57,22 @@ func TestSelect(t *testing.T) {
 	sel.AddWhere(expr)
 	buf := NewTrackedBuffer(nil)
 	sel.Where.Format(buf)
-	want := " where a = 1"
-	if buf.String() != want {
-		t.Errorf("where: %q, want %s", buf.String(), want)
-	}
+	assert.Equal(t, " where a = 1", buf.String())
 	sel.AddWhere(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Where.Format(buf)
-	want = " where a = 1"
-	if buf.String() != want {
-		t.Errorf("where: %q, want %s", buf.String(), want)
-	}
+	assert.Equal(t, " where a = 1", buf.String())
+
 	sel = &Select{}
 	sel.AddHaving(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Having.Format(buf)
-	want = " having a = 1"
-	if buf.String() != want {
-		t.Errorf("having: %q, want %s", buf.String(), want)
-	}
+	assert.Equal(t, " having a = 1", buf.String())
+
 	sel.AddHaving(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Having.Format(buf)
-	want = " having a = 1 and a = 1"
-	if buf.String() != want {
-		t.Errorf("having: %q, want %s", buf.String(), want)
-	}
+	assert.Equal(t, " having a = 1", buf.String())
 
 	tree, err = Parse("select * from t where a = 1 or b = 1")
 	require.NoError(t, err)
@@ -91,18 +81,14 @@ func TestSelect(t *testing.T) {
 	sel.AddWhere(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Where.Format(buf)
-	want = " where a = 1 or b = 1"
-	if buf.String() != want {
-		t.Errorf("where: %q, want %s", buf.String(), want)
-	}
+	assert.Equal(t, " where a = 1 or b = 1", buf.String())
+
 	sel = &Select{}
 	sel.AddHaving(expr)
 	buf = NewTrackedBuffer(nil)
 	sel.Having.Format(buf)
-	want = " having a = 1 or b = 1"
-	if buf.String() != want {
-		t.Errorf("having: %q, want %s", buf.String(), want)
-	}
+	assert.Equal(t, " having a = 1 or b = 1", buf.String())
+
 }
 
 func TestUpdate(t *testing.T) {
