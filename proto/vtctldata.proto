@@ -1313,7 +1313,7 @@ message WorkflowUpdateRequest {
 message WorkflowUpdateResponse {
   message TabletInfo {
     string tablet = 1;
-    // changed is true if any of the provided values were different
+    // Changed is true if any of the provided values were different
     // than what was already stored. This is based on the query
     // result's RowsAffected being 0 or 1.
     bool changed = 2;
