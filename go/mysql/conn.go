@@ -1415,6 +1415,13 @@ func (c *Conn) execQuery(query string, handler Handler, multiStatements bool) (s
 			if err := c.writeFields(qr); err != nil {
 				return err
 			}
+			// Now send an EOF packet.
+			if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+				// With CapabilityClientDeprecateEOF, we do not send this EOF.
+				if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+					return err
+				}
+			}
 		}
 
 		return c.writeRows(qr)
