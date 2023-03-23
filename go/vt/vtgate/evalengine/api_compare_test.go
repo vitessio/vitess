@@ -76,7 +76,6 @@ func (tc testCase) run(t *testing.T) {
 	env := &ExpressionEnv{
 		BindVars: tc.bv,
 		Row:      tc.row,
-		Fields:   fields,
 	}
 	cmp, err := (&astCompiler{}).translateComparisonExpr2(tc.op, tc.v1, tc.v2)
 	if err != nil {

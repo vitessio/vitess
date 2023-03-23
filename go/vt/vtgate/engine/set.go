@@ -129,7 +129,6 @@ func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[stri
 	}
 	env := evalengine.EnvWithBindVars(bindVars)
 	env.Row = input.Rows[0]
-	env.Fields = input.Fields
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(ctx, vcursor, env)
 		if err != nil {

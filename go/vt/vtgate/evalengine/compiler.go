@@ -72,7 +72,7 @@ func (c *compiler) compileExpr(expr Expr) (ctype, error) {
 			return ctype{}, err
 		}
 
-		t, f := expr.typeof(nil)
+		t, f := expr.typeof(nil, nil)
 		return ctype{t, f, evalCollation(expr.inner)}, nil
 
 	case *Column:

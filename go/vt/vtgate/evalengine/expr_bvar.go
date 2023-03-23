@@ -79,7 +79,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (bv *BindVariable) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var tt sqltypes.Type
 	if bv.typed {
 		tt = bv.Type

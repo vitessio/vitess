@@ -28,10 +28,7 @@ type (
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
 		BindVars map[string]*querypb.BindVariable
-
-		// Row and Fields should line up
-		Row    []sqltypes.Value
-		Fields []*querypb.Field
+		Row      []sqltypes.Value
 
 		vm *VirtualMachine
 	}
@@ -44,8 +41,8 @@ func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 
 var ErrAmbiguousType = errors.New("the type of this expression cannot be statically computed")
 
-func (env *ExpressionEnv) TypeOf(expr Expr) (sqltypes.Type, error) {
-	ty, f := expr.typeof(env)
+func (env *ExpressionEnv) TypeOf(expr Expr, fields []*querypb.Field) (sqltypes.Type, error) {
+	ty, f := expr.typeof(env, fields)
 	if f&flagAmbiguousType != 0 {
 		return ty, ErrAmbiguousType
 	}

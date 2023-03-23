@@ -61,7 +61,6 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 	}
 	env := evalengine.EnvWithBindVars(bindVars)
 	var rows [][]sqltypes.Value
-	env.Fields = result.Fields
 	for _, row := range result.Rows {
 		env.Row = row
 		evalResult, err := env.Evaluate(f.Predicate)
@@ -85,7 +84,6 @@ func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars
 	env := evalengine.EnvWithBindVars(bindVars)
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
-		env.Fields = results.Fields
 		for _, row := range results.Rows {
 			env.Row = row
 			evalResult, err := env.Evaluate(f.Predicate)

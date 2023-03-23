@@ -20,6 +20,7 @@ import (
 	"errors"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -62,8 +63,8 @@ func (p *CompiledExpr) eval(env *ExpressionEnv) (eval, error) {
 	return env.vm.eval(p, env.Row)
 }
 
-func (p *CompiledExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	return p.original.typeof(env)
+func (p *CompiledExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return p.original.typeof(env, fields)
 }
 
 func (p *CompiledExpr) format(buf *formatter, depth int) {

@@ -32,6 +32,7 @@ import (
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/simplifier"
@@ -122,7 +123,7 @@ func errorsMatch(remote, local error) bool {
 	return false
 }
 
-func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evalengine.EvalResult, sqltypes.Type, error) {
+func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string, fields []*querypb.Field) (evalengine.EvalResult, sqltypes.Type, error) {
 	stmt, err := sqlparser.Parse(query)
 	if err != nil {
 		return evalengine.EvalResult{}, 0, err
@@ -136,7 +137,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 			}
 		}()
 		cfg := &evalengine.Config{
-			ResolveColumn: evalengine.FieldResolver(env.Fields).Column,
+			ResolveColumn: evalengine.FieldResolver(fields).Column,
 			Collation:     collations.CollationUtf8mb4ID,
 			Optimization:  evalengine.OptimizationLevelNone,
 		}
@@ -159,7 +160,7 @@ func evaluateLocalEvalengine(env *evalengine.ExpressionEnv, query string) (evale
 		}()
 		eval, err = env.Evaluate(local)
 		if err == nil && debugCheckTypes {
-			tt, err = env.TypeOf(local)
+			tt, err = env.TypeOf(local, fields)
 			if errors.Is(err, evalengine.ErrAmbiguousType) {
 				tt = -1
 				err = nil
@@ -196,7 +197,7 @@ func TestGenerateFuzzCases(t *testing.T) {
 		query := "SELECT " + sqlparser.String(expr)
 
 		env := evalengine.EnvWithBindVars(nil)
-		eval, _, localErr := evaluateLocalEvalengine(env, query)
+		eval, _, localErr := evaluateLocalEvalengine(env, query, nil)
 		remote, remoteErr := conn.ExecuteFetch(query, 1, false)
 
 		if localErr != nil && strings.Contains(localErr.Error(), "syntax error at position") {

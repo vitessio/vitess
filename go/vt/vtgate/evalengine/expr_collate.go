@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -74,8 +75,8 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t, f := c.Inner.typeof(env)
+func (c *CollateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := c.Inner.typeof(env, fields)
 	return t, f | flagExplicitCollation
 }
 

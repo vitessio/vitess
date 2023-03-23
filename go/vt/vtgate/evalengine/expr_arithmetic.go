@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -76,9 +77,9 @@ func makeNumericalType(t sqltypes.Type, f typeFlag) sqltypes.Type {
 }
 
 // typeof implements the Expr interface
-func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t1, f1 := b.Left.typeof(env)
-	t2, f2 := b.Right.typeof(env)
+func (b *ArithmeticExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t1, f1 := b.Left.typeof(env, fields)
+	t2, f2 := b.Right.typeof(env, fields)
 	flags := f1 | f2
 
 	t1 = makeNumericalType(t1, f1)
@@ -165,8 +166,8 @@ func (n *NegateExpr) eval(env *ExpressionEnv) (eval, error) {
 	return evalToNumeric(e).negate(), nil
 }
 
-func (n *NegateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := n.Inner.typeof(env)
+func (n *NegateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := n.Inner.typeof(env, fields)
 	switch tt {
 	case sqltypes.Uint8, sqltypes.Uint16, sqltypes.Uint32, sqltypes.Uint64:
 		if f&flagIntegerOvf != 0 {

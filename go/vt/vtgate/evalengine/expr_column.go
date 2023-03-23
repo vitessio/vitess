@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -37,7 +38,7 @@ func (c *Column) eval(env *ExpressionEnv) (eval, error) {
 	return valueToEval(env.Row[c.Offset], c.Collation)
 }
 
-func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (c *Column) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	// if we have an active row in the expression Env, use that as an authoritative source
 	if c.Offset < len(env.Row) {
 		value := env.Row[c.Offset]
@@ -46,5 +47,15 @@ func (c *Column) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 		}
 		return value.Type(), typeFlag(0)
 	}
-	return c.Type, flagNullable
+	if c.Offset < len(fields) {
+		var f typeFlag
+		if fields[c.Offset].Flags&uint32(querypb.MySqlFlag_NOT_NULL_FLAG) == 0 {
+			f |= flagNullable
+		}
+		return fields[c.Offset].Type, f
+	}
+	if c.typed {
+		return c.Type, flagNullable
+	}
+	return sqltypes.Null, flagAmbiguousType
 }

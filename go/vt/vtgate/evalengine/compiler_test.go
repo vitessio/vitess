@@ -99,7 +99,6 @@ func TestCompilerReference(t *testing.T) {
 		t.Run(tc.Name(), func(t *testing.T) {
 			var supported, total int
 			env := evalengine.EmptyExpressionEnv()
-			env.Fields = tc.Schema
 
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row

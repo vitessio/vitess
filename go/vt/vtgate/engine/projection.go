@@ -58,7 +58,6 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 	}
 
 	env := evalengine.EnvWithBindVars(bindVars)
-	env.Fields = result.Fields
 	var resultRows []sqltypes.Row
 	for _, row := range result.Rows {
 		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
@@ -73,7 +72,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		resultRows = append(resultRows, resultRow)
 	}
 	if wantfields {
-		err := p.addFields(env, result)
+		result.Fields, err = p.evalFields(env, result.Fields)
 		if err != nil {
 			return nil, err
 		}
@@ -91,14 +90,11 @@ func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bind
 		var err error
 		if wantfields {
 			once.Do(func() {
-				env.Fields = qr.Fields
-				fieldRes := &sqltypes.Result{}
-				err = p.addFields(env, fieldRes)
+				fields, err = p.evalFields(env, qr.Fields)
 				if err != nil {
 					return
 				}
-				fields = fieldRes.Fields
-				err = callback(fieldRes)
+				err = callback(&sqltypes.Result{Fields: fields})
 				if err != nil {
 					return
 				}
@@ -133,26 +129,26 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 		return nil, err
 	}
 	env := evalengine.EnvWithBindVars(bindVars)
-	err = p.addFields(env, qr)
+	qr.Fields, err = p.evalFields(env, nil)
 	if err != nil {
 		return nil, err
 	}
 	return qr, nil
 }
 
-func (p *Projection) addFields(env *evalengine.ExpressionEnv, qr *sqltypes.Result) error {
-	qr.Fields = nil
+func (p *Projection) evalFields(env *evalengine.ExpressionEnv, infields []*querypb.Field) ([]*querypb.Field, error) {
+	var fields []*querypb.Field
 	for i, col := range p.Cols {
-		q, err := env.TypeOf(p.Exprs[i])
+		q, err := env.TypeOf(p.Exprs[i], infields)
 		if err != nil {
-			return err
+			return nil, err
 		}
-		qr.Fields = append(qr.Fields, &querypb.Field{
+		fields = append(fields, &querypb.Field{
 			Name: col,
 			Type: q,
 		})
 	}
-	return nil
+	return fields, nil
 }
 
 // Inputs implements the Primitive interface

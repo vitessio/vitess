@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -285,9 +286,9 @@ func (c *ComparisonExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (c *ComparisonExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := c.Left.typeof(env)
-	_, f2 := c.Right.typeof(env)
+func (c *ComparisonExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := c.Left.typeof(env, fields)
+	_, f2 := c.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }
 
@@ -342,9 +343,9 @@ func (i *InExpr) eval(env *ExpressionEnv) (eval, error) {
 	return in.eval(), nil
 }
 
-func (i *InExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := i.Left.typeof(env)
-	_, f2 := i.Right.typeof(env)
+func (i *InExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := i.Left.typeof(env, fields)
+	_, f2 := i.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }
 
@@ -384,8 +385,8 @@ func (l *LikeExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the ComparisonOp interface
-func (l *LikeExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f1 := l.Left.typeof(env)
-	_, f2 := l.Right.typeof(env)
+func (l *LikeExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f1 := l.Left.typeof(env, fields)
+	_, f2 := l.Right.typeof(env, fields)
 	return sqltypes.Int64, f1 | f2
 }
