@@ -514,9 +514,9 @@ func (be *BuiltinBackupEngine) backupFiles(
 			defer wg.Done()
 			fe := &fes[i]
 			// Wait until we are ready to go, return if we encounter an error
-			err = sema.Acquire(ctx, 1)
-			if err != nil {
-				log.Errorf("not able to acquire semaphore to backup file:%s  err: %s", fe, err.Error())
+			acqErr := sema.Acquire(ctx, 1)
+			if acqErr != nil {
+				log.Errorf("not able to acquire semaphore to backup file:%s  err: %s", fe, acqErr.Error())
 				return
 			}
 			defer sema.Release(1)
