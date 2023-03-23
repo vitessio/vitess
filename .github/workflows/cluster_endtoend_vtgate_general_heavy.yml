@@ -6,6 +6,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (vtgate_general_heavy)')
   cancel-in-progress: true
 
+permissions: read-all
+
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"

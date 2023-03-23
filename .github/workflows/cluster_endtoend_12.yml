@@ -6,6 +6,8 @@ concurrency:
   group: format('{0}-{1}', ${{ github.ref }}, 'Cluster (12)')
   cancel-in-progress: true
 
+permissions: read-all
+
 env:
   LAUNCHABLE_ORGANIZATION: "vitess"
   LAUNCHABLE_WORKSPACE: "vitess-app"
