@@ -26,7 +26,7 @@ import (
 
 	"github.com/spf13/pflag"
 
-	"vitess.io/vitess/go/mysql/collations/internal/charset"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/mysql/collations/internal/uca"
 	"vitess.io/vitess/go/mysql/collations/tools/makecolldata/codegen"
 )
@@ -107,7 +107,7 @@ func (all AllMetadata) get(name string) *CollationMetadata {
 }
 
 const PkgCollations codegen.Package = "vitess.io/vitess/go/mysql/collations"
-const PkgCharset codegen.Package = "vitess.io/vitess/go/mysql/collations/internal/charset"
+const PkgCharset codegen.Package = "vitess.io/vitess/go/mysql/collations/charset"
 
 func main() {
 	pflag.Parse()

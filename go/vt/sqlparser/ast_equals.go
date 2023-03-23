@@ -842,6 +842,24 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfModifyColumn(a, b)
+	case *MultiLinestringExpr:
+		b, ok := inB.(*MultiLinestringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiLinestringExpr(a, b)
+	case *MultiPointExpr:
+		b, ok := inB.(*MultiPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPointExpr(a, b)
+	case *MultiPolygonExpr:
+		b, ok := inB.(*MultiPolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPolygonExpr(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -1016,12 +1034,24 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfPointExpr(a, b)
+	case *PolygonExpr:
+		b, ok := inB.(*PolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonExpr(a, b)
 	case *PrepareStmt:
 		b, ok := inB.(*PrepareStmt)
 		if !ok {
 			return false
 		}
 		return cmp.RefOfPrepareStmt(a, b)
+	case *PurgeBinaryLogs:
+		b, ok := inB.(*PurgeBinaryLogs)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPurgeBinaryLogs(a, b)
 	case ReferenceAction:
 		b, ok := inB.(ReferenceAction)
 		if !ok {
@@ -3178,6 +3208,39 @@ func (cmp *Comparator) RefOfModifyColumn(a, b *ModifyColumn) bool {
 		cmp.RefOfColName(a.After, b.After)
 }
 
+// RefOfMultiLinestringExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfMultiLinestringExpr(a, b *MultiLinestringExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.LinestringParams, b.LinestringParams)
+}
+
+// RefOfMultiPointExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfMultiPointExpr(a, b *MultiPointExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.PointParams, b.PointParams)
+}
+
+// RefOfMultiPolygonExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfMultiPolygonExpr(a, b *MultiPolygonExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.PolygonParams, b.PolygonParams)
+}
+
 // RefOfNTHValueExpr does deep equals between the two objects.
 func (cmp *Comparator) RefOfNTHValueExpr(a, b *NTHValueExpr) bool {
 	if a == b {
@@ -3541,6 +3604,17 @@ func (cmp *Comparator) RefOfPointExpr(a, b *PointExpr) bool {
 		cmp.Expr(a.YCordinate, b.YCordinate)
 }
 
+// RefOfPolygonExpr does deep equals between the two objects.
+func (cmp *Comparator) RefOfPolygonExpr(a, b *PolygonExpr) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return cmp.Exprs(a.LinestringParams, b.LinestringParams)
+}
+
 // RefOfPrepareStmt does deep equals between the two objects.
 func (cmp *Comparator) RefOfPrepareStmt(a, b *PrepareStmt) bool {
 	if a == b {
@@ -3552,6 +3626,18 @@ func (cmp *Comparator) RefOfPrepareStmt(a, b *PrepareStmt) bool {
 	return cmp.IdentifierCI(a.Name, b.Name) &&
 		cmp.Expr(a.Statement, b.Statement) &&
 		cmp.RefOfParsedComments(a.Comments, b.Comments)
+}
+
+// RefOfPurgeBinaryLogs does deep equals between the two objects.
+func (cmp *Comparator) RefOfPurgeBinaryLogs(a, b *PurgeBinaryLogs) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.To == b.To &&
+		a.Before == b.Before
 }
 
 // RefOfReferenceDefinition does deep equals between the two objects.
@@ -5074,6 +5160,24 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfMin(a, b)
+	case *MultiLinestringExpr:
+		b, ok := inB.(*MultiLinestringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiLinestringExpr(a, b)
+	case *MultiPointExpr:
+		b, ok := inB.(*MultiPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPointExpr(a, b)
+	case *MultiPolygonExpr:
+		b, ok := inB.(*MultiPolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPolygonExpr(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -5104,6 +5208,12 @@ func (cmp *Comparator) Callable(inA, inB Callable) bool {
 			return false
 		}
 		return cmp.RefOfPointExpr(a, b)
+	case *PolygonExpr:
+		b, ok := inB.(*PolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -5758,6 +5868,24 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfMin(a, b)
+	case *MultiLinestringExpr:
+		b, ok := inB.(*MultiLinestringExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiLinestringExpr(a, b)
+	case *MultiPointExpr:
+		b, ok := inB.(*MultiPointExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPointExpr(a, b)
+	case *MultiPolygonExpr:
+		b, ok := inB.(*MultiPolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfMultiPolygonExpr(a, b)
 	case *NTHValueExpr:
 		b, ok := inB.(*NTHValueExpr)
 		if !ok {
@@ -5812,6 +5940,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfPointExpr(a, b)
+	case *PolygonExpr:
+		b, ok := inB.(*PolygonExpr)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPolygonExpr(a, b)
 	case *RegexpInstrExpr:
 		b, ok := inB.(*RegexpInstrExpr)
 		if !ok {
@@ -6280,6 +6414,12 @@ func (cmp *Comparator) Statement(inA, inB Statement) bool {
 			return false
 		}
 		return cmp.RefOfPrepareStmt(a, b)
+	case *PurgeBinaryLogs:
+		b, ok := inB.(*PurgeBinaryLogs)
+		if !ok {
+			return false
+		}
+		return cmp.RefOfPurgeBinaryLogs(a, b)
 	case *Release:
 		b, ok := inB.(*Release)
 		if !ok {

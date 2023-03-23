@@ -143,7 +143,7 @@ func ToFloat64(v sqltypes.Value) (float64, error) {
 }
 
 func LiteralToValue(literal *sqlparser.Literal) (sqltypes.Value, error) {
-	lit, err := translateLiteral(literal, nil)
+	lit, err := (&astCompiler{}).translateLiteral(literal)
 	if err != nil {
 		return sqltypes.Value{}, err
 	}

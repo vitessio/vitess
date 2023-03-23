@@ -20,8 +20,6 @@ import (
 	"fmt"
 	"path"
 
-	"google.golang.org/protobuf/proto"
-
 	"context"
 
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
@@ -63,7 +61,7 @@ func (ts *Server) GetCellsAliases(ctx context.Context, strongRead bool) (ret map
 
 			// Unpack the contents.
 			cellsAlias := &topodatapb.CellsAlias{}
-			if err := proto.Unmarshal(contents, cellsAlias); err != nil {
+			if err := cellsAlias.UnmarshalVT(contents); err != nil {
 				return nil, err
 			}
 
@@ -90,7 +88,7 @@ func (ts *Server) GetCellsAlias(ctx context.Context, name string, strongRead boo
 
 	// Unpack the contents.
 	cellsAlias := &topodatapb.CellsAlias{}
-	if err := proto.Unmarshal(contents, cellsAlias); err != nil {
+	if err := cellsAlias.UnmarshalVT(contents); err != nil {
 		return nil, err
 	}
 
@@ -119,7 +117,7 @@ func (ts *Server) CreateCellsAlias(ctx context.Context, alias string, cellsAlias
 	ts.clearCellAliasesCache()
 
 	// Pack the content.
-	contents, err := proto.Marshal(cellsAlias)
+	contents, err := cellsAlias.MarshalVT()
 	if err != nil {
 		return err
 	}
@@ -142,7 +140,7 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 		contents, version, err := ts.globalCell.Get(ctx, filePath)
 		switch {
 		case err == nil:
-			if err := proto.Unmarshal(contents, cellsAlias); err != nil {
+			if err := cellsAlias.UnmarshalVT(contents); err != nil {
 				return err
 			}
 		case IsErrType(err, NoNode):
@@ -169,7 +167,7 @@ func (ts *Server) UpdateCellsAlias(ctx context.Context, alias string, update fun
 		}
 
 		// Pack and save.
-		contents, err = proto.Marshal(cellsAlias)
+		contents, err = cellsAlias.MarshalVT()
 		if err != nil {
 			return err
 		}

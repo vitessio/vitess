@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/engine"
+	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
 )
 
 // typer is responsible for setting the type for expressions
@@ -62,9 +62,9 @@ func (t *typer) up(cursor *sqlparser.Cursor) error {
 			t.exprTypes[node] = floatval
 		}
 	case sqlparser.AggrFunc:
-		code, ok := engine.SupportedAggregates[strings.ToLower(node.AggrName())]
+		code, ok := opcode.SupportedAggregates[strings.ToLower(node.AggrName())]
 		if ok {
-			typ, ok := engine.OpcodeType[code]
+			typ, ok := opcode.OpcodeType[code]
 			if ok {
 				t.exprTypes[node] = Type{Type: typ}
 			}

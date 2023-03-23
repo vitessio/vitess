@@ -61,6 +61,7 @@ import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	"vitess.io/vitess/go/vt/servenv"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
 	"vitess.io/vitess/go/vt/topotools"
@@ -96,7 +97,6 @@ func registerInitFlags(fs *pflag.FlagSet) {
 	fs.StringVar(&initDbNameOverride, "init_db_name_override", initDbNameOverride, "(init parameter) override the name of the db used by vttablet. Without this flag, the db name defaults to vt_<keyspacename>")
 	fs.StringVar(&skipBuildInfoTags, "vttablet_skip_buildinfo_tags", skipBuildInfoTags, "comma-separated list of buildinfo tags to skip from merging with --init_tags. each tag is either an exact match or a regular expression of the form '/regexp/'.")
 	fs.Var(&initTags, "init_tags", "(init parameter) comma separated list of key:value pairs used to tag the tablet")
-
 	fs.BoolVar(&initPopulateMetadata, "init_populate_metadata", initPopulateMetadata, "(init parameter) populate metadata tables even if restore_from_backup is disabled. If restore_from_backup is enabled, metadata tables are always populated regardless of this flag.")
 	fs.MarkDeprecated("init_populate_metadata", "this flag is no longer being used and will be removed in future versions")
 	fs.DurationVar(&initTimeout, "init_timeout", initTimeout, "(init parameter) timeout to use for the init phase.")
@@ -486,6 +486,41 @@ func (tm *TabletManager) createKeyspaceShard(ctx context.Context) (*topo.ShardIn
 	}); err != nil {
 		return nil, vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
 	}
+
+	// Ensure that this tablet comes up with the sidecar database
+	// name that is set for the keyspace.
+	setSidecarDBName := func() error {
+		ks, err := tm.TopoServer.GetKeyspace(ctx, tablet.Keyspace)
+		if err != nil {
+			return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
+		}
+		// If the keyspace exists but this is the first tablet added, then
+		// update the keyspace record to the default.
+		if ks.SidecarDbName == "" {
+			ks.SidecarDbName = sidecardb.DefaultName
+			getlockctx, cancel := context.WithTimeout(context.Background(), topo.RemoteOperationTimeout)
+			defer cancel()
+			lockctx, unlock, lockErr := tm.TopoServer.LockKeyspace(getlockctx, tablet.Keyspace, "Setting sidecar database name")
+			if lockErr != nil {
+				return vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
+			}
+			err = tm.TopoServer.UpdateKeyspace(lockctx, ks)
+			unlock(&lockErr)
+			if err != nil {
+				return vterrors.Wrap(err, "createKeyspaceShard: cannot GetOrCreateShard shard")
+			}
+			if lockErr != nil {
+				return vterrors.Wrap(lockErr, "createKeyspaceShard: cannot GetOrCreateShard shard")
+			}
+		}
+		// Have the tablet use the sidecar database that's set for the keyspace.
+		sidecardb.SetName(ks.SidecarDbName)
+		return nil
+	}
+	if err := tm.withRetry(ctx, "setting sidecar database name", setSidecarDBName); err != nil {
+		return nil, err
+	}
+
 	tm.tmState.RefreshFromTopoInfo(ctx, shardInfo, nil)
 
 	// Rebuild keyspace if this the first tablet in this keyspace/cell
@@ -882,7 +917,7 @@ func (tm *TabletManager) initializeReplication(ctx context.Context, tabletType t
 		log.Warningf("primary tablet in the shard record does not have mysql hostname specified, possibly because that tablet has been shut down.")
 		return nil, nil
 	}
-	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, false /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
+	if err := tm.MysqlDaemon.SetReplicationSource(ctx, currentPrimary.Tablet.MysqlHostname, currentPrimary.Tablet.MysqlPort, true /* stopReplicationBefore */, true /* startReplicationAfter */); err != nil {
 		return nil, vterrors.Wrap(err, "MysqlDaemon.SetReplicationSource failed")
 	}
 

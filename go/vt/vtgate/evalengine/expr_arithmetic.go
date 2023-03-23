@@ -35,10 +35,12 @@ type (
 		String() string
 	}
 
-	opArithAdd struct{}
-	opArithSub struct{}
-	opArithMul struct{}
-	opArithDiv struct{}
+	opArithAdd    struct{}
+	opArithSub    struct{}
+	opArithMul    struct{}
+	opArithDiv    struct{}
+	opArithIntDiv struct{}
+	opArithMod    struct{}
 )
 
 var _ Expr = (*ArithmeticExpr)(nil)
@@ -47,10 +49,17 @@ var _ opArith = (*opArithAdd)(nil)
 var _ opArith = (*opArithSub)(nil)
 var _ opArith = (*opArithMul)(nil)
 var _ opArith = (*opArithDiv)(nil)
+var _ opArith = (*opArithIntDiv)(nil)
+var _ opArith = (*opArithMod)(nil)
 
 func (b *ArithmeticExpr) eval(env *ExpressionEnv) (eval, error) {
-	left, right, err := b.arguments(env)
-	if left == nil || right == nil || err != nil {
+	left, err := b.Left.eval(env)
+	if left == nil || err != nil {
+		return nil, err
+	}
+
+	right, err := b.Right.eval(env)
+	if right == nil || err != nil {
 		return nil, err
 	}
 	return b.Op.eval(left, right)
@@ -78,9 +87,22 @@ func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	switch b.Op.(type) {
 	case *opArithDiv:
 		if t1 == sqltypes.Float64 || t2 == sqltypes.Float64 {
-			return sqltypes.Float64, flags
+			return sqltypes.Float64, flags | flagNullable
 		}
-		return sqltypes.Decimal, flags
+		return sqltypes.Decimal, flags | flagNullable
+	case *opArithIntDiv:
+		if t1 == sqltypes.Uint64 || t2 == sqltypes.Uint64 {
+			return sqltypes.Uint64, flags | flagNullable
+		}
+		return sqltypes.Int64, flags | flagNullable
+	case *opArithMod:
+		if t1 == sqltypes.Float64 || t2 == sqltypes.Float64 {
+			return sqltypes.Float64, flags | flagNullable
+		}
+		if t1 == sqltypes.Decimal || t2 == sqltypes.Decimal {
+			return sqltypes.Decimal, flags | flagNullable
+		}
+		return t1, flags | flagNullable
 	}
 
 	switch t1 {
@@ -102,25 +124,35 @@ func (b *ArithmeticExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
 	return t1, flags
 }
 
-func (a *opArithAdd) eval(left, right eval) (eval, error) {
+func (op *opArithAdd) eval(left, right eval) (eval, error) {
 	return addNumericWithError(left, right)
 }
-func (a *opArithAdd) String() string { return "+" }
+func (op *opArithAdd) String() string { return "+" }
 
-func (s *opArithSub) eval(left, right eval) (eval, error) {
+func (op *opArithSub) eval(left, right eval) (eval, error) {
 	return subtractNumericWithError(left, right)
 }
-func (s *opArithSub) String() string { return "-" }
+func (op *opArithSub) String() string { return "-" }
 
-func (m *opArithMul) eval(left, right eval) (eval, error) {
+func (op *opArithMul) eval(left, right eval) (eval, error) {
 	return multiplyNumericWithError(left, right)
 }
-func (m *opArithMul) String() string { return "*" }
+func (op *opArithMul) String() string { return "*" }
 
-func (d *opArithDiv) eval(left, right eval) (eval, error) {
+func (op *opArithDiv) eval(left, right eval) (eval, error) {
 	return divideNumericWithError(left, right, true)
 }
-func (d *opArithDiv) String() string { return "/" }
+func (op *opArithDiv) String() string { return "/" }
+
+func (op *opArithIntDiv) eval(left, right eval) (eval, error) {
+	return integerDivideNumericWithError(left, right, true)
+}
+func (op *opArithIntDiv) String() string { return "DIV" }
+
+func (op *opArithMod) eval(left, right eval) (eval, error) {
+	return modNumericWithError(left, right, true)
+}
+func (op *opArithMod) String() string { return "DIV" }
 
 func (n *NegateExpr) eval(env *ExpressionEnv) (eval, error) {
 	e, err := n.Inner.eval(env)

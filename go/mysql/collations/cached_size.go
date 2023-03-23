@@ -63,7 +63,7 @@ func (cached *unicodeWildcard) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(48)
 	}
-	// field charset vitess.io/vitess/go/mysql/collations/internal/charset/types.Charset
+	// field charset vitess.io/vitess/go/mysql/collations/charset/types.Charset
 	if cc, ok := cached.charset.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}

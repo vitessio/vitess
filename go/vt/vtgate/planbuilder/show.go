@@ -22,20 +22,20 @@ import (
 	"sort"
 	"strings"
 
-	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
-
 	"vitess.io/vitess/go/mysql/collations"
-	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
-
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
-	"vitess.io/vitess/go/vt/vtgate/vindexes"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
+	"vitess.io/vitess/go/vt/log"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
+	vschemapb "vitess.io/vitess/go/vt/proto/vschema"
+	"vitess.io/vitess/go/vt/sidecardb"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
+	"vitess.io/vitess/go/vt/vtgate/vindexes"
 )
 
 const (
@@ -247,7 +247,9 @@ func buildDBPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine
 	return engine.NewRowsPrimitive(rows, buildVarCharFields("Database")), nil
 }
 
-// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries. It invokes queries on _vt.schema_migrations on all PRIMARY tablets on keyspace's shards.
+// buildShowVMigrationsPlan serves `SHOW VITESS_MIGRATIONS ...` queries.
+// It invokes queries on the sidecar database's schema_migrations table
+// on all PRIMARY tablets in the keyspace's shards.
 func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) (engine.Primitive, error) {
 	dest, ks, tabletType, err := vschema.TargetDestination(show.DbName.String())
 	if err != nil {
@@ -265,7 +267,13 @@ func buildShowVMigrationsPlan(show *sqlparser.ShowBasic, vschema plancontext.VSc
 		dest = key.DestinationAllShards{}
 	}
 
-	sql := "SELECT * FROM _vt.schema_migrations"
+	sidecarDBID, err := sidecardb.GetIdentifierForKeyspace(ks.Name)
+	if err != nil {
+		log.Errorf("Failed to read sidecar database identifier for keyspace %q from the cache: %v", ks.Name, err)
+		return nil, vterrors.VT14005(ks.Name)
+	}
+
+	sql := sqlparser.BuildParsedQuery("SELECT * FROM %s.schema_migrations", sidecarDBID).Query
 
 	if show.Filter != nil {
 		if show.Filter.Filter != nil {
@@ -558,7 +566,7 @@ func buildShowVGtidPlan(show *sqlparser.ShowBasic, vschema plancontext.VSchema) 
 		PreProcess: true,
 		Aggregates: []*engine.AggregateParams{
 			{
-				Opcode: engine.AggregateGtid,
+				Opcode: popcode.AggregateGtid,
 				Col:    1,
 				Alias:  "global vgtid_executed",
 			},

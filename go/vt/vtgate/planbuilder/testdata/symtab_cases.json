@@ -84,7 +84,7 @@
   {
     "comment": "predef1 is in both user and unsharded. So, it's ambiguous.",
     "query": "select predef1, predef3 from user join unsharded on predef1 = predef3",
-    "v3-plan": "VT03019: symbol predef1 not found",
+    "v3-plan": "VT03019: column predef1 not found",
     "gen4-plan": "Column 'predef1' in field list is ambiguous"
   }
 ]

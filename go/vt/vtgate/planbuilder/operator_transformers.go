@@ -114,7 +114,7 @@ func transformHorizon(ctx *plancontext.PlanningContext, op *operators.Horizon, i
 		}
 		var plan logicalPlan
 		if isRoute && rb.isSingleShard() {
-			err = planSingleShardRoutePlan(node, rb)
+			err = planSingleRoutePlan(node, rb)
 			plan = rb
 		} else {
 			plan, err = planOrderByOnUnion(ctx, source, node)

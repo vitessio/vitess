@@ -145,9 +145,9 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 	var pos int
 	d.ColumnsOffset, pos = addToIntSlice(d.ColumnsOffset, i)
 
+	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		d.Columns = append(d.Columns, col)
 		_, err := d.Source.AddColumn(ctx, sqlparser.NewColName(col.Name.String()))
 		if err != nil {
 			return 0, err

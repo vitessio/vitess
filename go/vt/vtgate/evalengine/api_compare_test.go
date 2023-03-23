@@ -79,7 +79,7 @@ func (tc testCase) run(t *testing.T) {
 		Row:      tc.row,
 		Fields:   fields,
 	}
-	cmp, err := translateComparisonExpr2(tc.op, tc.v1, tc.v2)
+	cmp, err := (&astCompiler{}).translateComparisonExpr2(tc.op, tc.v1, tc.v2)
 	if err != nil {
 		t.Fatalf("failed to convert: %v", err)
 	}

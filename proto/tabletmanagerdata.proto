@@ -497,16 +497,6 @@ message RestoreFromBackupResponse {
   logutil.Event event = 1;
 }
 
-message VExecRequest {
-  string query = 1;
-  string workflow = 2;
-  string keyspace = 3;
-}
-
-message VExecResponse {
-  query.QueryResult result = 1;
-}
-
 message VDiffRequest {
   string keyspace = 1;
   string workflow = 2;

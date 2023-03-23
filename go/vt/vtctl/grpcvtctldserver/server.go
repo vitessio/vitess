@@ -645,6 +645,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		BaseKeyspace:     req.BaseKeyspace,
 		SnapshotTime:     req.SnapshotTime,
 		DurabilityPolicy: req.DurabilityPolicy,
+		SidecarDbName:    req.SidecarDbName,
 	}
 
 	err = s.ts.CreateKeyspace(ctx, req.Name, ki)
@@ -1577,9 +1578,9 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 		return nil, fmt.Errorf("--check-as-check-self and --check-as-check-shard are mutually exclusive")
 	}
 
-	update := func(throttlerConfig *topodatapb.SrvKeyspace_ThrottlerConfig) *topodatapb.SrvKeyspace_ThrottlerConfig {
+	update := func(throttlerConfig *topodatapb.ThrottlerConfig) *topodatapb.ThrottlerConfig {
 		if throttlerConfig == nil {
-			throttlerConfig = &topodatapb.SrvKeyspace_ThrottlerConfig{}
+			throttlerConfig = &topodatapb.ThrottlerConfig{}
 		}
 		if req.CustomQuerySet {
 			// custom query provided
@@ -1612,11 +1613,21 @@ func (s *VtctldServer) UpdateThrottlerConfig(ctx context.Context, req *vtctldata
 	}
 	defer unlock(&err)
 
-	_, err = s.ts.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
+	ki, err := s.ts.GetKeyspace(ctx, req.Keyspace)
 	if err != nil {
 		return nil, err
 	}
-	return &vtctldatapb.UpdateThrottlerConfigResponse{}, nil
+
+	ki.ThrottlerConfig = update(ki.ThrottlerConfig)
+
+	err = s.ts.UpdateKeyspace(ctx, ki)
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = s.ts.UpdateSrvKeyspaceThrottlerConfig(ctx, req.Keyspace, []string{}, update)
+
+	return &vtctldatapb.UpdateThrottlerConfigResponse{}, err
 }
 
 // GetSrvVSchema is part of the vtctlservicepb.VtctldServer interface.

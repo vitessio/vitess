@@ -17,10 +17,12 @@ limitations under the License.
 package evalengine
 
 import (
+	"encoding/binary"
 	"time"
 
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -76,12 +78,11 @@ func evalToVarchar(e eval, col collations.ID, convert bool) (*evalBytes, error) 
 		typedcol.Collation = col
 
 		if col != collations.CollationBinaryID {
-			environment := collations.Local()
-			fromCollation := environment.LookupByID(b.col.Collation)
-			toCollation := environment.LookupByID(col)
+			fromCollation := b.col.Collation.Get()
+			toCollation := col.Get()
 
 			var err error
-			bytes, err = collations.Convert(nil, toCollation, bytes, fromCollation)
+			bytes, err = charset.Convert(nil, toCollation.Charset(), bytes, fromCollation.Charset())
 			if err != nil {
 				return nil, err
 			}
@@ -111,7 +112,7 @@ func (e *evalBytes) Hash(h *vthash.Hasher) {
 		_, _ = h.Write(e.bytes)
 	default:
 		h.Write16(hashPrefixBytes)
-		col := collations.Local().LookupByID(e.col.Collation)
+		col := e.col.Collation.Get()
 		col.Hash(h, e.bytes, 0)
 	}
 }
@@ -155,8 +156,8 @@ func (e *evalBytes) truncateInPlace(size int) {
 			e.bytes = e.bytes[:size]
 		}
 	case sqltypes.IsText(tt):
-		collation := collations.Local().LookupByID(e.col.Collation)
-		e.bytes = collations.Slice(collation, e.bytes, 0, size)
+		collation := e.col.Collation.Get()
+		e.bytes = charset.Slice(collation.Charset(), e.bytes, 0, size)
 	default:
 		panic("called EvalResult.truncate on non-quoted")
 	}
@@ -174,4 +175,19 @@ func (e *evalBytes) parseDate() (t time.Time, err error) {
 		err = vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "type %v is not date-like", e.SQLType())
 	}
 	return
+}
+
+func (e *evalBytes) toNumericHex() (*evalUint64, bool) {
+	raw := e.bytes
+	if len(raw) > 8 {
+		return nil, false // overflow
+	}
+
+	var number [8]byte
+	for i, b := range raw {
+		number[8-len(raw)+i] = b
+	}
+	hex := newEvalUint64(binary.BigEndian.Uint64(number[:]))
+	hex.hexLiteral = true
+	return hex, true
 }
