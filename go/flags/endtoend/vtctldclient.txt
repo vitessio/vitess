@@ -87,6 +87,7 @@ Available Commands:
   ValidateShard               Validates that all nodes reachable from the specified shard are consistent.
   ValidateVersionKeyspace     Validates that the version on the primary tablet of shard 0 matches all of the other tablets in the keyspace.
   ValidateVersionShard        Validates that the version on the primary matches all of the replicas.
+  Workflow                    Interface with vreplication workflows (Reshard, MoveTables, etc) in the given keyspace
   completion                  Generate the autocompletion script for the specified shell
   help                        Help about any command
 
