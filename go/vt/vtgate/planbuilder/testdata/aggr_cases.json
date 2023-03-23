@@ -4255,7 +4255,7 @@
   {
     "comment": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
     "query": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
-    "v3-plan": "VT03020: symbol ue.col not found in subquery",
+    "v3-plan": "VT03020: column ue.col not found in subquery",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select (select 1 from user u having count(ue.col) > 10) from user_extra ue",
@@ -4386,7 +4386,7 @@
   {
     "comment": "scatter aggregate symtab lookup error",
     "query": "select id, b as id, count(*) from user order by id",
-    "v3-plan": "VT03021: ambiguous symbol reference: id",
+    "v3-plan": "VT03021: ambiguous column reference: id",
     "gen4-plan": {
       "QueryType": "SELECT",
       "Original": "select id, b as id, count(*) from user order by id",

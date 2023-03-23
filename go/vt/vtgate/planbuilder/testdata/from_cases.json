@@ -2701,7 +2701,7 @@
         "Table": "`user`, user_extra"
       }
     },
-    "gen4-plan": "symbol t.col not found"
+    "gen4-plan": "column 't.col' not found"
   },
   {
     "comment": "routing rules for derived table where the constraint is in the outer query",
@@ -2766,7 +2766,7 @@
         "Table": "`user`"
       }
     },
-    "gen4-plan": "symbol t.id not found"
+    "gen4-plan": "column 'id' not found in table 't'"
   },
   {
     "comment": "push predicate on joined derived tables",
@@ -4587,8 +4587,8 @@
   {
     "comment": "verify ',' vs JOIN precedence",
     "query": "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a",
-    "v3-plan": "VT03019: symbol u1.a not found",
-    "gen4-plan": "symbol u1.a not found"
+    "v3-plan": "VT03019: column u1.a not found",
+    "gen4-plan": "column 'u1.a' not found"
   },
   {
     "comment": "first expression fails for ',' join (code coverage: ensure error is returned)",
@@ -4598,8 +4598,8 @@
   {
     "comment": "table names should be case-sensitive",
     "query": "select unsharded.id from unsharded where Unsharded.val = 1",
-    "v3-plan": "VT03019: symbol Unsharded.val not found",
-    "gen4-plan": "symbol Unsharded.val not found"
+    "v3-plan": "VT03019: column Unsharded.val not found",
+    "gen4-plan": "column 'Unsharded.val' not found"
   },
   {
     "comment": "implicit table reference for sharded keyspace",
