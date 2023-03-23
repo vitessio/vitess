@@ -25,29 +25,13 @@ import (
 	"testing"
 	"time"
 
-	"github.com/spf13/pflag"
 	"github.com/stretchr/testify/require"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/logutil"
+	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
 )
-
-var unusedFlag = &pflag.Flag{}
-
-// stringValue implements the pflag.Value interface.
-type stringValue struct {
-	value string
-}
-
-func (sv stringValue) Set(val string) error {
-	return nil
-}
-func (sv stringValue) String() string {
-	return sv.value
-}
-func (sv stringValue) Type() string {
-	return "string"
-}
 
 func TestVExec(t *testing.T) {
 	ctx := context.Background()
@@ -203,16 +187,16 @@ func TestWorkflowListStreams(t *testing.T) {
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
 
-	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, unusedFlag, unusedFlag, unusedFlag)
+	_, err := wr.WorkflowAction(ctx, workflow, keyspace, "listall", false, nil)
 	require.NoError(t, err)
 
-	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, unusedFlag, unusedFlag, unusedFlag)
+	_, err = wr.WorkflowAction(ctx, workflow, "badks", "show", false, nil)
 	require.Errorf(t, err, "node doesn't exist: keyspaces/badks/shards")
 
-	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, unusedFlag, unusedFlag, unusedFlag)
+	_, err = wr.WorkflowAction(ctx, "badwf", keyspace, "show", false, nil)
 	require.Errorf(t, err, "no streams found for workflow badwf in keyspace target")
 	logger.Clear()
-	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, unusedFlag, unusedFlag, unusedFlag)
+	_, err = wr.WorkflowAction(ctx, workflow, keyspace, "show", false, nil)
 	require.NoError(t, err)
 	want := `{
 	"Workflow": "wrWorkflow",
@@ -331,7 +315,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	got = re.ReplaceAllLiteralString(got, `"MaxVReplicationTransactionLag": 0`)
 	require.Equal(t, want, got)
 
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, unusedFlag, unusedFlag, unusedFlag)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, "stop", false, nil)
 	require.Nil(t, err)
 
 	// convert map to list and sort it for comparison
@@ -345,7 +329,7 @@ func TestWorkflowListStreams(t *testing.T) {
 	require.ElementsMatch(t, wantResults, gotResults)
 
 	logger.Clear()
-	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, unusedFlag, unusedFlag, unusedFlag)
+	results, err = wr.execWorkflowAction(ctx, workflow, keyspace, "stop", true, nil)
 	require.Nil(t, err)
 	require.Equal(t, "map[]", fmt.Sprintf("%v", results))
 	dryRunResult := `Query: update _vt.vreplication set state = 'Stopped' where db_name = 'vt_target' and workflow = 'wrWorkflow'
@@ -482,93 +466,62 @@ func TestWorkflowUpdate(t *testing.T) {
 	defer env.close()
 	logger := logutil.NewMemoryLogger()
 	wr := New(logger, env.topoServ, env.tmc)
+	nullSlice := []string{sqltypes.NULL.String()} // Used to represent a null value
+	nullOnDDL := binlogdatapb.OnDDLAction(-1)     // Used to represent a null value
 	tests := []struct {
 		name        string
-		cells       *pflag.Flag
-		tabletTypes *pflag.Flag
-		onDDL       *pflag.Flag
+		cells       []string
+		tabletTypes []string
+		onDDL       binlogdatapb.OnDDLAction
 		output      string
 		wantErr     string
 	}{
 		{
 			name:        "no flags",
-			cells:       &pflag.Flag{},
-			tabletTypes: &pflag.Flag{},
-			onDDL:       &pflag.Flag{},
-			wantErr:     errWorkflowUpdateWithoutChanges,
+			cells:       nullSlice,
+			tabletTypes: nullSlice,
+			onDDL:       nullOnDDL,
+			wantErr:     "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values",
 		},
 		{
-			name: "only cells",
-			cells: &pflag.Flag{
-				Name:    "cells",
-				Value:   stringValue{"zone1"},
-				Changed: true,
-			},
-			tabletTypes: &pflag.Flag{},
-			onDDL:       &pflag.Flag{},
+			name:        "only cells",
+			cells:       []string{"zone1"},
+			tabletTypes: nullSlice,
+			onDDL:       nullOnDDL,
 			output:      "The following workflow fields will be updated:\n  cells=\"zone1\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
-			name:  "only tablet types",
-			cells: &pflag.Flag{},
-			tabletTypes: &pflag.Flag{
-				Name:    "tablet-types",
-				Value:   stringValue{"primary,replica"},
-				Changed: true,
-			},
-			onDDL:  &pflag.Flag{},
-			output: "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
+			name:        "only tablet types",
+			cells:       nullSlice,
+			tabletTypes: []string{"primary", "replica"},
+			onDDL:       nullOnDDL,
+			output:      "The following workflow fields will be updated:\n  tablet_types=\"primary,replica\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
 			name:        "only on-ddl",
-			cells:       &pflag.Flag{},
-			tabletTypes: &pflag.Flag{},
-			onDDL: &pflag.Flag{
-				Name:    "on-ddl",
-				Value:   stringValue{"EXEC_IGNORE"},
-				Changed: true,
-			},
-			output: "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
+			cells:       nullSlice,
+			tabletTypes: nullSlice,
+			onDDL:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
+			output:      "The following workflow fields will be updated:\n  on_ddl=\"EXEC_IGNORE\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 		{
-			name:        "only on-ddl invalid",
-			cells:       &pflag.Flag{},
-			tabletTypes: &pflag.Flag{},
-			onDDL: &pflag.Flag{
-				Name:    "on-ddl",
-				Value:   stringValue{"WUT"},
-				Changed: true,
-			},
-			wantErr: "invalid value provided for on-ddl: WUT",
-		},
-		{
-			name: "all flags",
-			cells: &pflag.Flag{
-				Name:    "cells",
-				Value:   stringValue{"zone1,zone2"},
-				Changed: true,
-			},
-			tabletTypes: &pflag.Flag{
-				Name:    "tablet-types",
-				Value:   stringValue{"rdonly,spare"},
-				Changed: true,
-			},
-			onDDL: &pflag.Flag{
-				Name:    "on-ddl",
-				Value:   stringValue{"EXEC"},
-				Changed: true,
-			},
-			output: "The following workflow fields will be updated:\n  cells=\"zone1,zone2\"\n  tablet_types=\"rdonly,spare\"\n  on_ddl=\"EXEC\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
+			name:        "all flags",
+			cells:       []string{"zone1", "zone2"},
+			tabletTypes: []string{"rdonly", "spare"},
+			onDDL:       binlogdatapb.OnDDLAction_EXEC,
+			output:      "The following workflow fields will be updated:\n  cells=\"zone1,zone2\"\n  tablet_types=\"rdonly,spare\"\n  on_ddl=\"EXEC\"\nOn the following tablets in the target keyspace for workflow wrWorkflow:\n  zone1-0000000200 (target/-80)\n  zone1-0000000210 (target/80-)\n",
 		},
 	}
 
 	for _, tcase := range tests {
 		t.Run(tcase.name, func(t *testing.T) {
-			require.NotNil(t, tcase.cells)
-			require.NotNil(t, tcase.tabletTypes)
-			require.NotNil(t, tcase.onDDL)
+			rpcReq := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+				Cells:       tcase.cells,
+				TabletTypes: tcase.tabletTypes,
+				OnDdl:       tcase.onDDL,
+			}
 
-			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, tcase.cells, tcase.tabletTypes, tcase.onDDL)
+			_, err := wr.WorkflowAction(ctx, workflow, keyspace, "update", true, rpcReq)
 			if tcase.wantErr != "" {
 				require.Error(t, err)
 				require.Equal(t, err.Error(), tcase.wantErr)

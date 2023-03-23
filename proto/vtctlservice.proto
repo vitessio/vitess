@@ -276,6 +276,9 @@ service Vtctld {
   // parameters. Empty values are ignored. If the alias does not exist, the
   // CellsAlias will be created.
   rpc UpdateCellsAlias(vtctldata.UpdateCellsAliasRequest) returns (vtctldata.UpdateCellsAliasResponse) {};
+  // WorkflowUpdate updates the configuration of a vreplication workflow
+  // using the provided updated parameters.
+  rpc WorkflowUpdate(vtctldata.WorkflowUpdateRequest) returns (vtctldata.WorkflowUpdateResponse) {};
   // Validate validates that all nodes from the global replication graph are
   // reachable, and that all tablets in discoverable cells are consistent.
   rpc Validate(vtctldata.ValidateRequest) returns (vtctldata.ValidateResponse) {};

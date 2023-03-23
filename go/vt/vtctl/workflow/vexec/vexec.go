@@ -20,11 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/concurrency"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -42,6 +46,9 @@ const (
 	// VReplicationTableName is the unqualified name of the vreplication table
 	// supported by vexec.
 	VReplicationTableName = "vreplication"
+
+	// Timeout for callback function executions.
+	execTimeout = 10 * time.Second
 )
 
 var ( // Topo lookup errors.
@@ -145,6 +152,52 @@ func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.Tabl
 	}
 
 	return qp.ExecuteScatter(ctx, vx.primaries...)
+}
+
+// CallbackContext executes the given callback, returning a mapping of tablet
+// to querypb.QueryResult.
+//
+// On first use, QueryContext will also cause the VExec instance to discover
+// target tablets from the topo; that target list will be reused for all future
+// queries made by this instance.
+//
+// For details on query parsing and planning, see GetPlanner and the
+// QueryPlanner interface.
+func (vx *VExec) CallbackContext(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	if vx.primaries == nil {
+		if err := vx.initialize(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return vx.execCallback(ctx, callback)
+}
+
+// execCallback runs the provided callback function on backend shard primaries.
+// It collects query results from all shards and returns an aggregate (UNION
+// ALL -like) result.
+func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	var wg sync.WaitGroup
+	allErrors := &concurrency.AllErrorRecorder{}
+	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
+	var mu sync.Mutex
+	ctx, cancel := context.WithTimeout(ctx, execTimeout)
+	defer cancel()
+	for _, primary := range vx.primaries {
+		wg.Add(1)
+		go func(ctx context.Context, primary *topo.TabletInfo) {
+			defer wg.Done()
+			qr, err := callback(ctx, primary)
+			if err != nil {
+				allErrors.RecordError(err)
+			} else {
+				mu.Lock()
+				defer mu.Unlock()
+				results[primary] = qr
+			}
+		}(ctx, primary)
+	}
+	wg.Wait()
+	return results, allErrors.AggrError(vterrors.Aggregate)
 }
 
 func (vx *VExec) initialize(ctx context.Context) error {

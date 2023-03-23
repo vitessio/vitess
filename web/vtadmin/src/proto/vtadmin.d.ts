@@ -24246,10 +24246,10 @@ export namespace tabletmanagerdata {
         workflow?: (string|null);
 
         /** UpdateVRWorkflowRequest cells */
-        cells?: (string|null);
+        cells?: (string[]|null);
 
         /** UpdateVRWorkflowRequest tablet_types */
-        tablet_types?: (string|null);
+        tablet_types?: (string[]|null);
 
         /** UpdateVRWorkflowRequest on_ddl */
         on_ddl?: (binlogdata.OnDDLAction|null);
@@ -24268,10 +24268,10 @@ export namespace tabletmanagerdata {
         public workflow: string;
 
         /** UpdateVRWorkflowRequest cells. */
-        public cells: string;
+        public cells: string[];
 
         /** UpdateVRWorkflowRequest tablet_types. */
-        public tablet_types: string;
+        public tablet_types: string[];
 
         /** UpdateVRWorkflowRequest on_ddl. */
         public on_ddl: binlogdata.OnDDLAction;
@@ -46577,6 +46577,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest active_only */
         active_only?: (boolean|null);
+
+        /** GetWorkflowsRequest name_only */
+        name_only?: (boolean|null);
     }
 
     /** Represents a GetWorkflowsRequest. */
@@ -46593,6 +46596,9 @@ export namespace vtctldata {
 
         /** GetWorkflowsRequest active_only. */
         public active_only: boolean;
+
+        /** GetWorkflowsRequest name_only. */
+        public name_only: boolean;
 
         /**
          * Creates a new GetWorkflowsRequest instance using the specified properties.
@@ -53254,6 +53260,192 @@ export namespace vtctldata {
 
         /**
          * Converts this UpdateCellsAliasResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a WorkflowUpdateRequest. */
+    interface IWorkflowUpdateRequest {
+
+        /** WorkflowUpdateRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowUpdateRequest tablet_request */
+        tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
+    }
+
+    /** Represents a WorkflowUpdateRequest. */
+    class WorkflowUpdateRequest implements IWorkflowUpdateRequest {
+
+        /**
+         * Constructs a new WorkflowUpdateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowUpdateRequest);
+
+        /** WorkflowUpdateRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowUpdateRequest tablet_request. */
+        public tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
+
+        /**
+         * Creates a new WorkflowUpdateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowUpdateRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowUpdateRequest): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Encodes the specified WorkflowUpdateRequest message. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowUpdateRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Verifies a WorkflowUpdateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowUpdateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowUpdateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Creates a plain object from a WorkflowUpdateRequest message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowUpdateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowUpdateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a WorkflowUpdateResponse. */
+    interface IWorkflowUpdateResponse {
+
+        /** WorkflowUpdateResponse results */
+        results?: (string|null);
+    }
+
+    /** Represents a WorkflowUpdateResponse. */
+    class WorkflowUpdateResponse implements IWorkflowUpdateResponse {
+
+        /**
+         * Constructs a new WorkflowUpdateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowUpdateResponse);
+
+        /** WorkflowUpdateResponse results. */
+        public results: string;
+
+        /**
+         * Creates a new WorkflowUpdateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowUpdateResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowUpdateResponse): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Encodes the specified WorkflowUpdateResponse message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowUpdateResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Verifies a WorkflowUpdateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowUpdateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowUpdateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Creates a plain object from a WorkflowUpdateResponse message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowUpdateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowUpdateResponse to JSON.
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };

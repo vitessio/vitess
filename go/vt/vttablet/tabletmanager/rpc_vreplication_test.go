@@ -26,6 +26,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/fakesqldb"
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 	"vitess.io/vitess/go/vt/binlog/binlogplayer"
 	"vitess.io/vitess/go/vt/dbconfigs"
 	"vitess.io/vitess/go/vt/mysqlctl"
@@ -41,15 +42,15 @@ import (
 
 func TestUpdateVRWorkflow(t *testing.T) {
 	ctx := context.Background()
-	cell := "zone1"
-	tabletTypes := "replica"
+	cells := []string{"zone1"}
+	tabletTypes := []string{"replica"}
 	workflow := "testwf"
 	dbName := "test"
 	vreplID := 1
 	shortCircuitErr := fmt.Errorf("short circuiting test")
 	cp := mysql.ConnParams{}
 	db := fakesqldb.New(t)
-	ts := memorytopo.NewServer(cell)
+	ts := memorytopo.NewServer(cells[0])
 	mysqld := mysqlctl.NewFakeMysqlDaemon(db)
 	dbClient := binlogplayer.NewMockDBClient(t)
 	dbClientFactory := func() binlogplayer.DBClient { return dbClient }
@@ -58,7 +59,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 	// will add spacing.
 	dbClient.ExpectRequest(fmt.Sprintf("select * from _vt.vreplication where db_name='%s'", dbName),
 		&sqltypes.Result{}, nil)
-	vre := vreplication.NewSimpleTestEngine(ts, cell, mysqld, dbClientFactory, dbClientFactory, dbName, nil)
+	vre := vreplication.NewSimpleTestEngine(ts, cells[0], mysqld, dbClientFactory, dbClientFactory, dbName, nil)
 	vre.Open(context.Background())
 	tm := &TabletManager{
 		MysqlDaemon:         mysqld,
@@ -85,7 +86,7 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			"id|source|cell|tablet_types",
 			"int64|varchar|varchar|varchar",
 		),
-		fmt.Sprintf("%d|%s|%s|%s", vreplID, blsStr, cell, tabletTypes),
+		fmt.Sprintf("%d|%s|%s|%s", vreplID, blsStr, cells[0], tabletTypes[0]),
 	)
 	idQuery, err := sqlparser.ParseAndBind("select id from _vt.vreplication where id = %a",
 		sqltypes.Int64BindVariable(int64(vreplID)))
@@ -107,7 +108,8 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			name: "update cells",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow: workflow,
-				Cells:    "zone2",
+				Cells:    []string{"zone2"},
+				// TabletTypes is an empty value, so the current value should be cleared
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '' where id in (%d)`,
 				keyspace, shard, "zone2", vreplID),
@@ -116,17 +118,17 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			name: "update cells, NULL tablet_types",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
-				Cells:       "zone3",
-				TabletTypes: sqltypes.NULL.String(), // So keep the current value of replica
+				Cells:       []string{"zone3"},
+				TabletTypes: textutil.SimulatedNullStringSlice, // So keep the current value of replica
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, "zone3", tabletTypes, vreplID),
+				keyspace, shard, "zone3", tabletTypes[0], vreplID),
 		},
 		{
 			name: "update tablet_types",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
-				TabletTypes: "in_order:rdonly,replica",
+				TabletTypes: []string{"in_order:rdonly", "replica"},
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '', tablet_types = '%s' where id in (%d)`,
 				keyspace, shard, "in_order:rdonly,replica", vreplID),
@@ -135,11 +137,11 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			name: "update tablet_types, NULL cells",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
-				Cells:       sqltypes.NULL.String(), // So keep the current value of zone1
-				TabletTypes: "rdonly",
+				Cells:       textutil.SimulatedNullStringSlice, // So keep the current value of zone1
+				TabletTypes: []string{"rdonly"},
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}}', cell = '%s', tablet_types = '%s' where id in (%d)`,
-				keyspace, shard, cell, "rdonly", vreplID),
+				keyspace, shard, cells[0], "rdonly", vreplID),
 		},
 		{
 			name: "update on_ddl",
@@ -154,8 +156,8 @@ func TestUpdateVRWorkflow(t *testing.T) {
 			name: "update cell,tablet_types,on_ddl",
 			request: &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
-				Cells:       "zone1,zone2,zone3",
-				TabletTypes: "rdonly,replica,primary",
+				Cells:       []string{"zone1", "zone2", "zone3"},
+				TabletTypes: []string{"rdonly", "replica", "primary"},
 				OnDdl:       binlogdatapb.OnDDLAction_EXEC_IGNORE,
 			},
 			query: fmt.Sprintf(`update _vt.vreplication set source = 'keyspace:\"%s\" shard:\"%s\" filter:{rules:{match:\"customer\" filter:\"select * from customer\"} rules:{match:\"corder\" filter:\"select * from corder\"}} on_ddl:%s', cell = '%s', tablet_types = '%s' where id in (%d)`,

@@ -129,6 +129,8 @@ import (
 // ErrUnknownCommand is returned for an unknown command.
 var ErrUnknownCommand = errors.New("unknown command")
 
+const errWorkflowUpdateWithoutChanges = "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values"
+
 type command struct {
 	name   string
 	method func(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error
@@ -3611,9 +3613,9 @@ func commandHelp(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.Fla
 func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag.FlagSet, args []string) error {
 	usage := "usage: Workflow [--dry-run] [--cells] [--tablet-types] <keyspace>[.<workflow>] start/stop/update/delete/show/listall/tags [<tags>]"
 	dryRun := subFlags.Bool("dry-run", false, "Does a dry run of the Workflow action and reports the query and list of tablets on which the operation will be applied")
-	subFlags.String("cells", "", "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
-	subFlags.String("tablet-types", "", "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
-	subFlags.String("on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE. (Update only)")
+	cells := subFlags.StringSlice("cells", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from. (Update only)")
+	tabletTypes := subFlags.StringSlice("tablet-types", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY). (Update only)")
+	onDDL := subFlags.String("on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE. (Update only)")
 	if err := subFlags.Parse(args); err != nil {
 		return err
 	}
@@ -3652,7 +3654,39 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		if subFlags.NArg() != 2 {
 			return fmt.Errorf(usage)
 		}
-		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, subFlags.Lookup("cells"), subFlags.Lookup("tablet-types"), subFlags.Lookup("on-ddl"))
+		if action == "update" {
+			// We need to implicitly distinguish between an empty value (which is valid)
+			// and no value having been provided. We will use NULL for this purpose.
+			if !subFlags.Lookup("cells").Changed {
+				cells = &textutil.SimulatedNullStringSlice
+			}
+			if subFlags.Lookup("tablet-types").Changed {
+				for _, tabletType := range *tabletTypes {
+					if _, ok := topodatapb.TabletType_value[strings.ToUpper(tabletType)]; !ok {
+						return fmt.Errorf("invalid tablet type: %s", tabletType)
+					}
+				}
+			} else {
+				tabletTypes = &textutil.SimulatedNullStringSlice
+			}
+			onddl := int32(textutil.SimulatedNullInt) // to signify no value has been provided
+			if subFlags.Lookup("on-ddl").Changed {
+				var valid bool
+				onddl, valid = binlogdatapb.OnDDLAction_value[strings.ToUpper(*onDDL)]
+				if !valid {
+					return fmt.Errorf("invalid on-ddl action: %s", *onDDL)
+				}
+			}
+			rpcReq := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+				Workflow:    workflow,
+				Cells:       *cells,
+				TabletTypes: *tabletTypes,
+				OnDdl:       binlogdatapb.OnDDLAction(onddl),
+			}
+			results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update uses the new RPC path
+		} else {
+			results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, nil)
+		}
 		if err != nil {
 			return err
 		}

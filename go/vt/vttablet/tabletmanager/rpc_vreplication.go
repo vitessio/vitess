@@ -19,10 +19,12 @@ package tabletmanager
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/textutil"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -81,25 +83,24 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 
 	row := res.Named().Row()
 	id := row.AsInt64("id", 0)
-	cells := row.AsString("cell", "")
-	tabletTypes := row.AsString("tablet_types", "")
+	cells := strings.Split(row.AsString("cell", ""), ",")
+	tabletTypes := strings.Split(row.AsString("tablet_types", ""), ",")
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
 	// For the string values, we use NULL to differentiate from
 	// an empty string. The NULL value indicates that we should
 	// keep the existing value.
-	if req.Cells != sqltypes.NULL.String() {
+	if !textutil.ValueIsSimulatedNull(req.Cells) {
 		cells = req.Cells
 	}
-	if req.TabletTypes != sqltypes.NULL.String() {
+	if !textutil.ValueIsSimulatedNull(req.TabletTypes) {
 		tabletTypes = req.TabletTypes
 	}
 	if err = prototext.Unmarshal(source, bls); err != nil {
 		return nil, err
 	}
-	// If we don't want to update the existing value pass -1 or any
-	// other invalid value.
-	if _, ok := binlogdatapb.OnDDLAction_name[int32(req.OnDdl)]; ok {
+	// If we don't want to update the existing then value pass -1.
+	if !textutil.ValueIsSimulatedNull(req.OnDdl) {
 		bls.OnDdl = req.OnDdl
 	}
 	source, err = prototext.Marshal(bls)
@@ -108,8 +109,8 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	}
 	bindVars = map[string]*querypb.BindVariable{
 		"sc": sqltypes.StringBindVariable(string(source)),
-		"cl": sqltypes.StringBindVariable(cells),
-		"tt": sqltypes.StringBindVariable(tabletTypes),
+		"cl": sqltypes.StringBindVariable(strings.Join(cells, ",")),
+		"tt": sqltypes.StringBindVariable(strings.Join(tabletTypes, ",")),
 		"id": sqltypes.Int64BindVariable(id),
 	}
 	parsed = sqlparser.BuildParsedQuery(sqlUpdateVRWorkflowConfig, sidecardb.GetIdentifier(), ":sc", ":cl", ":tt", ":id")

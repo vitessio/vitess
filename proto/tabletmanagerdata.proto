@@ -545,8 +545,8 @@ message VDiffOptions {
 
 message UpdateVRWorkflowRequest {
   string workflow = 1;
-  string cells = 2;
-  string tablet_types = 3;
+  repeated string cells = 2;
+  repeated string tablet_types = 3;
   binlogdata.OnDDLAction on_ddl = 4;
 }
 

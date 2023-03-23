@@ -381,6 +381,9 @@ type VtctldClient interface {
 	// parameters. Empty values are ignored. If the alias does not exist, the
 	// CellsAlias will be created.
 	UpdateCellsAlias(ctx context.Context, in *vtctldata.UpdateCellsAliasRequest, opts ...grpc.CallOption) (*vtctldata.UpdateCellsAliasResponse, error)
+	// WorkflowUpdate updates the configuration of a vreplication workflow
+	// using the provided updated parameters.
+	WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error)
 	// Validate validates that all nodes from the global replication graph are
 	// reachable, and that all tablets in discoverable cells are consistent.
 	Validate(ctx context.Context, in *vtctldata.ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error)
@@ -1170,6 +1173,15 @@ func (c *vtctldClient) UpdateCellsAlias(ctx context.Context, in *vtctldata.Updat
 	return out, nil
 }
 
+func (c *vtctldClient) WorkflowUpdate(ctx context.Context, in *vtctldata.WorkflowUpdateRequest, opts ...grpc.CallOption) (*vtctldata.WorkflowUpdateResponse, error) {
+	out := new(vtctldata.WorkflowUpdateResponse)
+	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/WorkflowUpdate", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *vtctldClient) Validate(ctx context.Context, in *vtctldata.ValidateRequest, opts ...grpc.CallOption) (*vtctldata.ValidateResponse, error) {
 	out := new(vtctldata.ValidateResponse)
 	err := c.cc.Invoke(ctx, "/vtctlservice.Vtctld/Validate", in, out, opts...)
@@ -1482,6 +1494,9 @@ type VtctldServer interface {
 	// parameters. Empty values are ignored. If the alias does not exist, the
 	// CellsAlias will be created.
 	UpdateCellsAlias(context.Context, *vtctldata.UpdateCellsAliasRequest) (*vtctldata.UpdateCellsAliasResponse, error)
+	// WorkflowUpdate updates the configuration of a vreplication workflow
+	// using the provided updated parameters.
+	WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error)
 	// Validate validates that all nodes from the global replication graph are
 	// reachable, and that all tablets in discoverable cells are consistent.
 	Validate(context.Context, *vtctldata.ValidateRequest) (*vtctldata.ValidateResponse, error)
@@ -1736,6 +1751,9 @@ func (UnimplementedVtctldServer) UpdateCellInfo(context.Context, *vtctldata.Upda
 }
 func (UnimplementedVtctldServer) UpdateCellsAlias(context.Context, *vtctldata.UpdateCellsAliasRequest) (*vtctldata.UpdateCellsAliasResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateCellsAlias not implemented")
+}
+func (UnimplementedVtctldServer) WorkflowUpdate(context.Context, *vtctldata.WorkflowUpdateRequest) (*vtctldata.WorkflowUpdateResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method WorkflowUpdate not implemented")
 }
 func (UnimplementedVtctldServer) Validate(context.Context, *vtctldata.ValidateRequest) (*vtctldata.ValidateResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method Validate not implemented")
@@ -3166,6 +3184,24 @@ func _Vtctld_UpdateCellsAlias_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Vtctld_WorkflowUpdate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(vtctldata.WorkflowUpdateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VtctldServer).WorkflowUpdate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtctlservice.Vtctld/WorkflowUpdate",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VtctldServer).WorkflowUpdate(ctx, req.(*vtctldata.WorkflowUpdateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _Vtctld_Validate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(vtctldata.ValidateRequest)
 	if err := dec(in); err != nil {
@@ -3594,6 +3630,10 @@ var Vtctld_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateCellsAlias",
 			Handler:    _Vtctld_UpdateCellsAlias_Handler,
+		},
+		{
+			MethodName: "WorkflowUpdate",
+			Handler:    _Vtctld_WorkflowUpdate_Handler,
 		},
 		{
 			MethodName: "Validate",

@@ -39,6 +39,7 @@ import (
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 	"vitess.io/vitess/go/vt/proto/vttime"
@@ -748,4 +749,39 @@ func (s *Server) getWorkflowCopyStates(ctx context.Context, tablet *topo.TabletI
 	}
 
 	return copyStates, nil
+}
+
+// WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
+// It passes the embedded TabletRequest object to the given keyspace's
+// target primary tablets that are participating in the given workflow.
+func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest) (*vtctldatapb.WorkflowUpdateResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "workflow.Server.WorkflowUpdate")
+	defer span.Finish()
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.TabletRequest.Workflow)
+	span.Annotate("cells", req.TabletRequest.Cells)
+	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
+	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+
+	vx := vexec.NewVExec(req.Keyspace, req.TabletRequest.Workflow, s.ts, s.tmc)
+	callback := func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
+		res, err := s.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req.TabletRequest)
+		if err != nil {
+			return nil, err
+		}
+		return res.Result, err
+	}
+	res, err := vx.CallbackContext(ctx, callback)
+	if err != nil {
+		return nil, err
+	}
+	resultStr := strings.Builder{}
+	resultStr.WriteString(fmt.Sprintf("The following tablets were updated for the %s workflow\n",
+		req.TabletRequest.Workflow))
+	for tinfo, tres := range res {
+		resultStr.WriteString(fmt.Sprintf("%s-%d (%s/%s); changed: %t\n", tinfo.Alias.Cell, tinfo.Alias.Uid,
+			tinfo.Keyspace, tinfo.Shard, tres.RowsAffected == 1))
+	}
+	return &vtctldatapb.WorkflowUpdateResponse{Results: resultStr.String()}, nil
 }

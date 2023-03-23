@@ -26,8 +26,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/spf13/pflag"
-
+	"vitess.io/vitess/go/textutil"
 	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -48,11 +47,10 @@ import (
 )
 
 const (
-	vexecTableQualifier             = "_vt"
-	vreplicationTableName           = "vreplication"
-	sqlVReplicationDelete           = "delete from _vt.vreplication"
-	errWorkflowUpdateWithoutChanges = "no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values"
-	execTimeout                     = 10 * time.Second
+	vexecTableQualifier   = "_vt"
+	vreplicationTableName = "vreplication"
+	sqlVReplicationDelete = "delete from _vt.vreplication"
+	execTimeout           = 10 * time.Second
 )
 
 // vexec is the construct by which we run a query against backend shards. vexec is created by user-facing
@@ -330,8 +328,12 @@ func (wr *Wrangler) convertQueryResultToSQLTypesResult(results map[*topo.TabletI
 	return retResults
 }
 
-// WorkflowAction can start/stop/update/delete or list streams in _vt.vreplication on all primaries in the target keyspace of the workflow.
-func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes, onDDL *pflag.Flag) (map[*topo.TabletInfo]*sqltypes.Result, error) {
+// WorkflowAction can start/stop/update/delete or list streams in _vt.vreplication
+// on all primaries in the target keyspace of the workflow.
+// rpcReq is an optional argument for any actions that use the new RPC path. Today
+// that is only the update action. When using the SQL interface this is ignored and
+// you can pass nil.
+func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any) (map[*topo.TabletInfo]*sqltypes.Result, error) {
 	switch action {
 	case "show":
 		replStatus, err := wr.ShowWorkflow(ctx, workflow, keyspace)
@@ -349,7 +351,7 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 		return nil, err
 	default:
 	}
-	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, cells, tabletTypes, onDDL)
+	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, rpcReq)
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 
@@ -372,47 +374,38 @@ func (wr *Wrangler) getWorkflowActionQuery(action string) (string, error) {
 	return query, nil
 }
 
-func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, cells, tabletTypes, onDDL *pflag.Flag) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, action string, dryRun bool, rpcReq any) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error) = nil
 	query, err := wr.getWorkflowActionQuery(action)
 	if err != nil {
 		return nil, err
 	}
 	if action == "update" {
-		changes := false
-		var dryRunChanges strings.Builder
-		req := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
-			Workflow: workflow,
-		}
-		if cells.Changed {
-			changes = true
-			req.Cells = strings.TrimSpace(cells.Value.String())
-			dryRunChanges.WriteString(fmt.Sprintf("  cells=%q\n", req.Cells))
-		} else { // Indicate that we do NOT want to set the value to an empty string.
-			req.Cells = sqltypes.NULL.String()
-		}
-		if tabletTypes.Changed {
-			changes = true
-			req.TabletTypes = strings.TrimSpace(tabletTypes.Value.String())
-			dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", req.TabletTypes))
-		} else { // Indicate that we do NOT want to set the value to an empty string.
-			req.TabletTypes = sqltypes.NULL.String()
-		}
-		if onDDL.Changed {
-			changes = true
-			onddl, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(onDDL.Value.String())]
-			if !ok {
-				return nil, fmt.Errorf("invalid value provided for on-ddl: %s", onDDL.Value.String())
-			}
-			req.OnDdl = binlogdatapb.OnDDLAction(onddl)
-			dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", onDDL.Value.String()))
-		} else { // Indicate that we do NOT want to update the value.
-			req.OnDdl = -1
-		}
-		if !changes {
-			return nil, fmt.Errorf(errWorkflowUpdateWithoutChanges)
+		rpcReq, ok := rpcReq.(*tabletmanagerdatapb.UpdateVRWorkflowRequest)
+		if !ok {
+			return nil, fmt.Errorf("invalid RPC request: %+v", rpcReq)
 		}
 		if dryRun {
+			var dryRunChanges strings.Builder
+			changes := false
+			// We use the sqltypes.NULL string value to represent a nil
+			// value in the proto. This way we can distinguish between
+			// a default empty string value and a user provided empty value.
+			if !textutil.ValueIsSimulatedNull(rpcReq.Cells) {
+				changes = true
+				dryRunChanges.WriteString(fmt.Sprintf("  cells=%q\n", strings.Join(rpcReq.Cells, ",")))
+			}
+			if !textutil.ValueIsSimulatedNull(rpcReq.TabletTypes) {
+				changes = true
+				dryRunChanges.WriteString(fmt.Sprintf("  tablet_types=%q\n", strings.Join(rpcReq.TabletTypes, ",")))
+			}
+			if !textutil.ValueIsSimulatedNull(rpcReq.OnDdl) {
+				changes = true
+				dryRunChanges.WriteString(fmt.Sprintf("  on_ddl=%q\n", binlogdatapb.OnDDLAction_name[int32(rpcReq.OnDdl)]))
+			}
+			if !changes {
+				return nil, fmt.Errorf("no updates were provided; use --cells, --tablet-types, or --on-ddl to specify new values")
+			}
 			wr.Logger().Printf("The following workflow fields will be updated:\n%s", dryRunChanges.String())
 			wr.Logger().Printf("On the following tablets in the %s keyspace for workflow %s:\n",
 				keyspace, workflow)
@@ -431,7 +424,10 @@ func (wr *Wrangler) execWorkflowAction(ctx context.Context, workflow, keyspace, 
 			return nil, nil
 		} else {
 			callback = func(ctx context.Context, tablet *topo.TabletInfo) (*querypb.QueryResult, error) {
-				res, err := wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, req)
+				res, err := wr.tmc.UpdateVRWorkflow(ctx, tablet.Tablet, rpcReq)
+				if err != nil {
+					return nil, err
+				}
 				return res.Result, err
 			}
 		}

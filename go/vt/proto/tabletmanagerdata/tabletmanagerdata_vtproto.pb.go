@@ -4599,18 +4599,22 @@ func (m *UpdateVRWorkflowRequest) MarshalToSizedBufferVT(dAtA []byte) (int, erro
 		dAtA[i] = 0x20
 	}
 	if len(m.TabletTypes) > 0 {
-		i -= len(m.TabletTypes)
-		copy(dAtA[i:], m.TabletTypes)
-		i = encodeVarint(dAtA, i, uint64(len(m.TabletTypes)))
-		i--
-		dAtA[i] = 0x1a
+		for iNdEx := len(m.TabletTypes) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.TabletTypes[iNdEx])
+			copy(dAtA[i:], m.TabletTypes[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.TabletTypes[iNdEx])))
+			i--
+			dAtA[i] = 0x1a
+		}
 	}
 	if len(m.Cells) > 0 {
-		i -= len(m.Cells)
-		copy(dAtA[i:], m.Cells)
-		i = encodeVarint(dAtA, i, uint64(len(m.Cells)))
-		i--
-		dAtA[i] = 0x12
+		for iNdEx := len(m.Cells) - 1; iNdEx >= 0; iNdEx-- {
+			i -= len(m.Cells[iNdEx])
+			copy(dAtA[i:], m.Cells[iNdEx])
+			i = encodeVarint(dAtA, i, uint64(len(m.Cells[iNdEx])))
+			i--
+			dAtA[i] = 0x12
+		}
 	}
 	if len(m.Workflow) > 0 {
 		i -= len(m.Workflow)
@@ -6262,13 +6266,17 @@ func (m *UpdateVRWorkflowRequest) SizeVT() (n int) {
 	if l > 0 {
 		n += 1 + l + sov(uint64(l))
 	}
-	l = len(m.Cells)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+	if len(m.Cells) > 0 {
+		for _, s := range m.Cells {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
-	l = len(m.TabletTypes)
-	if l > 0 {
-		n += 1 + l + sov(uint64(l))
+	if len(m.TabletTypes) > 0 {
+		for _, s := range m.TabletTypes {
+			l = len(s)
+			n += 1 + l + sov(uint64(l))
+		}
 	}
 	if m.OnDdl != 0 {
 		n += 1 + sov(uint64(m.OnDdl))
@@ -15978,7 +15986,7 @@ func (m *UpdateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Cells = string(dAtA[iNdEx:postIndex])
+			m.Cells = append(m.Cells, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 3:
 			if wireType != 2 {
@@ -16010,7 +16018,7 @@ func (m *UpdateVRWorkflowRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.TabletTypes = string(dAtA[iNdEx:postIndex])
+			m.TabletTypes = append(m.TabletTypes, string(dAtA[iNdEx:postIndex]))
 			iNdEx = postIndex
 		case 4:
 			if wireType != 0 {
