@@ -47,7 +47,6 @@ var (
 )
 
 var (
-	// UpdateWorkflow makes a UpdateWorkflow gRPC call to a vtctld.
 	Workflow = &cobra.Command{
 		Use:                   "Workflow",
 		Short:                 "Interface with vreplication workflows (Reshard, MoveTables, etc) in the given keyspace",
@@ -60,12 +59,13 @@ var (
 		Keyspace string
 	}{}
 
-	// UpdateWorkflow makes a UpdateWorkflow gRPC call to a vtctld.
+	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
 	WorkflowUpdate = &cobra.Command{
 		Use:                   "update",
 		Short:                 "Update the configuration parameters for a vreplication workflow",
 		Example:               "vtctldclient --server=localhost:15999 Workflow --keyspace=customer update --workflow=commerce2customer --cells=zone1,zone2,zone3",
 		DisableFlagsInUseLine: true,
+		Aliases:               []string{"Update"},
 		Args:                  cobra.ExactArgs(0),
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			if !cmd.Flags().Lookup("cells").Changed && !cmd.Flags().Lookup("tablet-types").Changed && !cmd.Flags().Lookup("on-ddl").Changed {
