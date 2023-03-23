@@ -26,10 +26,10 @@ import (
 
 type (
 	BindVariable struct {
-		Key    string
-		col    collations.TypedCollation
-		coerce sqltypes.Type
-		tuple  bool
+		Key       string
+		Type      sqltypes.Type
+		Collation collations.TypedCollation
+		typed     bool
 	}
 )
 
@@ -52,7 +52,7 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 
 	switch bvar.Type {
 	case sqltypes.Tuple:
-		if !bv.tuple {
+		if bv.Type != sqltypes.Tuple {
 			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' cannot be a tuple", bv.Key)
 		}
 
@@ -67,32 +67,33 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 		return &evalTuple{t: tuple}, nil
 
 	default:
+		if bv.Type == sqltypes.Tuple {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, bvar.Type)
+		}
 		typ := bvar.Type
-		if bv.coerce >= 0 {
-			typ = bv.coerce
+		if bv.typed {
+			typ = bv.Type
 		}
-		if bv.tuple {
-			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query argument '%s' must be a tuple (is %s)", bv.Key, typ)
-		}
-		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), bv.col)
+		return valueToEval(sqltypes.MakeTrusted(typ, bvar.Value), bv.Collation)
 	}
 }
 
 // typeof implements the Expr interface
 func (bv *BindVariable) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	bvar, err := bv.bvar(env)
-	if err != nil {
-		return sqltypes.Null, flagNull | flagNullable
+	var tt sqltypes.Type
+	if bv.typed {
+		tt = bv.Type
+	} else {
+		if bvar, err := bv.bvar(env); err == nil {
+			tt = bvar.Type
+		}
 	}
-	switch bvar.Type {
+	switch tt {
 	case sqltypes.Null:
 		return sqltypes.Null, flagNull | flagNullable
 	case sqltypes.HexNum, sqltypes.HexVal:
 		return sqltypes.VarBinary, flagHex
 	default:
-		if bv.coerce >= 0 {
-			return bv.coerce, 0
-		}
-		return bvar.Type, 0
+		return tt, 0
 	}
 }

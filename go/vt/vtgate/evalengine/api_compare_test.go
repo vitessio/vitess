@@ -819,7 +819,7 @@ func TestCompareDates(t *testing.T) {
 		},
 		{
 			name: "date equal datetime through bind variables",
-			v1:   NewBindVar("k1", defaultCollation()), v2: NewBindVar("k2", defaultCollation()),
+			v1:   NewBindVar("k1"), v2: NewBindVar("k2"),
 			out: &T, op: sqlparser.EqualOp,
 			bv: map[string]*querypb.BindVariable{
 				"k1": {Type: sqltypes.Date, Value: []byte("2021-10-22")},
@@ -828,7 +828,7 @@ func TestCompareDates(t *testing.T) {
 		},
 		{
 			name: "date not equal datetime through bind variables",
-			v1:   NewBindVar("k1", defaultCollation()), v2: NewBindVar("k2", defaultCollation()),
+			v1:   NewBindVar("k1"), v2: NewBindVar("k2"),
 			out: &T, op: sqlparser.NotEqualOp,
 			bv: map[string]*querypb.BindVariable{
 				"k1": {Type: sqltypes.Date, Value: []byte("2021-02-20")},

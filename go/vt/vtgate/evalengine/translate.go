@@ -158,6 +158,18 @@ func (ast *astCompiler) defaultCollation() collations.TypedCollation {
 	}
 }
 
+func (ast *astCompiler) translateBindVar(node sqlparser.Argument) (Expr, error) {
+	bvar := NewBindVar(string(node))
+	if ast.opt.ResolveType != nil {
+		bvar.Type, bvar.Collation.Collation, bvar.typed = ast.opt.ResolveType(node)
+	}
+	if !bvar.typed {
+		bvar.Collation.Collation = ast.opt.Collation
+		ast.entities.untyped++
+	}
+	return bvar, nil
+}
+
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) {
 	column := NewColumn(col.V)
 	if ast.opt.ResolveType != nil {
@@ -322,17 +334,19 @@ func (ast *astCompiler) translateIntroducerExpr(introduced *sqlparser.Introducer
 			}
 		}
 	case *BindVariable:
-		if lit.tuple {
+		if lit.Type == sqltypes.Tuple {
 			panic("parser allowed introducer before tuple")
 		}
 
 		switch collation {
 		case collations.CollationBinaryID:
-			lit.coerce = sqltypes.VarBinary
-			lit.col = collationBinary
+			lit.Type = sqltypes.VarBinary
+			lit.Collation = collationBinary
+			lit.typed = true
 		default:
-			lit.coerce = sqltypes.VarChar
-			lit.col.Collation = collation
+			lit.Type = sqltypes.VarChar
+			lit.Collation.Collation = collation
+			lit.typed = true
 		}
 	default:
 		panic("character set introducers are only supported for literals and arguments")
@@ -457,10 +471,8 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 	case *sqlparser.ComparisonExpr:
 		return ast.translateComparisonExpr(node.Operator, node.Left, node.Right)
 	case sqlparser.Argument:
-		ast.entities.bvars++
-		return NewBindVar(string(node), ast.defaultCollation()), nil
+		return ast.translateBindVar(node)
 	case sqlparser.ListArg:
-		ast.entities.bvars++
 		return NewBindVarTuple(string(node)), nil
 	case *sqlparser.Literal:
 		return ast.translateLiteral(node)
