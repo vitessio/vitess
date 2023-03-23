@@ -158,13 +158,14 @@ func (ast *astCompiler) defaultCollation() collations.TypedCollation {
 	}
 }
 
-func (ast *astCompiler) translateBindVar(node sqlparser.Argument) (Expr, error) {
-	bvar := NewBindVar(string(node))
-	if ast.opt.ResolveType != nil {
-		bvar.Type, bvar.Collation.Collation, bvar.typed = ast.opt.ResolveType(node)
-	}
-	if !bvar.typed {
-		bvar.Collation.Collation = ast.opt.Collation
+func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
+	bvar := NewBindVar(arg.Name)
+	bvar.Collation.Collation = ast.opt.Collation
+
+	if arg.Type >= 0 {
+		bvar.Type = arg.Type
+		bvar.typed = true
+	} else {
 		ast.entities.untyped++
 	}
 	return bvar, nil
@@ -175,8 +176,10 @@ func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) 
 	if ast.opt.ResolveType != nil {
 		column.Type, column.Collation.Collation, column.typed = ast.opt.ResolveType(col.Original)
 	}
-	if !column.typed {
+	if column.Collation.Collation == collations.Unknown {
 		column.Collation.Collation = ast.opt.Collation
+	}
+	if !column.typed {
 		ast.entities.untyped++
 	}
 	return column, nil
@@ -194,8 +197,10 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, erro
 	if ast.opt.ResolveType != nil {
 		column.Type, column.Collation.Collation, column.typed = ast.opt.ResolveType(colname)
 	}
-	if !column.typed {
+	if column.Collation.Collation == collations.Unknown {
 		column.Collation.Collation = ast.opt.Collation
+	}
+	if !column.typed {
 		ast.entities.untyped++
 	}
 	return column, nil
@@ -470,7 +475,7 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 		return ast.translateColOffset(node)
 	case *sqlparser.ComparisonExpr:
 		return ast.translateComparisonExpr(node.Operator, node.Left, node.Right)
-	case sqlparser.Argument:
+	case *sqlparser.Argument:
 		return ast.translateBindVar(node)
 	case sqlparser.ListArg:
 		return NewBindVarTuple(string(node)), nil
