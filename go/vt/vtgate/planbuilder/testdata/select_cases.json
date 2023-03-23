@@ -5260,8 +5260,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
-            "Query": "select 1 from (select MAX(id) as maxt from music where music.user_id = 5) as other",
+            "FieldQuery": "select other.maxt from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
+            "Query": "select other.maxt from (select MAX(id) as maxt from music where music.user_id = 5) as other",
             "Table": "music",
             "Values": [
               "INT64(5)"
@@ -5563,8 +5563,8 @@
               "Name": "user",
               "Sharded": true
             },
-            "FieldQuery": "select 1 from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
-            "Query": "select 1 from (select MAX(id) as maxt from music where music.user_id = 5) as other",
+            "FieldQuery": "select other.maxt from (select MAX(id) as maxt from music where 1 != 1) as other where 1 != 1",
+            "Query": "select other.maxt from (select MAX(id) as maxt from music where music.user_id = 5) as other",
             "Table": "music",
             "Values": [
               "INT64(5)"
