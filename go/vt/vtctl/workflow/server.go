@@ -776,12 +776,17 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	if err != nil {
 		return nil, err
 	}
-	resultStr := strings.Builder{}
-	resultStr.WriteString(fmt.Sprintf("The following tablets were updated for the %s workflow\n",
-		req.TabletRequest.Workflow))
+
+	response := &vtctldatapb.WorkflowUpdateResponse{}
+	response.Summary = fmt.Sprintf("Successfully updated the %s workflow on (%d) target primary tablets in the %s keyspace", req.TabletRequest.Workflow, len(res), req.Keyspace)
+	details := []*vtctldatapb.WorkflowUpdateResponse_TabletInfo{}
 	for tinfo, tres := range res {
-		resultStr.WriteString(fmt.Sprintf("%s-%d (%s/%s); changed: %t\n", tinfo.Alias.Cell, tinfo.Alias.Uid,
-			tinfo.Keyspace, tinfo.Shard, tres.RowsAffected == 1))
+		result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
+			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
+			Changed: tres.RowsAffected == 1,
+		}
+		details = append(details, result)
 	}
-	return &vtctldatapb.WorkflowUpdateResponse{Results: resultStr.String()}, nil
+	response.Details = details
+	return response, nil
 }

@@ -46,7 +46,7 @@ var (
 		Use:                   "workflow",
 		Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace",
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"workflows", "Workflow", "Workflows"},
+		Aliases:               []string{"Workflow"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetWorkflows,
 	}
@@ -157,7 +157,12 @@ func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	fmt.Printf("%s\n", resp.Results)
+	data, err := cli.MarshalJSON(resp)
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("%s\n", data)
 
 	return nil
 }
@@ -173,6 +178,6 @@ func init() {
 	WorkflowUpdate.MarkFlagRequired("workflow")
 	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
 	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY)")
-	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.OnDDL, "on-ddl", "o", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
+	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
 	Workflow.AddCommand(WorkflowUpdate)
 }

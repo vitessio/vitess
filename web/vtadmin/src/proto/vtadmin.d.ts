@@ -53265,192 +53265,6 @@ export namespace vtctldata {
         public toJSON(): { [k: string]: any };
     }
 
-    /** Properties of a WorkflowUpdateRequest. */
-    interface IWorkflowUpdateRequest {
-
-        /** WorkflowUpdateRequest keyspace */
-        keyspace?: (string|null);
-
-        /** WorkflowUpdateRequest tablet_request */
-        tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
-    }
-
-    /** Represents a WorkflowUpdateRequest. */
-    class WorkflowUpdateRequest implements IWorkflowUpdateRequest {
-
-        /**
-         * Constructs a new WorkflowUpdateRequest.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IWorkflowUpdateRequest);
-
-        /** WorkflowUpdateRequest keyspace. */
-        public keyspace: string;
-
-        /** WorkflowUpdateRequest tablet_request. */
-        public tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
-
-        /**
-         * Creates a new WorkflowUpdateRequest instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns WorkflowUpdateRequest instance
-         */
-        public static create(properties?: vtctldata.IWorkflowUpdateRequest): vtctldata.WorkflowUpdateRequest;
-
-        /**
-         * Encodes the specified WorkflowUpdateRequest message. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
-         * @param message WorkflowUpdateRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified WorkflowUpdateRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
-         * @param message WorkflowUpdateRequest message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns WorkflowUpdateRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateRequest;
-
-        /**
-         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns WorkflowUpdateRequest
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateRequest;
-
-        /**
-         * Verifies a WorkflowUpdateRequest message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a WorkflowUpdateRequest message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns WorkflowUpdateRequest
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateRequest;
-
-        /**
-         * Creates a plain object from a WorkflowUpdateRequest message. Also converts values to other types if specified.
-         * @param message WorkflowUpdateRequest
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.WorkflowUpdateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this WorkflowUpdateRequest to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
-    /** Properties of a WorkflowUpdateResponse. */
-    interface IWorkflowUpdateResponse {
-
-        /** WorkflowUpdateResponse results */
-        results?: (string|null);
-    }
-
-    /** Represents a WorkflowUpdateResponse. */
-    class WorkflowUpdateResponse implements IWorkflowUpdateResponse {
-
-        /**
-         * Constructs a new WorkflowUpdateResponse.
-         * @param [properties] Properties to set
-         */
-        constructor(properties?: vtctldata.IWorkflowUpdateResponse);
-
-        /** WorkflowUpdateResponse results. */
-        public results: string;
-
-        /**
-         * Creates a new WorkflowUpdateResponse instance using the specified properties.
-         * @param [properties] Properties to set
-         * @returns WorkflowUpdateResponse instance
-         */
-        public static create(properties?: vtctldata.IWorkflowUpdateResponse): vtctldata.WorkflowUpdateResponse;
-
-        /**
-         * Encodes the specified WorkflowUpdateResponse message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
-         * @param message WorkflowUpdateResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encode(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Encodes the specified WorkflowUpdateResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
-         * @param message WorkflowUpdateResponse message or plain object to encode
-         * @param [writer] Writer to encode to
-         * @returns Writer
-         */
-        public static encodeDelimited(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
-
-        /**
-         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer.
-         * @param reader Reader or buffer to decode from
-         * @param [length] Message length if known beforehand
-         * @returns WorkflowUpdateResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse;
-
-        /**
-         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer, length delimited.
-         * @param reader Reader or buffer to decode from
-         * @returns WorkflowUpdateResponse
-         * @throws {Error} If the payload is not a reader or valid buffer
-         * @throws {$protobuf.util.ProtocolError} If required fields are missing
-         */
-        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse;
-
-        /**
-         * Verifies a WorkflowUpdateResponse message.
-         * @param message Plain object to verify
-         * @returns `null` if valid, otherwise the reason why it is not
-         */
-        public static verify(message: { [k: string]: any }): (string|null);
-
-        /**
-         * Creates a WorkflowUpdateResponse message from a plain object. Also converts values to their respective internal types.
-         * @param object Plain object
-         * @returns WorkflowUpdateResponse
-         */
-        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse;
-
-        /**
-         * Creates a plain object from a WorkflowUpdateResponse message. Also converts values to other types if specified.
-         * @param message WorkflowUpdateResponse
-         * @param [options] Conversion options
-         * @returns Plain object
-         */
-        public static toObject(message: vtctldata.WorkflowUpdateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
-
-        /**
-         * Converts this WorkflowUpdateResponse to JSON.
-         * @returns JSON object
-         */
-        public toJSON(): { [k: string]: any };
-    }
-
     /** Properties of a ValidateRequest. */
     interface IValidateRequest {
 
@@ -54805,5 +54619,296 @@ export namespace vtctldata {
          * @returns JSON object
          */
         public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a WorkflowUpdateRequest. */
+    interface IWorkflowUpdateRequest {
+
+        /** WorkflowUpdateRequest keyspace */
+        keyspace?: (string|null);
+
+        /** WorkflowUpdateRequest tablet_request */
+        tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
+    }
+
+    /** Represents a WorkflowUpdateRequest. */
+    class WorkflowUpdateRequest implements IWorkflowUpdateRequest {
+
+        /**
+         * Constructs a new WorkflowUpdateRequest.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowUpdateRequest);
+
+        /** WorkflowUpdateRequest keyspace. */
+        public keyspace: string;
+
+        /** WorkflowUpdateRequest tablet_request. */
+        public tablet_request?: (tabletmanagerdata.IUpdateVRWorkflowRequest|null);
+
+        /**
+         * Creates a new WorkflowUpdateRequest instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowUpdateRequest instance
+         */
+        public static create(properties?: vtctldata.IWorkflowUpdateRequest): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Encodes the specified WorkflowUpdateRequest message. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowUpdateRequest message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateRequest.verify|verify} messages.
+         * @param message WorkflowUpdateRequest message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateRequest, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Decodes a WorkflowUpdateRequest message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowUpdateRequest
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Verifies a WorkflowUpdateRequest message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowUpdateRequest message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowUpdateRequest
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateRequest;
+
+        /**
+         * Creates a plain object from a WorkflowUpdateRequest message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateRequest
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowUpdateRequest, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowUpdateRequest to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    /** Properties of a WorkflowUpdateResponse. */
+    interface IWorkflowUpdateResponse {
+
+        /** WorkflowUpdateResponse summary */
+        summary?: (string|null);
+
+        /** WorkflowUpdateResponse details */
+        details?: (vtctldata.WorkflowUpdateResponse.ITabletInfo[]|null);
+    }
+
+    /** Represents a WorkflowUpdateResponse. */
+    class WorkflowUpdateResponse implements IWorkflowUpdateResponse {
+
+        /**
+         * Constructs a new WorkflowUpdateResponse.
+         * @param [properties] Properties to set
+         */
+        constructor(properties?: vtctldata.IWorkflowUpdateResponse);
+
+        /** WorkflowUpdateResponse summary. */
+        public summary: string;
+
+        /** WorkflowUpdateResponse details. */
+        public details: vtctldata.WorkflowUpdateResponse.ITabletInfo[];
+
+        /**
+         * Creates a new WorkflowUpdateResponse instance using the specified properties.
+         * @param [properties] Properties to set
+         * @returns WorkflowUpdateResponse instance
+         */
+        public static create(properties?: vtctldata.IWorkflowUpdateResponse): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Encodes the specified WorkflowUpdateResponse message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encode(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Encodes the specified WorkflowUpdateResponse message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.verify|verify} messages.
+         * @param message WorkflowUpdateResponse message or plain object to encode
+         * @param [writer] Writer to encode to
+         * @returns Writer
+         */
+        public static encodeDelimited(message: vtctldata.IWorkflowUpdateResponse, writer?: $protobuf.Writer): $protobuf.Writer;
+
+        /**
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer.
+         * @param reader Reader or buffer to decode from
+         * @param [length] Message length if known beforehand
+         * @returns WorkflowUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Decodes a WorkflowUpdateResponse message from the specified reader or buffer, length delimited.
+         * @param reader Reader or buffer to decode from
+         * @returns WorkflowUpdateResponse
+         * @throws {Error} If the payload is not a reader or valid buffer
+         * @throws {$protobuf.util.ProtocolError} If required fields are missing
+         */
+        public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Verifies a WorkflowUpdateResponse message.
+         * @param message Plain object to verify
+         * @returns `null` if valid, otherwise the reason why it is not
+         */
+        public static verify(message: { [k: string]: any }): (string|null);
+
+        /**
+         * Creates a WorkflowUpdateResponse message from a plain object. Also converts values to their respective internal types.
+         * @param object Plain object
+         * @returns WorkflowUpdateResponse
+         */
+        public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse;
+
+        /**
+         * Creates a plain object from a WorkflowUpdateResponse message. Also converts values to other types if specified.
+         * @param message WorkflowUpdateResponse
+         * @param [options] Conversion options
+         * @returns Plain object
+         */
+        public static toObject(message: vtctldata.WorkflowUpdateResponse, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+        /**
+         * Converts this WorkflowUpdateResponse to JSON.
+         * @returns JSON object
+         */
+        public toJSON(): { [k: string]: any };
+    }
+
+    namespace WorkflowUpdateResponse {
+
+        /** Properties of a TabletInfo. */
+        interface ITabletInfo {
+
+            /** TabletInfo tablet */
+            tablet?: (string|null);
+
+            /** TabletInfo changed */
+            changed?: (boolean|null);
+        }
+
+        /** Represents a TabletInfo. */
+        class TabletInfo implements ITabletInfo {
+
+            /**
+             * Constructs a new TabletInfo.
+             * @param [properties] Properties to set
+             */
+            constructor(properties?: vtctldata.WorkflowUpdateResponse.ITabletInfo);
+
+            /** TabletInfo tablet. */
+            public tablet: string;
+
+            /** TabletInfo changed. */
+            public changed: boolean;
+
+            /**
+             * Creates a new TabletInfo instance using the specified properties.
+             * @param [properties] Properties to set
+             * @returns TabletInfo instance
+             */
+            public static create(properties?: vtctldata.WorkflowUpdateResponse.ITabletInfo): vtctldata.WorkflowUpdateResponse.TabletInfo;
+
+            /**
+             * Encodes the specified TabletInfo message. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encode(message: vtctldata.WorkflowUpdateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Encodes the specified TabletInfo message, length delimited. Does not implicitly {@link vtctldata.WorkflowUpdateResponse.TabletInfo.verify|verify} messages.
+             * @param message TabletInfo message or plain object to encode
+             * @param [writer] Writer to encode to
+             * @returns Writer
+             */
+            public static encodeDelimited(message: vtctldata.WorkflowUpdateResponse.ITabletInfo, writer?: $protobuf.Writer): $protobuf.Writer;
+
+            /**
+             * Decodes a TabletInfo message from the specified reader or buffer.
+             * @param reader Reader or buffer to decode from
+             * @param [length] Message length if known beforehand
+             * @returns TabletInfo
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decode(reader: ($protobuf.Reader|Uint8Array), length?: number): vtctldata.WorkflowUpdateResponse.TabletInfo;
+
+            /**
+             * Decodes a TabletInfo message from the specified reader or buffer, length delimited.
+             * @param reader Reader or buffer to decode from
+             * @returns TabletInfo
+             * @throws {Error} If the payload is not a reader or valid buffer
+             * @throws {$protobuf.util.ProtocolError} If required fields are missing
+             */
+            public static decodeDelimited(reader: ($protobuf.Reader|Uint8Array)): vtctldata.WorkflowUpdateResponse.TabletInfo;
+
+            /**
+             * Verifies a TabletInfo message.
+             * @param message Plain object to verify
+             * @returns `null` if valid, otherwise the reason why it is not
+             */
+            public static verify(message: { [k: string]: any }): (string|null);
+
+            /**
+             * Creates a TabletInfo message from a plain object. Also converts values to their respective internal types.
+             * @param object Plain object
+             * @returns TabletInfo
+             */
+            public static fromObject(object: { [k: string]: any }): vtctldata.WorkflowUpdateResponse.TabletInfo;
+
+            /**
+             * Creates a plain object from a TabletInfo message. Also converts values to other types if specified.
+             * @param message TabletInfo
+             * @param [options] Conversion options
+             * @returns Plain object
+             */
+            public static toObject(message: vtctldata.WorkflowUpdateResponse.TabletInfo, options?: $protobuf.IConversionOptions): { [k: string]: any };
+
+            /**
+             * Converts this TabletInfo to JSON.
+             * @returns JSON object
+             */
+            public toJSON(): { [k: string]: any };
+        }
     }
 }
