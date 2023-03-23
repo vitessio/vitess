@@ -152,7 +152,7 @@ func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExpr
 
 func (ast *astCompiler) defaultCollation() collations.TypedCollation {
 	return collations.TypedCollation{
-		Collation:    ast.opt.Collation,
+		Collation:    ast.cfg.Collation,
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireUnicode,
 	}
@@ -160,48 +160,48 @@ func (ast *astCompiler) defaultCollation() collations.TypedCollation {
 
 func (ast *astCompiler) translateBindVar(arg *sqlparser.Argument) (Expr, error) {
 	bvar := NewBindVar(arg.Name)
-	bvar.Collation.Collation = ast.opt.Collation
+	bvar.Collation.Collation = ast.cfg.Collation
 
 	if arg.Type >= 0 {
 		bvar.Type = arg.Type
 		bvar.typed = true
 	} else {
-		ast.entities.untyped++
+		ast.untyped++
 	}
 	return bvar, nil
 }
 
 func (ast *astCompiler) translateColOffset(col *sqlparser.Offset) (Expr, error) {
 	column := NewColumn(col.V)
-	if ast.opt.ResolveType != nil {
-		column.Type, column.Collation.Collation, column.typed = ast.opt.ResolveType(col.Original)
+	if ast.cfg.ResolveType != nil {
+		column.Type, column.Collation.Collation, column.typed = ast.cfg.ResolveType(col.Original)
 	}
 	if column.Collation.Collation == collations.Unknown {
-		column.Collation.Collation = ast.opt.Collation
+		column.Collation.Collation = ast.cfg.Collation
 	}
 	if !column.typed {
-		ast.entities.untyped++
+		ast.untyped++
 	}
 	return column, nil
 }
 
 func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, error) {
-	if ast.opt.ResolveColumn == nil {
+	if ast.cfg.ResolveColumn == nil {
 		return nil, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "cannot lookup column (column access not supported here)")
 	}
-	idx, err := ast.opt.ResolveColumn(colname)
+	idx, err := ast.cfg.ResolveColumn(colname)
 	if err != nil {
 		return nil, err
 	}
 	column := NewColumn(idx)
-	if ast.opt.ResolveType != nil {
-		column.Type, column.Collation.Collation, column.typed = ast.opt.ResolveType(colname)
+	if ast.cfg.ResolveType != nil {
+		column.Type, column.Collation.Collation, column.typed = ast.cfg.ResolveType(colname)
 	}
 	if column.Collation.Collation == collations.Unknown {
-		column.Collation.Collation = ast.opt.Collation
+		column.Collation.Collation = ast.cfg.Collation
 	}
 	if !column.typed {
-		ast.entities.untyped++
+		ast.untyped++
 	}
 	return column, nil
 }
@@ -517,11 +517,8 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 }
 
 type astCompiler struct {
-	opt      *Options
-	entities struct {
-		untyped int
-		bvars   int
-	}
+	cfg     *Config
+	untyped int
 }
 
 type ColumnResolver func(name *sqlparser.ColName) (int, error)
@@ -538,7 +535,7 @@ const (
 	OptimizationLevelNone OptimizationLevel = -1
 )
 
-type Options struct {
+type Config struct {
 	ResolveColumn ColumnResolver
 	ResolveType   TypeResolver
 
@@ -547,18 +544,18 @@ type Options struct {
 	CompilerErr  error
 }
 
-func Translate(e sqlparser.Expr, opt *Options) (Expr, error) {
-	if opt == nil {
-		opt = &Options{}
+func Translate(e sqlparser.Expr, cfg *Config) (Expr, error) {
+	if cfg == nil {
+		cfg = &Config{}
 	}
-	if opt.Collation == collations.Unknown {
-		opt.Collation = collations.Default()
+	if cfg.Collation == collations.Unknown {
+		cfg.Collation = collations.Default()
 	}
-	if opt.Optimization == OptimizationLevelDefault {
-		opt.Optimization = OptimizationLevelSimplify
+	if cfg.Optimization == OptimizationLevelDefault {
+		cfg.Optimization = OptimizationLevelSimplify
 	}
 
-	ast := astCompiler{opt: opt}
+	ast := astCompiler{cfg: cfg}
 
 	expr, err := ast.translateExpr(e)
 	if err != nil {
@@ -569,16 +566,17 @@ func Translate(e sqlparser.Expr, opt *Options) (Expr, error) {
 		return nil, err
 	}
 
-	if opt.Optimization >= OptimizationLevelSimplify && opt.Optimization != OptimizationLevelCompilerDebug {
+	if cfg.Optimization >= OptimizationLevelSimplify && cfg.Optimization != OptimizationLevelCompilerDebug {
 		var staticEnv ExpressionEnv
-		staticEnv.DefaultCollation = opt.Collation
+		staticEnv.DefaultCollation = cfg.Collation
 		expr, err = simplifyExpr(&staticEnv, expr)
 	}
 
-	if opt.Optimization >= OptimizationLevelCompile && ast.entities.bvars == 0 && ast.entities.untyped == 0 {
-		var comp compiler
-		comp.opt = opt
-		if _, opt.CompilerErr = comp.compileExpr(expr); opt.CompilerErr == nil {
+	if cfg.Optimization >= OptimizationLevelCompile && ast.untyped == 0 {
+		comp := compiler{
+			cfg: cfg,
+		}
+		if _, cfg.CompilerErr = comp.compileExpr(expr); cfg.CompilerErr == nil {
 			if comp.asm.stack.cur != 1 {
 				return nil, vterrors.Errorf(vtrpcpb.Code_INTERNAL, "bad compilation: stack pointer at %d after compilation", comp.asm.stack.cur)
 			}

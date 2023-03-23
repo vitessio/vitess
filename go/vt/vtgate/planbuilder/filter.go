@@ -49,7 +49,7 @@ func resolveFromPlan(ctx *plancontext.PlanningContext, plan logicalPlan, canPush
 
 // newFilter builds a new filter.
 func newFilter(ctx *plancontext.PlanningContext, plan logicalPlan, expr sqlparser.Expr) (*filter, error) {
-	predicate, err := evalengine.Translate(expr, &evalengine.Options{
+	predicate, err := evalengine.Translate(expr, &evalengine.Config{
 		ResolveColumn: resolveFromPlan(ctx, plan, false),
 		ResolveType:   ctx.SemTable.TypeForExpr,
 		Collation:     ctx.SemTable.Collation,

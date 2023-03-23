@@ -100,11 +100,11 @@ func TestFuzzRewriting(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			simplified := sqlparser.RewritePredicate(predicate)
 
-			original, err := evalengine.Translate(predicate, &evalengine.Options{
+			original, err := evalengine.Translate(predicate, &evalengine.Config{
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)
-			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Options{
+			simpler, err := evalengine.Translate(simplified.(sqlparser.Expr), &evalengine.Config{
 				ResolveColumn: resolveForFuzz,
 			})
 			require.NoError(t, err)

@@ -122,14 +122,14 @@ func TestTranslateSimplification(t *testing.T) {
 				{Name: "json", Type: sqltypes.TypeJSON, Charset: collations.CollationUtf8mb4ID},
 			})
 
-			ctx := &Options{
+			cfg := &Config{
 				ResolveColumn: fields.Column,
 				Collation:     45,
 				Optimization:  OptimizationLevelNone,
 			}
 
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			converted, err := Translate(astExpr, ctx)
+			converted, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.converted.err == "" {
 					t.Fatalf("failed to Convert (simplify=false): %v", err)
@@ -141,8 +141,8 @@ func TestTranslateSimplification(t *testing.T) {
 			}
 			assert.Equal(t, tc.converted.literal, FormatExpr(converted))
 
-			ctx.Optimization = OptimizationLevelSimplify
-			simplified, err := Translate(astExpr, ctx)
+			cfg.Optimization = OptimizationLevelSimplify
+			simplified, err := Translate(astExpr, cfg)
 			if err != nil {
 				if tc.simplified.err == "" {
 					t.Fatalf("failed to Convert (simplify=true): %v", err)
@@ -299,7 +299,7 @@ func TestEvaluate(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Options{Collation: 45})
+			sqltypesExpr, err := Translate(astExpr, &Config{Collation: 45})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 			env := EnvWithBindVars(
@@ -345,7 +345,7 @@ func TestEvaluateTuple(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + test.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			sqltypesExpr, err := Translate(astExpr, &Options{Collation: 45})
+			sqltypesExpr, err := Translate(astExpr, &Config{Collation: 45})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
 
@@ -388,7 +388,7 @@ func TestTranslationFailures(t *testing.T) {
 			stmt, err := sqlparser.Parse("select " + testcase.expression)
 			require.NoError(t, err)
 			astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-			_, err = Translate(astExpr, &Options{Collation: 45})
+			_, err = Translate(astExpr, &Config{Collation: 45})
 			require.EqualError(t, err, testcase.expectedErr)
 		})
 	}
@@ -424,7 +424,7 @@ func TestCardinalityWithBindVariables(t *testing.T) {
 				}
 
 				astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-				_, err = Translate(astExpr, &Options{Collation: 45})
+				_, err = Translate(astExpr, &Config{Collation: 45})
 				return err
 			}()
 

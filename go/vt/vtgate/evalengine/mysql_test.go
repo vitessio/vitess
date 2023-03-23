@@ -52,17 +52,16 @@ func convert(t *testing.T, query string, simplify bool) (Expr, error) {
 		t.Fatalf("failed to parse '%s': %v", query, err)
 	}
 
-	ctx := &Options{
-		Collation: collations.CollationUtf8mb4ID,
+	cfg := &Config{
+		Collation:    collations.CollationUtf8mb4ID,
+		Optimization: OptimizationLevelNone,
 	}
 	if simplify {
-		ctx.Optimization = OptimizationLevelSimplify
-	} else {
-		ctx.Optimization = OptimizationLevelNone
+		cfg.Optimization = OptimizationLevelSimplify
 	}
 
 	astExpr := stmt.(*sqlparser.Select).SelectExprs[0].(*sqlparser.AliasedExpr).Expr
-	converted, err := Translate(astExpr, ctx)
+	converted, err := Translate(astExpr, cfg)
 	if err == nil {
 		if knownBadQuery(converted) {
 			return nil, errKnownBadQuery

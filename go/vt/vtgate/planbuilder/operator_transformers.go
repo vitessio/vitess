@@ -65,7 +65,7 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 			return nil, err
 		}
 		ast := ctx.SemTable.AndExpressions(op.Predicates...)
-		predicate, err := evalengine.Translate(ast, &evalengine.Options{
+		predicate, err := evalengine.Translate(ast, &evalengine.Config{
 			ResolveColumn: resolveFromPlan(ctx, plan, true),
 			Collation:     ctx.SemTable.Collation,
 		})

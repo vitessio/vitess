@@ -46,7 +46,7 @@ type InfoSchemaRouting struct {
 func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.SysTableTableSchema = nil
 	for _, expr := range isr.SysTableTableSchema {
-		eexpr, err := evalengine.Translate(expr, &evalengine.Options{ResolveColumn: NotImplementedSchemaInfoResolver})
+		eexpr, err := evalengine.Translate(expr, &evalengine.Config{ResolveColumn: NotImplementedSchemaInfoResolver})
 		if err != nil {
 			return err
 		}
@@ -55,7 +55,7 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 
 	rp.SysTableTableName = make(map[string]evalengine.Expr, len(isr.SysTableTableName))
 	for k, expr := range isr.SysTableTableName {
-		eexpr, err := evalengine.Translate(expr, &evalengine.Options{ResolveColumn: NotImplementedSchemaInfoResolver})
+		eexpr, err := evalengine.Translate(expr, &evalengine.Config{ResolveColumn: NotImplementedSchemaInfoResolver})
 		if err != nil {
 			return err
 		}
@@ -126,7 +126,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 
 	// here we are just checking if this query can be translated to an evalengine expression
 	// we'll need to do this translation again later when building the engine.Route
-	_, err := evalengine.Translate(rhs, &evalengine.Options{ResolveColumn: NotImplementedSchemaInfoResolver})
+	_, err := evalengine.Translate(rhs, &evalengine.Config{ResolveColumn: NotImplementedSchemaInfoResolver})
 	if err != nil {
 		// if we can't translate this to an evalengine expression,
 		// we are not going to be able to route based on this expression,

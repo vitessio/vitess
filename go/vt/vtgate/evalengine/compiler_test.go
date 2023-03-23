@@ -111,14 +111,14 @@ func TestCompilerReference(t *testing.T) {
 				}
 
 				fields := evalengine.FieldResolver(env.Fields)
-				opt := &evalengine.Options{
+				cfg := &evalengine.Config{
 					ResolveColumn: fields.Column,
 					ResolveType:   fields.Type,
 					Collation:     collations.CollationUtf8mb4ID,
 					Optimization:  evalengine.OptimizationLevelCompilerDebug,
 				}
 
-				converted, err := evalengine.Translate(stmt, opt)
+				converted, err := evalengine.Translate(stmt, cfg)
 				if err != nil {
 					return
 				}
@@ -126,14 +126,14 @@ func TestCompilerReference(t *testing.T) {
 				expected, evalErr := env.Evaluate(evalengine.Deoptimize(converted))
 				total++
 
-				if opt.CompilerErr != nil {
+				if cfg.CompilerErr != nil {
 					switch {
-					case vterrors.Code(opt.CompilerErr) == vtrpcpb.Code_UNIMPLEMENTED:
+					case vterrors.Code(cfg.CompilerErr) == vtrpcpb.Code_UNIMPLEMENTED:
 						t.Logf("unsupported: %s", query)
 					case evalErr == nil:
-						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, opt.CompilerErr)
-					case evalErr.Error() != opt.CompilerErr.Error():
-						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, opt.CompilerErr)
+						t.Errorf("failed compilation:\nSQL:  %s\nError: %s", query, cfg.CompilerErr)
+					case evalErr.Error() != cfg.CompilerErr.Error():
+						t.Errorf("error mismatch:\nSQL:  %s\nError eval: %s\nError comp: %s", query, evalErr, cfg.CompilerErr)
 					default:
 						supported++
 					}
@@ -289,20 +289,20 @@ func TestCompilerSingle(t *testing.T) {
 			}
 
 			fields := evalengine.FieldResolver(makeFields(tc.values))
-			ctx := &evalengine.Options{
+			cfg := &evalengine.Config{
 				ResolveColumn: fields.Column,
 				ResolveType:   fields.Type,
 				Collation:     collations.CollationUtf8mb4ID,
 				Optimization:  evalengine.OptimizationLevelCompilerDebug,
 			}
 
-			converted, err := evalengine.Translate(expr, ctx)
+			converted, err := evalengine.Translate(expr, cfg)
 			if err != nil {
 				t.Fatal(err)
 			}
 
-			if ctx.CompilerErr != nil {
-				t.Fatalf("bad compilation: %v", ctx.CompilerErr)
+			if cfg.CompilerErr != nil {
+				t.Fatalf("bad compilation: %v", cfg.CompilerErr)
 			}
 
 			env := evalengine.EmptyExpressionEnv()

@@ -26,7 +26,7 @@ import (
 type frame func(vm *VirtualMachine) int
 
 type compiler struct {
-	opt *Options
+	cfg *Config
 	asm assembler
 }
 

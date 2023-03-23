@@ -213,7 +213,7 @@ func (c *compiler) compileFn_REPEAT(expr *builtinRepeat) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 	_ = c.compileToInt64(repeat, 1)
 
@@ -238,11 +238,11 @@ func (c *compiler) compileFn_TO_BASE64(call *builtinToBase64) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, t, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
 	}
 
 	col := collations.TypedCollation{
-		Collation:    c.opt.Collation,
+		Collation:    c.cfg.Collation,
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireASCII,
 	}
@@ -269,7 +269,7 @@ func (c *compiler) compileFn_FROM_BASE64(call *builtinFromBase64) (ctype, error)
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, t, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
 	}
 
 	c.asm.Fn_FROM_BASE64(t)
@@ -289,7 +289,7 @@ func (c *compiler) compileFn_CCASE(call *builtinChangeCase) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 
 	c.asm.Fn_LUCASE(call.upcase)
@@ -309,7 +309,7 @@ func (c *compiler) compileFn_length(call callable, asm_ins func()) (ctype, error
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 
 	asm_ins()
@@ -329,7 +329,7 @@ func (c *compiler) compileFn_ASCII(call *builtinASCII) (ctype, error) {
 	switch {
 	case str.isTextual():
 	default:
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 	}
 
 	c.asm.Fn_ASCII()
@@ -347,7 +347,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	skip := c.compileNullCheck1(str)
 
 	col := collations.TypedCollation{
-		Collation:    c.opt.Collation,
+		Collation:    c.cfg.Collation,
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireASCII,
 	}
@@ -363,7 +363,7 @@ func (c *compiler) compileFn_HEX(call *builtinHex) (ctype, error) {
 	case str.isTextual():
 		c.asm.Fn_HEX_c(t, col)
 	default:
-		c.asm.Convert_xc(1, t, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(1, t, c.cfg.Collation, 0, false)
 		c.asm.Fn_HEX_c(t, col)
 	}
 

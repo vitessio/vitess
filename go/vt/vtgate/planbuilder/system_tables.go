@@ -106,7 +106,7 @@ func extractInfoSchemaRoutingPredicate(
 		return
 	}
 
-	evalExpr, err = evalengine.Translate(other, &evalengine.Options{ResolveColumn: operators.NotImplementedSchemaInfoResolver})
+	evalExpr, err = evalengine.Translate(other, &evalengine.Config{ResolveColumn: operators.NotImplementedSchemaInfoResolver})
 	if err != nil {
 		if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			// This just means we can't rewrite this particular expression,

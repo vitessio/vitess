@@ -299,18 +299,18 @@ func (c *compiler) compileLike(expr *LikeExpr) (ctype, error) {
 	skip := c.compileNullCheck2(lt, rt)
 
 	if !lt.isTextual() {
-		c.asm.Convert_xc(2, sqltypes.VarChar, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(2, sqltypes.VarChar, c.cfg.Collation, 0, false)
 		lt.Col = collations.TypedCollation{
-			Collation:    c.opt.Collation,
+			Collation:    c.cfg.Collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}
 	}
 
 	if !rt.isTextual() {
-		c.asm.Convert_xc(1, sqltypes.VarChar, c.opt.Collation, 0, false)
+		c.asm.Convert_xc(1, sqltypes.VarChar, c.cfg.Collation, 0, false)
 		rt.Col = collations.TypedCollation{
-			Collation:    c.opt.Collation,
+			Collation:    c.cfg.Collation,
 			Coercibility: collations.CoerceCoercible,
 			Repertoire:   collations.RepertoireASCII,
 		}

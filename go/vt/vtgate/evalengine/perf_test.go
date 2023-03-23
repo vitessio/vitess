@@ -29,14 +29,14 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 		}
 
 		fields := evalengine.FieldResolver(makeFields(tc.values))
-		ctx := &evalengine.Options{
+		cfg := &evalengine.Config{
 			ResolveColumn: fields.Column,
 			ResolveType:   fields.Type,
 			Collation:     collations.CollationUtf8mb4ID,
 			Optimization:  evalengine.OptimizationLevelCompile,
 		}
 
-		translated, err := evalengine.Translate(expr, ctx)
+		translated, err := evalengine.Translate(expr, cfg)
 		if err != nil {
 			b.Fatal(err)
 		}

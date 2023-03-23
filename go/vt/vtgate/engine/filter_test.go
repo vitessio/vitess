@@ -67,7 +67,7 @@ func TestFilterPass(t *testing.T) {
 	}}
 	for _, tc := range tcases {
 		t.Run(tc.name, func(t *testing.T) {
-			pred, err := evalengine.Translate(predicate, &evalengine.Options{
+			pred, err := evalengine.Translate(predicate, &evalengine.Config{
 				Collation:     utf8mb4Bin,
 				ResolveColumn: evalengine.FieldResolver(tc.res.Fields).Column,
 			})
