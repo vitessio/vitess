@@ -453,10 +453,10 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 		return NewColumn(node.V, ast.getCollation(node)), nil
 	case *sqlparser.ComparisonExpr:
 		return ast.translateComparisonExpr(node.Operator, node.Left, node.Right)
-	case sqlparser.Argument:
+	case *sqlparser.Argument:
 		ast.entities.bvars++
 		collation := ast.getCollation(e)
-		return NewBindVar(string(node), collation), nil
+		return NewBindVar(node.Name, collation), nil
 	case sqlparser.ListArg:
 		ast.entities.bvars++
 		return NewBindVarTuple(string(node)), nil

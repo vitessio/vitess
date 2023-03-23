@@ -621,12 +621,12 @@ func gen4ValEqual(ctx *plancontext.PlanningContext, a, b sqlparser.Expr) bool {
 
 			return ctx.SemTable.DirectDeps(a) == ctx.SemTable.DirectDeps(b)
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {

@@ -397,7 +397,7 @@ func generateAggregateParams(aggrs []operators.Aggr, aggrParamOffsets [][]offset
 		if proj != nil {
 			var aggrExpr sqlparser.Expr
 			for _, ofs := range paramOffset {
-				curr := &sqlparser.Offset{V: ofs.col}
+				curr := sqlparser.NewOffset(ofs.col, aggr.Func)
 				if aggrExpr == nil {
 					aggrExpr = curr
 				} else {

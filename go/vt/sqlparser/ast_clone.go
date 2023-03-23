@@ -55,8 +55,8 @@ func CloneSQLNode(in SQLNode) SQLNode {
 		return CloneRefOfAlterVschema(in)
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
-	case Argument:
-		return in
+	case *Argument:
+		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *AutoIncSpec:
@@ -700,6 +700,15 @@ func CloneRefOfAndExpr(n *AndExpr) *AndExpr {
 	out := *n
 	out.Left = CloneExpr(n.Left)
 	out.Right = CloneExpr(n.Right)
+	return &out
+}
+
+// CloneRefOfArgument creates a deep clone of the input.
+func CloneRefOfArgument(n *Argument) *Argument {
+	if n == nil {
+		return nil
+	}
+	out := *n
 	return &out
 }
 
@@ -2096,6 +2105,7 @@ func CloneRefOfOffset(n *Offset) *Offset {
 		return nil
 	}
 	out := *n
+	out.Original = CloneExpr(n.Original)
 	return &out
 }
 
@@ -3565,8 +3575,8 @@ func CloneExpr(in Expr) Expr {
 	switch in := in.(type) {
 	case *AndExpr:
 		return CloneRefOfAndExpr(in)
-	case Argument:
-		return in
+	case *Argument:
+		return CloneRefOfArgument(in)
 	case *ArgumentLessWindowExpr:
 		return CloneRefOfArgumentLessWindowExpr(in)
 	case *Avg:

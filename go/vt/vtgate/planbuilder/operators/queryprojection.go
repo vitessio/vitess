@@ -678,8 +678,8 @@ func checkForInvalidGroupingExpressions(expr sqlparser.Expr) error {
 			return false, vterrors.VT03005(sqlparser.String(expr))
 		}
 		_, isSubQ := node.(*sqlparser.Subquery)
-		arg, isArg := node.(sqlparser.Argument)
-		if isSubQ || (isArg && strings.HasPrefix(string(arg), "__sq")) {
+		arg, isArg := node.(*sqlparser.Argument)
+		if isSubQ || (isArg && strings.HasPrefix(arg.Name, "__sq")) {
 			return false, vterrors.VT12001("subqueries in GROUP BY")
 		}
 		return true, nil

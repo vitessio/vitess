@@ -64,14 +64,14 @@ func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, ru
 	return nil
 }
 
-func findOtherComparator(cmp *sqlparser.ComparisonExpr) (bool, sqlparser.Expr, sqlparser.Expr, func(arg sqlparser.Argument)) {
+func findOtherComparator(cmp *sqlparser.ComparisonExpr) (bool, sqlparser.Expr, sqlparser.Expr, func(arg *sqlparser.Argument)) {
 	if schema, table := isTableSchemaOrName(cmp.Left); schema || table {
-		return schema, cmp.Left, cmp.Right, func(arg sqlparser.Argument) {
+		return schema, cmp.Left, cmp.Right, func(arg *sqlparser.Argument) {
 			cmp.Right = arg
 		}
 	}
 	if schema, table := isTableSchemaOrName(cmp.Right); schema || table {
-		return schema, cmp.Right, cmp.Left, func(arg sqlparser.Argument) {
+		return schema, cmp.Right, cmp.Left, func(arg *sqlparser.Argument) {
 			cmp.Left = arg
 		}
 	}
@@ -139,7 +139,7 @@ func extractInfoSchemaRoutingPredicate(
 	} else {
 		name = reservedVars.ReserveColName(col.(*sqlparser.ColName))
 	}
-	replaceOther(sqlparser.NewArgument(name))
+	replaceOther(sqlparser.NewTypedArgument(name, sqltypes.VarChar))
 	return isSchemaName, name, evalExpr, nil
 }
 

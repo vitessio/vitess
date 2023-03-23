@@ -21,6 +21,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"regexp"
 	"strconv"
 	"strings"
@@ -543,8 +544,17 @@ func NewTimestampLiteral(in string) *Literal {
 }
 
 // NewArgument builds a new ValArg.
-func NewArgument(in string) Argument {
-	return Argument(in)
+func NewArgument(in string) *Argument {
+	return &Argument{Name: in, Type: -1}
+}
+
+func parseBindVariable(yylex yyLexer, bvar string) *Argument {
+	markBindVariable(yylex, bvar)
+	return NewArgument(bvar)
+}
+
+func NewTypedArgument(in string, t sqltypes.Type) *Argument {
+	return &Argument{Name: in, Type: t}
 }
 
 // NewListArg builds a new ListArg.
@@ -760,7 +770,7 @@ func createIdentifierCI(str string) IdentifierCI {
 
 // NewOffset creates an offset and returns it
 func NewOffset(v int, original Expr) *Offset {
-	return &Offset{V: v, Original: String(original)}
+	return &Offset{V: v, Original: original}
 }
 
 // IsEmpty returns true if the name is empty.
@@ -1996,10 +2006,16 @@ func formatAddress(address string) string {
 func ContainsAggregation(e SQLNode) bool {
 	hasAggregates := false
 	_ = Walk(func(node SQLNode) (kontinue bool, err error) {
-		if _, isAggregate := node.(AggrFunc); isAggregate {
-			hasAggregates = true
+		switch node.(type) {
+		case *Offset:
+			// offsets here indicate that a possible aggregation has already been handled by an input
+			// so we don't need to worry about aggregation in the original
 			return false, nil
+		case AggrFunc:
+			hasAggregates = true
+			return false, io.EOF
 		}
+
 		return true, nil
 	}, e)
 	return hasAggregates

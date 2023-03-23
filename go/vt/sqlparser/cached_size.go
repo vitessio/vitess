@@ -319,6 +319,18 @@ func (cached *AndExpr) CachedSize(alloc bool) int64 {
 	}
 	return size
 }
+func (cached *Argument) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(24)
+	}
+	// field Name string
+	size += hack.RuntimeAllocSize(int64(len(cached.Name)))
+	return size
+}
 func (cached *ArgumentLessWindowExpr) CachedSize(alloc bool) int64 {
 	if cached == nil {
 		return int64(0)
@@ -2699,8 +2711,10 @@ func (cached *Offset) CachedSize(alloc bool) int64 {
 	if alloc {
 		size += int64(24)
 	}
-	// field Original string
-	size += hack.RuntimeAllocSize(int64(len(cached.Original)))
+	// field Original vitess.io/vitess/go/vt/sqlparser.Expr
+	if cc, ok := cached.Original.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
 	return size
 }
 func (cached *OptLike) CachedSize(alloc bool) int64 {

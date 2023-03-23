@@ -352,8 +352,9 @@ func rewriteColumnsInSubqueryOpForJoin(
 		}
 
 		// get the bindVariable for that column name and replace it in the subquery
+		typ := ctx.SemTable.ExprTypes[node]
 		bindVar := ctx.ReservedVars.ReserveColName(node)
-		cursor.Replace(sqlparser.NewArgument(bindVar))
+		cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ.Type))
 		// check whether the bindVariable already exists in the joinVars of the other tree
 		_, alreadyExists := outerTree.Vars[bindVar]
 		if alreadyExists {
@@ -418,8 +419,9 @@ func createCorrelatedSubqueryOp(
 			}
 
 			// get the bindVariable for that column name and replace it in the predicate
+			typ := ctx.SemTable.ExprTypes[node]
 			bindVar := ctx.ReservedVars.ReserveColName(node)
-			cursor.Replace(sqlparser.NewArgument(bindVar))
+			cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ.Type))
 			// store it in the map for future comparisons
 			bindVars[node] = bindVar
 
