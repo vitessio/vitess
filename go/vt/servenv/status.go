@@ -313,7 +313,7 @@ func init() {
 		log.Exitf("os.Hostname: %v", err)
 	}
 
-	_ = stats.NewGaugeFunc("Uptime", "Uptime in seconds", func() int64 {
-		return int64(time.Since(serverStart).Seconds())
+	_ = stats.NewGaugeFunc("Uptime", "Uptime in nanoseconds", func() int64 {
+		return int64(time.Since(serverStart).Nanoseconds())
 	})
 }
