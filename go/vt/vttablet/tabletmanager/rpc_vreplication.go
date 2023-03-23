@@ -87,9 +87,9 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	tabletTypes := strings.Split(row.AsString("tablet_types", ""), ",")
 	bls := &binlogdatapb.BinlogSource{}
 	source := row.AsBytes("source", []byte{})
-	// For the string values, we use NULL to differentiate from
-	// an empty string. The NULL value indicates that we should
-	// keep the existing value.
+	// For the string based values, we use NULL to differentiate
+	// from an empty string. The NULL value indicates that we
+	// should keep the existing value.
 	if !textutil.ValueIsSimulatedNull(req.Cells) {
 		cells = req.Cells
 	}

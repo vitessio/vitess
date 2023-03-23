@@ -3654,6 +3654,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		if subFlags.NArg() != 2 {
 			return fmt.Errorf(usage)
 		}
+		var rpcReq any = nil // Only update uses the new RPC path
 		if action == "update" {
 			// We need to implicitly distinguish between an empty value (which is valid)
 			// and no value having been provided. We will use NULL for this purpose.
@@ -3671,22 +3672,20 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			}
 			onddl := int32(textutil.SimulatedNullInt) // to signify no value has been provided
 			if subFlags.Lookup("on-ddl").Changed {
-				var valid bool
-				onddl, valid = binlogdatapb.OnDDLAction_value[strings.ToUpper(*onDDL)]
+				ival, valid := binlogdatapb.OnDDLAction_value[strings.ToUpper(*onDDL)]
 				if !valid {
 					return fmt.Errorf("invalid on-ddl action: %s", *onDDL)
 				}
+				onddl = ival
 			}
-			rpcReq := &tabletmanagerdatapb.UpdateVRWorkflowRequest{
+			rpcReq = &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
 				Cells:       *cells,
 				TabletTypes: *tabletTypes,
 				OnDdl:       binlogdatapb.OnDDLAction(onddl),
 			}
-			results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update uses the new RPC path
-		} else {
-			results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, nil)
 		}
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update uses the new RPC path
 		if err != nil {
 			return err
 		}

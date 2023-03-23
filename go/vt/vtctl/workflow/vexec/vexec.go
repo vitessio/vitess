@@ -155,10 +155,7 @@ func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.Tabl
 //
 // On first use, QueryContext will also cause the VExec instance to discover
 // target tablets from the topo; that target list will be reused for all future
-// queries made by this instance.
-//
-// For details on query parsing and planning, see GetPlanner and the
-// QueryPlanner interface.
+// callbacks executed by this instance.
 func (vx *VExec) CallbackContext(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	if vx.primaries == nil {
 		if err := vx.initialize(ctx); err != nil {
