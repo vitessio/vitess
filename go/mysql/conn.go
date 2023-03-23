@@ -911,9 +911,11 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 	switch data[0] {
 	case ComQuit:
+		log.Info("Received COM_QUIT")
 		c.recycleReadPacket()
 		return errors.New("ComQuit")
 	case ComInitDB:
+		log.Info("Received COM_INIT_DB")
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
 		c.schemaName = db
@@ -934,6 +936,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComQuery:
+		log.Info("Received COM_QUERY")
 		// flush is called at the end of this block.
 		// To simplify error handling, we do not
 		// encapsulate it with a defer'd func()
@@ -962,6 +965,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComFieldList:
+		log.Info("Received COM_FIELD_LIST")
 		// support for deprecated COM_FIELD_LIST command
 		// https://dev.mysql.com/doc/internals/en/com-field-list.html
 
@@ -1001,6 +1005,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComPing:
+		log.Info("Received COM_PING")
 		c.recycleReadPacket()
 		// Return error if listener was shut down and OK otherwise
 		if c.listener.isShutdown() {
@@ -1015,6 +1020,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 	case ComSetOption:
+		log.Info("Received COM_SET_OPERATION")
 		operation, ok := c.parseComSetOption(data)
 		c.recycleReadPacket()
 		if ok {
@@ -1042,6 +1048,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 	case ComPrepare:
+		log.Info("Received COM_PREPARE")
 		query := c.parseComPrepare(data)
 		c.recycleReadPacket()
 
@@ -1116,6 +1123,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtExecute:
+		log.Info("Received COM_EXECUTE")
 		// flush is called at the end of this block.
 		// To simplify error handling, we do not
 		// encapsulate it with a defer'd func()
@@ -1158,6 +1166,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtSendLongData:
+		log.Info("Received COM_STMT_SEND_LONG_DATA")
 		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
 		if !ok {
@@ -1191,12 +1200,14 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			prepare.BindVars[key] = sqltypes.BytesBindVariable(chunk)
 		}
 	case ComStmtClose:
+		log.Info("Received COM_STMT_CLOSE")
 		stmtID, ok := c.parseComStmtClose(data)
 		c.recycleReadPacket()
 		if ok {
 			delete(c.PrepareData, stmtID)
 		}
 	case ComStmtReset:
+		log.Info("Received COM_STMT_RESET")
 		stmtID, ok := c.parseComStmtReset(data)
 		c.recycleReadPacket()
 		if !ok {
@@ -1227,6 +1238,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtFetch:
+		log.Info("Received COM_STMT_FETCH")
 		if c.cs == nil {
 			log.Error("Fetching from missing result set. Client %v, returning error: %v", c.ConnectionID, data)
 			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
@@ -1323,6 +1335,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		return nil
 	case ComResetConnection:
+		log.Info("Received COM_RESET_CONNECTION")
 		// Clean up and reset the connection
 		c.recycleReadPacket()
 		handler.ComResetConnection(c)
