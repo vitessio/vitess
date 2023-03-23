@@ -171,17 +171,18 @@ func TestExecuteBackup(t *testing.T) {
 	assert.False(t, ok)
 }
 
-// TestExecuteBackupWithCacelledContext tests the ability for backup to gracefully
-// handle cases where we encounter error due to any reasons for e.g context cancel etc
+// TestExecuteBackupWithCancelledContext test the ability of backup to gracefully
+// handle cases where we encounter error due to any reasons for e.g context cancel etc.
 // Process should not panic in these situations.
-func TestExecuteBackupWithCacelledContext(t *testing.T) {
+func TestExecuteBackupWithCancelledContext(t *testing.T) {
 	// Set up local backup directory
-	backupRoot := "testdata/builtinbackup_test"
+	id := fmt.Sprintf("%d", time.Now().UnixNano())
+	backupRoot := fmt.Sprintf("testdata/builtinbackup_test_%s", id)
 	filebackupstorage.FileBackupStorageRoot = backupRoot
 	require.NoError(t, createBackupDir(backupRoot, "innodb", "log", "datadir"))
 	dataDir := path.Join(backupRoot, "datadir")
 	// Add some files under data directory to force backup to execute semaphore acquire inside
-	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483)
+	// backupFiles() method (https://github.com/vitessio/vitess/blob/main/go/vt/mysqlctl/builtinbackupengine.go#L483).
 	require.NoError(t, createBackupDir(dataDir, "test1"))
 	require.NoError(t, createBackupDir(dataDir, "test2"))
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test1"), 2, "ibd"))
@@ -189,6 +190,7 @@ func TestExecuteBackupWithCacelledContext(t *testing.T) {
 	defer os.RemoveAll(backupRoot)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	time.Sleep(100 * time.Millisecond)
 	cancel()
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
@@ -231,12 +233,10 @@ func TestExecuteBackupWithCacelledContext(t *testing.T) {
 
 	be := &mysqlctl.BuiltinBackupEngine{}
 	bh := filebackupstorage.NewBackupHandle(nil, "", "", false)
-
 	// Spin up a fake daemon to be used in backups. It needs to be allowed to receive:
 	//  "STOP SLAVE", "START SLAVE", in that order.
 	mysqld := mysqlctl.NewFakeMysqlDaemon(fakesqldb.New(t))
 	mysqld.ExpectedExecuteSuperQueryList = []string{"STOP SLAVE", "START SLAVE"}
-	// mysqld.ShutdownTime = time.Minute
 
 	ok, err := be.ExecuteBackup(ctx, mysqlctl.BackupParams{
 		Logger: logutil.NewConsoleLogger(),
