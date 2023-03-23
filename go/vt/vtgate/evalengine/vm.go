@@ -52,6 +52,7 @@ func Deoptimize(expr Expr) Expr {
 
 type CompiledExpr struct {
 	code     []frame
+	typed    sqltypes.Type
 	stack    int
 	original Expr
 }
@@ -64,7 +65,7 @@ func (p *CompiledExpr) eval(env *ExpressionEnv) (eval, error) {
 }
 
 func (p *CompiledExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
-	return p.original.typeof(env, fields)
+	return p.typed, 0
 }
 
 func (p *CompiledExpr) format(buf *formatter, depth int) {
