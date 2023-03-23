@@ -209,6 +209,8 @@ These stats are deprecated in v17.
 |-|-|
 | `backup_duration_seconds` | `BackupDurationNanoseconds` |
 | `restore_duration_seconds` | `RestoreDurationNanoseconds` |
+
+
 ### <a id="vttablet"/> VTTablet
 #### <a id="vttablet-initialization"/> Initializing all replicas with super_read_only
 In order to prevent SUPER privileged users like `root` or `vt_dba` from producing errant GTIDs on replicas, all the replica MySQL servers are initialized with the MySQL
@@ -217,6 +219,11 @@ primary to accept writes. All of the shard's tablets, except the current primary
 MySQL replication no other component, offline system or operator can write directly to a replica.
 
 Reference PR for this change is [PR #12206](https://github.com/vitessio/vitess/pull/12206)
+
+An important note regarding this change is how the default `init_db.sql` file has changed.
+This is even more important if you are running Vitess on the vitess-operator.
+You must ensure your `init_db.sql` is up-to-date with the new default for `v17.0.0`.
+The default file can be found in `./config/init_db.sql`.
 
 #### <a id="deprecated-flags"/> Deprecated Flags
 The flag `use_super_read_only` is deprecated and will be removed in a later release.
