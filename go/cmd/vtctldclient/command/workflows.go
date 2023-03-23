@@ -41,48 +41,59 @@ var (
 		RunE:                  commandGetWorkflows,
 	}
 
-	getWorkflowsOptions = struct {
-		ShowAll bool
-	}{}
-)
-
-var (
+	// Workflow is a parent command for Workflow* sub commands.
 	Workflow = &cobra.Command{
-		Use:                   "Workflow",
-		Short:                 "Interface with vreplication workflows (Reshard, MoveTables, etc) in the given keyspace",
+		Use:                   "workflow",
+		Short:                 "Administer VReplication workflows (Reshard, MoveTables, etc) in the given keyspace",
 		DisableFlagsInUseLine: true,
-		Aliases:               []string{"workflow", "workflow", "Workflows"},
+		Aliases:               []string{"workflows", "Workflow", "Workflows"},
 		Args:                  cobra.ExactArgs(1),
 		RunE:                  commandGetWorkflows,
 	}
-	workflowOptions = struct {
-		Keyspace string
-	}{}
 
 	// WorkflowUpdate makes a WorkflowUpdate gRPC call to a vtctld.
 	WorkflowUpdate = &cobra.Command{
 		Use:                   "update",
-		Short:                 "Update the configuration parameters for a vreplication workflow",
-		Example:               "vtctldclient --server=localhost:15999 Workflow --keyspace=customer update --workflow=commerce2customer --cells=zone1,zone2,zone3",
+		Short:                 "Update the configuration parameters for a VReplication workflow",
+		Example:               `vtctldclient --server=localhost:15999 workflow --keyspace=customer update --workflow=commerce2customer --cells "zone1" --cells "zone2" -c "zone3,zone4" -c "zone5"`,
 		DisableFlagsInUseLine: true,
 		Aliases:               []string{"Update"},
-		Args:                  cobra.ExactArgs(0),
+		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
-			if !cmd.Flags().Lookup("cells").Changed && !cmd.Flags().Lookup("tablet-types").Changed && !cmd.Flags().Lookup("on-ddl").Changed {
+			changes := false
+			if cmd.Flags().Lookup("cells").Changed { // No validation required
+				changes = true
+			} else {
+				workflowUpdateOptions.Cells = textutil.SimulatedNullStringSlice
+			}
+			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
+				changes = true
+				for _, tabletType := range workflowUpdateOptions.TabletTypes {
+					if _, ok := topodatapb.TabletType_value[strings.ToUpper(strings.TrimSpace(tabletType))]; !ok {
+						return fmt.Errorf("invalid tablet type: %s", tabletType)
+					}
+				}
+			} else {
+				workflowUpdateOptions.TabletTypes = textutil.SimulatedNullStringSlice
+			}
+			if cmd.Flags().Lookup("on-ddl").Changed { // Validate the provided value
+				changes = true
+				if _, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(workflowUpdateOptions.OnDDL)]; !ok {
+					return fmt.Errorf("invalid on-ddl value: %s", workflowUpdateOptions.OnDDL)
+				}
+			} // Simulated NULL will need to be handled in command
+			if !changes {
 				return fmt.Errorf("no configuration options specified to update")
 			}
 			return nil
 		},
 		RunE: commandWorkflowUpdate,
 	}
-
-	workflowUpdateOptions = struct {
-		Workflow    string
-		Cells       []string
-		TabletTypes []string
-		OnDDL       string
-	}{}
 )
+
+var getWorkflowsOptions = struct {
+	ShowAll bool
+}{}
 
 func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
@@ -108,29 +119,27 @@ func commandGetWorkflows(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+var (
+	workflowOptions = struct {
+		Keyspace string
+	}{}
+	workflowUpdateOptions = struct {
+		Workflow    string
+		Cells       []string
+		TabletTypes []string
+		OnDDL       string
+	}{}
+)
+
 func commandWorkflowUpdate(cmd *cobra.Command, args []string) error {
 	cli.FinishedParsing(cmd)
 
-	if !cmd.Flags().Lookup("cells").Changed {
-		workflowUpdateOptions.Cells = textutil.SimulatedNullStringSlice
-	}
-	if !cmd.Flags().Lookup("tablet-types").Changed {
-		workflowUpdateOptions.TabletTypes = textutil.SimulatedNullStringSlice
-	} else { // Validate the provided value
-		for _, tabletType := range workflowUpdateOptions.TabletTypes {
-			if _, ok := topodatapb.TabletType_value[strings.ToUpper(strings.TrimSpace(tabletType))]; !ok {
-				return fmt.Errorf("invalid tablet type: %s", tabletType)
-			}
-		}
-	}
-	onddl := int32(textutil.SimulatedNullInt)
-	var valid bool
-	if !cmd.Flags().Lookup("on-ddl").Changed {
-	} else { // Validate the provided value
-		onddl, valid = binlogdatapb.OnDDLAction_value[strings.ToUpper(workflowUpdateOptions.OnDDL)]
-		if !valid {
-			return fmt.Errorf("invalid on-ddl value: %s", workflowUpdateOptions.OnDDL)
-		}
+	// We've already validated any provided value, if one WAS provided.
+	// Now we need to do the mapping from the string representation to
+	// the enum value.
+	onddl := int32(textutil.SimulatedNullInt) // Simulated NULL when no value provided
+	if val, ok := binlogdatapb.OnDDLAction_value[strings.ToUpper(workflowUpdateOptions.OnDDL)]; ok {
+		onddl = val
 	}
 
 	req := &vtctldatapb.WorkflowUpdateRequest{
@@ -158,11 +167,10 @@ func init() {
 	Root.AddCommand(GetWorkflows)
 
 	Workflow.PersistentFlags().StringVarP(&workflowOptions.Keyspace, "keyspace", "k", "", "Keyspace context for the workflow (required)")
-	_ = Workflow.MarkPersistentFlagRequired("keyspace")
+	Workflow.MarkPersistentFlagRequired("keyspace")
 	Root.AddCommand(Workflow)
-
 	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
-	_ = WorkflowUpdate.MarkFlagRequired("workflow")
+	WorkflowUpdate.MarkFlagRequired("workflow")
 	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
 	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY)")
 	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.OnDDL, "on-ddl", "o", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")

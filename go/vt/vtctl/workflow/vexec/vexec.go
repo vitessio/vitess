@@ -21,7 +21,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
@@ -46,9 +45,6 @@ const (
 	// VReplicationTableName is the unqualified name of the vreplication table
 	// supported by vexec.
 	VReplicationTableName = "vreplication"
-
-	// Timeout for callback function executions.
-	execTimeout = 10 * time.Second
 )
 
 var ( // Topo lookup errors.
@@ -176,12 +172,13 @@ func (vx *VExec) CallbackContext(ctx context.Context, callback func(context.Cont
 // It collects query results from all shards and returns an aggregate (UNION
 // ALL -like) result.
 func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
-	var wg sync.WaitGroup
-	allErrors := &concurrency.AllErrorRecorder{}
-	results := make(map[*topo.TabletInfo]*querypb.QueryResult)
-	var mu sync.Mutex
-	ctx, cancel := context.WithTimeout(ctx, execTimeout)
-	defer cancel()
+	var (
+		wg sync.WaitGroup
+		mu sync.Mutex
+
+		allErrors = &concurrency.AllErrorRecorder{}
+		results   = make(map[*topo.TabletInfo]*querypb.QueryResult)
+	)
 	for _, primary := range vx.primaries {
 		wg.Add(1)
 		go func(ctx context.Context, primary *topo.TabletInfo) {
