@@ -1488,6 +1488,13 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 				if err = c.writeFields(qr); err != nil {
 					return err
 				}
+				// Now send an EOF packet.
+				if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
+					// With CapabilityClientDeprecateEOF, we do not send this EOF.
+					if err = c.writeEOFPacket(c.StatusFlags, 0); err != nil {
+						return err
+					}
+				}
 			}
 			return c.writeBinaryRows(qr)
 		})
