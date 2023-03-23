@@ -114,9 +114,12 @@ func TestNewSchemaFromQueriesUnresolved(t *testing.T) {
 	queries := append(schemaTestCreateQueries,
 		"create view v7 as select * from v8, t2",
 	)
-	_, err := NewSchemaFromQueries(queries)
+	schema, err := NewSchemaFromQueries(queries)
 	assert.Error(t, err)
 	assert.EqualError(t, err, (&ViewDependencyUnresolvedError{View: "v7"}).Error())
+	v := schema.sorted[len(schema.sorted)-1]
+	assert.IsType(t, &CreateViewEntity{}, v)
+	assert.Equal(t, "CREATE VIEW `v7` AS SELECT * FROM `v8`, `t2`", v.Create().CanonicalStatementString())
 }
 
 func TestNewSchemaFromQueriesUnresolvedAlias(t *testing.T) {
