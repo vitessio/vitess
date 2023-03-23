@@ -211,7 +211,7 @@ func TestComStmtExecute(t *testing.T) {
 	cConn.PrepareData[prepare.StatementID] = prepare
 
 	// This is simulated packets for `select * from test_table where id = ?`
-	data := []byte{23, 18, 0, 0, 0, 128, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+	data := []byte{23, 18, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 128, 1}
 
 	stmtID, _, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
 	if err != nil {
@@ -219,6 +219,33 @@ func TestComStmtExecute(t *testing.T) {
 	}
 	if stmtID != 18 {
 		t.Fatalf("Parsed incorrect values")
+	}
+}
+
+func TestComStmtFetch(t *testing.T) {
+	listener, sConn, cConn := createSocketPair(t)
+	defer func() {
+		listener.Close()
+		sConn.Close()
+		cConn.Close()
+	}()
+
+	prepare, _ := MockPrepareData(t)
+	cConn.PrepareData = make(map[uint32]*PrepareData)
+	cConn.PrepareData[prepare.StatementID] = prepare
+
+	// This is simulated packets for `select * from test_table where id = ?`
+	data := []byte{23, 18, 0, 0, 0, 1, 1, 0, 0, 0, 0, 1, 1, 128, 1}
+
+	stmtID, cursorType, err := sConn.parseComStmtExecute(cConn.PrepareData, data)
+	if err != nil {
+		t.Fatalf("parseComStmtExeute failed: %v", err)
+	}
+	if stmtID != 18 {
+		t.Fatalf("Parsed incorrect values")
+	}
+	if cursorType != ReadOnly {
+		t.Fatalf("Expected read-only cursor")
 	}
 }
 
