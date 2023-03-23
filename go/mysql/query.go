@@ -23,6 +23,7 @@ import (
 	"strings"
 
 	"github.com/dolthub/vitess/go/sqltypes"
+	"github.com/dolthub/vitess/go/vt/log"
 	"github.com/dolthub/vitess/go/vt/proto/vtrpc"
 	"github.com/dolthub/vitess/go/vt/vterrors"
 
@@ -994,14 +995,6 @@ func (c *Conn) writeFields(result *sqltypes.Result) error {
 			return err
 		}
 	}
-
-	// Now send an EOF packet.
-	if c.Capabilities&CapabilityClientDeprecateEOF == 0 {
-		// With CapabilityClientDeprecateEOF, we do not send this EOF.
-		if err := c.writeEOFPacket(c.StatusFlags, 0); err != nil {
-			return err
-		}
-	}
 	return nil
 }
 
@@ -1151,6 +1144,7 @@ func (c *Conn) writeBinaryRow(fields []*querypb.Field, row []sqltypes.Value) err
 
 // writeBinaryRows sends the rows of a Result with binary form.
 func (c *Conn) writeBinaryRows(result *sqltypes.Result) error {
+	log.Info("write binary rows")
 	for _, row := range result.Rows {
 		if err := c.writeBinaryRow(result.Fields, row); err != nil {
 			return err

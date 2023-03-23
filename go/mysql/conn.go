@@ -190,6 +190,7 @@ type Conn struct {
 type cursorState struct {
 	stmtID  uint32
 	pending *sqltypes.Result
+	noData bool
 
 	next  chan *sqltypes.Result
 	done  chan error
@@ -880,6 +881,7 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file 
 // writeEOFPacket writes an EOF packet, through the buffer, and
 // doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
+	log.Info("writing EOF Packet")
 	length := 5
 	data := c.startEphemeralPacket(length)
 	pos := 0
@@ -1271,9 +1273,10 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		c.StatusFlags |= uint16(ServerCursorExists)
 
 		// while we are still expecting rows
-		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
+		for !c.cs.noData && (c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows)) {
 			// drain rows from next to cs.pending
-			newqr, ok := <-c.cs.next
+			var newqr *sqltypes.Result
+			newqr, ok = <-c.cs.next
 
 			// channel is closed, meaning there are no more rows
 			if !ok {
@@ -1281,6 +1284,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 				if err = <- c.cs.done; err != nil {
 					return err
 				}
+				// indicate that there is no more data, and prevent blocking from reading c.cs.done for errors again
+				c.cs.noData = true
 				break
 			}
 
