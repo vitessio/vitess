@@ -158,6 +158,9 @@ const (
 
 	// ServerCursorExists is SERVER_STATUS_CURSOR_EXISTS
 	ServerCursorExists = 0x0040
+
+	// ServerCursorLastRowSent is SERVER_STATUS_LAST_ROW_SENT
+	ServerCursorLastRowSent = 0x0080
 )
 
 // Cursor Types. They are received on COM_STMT_EXECUTE()

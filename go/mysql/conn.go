@@ -190,7 +190,6 @@ type Conn struct {
 type cursorState struct {
 	stmtID  uint32
 	pending *sqltypes.Result
-	noData bool
 
 	next  chan *sqltypes.Result
 	done  chan error
@@ -892,6 +891,8 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	return c.writeEphemeralPacket()
 }
 
+const batchSize = 128
+
 // handleNextCommand is called in the server loop to process
 // incoming packets.
 func (c *Conn) handleNextCommand(handler Handler) error {
@@ -1241,14 +1242,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 	case ComStmtFetch:
 		log.Info("Received COM_STMT_FETCH")
-		if c.cs == nil {
-			log.Error("Fetching from missing result set. Client %v, returning error: %v", c.ConnectionID, data)
-			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
-				log.Error("Error writing error packet to client: %v", err)
-				return err
-			}
-		}
-
 		c.startWriterBuffering()
 
 		stmtID, numRows, ok := c.parseComStmtFetch(data)
@@ -1261,6 +1254,26 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
+		// cursor is closed
+		if c.cs == nil {
+			c.StatusFlags &= ^uint16(ServerCursorExists)
+			c.StatusFlags |= uint16(ServerCursorLastRowSent)
+			if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+				log.Errorf("Error writing result to %s: %v", c, err)
+				return err
+			}
+			if err = c.flush(); err != nil {
+				log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+				return err
+			}
+			return nil
+		}
+
+		// cursor is open
+		c.StatusFlags |= uint16(ServerCursorExists)
+		c.StatusFlags &= ^uint16(ServerCursorLastRowSent)
+
+		// fetching from wrong statement
 		if stmtID != c.cs.stmtID {
 			log.Errorf("Requested stmtID does not match stmtID of open cursor. Client %v, returning error: %v", c.ConnectionID, data)
 			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
@@ -1269,11 +1282,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
-		// If fetching, we definitely have a cursor open
-		c.StatusFlags |= uint16(ServerCursorExists)
-
 		// while we are still expecting rows
-		for !c.cs.noData && (c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows)) {
+		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
 			// drain rows from next to cs.pending
 			var newqr *sqltypes.Result
 			newqr, ok = <-c.cs.next
@@ -1282,10 +1292,14 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			if !ok {
 				// check if there was an error
 				if err = <- c.cs.done; err != nil {
-					return err
+					if werr := c.writeErrorPacketFromError(err); werr != nil {
+						log.Errorf("Error writing query error to %s: %v", c, werr)
+						return werr
+					}
+					return nil
 				}
-				// indicate that there is no more data, and prevent blocking from reading c.cs.done for errors again
-				c.cs.noData = true
+				// close cursor
+				c.cs = nil
 				break
 			}
 
@@ -1297,15 +1311,23 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 
 			// write out some rows to prevent packets from getting too large
-			for len(c.cs.pending.Rows) < int(numRows) && len(c.cs.pending.Rows) > 128 {
-				pendingRows := c.cs.pending.Rows[128:]
-				c.cs.pending.Rows = c.cs.pending.Rows[:128]
+			for len(c.cs.pending.Rows) < int(numRows) && len(c.cs.pending.Rows) > batchSize {
+				pendingRows := c.cs.pending.Rows[batchSize:]
+				c.cs.pending.Rows = c.cs.pending.Rows[:batchSize]
 				if err = c.writeBinaryRows(c.cs.pending); err != nil {
 					log.Errorf("Error writing result to %s: %v", c, err)
 					return err
 				}
+				if err = c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
+					log.Errorf("Error writing result to %s: %v", c, err)
+					return err
+				}
+				if err = c.flush(); err != nil {
+					log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+					return err
+				}
 				c.cs.pending.Rows = pendingRows
-				numRows -= 128
+				numRows -= batchSize
 			}
 		}
 
@@ -1325,19 +1347,18 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			log.Errorf("Error writing result to %s: %v", c, err)
 			return err
 		}
-
-		// retain rest of rows
-		if len(origRows) == int(numRows) {
-			c.cs.pending.Rows = nil
-		} else {
-			c.cs.pending.Rows = origRows[numRows:]
-		}
-
 		if err = c.flush(); err != nil {
 			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 			return err
 		}
 
+		// retain rest of rows
+		c.cs.pending.Rows = origRows[numRows:]
+
+		// no rows left, close cursor
+		if len(c.cs.pending.Rows) == 0 {
+			c.cs = nil
+		}
 		return nil
 	case ComResetConnection:
 		log.Info("Received COM_RESET_CONNECTION")
