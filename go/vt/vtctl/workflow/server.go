@@ -779,7 +779,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 
 	response := &vtctldatapb.WorkflowUpdateResponse{}
 	response.Summary = fmt.Sprintf("Successfully updated the %s workflow on (%d) target primary tablets in the %s keyspace", req.TabletRequest.Workflow, len(res), req.Keyspace)
-	details := []*vtctldatapb.WorkflowUpdateResponse_TabletInfo{}
+	details := make([]*vtctldatapb.WorkflowUpdateResponse_TabletInfo, 0, len(res))
 	for tinfo, tres := range res {
 		result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
 			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
