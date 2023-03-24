@@ -109,7 +109,7 @@ func (a *analyzer) setError(err error) {
 	switch err := err.(type) {
 	case ProjError:
 		a.projErr = err.Inner
-	case UnshardedError:
+	case ShardedError:
 		a.unshardedErr = err.Inner
 	default:
 		if a.inProjection > 0 && vterrors.ErrState(err) == vterrors.NonUniqError {
@@ -260,11 +260,11 @@ func (a *analyzer) checkForInvalidConstructs(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Update:
 		if len(node.TableExprs) != 1 {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
+			return ShardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
 		}
 		alias, isAlias := node.TableExprs[0].(*sqlparser.AliasedTableExpr)
 		if !isAlias {
-			return UnshardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
+			return ShardedError{Inner: NewError(UnsupportedMultiTablesInUpdate)}
 		}
 		_, isDerived := alias.Expr.(*sqlparser.DerivedTable)
 		if isDerived {
@@ -357,12 +357,12 @@ func (p ProjError) Error() string {
 	return p.Inner.Error()
 }
 
-// UnshardedError is used to mark an error as something that should only be returned
+// ShardedError is used to mark an error as something that should only be returned
 // if the query is not unsharded
-type UnshardedError struct {
+type ShardedError struct {
 	Inner error
 }
 
-func (p UnshardedError) Error() string {
+func (p ShardedError) Error() string {
 	return p.Inner.Error()
 }
