@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"sort"
 	"strings"
 
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
@@ -35,25 +36,42 @@ import (
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 )
 
-// InfoSchemaRouting used for information_schema queries.
-// They are special because we usually don't know at plan-time
-// what keyspace the query go to, because we don't see normalized literal values
-type InfoSchemaRouting struct {
-	SysTableSchema    sqlparser.Expr
-	SysTableTableName map[string]sqlparser.Expr
+type (
+	// InfoSchemaRouting used for information_schema queries.
+	// They are special because we usually don't know at plan-time
+	// what keyspace the query go to, because we don't see normalized literal values
+	InfoSchemaRouting struct {
+		SysTableSchema    sqlparser.Expr
+		SysTableTableName map[string]sqlparser.Expr
 
-	KeyspaceRoutedTo    string
-	HasSchemaNameColumn bool
-	Table               *QueryTable
-}
+		KeyspaceRoutedTo *vindexes.Keyspace
+		Table            *QueryTable
+		Expanded         bool
+	}
+	InfoSchemaType int
+)
 
-func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
+const (
+	NoSchemaColumn InfoSchemaType = iota
+	SchemaColumnWithPredicate
+	SchemaColumnNoPredicate
+)
+
+func (isr *InfoSchemaRouting) UpdateRoutingParams(ctx *plancontext.PlanningContext, rp *engine.RoutingParameters) error {
 	rp.SysTableSchema = nil
 	if isr.SysTableSchema != nil {
 		eexpr, err := evalengine.Translate(isr.SysTableSchema, &notImplementedSchemaInfoConverter{})
 		if err != nil {
 			return err
 		}
+
+		ks := evalAndFindKeyspace(ctx, eexpr)
+		if ks != nil {
+			rp.Keyspace = ks
+			return nil
+		}
+
+		// if we couldn't find the keyspace at plantime, we'll do it at runtime
 		rp.SysTableSchema = eexpr
 	}
 
@@ -69,11 +87,29 @@ func (isr *InfoSchemaRouting) UpdateRoutingParams(_ *plancontext.PlanningContext
 	return nil
 }
 
+func evalAndFindKeyspace(ctx *plancontext.PlanningContext, expr evalengine.Expr) *vindexes.Keyspace {
+	// let's check if we can evaluate this right away or if it needs to happen at runtime
+	env := evalengine.EmptyExpressionEnv()
+	val, err := env.Evaluate(expr)
+	if err != nil {
+		return nil
+	}
+
+	// we could evaluate at plan-time. nice - let's find the keyspace
+	ks := val.Value().ToString()
+
+	// we don't really care if we get an error or not - nil return value is value here
+	keyspace, _ := ctx.VSchema.FindKeyspace(ks)
+	return keyspace
+}
+
 func (isr *InfoSchemaRouting) Clone() Routing {
 	return &InfoSchemaRouting{
 		SysTableSchema:    sqlparser.CloneExpr(isr.SysTableSchema),
 		SysTableTableName: maps.Clone(isr.SysTableTableName),
+		KeyspaceRoutedTo:  isr.KeyspaceRoutedTo,
 		Table:             isr.Table,
+		Expanded:          isr.Expanded,
 	}
 }
 
@@ -116,6 +152,56 @@ func (isr *InfoSchemaRouting) Keyspace() *vindexes.Keyspace {
 	// TODO: for some info schema queries, we do know which keyspace it will go to
 	// if we had this information, more routes could be merged.
 	return nil
+}
+
+func (isr *InfoSchemaRouting) Expand(ctx *plancontext.PlanningContext, op *Route) (ops.Operator, error) {
+	if isr.Type() != SchemaColumnNoPredicate || isr.Expanded {
+		return op, nil
+	}
+	isr.Expanded = true
+	keyspaces, err := ctx.VSchema.AllKeyspace()
+	if err != nil {
+		return nil, err
+	}
+
+	// we sort the keyspaces so we have stable plan outputs
+	sort.Slice(keyspaces, func(i, j int) bool {
+		return keyspaces[i].Name < keyspaces[j].Name
+	})
+
+	union := &Union{
+		Sources:   nil,
+		Distinct:  false,
+		Ordering:  nil,
+		noColumns: noColumns{},
+	}
+
+	colName := getSchemaColumnsPerTable()[strings.ToUpper(isr.Table.Table.Name.String())][0]
+	for i, ks := range keyspaces {
+		routeForKs := Clone(op)
+		colName := sqlparser.NewColName(colName)
+		ctx.SemTable.Direct[colName] = isr.Table.ID
+		cmp := &sqlparser.ComparisonExpr{
+			Operator: sqlparser.EqualOp,
+			Left:     colName,
+			Right:    sqlparser.NewStrLiteral(ks.Name),
+		}
+		if i > 0 {
+			routeForKs, err = routeForKs.AddPredicate(ctx, cmp)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			route := routeForKs.(*Route)
+			route.Routing, err = route.Routing.updateRoutingLogic(ctx, cmp)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		union.Sources = append(union.Sources, routeForKs)
+	}
+	return union, nil
 }
 
 func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparser.ReservedVars) (bool, string, sqlparser.Expr) {
@@ -168,10 +254,36 @@ func isTableOrSchemaRoutable(cmp *sqlparser.ComparisonExpr) (
 	return false, nil
 }
 
-func tryMergeInfoSchemaRoutings(routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {
+func (isr *InfoSchemaRouting) Type() InfoSchemaType {
+	name := strings.ToUpper(isr.Table.Table.Name.String())
+	_, found := getSchemaColumnsPerTable()[name]
+	if !found {
+		return NoSchemaColumn
+	}
+
+	if isr.SysTableSchema == nil {
+		return SchemaColumnNoPredicate
+	}
+
+	return SchemaColumnWithPredicate
+}
+
+func tryMergeInfoSchemaRoutings(ctx *plancontext.PlanningContext, routingA, routingB Routing, m merger, lhsRoute, rhsRoute *Route) (ops.Operator, error) {
 	// we have already checked type earlier, so this should always be safe
 	isrA := routingA.(*InfoSchemaRouting)
 	isrB := routingB.(*InfoSchemaRouting)
+	typA := isrA.Type()
+	typB := isrB.Type()
+
+	switch {
+	case typA == NoSchemaColumn && typA == typB:
+		return m.merge(lhsRoute, rhsRoute, isrA)
+	case typA == SchemaColumnWithPredicate && typA == typB && ctx.SemTable.EqualsExpr(isrA.SysTableSchema, isrB.SysTableSchema):
+		return m.merge(lhsRoute, rhsRoute, isrA)
+	default:
+		return nil, nil
+	}
+
 	emptyA := len(isrA.SysTableTableName) == 0 && isrA.SysTableSchema == nil
 	emptyB := len(isrB.SysTableTableName) == 0 && isrB.SysTableSchema == nil
 
@@ -295,16 +407,26 @@ func IsTableSchemaOrName(e sqlparser.Expr) (col *sqlparser.ColName, isTableSchem
 }
 
 func isDbNameCol(col *sqlparser.ColName) bool {
-	version := servenv.MySQLServerVersion()
-	var schemaColumns map[string]any
-	if strings.HasPrefix(version, "5.7") {
-		schemaColumns = schemaColumns57
-	} else {
-		schemaColumns = schemaColumns80
-	}
-
-	_, found := schemaColumns[col.Name.Lowered()]
+	_, found := getSchemaColumns()[col.Name.Lowered()]
 	return found
+}
+
+func getSchemaColumns() map[string]any {
+	version := servenv.MySQLServerVersion()
+	if strings.HasPrefix(version, "5.7") {
+		return schemaColumns57
+	} else {
+		return schemaColumns80
+	}
+}
+
+func getSchemaColumnsPerTable() map[string][]string {
+	version := servenv.MySQLServerVersion()
+	if strings.HasPrefix(version, "5.7") {
+		return schemaColName57
+	} else {
+		return schemaColName80
+	}
 }
 
 func isTableNameCol(col *sqlparser.ColName) bool {

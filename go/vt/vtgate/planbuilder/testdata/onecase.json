@@ -1,9 +1,21 @@
 [
   {
-    "comment": "Add your test case here for debugging and run go test -run=One.",
-    "query": "",
+    "comment": "SelectDBA with uncorrelated subqueries",
+    "query": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
     "plan": {
-
+      "QueryType": "SELECT",
+      "Original": "select t.table_schema from information_schema.tables as t where t.table_schema in (select c.column_name from information_schema.columns as c)",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "DBA",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select t.table_schema from information_schema.`tables` as t where 1 != 1",
+        "Query": "select t.table_schema from information_schema.`tables` as t where t.table_schema in (select c.column_name from information_schema.`columns` as c)",
+        "Table": "information_schema.`tables`"
+      }
     }
   }
 ]

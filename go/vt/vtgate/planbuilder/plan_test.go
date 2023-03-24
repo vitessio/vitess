@@ -612,17 +612,22 @@ func (vw *vschemaWrapper) ForeignKeyMode() string {
 	return "allow"
 }
 
-func (vw *vschemaWrapper) AllKeyspace() ([]*vindexes.Keyspace, error) {
-	if vw.keyspace == nil {
-		return nil, vterrors.VT13001("keyspace not available")
+func (vw *vschemaWrapper) AllKeyspace() (result []*vindexes.Keyspace, err error) {
+	for _, ks := range vw.v.Keyspaces {
+		result = append(result, ks.Keyspace)
 	}
-	return []*vindexes.Keyspace{vw.keyspace}, nil
+	return
 }
 
 // FindKeyspace implements the VSchema interface
 func (vw *vschemaWrapper) FindKeyspace(keyspace string) (*vindexes.Keyspace, error) {
 	if vw.keyspace == nil {
-		return nil, vterrors.VT13001("keyspace not available")
+		ks, found := vw.v.Keyspaces[keyspace]
+		if !found {
+
+			return nil, vterrors.VT13001("keyspace not available")
+		}
+		return ks.Keyspace, nil
 	}
 	if vw.keyspace.Name == keyspace {
 		return vw.keyspace, nil

@@ -66,7 +66,7 @@ func Merge(ctx *plancontext.PlanningContext, lhs, rhs ops.Operator, joinPredicat
 
 	// infoSchema routing is complex, so we handle it in a separate method
 	case a == infoSchema && b == infoSchema:
-		return tryMergeInfoSchemaRoutings(routingA, routingB, m, lhsRoute, rhsRoute)
+		return tryMergeInfoSchemaRoutings(ctx, routingA, routingB, m, lhsRoute, rhsRoute)
 
 	// sharded routing is complex, so we handle it in a separate method
 	case a == sharded && b == sharded:

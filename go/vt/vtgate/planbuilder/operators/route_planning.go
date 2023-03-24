@@ -306,7 +306,9 @@ func createInfSchemaRoute(ctx *plancontext.PlanningContext, table *QueryTable) (
 			Keyspace: ks,
 		},
 	}
-	var routing Routing = &InfoSchemaRouting{}
+	var routing Routing = &InfoSchemaRouting{
+		Table: table,
+	}
 	for _, pred := range table.Predicates {
 		routing, err = UpdateRoutingLogic(ctx, pred, routing)
 		if err != nil {

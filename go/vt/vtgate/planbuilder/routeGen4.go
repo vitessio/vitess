@@ -19,6 +19,7 @@ package planbuilder
 import (
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
 
@@ -50,6 +51,7 @@ type routeGen4 struct {
 
 	// is the engine primitive we will return from the Primitive() method. Note that it could be different than eroute
 	enginePrimitive engine.Primitive
+	expandToUnion   bool
 
 	// tables keeps track of which tables this route is covering
 	tables semantics.TableSet
@@ -75,6 +77,17 @@ func (rb *routeGen4) WireupGen4(ctx *plancontext.PlanningContext) error {
 	node := buffer.WriteNode(rb.Select)
 	parsedQuery := node.ParsedQuery()
 	rb.eroute.FieldQuery = parsedQuery.Query
+
+	if rb.eroute.SysTableSchema != nil {
+		res, err := evalengine.EmptyExpressionEnv().Evaluate(rb.eroute.SysTableSchema)
+		if err == nil {
+			foundKs, err := ctx.VSchema.FindKeyspace(res.Value().ToString())
+			if err == nil {
+				rb.eroute.Keyspace = foundKs
+				rb.eroute.SysTableSchema = nil
+			}
+		}
+	}
 
 	// if we have a planable vindex lookup, let's extract it into its own primitive
 	planableVindex, ok := rb.eroute.RoutingParameters.Vindex.(vindexes.LookupPlanable)

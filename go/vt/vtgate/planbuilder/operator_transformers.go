@@ -190,6 +190,27 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 	case *operators.Delete:
 		return transformDeletePlan(ctx, op, src)
 	}
+	expandToUnion := false
+	if is, ok := op.Routing.(*operators.InfoSchemaRouting); ok {
+		if is.Type() != operators.SchemaColumnNoPredicate || is.Expanded {
+			// we can only expand these routes into UNION if horizon planning has already happened.
+			// Otherwise, we'll do it at WireUp() time
+			_, hpDone := op.Source.(*operators.Horizon)
+			if hpDone {
+				newOp, err := is.Expand(ctx, op)
+				if err != nil {
+					return nil, err
+				}
+				if newOp != op {
+					// if we had to expand, there is nothing left to do here
+					return transformToLogicalPlan(ctx, newOp, true)
+				}
+			} else {
+				expandToUnion = true
+			}
+
+		}
+	}
 	condition := getVindexPredicate(ctx, op)
 	sel, err := operators.ToSQL(ctx, op.Source)
 	if err != nil {
@@ -201,10 +222,11 @@ func transformRoutePlan(ctx *plancontext.PlanningContext, op *operators.Route) (
 		return nil, err
 	}
 	return &routeGen4{
-		eroute:    eroute,
-		Select:    sel,
-		tables:    operators.TableID(op),
-		condition: condition,
+		eroute:        eroute,
+		Select:        sel,
+		tables:        operators.TableID(op),
+		condition:     condition,
+		expandToUnion: expandToUnion,
 	}, nil
 
 }
@@ -707,10 +729,17 @@ func canSelectDBAMerge(a, b *routeGen4) bool {
 		return false
 	}
 
+	if (a.eroute.SysTableSchema == nil) != (b.eroute.SysTableSchema == nil) {
+		// if one side has a table schema predicate and the other one doesn't, we can't merge
+		return false
+	}
+
 	// safe to merge when any 1 table name or schema matches, since either the routing will match or either side would be throwing an error
 	// during run-time which we want to preserve. For example outer side has User in sys table schema and inner side has User and Main in sys table schema
 	// Inner might end up throwing an error at runtime, but if it doesn't then it is safe to merge.
-	if a.eroute.SysTableSchema != nil && b.eroute.SysTableSchema != nil && evalengine.FormatExpr(a.eroute.SysTableSchema) == evalengine.FormatExpr(b.eroute.SysTableSchema) {
+	if a.eroute.SysTableSchema != nil &&
+		b.eroute.SysTableSchema != nil &&
+		evalengine.FormatExpr(a.eroute.SysTableSchema) == evalengine.FormatExpr(b.eroute.SysTableSchema) {
 		return true
 	}
 
