@@ -1514,6 +1514,14 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		go func() {
+			defer func(){
+				// pass along error, even if there's a panic
+				if r := recover(); r != nil {
+					err = r.(error)
+				}
+				close(c.cs.next)
+				c.cs.done <- err
+			}()
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 				// block until query results are sent or receive signal to quit
 				select {
@@ -1523,9 +1531,6 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 					return err
 				}
 			})
-			// pass along error
-			close(c.cs.next)
-			c.cs.done <- err
 		}()
 
 		// Immediately get the very first query result to write the fields
