@@ -182,8 +182,8 @@ func init() {
 	Root.AddCommand(Workflow)
 	WorkflowUpdate.Flags().StringVarP(&workflowUpdateOptions.Workflow, "workflow", "w", "", "The workflow you want to update (required)")
 	WorkflowUpdate.MarkFlagRequired("workflow")
-	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", []string{}, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
-	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", []string{}, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY)")
+	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.Cells, "cells", "c", nil, "New Cell(s) or CellAlias(es) (comma-separated) to replicate from")
+	WorkflowUpdate.Flags().StringSliceVarP(&workflowUpdateOptions.TabletTypes, "tablet-types", "t", nil, "New source tablet types to replicate from (e.g. PRIMARY, REPLICA, RDONLY)")
 	WorkflowUpdate.Flags().StringVar(&workflowUpdateOptions.OnDDL, "on-ddl", "", "New instruction on what to do when DDL is encountered in the VReplication stream. Possible values are IGNORE, STOP, EXEC, and EXEC_IGNORE")
 	Workflow.AddCommand(WorkflowUpdate)
 }
