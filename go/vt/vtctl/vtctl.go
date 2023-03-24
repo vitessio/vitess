@@ -3654,14 +3654,18 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 		if subFlags.NArg() != 2 {
 			return fmt.Errorf(usage)
 		}
-		var rpcReq any = nil // Only update uses the new RPC path
+		var rpcReq any = nil
 		if action == "update" {
+			changes := false
 			// We need to implicitly distinguish between an empty value (which is valid)
 			// and no value having been provided. We will use NULL for this purpose.
-			if !subFlags.Lookup("cells").Changed {
+			if subFlags.Lookup("cells").Changed { // No validation needed
+				changes = true
+			} else {
 				cells = &textutil.SimulatedNullStringSlice
 			}
-			if subFlags.Lookup("tablet-types").Changed {
+			if subFlags.Lookup("tablet-types").Changed { // Validate the provided value(s)
+				changes = true
 				for _, tabletType := range *tabletTypes {
 					if _, ok := topodatapb.TabletType_value[strings.ToUpper(strings.TrimSpace(tabletType))]; !ok {
 						return fmt.Errorf("invalid tablet type: %s", tabletType)
@@ -3670,13 +3674,17 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			} else {
 				tabletTypes = &textutil.SimulatedNullStringSlice
 			}
-			onddl := int32(textutil.SimulatedNullInt) // to signify no value has been provided
-			if subFlags.Lookup("on-ddl").Changed {
+			onddl := int32(textutil.SimulatedNullInt) // To signify no value has been provided
+			if subFlags.Lookup("on-ddl").Changed {    // Validate the provided value
+				changes = true
 				ival, valid := binlogdatapb.OnDDLAction_value[strings.ToUpper(*onDDL)]
 				if !valid {
 					return fmt.Errorf("invalid on-ddl action: %s", *onDDL)
 				}
 				onddl = ival
+			}
+			if !changes {
+				return fmt.Errorf(errWorkflowUpdateWithoutChanges)
 			}
 			rpcReq = &tabletmanagerdatapb.UpdateVRWorkflowRequest{
 				Workflow:    workflow,
@@ -3685,7 +3693,7 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				OnDdl:       binlogdatapb.OnDDLAction(onddl),
 			}
 		}
-		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update uses the new RPC path
+		results, err = wr.WorkflowAction(ctx, workflow, keyspace, action, *dryRun, rpcReq) // Only update currently uses the new RPC path
 		if err != nil {
 			return err
 		}
