@@ -273,7 +273,7 @@ func (b *binder) resolveColumn(colName *sqlparser.ColName, current *scope, allow
 		first = false
 		current = current.parent
 	}
-	return dependency{}, &ColumnNotFoundError{Column: colName, Table: tableName}
+	return dependency{}, ShardedError{&ColumnNotFoundError{Column: colName, Table: tableName}}
 }
 
 func (b *binder) resolveColumnInScope(current *scope, expr *sqlparser.ColName, allowMulti bool) (dependencies, error) {
