@@ -9,6 +9,8 @@ on:
     - cron: '0 0 * * 1'
   workflow_dispatch:
 
+permissions: read-all
+
 jobs:
   analyze:
     name: Analyze

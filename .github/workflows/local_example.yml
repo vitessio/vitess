@@ -1,5 +1,6 @@
 name: local_example
 on: [push, pull_request]
+permissions: read-all
 jobs:
 
   build:

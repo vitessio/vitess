@@ -1,5 +1,6 @@
 name: docker_test_cluster_25
 on: [push, pull_request]
+permissions: read-all
 jobs:
 
   build:

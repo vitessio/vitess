@@ -4,7 +4,6 @@ on: [push, pull_request]
 permissions: read-all
 
 jobs:
-
   build:
     name: Check Make VTAdmin Web Proto
     runs-on: ubuntu-22.04
