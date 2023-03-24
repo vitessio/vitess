@@ -27,14 +27,17 @@ type (
 	// ExpressionEnv contains the environment that the expression
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
+		vm vmstate
+
 		BindVars map[string]*querypb.BindVariable
 		Row      []sqltypes.Value
-
-		vm *VirtualMachine
 	}
 )
 
 func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
+	if p, ok := expr.(*CompiledExpr); ok {
+		return env.EvaluateVM(p)
+	}
 	e, err := expr.eval(env)
 	return EvalResult{e}, err
 }

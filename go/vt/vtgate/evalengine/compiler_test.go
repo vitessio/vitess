@@ -139,14 +139,13 @@ func TestCompilerReference(t *testing.T) {
 					return
 				}
 
-				var vm evalengine.VirtualMachine
 				res, vmErr := func() (res evalengine.EvalResult, err error) {
 					defer func() {
 						if r := recover(); r != nil {
 							err = fmt.Errorf("PANIC: %v", r)
 						}
 					}()
-					res, err = vm.Evaluate(converted.(*evalengine.CompiledExpr), env.Row)
+					res, err = env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 					return
 				}()
 
@@ -306,6 +305,7 @@ func TestCompilerSingle(t *testing.T) {
 
 			env := evalengine.EmptyExpressionEnv()
 			env.Row = tc.values
+
 			expected, err := env.Evaluate(evalengine.Deoptimize(converted))
 			if err != nil {
 				t.Fatal(err)
@@ -314,10 +314,9 @@ func TestCompilerSingle(t *testing.T) {
 				t.Fatalf("bad evaluation from eval engine: got %s, want %s", expected.String(), tc.result)
 			}
 
-			var vm evalengine.VirtualMachine
 			// re-run the same evaluation multiple times to ensure results are always consistent
 			for i := 0; i < 8; i++ {
-				res, err := vm.Evaluate(converted.(*evalengine.CompiledExpr), tc.values)
+				res, err := env.EvaluateVM(converted.(*evalengine.CompiledExpr))
 				if err != nil {
 					t.Fatal(err)
 				}

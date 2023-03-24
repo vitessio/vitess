@@ -23,7 +23,7 @@ import (
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
-type frame func(vm *VirtualMachine) int
+type frame func(env *ExpressionEnv) int
 
 type compiler struct {
 	cfg *Config

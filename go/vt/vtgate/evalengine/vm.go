@@ -26,11 +26,10 @@ import (
 
 var errDeoptimize = errors.New("de-optimize")
 
-type VirtualMachine struct {
+type vmstate struct {
 	stack []eval
 	sp    int
 
-	row   []sqltypes.Value
 	arena Arena
 	hash  vthash.Hasher
 	err   error
@@ -58,13 +57,10 @@ type CompiledExpr struct {
 }
 
 func (p *CompiledExpr) eval(env *ExpressionEnv) (eval, error) {
-	if env.vm == nil {
-		env.vm = new(VirtualMachine)
-	}
-	return env.vm.eval(p, env.Row)
+	return p.original.eval(env)
 }
 
-func (p *CompiledExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (p *CompiledExpr) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return p.typed, 0
 }
 
@@ -83,40 +79,29 @@ func (p *CompiledExpr) simplify(env *ExpressionEnv) error {
 
 var _ Expr = (*CompiledExpr)(nil)
 
-func (vm *VirtualMachine) eval(p *CompiledExpr, row []sqltypes.Value) (eval, error) {
-	vm.arena.reset()
-	vm.row = row
-	vm.sp = 0
-	vm.err = nil
-	if len(vm.stack) < p.stack {
-		vm.stack = make([]eval, p.stack)
+func (env *ExpressionEnv) EvaluateVM(p *CompiledExpr) (EvalResult, error) {
+	env.vm.arena.reset()
+	env.vm.sp = 0
+	env.vm.err = nil
+	if len(env.vm.stack) < p.stack {
+		env.vm.stack = make([]eval, p.stack)
 	}
-	e, err := vm.run(p)
-	if err != nil {
-		if err == errDeoptimize {
-			var env ExpressionEnv
-			env.Row = row
-			return p.original.eval(&env)
-		}
-		return nil, err
-	}
-	return e, nil
-}
 
-func (vm *VirtualMachine) Evaluate(p *CompiledExpr, row []sqltypes.Value) (EvalResult, error) {
-	e, err := vm.eval(p, row)
-	return EvalResult{e}, err
-}
-
-func (vm *VirtualMachine) run(p *CompiledExpr) (eval, error) {
 	code := p.code
 	ip := 0
 
 	for ip < len(code) {
-		ip += code[ip](vm)
-		if vm.err != nil {
-			return nil, vm.err
+		ip += code[ip](env)
+		if env.vm.err != nil {
+			goto err
 		}
 	}
-	return vm.stack[vm.sp-1], nil
+	return EvalResult{env.vm.stack[env.vm.sp-1]}, nil
+
+err:
+	if env.vm.err == errDeoptimize {
+		e, err := p.original.eval(env)
+		return EvalResult{e}, err
+	}
+	return EvalResult{}, env.vm.err
 }

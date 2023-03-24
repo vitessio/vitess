@@ -56,14 +56,14 @@ func BenchmarkCompilerExpressions(b *testing.B) {
 
 		b.Run(tc.name+"/eval=vm", func(b *testing.B) {
 			compiled := translated.(*evalengine.CompiledExpr)
-			values := tc.values
 
 			b.ResetTimer()
 			b.ReportAllocs()
 
-			var vm evalengine.VirtualMachine
+			var env evalengine.ExpressionEnv
+			env.Row = tc.values
 			for n := 0; n < b.N; n++ {
-				_, _ = vm.Evaluate(compiled, values)
+				_, _ = env.EvaluateVM(compiled)
 			}
 		})
 	}
