@@ -577,6 +577,33 @@ func (node *Literal) HexDecode() ([]byte, error) {
 	return hex.DecodeString(node.Val)
 }
 
+func (node *Literal) SQLType() sqltypes.Type {
+	switch node.Type {
+	case StrVal:
+		return sqltypes.VarChar
+	case IntVal:
+		return sqltypes.Int64
+	case FloatVal:
+		return sqltypes.Float64
+	case DecimalVal:
+		return sqltypes.Decimal
+	case HexNum:
+		return sqltypes.HexNum
+	case HexVal:
+		return sqltypes.HexVal
+	case BitVal:
+		return sqltypes.HexNum
+	case DateVal:
+		return sqltypes.Date
+	case TimeVal:
+		return sqltypes.Time
+	case TimestampVal:
+		return sqltypes.Datetime
+	default:
+		return -1
+	}
+}
+
 // encodeHexOrBitValToMySQLQueryFormat encodes the hexval or bitval back into the query format
 // for passing on to MySQL as a bind var
 func (node *Literal) encodeHexOrBitValToMySQLQueryFormat() ([]byte, error) {

@@ -46,7 +46,7 @@ func newTyper() *typer {
 func (t *typer) up(cursor *sqlparser.Cursor) error {
 	switch node := cursor.Node().(type) {
 	case *sqlparser.Literal:
-		t.exprTypes[node] = Type{Type: sqlparser.TypeOf(node)}
+		t.exprTypes[node] = Type{Type: node.SQLType()}
 	case *sqlparser.Argument:
 		if node.Type >= 0 {
 			t.exprTypes[node] = Type{Type: node.Type}

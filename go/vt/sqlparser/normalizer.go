@@ -200,7 +200,7 @@ func (nz *normalizer) convertLiteralDedup(node *Literal, cursor *Cursor) {
 	}
 
 	// Modify the AST node to a bindvar.
-	cursor.Replace(NewTypedArgument(bvname, TypeOf(node)))
+	cursor.Replace(NewTypedArgument(bvname, node.SQLType()))
 }
 
 func keyFor(bval *querypb.BindVariable, lit *Literal) string {
@@ -228,7 +228,7 @@ func (nz *normalizer) convertLiteral(node *Literal, cursor *Cursor) {
 
 	bvname := nz.reserved.nextUnusedVar()
 	nz.bindVars[bvname] = bval
-	cursor.Replace(NewTypedArgument(bvname, TypeOf(node)))
+	cursor.Replace(NewTypedArgument(bvname, node.SQLType()))
 }
 
 // convertComparison attempts to convert IN clauses to
@@ -273,7 +273,7 @@ func (nz *normalizer) parameterize(left, right Expr) Expr {
 	}
 	key := keyFor(bval, lit)
 	bvname := nz.decideBindVarName(key, lit, col, bval)
-	return NewTypedArgument(bvname, TypeOf(lit))
+	return NewTypedArgument(bvname, lit.SQLType())
 }
 
 func (nz *normalizer) decideBindVarName(key string, lit *Literal, col *ColName, bval *querypb.BindVariable) string {
@@ -326,33 +326,6 @@ func (nz *normalizer) convertUpdateExpr(node *UpdateExpr) {
 	newR := nz.parameterize(node.Name, node.Expr)
 	if newR != nil {
 		node.Expr = newR
-	}
-}
-
-func TypeOf(lit *Literal) sqltypes.Type {
-	switch lit.Type {
-	case StrVal:
-		return sqltypes.VarChar
-	case IntVal:
-		return sqltypes.Int64
-	case FloatVal:
-		return sqltypes.Float64
-	case DecimalVal:
-		return sqltypes.Decimal
-	case HexNum:
-		return sqltypes.HexNum
-	case HexVal:
-		return sqltypes.HexVal
-	case BitVal:
-		return sqltypes.HexNum
-	case DateVal:
-		return sqltypes.Date
-	case TimeVal:
-		return sqltypes.Time
-	case TimestampVal:
-		return sqltypes.Datetime
-	default:
-		return 0
 	}
 }
 
