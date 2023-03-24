@@ -139,18 +139,17 @@ jobs:
       run: |
         make tools
 
-    # Temporarily stop sending unit test data to launchable
-    # - name: Setup launchable dependencies
-      # if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
-      # run: |
-        # # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
-        # pip3 install --user launchable~=1.0 > /dev/null
+    - name: Setup launchable dependencies
+      if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && github.base_ref == 'main'
+      run: |
+        # Get Launchable CLI installed. If you can, make it a part of the builder image to speed things up
+        pip3 install --user launchable~=1.0 > /dev/null
 
-        # # verify that launchable setup is all correct.
-        # # launchable verify || true
+        # verify that launchable setup is all correct.
+        launchable verify || true
 
-        # # Tell Launchable about the build you are producing and testing
-        # launchable record build --name "$GITHUB_RUN_ID" --source .
+        # Tell Launchable about the build you are producing and testing
+        launchable record build --name "$GITHUB_RUN_ID" --source .
 
     - name: Run test
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true'
@@ -162,7 +161,7 @@ jobs:
       if: steps.skip-workflow.outputs.skip-workflow == 'false' && steps.changes.outputs.unit_tests == 'true' && always()
       run: |
         # send recorded tests to launchable
-        # launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
+        launchable record tests --build "$GITHUB_RUN_ID" go-test . || true
 
         # print test output
         cat output.txt
