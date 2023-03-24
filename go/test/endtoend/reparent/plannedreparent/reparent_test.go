@@ -418,7 +418,8 @@ func TestFullStatus(t *testing.T) {
 	primaryStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", primaryTablet.Alias)
 	require.NoError(t, err)
 	primaryStatus := &replicationdatapb.FullStatus{}
-	err = protojson.Unmarshal([]byte(primaryStatusString), primaryStatus)
+	opt := protojson.UnmarshalOptions{DiscardUnknown: true}
+	err = opt.Unmarshal([]byte(primaryStatusString), primaryStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, primaryStatus.ServerUuid)
 	assert.NotEmpty(t, primaryStatus.ServerId)
@@ -450,7 +451,8 @@ func TestFullStatus(t *testing.T) {
 	replicaStatusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", replicaTablet.Alias)
 	require.NoError(t, err)
 	replicaStatus := &replicationdatapb.FullStatus{}
-	err = protojson.Unmarshal([]byte(replicaStatusString), replicaStatus)
+	opt = protojson.UnmarshalOptions{DiscardUnknown: true}
+	err = opt.Unmarshal([]byte(replicaStatusString), replicaStatus)
 	require.NoError(t, err)
 	assert.NotEmpty(t, replicaStatus.ServerUuid)
 	assert.NotEmpty(t, replicaStatus.ServerId)
@@ -499,7 +501,8 @@ func getFullStatus(t *testing.T, clusterInstance *cluster.LocalProcessCluster, t
 	statusString, err := clusterInstance.VtctldClientProcess.ExecuteCommandWithOutput("GetFullStatus", tablet.Alias)
 	require.NoError(t, err)
 	status := &replicationdatapb.FullStatus{}
-	err = protojson.Unmarshal([]byte(statusString), status)
+	opt := protojson.UnmarshalOptions{DiscardUnknown: true}
+	err = opt.Unmarshal([]byte(statusString), status)
 	require.NoError(t, err)
 	return status
 }
