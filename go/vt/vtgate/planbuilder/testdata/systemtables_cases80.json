@@ -37,7 +37,7 @@
         "Table": "information_schema.a, information_schema.b"
       }
     },
-    "gen4-plan": "symbol a.id not found"
+    "gen4-plan": "symbol b.id not found"
   },
   {
     "comment": "information schema query that uses table_schema",
@@ -382,7 +382,7 @@
         ]
       }
     },
-    "gen4-plan": "symbol KCU.DELETE_RULE not found"
+    "gen4-plan": "symbol S.TABLE_NAME not found"
   },
   {
     "comment": "information_schema.routines",
@@ -1182,7 +1182,7 @@
         "Table": "INFORMATION_SCHEMA.`TABLES`"
       }
     },
-    "gen4-plan": "symbol other_column not found"
+    "gen4-plan": "symbol foobar not found"
   },
   {
     "comment": "expand star with information schema",
