@@ -1298,8 +1298,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					}
 					return nil
 				}
-				// close cursor
-				c.cs = nil
 				break
 			}
 
