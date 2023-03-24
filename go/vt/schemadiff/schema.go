@@ -796,7 +796,7 @@ func (s *Schema) ValidateViewReferences() error {
 
 	for _, view := range s.Views() {
 		sel := sqlparser.CloneSelectStatement(view.CreateView.Select) // Analyze(), below, rewrites the select; we don't want to actually modify the schema
-		_, err := semantics.Analyze(sel, semanticKS.Name, schemaInformation)
+		_, err := semantics.AnalyzeStrict(sel, semanticKS.Name, schemaInformation)
 		formalizeErr := func(err error) error {
 			if err == nil {
 				return nil

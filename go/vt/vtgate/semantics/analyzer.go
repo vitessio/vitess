@@ -80,6 +80,23 @@ func Analyze(statement sqlparser.Statement, currentDb string, si SchemaInformati
 	return semTable, nil
 }
 
+// AnalyzeStrict analyzes the parsed query, and fails the analysis for any possible errors
+func AnalyzeStrict(statement sqlparser.Statement, currentDb string, si SchemaInformation) (*SemTable, error) {
+	st, err := Analyze(statement, currentDb, si)
+	if err != nil {
+		return nil, err
+	}
+
+	if st.NotUnshardedErr != nil {
+		return nil, st.NotUnshardedErr
+	}
+	if st.NotSingleRouteErr != nil {
+		return nil, st.NotSingleRouteErr
+	}
+
+	return st, nil
+}
+
 func (a *analyzer) newSemTable(statement sqlparser.Statement, coll collations.ID) *SemTable {
 	var comments *sqlparser.ParsedComments
 	commentedStmt, isCommented := statement.(sqlparser.Commented)
