@@ -17,6 +17,7 @@ limitations under the License.
 package vtgate
 
 import (
+	"bufio"
 	"bytes"
 	"context"
 	"crypto/sha256"
@@ -35,7 +36,6 @@ import (
 
 	"vitess.io/vitess/go/acl"
 	"vitess.io/vitess/go/cache"
-	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/stats"
@@ -1020,9 +1020,14 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 
 func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
 	planHash := sha256.New()
-	_, _ = planHash.Write([]byte(vcursor.planPrefixKey(ctx)))
-	_, _ = planHash.Write([]byte{':'})
-	_, _ = planHash.Write(hack.StringBytes(query))
+
+	{
+		// use a bufio.Writer to accumulate writes instead of writing directly to the hasher
+		buf := bufio.NewWriter(planHash)
+		vcursor.keyForPlan(ctx, query, buf)
+		buf.Flush()
+	}
+
 	planKey := hex.EncodeToString(planHash.Sum(nil))
 
 	if sqlparser.CachePlan(statement) && qo.cachePlan() {
