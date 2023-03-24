@@ -516,7 +516,8 @@ func (be *BuiltinBackupEngine) backupFiles(
 			// Wait until we are ready to go, return if we encounter an error
 			acqErr := sema.Acquire(ctx, 1)
 			if acqErr != nil {
-				log.Errorf("not able to acquire semaphore to backup file:%s  err: %s", fe, acqErr.Error())
+				log.Errorf("not able to acquire semaphore to backup file:%s  err: %s", fe.Name, acqErr.Error())
+				bh.RecordError(acqErr)
 				return
 			}
 			defer sema.Release(1)
@@ -891,6 +892,7 @@ func (be *BuiltinBackupEngine) restoreFiles(ctx context.Context, params RestoreP
 			acqErr := sema.Acquire(ctx, 1)
 			if acqErr != nil {
 				log.Errorf("not able to acquire semaphore to restore file:%s  err: %s", fe.Name, acqErr.Error())
+				rec.RecordError(acqErr)
 				return
 			}
 			defer sema.Release(1)

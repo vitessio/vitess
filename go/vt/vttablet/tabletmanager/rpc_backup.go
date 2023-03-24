@@ -99,9 +99,7 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 			// Change our type back to the original value.
 			// Original type could be primary so pass in a real value for PrimaryTermStartTime
 			if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
-				if err != nil {
-					l.Errorf("mysql backup command returned error: %v", err)
-				}
+				l.Errorf("Fail to change tablet type from %v to %v : %v", topodatapb.TabletType_BACKUP, originalType, err)
 			}
 		}()
 	}
@@ -123,24 +121,6 @@ func (tm *TabletManager) Backup(ctx context.Context, logger logutil.Logger, req 
 	}
 
 	returnErr := mysqlctl.Backup(ctx, backupParams)
-
-	if engine.ShouldDrainForBackup() {
-		bgCtx := context.Background()
-		// Starting from here we won't be able to recover if we get stopped by a cancelled
-		// context. It is also possible that the context already timed out during the
-		// above call to Backup. Thus we use the background context to get through to the finish.
-
-		// Change our type back to the original value.
-		// Original type could be primary so pass in a real value for PrimaryTermStartTime
-		if err := tm.changeTypeLocked(bgCtx, originalType, DBActionNone, SemiSyncActionNone); err != nil {
-			// failure in changing the topology type is probably worse,
-			// so returning that (we logged the snapshot error anyway)
-			if returnErr != nil {
-				l.Errorf("mysql backup command returned error: %v", returnErr)
-			}
-			returnErr = err
-		}
-	}
 
 	return returnErr
 }

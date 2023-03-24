@@ -85,7 +85,7 @@ func TestExecuteBackup(t *testing.T) {
 	if needIt {
 		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
 		if err := createBackupDir(backupRoot, fpath); err != nil {
-			t.Fatalf("failed to create directory %s: %v", fpath, err)
+			require.Failf(t, err.Error(), "failed to create directory: %s", fpath)
 		}
 	}
 
@@ -189,15 +189,15 @@ func TestExecuteBackupWithCancelledContext(t *testing.T) {
 	require.NoError(t, createBackupFiles(path.Join(dataDir, "test2"), 2, "ibd"))
 	defer os.RemoveAll(backupRoot)
 
+	// cancel the context deliberately
 	ctx, cancel := context.WithCancel(context.Background())
-	time.Sleep(100 * time.Millisecond)
 	cancel()
 	needIt, err := needInnoDBRedoLogSubdir()
 	require.NoError(t, err)
 	if needIt {
 		fpath := path.Join("log", mysql.DynamicRedoLogSubdir)
 		if err := createBackupDir(backupRoot, fpath); err != nil {
-			t.Fatalf("failed to create directory %s: %v", fpath, err)
+			require.Failf(t, err.Error(), "failed to create directory: %s", fpath)
 		}
 	}
 
@@ -254,8 +254,10 @@ func TestExecuteBackupWithCancelledContext(t *testing.T) {
 		Shard:        shard,
 	}, bh)
 
-	require.NoError(t, err)
-	assert.True(t, ok)
+	require.Error(t, err)
+	// out of four, two files will fail.
+	require.ErrorContains(t, err, "context canceled;context canceled")
+	assert.False(t, ok)
 }
 
 // needInnoDBRedoLogSubdir indicates whether we need to create a redo log subdirectory.
