@@ -982,7 +982,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		err = handler.ComQuery(c, sql, func(qr *sqltypes.Result, more bool) error {
 			// only send meta data, no rows
 			if len(qr.Fields) == 0 {
-				return NewSQLErrorFromError(errors.New("unexpected: query ended with fields and no error"))
+				return NewSQLErrorFromError(errors.New("unexpected: query ended without fields and no error"))
 			}
 
 			// for COM_FIELD_LIST response, don't send the number of fields first.
@@ -1528,16 +1528,14 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 			c.cs.done <- err
 		}()
 
-		// Immediately get the very first query result, to write the fields
+		// Immediately get the very first query result to write the fields
 		if qr, ok := <- c.cs.next; ok {
-			if !fieldSent {
-				fieldSent = true
-				if len(qr.Fields) == 0 {
-					sendFinished = true
-					err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
-				} else {
-					err = c.writeFields(qr)
-				}
+			fieldSent = true
+			if len(qr.Fields) == 0 {
+				sendFinished = true
+				err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+			} else {
+				err = c.writeFields(qr)
 			}
 			c.cs.pending = qr
 		} else {
