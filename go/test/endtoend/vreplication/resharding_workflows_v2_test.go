@@ -179,7 +179,7 @@ func tstWorkflowComplete(t *testing.T) error {
 func testWorkflowUpdate(t *testing.T) {
 	tabletTypes := "primary,replica,rdonly"
 	// Test vtctlclient first
-	_, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, "no.exist", "update")
+	_, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, "noexist.noexist", "update")
 	require.Error(t, err, err)
 	resp, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, ksWorkflow, "update")
 	require.NoError(t, err)
