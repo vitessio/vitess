@@ -35,6 +35,7 @@ import (
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/vtctl/workflow/vexec"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -774,7 +775,14 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	}
 	res, err := vx.CallbackContext(ctx, callback)
 	if err != nil {
+		if topo.IsErrType(err, topo.NoNode) {
+			return nil, vterrors.Wrapf(err, "%s keyspace does not exist", req.Keyspace)
+		}
 		return nil, err
+	}
+
+	if len(res) == 0 {
+		return nil, fmt.Errorf("no streams found for the %s workflow in the %s keyspace", req.TabletRequest.Workflow, req.Keyspace)
 	}
 
 	response := &vtctldatapb.WorkflowUpdateResponse{}

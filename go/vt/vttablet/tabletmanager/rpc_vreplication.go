@@ -18,7 +18,6 @@ package tabletmanager
 
 import (
 	"context"
-	"fmt"
 	"strings"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -60,7 +59,11 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 }
 
 // UpdateVRWorkflow updates the sidecar databases's vreplication
-// record for this tablet's vreplication workflow stream.
+// record for this tablet's vreplication workflow stream. If there
+// is no stream for this workflow on the tablet then a nil result
+// is returned as this is expected e.g. on source tablets of a
+// Reshard workflow (source and target are the same keyspace). The
+// caller can consider this case an error if they choose to.
 // Note: the VReplication engine creates a new controller for the
 // workflow when the record is updated, so we also in effect restart
 // the workflow via the update.
@@ -78,7 +81,11 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 		return nil, err
 	}
 	if res == nil || len(res.Rows) == 0 {
-		return nil, fmt.Errorf("no stream found for workflow %s", req.Workflow)
+		// No streams on this tablet to update. This is
+		// expected e.g. on source tablets for Reshard
+		// workflows. If callers want to treat this
+		// scenario as an error they can.
+		return &tabletmanagerdatapb.UpdateVRWorkflowResponse{Result: nil}, nil
 	}
 
 	row := res.Named().Row()

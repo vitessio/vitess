@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/log"
 	workflow2 "vitess.io/vitess/go/vt/vtctl/workflow"
 
 	"google.golang.org/protobuf/encoding/prototext"
@@ -241,6 +242,7 @@ func (vx *vexec) exec() (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 // execCallback runs the provided callback function on backend shard primaries.
 // It collects query results from all shards and returns an aggregate (UNION
 // ALL -like) result.
+// Note: any nil results from the callback are ignored.
 func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var wg sync.WaitGroup
 	allErrors := &concurrency.AllErrorRecorder{}
@@ -256,6 +258,10 @@ func (vx *vexec) execCallback(callback func(context.Context, *topo.TabletInfo) (
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
+				if qr == nil {
+					log.Infof("Callback returned nil result for tablet %s-%s", primary.Alias.Cell, primary.Alias.Uid)
+					return // no result
+				}
 				mu.Lock()
 				defer mu.Unlock()
 				results[primary] = qr
@@ -352,6 +358,9 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 	default:
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, rpcReq)
+	if len(results) == 0 {
+		return nil, fmt.Errorf("no streams found for the %s workflow in the %s keyspace", workflow, keyspace)
+	}
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }
 

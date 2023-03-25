@@ -24,6 +24,7 @@ import (
 
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
@@ -168,6 +169,7 @@ func (vx *VExec) CallbackContext(ctx context.Context, callback func(context.Cont
 // execCallback runs the provided callback function on backend shard primaries.
 // It collects query results from all shards and returns an aggregate (UNION
 // ALL -like) result.
+// Note: any nil results from the callback are ignored.
 func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
 	var (
 		wg sync.WaitGroup
@@ -184,6 +186,10 @@ func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context
 			if err != nil {
 				allErrors.RecordError(err)
 			} else {
+				if qr == nil {
+					log.Infof("Callback returned nil result for tablet %s-%s", primary.Alias.Cell, primary.Alias.Uid)
+					return // no result
+				}
 				mu.Lock()
 				defer mu.Unlock()
 				results[primary] = qr
