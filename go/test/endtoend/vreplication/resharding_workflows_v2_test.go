@@ -183,14 +183,14 @@ func testWorkflowUpdate(t *testing.T) {
 	require.Error(t, err, err)
 	resp, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, ksWorkflow, "update")
 	require.NoError(t, err)
-	require.NotEqual(t, "", resp)
+	require.NotEmpty(t, resp)
 
 	// Test vtctldclient last
 	_, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", "noexist", "update", "--workflow", "noexist", "--tablet-types", tabletTypes)
 	require.Error(t, err)
 	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKs, "update", "--workflow", workflowName, "--tablet-types", tabletTypes)
 	require.NoError(t, err, err)
-	require.NotEqual(t, "", resp)
+	require.NotEmpty(t, resp)
 }
 
 func tstWorkflowCancel(t *testing.T) error {
