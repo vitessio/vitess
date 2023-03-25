@@ -438,6 +438,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 
 	testReplicatingWithPKEnumCols(t)
 
+	// Confirm that updating MoveTable workflows works.
+	testWorkflowUpdate(t)
+
 	testRestOfWorkflow(t)
 
 	listAllArgs := []string{"workflow", "customer", "listall"}
@@ -449,9 +452,6 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	createMoveTablesWorkflow(t, "Lead,Lead-1")
 	output, _ = vc.VtctlClient.ExecuteCommandWithOutput(listAllArgs...)
 	require.Contains(t, output, "Following workflow(s) found in keyspace customer: wf1")
-
-	// Confirm that updating MoveTable workflows works.
-	testWorkflowUpdate(t)
 
 	err := tstWorkflowCancel(t)
 	require.NoError(t, err)
