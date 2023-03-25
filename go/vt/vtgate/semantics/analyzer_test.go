@@ -412,7 +412,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 						require.NoError(t, tbl.NotSingleRouteErr)
 						typ, _, found := tbl.TypeForExpr(expr)
 						assert.True(t, found)
-						assert.Equal(t, test.typ, typ.Type)
+						assert.Equal(t, test.typ, typ)
 					}
 				})
 			}
