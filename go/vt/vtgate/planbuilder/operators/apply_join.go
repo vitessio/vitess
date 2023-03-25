@@ -122,7 +122,7 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 		return err
 	}
 	for i, col := range cols {
-		offset, err := a.LHS.AddColumn(ctx, aeWrap(col))
+		offset, err := a.pushColLeft(ctx, aeWrap(col))
 		if err != nil {
 			return err
 		}
@@ -140,11 +140,28 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 	return nil
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error) {
+func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
+	newLHS, offset, err := a.LHS.AddColumn(ctx, e)
+	if err != nil {
+		return 0, err
+	}
+	a.LHS = newLHS
+	return offset, nil
+}
+func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
+	newRHS, offset, err := a.RHS.AddColumn(ctx, e)
+	if err != nil {
+		return 0, err
+	}
+	a.RHS = newRHS
+	return offset, nil
+}
+
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	// first check if we already are passing through this expression
 	for i, existing := range a.ColumnsAST {
 		if ctx.SemTable.EqualsExpr(existing, expr.Expr) {
-			return i, nil
+			return a, i, nil
 		}
 	}
 
@@ -158,36 +175,39 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.
 	// or if we have to break the expression into left and right parts
 	switch {
 	case deps.IsSolvedBy(lhs):
-		offset, err := a.LHS.AddColumn(ctx, expr)
+		offset, err := a.pushColLeft(ctx, expr)
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
 		a.Columns = append(a.Columns, -offset-1)
+	case deps.IsSolvedBy(rhs):
+		offset, err := a.pushColRight(ctx, expr)
+		if err != nil {
+			return nil, 0, err
+		}
+		a.Columns = append(a.Columns, offset+1)
 	case deps.IsSolvedBy(both):
 		bvNames, lhsExprs, rhsExpr, err := BreakExpressionInLHSandRHS(ctx, expr.Expr, lhs)
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
 		for i, lhsExpr := range lhsExprs {
-			offset, err := a.LHS.AddColumn(ctx, aeWrap(lhsExpr))
+			offset, err := a.pushColLeft(ctx, aeWrap(lhsExpr))
 			if err != nil {
-				return 0, err
+				return nil, 0, err
 			}
 			a.Vars[bvNames[i]] = offset
 		}
-		expr = aeWrap(rhsExpr)
-		fallthrough // now we just pass the rest to the RHS of the join
-	case deps.IsSolvedBy(rhs):
-		offset, err := a.RHS.AddColumn(ctx, expr)
+		offset, err := a.pushColRight(ctx, aeWrap(rhsExpr))
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
 		a.Columns = append(a.Columns, offset+1)
 	default:
-		return 0, vterrors.VT13002(sqlparser.String(expr))
+		return nil, 0, vterrors.VT13002(sqlparser.String(expr))
 	}
 
 	// the expression wasn't already there - let's add it
 	a.ColumnsAST = append(a.ColumnsAST, expr.Expr)
-	return len(a.Columns) - 1, nil
+	return a, len(a.Columns) - 1, nil
 }

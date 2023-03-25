@@ -39,7 +39,7 @@ type (
 
 		// AddColumn tells an operator to also output an additional column specified.
 		// The offset to the column is returned.
-		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error)
+		AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (Operator, int, error)
 	}
 
 	// PhysicalOperator means that this operator is ready to be turned into a logical plan

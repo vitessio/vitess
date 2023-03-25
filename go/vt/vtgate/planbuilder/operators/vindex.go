@@ -66,8 +66,14 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 
 var _ ops.PhysicalOperator = (*Vindex)(nil)
 
-func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error) {
-	return addColumn(v, expr.Expr)
+func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	offset, err := addColumn(v, expr.Expr)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	return v, offset, nil
+
 }
 
 func (v *Vindex) GetColumns() []*sqlparser.ColName {

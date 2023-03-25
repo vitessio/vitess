@@ -88,8 +88,8 @@ func (noInputs) Inputs() []ops.Operator {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (int, error) {
-	return 0, vterrors.VT13001("the noColumns operator cannot accept columns")
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 
 // AddPredicate implements the Operator interface

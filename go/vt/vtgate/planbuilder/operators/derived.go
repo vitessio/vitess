@@ -132,15 +132,15 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return d, nil
 }
 
-func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error) {
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
-		return 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
 	}
 
 	i, err := d.findOutputColumn(col)
 	if err != nil {
-		return 0, err
+		return nil, 0, err
 	}
 	var pos int
 	d.ColumnsOffset, pos = addToIntSlice(d.ColumnsOffset, i)
@@ -148,12 +148,13 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		_, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())))
+		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())))
 		if err != nil {
-			return 0, err
+			return nil, 0, err
 		}
+		d.Source = newSrc
 	}
-	return pos, nil
+	return d, pos, nil
 }
 
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {
