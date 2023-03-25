@@ -587,6 +587,7 @@ func TestCellAliasVreplicationWorkflow(t *testing.T) {
 	verifyClusterHealth(t, vc)
 
 	insertInitialData(t)
+
 	t.Run("VStreamFrom", func(t *testing.T) {
 		testVStreamFrom(t, keyspace, 2)
 	})
@@ -749,9 +750,10 @@ func shardCustomer(t *testing.T, testReverse bool, cells []*Cell, sourceCellOrAl
 
 		query := "select cid from customer"
 		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", query, query))
-		insertQuery1 := "insert into customer(cid, name) values(1001, 'tempCustomer1')"
-		matchInsertQuery1 := "insert into customer(cid, `name`) values (:vtg1, :vtg2)"
-		require.True(t, validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1))
+		insertQuery1 := "insert into customer(cid, name, meta) values(1001, 'tempCustomer1', '{\"a\": 1629849600, \"b\": 930701976723823, \"c\": 123456789012345678901234567890}')"
+
+		matchInsertQuery1 := "insert into customer(cid, `name`, meta) values (:vtg1, :vtg2, :vtg3)"
+		validateThatQueryExecutesOnTablet(t, vtgateConn, productTab, "product", insertQuery1, matchInsertQuery1)
 
 		// confirm that the backticking of table names in the routing rules works
 		tbls := []string{"Lead", "Lead-1"}

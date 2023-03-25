@@ -150,7 +150,7 @@ func TestJSONTypes(t *testing.T) {
 	}, {
 		// opaque, decimal
 		data:     []byte{15, 246, 8, 13, 4, 135, 91, 205, 21, 4, 210},
-		expected: `1.234567891234e+08`,
+		expected: `123456789.1234`,
 	}, {
 		// opaque, bit field. Not yet implemented.
 		data:     []byte{15, 16, 2, 202, 254},

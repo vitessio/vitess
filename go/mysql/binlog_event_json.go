@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/shopspring/decimal"
+
 	"vitess.io/vitess/go/vt/log"
 
 	"github.com/spyzhov/ajson"
@@ -472,11 +474,12 @@ func (oh opaquePlugin) getNode(typ jsonDataType, data []byte, pos int) (node *aj
 		if err != nil {
 			return nil, err
 		}
-		float, err := val.ToFloat64()
+		decimalValue, err := decimal.NewFromString(val.ToString())
+
 		if err != nil {
 			return nil, err
 		}
-		node = ajson.NumericNode("", float)
+		node = ajson.DecimalNode("", decimalValue)
 	default:
 		return nil, fmt.Errorf("opaque type %d is not supported yet, data %v", dataType, data[2:])
 	}

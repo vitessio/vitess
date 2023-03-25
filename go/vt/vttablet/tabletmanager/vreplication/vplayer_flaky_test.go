@@ -1376,7 +1376,7 @@ func TestPlayerTypes(t *testing.T) {
 	flavor := strings.ToLower(env.Flavor)
 	// Disable tests on percona and mariadb platforms in CI since they
 	// either don't support JSON or JSON support is not enabled by default
-	if strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
+	if strings.Contains(flavor, "mysql56") || strings.Contains(flavor, "mysql57") || strings.Contains(flavor, "mysql80") {
 		log.Infof("Running JSON column type tests on flavor %s", flavor)
 		enableJSONColumnTesting = true
 	} else {
@@ -1422,8 +1422,8 @@ func TestPlayerTypes(t *testing.T) {
 	})
 	if enableJSONColumnTesting {
 		execStatements(t, []string{
-			"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))",
-			fmt.Sprintf("create table %s.vitess_json(id int, val1 json, val2 json, val3 json, val4 json, val5 json, primary key(id))", vrepldb),
+			"create table vitess_json(id int auto_increment, val1 json, val2 json, val3 json, val4 json, val5 json, val6 json, primary key(id))",
+			fmt.Sprintf("create table %s.vitess_json(id int, val1 json, val2 json, val3 json, val4 json, val5 json, val6 json, primary key(id))", vrepldb),
 		})
 		defer execStatements(t, []string{
 			"drop table vitess_json",
@@ -1512,21 +1512,20 @@ func TestPlayerTypes(t *testing.T) {
 	}}
 	if enableJSONColumnTesting {
 		testcases = append(testcases, testcase{
-			input: "insert into vitess_json(val1,val2,val3,val4,val5) values (null,'{}','123','{\"a\":[42,100]}', '{\"foo\":\"bar\"}')",
-			output: "insert into vitess_json(id,val1,val2,val3,val4,val5) values (1," +
-				"convert(null using utf8mb4)," + "convert('{}' using utf8mb4)," + "convert('123' using utf8mb4)," +
-				"convert('{\\\"a\\\":[42,100]}' using utf8mb4)," + "convert('{\\\"foo\\\":\\\"bar\\\"}' using utf8mb4))",
-			table: "vitess_json",
+			input:  "insert into vitess_json(val1,val2,val3,val4,val5,val6) values (null,'{}','1629849600','{\"a\":[42,-1,3.1415,-128,127,-9223372036854775808,9223372036854775807,18446744073709551615]}', '{\"foo\":\"bar\"}', json_object(\"dec1\",21312332514254356413641614614))",
+			output: "insert into vitess_json(id,val1,val2,val3,val4,val5,val6) values (1,convert(null using utf8mb4),convert('{}' using utf8mb4),convert('1629849600' using utf8mb4),convert('{\\\"a\\\":[42,-1,3.1415,-128,127,-9223372036854775808,9223372036854775807,18446744073709551615]}' using utf8mb4),convert('{\\\"foo\\\":\\\"bar\\\"}' using utf8mb4),convert('{\\\"dec1\\\":21312332514254356413641614614}' using utf8mb4))",
+			table:  "vitess_json",
 			data: [][]string{
-				{"1", "", "{}", "123", `{"a": [42, 100]}`, `{"foo": "bar"}`},
+				{"1", "", "{}", "1629849600", `{"a": [42, -1, 3.1415, -128, 127, -9223372036854775808, 9223372036854775807, 18446744073709551615]}`, `{"foo": "bar"}`, `{"dec1": 2.1312332514254357e28}`},
 			},
 		})
 		testcases = append(testcases, testcase{
-			input:  "update vitess_json set val4 = '{\"a\": [98, 123]}', val5 = convert(x'7b7d' using utf8mb4)",
-			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('123' using utf8mb4), val4=convert('{\\\"a\\\":[98,123]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
+			input: "update vitess_json set val4 = '{\"a\": [-9223372036854775808, -2147483648]}', val5 = convert(x'7b7d' using utf8mb4)",
+			//output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('1629849600' using utf8mb4), val4=convert('{\\\"a\\\":[-9223372036854775808,-2147483648]}' using utf8mb4), val5=convert('{}' using utf8mb4) where id=1",
+			output: "update vitess_json set val1=convert(null using utf8mb4), val2=convert('{}' using utf8mb4), val3=convert('1629849600' using utf8mb4), val4=convert('{\\\"a\\\":[-9223372036854775808,-2147483648]}' using utf8mb4), val5=convert('{}' using utf8mb4), val6=convert('{\\\"dec1\\\":21312332514254356413641614614}' using utf8mb4) where id=1",
 			table:  "vitess_json",
 			data: [][]string{
-				{"1", "", "{}", "123", `{"a": [98, 123]}`, `{}`},
+				{"1", "", "{}", "1629849600", `{"a": [-9223372036854775808, -2147483648]}`, `{}`, `{"dec1": 2.1312332514254357e28}`},
 			},
 		})
 	}
