@@ -66,8 +66,8 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 
 var _ ops.PhysicalOperator = (*Vindex)(nil)
 
-func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	return addColumn(v, expr)
+func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error) {
+	return addColumn(v, expr.Expr)
 }
 
 func (v *Vindex) GetColumns() []*sqlparser.ColName {
@@ -77,7 +77,6 @@ func (v *Vindex) AddCol(col *sqlparser.ColName) {
 	v.Columns = append(v.Columns, col)
 }
 
-// checkValid implements the Operator interface
 func (v *Vindex) CheckValid() error {
 	if len(v.Table.Predicates) == 0 {
 		return vterrors.VT12001(VindexUnsupported + " (where clause missing)")

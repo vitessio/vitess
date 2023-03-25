@@ -76,3 +76,7 @@ func planSingleRoute(rb *Route, horizon *Horizon) (ops.Operator, rewrite.VisitRu
 	rb.Source, horizon.Source = horizon, rb.Source
 	return rb, rewrite.SkipChildren, nil
 }
+
+func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
+	return &sqlparser.AliasedExpr{Expr: e}
+}

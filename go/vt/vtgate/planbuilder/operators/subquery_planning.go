@@ -361,7 +361,7 @@ func rewriteColumnsInSubqueryOpForJoin(
 			return true
 		}
 		// if it does not exist, then push this as an output column there and add it to the joinVars
-		offset, err := resultInnerOp.AddColumn(ctx, node)
+		offset, err := resultInnerOp.AddColumn(ctx, aeWrap(node))
 		if err != nil {
 			rewriteError = err
 			return false
@@ -426,7 +426,7 @@ func createCorrelatedSubqueryOp(
 			bindVars[node] = bindVar
 
 			// if it does not exist, then push this as an output column in the outerOp and add it to the joinVars
-			offset, err := resultOuterOp.AddColumn(ctx, node)
+			offset, err := resultOuterOp.AddColumn(ctx, aeWrap(node))
 			if err != nil {
 				rewriteError = err
 				return true

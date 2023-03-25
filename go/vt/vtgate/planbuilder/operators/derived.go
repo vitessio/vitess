@@ -132,8 +132,8 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return d, nil
 }
 
-func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
-	col, ok := expr.(*sqlparser.ColName)
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error) {
+	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
 	}
@@ -148,7 +148,7 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Exp
 	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		_, err := d.Source.AddColumn(ctx, sqlparser.NewColName(col.Name.String()))
+		_, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())))
 		if err != nil {
 			return 0, err
 		}

@@ -67,8 +67,8 @@ func (to *Table) AddPredicate(_ *plancontext.PlanningContext, expr sqlparser.Exp
 	return newFilter(to, expr), nil
 }
 
-func (to *Table) AddColumn(_ *plancontext.PlanningContext, e sqlparser.Expr) (int, error) {
-	return addColumn(to, e)
+func (to *Table) AddColumn(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error) {
+	return addColumn(to, expr.Expr)
 }
 
 func (to *Table) GetColumns() []*sqlparser.ColName {

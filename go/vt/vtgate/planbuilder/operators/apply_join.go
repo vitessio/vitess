@@ -122,7 +122,7 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 		return err
 	}
 	for i, col := range cols {
-		offset, err := a.LHS.AddColumn(ctx, col)
+		offset, err := a.LHS.AddColumn(ctx, aeWrap(col))
 		if err != nil {
 			return err
 		}
@@ -140,10 +140,10 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 	return nil
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (int, error) {
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (int, error) {
 	// first check if we already are passing through this expression
 	for i, existing := range a.ColumnsAST {
-		if ctx.SemTable.EqualsExpr(existing, expr) {
+		if ctx.SemTable.EqualsExpr(existing, expr.Expr) {
 			return i, nil
 		}
 	}
@@ -151,7 +151,7 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 	lhs := TableID(a.LHS)
 	rhs := TableID(a.RHS)
 	both := lhs.Merge(rhs)
-	deps := ctx.SemTable.RecursiveDeps(expr)
+	deps := ctx.SemTable.RecursiveDeps(expr.Expr)
 
 	// if we get here, it's a new expression we are dealing with.
 	// We need to decide if we can push it all on either side,
@@ -164,18 +164,18 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 		}
 		a.Columns = append(a.Columns, -offset-1)
 	case deps.IsSolvedBy(both):
-		bvNames, lhsExprs, rhsExpr, err := BreakExpressionInLHSandRHS(ctx, expr, lhs)
+		bvNames, lhsExprs, rhsExpr, err := BreakExpressionInLHSandRHS(ctx, expr.Expr, lhs)
 		if err != nil {
 			return 0, err
 		}
 		for i, lhsExpr := range lhsExprs {
-			offset, err := a.LHS.AddColumn(ctx, lhsExpr)
+			offset, err := a.LHS.AddColumn(ctx, aeWrap(lhsExpr))
 			if err != nil {
 				return 0, err
 			}
 			a.Vars[bvNames[i]] = offset
 		}
-		expr = rhsExpr
+		expr = aeWrap(rhsExpr)
 		fallthrough // now we just pass the rest to the RHS of the join
 	case deps.IsSolvedBy(rhs):
 		offset, err := a.RHS.AddColumn(ctx, expr)
@@ -188,6 +188,6 @@ func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr sqlparser.E
 	}
 
 	// the expression wasn't already there - let's add it
-	a.ColumnsAST = append(a.ColumnsAST, expr)
+	a.ColumnsAST = append(a.ColumnsAST, expr.Expr)
 	return len(a.Columns) - 1, nil
 }
