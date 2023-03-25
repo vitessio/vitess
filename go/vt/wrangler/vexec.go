@@ -358,8 +358,8 @@ func (wr *Wrangler) WorkflowAction(ctx context.Context, workflow, keyspace, acti
 	default:
 	}
 	results, err := wr.execWorkflowAction(ctx, workflow, keyspace, action, dryRun, rpcReq)
-	if len(results) == 0 {
-		return nil, fmt.Errorf("no streams found for the %s workflow in the %s keyspace", workflow, keyspace)
+	if len(results) == 0 && !dryRun { // Dry runs produce no actual tablet results
+		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", workflow, keyspace)
 	}
 	return wr.convertQueryResultToSQLTypesResult(results), err
 }

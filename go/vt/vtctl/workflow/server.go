@@ -782,7 +782,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	}
 
 	if len(res) == 0 {
-		return nil, fmt.Errorf("no streams found for the %s workflow in the %s keyspace", req.TabletRequest.Workflow, req.Keyspace)
+		return nil, fmt.Errorf("the %s workflow does not exist in the %s keyspace", req.TabletRequest.Workflow, req.Keyspace)
 	}
 
 	response := &vtctldatapb.WorkflowUpdateResponse{}
