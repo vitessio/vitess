@@ -18,6 +18,7 @@ package topo
 
 import (
 	"path"
+	"strings"
 
 	"context"
 
@@ -51,6 +52,16 @@ func (ki *KeyspaceInfo) KeyspaceName() string {
 // SetKeyspaceName sets the keyspace name
 func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 	ki.keyspace = name
+}
+
+var ksNameReplacer = strings.NewReplacer("/", "")
+
+func ValidateKeyspaceName(name string) (string, error) {
+	if validated := ksNameReplacer.Replace(name); name != validated {
+		return validated, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; expected %s instead", name, validated)
+	}
+
+	return name, nil
 }
 
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
@@ -160,6 +171,10 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 // CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
+	if _, err := ValidateKeyspaceName(keyspace); err != nil {
+		return vterrors.Wrap(err, "CreateKeyspace got invalid keyspace name")
+	}
+
 	data, err := value.MarshalVT()
 	if err != nil {
 		return err
@@ -180,6 +195,10 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 
 // GetKeyspace reads the given keyspace and returns it
 func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
+	if _, err := ValidateKeyspaceName(keyspace); err != nil {
+		return nil, vterrors.Wrap(err, "GetKeyspace got invalid keyspace name")
+	}
+
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
 	data, version, err := ts.globalCell.Get(ctx, keyspacePath)
 	if err != nil {
