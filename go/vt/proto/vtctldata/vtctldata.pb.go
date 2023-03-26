@@ -10858,8 +10858,8 @@ type WorkflowUpdateResponse_TabletInfo struct {
 
 	Tablet string `protobuf:"bytes,1,opt,name=tablet,proto3" json:"tablet,omitempty"`
 	// Changed is true if any of the provided values were different
-	// than what was already stored. This is based on the query
-	// result's RowsAffected being 0 or 1.
+	// than what was already stored. The value is based on the query
+	// result's RowsAffected being 0 or not.
 	Changed bool `protobuf:"varint,2,opt,name=changed,proto3" json:"changed,omitempty"`
 }
 

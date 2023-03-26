@@ -59,14 +59,14 @@ func (tm *TabletManager) VReplicationWaitForPos(ctx context.Context, id int32, p
 }
 
 // UpdateVRWorkflow updates the sidecar databases's vreplication
-// record for this tablet's vreplication workflow stream. If there
-// is no stream for this workflow on the tablet then a nil result
+// record for this tablet's vreplication workflow stream(s). If there
+// is no stream for the given workflow on the tablet then a nil result
 // is returned as this is expected e.g. on source tablets of a
 // Reshard workflow (source and target are the same keyspace). The
 // caller can consider this case an error if they choose to.
 // Note: the VReplication engine creates a new controller for the
-// workflow when the record is updated, so we also in effect restart
-// the workflow via the update.
+// workflow stream when the record is updated, so we also in effect
+// restart the workflow stream via the update.
 func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanagerdatapb.UpdateVRWorkflowRequest) (*tabletmanagerdatapb.UpdateVRWorkflowResponse, error) {
 	bindVars := map[string]*querypb.BindVariable{
 		"wf": sqltypes.StringBindVariable(req.Workflow),

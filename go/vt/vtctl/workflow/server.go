@@ -791,7 +791,7 @@ func (s *Server) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUp
 	for tinfo, tres := range res {
 		result := &vtctldatapb.WorkflowUpdateResponse_TabletInfo{
 			Tablet:  fmt.Sprintf("%s-%d (%s/%s)", tinfo.Alias.Cell, tinfo.Alias.Uid, tinfo.Keyspace, tinfo.Shard),
-			Changed: tres.RowsAffected == 1,
+			Changed: tres.RowsAffected > 0, // Can be more than one with shard merges
 		}
 		details = append(details, result)
 	}
