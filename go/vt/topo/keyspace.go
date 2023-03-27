@@ -56,6 +56,14 @@ func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 
 var ksNameReplacer = strings.NewReplacer("/", "")
 
+// ValidateKeyspaceNames checks if the provided name is a valid name for a
+// keyspace.
+//
+// If it is valid, the original name is returned with no error. If it is
+// invalid, the name with all invalid characters removed is returned, along
+// with an error.
+//
+// As of v17, "all invalid characters" is just the forward slash ("/").
 func ValidateKeyspaceName(name string) (string, error) {
 	if validated := ksNameReplacer.Replace(name); name != validated {
 		return validated, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; expected %s instead", name, validated)
