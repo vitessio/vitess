@@ -49,6 +49,13 @@ func newEvalBytesHex(raw []byte) eval {
 	return &evalBytes{tt: int16(sqltypes.VarBinary), isHexLiteral: true, col: collationBinary, bytes: raw}
 }
 
+// newEvalBytesBit creates a new evalBytes for a bit literal.
+// Turns out that a bit literal is not actually typed with
+// sqltypes.Bit, but with sqltypes.VarBinary.
+func newEvalBytesBit(raw []byte) eval {
+	return &evalBytes{tt: int16(sqltypes.VarBinary), isBitLiteral: true, col: collationBinary, bytes: raw}
+}
+
 func newEvalBinary(raw []byte) *evalBytes {
 	return newEvalRaw(sqltypes.VarBinary, raw, collationBinary)
 }

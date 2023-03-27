@@ -200,6 +200,8 @@ func (ast *astCompiler) translateLiteral(lit *sqlparser.Literal) (*Literal, erro
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
+	case sqlparser.BitVal:
+		return NewLiteralBinaryFromBit(lit.Bytes())
 	case sqlparser.DateVal:
 		return NewLiteralDateFromBytes(lit.Bytes())
 	case sqlparser.TimeVal:

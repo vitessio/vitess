@@ -60,6 +60,12 @@ func (c *compiler) compileToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
+	case sqltypes.Date:
+		c.asm.Convert_dj(offset)
+	case sqltypes.Datetime, sqltypes.Timestamp:
+		c.asm.Convert_dtj(offset)
+	case sqltypes.Time:
+		c.asm.Convert_tj(offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}
@@ -80,6 +86,14 @@ func (c *compiler) compileArgToJSON(doct ctype, offset int) (ctype, error) {
 		c.asm.Convert_bj(offset)
 	case sqltypes.Null:
 		c.asm.Convert_Nj(offset)
+	case sqltypes.Date:
+		c.asm.Convert_dj(offset)
+	case sqltypes.Datetime:
+		c.asm.Convert_dtj(offset)
+	case sqltypes.Timestamp:
+		c.asm.Convert_dtj(offset)
+	case sqltypes.Time:
+		c.asm.Convert_tj(offset)
 	default:
 		return ctype{}, vterrors.Errorf(vtrpc.Code_UNIMPLEMENTED, "Unsupported type conversion: %s AS JSON", doct.Type)
 	}

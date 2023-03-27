@@ -683,6 +683,18 @@ func (asm *assembler) CmpString_collate(collation collations.Collation) {
 	}, "CMP VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
 
+func (asm *assembler) CmpJSON() {
+	asm.adjustStack(-2)
+
+	asm.emit(func(vm *VirtualMachine) int {
+		l := vm.stack[vm.sp-2].(*evalJSON)
+		r := vm.stack[vm.sp-1].(*evalJSON)
+		vm.sp -= 2
+		vm.flags.cmp, vm.err = compareJSONValue(l, r)
+		return 1
+	}, "CMP JSON(SP-2), JSON(SP-1)")
+}
+
 func (asm *assembler) CmpTuple(fullEquality bool) {
 	asm.adjustStack(-2)
 	asm.emit(func(vm *VirtualMachine) int {
@@ -731,7 +743,18 @@ func (asm *assembler) Convert_jB(offset int) {
 		arg := vm.stack[vm.sp-offset].(*evalJSON)
 		switch arg.Type() {
 		case json.TypeNumber:
-			vm.stack[vm.sp-offset] = vm.arena.newEvalBool(parseStringToFloat(arg.String()) != 0.0)
+			switch arg.NumberType() {
+			case json.NumberTypeInteger:
+				if i, ok := arg.Int64(); ok {
+					vm.stack[vm.sp-offset] = vm.arena.newEvalBool(i != 0)
+				} else {
+					d, _ := arg.Decimal()
+					vm.stack[vm.sp-offset] = vm.arena.newEvalBool(!d.IsZero())
+				}
+			case json.NumberTypeDouble:
+				d, _ := arg.Float64()
+				vm.stack[vm.sp-offset] = vm.arena.newEvalBool(d != 0.0)
+			}
 		default:
 			vm.stack[vm.sp-offset] = vm.arena.newEvalBool(true)
 		}
@@ -761,6 +784,30 @@ func (asm *assembler) Convert_cj(offset int) {
 		vm.stack[vm.sp-offset], vm.err = evalConvert_cj(arg)
 		return 1
 	}, "CONV VARCHAR(SP-%d), JSON", offset)
+}
+
+func (asm *assembler) Convert_dj(offset int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-offset].(*evalBytes)
+		vm.stack[vm.sp-offset] = evalConvert_dj(arg)
+		return 1
+	}, "CONV DATE(SP-%d), JSON", offset)
+}
+
+func (asm *assembler) Convert_dtj(offset int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-offset].(*evalBytes)
+		vm.stack[vm.sp-offset] = evalConvert_dtj(arg)
+		return 1
+	}, "CONV DATETIME(SP-%d), JSON", offset)
+}
+
+func (asm *assembler) Convert_tj(offset int) {
+	asm.emit(func(vm *VirtualMachine) int {
+		arg := vm.stack[vm.sp-offset].(*evalBytes)
+		vm.stack[vm.sp-offset] = evalConvert_tj(arg)
+		return 1
+	}, "CONV TIME(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_dB(offset int) {
@@ -796,7 +843,7 @@ func (asm *assembler) Convert_fj(offset int) {
 		arg := vm.stack[vm.sp-offset].(*evalFloat)
 		vm.stack[vm.sp-offset] = evalConvert_fj(arg)
 		return 1
-	}, "CONV FLOAT64(SP-%d), JSON")
+	}, "CONV FLOAT64(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_hex(offset int) {
@@ -858,14 +905,14 @@ func (asm *assembler) Convert_nj(offset int, isBool bool) {
 			vm.stack[vm.sp-offset] = json.NewNumber(arg.ToRawBytes())
 		}
 		return 1
-	}, "CONV numeric(SP-%d), JSON")
+	}, "CONV numeric(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_Nj(offset int) {
 	asm.emit(func(vm *VirtualMachine) int {
 		vm.stack[vm.sp-offset] = json.ValueNull
 		return 1
-	}, "CONV NULL(SP-%d), JSON")
+	}, "CONV NULL(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_uB(offset int) {
@@ -1406,15 +1453,13 @@ func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 	asm.emit(func(vm *VirtualMachine) int {
 		str := vm.stack[vm.sp-1].(*evalBytes)
 
-		decoded := make([]byte, mysqlBase64.DecodedLen(len(str.bytes)))
-
-		n, err := mysqlBase64.Decode(decoded, str.bytes)
+		decoded, err := mysqlBase64Decode(str.bytes)
 		if err != nil {
 			vm.stack[vm.sp-1] = nil
 			return 1
 		}
 		str.tt = int16(t)
-		str.bytes = decoded[:n]
+		str.bytes = decoded
 		return 1
 	}, "FN FROM_BASE64 VARCHAR(SP-1)")
 }
@@ -1581,7 +1626,7 @@ func (asm *assembler) Fn_JSON_OBJECT(args int) {
 		vm.stack[vm.sp-args] = j
 		vm.sp -= args - 1
 		return 1
-	}, "FN JSON_ARRAY (SP-%d)...(SP-1)", args)
+	}, "FN JSON_OBJECT (SP-%d)...(SP-1)", args)
 }
 
 func (asm *assembler) Fn_JSON_UNQUOTE() {
@@ -1799,8 +1844,7 @@ func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollatio
 	asm.emit(func(vm *VirtualMachine) int {
 		str := vm.stack[vm.sp-1].(*evalBytes)
 
-		encoded := make([]byte, mysqlBase64.EncodedLen(len(str.bytes)))
-		mysqlBase64.Encode(encoded, str.bytes)
+		encoded := mysqlBase64Encode(str.bytes)
 
 		str.tt = int16(t)
 		str.col = col
