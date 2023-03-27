@@ -25,10 +25,10 @@ import (
 
 	"vitess.io/vitess/go/cmd/vtctldclient/cli"
 	"vitess.io/vitess/go/textutil"
+	"vitess.io/vitess/go/vt/topo/topoproto"
 
 	binlogdatapb "vitess.io/vitess/go/vt/proto/binlogdata"
 	tabletmanagerdatapb "vitess.io/vitess/go/vt/proto/tabletmanagerdata"
-	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtctldatapb "vitess.io/vitess/go/vt/proto/vtctldata"
 )
 
@@ -74,8 +74,8 @@ var (
 				changes = true
 				for i, tabletType := range workflowUpdateOptions.TabletTypes {
 					workflowUpdateOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, ok := topodatapb.TabletType_value[workflowUpdateOptions.TabletTypes[i]]; !ok {
-						return fmt.Errorf("invalid tablet type: %s", tabletType)
+					if _, err := topoproto.ParseTabletType(workflowUpdateOptions.TabletTypes[i]); err != nil {
+						return err
 					}
 				}
 			} else {

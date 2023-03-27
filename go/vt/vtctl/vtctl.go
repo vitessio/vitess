@@ -3671,8 +3671,8 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 				changes = true
 				for i, tabletType := range *tabletTypes {
 					(*tabletTypes)[i] = strings.ToUpper(strings.TrimSpace(tabletType))
-					if _, ok := topodatapb.TabletType_value[(*tabletTypes)[i]]; !ok {
-						return fmt.Errorf("invalid tablet type: %s", tabletType)
+					if _, err = topoproto.ParseTabletType((*tabletTypes)[i]); err != nil {
+						return err
 					}
 				}
 			} else {
