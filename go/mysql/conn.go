@@ -914,11 +914,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 	switch data[0] {
 	case ComQuit:
-		log.Info("Received COM_QUIT")
 		c.recycleReadPacket()
 		return errors.New("ComQuit")
 	case ComInitDB:
-		log.Info("Received COM_INIT_DB")
 		db := c.parseComInitDB(data)
 		c.recycleReadPacket()
 		c.schemaName = db
@@ -939,7 +937,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComQuery:
-		log.Info("Received COM_QUERY")
 		// flush is called at the end of this block.
 		// To simplify error handling, we do not
 		// encapsulate it with a defer'd func()
@@ -968,7 +965,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComFieldList:
-		log.Info("Received COM_FIELD_LIST")
 		// support for deprecated COM_FIELD_LIST command
 		// https://dev.mysql.com/doc/internals/en/com-field-list.html
 
@@ -1008,7 +1004,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComPing:
-		log.Info("Received COM_PING")
 		c.recycleReadPacket()
 		// Return error if listener was shut down and OK otherwise
 		if c.listener.isShutdown() {
@@ -1023,7 +1018,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 	case ComSetOption:
-		log.Info("Received COM_SET_OPERATION")
 		operation, ok := c.parseComSetOption(data)
 		c.recycleReadPacket()
 		if ok {
@@ -1051,7 +1045,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 	case ComPrepare:
-		log.Info("Received COM_PREPARE")
 		query := c.parseComPrepare(data)
 		c.recycleReadPacket()
 
@@ -1126,7 +1119,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtExecute:
-		log.Info("Received COM_EXECUTE")
 		// flush is called at the end of this block.
 		// To simplify error handling, we do not
 		// encapsulate it with a defer'd func()
@@ -1169,7 +1161,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtSendLongData:
-		log.Info("Received COM_STMT_SEND_LONG_DATA")
 		stmtID, paramID, chunkData, ok := c.parseComStmtSendLongData(data)
 		c.recycleReadPacket()
 		if !ok {
@@ -1203,7 +1194,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			prepare.BindVars[key] = sqltypes.BytesBindVariable(chunk)
 		}
 	case ComStmtClose:
-		log.Info("Received COM_STMT_CLOSE")
 		stmtID, ok := c.parseComStmtClose(data)
 		c.recycleReadPacket()
 		if ok {
@@ -1211,7 +1201,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 		c.discardCursor()
 	case ComStmtReset:
-		log.Info("Received COM_STMT_RESET")
 		stmtID, ok := c.parseComStmtReset(data)
 		c.recycleReadPacket()
 		if !ok {
@@ -1244,7 +1233,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			return err
 		}
 	case ComStmtFetch:
-		log.Info("Received COM_STMT_FETCH")
 		c.startWriterBuffering()
 
 		stmtID, numRows, ok := c.parseComStmtFetch(data)
@@ -1313,21 +1301,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 			// write out some rows to prevent packets from getting too large
 			for len(c.cs.pending.Rows) < int(numRows) && len(c.cs.pending.Rows) > batchSize {
-				pendingRows := c.cs.pending.Rows[batchSize:]
-				c.cs.pending.Rows = c.cs.pending.Rows[:batchSize]
-				if err = c.writeBinaryRows(c.cs.pending); err != nil {
-					log.Errorf("Error writing result to %s: %v", c, err)
+				if err = c.writeNumRows(handler, int(numRows), true); err != nil {
 					return err
 				}
-				if err = c.writeEndResult(true, 0, 0, handler.WarningCount(c)); err != nil {
-					log.Errorf("Error writing result to %s: %v", c, err)
-					return err
-				}
-				if err = c.flush(); err != nil {
-					log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-					return err
-				}
-				c.cs.pending.Rows = pendingRows
 				numRows -= batchSize
 			}
 		}
@@ -1337,24 +1313,10 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			numRows = uint32(len(c.cs.pending.Rows))
 		}
 
-		// write first numRows
-		origRows := c.cs.pending.Rows
-		c.cs.pending.Rows = c.cs.pending.Rows[:numRows]
-		if err = c.writeBinaryRows(c.cs.pending); err != nil {
-			log.Errorf("Error writing result to %s: %v", c, err)
+		// write the first numRows
+		if err = c.writeNumRows(handler, int(numRows), false); err != nil {
 			return err
 		}
-		if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Errorf("Error writing result to %s: %v", c, err)
-			return err
-		}
-		if err = c.flush(); err != nil {
-			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-			return err
-		}
-
-		// retain rest of rows
-		c.cs.pending.Rows = origRows[numRows:]
 
 		// no rows left, close cursor
 		if len(c.cs.pending.Rows) == 0 {
@@ -1362,7 +1324,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 		return nil
 	case ComResetConnection:
-		log.Info("Received COM_RESET_CONNECTION")
 		// Clean up and reset the connection
 		c.recycleReadPacket()
 		handler.ComResetConnection(c)
@@ -1382,6 +1343,26 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 	}
 
+	return nil
+}
+
+// writeNumRows writes the specified number of rows to the handler, the end result, and flushes
+func (c *Conn) writeNumRows(handler Handler, numRows int, more bool) (err error) {
+	origRows := c.cs.pending.Rows
+	c.cs.pending.Rows = c.cs.pending.Rows[:numRows]
+	if err = c.writeBinaryRows(c.cs.pending); err != nil {
+		log.Errorf("Error writing result to %s: %v", c, err)
+		return err
+	}
+	if err = c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
+		log.Errorf("Error writing result to %s: %v", c, err)
+		return err
+	}
+	if err = c.flush(); err != nil {
+		log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+		return err
+	}
+	c.cs.pending.Rows = origRows[numRows:]
 	return nil
 }
 
