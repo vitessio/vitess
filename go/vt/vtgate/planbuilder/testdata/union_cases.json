@@ -1916,5 +1916,24 @@
         ]
       }
     }
+  },
+  {
+    "comment": "unknown columns are OK as long as the whole query is unsharded",
+    "query": "(SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'FAILED' ORDER BY buildNumber DESC LIMIT 1) AS last_failed) UNION ALL (SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'SUCCEEDED' ORDER BY buildNumber DESC LIMIT 1) AS last_succeeded) ORDER BY buildNumber DESC LIMIT 1",
+    "plan": {
+      "QueryType": "SELECT",
+      "Original": "(SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'FAILED' ORDER BY buildNumber DESC LIMIT 1) AS last_failed) UNION ALL (SELECT * FROM (SELECT * FROM unsharded WHERE branchId = 203622 AND buildNumber <= 113893 AND state = 'SUCCEEDED' ORDER BY buildNumber DESC LIMIT 1) AS last_succeeded) ORDER BY buildNumber DESC LIMIT 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select * from (select * from unsharded where 1 != 1) as last_failed where 1 != 1 union all select * from (select * from unsharded where 1 != 1) as last_succeeded where 1 != 1",
+        "Query": "select * from (select * from unsharded where branchId = 203622 and buildNumber <= 113893 and state = 'FAILED' order by buildNumber desc limit 1) as last_failed union all select * from (select * from unsharded where branchId = 203622 and buildNumber <= 113893 and state = 'SUCCEEDED' order by buildNumber desc limit 1) as last_succeeded order by buildNumber desc limit 1",
+        "Table": "unsharded"
+      }
+    }
   }
 ]
