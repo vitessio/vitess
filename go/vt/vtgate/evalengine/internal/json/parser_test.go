@@ -470,8 +470,7 @@ func TestParserParse(t *testing.T) {
 		if err != nil {
 			t.Fatalf("cannot parse true: %s", err)
 		}
-		tp := v.Type()
-		if tp != TypeTrue || tp.String() != "true" {
+		if v != ValueTrue {
 			t.Fatalf("unexpected value obtained for true: %#v", v)
 		}
 		b, ok := v.Bool()
@@ -492,8 +491,7 @@ func TestParserParse(t *testing.T) {
 		if err != nil {
 			t.Fatalf("cannot parse false: %s", err)
 		}
-		tp := v.Type()
-		if tp != TypeFalse || tp.String() != "false" {
+		if v != ValueFalse {
 			t.Fatalf("unexpected value obtained for false: %#v", v)
 		}
 		b, ok := v.Bool()
