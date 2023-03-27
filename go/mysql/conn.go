@@ -184,6 +184,7 @@ type Conn struct {
 	// CursorState serves as a buffer for the current result set from the last COM_STMT_EXECUTE
 	// Rows are read from here upon receiving COM_STMT_FETCH
 	// This is basically a server-side cursor implementation
+	// TODO: we will allow only exactly 1 cursor open for now, MySQL seems to allow any number of independent cursors
 	cs *cursorState
 }
 
@@ -880,7 +881,6 @@ func (c *Conn) HandleLoadDataLocalQuery(tmpdir string, tmpfileName string, file 
 // writeEOFPacket writes an EOF packet, through the buffer, and
 // doesn't flush (as it is used as part of a query result).
 func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
-	log.Info("writing EOF Packet")
 	length := 5
 	data := c.startEphemeralPacket(length)
 	pos := 0
@@ -1209,6 +1209,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		if ok {
 			delete(c.PrepareData, stmtID)
 		}
+		c.discardCursor()
 	case ComStmtReset:
 		log.Info("Received COM_STMT_RESET")
 		stmtID, ok := c.parseComStmtReset(data)
@@ -1230,20 +1231,13 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
-		// close cursor if open
-		if c.cs != nil {
-			select {
-			case c.cs.quit <- nil:
-			case <- c.cs.done:
-			}
-			c.cs = nil
-		}
-
 		if prepare.BindVars != nil {
 			for k := range prepare.BindVars {
 				prepare.BindVars[k] = nil
 			}
 		}
+
+		c.discardCursor()
 
 		if err := c.writeOKPacket(0, 0, c.StatusFlags, 0); err != nil {
 			log.Error("Error writing ComStmtReset OK packet to client %v: %v", c.ConnectionID, err)
@@ -1364,7 +1358,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		// no rows left, close cursor
 		if len(c.cs.pending.Rows) == 0 {
-			c.cs = nil
+			c.discardCursor()
 		}
 		return nil
 	case ComResetConnection:
@@ -1389,6 +1383,20 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	}
 
 	return nil
+}
+
+// discordCursor stops the statement execute goroutine and clears the cursor state, if it exists
+func (c *Conn) discardCursor() (err error) {
+	// close cursor if open
+	if c.cs != nil {
+		select {
+		case c.cs.quit <- nil:
+		case err = <- c.cs.done:
+		}
+		c.cs = nil
+	}
+	c.StatusFlags &= ^uint16(ServerCursorExists)
+	return err
 }
 
 // formatID returns a quoted identifier from the one given. Adapted from ast.go
