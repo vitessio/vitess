@@ -769,9 +769,15 @@ func TupleComparisons(yield Query) {
 func Comparisons(yield Query) {
 	var operators = []string{"=", "!=", "<=>", "<", "<=", ">", ">="}
 	for _, op := range operators {
-		for i := 0; i < len(inputComparisonElement); i++ {
-			for j := 0; j < len(inputComparisonElement); j++ {
-				yield(fmt.Sprintf("%s %s %s", inputComparisonElement[i], op, inputComparisonElement[j]), nil)
+		for _, l := range inputComparisonElement {
+			for _, r := range inputComparisonElement {
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
+			}
+		}
+
+		for _, l := range inputConversions {
+			for _, r := range inputConversions {
+				yield(fmt.Sprintf("%s %s %s", l, op, r), nil)
 			}
 		}
 	}
