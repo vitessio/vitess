@@ -1,6 +1,8 @@
 name: {{.Name}}
 on: [push, pull_request]
 
+permissions: read-all
+
 jobs:
   build:
     name: Run endtoend tests on {{.Name}}
