@@ -1230,6 +1230,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
+		// close cursor if open
+		if c.cs != nil {
+			select {
+			case c.cs.quit <- nil:
+			case <- c.cs.done:
+			}
+			c.cs = nil
+		}
+
 		if prepare.BindVars != nil {
 			for k := range prepare.BindVars {
 				prepare.BindVars[k] = nil
