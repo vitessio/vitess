@@ -998,10 +998,10 @@ func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (str
 }
 
 func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.StringWriter) {
-	buf.WriteString(vc.keyspace)
-	buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
-	buf.WriteString("+Collate:")
-	buf.WriteString(vc.collation.Get().Name())
+	_, _ = buf.WriteString(vc.keyspace)
+	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
+	_, _ = buf.WriteString("+Collate:")
+	_, _ = buf.WriteString(vc.collation.Get().Name())
 
 	if vc.destination != nil {
 		switch vc.destination.(type) {
@@ -1014,21 +1014,21 @@ func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.Stri
 				}
 				sort.Strings(shards)
 
-				buf.WriteString("+KsIDsResolved:")
+				_, _ = buf.WriteString("+KsIDsResolved:")
 				for i, s := range shards {
 					if i > 0 {
-						buf.WriteString(",")
+						_, _ = buf.WriteString(",")
 					}
-					buf.WriteString(s)
+					_, _ = buf.WriteString(s)
 				}
 			}
 		default:
-			buf.WriteString("+")
-			buf.WriteString(vc.destination.String())
+			_, _ = buf.WriteString("+")
+			_, _ = buf.WriteString(vc.destination.String())
 		}
 	}
-	buf.WriteString("+Query:")
-	buf.WriteString(query)
+	_, _ = buf.WriteString("+Query:")
+	_, _ = buf.WriteString(query)
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {

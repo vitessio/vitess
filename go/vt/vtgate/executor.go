@@ -1018,7 +1018,7 @@ func (e *Executor) getPlan(ctx context.Context, vcursor *vcursorImpl, sql string
 	return e.cacheAndBuildStatement(ctx, vcursor, query, statement, qo, logStats, stmt, reservedVars, bindVarNeeds)
 }
 
-func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
+func (e *Executor) hashPlan(ctx context.Context, vcursor *vcursorImpl, query string) string {
 	planHash := sha256.New()
 
 	{
@@ -1028,8 +1028,11 @@ func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorI
 		buf.Flush()
 	}
 
-	planKey := hex.EncodeToString(planHash.Sum(nil))
+	return hex.EncodeToString(planHash.Sum(nil))
+}
 
+func (e *Executor) cacheAndBuildStatement(ctx context.Context, vcursor *vcursorImpl, query string, statement sqlparser.Statement, qo iQueryOption, logStats *logstats.LogStats, stmt sqlparser.Statement, reservedVars *sqlparser.ReservedVars, bindVarNeeds *sqlparser.BindVarNeeds) (*engine.Plan, sqlparser.Statement, error) {
+	planKey := e.hashPlan(ctx, vcursor, query)
 	if sqlparser.CachePlan(statement) && qo.cachePlan() {
 		if plan, ok := e.plans.Get(planKey); ok {
 			logStats.CachedPlan = true
@@ -1084,15 +1087,6 @@ func prepareSetVarComment(vcursor *vcursorImpl, stmt sqlparser.Statement) (strin
 		res.WriteString(fmt.Sprintf("SET_VAR(%s = %s) ", k, v))
 	})
 	return strings.TrimSpace(res.String()), nil
-}
-
-func (e *Executor) debugGetPlan(planKey string) (*engine.Plan, bool) {
-	planHash := sha256.Sum256([]byte(planKey))
-	planHex := hex.EncodeToString(planHash[:])
-	if plan, ok := e.plans.Get(planHex); ok {
-		return plan.(*engine.Plan), true
-	}
-	return nil, false
 }
 
 type cacheItem struct {
