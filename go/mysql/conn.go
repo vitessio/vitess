@@ -891,7 +891,7 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	return c.writeEphemeralPacket()
 }
 
-const batchSize = 128
+const batchSize = 1
 
 // handleNextCommand is called in the server loop to process
 // incoming packets.
@@ -1300,8 +1300,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 
 			// write out some rows to prevent packets from getting too large
-			for len(c.cs.pending.Rows) < int(numRows) && len(c.cs.pending.Rows) > batchSize {
-				if err = c.writeNumRows(handler, int(numRows), true); err != nil {
+			for len(c.cs.pending.Rows) > batchSize && len(c.cs.pending.Rows) < int(numRows) {
+				if err = c.writeNumRows(handler, batchSize, true); err != nil {
 					return err
 				}
 				numRows -= batchSize
@@ -1348,6 +1348,8 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 // writeNumRows writes the specified number of rows to the handler, the end result, and flushes
 func (c *Conn) writeNumRows(handler Handler, numRows int, more bool) (err error) {
+	log.Infof("write num rows")
+	log.Infof("numRows: %d, more %v", numRows, more)
 	origRows := c.cs.pending.Rows
 	c.cs.pending.Rows = c.cs.pending.Rows[:numRows]
 	if err = c.writeBinaryRows(c.cs.pending); err != nil {
@@ -1531,15 +1533,19 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		go func() {
-			defer func(){
-				// pass along error, even if there's a panic
-				if r := recover(); r != nil {
-					err = r.(error)
-				}
-				close(c.cs.next)
-				c.cs.done <- err
-			}()
+
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+				defer func(){
+					// pass along error, even if there's a panic
+					if r := recover(); r != nil {
+						err = r.(error)
+					}
+					if c.cs != nil {
+						close(c.cs.next)
+						c.cs.done <- err
+					}
+				}()
+
 				// block until query results are sent or receive signal to quit
 				select {
 				case c.cs.next <- qr:
