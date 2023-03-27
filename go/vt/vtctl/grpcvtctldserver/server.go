@@ -4353,6 +4353,23 @@ func (s *VtctldServer) ValidateVSchema(ctx context.Context, req *vtctldatapb.Val
 	return resp, err
 }
 
+// WorkflowUpdate is part of the vtctlservicepb.VtctldServer interface.
+func (s *VtctldServer) WorkflowUpdate(ctx context.Context, req *vtctldatapb.WorkflowUpdateRequest) (resp *vtctldatapb.WorkflowUpdateResponse, err error) {
+	span, ctx := trace.NewSpan(ctx, "VtctldServer.WorkflowUpdate")
+	defer span.Finish()
+
+	defer panicHandler(&err)
+
+	span.Annotate("keyspace", req.Keyspace)
+	span.Annotate("workflow", req.TabletRequest.Workflow)
+	span.Annotate("cells", req.TabletRequest.Cells)
+	span.Annotate("tablet_types", req.TabletRequest.TabletTypes)
+	span.Annotate("on_ddl", req.TabletRequest.OnDdl)
+
+	resp, err = s.ws.WorkflowUpdate(ctx, req)
+	return resp, err
+}
+
 // StartServer registers a VtctldServer for RPCs on the given gRPC server.
 func StartServer(s *grpc.Server, ts *topo.Server) {
 	vtctlservicepb.RegisterVtctldServer(s, NewVtctldServer(ts))
