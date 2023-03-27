@@ -106,7 +106,8 @@ func (tm *TabletManager) UpdateVRWorkflow(ctx context.Context, req *tabletmanage
 	if err = prototext.Unmarshal(source, bls); err != nil {
 		return nil, err
 	}
-	// If we don't want to update the existing then value pass -1.
+	// If we don't want to update the existing value then pass
+	// the simulated NULL value of -1.
 	if !textutil.ValueIsSimulatedNull(req.OnDdl) {
 		bls.OnDdl = req.OnDdl
 	}
