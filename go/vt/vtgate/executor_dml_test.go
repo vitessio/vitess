@@ -597,7 +597,7 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err := executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :a where id = :id /* trailing */",
+		Sql: "/* leading */ update `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"a":  sqltypes.TestBindVariable(int64(2)),
 			"id": sqltypes.TestBindVariable(int64(1)),
@@ -612,7 +612,7 @@ func TestUpdateNormalize(t *testing.T) {
 	_, err = executorExec(executor, "/* leading */ update user set a=2 where id = 1 /* trailing */", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "/* leading */ update `user` set a = :a where id = :id /* trailing */",
+		Sql: "/* leading */ update `user` set a = :a /* INT64 */ where id = :id /* INT64 */ /* trailing */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"a":  sqltypes.TestBindVariable(int64(2)),
 			"id": sqltypes.TestBindVariable(int64(1)),
@@ -1288,7 +1288,7 @@ func TestInsertSharded(t *testing.T) {
 	_, err = executorExec(executor, "insert into user(id, v, name) values (1, 2, _binary 'myname')", nil)
 	require.NoError(t, err)
 	wantQueries = []*querypb.BoundQuery{{
-		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, :vtg2, :_name_0)",
+		Sql: "insert into `user`(id, v, `name`) values (:_Id_0, :vtg2 /* INT64 */, :_name_0)",
 		BindVariables: map[string]*querypb.BindVariable{
 			"_Id_0":   sqltypes.Int64BindVariable(1),
 			"_name_0": sqltypes.BytesBindVariable([]byte("myname")),
@@ -1311,7 +1311,7 @@ func TestInsertSharded(t *testing.T) {
 
 	testQueryLog(t, logChan, "MarkSavepoint", "SAVEPOINT", "savepoint x", 3)
 	testQueryLog(t, logChan, "VindexCreate", "INSERT", "insert into name_user_map(`name`, user_id) values (:name_0, :user_id_0)", 1)
-	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1, :vtg2, _binary :vtg3)", 1)
+	testQueryLog(t, logChan, "TestExecute", "INSERT", "insert into `user`(id, v, `name`) values (:vtg1 /* INT64 */, :vtg2 /* INT64 */, _binary :vtg3 /* VARCHAR */)", 1)
 }
 
 func TestInsertShardedKeyrange(t *testing.T) {
@@ -2335,7 +2335,7 @@ func TestUpdateLastInsertID(t *testing.T) {
 	_, err := executorExec(executor, sql, map[string]*querypb.BindVariable{})
 	require.NoError(t, err)
 	wantQueries := []*querypb.BoundQuery{{
-		Sql: "update `user` set a = :__lastInsertId where id = :id",
+		Sql: "update `user` set a = :__lastInsertId where id = :id /* INT64 */",
 		BindVariables: map[string]*querypb.BindVariable{
 			"__lastInsertId": sqltypes.Uint64BindVariable(43),
 			"id":             sqltypes.Int64BindVariable(1)},
