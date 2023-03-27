@@ -2213,3 +2213,27 @@ func AndExpressions(exprs ...Expr) Expr {
 
 // Equals is the default Comparator for AST expressions.
 var Equals = &Comparator{}
+
+// ToString returns the type as a string
+func (ty GeomFromWktType) ToString() string {
+	switch ty {
+	case GeometryFromText:
+		return GeometryFromTextStr
+	case GeometryCollectionFromText:
+		return GeometryCollectionFromTextStr
+	case PointFromText:
+		return PointFromTextStr
+	case PolygonFromText:
+		return PolygonFromTextStr
+	case LineStringFromText:
+		return LineStringFromTextStr
+	case MultiPointFromText:
+		return MultiPointFromTextStr
+	case MultiLinestringFromText:
+		return MultiLinestringFromTextStr
+	case MultiPolygonFromText:
+		return MultiPolygonFromTextStr
+	default:
+		return "Unknown GeomFromWktType"
+	}
+}

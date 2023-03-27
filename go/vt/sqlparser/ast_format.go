@@ -2795,3 +2795,15 @@ func (node *MultiPointExpr) Format(buf *TrackedBuffer) {
 func (node *MultiLinestringExpr) Format(buf *TrackedBuffer) {
 	buf.astPrintf(node, "multilinestring(%v)", node.LinestringParams)
 }
+
+// Format formats the node
+func (node *GeomFromTextExpr) Format(buf *TrackedBuffer) {
+	buf.astPrintf(node, "%s(%v", node.Type.ToString(), node.WktText)
+	if node.Srid != nil {
+		buf.astPrintf(node, ", %v", node.Srid)
+	}
+	if node.AxisOrderOpt != nil {
+		buf.astPrintf(node, ", %v", node.AxisOrderOpt)
+	}
+	buf.WriteByte(')')
+}
