@@ -30,9 +30,6 @@ import (
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 )
 
-// TODO: add copyright
-// TODO: test valid vs invalid ks names
-
 func TestCreateKeyspace(t *testing.T) {
 	ts := memorytopo.NewServer("zone1")
 	ctx := context.Background()
