@@ -172,6 +172,27 @@ func tstWorkflowComplete(t *testing.T) error {
 	return tstWorkflowAction(t, workflowActionComplete, "", "")
 }
 
+// testWorkflowUpdate is a very simple test of the workflow update
+// vtctlclient/vtctldclient command.
+// It performs a non-behavior impacting update, setting tablet-types
+// to primary,replica,rdonly (the only applicable types in these tests).
+func testWorkflowUpdate(t *testing.T) {
+	tabletTypes := "primary,replica,rdonly"
+	// Test vtctlclient first
+	_, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, "noexist.noexist", "update")
+	require.Error(t, err, err)
+	resp, err := vc.VtctlClient.ExecuteCommandWithOutput("workflow", "--", "--tablet-types", tabletTypes, ksWorkflow, "update")
+	require.NoError(t, err)
+	require.NotEmpty(t, resp)
+
+	// Test vtctldclient last
+	_, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", "noexist", "update", "--workflow", "noexist", "--tablet-types", tabletTypes)
+	require.Error(t, err)
+	resp, err = vc.VtctldClient.ExecuteCommandWithOutput("workflow", "--keyspace", targetKs, "update", "--workflow", workflowName, "--tablet-types", tabletTypes)
+	require.NoError(t, err, err)
+	require.NotEmpty(t, resp)
+}
+
 func tstWorkflowCancel(t *testing.T) error {
 	return tstWorkflowAction(t, workflowActionCancel, "", "")
 }
@@ -391,6 +412,9 @@ func testReshardV2Workflow(t *testing.T) {
 	verifyNoInternalTables(t, vtgateConn, targetKs+"/-40")
 	verifyNoInternalTables(t, vtgateConn, targetKs+"/c0-")
 
+	// Confirm that updating Reshard workflows works.
+	testWorkflowUpdate(t)
+
 	testRestOfWorkflow(t)
 }
 
@@ -413,6 +437,9 @@ func testMoveTablesV2Workflow(t *testing.T) {
 	verifyNoInternalTables(t, vtgateConn, targetKs)
 
 	testReplicatingWithPKEnumCols(t)
+
+	// Confirm that updating MoveTable workflows works.
+	testWorkflowUpdate(t)
 
 	testRestOfWorkflow(t)
 
