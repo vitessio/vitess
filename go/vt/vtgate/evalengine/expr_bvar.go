@@ -35,17 +35,17 @@ type (
 
 var _ Expr = (*BindVariable)(nil)
 
-func (bv *BindVariable) bvar(env *ExpressionEnv) (*querypb.BindVariable, error) {
-	val, ok := env.BindVars[bv.Key]
+func (env *ExpressionEnv) lookupBindVar(key string) (*querypb.BindVariable, error) {
+	val, ok := env.BindVars[key]
 	if !ok {
-		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", bv.Key)
+		return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "query arguments missing for %s", key)
 	}
 	return val, nil
 }
 
 // eval implements the Expr interface
 func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
-	bvar, err := bv.bvar(env)
+	bvar, err := env.lookupBindVar(bv.Key)
 	if err != nil {
 		return nil, err
 	}
@@ -79,12 +79,12 @@ func (bv *BindVariable) eval(env *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (bv *BindVariable) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+func (bv *BindVariable) typeof(env *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var tt sqltypes.Type
 	if bv.typed {
 		tt = bv.Type
 	} else {
-		if bvar, err := bv.bvar(env); err == nil {
+		if bvar, err := env.lookupBindVar(bv.Key); err == nil {
 			tt = bvar.Type
 		}
 	}
