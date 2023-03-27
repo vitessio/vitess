@@ -4588,7 +4588,25 @@
   {
     "comment": "verify ',' vs JOIN precedence",
     "query": "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a",
-    "plan": "symbol u1.a not found"
+    "v3-plan": "symbol u1.a not found",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select u1.a from unsharded u1, unsharded u2 join unsharded u3 on u1.a = u2.a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select u1.a from unsharded as u1, unsharded as u2 join unsharded as u3 on u1.a = u2.a where 1 != 1",
+        "Query": "select u1.a from unsharded as u1, unsharded as u2 join unsharded as u3 on u1.a = u2.a",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
   },
   {
     "comment": "first expression fails for ',' join (code coverage: ensure error is returned)",
@@ -4598,7 +4616,25 @@
   {
     "comment": "table names should be case-sensitive",
     "query": "select unsharded.id from unsharded where Unsharded.val = 1",
-    "plan": "symbol Unsharded.val not found"
+    "v3-plan": "symbol Unsharded.val not found",
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select unsharded.id from unsharded where Unsharded.val = 1",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select unsharded.id from unsharded where 1 != 1",
+        "Query": "select unsharded.id from unsharded where Unsharded.val = 1",
+        "Table": "unsharded"
+      },
+      "TablesUsed": [
+        "main.unsharded"
+      ]
+    }
   },
   {
     "comment": "implicit table reference for sharded keyspace",
@@ -6207,5 +6243,49 @@
         "user.user"
       ]
     }
+  },
+  {
+    "comment": "missing and ambiguous column info is OK as long as we can send the query to a single unsharded keyspace",
+    "query": "select missing_column from unsharded, unsharded_a",
+    "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "select missing_column from unsharded, unsharded_a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select missing_column from unsharded, unsharded_a where 1 != 1",
+        "Query": "select missing_column from unsharded, unsharded_a",
+        "Table": "unsharded, unsharded_a"
+      }
+    },
+    "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "select missing_column from unsharded, unsharded_a",
+      "Instructions": {
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
+        "Keyspace": {
+          "Name": "main",
+          "Sharded": false
+        },
+        "FieldQuery": "select missing_column from unsharded, unsharded_a where 1 != 1",
+        "Query": "select missing_column from unsharded, unsharded_a",
+        "Table": "unsharded, unsharded_a"
+      },
+      "TablesUsed": [
+        "main.unsharded",
+        "main.unsharded_a"
+      ]
+    }
+  },
+  {
+    "comment": "missing and ambiguous column info is not valid when we have two different unsharded keyspaces in the query",
+    "query": "select missing_column from unsharded, unsharded_tab",
+    "v3-plan": "symbol missing_column not found",
+    "gen4-plan": "Column 'missing_column' in field list is ambiguous"
   }
 ]
