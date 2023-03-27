@@ -27,7 +27,7 @@ import (
 type (
 	builtinToBase64 struct {
 		CallExpr
-		collate collations.TypedCollation
+		collate collations.ID
 	}
 
 	builtinFromBase64 struct {
@@ -81,9 +81,9 @@ func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	encoded := mysqlBase64Encode(b.bytes)
 
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, call.collate), nil
+		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
 	}
-	return newEvalText(encoded, call.collate), nil
+	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
 }
 
 func (call *builtinToBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {

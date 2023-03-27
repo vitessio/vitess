@@ -26,7 +26,7 @@ import (
 
 type builtinHex struct {
 	CallExpr
-	collate collations.TypedCollation
+	collate collations.ID
 }
 
 var _ Expr = (*builtinHex)(nil)
@@ -50,9 +50,9 @@ func (call *builtinHex) eval(env *ExpressionEnv) (eval, error) {
 		encoded = hexEncodeBytes(arg.ToRawBytes())
 	}
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, call.collate), nil
+		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
 	}
-	return newEvalText(encoded, call.collate), nil
+	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
 }
 
 func (call *builtinHex) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {

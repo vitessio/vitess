@@ -77,7 +77,13 @@ func (tc testCase) run(t *testing.T) {
 		BindVars: tc.bv,
 		Row:      tc.row,
 	}
-	cmp, err := (&astCompiler{}).translateComparisonExpr2(tc.op, tc.v1, tc.v2)
+	ast := &astCompiler{
+		cfg: &Config{
+			Collation:    collations.CollationUtf8mb4ID,
+			Optimization: OptimizationLevelSimplify,
+		},
+	}
+	cmp, err := ast.translateComparisonExpr2(tc.op, tc.v1, tc.v2)
 	if err != nil {
 		t.Fatalf("failed to convert: %v", err)
 	}

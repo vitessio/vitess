@@ -96,7 +96,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinHex{CallExpr: call, collate: ast.defaultCollation()}, nil
+		return &builtinHex{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "ceil", "ceiling":
 		if len(args) != 1 {
 			return nil, argError(method)
@@ -215,7 +215,7 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		if len(args) != 1 {
 			return nil, argError(method)
 		}
-		return &builtinToBase64{CallExpr: call, collate: ast.defaultCollation()}, nil
+		return &builtinToBase64{CallExpr: call, collate: ast.cfg.Collation}, nil
 	case "json_depth":
 		if len(args) != 1 {
 			return nil, argError(method)

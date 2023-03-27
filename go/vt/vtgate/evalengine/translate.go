@@ -150,9 +150,9 @@ func (ast *astCompiler) translateIsExpr(left sqlparser.Expr, op sqlparser.IsExpr
 	}, nil
 }
 
-func (ast *astCompiler) defaultCollation() collations.TypedCollation {
+func defaultCoercionCollation(id collations.ID) collations.TypedCollation {
 	return collations.TypedCollation{
-		Collation:    ast.cfg.Collation,
+		Collation:    id,
 		Coercibility: collations.CoerceCoercible,
 		Repertoire:   collations.RepertoireUnicode,
 	}
@@ -206,7 +206,7 @@ func (ast *astCompiler) translateColName(colname *sqlparser.ColName) (Expr, erro
 	return column, nil
 }
 
-func (ast *astCompiler) translateLiteral(lit *sqlparser.Literal) (*Literal, error) {
+func translateLiteral(lit *sqlparser.Literal, collation collations.ID) (*Literal, error) {
 	switch lit.Type {
 	case sqlparser.IntVal:
 		return NewLiteralIntegralFromBytes(lit.Bytes())
@@ -215,7 +215,7 @@ func (ast *astCompiler) translateLiteral(lit *sqlparser.Literal) (*Literal, erro
 	case sqlparser.DecimalVal:
 		return NewLiteralDecimalFromBytes(lit.Bytes())
 	case sqlparser.StrVal:
-		return NewLiteralString(lit.Bytes(), ast.defaultCollation()), nil
+		return NewLiteralString(lit.Bytes(), defaultCoercionCollation(collation)), nil
 	case sqlparser.HexNum:
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
@@ -363,7 +363,7 @@ func (ast *astCompiler) translateIntegral(lit *sqlparser.Literal) (int, bool, er
 	if lit == nil {
 		return 0, false, nil
 	}
-	literal, err := ast.translateLiteral(lit)
+	literal, err := translateLiteral(lit, ast.cfg.Collation)
 	if err != nil {
 		return 0, false, err
 	}
@@ -480,7 +480,7 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 	case sqlparser.ListArg:
 		return NewBindVarTuple(string(node)), nil
 	case *sqlparser.Literal:
-		return ast.translateLiteral(node)
+		return translateLiteral(node, ast.cfg.Collation)
 	case *sqlparser.AndExpr:
 		return ast.translateLogicalExpr("AND", node.Left, node.Right)
 	case *sqlparser.OrExpr:
