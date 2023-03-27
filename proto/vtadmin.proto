@@ -80,8 +80,9 @@ service VTAdmin {
     // GetShardReplicationPositions returns shard replication positions grouped
     // by cluster.
     rpc GetShardReplicationPositions(GetShardReplicationPositionsRequest) returns (GetShardReplicationPositionsResponse) {};
-    // GetSrvKeyspaces returns the SrvKeyspaces for a keyspace in one or more
-    // cells.
+    // GetSrvKeyspace returns the SrvKeyspace for a keyspace in one or more cells.
+    rpc GetSrvKeyspace (GetSrvKeyspaceRequest) returns (vtctldata.GetSrvKeyspacesResponse) {};
+    // GetSrvKeyspaces returns the SrvKeyspaces for all keyspaces across all the specified clusters.
     rpc GetSrvKeyspaces (GetSrvKeyspacesRequest) returns (GetSrvKeyspacesResponse) {};
     // GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
     rpc GetSrvVSchema (GetSrvVSchemaRequest) returns (SrvVSchema) {};
@@ -486,6 +487,14 @@ message GetShardReplicationPositionsRequest {
 
 message GetShardReplicationPositionsResponse {
     repeated ClusterShardReplicationPosition replication_positions = 1;
+}
+
+message GetSrvKeyspaceRequest {
+  string cluster_id = 1;
+  string keyspace = 2;
+  // Cells is a list of cells to lookup a SrvKeyspace for. Leaving this empty is
+  // equivalent to specifying all cells in the topo.
+  repeated string cells = 3;
 }
 
 message GetSrvKeyspacesRequest {

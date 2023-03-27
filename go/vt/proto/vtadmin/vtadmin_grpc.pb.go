@@ -70,6 +70,9 @@ type VTAdminClient interface {
 	// GetShardReplicationPositions returns shard replication positions grouped
 	// by cluster.
 	GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error)
+	// GetSrvKeyspace returns the SrvKeyspace for a keyspace in one or more cells.
+	GetSrvKeyspace(ctx context.Context, in *GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspacesResponse, error)
+	// GetSrvKeyspaces returns the SrvKeyspaces for all keyspaces across all the specified clusters.
 	GetSrvKeyspaces(ctx context.Context, in *GetSrvKeyspacesRequest, opts ...grpc.CallOption) (*GetSrvKeyspacesResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(ctx context.Context, in *GetSrvVSchemaRequest, opts ...grpc.CallOption) (*SrvVSchema, error)
@@ -329,6 +332,15 @@ func (c *vTAdminClient) GetSchemas(ctx context.Context, in *GetSchemasRequest, o
 func (c *vTAdminClient) GetShardReplicationPositions(ctx context.Context, in *GetShardReplicationPositionsRequest, opts ...grpc.CallOption) (*GetShardReplicationPositionsResponse, error) {
 	out := new(GetShardReplicationPositionsResponse)
 	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetShardReplicationPositions", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *vTAdminClient) GetSrvKeyspace(ctx context.Context, in *GetSrvKeyspaceRequest, opts ...grpc.CallOption) (*vtctldata.GetSrvKeyspacesResponse, error) {
+	out := new(vtctldata.GetSrvKeyspacesResponse)
+	err := c.cc.Invoke(ctx, "/vtadmin.VTAdmin/GetSrvKeyspace", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -674,6 +686,9 @@ type VTAdminServer interface {
 	// GetShardReplicationPositions returns shard replication positions grouped
 	// by cluster.
 	GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error)
+	// GetSrvKeyspace returns the SrvKeyspace for a keyspace in one or more cells.
+	GetSrvKeyspace(context.Context, *GetSrvKeyspaceRequest) (*vtctldata.GetSrvKeyspacesResponse, error)
+	// GetSrvKeyspaces returns the SrvKeyspaces for all keyspaces across all the specified clusters.
 	GetSrvKeyspaces(context.Context, *GetSrvKeyspacesRequest) (*GetSrvKeyspacesResponse, error)
 	// GetSrvVSchema returns the SrvVSchema for the given cluster and cell.
 	GetSrvVSchema(context.Context, *GetSrvVSchemaRequest) (*SrvVSchema, error)
@@ -827,6 +842,9 @@ func (UnimplementedVTAdminServer) GetSchemas(context.Context, *GetSchemasRequest
 }
 func (UnimplementedVTAdminServer) GetShardReplicationPositions(context.Context, *GetShardReplicationPositionsRequest) (*GetShardReplicationPositionsResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetShardReplicationPositions not implemented")
+}
+func (UnimplementedVTAdminServer) GetSrvKeyspace(context.Context, *GetSrvKeyspaceRequest) (*vtctldata.GetSrvKeyspacesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspace not implemented")
 }
 func (UnimplementedVTAdminServer) GetSrvKeyspaces(context.Context, *GetSrvKeyspacesRequest) (*GetSrvKeyspacesResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetSrvKeyspaces not implemented")
@@ -1257,6 +1275,24 @@ func _VTAdmin_GetShardReplicationPositions_Handler(srv interface{}, ctx context.
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
 		return srv.(VTAdminServer).GetShardReplicationPositions(ctx, req.(*GetShardReplicationPositionsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _VTAdmin_GetSrvKeyspace_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSrvKeyspaceRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(VTAdminServer).GetSrvKeyspace(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/vtadmin.VTAdmin/GetSrvKeyspace",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(VTAdminServer).GetSrvKeyspace(ctx, req.(*GetSrvKeyspaceRequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -1915,6 +1951,10 @@ var VTAdmin_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetShardReplicationPositions",
 			Handler:    _VTAdmin_GetShardReplicationPositions_Handler,
+		},
+		{
+			MethodName: "GetSrvKeyspace",
+			Handler:    _VTAdmin_GetSrvKeyspace_Handler,
 		},
 		{
 			MethodName: "GetSrvKeyspaces",

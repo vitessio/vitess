@@ -370,6 +370,7 @@ func (api *API) Handler() http.Handler {
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.CreateShard)).Name("API.CreateShard").Methods("POST")
 	router.HandleFunc("/shards/{cluster_id}", httpAPI.Adapt(vtadminhttp.DeleteShards)).Name("API.DeleteShards").Methods("DELETE")
 	router.HandleFunc("/srvkeyspaces", httpAPI.Adapt(vtadminhttp.GetSrvKeyspaces)).Name("API.GetSrvKeyspaces").Methods("GET")
+	router.HandleFunc("/srvkeyspace/{cluster_id}/{name}", httpAPI.Adapt(vtadminhttp.GetSrvKeyspace)).Name("API.GetSrvKeyspace").Methods("Get")
 	router.HandleFunc("/srvvschema/{cluster_id}/{cell}", httpAPI.Adapt(vtadminhttp.GetSrvVSchema)).Name("API.GetSrvVSchema")
 	router.HandleFunc("/srvvschemas", httpAPI.Adapt(vtadminhttp.GetSrvVSchemas)).Name("API.GetSrvVSchemas")
 	router.HandleFunc("/tablets", httpAPI.Adapt(vtadminhttp.GetTablets)).Name("API.GetTablets")
@@ -1052,9 +1053,29 @@ func (api *API) GetShardReplicationPositions(ctx context.Context, req *vtadminpb
 	}, nil
 }
 
+// GetSrvKeyspace is part of the vtadminpb.VTAdminServer interface.
+func (api *API) GetSrvKeyspace(ctx context.Context, req *vtadminpb.GetSrvKeyspaceRequest) (*vtctldatapb.GetSrvKeyspacesResponse, error) {
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvKeyspace")
+	defer span.Finish()
+
+	c, err := api.getClusterForRequest(req.ClusterId)
+	if err != nil {
+		return nil, err
+	}
+
+	if !api.authz.IsAuthorized(ctx, c.ID, rbac.SrvKeyspaceResource, rbac.GetAction) {
+		return nil, nil
+	}
+
+	return c.Vtctld.GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{
+		Keyspace: req.Keyspace,
+		Cells:    req.Cells,
+	})
+}
+
 // GetSrvKeyspaces is part of the vtadminpb.VTAdminServer interface.
 func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspacesRequest) (*vtadminpb.GetSrvKeyspacesResponse, error) {
-	span, ctx := trace.NewSpan(ctx, "API.GetSrvVSchemas")
+	span, ctx := trace.NewSpan(ctx, "API.GetSrvKeyspaces")
 	defer span.Finish()
 
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)

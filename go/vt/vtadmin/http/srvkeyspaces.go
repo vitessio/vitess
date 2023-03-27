@@ -19,6 +19,8 @@ package http
 import (
 	"context"
 
+	"github.com/gorilla/mux"
+
 	vtadminpb "vitess.io/vitess/go/vt/proto/vtadmin"
 )
 
@@ -26,10 +28,24 @@ import (
 func GetSrvKeyspaces(ctx context.Context, r Request, api *API) *JSONResponse {
 	query := r.URL.Query()
 
-	svs, err := api.server.GetSrvKeyspaces(ctx, &vtadminpb.GetSrvKeyspacesRequest{
+	sks, err := api.server.GetSrvKeyspaces(ctx, &vtadminpb.GetSrvKeyspacesRequest{
 		Cells:      query["cell"],
 		ClusterIds: query["cluster"],
 	})
 
-	return NewJSONResponse(svs, err)
+	return NewJSONResponse(sks, err)
+}
+
+// GetSrvKeyspace implements the http wrapper for the /api/srvkeyspaces/{cluster_id}/{name} route.
+func GetSrvKeyspace(ctx context.Context, r Request, api *API) *JSONResponse {
+	query := r.URL.Query()
+	vars := mux.Vars(r.Request)
+
+	sk, err := api.server.GetSrvKeyspace(ctx, &vtadminpb.GetSrvKeyspaceRequest{
+		Cells:     query["cell"],
+		Keyspace:  vars["name"],
+		ClusterId: vars["cluster_id"],
+	})
+
+	return NewJSONResponse(sk, err)
 }
