@@ -87,6 +87,7 @@ const (
 	extremelyHighThreshold    = 1 * time.Hour
 	onDemandHeartbeatDuration = 5 * time.Second
 	applyConfigWait           = 15 * time.Second // time after which we're sure the throttler has refreshed config and tablets
+	throttlerEnabledTimeout   = 60 * time.Second
 )
 
 func TestMain(m *testing.M) {
@@ -340,6 +341,11 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 func TestLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
 
+	// Wait for the throttler to be up and running everywhere.
+	for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+		onlineddl.WaitForThrottlerStatusEnabled(t, &tablet, throttlerEnabledTimeout)
+	}
+
 	t.Run("stopping replication", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)
 		assert.NoError(t, err)
@@ -485,6 +491,11 @@ func TestRestoreDefaultQuery(t *testing.T) {
 	t.Run("enabling throttler with standard threshold", func(t *testing.T) {
 		_, err := onlineddl.UpdateThrottlerTopoConfig(clusterInstance, true, false, throttlerThreshold.Seconds(), "", false)
 		assert.NoError(t, err)
+
+		// Wait for the throttler to be up and running everywhere.
+		for _, tablet := range []cluster.Vttablet{*primaryTablet, *replicaTablet} {
+			onlineddl.WaitForThrottlerStatusEnabled(t, &tablet, throttlerEnabledTimeout)
+		}
 	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
