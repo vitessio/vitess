@@ -62,15 +62,19 @@ var (
 		Args:                  cobra.NoArgs,
 		PreRunE: func(cmd *cobra.Command, args []string) error {
 			changes := false
-			if cmd.Flags().Lookup("cells").Changed { // No validation required
+			if cmd.Flags().Lookup("cells").Changed { // Validate the provided value(s)
 				changes = true
+				for i, cell := range workflowUpdateOptions.Cells { // Which only means trimming whitespace
+					workflowUpdateOptions.Cells[i] = strings.TrimSpace(cell)
+				}
 			} else {
 				workflowUpdateOptions.Cells = textutil.SimulatedNullStringSlice
 			}
 			if cmd.Flags().Lookup("tablet-types").Changed { // Validate the provided value(s)
 				changes = true
-				for _, tabletType := range workflowUpdateOptions.TabletTypes {
-					if _, ok := topodatapb.TabletType_value[strings.ToUpper(strings.TrimSpace(tabletType))]; !ok {
+				for i, tabletType := range workflowUpdateOptions.TabletTypes {
+					workflowUpdateOptions.TabletTypes[i] = strings.ToUpper(strings.TrimSpace(tabletType))
+					if _, ok := topodatapb.TabletType_value[workflowUpdateOptions.TabletTypes[i]]; !ok {
 						return fmt.Errorf("invalid tablet type: %s", tabletType)
 					}
 				}

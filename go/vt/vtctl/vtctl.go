@@ -3659,15 +3659,19 @@ func commandWorkflow(ctx context.Context, wr *wrangler.Wrangler, subFlags *pflag
 			changes := false
 			// We need to implicitly distinguish between an empty value (which is valid)
 			// and no value having been provided. We will use NULL for this purpose.
-			if subFlags.Lookup("cells").Changed { // No validation needed
+			if subFlags.Lookup("cells").Changed { // Validate the provided value(s)
 				changes = true
+				for i, cell := range *cells { // Which only means trimming whitespace
+					(*cells)[i] = strings.TrimSpace(cell)
+				}
 			} else {
 				cells = &textutil.SimulatedNullStringSlice
 			}
 			if subFlags.Lookup("tablet-types").Changed { // Validate the provided value(s)
 				changes = true
-				for _, tabletType := range *tabletTypes {
-					if _, ok := topodatapb.TabletType_value[strings.ToUpper(strings.TrimSpace(tabletType))]; !ok {
+				for i, tabletType := range *tabletTypes {
+					(*tabletTypes)[i] = strings.ToUpper(strings.TrimSpace(tabletType))
+					if _, ok := topodatapb.TabletType_value[(*tabletTypes)[i]]; !ok {
 						return fmt.Errorf("invalid tablet type: %s", tabletType)
 					}
 				}
