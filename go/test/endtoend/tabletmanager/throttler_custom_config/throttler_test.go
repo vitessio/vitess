@@ -108,6 +108,12 @@ func TestMain(m *testing.M) {
 			"--heartbeat_interval", "250ms",
 		}
 
+		// Tell vtorc not to watch our keyspace(s) as we don't want it to e.g. repair
+		// replication when we explicitly stop it.
+		for i := range clusterInstance.VTOrcProcesses {
+			clusterInstance.VTOrcProcesses[i].ExtraArgs = []string{`--clusters_to_watch=""`}
+		}
+
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
