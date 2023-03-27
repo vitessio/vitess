@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"bytes"
-	"fmt"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -232,11 +231,11 @@ func compareJSONValue(lj, rj *json.Value) (int, error) {
 	case json.TypeNumber:
 		ld, ok := lj.Decimal()
 		if !ok {
-			return 0, fmt.Errorf("JSON number is out of range")
+			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 		}
 		rd, ok := rj.Decimal()
 		if !ok {
-			return 0, fmt.Errorf("JSON number is out of range")
+			return 0, vterrors.NewErrorf(vtrpcpb.Code_INVALID_ARGUMENT, vterrors.DataOutOfRange, "DECIMAL value is out of range")
 		}
 		return ld.Cmp(rd), nil
 	case json.TypeString:

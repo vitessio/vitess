@@ -251,18 +251,14 @@ func (c *compiler) compareAsStrings(lt ctype, rt ctype) error {
 }
 
 func (c *compiler) compareAsJSON(lt ctype, rt ctype) error {
-	if lt.Type != sqltypes.TypeJSON {
-		_, err := c.compileArgToJSON(lt, 2)
-		if err != nil {
-			return err
-		}
+	_, err := c.compileArgToJSON(lt, 2)
+	if err != nil {
+		return err
 	}
 
-	if rt.Type != sqltypes.TypeJSON {
-		_, err := c.compileArgToJSON(rt, 1)
-		if err != nil {
-			return err
-		}
+	_, err = c.compileArgToJSON(rt, 1)
+	if err != nil {
+		return err
 	}
 	c.asm.CmpJSON()
 

@@ -18,7 +18,6 @@ package evalengine
 
 import (
 	"encoding/hex"
-	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -160,7 +159,7 @@ func parseBitLiteral(val []byte) ([]byte, error) {
 	var i big.Int
 	_, ok := i.SetString(string(val), 2)
 	if !ok {
-		return nil, fmt.Errorf("invalid bit literal: %s", string(val))
+		panic("malformed bit literal from parser")
 	}
 	return i.Bytes(), nil
 }
