@@ -304,7 +304,7 @@ type mismatch struct {
 
 const tolerance = 1e-14
 
-func close(a, b float64, decimals uint32) bool {
+func closeFloat(a, b float64, decimals uint32) bool {
 	if decimals > 0 {
 		ratio := math.Pow(10, float64(decimals))
 		a = math.Round(a*ratio) / ratio
@@ -318,6 +318,14 @@ func close(a, b float64, decimals uint32) bool {
 		return math.Abs(a) < tolerance
 	}
 	return math.Abs((a-b)/b) < tolerance
+}
+
+func closeDatetime(a, b time.Time, diff time.Duration) bool {
+	d := a.Sub(b)
+	if d < 0 {
+		d = -d
+	}
+	return d < diff
 }
 
 func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value, localCollation, remoteCollation collations.ID, decimals uint32) string {
@@ -358,10 +366,24 @@ func compareResult(localErr, remoteErr error, localVal, remoteVal sqltypes.Value
 		if err != nil {
 			return fmt.Sprintf("error converting remote value to float: %v", err)
 		}
-		if !close(localFloat, remoteFloat, decimals) {
+		if !closeFloat(localFloat, remoteFloat, decimals) {
 			return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
 		}
+	} else if localVal.IsDateTime() && remoteVal.IsDateTime() {
+		localDatetime, err := time.Parse("2006-01-02 15:04:05.999999", localVal.ToString())
+		if err != nil {
+			return fmt.Sprintf("error converting local value to datetime: %v", err)
+		}
+		remoteDatetime, err := time.Parse("2006-01-02 15:04:05.999999", remoteVal.ToString())
+		if err != nil {
+			return fmt.Sprintf("error converting remote value to datetime: %v", err)
+		}
+		if !closeDatetime(localDatetime, remoteDatetime, 100*time.Millisecond) {
+			return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
+				localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)
+		}
+
 	} else if localVal.String() != remoteVal.String() {
 		return fmt.Sprintf("different results: %s; mysql response: %s (local collation: %s; mysql collation: %s)",
 			localVal.String(), remoteVal.String(), localCollationName, remoteCollationName)

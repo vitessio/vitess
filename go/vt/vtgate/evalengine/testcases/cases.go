@@ -81,6 +81,7 @@ var Cases = []TestCase{
 	{Run: FnTan},
 	{Run: FnDegrees},
 	{Run: FnRadians},
+	{Run: FnNow},
 }
 
 func JSONPathOperations(yield Query) {
@@ -912,4 +913,24 @@ func InStatement(yield Query) {
 		yield(fmt.Sprintf("%s NOT IN (%s, %s)", inputs[1], inputs[0], inputs[2]), nil)
 		yield(fmt.Sprintf("%s NOT IN (%s, %s, %s)", inputs[0], inputs[1], inputs[2], inputs[0]), nil)
 	})
+}
+
+func FnNow(yield Query) {
+	fns := []string{
+		"NOW()", "CURRENT_TIMESTAMP()", "CURRENT_TIMESTAMP",
+		"NOW(1)", "CURRENT_TIMESTAMP(1)",
+		"LOCALTIME()", "LOCALTIME", "LOCALTIMESTAMP()", "LOCALTIMESTAMP",
+		"LOCALTIME(1)", "LOCALTIMESTAMP(1)",
+		"UTC_TIMESTAMP()", "UTC_TIMESTAMP",
+		"UTC_TIMESTAMP(1)",
+		"CURDATE()", "CURRENT_DATE()", "CURRENT_DATE",
+		"UTC_TIME()", "UTC_TIME",
+		"UTC_TIME(1)",
+		"CURTIME()", "CURRENT_TIME()", "CURRENT_TIME",
+		"CURTIME(1)", "CURRENT_TIME(1)",
+		"SYSDATE()", "SYSDATE(1)",
+	}
+	for _, fn := range fns {
+		yield(fn, nil)
+	}
 }

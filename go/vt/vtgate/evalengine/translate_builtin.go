@@ -228,6 +228,16 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		default:
 			return nil, argError(method)
 		}
+	case "sysdate":
+		if len(args) > 1 {
+			return nil, argError(method)
+		}
+		return &builtinSysdate{CallExpr: call}, nil
+	case "curdate", "current_date":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinCurdate{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
@@ -347,6 +357,35 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			Arguments: args,
 			Method:    "JSON_KEYS",
 		}}, nil
+
+	case *sqlparser.CurTimeFuncExpr:
+		var args []Expr
+		if call.Fsp != nil {
+			precision, err := ast.translateExpr(call.Fsp)
+			if err != nil {
+				return nil, err
+			}
+			args = append(args, precision)
+		}
+		var utc, onlyTime bool
+		switch call.Name.Lowered() {
+		case "current_time", "curtime":
+			onlyTime = true
+		case "utc_time":
+			onlyTime = true
+			utc = true
+		case "utc_timestamp":
+			utc = true
+		}
+
+		return &builtinNow{
+			CallExpr: CallExpr{
+				Arguments: args,
+				Method:    call.Name.String(),
+			},
+			utc:      utc,
+			onlyTime: onlyTime,
+		}, nil
 
 	default:
 		return nil, translateExprNotSupported(call)

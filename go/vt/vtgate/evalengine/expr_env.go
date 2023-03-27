@@ -18,6 +18,7 @@ package evalengine
 
 import (
 	"errors"
+	"time"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
@@ -27,7 +28,8 @@ type (
 	// ExpressionEnv contains the environment that the expression
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
-		vm vmstate
+		vm  vmstate
+		now time.Time
 
 		BindVars map[string]*querypb.BindVariable
 		Row      []sqltypes.Value
@@ -35,6 +37,7 @@ type (
 )
 
 func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
+	env.now = time.Time{}
 	if p, ok := expr.(*CompiledExpr); ok {
 		return env.EvaluateVM(p)
 	}

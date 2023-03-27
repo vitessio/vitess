@@ -2792,7 +2792,7 @@ var (
 		output: "select json_array(BIN(11)) from dual",
 	}, {
 		input:  `SELECT JSON_ARRAY(1, "abc", NULL, TRUE, CURTIME());`,
-		output: `select json_array(1, 'abc', null, true, CURTIME()) from dual`,
+		output: `select json_array(1, 'abc', null, true, curtime()) from dual`,
 	}, {
 		input:  "SELECT JSON_OBJECT(1,2)",
 		output: "select json_object(1, 2) from dual",

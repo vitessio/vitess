@@ -91,6 +91,12 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_math1(call, c.asm.Fn_RADIANS, 0)
 	case *builtinWeightString:
 		return c.compileFn_WEIGHT_STRING(call)
+	case *builtinNow:
+		return c.compileFn_Now(call)
+	case *builtinCurdate:
+		return c.compileFn_Curdate(call)
+	case *builtinSysdate:
+		return c.compileFn_Sysdate(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
