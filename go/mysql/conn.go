@@ -891,7 +891,7 @@ func (c *Conn) writeEOFPacket(flags uint16, warnings uint16) error {
 	return c.writeEphemeralPacket()
 }
 
-const batchSize = 1
+const batchSize = 128
 
 // handleNextCommand is called in the server loop to process
 // incoming packets.
@@ -1274,6 +1274,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		// while we are still expecting rows
+		shouldDiscard := false
 		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
 			// drain rows from next to cs.pending
 			var newqr *sqltypes.Result
@@ -1289,6 +1290,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					}
 					return nil
 				}
+				shouldDiscard = true
 				break
 			}
 
@@ -1301,7 +1303,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 			// write out some rows to prevent packets from getting too large
 			for len(c.cs.pending.Rows) > batchSize && len(c.cs.pending.Rows) < int(numRows) {
-				if err = c.writeNumRows(handler, batchSize, true); err != nil {
+				if err = c.writeNumRows(batchSize); err != nil {
 					return err
 				}
 				numRows -= batchSize
@@ -1314,12 +1316,20 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 
 		// write the first numRows
-		if err = c.writeNumRows(handler, int(numRows), false); err != nil {
+		if err = c.writeNumRows(int(numRows)); err != nil {
+			return err
+		}
+		if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+			log.Errorf("Error writing result to %s: %v", c, err)
+			return err
+		}
+		if err = c.flush(); err != nil {
+			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
 			return err
 		}
 
 		// no rows left, close cursor
-		if len(c.cs.pending.Rows) == 0 {
+		if shouldDiscard {
 			c.discardCursor()
 		}
 		return nil
@@ -1347,28 +1357,18 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 }
 
 // writeNumRows writes the specified number of rows to the handler, the end result, and flushes
-func (c *Conn) writeNumRows(handler Handler, numRows int, more bool) (err error) {
-	log.Infof("write num rows")
-	log.Infof("numRows: %d, more %v", numRows, more)
+func (c *Conn) writeNumRows(numRows int) (err error) {
 	origRows := c.cs.pending.Rows
 	c.cs.pending.Rows = c.cs.pending.Rows[:numRows]
 	if err = c.writeBinaryRows(c.cs.pending); err != nil {
 		log.Errorf("Error writing result to %s: %v", c, err)
 		return err
 	}
-	if err = c.writeEndResult(more, 0, 0, handler.WarningCount(c)); err != nil {
-		log.Errorf("Error writing result to %s: %v", c, err)
-		return err
-	}
-	if err = c.flush(); err != nil {
-		log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-		return err
-	}
 	c.cs.pending.Rows = origRows[numRows:]
 	return nil
 }
 
-// discordCursor stops the statement execute goroutine and clears the cursor state, if it exists
+// discardCursor stops the statement execute goroutine and clears the cursor state, if it exists
 func (c *Conn) discardCursor() (err error) {
 	// close cursor if open
 	if c.cs != nil {
@@ -1533,19 +1533,18 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		go func() {
+			defer func(){
+				// pass along error, even if there's a panic
+				if r := recover(); r != nil {
+					err = r.(error)
+				}
+				if c.cs != nil {
+					close(c.cs.next)
+					c.cs.done <- err
+				}
+			}()
 
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
-				defer func(){
-					// pass along error, even if there's a panic
-					if r := recover(); r != nil {
-						err = r.(error)
-					}
-					if c.cs != nil {
-						close(c.cs.next)
-						c.cs.done <- err
-					}
-				}()
-
 				// block until query results are sent or receive signal to quit
 				select {
 				case c.cs.next <- qr:
