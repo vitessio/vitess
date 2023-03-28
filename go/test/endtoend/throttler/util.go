@@ -89,7 +89,7 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 		}
 		select {
 		case <-ctx.Done():
-			return "", fmt.Errorf("timed out waiting for UpdateThrottlerConfig to succeed after %v. Last seen value: %+v, error: %v", ConfigTimeout, result, err)
+			return "", fmt.Errorf("timed out waiting for UpdateThrottlerConfig to succeed after %v; last seen value: %+v, error: %v", ConfigTimeout, result, err)
 		case <-ticker.C:
 		}
 	}
@@ -101,12 +101,9 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 	enabledJSONPath := "IsEnabled"
 	queryJSONPath := "Query"
 	thresholdJSONPath := "Threshold"
-
 	url := fmt.Sprintf("http://localhost:%d/throttler/status", tablet.HTTPPort)
-
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
@@ -128,8 +125,8 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timeout waiting for the %s tablet's throttler status enabled to be %t with the correct config; last seen value: %s",
-				tablet.Alias, enabled, body)
+			t.Errorf("timed out waiting for the %s tablet's throttler status enabled to be %t with the correct config after %v; last seen value: %s",
+				tablet.Alias, enabled, timeout, body)
 			return
 		case <-ticker.C:
 		}
