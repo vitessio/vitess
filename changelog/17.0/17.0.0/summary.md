@@ -55,10 +55,7 @@ Here is a (condensed) example of stats output:
 
 Prior to v17, it was possible to create a keyspace with invalid characters, which would then be inaccessible to various cluster management operations.
 
-Now, the TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given an invalid name.
-
-Keyspace names may no longer contain the following characters:
-- Forward slash ("/").
+Keyspace names may no longer contain the forward slash ("/") character, and TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given such a name.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
