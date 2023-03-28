@@ -228,11 +228,6 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		default:
 			return nil, argError(method)
 		}
-	case "sysdate":
-		if len(args) > 1 {
-			return nil, argError(method)
-		}
-		return &builtinSysdate{CallExpr: call}, nil
 	case "curdate", "current_date":
 		if len(args) != 0 {
 			return nil, argError(method)
@@ -359,6 +354,7 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}}, nil
 
 	case *sqlparser.CurTimeFuncExpr:
+		var cexpr = CallExpr{Arguments: nil, Method: call.Name.String()}
 		var utc, onlyTime bool
 		switch call.Name.Lowered() {
 		case "current_time", "curtime":
@@ -368,12 +364,14 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			utc = true
 		case "utc_timestamp":
 			utc = true
+		case "sysdate":
+			return &builtinSysdate{
+				CallExpr: cexpr,
+				prec:     0, // TODO: call.Prec once it's an integer literal
+			}, nil
 		}
 		return &builtinNow{
-			CallExpr: CallExpr{
-				Arguments: nil,
-				Method:    call.Name.String(),
-			},
+			CallExpr: cexpr,
 			utc:      utc,
 			onlyTime: onlyTime,
 			prec:     0, // TODO: call.Prec once it's an integer literal
