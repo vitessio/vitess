@@ -683,6 +683,17 @@ func (asm *assembler) CmpString_collate(collation collations.Collation) {
 	}, "CMP VARCHAR(SP-2), VARCHAR(SP-1) COLLATE '%s'", collation.Name())
 }
 
+func (asm *assembler) CmpJSON() {
+	asm.adjustStack(-2)
+	asm.emit(func(env *ExpressionEnv) int {
+		l := env.vm.stack[env.vm.sp-2].(*evalJSON)
+		r := env.vm.stack[env.vm.sp-1].(*evalJSON)
+		env.vm.sp -= 2
+		env.vm.flags.cmp, env.vm.err = compareJSONValue(l, r)
+		return 1
+	}, "CMP JSON(SP-2), JSON(SP-1)")
+}
+
 func (asm *assembler) CmpTuple(fullEquality bool) {
 	asm.adjustStack(-2)
 	asm.emit(func(env *ExpressionEnv) int {
@@ -728,13 +739,26 @@ func (asm *assembler) Convert_bB(offset int) {
 
 func (asm *assembler) Convert_jB(offset int) {
 	asm.emit(func(env *ExpressionEnv) int {
+		b := false
 		arg := env.vm.stack[env.vm.sp-offset].(*evalJSON)
 		switch arg.Type() {
 		case json.TypeNumber:
-			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(parseStringToFloat(arg.String()) != 0.0)
+			switch arg.NumberType() {
+			case json.NumberTypeInteger:
+				if i, ok := arg.Int64(); ok {
+					b = i != 0
+				} else {
+					d, _ := arg.Decimal()
+					b = !d.IsZero()
+				}
+			case json.NumberTypeDouble:
+				d, _ := arg.Float64()
+				b = d != 0.0
+			}
 		default:
-			env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(true)
+			b = true
 		}
+		env.vm.stack[env.vm.sp-offset] = env.vm.arena.newEvalBool(b)
 		return 1
 	}, "CONV JSON(SP-%d), BOOL", offset)
 }
@@ -761,6 +785,30 @@ func (asm *assembler) Convert_cj(offset int) {
 		env.vm.stack[env.vm.sp-offset], env.vm.err = evalConvert_cj(arg)
 		return 1
 	}, "CONV VARCHAR(SP-%d), JSON", offset)
+}
+
+func (asm *assembler) Convert_dj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		env.vm.stack[env.vm.sp-offset] = evalConvert_dj(arg)
+		return 1
+	}, "CONV DATE(SP-%d), JSON", offset)
+}
+
+func (asm *assembler) Convert_dtj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		env.vm.stack[env.vm.sp-offset] = evalConvert_dtj(arg)
+		return 1
+	}, "CONV DATETIME(SP-%d), JSON", offset)
+}
+
+func (asm *assembler) Convert_tj(offset int) {
+	asm.emit(func(env *ExpressionEnv) int {
+		arg := env.vm.stack[env.vm.sp-offset].(*evalBytes)
+		env.vm.stack[env.vm.sp-offset] = evalConvert_tj(arg)
+		return 1
+	}, "CONV TIME(SP-%d), JSON", offset)
 }
 
 func (asm *assembler) Convert_dB(offset int) {
@@ -1406,15 +1454,13 @@ func (asm *assembler) Fn_FROM_BASE64(t sqltypes.Type) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
 
-		decoded := make([]byte, mysqlBase64.DecodedLen(len(str.bytes)))
-
-		n, err := mysqlBase64.Decode(decoded, str.bytes)
+		decoded, err := mysqlBase64Decode(str.bytes)
 		if err != nil {
 			env.vm.stack[env.vm.sp-1] = nil
 			return 1
 		}
 		str.tt = int16(t)
-		str.bytes = decoded[:n]
+		str.bytes = decoded
 		return 1
 	}, "FN FROM_BASE64 VARCHAR(SP-1)")
 }
@@ -1798,10 +1844,7 @@ func (asm *assembler) Fn_REPEAT(i int) {
 func (asm *assembler) Fn_TO_BASE64(t sqltypes.Type, col collations.TypedCollation) {
 	asm.emit(func(env *ExpressionEnv) int {
 		str := env.vm.stack[env.vm.sp-1].(*evalBytes)
-
-		encoded := make([]byte, mysqlBase64.EncodedLen(len(str.bytes)))
-		mysqlBase64.Encode(encoded, str.bytes)
-
+		encoded := mysqlBase64Encode(str.bytes)
 		str.tt = int16(t)
 		str.col = col
 		str.bytes = encoded
