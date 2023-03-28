@@ -183,7 +183,7 @@ func (cached *CompiledExpr) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(48)
+		size += int64(64)
 	}
 	// field code []vitess.io/vitess/go/vt/vtgate/evalengine.frame
 	{
