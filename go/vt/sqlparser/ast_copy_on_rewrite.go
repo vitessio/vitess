@@ -1683,11 +1683,9 @@ func (c *cow) copyOnRewriteRefOfCurTimeFuncExpr(n *CurTimeFuncExpr, parent SQLNo
 	out = n
 	if c.pre == nil || c.pre(n, parent) {
 		_Name, changedName := c.copyOnRewriteIdentifierCI(n.Name, n)
-		_Fsp, changedFsp := c.copyOnRewriteExpr(n.Fsp, n)
-		if changedName || changedFsp {
+		if changedName {
 			res := *n
 			res.Name, _ = _Name.(IdentifierCI)
-			res.Fsp, _ = _Fsp.(Expr)
 			out = &res
 			if c.cloned != nil {
 				c.cloned(n, out)

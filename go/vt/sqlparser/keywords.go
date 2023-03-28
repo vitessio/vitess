@@ -612,6 +612,7 @@ var keywords = []keyword{
 	{"st_polyfromtext", ST_PolygonFromText},
 	{"st_polygonfromtext", ST_PolygonFromText},
 	{"sum", SUM},
+	{"sysdate", SYSDATE},
 	{"system", UNUSED},
 	{"table", TABLE},
 	{"tables", TABLES},

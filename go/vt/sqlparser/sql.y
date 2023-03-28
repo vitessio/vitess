@@ -348,7 +348,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 // Functions
 %token <str> CURRENT_TIMESTAMP DATABASE CURRENT_DATE CURDATE NOW
 %token <str> CURTIME CURRENT_TIME LOCALTIME LOCALTIMESTAMP CURRENT_USER
-%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP
+%token <str> UTC_DATE UTC_TIME UTC_TIMESTAMP SYSDATE
 %token <str> DAY DAY_HOUR DAY_MICROSECOND DAY_MINUTE DAY_SECOND HOUR HOUR_MICROSECOND HOUR_MINUTE HOUR_SECOND MICROSECOND MINUTE MINUTE_MICROSECOND MINUTE_SECOND MONTH QUARTER SECOND SECOND_MICROSECOND YEAR_MONTH WEEK
 %token <str> REPLACE
 %token <str> CONVERT CAST
@@ -546,7 +546,7 @@ func markBindVariable(yylex yyLexer, bvar string) {
 %type <columnType> column_type
 %type <columnType> int_type decimal_type numeric_type time_type char_type spatial_type
 %type <literal> length_opt partition_comment partition_data_directory partition_index_directory
-%type <expr> func_datetime_precision
+%type <integer> func_datetime_precision
 %type <columnCharset> charset_opt
 %type <str> collate_opt
 %type <boolean> binary_opt
@@ -1644,6 +1644,10 @@ CURRENT_TIMESTAMP func_datetime_precision
 | NOW func_datetime_precision
   {
     $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("now"), Fsp: $2}
+  }
+| SYSDATE func_datetime_precision
+  {
+    $$ = &CurTimeFuncExpr{Name:NewIdentifierCI("sysdate"), Fsp: $2}
   }
 
 signed_literal_or_null:
@@ -6604,19 +6608,15 @@ func_paren_opt:
 func_datetime_precision:
   /* empty */
   {
-  	$$ = nil
+  	$$ = 0
   }
 | openb closeb
   {
-    $$ = nil
+    $$ = 0
   }
 | openb INTEGRAL closeb
   {
-  	$$ = NewIntLiteral($2)
-  }
-| openb VALUE_ARG closeb
-  {
-    $$ = parseBindVariable(yylex, $2[1:])
+      $$ = convertStringToInt($2)
   }
 
 /*
@@ -7654,6 +7654,7 @@ reserved_keyword:
 | SPATIAL
 | STORED
 | STRAIGHT_JOIN
+| SYSDATE
 | SYSTEM
 | TABLE
 | THEN

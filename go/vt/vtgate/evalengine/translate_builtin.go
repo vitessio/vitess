@@ -354,6 +354,10 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}}, nil
 
 	case *sqlparser.CurTimeFuncExpr:
+		if call.Fsp > 6 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision 12 specified for '%s'. Maximum is 6.", call.Name.String())
+		}
+
 		var cexpr = CallExpr{Arguments: nil, Method: call.Name.String()}
 		var utc, onlyTime bool
 		switch call.Name.Lowered() {
@@ -367,14 +371,14 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		case "sysdate":
 			return &builtinSysdate{
 				CallExpr: cexpr,
-				prec:     0, // TODO: call.Prec once it's an integer literal
+				prec:     uint8(call.Fsp),
 			}, nil
 		}
 		return &builtinNow{
 			CallExpr: cexpr,
 			utc:      utc,
 			onlyTime: onlyTime,
-			prec:     0, // TODO: call.Prec once it's an integer literal
+			prec:     uint8(call.Fsp),
 		}, nil
 
 	default:

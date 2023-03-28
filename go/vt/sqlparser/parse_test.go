@@ -810,7 +810,7 @@ var (
 	}, {
 		input: "select /* utc_timestamp as func */ utc_timestamp() from t",
 	}, {
-		input: "select /* utc_timestamp with fsp */ utc_timestamp(0) from t",
+		input: "select /* utc_timestamp with fsp */ utc_timestamp(1) from t",
 	}, {
 		input: "select /* utc_time */ utc_time() from t",
 	}, {
