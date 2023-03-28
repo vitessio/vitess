@@ -1,6 +1,7 @@
 package evalengine
 
 import (
+	"strconv"
 	"time"
 
 	"github.com/lestrrat-go/strftime"
@@ -39,12 +40,27 @@ var (
 	formatDate     *strftime.Strftime
 )
 
+func withSubSecondPrecision(prec int) strftime.Appender {
+	return strftime.AppendFunc(func(b []byte, t time.Time) []byte {
+		l := len(b)
+		b = strconv.AppendUint(b, uint64(t.Nanosecond()), 10)
+		for len(b)-l < prec {
+			b = append(b, '0')
+		}
+		return b[:l+prec]
+	})
+}
+
 func init() {
-	for i := 0; i < 7; i++ {
-		formatTime[i], _ = strftime.New("%H:%M:%S")
-		formatDateTime[i], _ = strftime.New("%Y-%m-%d %H:%M:%S")
-	}
+	formatTime[0], _ = strftime.New("%H:%M:%S")
+	formatDateTime[0], _ = strftime.New("%Y-%m-%d %H:%M:%S")
 	formatDate, _ = strftime.New("%Y-%m-%d")
+
+	for i := 1; i <= 6; i++ {
+		spec := strftime.WithSpecification('f', withSubSecondPrecision(i))
+		formatTime[i], _ = strftime.New("%H:%M:%S.%f", spec)
+		formatDateTime[i], _ = strftime.New("%Y-%m-%d %H:%M:%S.%f", spec)
+	}
 }
 
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
