@@ -288,12 +288,12 @@ func valEqual(a, b sqlparser.Expr) bool {
 		if b, ok := b.(*sqlparser.ColName); ok {
 			return a.Metadata == b.Metadata
 		}
-	case sqlparser.Argument:
-		b, ok := b.(sqlparser.Argument)
+	case *sqlparser.Argument:
+		b, ok := b.(*sqlparser.Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return a.Name == b.Name
 	case *sqlparser.Literal:
 		b, ok := b.(*sqlparser.Literal)
 		if !ok {

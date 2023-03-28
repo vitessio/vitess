@@ -86,8 +86,9 @@ func (r *ReservedVars) ReserveColName(col *ColName) string {
 
 	for {
 		if _, ok := r.reserved[string(joinVar)]; !ok {
-			r.reserved[string(joinVar)] = struct{}{}
-			return string(joinVar)
+			bvar := string(joinVar)
+			r.reserved[bvar] = struct{}{}
+			return bvar
 		}
 		joinVar = strconv.AppendInt(joinVar[:baseLen], i, 10)
 		i++
@@ -128,8 +129,9 @@ func (r *ReservedVars) ReserveHasValuesSubQuery() string {
 		r.sqNext++
 		joinVar := strconv.AppendInt(HasValueSubQueryBaseName, r.sqNext, 10)
 		if _, ok := r.reserved[string(joinVar)]; !ok {
-			r.reserved[string(joinVar)] = struct{}{}
-			return string(joinVar)
+			bvar := string(joinVar)
+			r.reserved[bvar] = struct{}{}
+			return bvar
 		}
 	}
 }
@@ -159,7 +161,6 @@ func (r *ReservedVars) nextUnusedVar() string {
 	for {
 		r.counter++
 		r.next = strconv.AppendInt(r.next[:len(r.prefix)], int64(r.counter), 10)
-
 		if _, ok := r.reserved[string(r.next)]; !ok {
 			bvar := string(r.next)
 			r.reserved[bvar] = struct{}{}

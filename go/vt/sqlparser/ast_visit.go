@@ -54,8 +54,8 @@ func VisitSQLNode(in SQLNode, f Visit) error {
 		return VisitRefOfAlterVschema(in, f)
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
-	case Argument:
-		return VisitArgument(in, f)
+	case *Argument:
+		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *AutoIncSpec:
@@ -767,6 +767,15 @@ func VisitRefOfAndExpr(in *AndExpr, f Visit) error {
 		return err
 	}
 	if err := VisitExpr(in.Right, f); err != nil {
+		return err
+	}
+	return nil
+}
+func VisitRefOfArgument(in *Argument, f Visit) error {
+	if in == nil {
+		return nil
+	}
+	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
 	return nil
@@ -2631,6 +2640,9 @@ func VisitRefOfOffset(in *Offset, f Visit) error {
 	if cont, err := f(in); err != nil || !cont {
 		return err
 	}
+	if err := VisitExpr(in.Original, f); err != nil {
+		return err
+	}
 	return nil
 }
 func VisitOnDup(in OnDup, f Visit) error {
@@ -4458,8 +4470,8 @@ func VisitExpr(in Expr, f Visit) error {
 	switch in := in.(type) {
 	case *AndExpr:
 		return VisitRefOfAndExpr(in, f)
-	case Argument:
-		return VisitArgument(in, f)
+	case *Argument:
+		return VisitRefOfArgument(in, f)
 	case *ArgumentLessWindowExpr:
 		return VisitRefOfArgumentLessWindowExpr(in, f)
 	case *Avg:
@@ -4866,10 +4878,6 @@ func VisitTableExpr(in TableExpr, f Visit) error {
 	}
 }
 func VisitAlgorithmValue(in AlgorithmValue, f Visit) error {
-	_, err := f(in)
-	return err
-}
-func VisitArgument(in Argument, f Visit) error {
 	_, err := f(in)
 	return err
 }
