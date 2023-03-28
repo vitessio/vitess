@@ -68,8 +68,8 @@ func UpdateThrottlerTopoConfig(clusterInstance *cluster.LocalProcessCluster, ena
 	if threshold > 0 {
 		args = append(args, "--threshold", fmt.Sprintf("%f", threshold))
 	}
+	args = append(args, "--custom-query", metricsQuery)
 	if metricsQuery != "" {
-		args = append(args, "--custom-query", metricsQuery)
 		args = append(args, "--check-as-check-self")
 	} else {
 		args = append(args, "--check-as-check-shard")
