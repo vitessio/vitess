@@ -929,6 +929,8 @@ func FnNow(yield Query) {
 		"CURTIME()", "CURRENT_TIME()", "CURRENT_TIME",
 		"CURTIME(1)", "CURRENT_TIME(1)",
 		"SYSDATE()", "SYSDATE(1)",
+		"NOW(1)", "NOW(2)", "NOW(3)", "NOW(4)", "NOW(5)",
+		"SYSDATE(1)", "SYSDATE(2)", "SYSDATE(3)", "SYSDATE(4)", "SYSDATE(5)",
 	}
 	for _, fn := range fns {
 		yield(fn, nil)

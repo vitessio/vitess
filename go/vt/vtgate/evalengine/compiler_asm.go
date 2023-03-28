@@ -20,8 +20,9 @@ import (
 	"bytes"
 	"math"
 	"math/bits"
-	"strings"
 	"time"
+
+	"github.com/lestrrat-go/strftime"
 
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
@@ -2405,74 +2406,28 @@ func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	}
 }
 
-func (asm *assembler) Fn_Now(t querypb.Type, format string, utc bool) {
+func (asm *assembler) Fn_Now(t querypb.Type, format *strftime.Strftime, utc bool) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(t)
-		now := env.now
-		if now.IsZero() {
-			now = time.Now()
-			env.now = now
-		}
-
-		if utc {
-			now = now.UTC()
-		}
-		val.bytes = []byte(now.Format(format))
+		val.bytes = format.FormatBuffer(make([]byte, 0, formatBufferSize), env.time(utc))
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
-	}, "NOW")
+	}, "FN NOW")
 }
 
-func (asm *assembler) Fn_NowSub(t querypb.Type, format string, utc bool) {
-	asm.emit(func(env *ExpressionEnv) int {
-		s := env.vm.stack[env.vm.sp-1].(*evalInt64)
-		format = format + "." + strings.Repeat("9", int(s.i))
-
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(t)
-		now := env.now
-		if now.IsZero() {
-			now = time.Now()
-			env.now = now
-		}
-
-		if utc {
-			now = now.UTC()
-		}
-		val.bytes = []byte(now.Format(format))
-		env.vm.stack[env.vm.sp-1] = val
-		return 1
-	}, "NOW UINT64(SP-1)")
-}
-
-func (asm *assembler) Fn_Sysdate() {
+func (asm *assembler) Fn_Sysdate(format *strftime.Strftime) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Datetime)
-		now := time.Now()
-		val.bytes = []byte(now.Format("2006-01-02 15:04:05"))
+		val.bytes = format.FormatBuffer(make([]byte, 0, formatBufferSize), time.Now())
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
-	}, "SYSDATE")
-}
-
-func (asm *assembler) Fn_SysdateSub() {
-	asm.emit(func(env *ExpressionEnv) int {
-		s := env.vm.stack[env.vm.sp-1].(*evalInt64)
-		format := "2006-01-02 15:04:05." + strings.Repeat("9", int(s.i))
-
-		val := env.vm.arena.newEvalBytesEmpty()
-		val.tt = int16(sqltypes.Datetime)
-		now := time.Now()
-		val.bytes = []byte(now.Format(format))
-		env.vm.stack[env.vm.sp-1] = val
-		return 1
-	}, "NOW UINT64(SP-1)")
+	}, "FN SYSDATE")
 }
 
 func (asm *assembler) Fn_Curdate() {
@@ -2480,14 +2435,9 @@ func (asm *assembler) Fn_Curdate() {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
-		now := env.now
-		if now.IsZero() {
-			now = time.Now()
-			env.now = now
-		}
-		val.bytes = []byte(now.Format("2006-01-02"))
+		val.bytes = formatDate.FormatBuffer(make([]byte, 0, formatBufferSize), env.time(false))
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
-	}, "CURDATE")
+	}, "FN CURDATE")
 }

@@ -164,7 +164,7 @@ func (l *Limit) NeedsTransaction() bool {
 }
 
 func (l *Limit) getCountAndOffset(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
 	count, err = getIntFrom(env, l.Count)
 	if err != nil {
 		return

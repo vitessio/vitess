@@ -17,6 +17,8 @@ limitations under the License.
 package evalengine
 
 import (
+	"github.com/lestrrat-go/strftime"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
@@ -525,4 +527,29 @@ func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, er
 		c.asm.SetNull(1)
 		return ctype{Type: sqltypes.VarBinary, Flag: flagNullable | flagNull, Col: collationBinary}, nil
 	}
+}
+
+func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
+	var format *strftime.Strftime
+	var t sqltypes.Type
+
+	if call.onlyTime {
+		format = formatTime[call.prec]
+		t = sqltypes.Time
+	} else {
+		format = formatDateTime[call.prec]
+		t = sqltypes.Datetime
+	}
+	c.asm.Fn_Now(t, format, call.utc)
+	return ctype{Type: t, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_Curdate(*builtinCurdate) (ctype, error) {
+	c.asm.Fn_Curdate()
+	return ctype{Type: sqltypes.Date, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_Sysdate(call *builtinSysdate) (ctype, error) {
+	c.asm.Fn_Sysdate(formatDateTime[call.prec])
+	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
 }

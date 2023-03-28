@@ -302,15 +302,14 @@ func TestEvaluate(t *testing.T) {
 			sqltypesExpr, err := Translate(astExpr, &Config{Collation: 45})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := EnvWithBindVars(
-				map[string]*querypb.BindVariable{
-					"exp":                  sqltypes.Int64BindVariable(66),
-					"string_bind_variable": sqltypes.StringBindVariable("bar"),
-					"int32_bind_variable":  sqltypes.Int32BindVariable(20),
-					"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
-					"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
-					"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
-				})
+			env := NewExpressionEnv(map[string]*querypb.BindVariable{
+				"exp":                  sqltypes.Int64BindVariable(66),
+				"string_bind_variable": sqltypes.StringBindVariable("bar"),
+				"int32_bind_variable":  sqltypes.Int32BindVariable(20),
+				"uint32_bind_variable": sqltypes.Uint32BindVariable(21),
+				"uint64_bind_variable": sqltypes.Uint64BindVariable(22),
+				"float_bind_variable":  sqltypes.Float64BindVariable(2.2),
+			}, nil)
 
 			// When
 			r, err := env.Evaluate(sqltypesExpr)

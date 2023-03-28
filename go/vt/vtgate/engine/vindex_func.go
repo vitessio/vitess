@@ -111,7 +111,7 @@ func (vf *VindexFunc) GetFields(ctx context.Context, vcursor VCursor, bindVars m
 }
 
 func (vf *VindexFunc) mapVindex(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (*sqltypes.Result, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
 	k, err := env.Evaluate(vf.Value)
 	if err != nil {
 		return nil, err

@@ -247,7 +247,7 @@ func (vr *VindexLookup) executeBatch(ctx context.Context, vcursor VCursor, ids [
 }
 
 func (vr *VindexLookup) generateIds(vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]sqltypes.Value, error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
 	value, err := env.Evaluate(vr.Values[0])
 	if err != nil {
 		return nil, err

@@ -76,7 +76,7 @@ func testSingle(t *testing.T, query string) (EvalResult, error) {
 	if err != nil {
 		return EvalResult{}, err
 	}
-	return EnvWithBindVars(nil).Evaluate(converted)
+	return NewExpressionEnv(nil, nil).Evaluate(converted)
 }
 
 func TestMySQLGolden(t *testing.T) {

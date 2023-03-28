@@ -28,13 +28,29 @@ type (
 	// ExpressionEnv contains the environment that the expression
 	// evaluates in, such as the current row and bindvars
 	ExpressionEnv struct {
-		vm  vmstate
-		now time.Time
+		vm vmstate
 
 		BindVars map[string]*querypb.BindVariable
 		Row      []sqltypes.Value
+		Tz       *time.Location
+
+		// internal state
+		now time.Time
 	}
 )
+
+func (env *ExpressionEnv) time(utc bool) time.Time {
+	if env.now.IsZero() {
+		env.now = time.Now()
+	}
+	if utc {
+		return env.now.UTC()
+	}
+	if env.Tz != nil {
+		return env.now.In(env.Tz)
+	}
+	return env.now
+}
 
 func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
 	env.now = time.Time{}
@@ -57,10 +73,10 @@ func (env *ExpressionEnv) TypeOf(expr Expr, fields []*querypb.Field) (sqltypes.T
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return EnvWithBindVars(map[string]*querypb.BindVariable{})
+	return NewExpressionEnv(nil, nil)
 }
 
-// EnvWithBindVars returns an expression environment with no current row, but with bindvars
-func EnvWithBindVars(bindVars map[string]*querypb.BindVariable) *ExpressionEnv {
-	return &ExpressionEnv{BindVars: bindVars}
+// NewExpressionEnv returns an expression environment with no current row, but with bindvars
+func NewExpressionEnv(bindVars map[string]*querypb.BindVariable, tz *time.Location) *ExpressionEnv {
+	return &ExpressionEnv{BindVars: bindVars, Tz: tz}
 }

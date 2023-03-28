@@ -547,6 +547,18 @@ func (session *SafeSession) HasSystemVariables() (found bool) {
 	return
 }
 
+func (session *SafeSession) TimeZone() *time.Location {
+	session.mu.Lock()
+	tz, ok := session.SystemVariables["time_zone"]
+	session.mu.Unlock()
+
+	if !ok {
+		return time.Local
+	}
+	loc, _ := time.LoadLocation(tz)
+	return loc
+}
+
 // SetOptions sets the options
 func (session *SafeSession) SetOptions(options *querypb.ExecuteOptions) {
 	session.mu.Lock()

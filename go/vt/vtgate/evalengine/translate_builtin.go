@@ -359,14 +359,6 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		}}, nil
 
 	case *sqlparser.CurTimeFuncExpr:
-		var args []Expr
-		if call.Fsp != nil {
-			precision, err := ast.translateExpr(call.Fsp)
-			if err != nil {
-				return nil, err
-			}
-			args = append(args, precision)
-		}
 		var utc, onlyTime bool
 		switch call.Name.Lowered() {
 		case "current_time", "curtime":
@@ -377,14 +369,14 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 		case "utc_timestamp":
 			utc = true
 		}
-
 		return &builtinNow{
 			CallExpr: CallExpr{
-				Arguments: args,
+				Arguments: nil,
 				Method:    call.Name.String(),
 			},
 			utc:      utc,
 			onlyTime: onlyTime,
+			prec:     0, // TODO: call.Prec once it's an integer literal
 		}, nil
 
 	default:

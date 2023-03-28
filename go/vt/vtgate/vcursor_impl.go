@@ -23,6 +23,7 @@ import (
 	"sort"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"vitess.io/vitess/go/vt/vtgate/logstats"
 
@@ -185,6 +186,10 @@ func (vc *vcursorImpl) GetSystemVariables(f func(k string, v string)) {
 // ConnCollation returns the collation of this session
 func (vc *vcursorImpl) ConnCollation() collations.ID {
 	return vc.collation
+}
+
+func (vc *vcursorImpl) TimeZone() *time.Location {
+	return vc.safeSession.TimeZone()
 }
 
 // MaxMemoryRows returns the maxMemoryRows flag value.
