@@ -54,22 +54,18 @@ func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 	ki.keyspace = name
 }
 
-var ksNameReplacer = strings.NewReplacer("/", "")
+var invalidKeyspaceNameChars = "/"
 
 // ValidateKeyspaceNames checks if the provided name is a valid name for a
 // keyspace.
 //
-// If it is valid, the original name is returned with no error. If it is
-// invalid, the name with all invalid characters removed is returned, along
-// with an error.
-//
 // As of v17, "all invalid characters" is just the forward slash ("/").
-func ValidateKeyspaceName(name string) (string, error) {
-	if validated := ksNameReplacer.Replace(name); name != validated {
-		return validated, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; expected %s instead", name, validated)
+func ValidateKeyspaceName(name string) error {
+	if strings.ContainsAny(name, invalidKeyspaceNameChars) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; may not contain any of the following: %+v", name, strings.Split(invalidKeyspaceNameChars, ""))
 	}
 
-	return name, nil
+	return nil
 }
 
 // GetServedFrom returns a Keyspace_ServedFrom record if it exists.
@@ -179,8 +175,8 @@ func (ki *KeyspaceInfo) ComputeCellServedFrom(cell string) []*topodatapb.SrvKeys
 // CreateKeyspace wraps the underlying Conn.Create
 // and dispatches the event.
 func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *topodatapb.Keyspace) error {
-	if _, err := ValidateKeyspaceName(keyspace); err != nil {
-		return vterrors.Wrap(err, "CreateKeyspace got invalid keyspace name")
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return vterrors.Wrapf(err, "CreateKeyspace: %s", err)
 	}
 
 	data, err := value.MarshalVT()
@@ -203,8 +199,8 @@ func (ts *Server) CreateKeyspace(ctx context.Context, keyspace string, value *to
 
 // GetKeyspace reads the given keyspace and returns it
 func (ts *Server) GetKeyspace(ctx context.Context, keyspace string) (*KeyspaceInfo, error) {
-	if _, err := ValidateKeyspaceName(keyspace); err != nil {
-		return nil, vterrors.Wrap(err, "GetKeyspace got invalid keyspace name")
+	if err := ValidateKeyspaceName(keyspace); err != nil {
+		return nil, vterrors.Wrapf(err, "GetKeyspace: %s", err)
 	}
 
 	keyspacePath := path.Join(KeyspacesPath, keyspace, KeyspaceFile)
