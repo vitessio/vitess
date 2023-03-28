@@ -99,6 +99,12 @@ func (c *compiler) compileFn(call callable) (ctype, error) {
 		return c.compileFn_Curdate(call)
 	case *builtinSysdate:
 		return c.compileFn_Sysdate(call)
+	case *builtinUser:
+		return c.compileFn_User(call)
+	case *builtinDatabase:
+		return c.compileFn_Database(call)
+	case *builtinVersion:
+		return c.compileFn_Version(call)
 	default:
 		return ctype{}, c.unsupported(call)
 	}
@@ -388,16 +394,10 @@ func (c *compiler) compileFn_COLLATION(expr *builtinCollation) (ctype, error) {
 
 	skip := c.asm.jumpFrom()
 
-	col := collations.TypedCollation{
-		Collation:    collations.CollationUtf8ID,
-		Coercibility: collations.CoerceCoercible,
-		Repertoire:   collations.RepertoireASCII,
-	}
-
-	c.asm.Fn_COLLATION(col)
+	c.asm.Fn_COLLATION(collationUtf8mb3)
 	c.asm.jumpDestination(skip)
 
-	return ctype{Type: sqltypes.VarChar, Col: col}, nil
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
 }
 
 func (c *compiler) compileFn_rounding(expr callable, asm_ins_f, asm_ins_d func()) (ctype, error) {
@@ -552,4 +552,19 @@ func (c *compiler) compileFn_Curdate(*builtinCurdate) (ctype, error) {
 func (c *compiler) compileFn_Sysdate(call *builtinSysdate) (ctype, error) {
 	c.asm.Fn_Sysdate(formatDateTime[call.prec])
 	return ctype{Type: sqltypes.Datetime, Col: collationBinary}, nil
+}
+
+func (c *compiler) compileFn_User(_ *builtinUser) (ctype, error) {
+	c.asm.Fn_User()
+	return ctype{Type: sqltypes.VarChar, Col: collationUtf8mb3}, nil
+}
+
+func (c *compiler) compileFn_Database(_ *builtinDatabase) (ctype, error) {
+	c.asm.Fn_Database()
+	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
+}
+
+func (c *compiler) compileFn_Version(_ *builtinVersion) (ctype, error) {
+	c.asm.Fn_Version()
+	return ctype{Type: sqltypes.Datetime, Col: collationUtf8mb3}, nil
 }

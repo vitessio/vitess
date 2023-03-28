@@ -57,7 +57,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 		return nil, err
 	}
 
-	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var resultRows []sqltypes.Row
 	for _, row := range result.Rows {
 		resultRow := make(sqltypes.Row, 0, len(p.Exprs))
@@ -83,7 +83,7 @@ func (p *Projection) TryExecute(ctx context.Context, vcursor VCursor, bindVars m
 
 // TryStreamExecute implements the Primitive interface
 func (p *Projection) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var once sync.Once
 	var fields []*querypb.Field
 	return vcursor.StreamExecutePrimitive(ctx, p.Input, bindVars, wantfields, func(qr *sqltypes.Result) error {
@@ -128,7 +128,7 @@ func (p *Projection) GetFields(ctx context.Context, vcursor VCursor, bindVars ma
 	if err != nil {
 		return nil, err
 	}
-	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	qr.Fields, err = p.evalFields(env, nil)
 	if err != nil {
 		return nil, err

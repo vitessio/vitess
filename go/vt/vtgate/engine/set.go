@@ -127,7 +127,7 @@ func (s *Set) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[stri
 	if len(input.Rows) != 1 {
 		return nil, vterrors.Errorf(vtrpcpb.Code_FAILED_PRECONDITION, "should get a single row")
 	}
-	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	env.Row = input.Rows[0]
 	for _, setOp := range s.Ops {
 		err := setOp.Execute(ctx, vcursor, env)

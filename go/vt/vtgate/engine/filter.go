@@ -59,7 +59,7 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 	if err != nil {
 		return nil, err
 	}
-	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	var rows [][]sqltypes.Value
 	for _, row := range result.Rows {
 		env.Row = row
@@ -81,7 +81,7 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 
 // TryStreamExecute satisfies the Primitive interface.
 func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	env := evalengine.NewExpressionEnv(bindVars, vcursor.TimeZone())
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
 		for _, row := range results.Rows {

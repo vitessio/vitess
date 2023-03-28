@@ -17,12 +17,19 @@ limitations under the License.
 package evalengine
 
 import (
+	"context"
 	"errors"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/callerid"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 )
+
+type VCursor interface {
+	TimeZone() *time.Location
+	GetKeyspace() string
+}
 
 type (
 	// ExpressionEnv contains the environment that the expression
@@ -32,10 +39,12 @@ type (
 
 		BindVars map[string]*querypb.BindVariable
 		Row      []sqltypes.Value
-		Tz       *time.Location
 
 		// internal state
-		now time.Time
+		now      time.Time
+		tz       *time.Location
+		keyspace string
+		user     *querypb.VTGateCallerID
 	}
 )
 
@@ -46,8 +55,8 @@ func (env *ExpressionEnv) time(utc bool) time.Time {
 	if utc {
 		return env.now.UTC()
 	}
-	if env.Tz != nil {
-		return env.now.In(env.Tz)
+	if env.tz != nil {
+		return env.now.In(env.tz)
 	}
 	return env.now
 }
@@ -73,10 +82,16 @@ func (env *ExpressionEnv) TypeOf(expr Expr, fields []*querypb.Field) (sqltypes.T
 
 // EmptyExpressionEnv returns a new ExpressionEnv with no bind vars or row
 func EmptyExpressionEnv() *ExpressionEnv {
-	return NewExpressionEnv(nil, nil)
+	return NewExpressionEnv(context.Background(), nil, nil)
 }
 
 // NewExpressionEnv returns an expression environment with no current row, but with bindvars
-func NewExpressionEnv(bindVars map[string]*querypb.BindVariable, tz *time.Location) *ExpressionEnv {
-	return &ExpressionEnv{BindVars: bindVars, Tz: tz}
+func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVariable, vc VCursor) *ExpressionEnv {
+	var keyspace string
+	var tz *time.Location
+	if vc != nil {
+		keyspace = vc.GetKeyspace()
+		tz = vc.TimeZone()
+	}
+	return &ExpressionEnv{BindVars: bindVars, tz: tz, keyspace: keyspace, user: callerid.ImmediateCallerIDFromContext(ctx)}
 }

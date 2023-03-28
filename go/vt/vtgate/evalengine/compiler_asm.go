@@ -24,6 +24,8 @@ import (
 
 	"github.com/lestrrat-go/strftime"
 
+	"vitess.io/vitess/go/vt/servenv"
+
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/slices2"
@@ -2424,8 +2426,8 @@ func (asm *assembler) Fn_Sysdate(format *strftime.Strftime) {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Datetime)
 		now := time.Now()
-		if env.Tz != nil {
-			now = now.In(env.Tz)
+		if env.tz != nil {
+			now = now.In(env.tz)
 		}
 		val.bytes = format.FormatBuffer(make([]byte, 0, formatBufferSize), now)
 		env.vm.stack[env.vm.sp] = val
@@ -2444,4 +2446,32 @@ func (asm *assembler) Fn_Curdate() {
 		env.vm.sp++
 		return 1
 	}, "FN CURDATE")
+}
+
+func (asm *assembler) Fn_User() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		user := currentUser(env)
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(user), collationUtf8mb3)
+		env.vm.sp++
+		return 1
+	}, "FN USER")
+}
+
+func (asm *assembler) Fn_Database() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(env.keyspace), collationUtf8mb3)
+		env.vm.sp++
+		return 1
+	}, "FN DATABASE")
+}
+
+func (asm *assembler) Fn_Version() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(servenv.MySQLServerVersion()), collationUtf8mb3)
+		env.vm.sp++
+		return 1
+	}, "FN VERSION")
 }

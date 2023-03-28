@@ -82,6 +82,7 @@ var Cases = []TestCase{
 	{Run: FnDegrees},
 	{Run: FnRadians},
 	{Run: FnNow},
+	{Run: FnInfo},
 }
 
 func JSONPathOperations(yield Query) {
@@ -931,6 +932,18 @@ func FnNow(yield Query) {
 		"SYSDATE()", "SYSDATE(1)",
 		"NOW(1)", "NOW(2)", "NOW(3)", "NOW(4)", "NOW(5)",
 		"SYSDATE(1)", "SYSDATE(2)", "SYSDATE(3)", "SYSDATE(4)", "SYSDATE(5)",
+	}
+	for _, fn := range fns {
+		yield(fn, nil)
+	}
+}
+
+func FnInfo(yield Query) {
+	fns := []string{
+		"USER()", "CURRENT_USER()", "CURRENT_USER",
+		"SESSION_USER()", "SYSTEM_USER()",
+		"DATABASE()", "SCHEMA()",
+		"VERSION()",
 	}
 	for _, fn := range fns {
 		yield(fn, nil)

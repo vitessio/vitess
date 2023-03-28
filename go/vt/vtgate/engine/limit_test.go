@@ -540,15 +540,15 @@ func TestLimitInvalidCount(t *testing.T) {
 	l := &Limit{
 		Count: evalengine.NewBindVar("l"),
 	}
-	_, _, err := l.getCountAndOffset(&noopVCursor{}, nil)
+	_, _, err := l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "query arguments missing for l")
 
 	l.Count = evalengine.NewLiteralFloat(1.2)
-	_, _, err = l.getCountAndOffset(&noopVCursor{}, nil)
+	_, _, err = l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "Cannot convert value to desired type")
 
 	l.Count = evalengine.NewLiteralUint(18446744073709551615)
-	_, _, err = l.getCountAndOffset(&noopVCursor{}, nil)
+	_, _, err = l.getCountAndOffset(context.Background(), &noopVCursor{}, nil)
 	assert.EqualError(t, err, "requested limit is out of range: 18446744073709551615")
 
 	// When going through the API, it should return the same error.

@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -302,7 +303,7 @@ func TestEvaluate(t *testing.T) {
 			sqltypesExpr, err := Translate(astExpr, &Config{Collation: 45})
 			require.Nil(t, err)
 			require.NotNil(t, sqltypesExpr)
-			env := NewExpressionEnv(map[string]*querypb.BindVariable{
+			env := NewExpressionEnv(context.Background(), map[string]*querypb.BindVariable{
 				"exp":                  sqltypes.Int64BindVariable(66),
 				"string_bind_variable": sqltypes.StringBindVariable("bar"),
 				"int32_bind_variable":  sqltypes.Int32BindVariable(20),

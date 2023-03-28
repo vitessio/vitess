@@ -233,6 +233,21 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 			return nil, argError(method)
 		}
 		return &builtinCurdate{CallExpr: call}, nil
+	case "user", "current_user", "session_user", "system_user":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUser{CallExpr: call}, nil
+	case "database", "schema":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinDatabase{CallExpr: call}, nil
+	case "version":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinVersion{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
