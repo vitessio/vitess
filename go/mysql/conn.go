@@ -1214,9 +1214,9 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		prepare, ok := c.PrepareData[stmtID]
 		if !ok {
 			log.Error("Commands were executed in an improper order from client %v, packet: %v", c.ConnectionID, data)
-			if err := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); err != nil {
+			if werr := c.writeErrorPacket(CRCommandsOutOfSync, SSUnknownComError, "commands were executed in an improper order: %v", data); werr != nil {
 				log.Error("Error writing error packet to client: %v", err)
-				return err
+				return werr
 			}
 		}
 
@@ -1234,14 +1234,25 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 	case ComStmtFetch:
 		c.startWriterBuffering()
+		endFetch := func() error {
+			if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
+				log.Errorf("Error writing result to %s: %v", c, err)
+				return err
+			}
+			if err = c.flush(); err != nil {
+				log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+				return err
+			}
+			return nil
+		}
 
 		stmtID, numRows, ok := c.parseComStmtFetch(data)
 		c.recycleReadPacket()
 		if !ok {
 			log.Error("Got unhandled packet from client %v, returning error: %v", c.ConnectionID, data)
-			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
-				log.Error("Error writing error packet to client: %v", err)
-				return err
+			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
+				log.Error("Error writing error packet to client: %v", werr)
+				return werr
 			}
 		}
 
@@ -1249,12 +1260,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		if c.cs == nil {
 			c.StatusFlags &= ^uint16(ServerCursorExists)
 			c.StatusFlags |= uint16(ServerCursorLastRowSent)
-			if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-				log.Errorf("Error writing result to %s: %v", c, err)
-				return err
-			}
-			if err = c.flush(); err != nil {
-				log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
+			if err = endFetch(); err != nil {
 				return err
 			}
 			return nil
@@ -1267,16 +1273,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		// fetching from wrong statement
 		if stmtID != c.cs.stmtID {
 			log.Errorf("Requested stmtID does not match stmtID of open cursor. Client %v, returning error: %v", c.ConnectionID, data)
-			if err := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); err != nil {
+			if werr := c.writeErrorPacket(ERUnknownComError, SSUnknownComError, "error handling packet: %v", data); werr != nil {
 				log.Error("Error writing error packet to client: %v", err)
-				return err
+				return werr
 			}
 		}
 
 		// while we are still expecting rows
-		shouldDiscard := false
 		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
-			// drain rows from next to cs.pending
+			// receive rows from next to cs.pending
 			var newqr *sqltypes.Result
 			newqr, ok = <-c.cs.next
 
@@ -1290,7 +1295,6 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 					}
 					return nil
 				}
-				shouldDiscard = true
 				break
 			}
 
@@ -1310,27 +1314,29 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 			}
 		}
 
+		// reached end of result set
+		if c.cs.pending == nil {
+			c.discardCursor()
+			if err = endFetch(); err != nil {
+				return err
+			}
+			return nil
+		}
+
 		// cap the number of rows
 		if int(numRows) > len(c.cs.pending.Rows) {
 			numRows = uint32(len(c.cs.pending.Rows))
 		}
-
 		// write the first numRows
 		if err = c.writeNumRows(int(numRows)); err != nil {
 			return err
 		}
-		if err = c.writeEndResult(false, 0, 0, handler.WarningCount(c)); err != nil {
-			log.Errorf("Error writing result to %s: %v", c, err)
+		if err = endFetch(); err != nil {
 			return err
 		}
-		if err = c.flush(); err != nil {
-			log.Errorf("Conn %v: Flush() failed: %v", c.ID(), err)
-			return err
-		}
-
-		// no rows left, close cursor
-		if shouldDiscard {
-			c.discardCursor()
+		// no rows left, reset pending
+		if len(c.cs.pending.Rows) == 0 {
+			c.cs.pending = nil
 		}
 		return nil
 	case ComResetConnection:
@@ -1369,17 +1375,16 @@ func (c *Conn) writeNumRows(numRows int) (err error) {
 }
 
 // discardCursor stops the statement execute goroutine and clears the cursor state, if it exists
-func (c *Conn) discardCursor() (err error) {
+func (c *Conn) discardCursor() {
 	// close cursor if open
 	if c.cs != nil {
-		select {
-		case c.cs.quit <- nil:
-		case err = <- c.cs.done:
+		if _, ok := <- c.cs.next; ok {
+			c.cs.quit <- nil
 		}
 		c.cs = nil
 	}
 	c.StatusFlags &= ^uint16(ServerCursorExists)
-	return err
+	c.StatusFlags |= uint16(ServerCursorLastRowSent)
 }
 
 // formatID returns a quoted identifier from the one given. Adapted from ast.go
@@ -1533,18 +1538,17 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		go func() {
-			defer func(){
-				// pass along error, even if there's a panic
-				if r := recover(); r != nil {
-					err = r.(error)
-				}
-				if c.cs != nil {
-					close(c.cs.next)
-					c.cs.done <- err
-				}
-			}()
-
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
+				defer func(){
+					// pass along error, even if there's a panic
+					if r := recover(); r != nil {
+						err = r.(error)
+					}
+					if c.cs != nil {
+						close(c.cs.next)
+						c.cs.done <- err
+					}
+				}()
 				// block until query results are sent or receive signal to quit
 				select {
 				case c.cs.next <- qr:
