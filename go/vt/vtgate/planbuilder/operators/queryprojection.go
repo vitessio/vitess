@@ -223,7 +223,6 @@ func (ar *AggrRewriter) RewriteUp() func(*sqlparser.Cursor) bool {
 			Col:  &sqlparser.AliasedExpr{Expr: fExp},
 		}
 		ar.qp.HasAggr = true
-
 		cursor.Replace(sqlparser.NewOffset(len(ar.qp.SelectExprs), fExp))
 		ar.qp.SelectExprs = append(ar.qp.SelectExprs, col)
 		ar.qp.AddedColumn++
@@ -467,7 +466,6 @@ func (qp *QueryProjection) NeedsProjecting(
 					err = tErr
 					return
 				}
-
 				cursor.Replace(sqlparser.NewOffset(offset, col))
 			}
 		}

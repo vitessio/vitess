@@ -19,12 +19,15 @@ package evalengine
 import (
 	"encoding/base64"
 
+	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
 	builtinToBase64 struct {
 		CallExpr
+		collate collations.ID
 	}
 
 	builtinFromBase64 struct {
@@ -78,13 +81,13 @@ func (call *builtinToBase64) eval(env *ExpressionEnv) (eval, error) {
 	encoded := mysqlBase64Encode(b.bytes)
 
 	if arg.SQLType() == sqltypes.Blob || arg.SQLType() == sqltypes.TypeJSON {
-		return newEvalRaw(sqltypes.Text, encoded, env.collation()), nil
+		return newEvalRaw(sqltypes.Text, encoded, defaultCoercionCollation(call.collate)), nil
 	}
-	return newEvalText(encoded, env.collation()), nil
+	return newEvalText(encoded, defaultCoercionCollation(call.collate)), nil
 }
 
-func (call *builtinToBase64) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env)
+func (call *builtinToBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
 	if tt == sqltypes.Blob || tt == sqltypes.TypeJSON {
 		return sqltypes.Text, f
 	}
@@ -111,8 +114,8 @@ func (call *builtinFromBase64) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalBinary(decoded), nil
 }
 
-func (call *builtinFromBase64) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := call.Arguments[0].typeof(env)
+func (call *builtinFromBase64) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := call.Arguments[0].typeof(env, fields)
 	if tt == sqltypes.Text || tt == sqltypes.TypeJSON {
 		return sqltypes.Blob, f | flagNullable
 	}

@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -56,8 +57,8 @@ func (call *builtinCeil) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinCeil) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env)
+func (call *builtinCeil) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := call.Arguments[0].typeof(env, fields)
 	if sqltypes.IsSigned(t) {
 		return sqltypes.Int64, f
 	} else if sqltypes.IsUnsigned(t) {
@@ -101,8 +102,8 @@ func (call *builtinFloor) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinFloor) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env)
+func (call *builtinFloor) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := call.Arguments[0].typeof(env, fields)
 	if sqltypes.IsSigned(t) {
 		return sqltypes.Int64, f
 	} else if sqltypes.IsUnsigned(t) {
@@ -148,8 +149,8 @@ func (call *builtinAbs) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (call *builtinAbs) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t, f := call.Arguments[0].typeof(env)
+func (call *builtinAbs) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := call.Arguments[0].typeof(env, fields)
 	if sqltypes.IsNumber(t) {
 		return t, f
 	} else {
@@ -167,7 +168,7 @@ func (call *builtinPi) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Pi), nil
 }
 
-func (call *builtinPi) typeof(_ *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (call *builtinPi) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	return sqltypes.Float64, 0
 }
 
@@ -193,8 +194,8 @@ func (call *builtinAcos) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Acos(f.f)), nil
 }
 
-func (call *builtinAcos) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinAcos) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f | flagNullable
 }
 
@@ -220,8 +221,8 @@ func (call *builtinAsin) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Asin(f.f)), nil
 }
 
-func (call *builtinAsin) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinAsin) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f | flagNullable
 }
 
@@ -244,8 +245,8 @@ func (call *builtinAtan) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Atan(f.f)), nil
 }
 
-func (call *builtinAtan) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinAtan) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }
 
@@ -269,8 +270,8 @@ func (call *builtinAtan2) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Atan2(f1.f, f2.f)), nil
 }
 
-func (call *builtinAtan2) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinAtan2) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }
 
@@ -293,8 +294,8 @@ func (call *builtinCos) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Cos(f.f)), nil
 }
 
-func (call *builtinCos) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinCos) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }
 
@@ -317,8 +318,8 @@ func (call *builtinCot) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(1.0 / math.Tan(f.f)), nil
 }
 
-func (call *builtinCot) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinCot) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }
 
@@ -341,8 +342,8 @@ func (call *builtinSin) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Sin(f.f)), nil
 }
 
-func (call *builtinSin) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinSin) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }
 
@@ -365,8 +366,8 @@ func (call *builtinTan) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(math.Tan(f.f)), nil
 }
 
-func (call *builtinTan) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinTan) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }
 
@@ -389,8 +390,8 @@ func (call *builtinDegrees) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(f.f * (180 / math.Pi)), nil
 }
 
-func (call *builtinDegrees) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinDegrees) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }
 
@@ -413,7 +414,7 @@ func (call *builtinRadians) eval(env *ExpressionEnv) (eval, error) {
 	return newEvalFloat(f.f * (math.Pi / 180)), nil
 }
 
-func (call *builtinRadians) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := call.Arguments[0].typeof(env)
+func (call *builtinRadians) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := call.Arguments[0].typeof(env, fields)
 	return sqltypes.Float64, f
 }

@@ -20,62 +20,88 @@ import (
 	"errors"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
 var errDeoptimize = errors.New("de-optimize")
 
-type VirtualMachine struct {
-	arena Arena
-	hash  vthash.Hasher
-	row   []sqltypes.Value
+type vmstate struct {
 	stack []eval
 	sp    int
 
+	arena Arena
+	hash  vthash.Hasher
 	err   error
+
 	flags struct {
 		cmp  int
 		null bool
 	}
 }
 
-type Program struct {
+func Deoptimize(expr Expr) Expr {
+	switch expr := expr.(type) {
+	case *CompiledExpr:
+		return expr.original
+	default:
+		return expr
+	}
+}
+
+type CompiledExpr struct {
 	code     []frame
-	original Expr
+	typed    sqltypes.Type
 	stack    int
+	original Expr
 }
 
-func (vm *VirtualMachine) Run(p *Program, row []sqltypes.Value) (EvalResult, error) {
-	vm.arena.reset()
-	vm.row = row
-	vm.sp = 0
-	if len(vm.stack) < p.stack {
-		vm.stack = make([]eval, p.stack)
-	}
-	e, err := vm.execute(p)
-	if err != nil {
-		if err == errDeoptimize {
-			var env ExpressionEnv
-			env.Row = row
-			return env.Evaluate(p.original)
-		}
-		return EvalResult{}, err
-	}
-	return EvalResult{e}, nil
+func (p *CompiledExpr) eval(env *ExpressionEnv) (eval, error) {
+	return p.original.eval(env)
 }
 
-func (vm *VirtualMachine) execute(p *Program) (eval, error) {
+func (p *CompiledExpr) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
+	return p.typed, 0
+}
+
+func (p *CompiledExpr) format(buf *formatter, depth int) {
+	p.original.format(buf, depth)
+}
+
+func (p *CompiledExpr) constant() bool {
+	return p.original.constant()
+}
+
+func (p *CompiledExpr) simplify(env *ExpressionEnv) error {
+	// No-op
+	return nil
+}
+
+var _ Expr = (*CompiledExpr)(nil)
+
+func (env *ExpressionEnv) EvaluateVM(p *CompiledExpr) (EvalResult, error) {
+	env.vm.arena.reset()
+	env.vm.sp = 0
+	env.vm.err = nil
+	if len(env.vm.stack) < p.stack {
+		env.vm.stack = make([]eval, p.stack)
+	}
+
 	code := p.code
 	ip := 0
 
 	for ip < len(code) {
-		ip += code[ip](vm)
-		if vm.err != nil {
-			return nil, vm.err
+		ip += code[ip](env)
+		if env.vm.err != nil {
+			goto err
 		}
 	}
-	if vm.sp == 0 {
-		return nil, nil
+	return EvalResult{env.vm.stack[env.vm.sp-1]}, nil
+
+err:
+	if env.vm.err == errDeoptimize {
+		e, err := p.original.eval(env)
+		return EvalResult{e}, err
 	}
-	return vm.stack[vm.sp-1], nil
+	return EvalResult{}, env.vm.err
 }

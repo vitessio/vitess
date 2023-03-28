@@ -23,7 +23,6 @@ import (
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/vindexes"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -356,8 +355,6 @@ func (st *SemTable) CopyExprInfo(src, dest sqlparser.Expr) {
 		st.ExprTypes[dest] = srcType
 	}
 }
-
-var _ evalengine.TranslationLookup = (*SemTable)(nil)
 
 var columnNotSupportedErr = vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
 
