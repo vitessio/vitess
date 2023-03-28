@@ -45,6 +45,7 @@ import (
 	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/trace"
 	"vitess.io/vitess/go/viperutil"
+	viperdebug "vitess.io/vitess/go/viperutil/debug"
 	"vitess.io/vitess/go/vt/grpccommon"
 	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/logutil"
@@ -344,6 +345,7 @@ func ParseFlags(cmd string) {
 	if err := viperutil.LoadConfig(); err != nil {
 		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
 	}
+	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
 
 	logutil.PurgeLogs()
 }
@@ -380,6 +382,7 @@ func ParseFlagsWithArgs(cmd string) []string {
 	if err := viperutil.LoadConfig(); err != nil {
 		log.Exitf("%s: failed to read in config: %s", cmd, err.Error())
 	}
+	HTTPHandleFunc("/debug/config", viperdebug.HandlerFunc)
 
 	logutil.PurgeLogs()
 

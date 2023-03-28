@@ -25,9 +25,12 @@ import (
 // Debug provides the Debug functionality normally accessible to a given viper
 // instance, but for a combination of the private static and dynamic registries.
 func Debug() {
+	combinedRegistry().Debug()
+}
+
+func combinedRegistry() *viper.Viper {
 	v := viper.New()
 	_ = v.MergeConfigMap(registry.Static.AllSettings())
 	_ = v.MergeConfigMap(registry.Dynamic.AllSettings())
-
-	v.Debug()
+	return v
 }
