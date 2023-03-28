@@ -422,6 +422,16 @@ const (
 	SecondStr            = "second"
 	SecondMicrosecondStr = "second_microsecond"
 	YearMonthStr         = "year_month"
+
+	//GeomeFromWktType strings
+	GeometryFromTextStr           = "st_geometryfromtext"
+	GeometryCollectionFromTextStr = "st_geometrycollectionfromtext"
+	PointFromTextStr              = "st_pointfromtext"
+	MultiPointFromTextStr         = "st_multipointfromtext"
+	LineStringFromTextStr         = "st_linestringfromtext"
+	MultiLinestringFromTextStr    = "st_multilinestringfromtext"
+	PolygonFromTextStr            = "st_polygonfromtext"
+	MultiPolygonFromTextStr       = "st_multipolygonfromtext"
 )
 
 // Constants for Enum Type - Insert.Action
@@ -886,4 +896,16 @@ const (
 	WithConsistentSnapshot TxAccessMode = iota
 	ReadWrite
 	ReadOnly
+)
+
+// Enum Types of WKT functions
+const (
+	GeometryFromText GeomFromWktType = iota
+	GeometryCollectionFromText
+	PointFromText
+	LineStringFromText
+	PolygonFromText
+	MultiPointFromText
+	MultiPolygonFromText
+	MultiLinestringFromText
 )

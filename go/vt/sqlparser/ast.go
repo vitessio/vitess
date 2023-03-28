@@ -16,6 +16,8 @@ limitations under the License.
 
 package sqlparser
 
+import "vitess.io/vitess/go/sqltypes"
+
 /*
 This is the Vitess AST. This file should only contain pure struct declarations,
 or methods used to mark a struct as implementing an interface. All other methods
@@ -552,6 +554,12 @@ type (
 	Load struct {
 	}
 
+	// PurgeBinaryLogs represents a PURGE BINARY LOGS statement
+	PurgeBinaryLogs struct {
+		To     string
+		Before string
+	}
+
 	// Show represents a show statement.
 	Show struct {
 		Internal ShowInternal
@@ -739,6 +747,7 @@ func (*ExplainTab) iStatement()          {}
 func (*PrepareStmt) iStatement()         {}
 func (*ExecuteStmt) iStatement()         {}
 func (*DeallocateStmt) iStatement()      {}
+func (*PurgeBinaryLogs) iStatement()     {}
 
 func (*CreateView) iDDLStatement()    {}
 func (*AlterView) iDDLStatement()     {}
@@ -2263,7 +2272,10 @@ type (
 	}
 
 	// Argument represents bindvariable expression
-	Argument string
+	Argument struct {
+		Name string
+		Type sqltypes.Type
+	}
 
 	// NullVal represents a NULL value.
 	NullVal struct{}
@@ -2503,7 +2515,7 @@ type (
 	// it is the column offset from the incoming result stream
 	Offset struct {
 		V        int
-		Original string
+		Original Expr
 	}
 
 	// JSONArrayExpr represents JSON_ARRAY()
@@ -2704,20 +2716,45 @@ type (
 		JSONValue Expr
 	}
 
-	//PointExpr represents POINT(x,y) expression
+	// PointExpr represents POINT(x,y) expression
 	PointExpr struct {
 		XCordinate Expr
 		YCordinate Expr
 	}
 
-	//LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
+	// LineString represents LineString(POINT(x,y), POINT(x,y), ..) expression
 	LineStringExpr struct {
 		PointParams Exprs
 	}
 
-	//PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
+	// PolygonExpr represents Polygon(LineString(POINT(x,y), POINT(x,y), ..)) expressions
 	PolygonExpr struct {
 		LinestringParams Exprs
+	}
+
+	// MultiPoint represents a geometry collection for points
+	MultiPointExpr struct {
+		PointParams Exprs
+	}
+
+	// MultiPoint represents a geometry collection for linestrings
+	MultiLinestringExpr struct {
+		LinestringParams Exprs
+	}
+
+	// MultiPolygon represents a geometry collection for polygons
+	MultiPolygonExpr struct {
+		PolygonParams Exprs
+	}
+
+	// GeomFromWktType is an enum to get the types of wkt functions with possible values: GeometryFromText GeometryCollectionFromText PointFromText LineStringFromText PolygonFromText MultiPointFromText MultiPolygonFromText MultiLinestringFromText
+	GeomFromWktType int8
+
+	GeomFromTextExpr struct {
+		Type         GeomFromWktType
+		WktText      Expr
+		Srid         Expr
+		AxisOrderOpt Expr
 	}
 
 	AggrFunc interface {
@@ -2960,7 +2997,7 @@ func (*BetweenExpr) iExpr()                        {}
 func (*IsExpr) iExpr()                             {}
 func (*ExistsExpr) iExpr()                         {}
 func (*Literal) iExpr()                            {}
-func (Argument) iExpr()                            {}
+func (*Argument) iExpr()                           {}
 func (*NullVal) iExpr()                            {}
 func (BoolVal) iExpr()                             {}
 func (*ColName) iExpr()                            {}
@@ -3049,6 +3086,10 @@ func (*Variable) iExpr()                           {}
 func (*PointExpr) iExpr()                          {}
 func (*LineStringExpr) iExpr()                     {}
 func (*PolygonExpr) iExpr()                        {}
+func (*MultiPolygonExpr) iExpr()                   {}
+func (*MultiPointExpr) iExpr()                     {}
+func (*MultiLinestringExpr) iExpr()                {}
+func (*GeomFromTextExpr) iExpr()                   {}
 
 // iCallable marks all expressions that represent function calls
 func (*FuncExpr) iCallable()                           {}
@@ -3105,6 +3146,10 @@ func (*GTIDFuncExpr) iCallable()                       {}
 func (*PointExpr) iCallable()                          {}
 func (*LineStringExpr) iCallable()                     {}
 func (*PolygonExpr) iCallable()                        {}
+func (*MultiPolygonExpr) iCallable()                   {}
+func (*MultiPointExpr) iCallable()                     {}
+func (*MultiLinestringExpr) iCallable()                {}
+func (*GeomFromTextExpr) iCallable()                   {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}

@@ -60,7 +60,6 @@ func (ast *astCompiler) translateComparisonExpr2(op sqlparser.ComparisonExprOper
 		return &InExpr{
 			BinaryExpr: binaryExpr,
 			Negate:     op == sqlparser.NotInOp,
-			Hashed:     nil,
 		}, nil
 	}
 
@@ -107,14 +106,14 @@ func (ast *astCompiler) translateLogicalExpr(opname string, left, right sqlparse
 		return nil, err
 	}
 
-	var logic func(l, r boolean) boolean
+	var logic func(l, r Expr, env *ExpressionEnv) (boolean, error)
 	switch opname {
 	case "AND":
-		logic = func(l, r boolean) boolean { return l.and(r) }
+		logic = func(l, r Expr, env *ExpressionEnv) (boolean, error) { return opAnd(l, r, env) }
 	case "OR":
-		logic = func(l, r boolean) boolean { return l.or(r) }
+		logic = func(l, r Expr, env *ExpressionEnv) (boolean, error) { return opOr(l, r, env) }
 	case "XOR":
-		logic = func(l, r boolean) boolean { return l.xor(r) }
+		logic = func(l, r Expr, env *ExpressionEnv) (boolean, error) { return opXor(l, r, env) }
 	default:
 		panic("unexpected logical operator")
 	}
@@ -201,6 +200,8 @@ func (ast *astCompiler) translateLiteral(lit *sqlparser.Literal) (*Literal, erro
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
+	case sqlparser.BitVal:
+		return NewLiteralBinaryFromBit(lit.Bytes())
 	case sqlparser.DateVal:
 		return NewLiteralDateFromBytes(lit.Bytes())
 	case sqlparser.TimeVal:
@@ -235,6 +236,10 @@ func (ast *astCompiler) translateBinaryExpr(binary *sqlparser.BinaryExpr) (Expr,
 		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithMul{}}, nil
 	case sqlparser.DivOp:
 		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithDiv{}}, nil
+	case sqlparser.IntDivOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithIntDiv{}}, nil
+	case sqlparser.ModOp:
+		return &ArithmeticExpr{BinaryExpr: binaryExpr, Op: &opArithMod{}}, nil
 	case sqlparser.BitAndOp:
 		return &BitwiseExpr{BinaryExpr: binaryExpr, Op: &opBitAnd{}}, nil
 	case sqlparser.BitOrOp:
@@ -450,10 +455,10 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 		return NewColumn(node.V, ast.getCollation(node)), nil
 	case *sqlparser.ComparisonExpr:
 		return ast.translateComparisonExpr(node.Operator, node.Left, node.Right)
-	case sqlparser.Argument:
+	case *sqlparser.Argument:
 		ast.entities.bvars++
 		collation := ast.getCollation(e)
-		return NewBindVar(string(node), collation), nil
+		return NewBindVar(node.Name, collation), nil
 	case sqlparser.ListArg:
 		ast.entities.bvars++
 		return NewBindVarTuple(string(node)), nil

@@ -796,7 +796,7 @@
   {
     "comment": "Cannot auto-resolve for cross-shard joins",
     "query": "select col from user join user_extra",
-    "v3-plan": "VT03019: symbol col not found",
+    "v3-plan": "VT03019: column col not found",
     "gen4-plan": "Column 'col' in field list is ambiguous"
   },
   {
@@ -2372,8 +2372,8 @@
   {
     "comment": "non-existent symbol in cross-shard derived table",
     "query": "select t.col from (select user.id from user join user_extra) as t",
-    "v3-plan": "VT03019: symbol t.col not found",
-    "gen4-plan": "symbol t.col not found"
+    "v3-plan": "VT03019: column t.col not found",
+    "gen4-plan": "column 't.col' not found"
   },
   {
     "comment": "union with the same target shard",
@@ -4074,7 +4074,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u1_col and ue.col = :u2_col",
+            "Query": "select 1 from user_extra as ue where ue.col = :u1_col /* INT16 */ and ue.col = :u2_col /* INT16 */",
             "Table": "user_extra"
           }
         ]
@@ -4119,7 +4119,7 @@
               "Sharded": true
             },
             "FieldQuery": "select 1 from user_extra as ue where 1 != 1",
-            "Query": "select 1 from user_extra as ue where ue.col = :u_col and ue.col2 = :u_col",
+            "Query": "select 1 from user_extra as ue where ue.col = :u_col /* INT16 */ and ue.col2 = :u_col",
             "Table": "user_extra"
           }
         ]
@@ -4488,7 +4488,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where information_schema.`TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and information_schema.`TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -4505,7 +4505,7 @@
           "Sharded": false
         },
         "FieldQuery": "select 1 from dual where 1 != 1",
-        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME and `TABLES`.TABLE_SCHEMA = :__vtschemaname limit 1)",
+        "Query": "select 1 from dual where exists (select 1 from information_schema.`TABLES` where `TABLES`.TABLE_NAME = :TABLES_TABLE_NAME /* VARCHAR */ and `TABLES`.TABLE_SCHEMA = :__vtschemaname /* VARCHAR */ limit 1)",
         "SysTableTableName": "[TABLES_TABLE_NAME:VARCHAR(\"proc\")]",
         "SysTableTableSchema": "[VARCHAR(\"mysql\")]",
         "Table": "dual"
@@ -7900,34 +7900,34 @@
     "comment": "query with a derived table and dual table in unsharded keyspace",
     "query": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
     "v3-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
       "Instructions": {
-        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
-        "OperatorType": "Route",
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
         "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
-        "Table": "unsharded_a, dual",
-        "Variant": "Unsharded"
-      },
-      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
-      "QueryType": "SELECT"
+        "Table": "unsharded_a, dual"
+      }
     },
     "gen4-plan": {
+      "QueryType": "SELECT",
+      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
       "Instructions": {
-        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
+        "OperatorType": "Route",
+        "Variant": "Unsharded",
         "Keyspace": {
           "Name": "main",
           "Sharded": false
         },
-        "OperatorType": "Route",
+        "FieldQuery": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a where 1 != 1)) as `name` from dual where 1 != 1) as t2 where 1 != 1",
         "Query": "select * from unsharded_a as t1 join (select trim((select max(`name`) from unsharded_a)) as `name` from dual) as t2 where t1.`name` >= t2.`name` order by t1.`name` asc limit 1",
-        "Table": "dual, unsharded_a",
-        "Variant": "Unsharded"
+        "Table": "dual, unsharded_a"
       },
-      "Original": "SELECT * FROM unsharded_a AS t1  JOIN (SELECT trim((SELECT MAX(name) FROM unsharded_a)) AS name) AS t2 WHERE t1.name >= t2.name ORDER BY t1.name ASC LIMIT 1;",
-      "QueryType": "SELECT",
       "TablesUsed": [
         "main.dual",
         "main.unsharded_a"

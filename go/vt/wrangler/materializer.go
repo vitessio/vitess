@@ -1226,7 +1226,7 @@ func (mz *materializer) generateInserts(ctx context.Context, targetShard *topo.S
 		// We only do it for MoveTables for now since this doesn't hold for materialize flows
 		// where the target's sharding key might differ from that of the source
 		if mz.ms.MaterializationIntent == vtctldatapb.MaterializationIntent_MOVETABLES &&
-			!key.KeyRangesIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
+			!key.KeyRangeIntersect(sourceShard.KeyRange, targetShard.KeyRange) {
 			continue
 		}
 		bls := &binlogdatapb.BinlogSource{

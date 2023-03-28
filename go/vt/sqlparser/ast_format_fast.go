@@ -1720,8 +1720,16 @@ func (node *Literal) formatFast(buf *TrackedBuffer) {
 }
 
 // formatFast formats the node.
-func (node Argument) formatFast(buf *TrackedBuffer) {
-	buf.WriteArg(":", string(node))
+func (node *Argument) formatFast(buf *TrackedBuffer) {
+	buf.WriteArg(":", node.Name)
+	if node.Type >= 0 {
+		// For bind variables that are statically typed, emit their type as an adjacent comment.
+		// This comment will be ignored by older versions of Vitess (and by MySQL) but will provide
+		// type safety when using the query as a cache key.
+		buf.WriteString(" /* ")
+		buf.WriteString(node.Type.String())
+		buf.WriteString(" */")
+	}
 }
 
 // formatFast formats the node.
@@ -3636,5 +3644,55 @@ func (node *LineStringExpr) formatFast(buf *TrackedBuffer) {
 func (node *PolygonExpr) formatFast(buf *TrackedBuffer) {
 	buf.WriteString("polygon(")
 	node.LinestringParams.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *PurgeBinaryLogs) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("purge binary logs")
+	if node.To != "" {
+		buf.WriteString(" to '")
+		buf.WriteString(node.To)
+		buf.WriteByte('\'')
+	} else {
+		buf.WriteString(" before '")
+		buf.WriteString(node.Before)
+		buf.WriteByte('\'')
+	}
+}
+
+func (node *MultiPolygonExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("multipolygon(")
+	node.PolygonParams.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *MultiPointExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("multipoint(")
+	node.PointParams.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node.
+func (node *MultiLinestringExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString("multilinestring(")
+	node.LinestringParams.formatFast(buf)
+	buf.WriteByte(')')
+}
+
+// formatFast formats the node
+func (node *GeomFromTextExpr) formatFast(buf *TrackedBuffer) {
+	buf.WriteString(node.Type.ToString())
+	buf.WriteByte('(')
+	buf.printExpr(node, node.WktText, true)
+	if node.Srid != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.Srid, true)
+	}
+	if node.AxisOrderOpt != nil {
+		buf.WriteString(", ")
+		buf.printExpr(node, node.AxisOrderOpt, true)
+	}
 	buf.WriteByte(')')
 }

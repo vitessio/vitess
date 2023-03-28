@@ -20,6 +20,7 @@ import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/engine"
+	popcode "vitess.io/vitess/go/vt/vtgate/engine/opcode"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -61,7 +62,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 			continue
 		}
 
-		if inner.ExtractedSubquery.OpCode == int(engine.PulloutExists) {
+		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
 			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
 				return nil, rewrite.SameTree, err
@@ -351,8 +352,9 @@ func rewriteColumnsInSubqueryOpForJoin(
 		}
 
 		// get the bindVariable for that column name and replace it in the subquery
+		typ, _, _ := ctx.SemTable.TypeForExpr(node)
 		bindVar := ctx.ReservedVars.ReserveColName(node)
-		cursor.Replace(sqlparser.NewArgument(bindVar))
+		cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 		// check whether the bindVariable already exists in the joinVars of the other tree
 		_, alreadyExists := outerTree.Vars[bindVar]
 		if alreadyExists {
@@ -417,8 +419,9 @@ func createCorrelatedSubqueryOp(
 			}
 
 			// get the bindVariable for that column name and replace it in the predicate
+			typ, _, _ := ctx.SemTable.TypeForExpr(node)
 			bindVar := ctx.ReservedVars.ReserveColName(node)
-			cursor.Replace(sqlparser.NewArgument(bindVar))
+			cursor.Replace(sqlparser.NewTypedArgument(bindVar, typ))
 			// store it in the map for future comparisons
 			bindVars[node] = bindVar
 
@@ -456,7 +459,7 @@ func createCorrelatedSubqueryOp(
 func canMergeSubqueryOnColumnSelection(ctx *plancontext.PlanningContext, a, b *Route, predicate *sqlparser.ExtractedSubquery) bool {
 	left := predicate.OtherSide
 	opCode := predicate.OpCode
-	if opCode != int(engine.PulloutValue) && opCode != int(engine.PulloutIn) {
+	if opCode != int(popcode.PulloutValue) && opCode != int(popcode.PulloutIn) {
 		return false
 	}
 

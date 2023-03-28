@@ -746,11 +746,11 @@ func TestDecimal_QuoRem(t *testing.T) {
 		d, _ := NewFromString(inp4.d)
 		d2, _ := NewFromString(inp4.d2)
 		prec := inp4.exp
-		q, r := d.quoRem(d2, prec)
+		q, r := d.QuoRem(d2, prec)
 		expectedQ, _ := NewFromString(inp4.q)
 		expectedR, _ := NewFromString(inp4.r)
 		if !q.Equal(expectedQ) || !r.Equal(expectedR) {
-			t.Errorf("bad quoRem division %s , %s , %d got %v, %v expected %s , %s",
+			t.Errorf("bad QuoRem division %s , %s , %d got %v, %v expected %s , %s",
 				inp4.d, inp4.d2, prec, q, r, inp4.q, inp4.r)
 		}
 		if !d.Equal(d2.mul(q).Add(r)) {
@@ -761,7 +761,7 @@ func TestDecimal_QuoRem(t *testing.T) {
 			t.Errorf("quotient wrong precision: d=%v, d2= %v, prec=%d, q=%v, r=%v",
 				d, d2, prec, q, r)
 		}
-		if r.abs().Cmp(d2.abs().mul(New(1, -prec))) >= 0 {
+		if r.Abs().Cmp(d2.Abs().mul(New(1, -prec))) >= 0 {
 			t.Errorf("remainder too large: d=%v, d2= %v, prec=%d, q=%v, r=%v",
 				d, d2, prec, q, r)
 		}
@@ -813,7 +813,7 @@ func TestDecimal_QuoRem2(t *testing.T) {
 		}
 		d2 := tc.d2
 		prec := tc.prec
-		q, r := d.quoRem(d2, prec)
+		q, r := d.QuoRem(d2, prec)
 		// rule 1: d = d2*q +r
 		if !d.Equal(d2.mul(q).Add(r)) {
 			t.Errorf("not fitting, d=%v, d2=%v, prec=%d, q=%v, r=%v",
@@ -825,7 +825,7 @@ func TestDecimal_QuoRem2(t *testing.T) {
 				d, d2, prec, q, r)
 		}
 		// rule 3: abs(r)<abs(d) * 10^(-prec)
-		if r.abs().Cmp(d2.abs().mul(New(1, -prec))) >= 0 {
+		if r.Abs().Cmp(d2.Abs().mul(New(1, -prec))) >= 0 {
 			t.Errorf("remainder too large, d=%v, d2=%v, prec=%d, q=%v, r=%v",
 				d, d2, prec, q, r)
 		}
@@ -879,11 +879,11 @@ func TestDecimal_DivRound(t *testing.T) {
 		if sign(q)*sign(d)*sign(d2) < 0 {
 			t.Errorf("sign of quotient wrong, got: %v/%v is about %v", d, d2, q)
 		}
-		x := q.mul(d2).abs().sub(d.abs()).mul(New(2, 0))
-		if x.Cmp(d2.abs().mul(New(1, -prec))) > 0 {
+		x := q.mul(d2).Abs().sub(d.Abs()).mul(New(2, 0))
+		if x.Cmp(d2.Abs().mul(New(1, -prec))) > 0 {
 			t.Errorf("wrong rounding, got: %v/%v prec=%d is about %v", d, d2, prec, q)
 		}
-		if x.Cmp(d2.abs().mul(New(-1, -prec))) <= 0 {
+		if x.Cmp(d2.Abs().mul(New(-1, -prec))) <= 0 {
 			t.Errorf("wrong rounding, got: %v/%v prec=%d is about %v", d, d2, prec, q)
 		}
 		if !q.Equal(result) {
@@ -904,11 +904,11 @@ func TestDecimal_DivRound2(t *testing.T) {
 		if sign(q)*sign(d)*sign(d2) < 0 {
 			t.Errorf("sign of quotient wrong, got: %v/%v is about %v", d, d2, q)
 		}
-		x := q.mul(d2).abs().sub(d.abs()).mul(New(2, 0))
-		if x.Cmp(d2.abs().mul(New(1, -prec))) > 0 {
+		x := q.mul(d2).Abs().sub(d.Abs()).mul(New(2, 0))
+		if x.Cmp(d2.Abs().mul(New(1, -prec))) > 0 {
 			t.Errorf("wrong rounding, got: %v/%v prec=%d is about %v", d, d2, prec, q)
 		}
-		if x.Cmp(d2.abs().mul(New(-1, -prec))) <= 0 {
+		if x.Cmp(d2.Abs().mul(New(-1, -prec))) <= 0 {
 			t.Errorf("wrong rounding, got: %v/%v prec=%d is about %v", d, d2, prec, q)
 		}
 	}
@@ -973,7 +973,7 @@ func TestDecimal_Abs1(t *testing.T) {
 	a := New(-1234, -4)
 	b := New(1234, -4)
 
-	c := a.abs()
+	c := a.Abs()
 	if c.Cmp(b) != 0 {
 		t.Errorf("error")
 	}
@@ -983,7 +983,7 @@ func TestDecimal_Abs2(t *testing.T) {
 	a := New(-1234, -4)
 	b := New(1234, -4)
 
-	c := b.abs()
+	c := b.Abs()
 	if c.Cmp(a) == 0 {
 		t.Errorf("error")
 	}

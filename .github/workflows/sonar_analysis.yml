@@ -3,6 +3,7 @@ on:
   push:
     branches:
       - 'sonartest'
+permissions: read-all
 jobs:
 
   build:

@@ -36,6 +36,8 @@ const (
 	flagNull typeFlag = 1 << 0
 	// flagNullable marks that this value CAN be null
 	flagNullable typeFlag = 1 << 1
+	// flagIsBoolean marks that this value should be interpreted as boolean
+	flagIsBoolean typeFlag = 1 << 2
 
 	// flagIntegerUdf marks that this value is math.MinInt64, and will underflow if negated
 	flagIntegerUdf typeFlag = 1 << 5
@@ -51,6 +53,10 @@ const (
 	flagBit typeFlag = 1 << 9
 	// flagExplicitCollation marks that this value has an explicit collation
 	flagExplicitCollation typeFlag = 1 << 10
+
+	// flagAmbiguousType marks that the type of this value depends on the value at runtime
+	// and cannot be computed accurately
+	flagAmbiguousType typeFlag = 1 << 11
 
 	// flagIntegerRange are the flags that mark overflow/underflow in integers
 	flagIntegerRange = flagIntegerOvf | flagIntegerCap | flagIntegerUdf
@@ -124,7 +130,35 @@ func evalIsTruthy(e eval) boolean {
 	case *evalDecimal:
 		return makeboolean(!e.dec.IsZero())
 	case *evalBytes:
+		if e.isHexLiteral {
+			hex, ok := e.toNumericHex()
+			if !ok {
+				// overflow
+				return makeboolean(true)
+			}
+			return makeboolean(hex.u != 0)
+		}
 		return makeboolean(parseStringToFloat(e.string()) != 0.0)
+	case *evalJSON:
+		switch e.Type() {
+		case json.TypeNumber:
+			switch e.NumberType() {
+			case json.NumberTypeInteger:
+				if i, ok := e.Int64(); ok {
+					return makeboolean(i != 0)
+				}
+
+				d, _ := e.Decimal()
+				return makeboolean(!d.IsZero())
+			case json.NumberTypeDouble:
+				d, _ := e.Float64()
+				return makeboolean(d != 0.0)
+			default:
+				return makeboolean(parseStringToFloat(e.Raw()) != 0.0)
+			}
+		default:
+			return makeboolean(true)
+		}
 	default:
 		panic("unhandled case: evalIsTruthy")
 	}

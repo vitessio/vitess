@@ -22,6 +22,7 @@ option go_package = "vitess.io/vitess/go/vt/proto/tabletmanagerdata";
 
 package tabletmanagerdata;
 
+import "binlogdata.proto";
 import "query.proto";
 import "topodata.proto";
 import "replicationdata.proto";
@@ -540,4 +541,15 @@ message VDiffOptions {
   VDiffPickerOptions picker_options = 1;
   VDiffCoreOptions core_options = 2;
   VDiffReportOptions report_options = 3;
+}
+
+message UpdateVRWorkflowRequest {
+  string workflow = 1;
+  repeated string cells = 2;
+  repeated string tablet_types = 3;
+  binlogdata.OnDDLAction on_ddl = 4;
+}
+
+message UpdateVRWorkflowResponse {
+  query.QueryResult result = 1;
 }

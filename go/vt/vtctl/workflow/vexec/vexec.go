@@ -20,11 +20,15 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"sync"
 
 	"vitess.io/vitess/go/sqltypes"
+	"vitess.io/vitess/go/vt/concurrency"
+	"vitess.io/vitess/go/vt/log"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/topo"
 	"vitess.io/vitess/go/vt/topo/topoproto"
+	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vttablet/tmclient"
 
@@ -145,6 +149,55 @@ func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.Tabl
 	}
 
 	return qp.ExecuteScatter(ctx, vx.primaries...)
+}
+
+// CallbackContext executes the given callback, returning a mapping of tablet
+// to querypb.QueryResult.
+//
+// On first use, QueryContext will also cause the VExec instance to discover
+// target tablets from the topo; that target list will be reused for all future
+// callbacks executed by this instance.
+func (vx *VExec) CallbackContext(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	if vx.primaries == nil {
+		if err := vx.initialize(ctx); err != nil {
+			return nil, err
+		}
+	}
+	return vx.execCallback(ctx, callback)
+}
+
+// execCallback runs the provided callback function on backend shard primaries.
+// It collects query results from all shards and returns an aggregate (UNION
+// ALL -like) result.
+// Note: any nil results from the callback are ignored.
+func (vx *VExec) execCallback(ctx context.Context, callback func(context.Context, *topo.TabletInfo) (*querypb.QueryResult, error)) (map[*topo.TabletInfo]*querypb.QueryResult, error) {
+	var (
+		wg sync.WaitGroup
+		mu sync.Mutex
+
+		allErrors = &concurrency.AllErrorRecorder{}
+		results   = make(map[*topo.TabletInfo]*querypb.QueryResult)
+	)
+	for _, primary := range vx.primaries {
+		wg.Add(1)
+		go func(ctx context.Context, primary *topo.TabletInfo) {
+			defer wg.Done()
+			qr, err := callback(ctx, primary)
+			if err != nil {
+				allErrors.RecordError(err)
+			} else {
+				if qr == nil {
+					log.Infof("Callback returned nil result for tablet %s-%s", primary.Alias.Cell, primary.Alias.Uid)
+					return // no result
+				}
+				mu.Lock()
+				defer mu.Unlock()
+				results[primary] = qr
+			}
+		}(ctx, primary)
+	}
+	wg.Wait()
+	return results, allErrors.AggrError(vterrors.Aggregate)
 }
 
 func (vx *VExec) initialize(ctx context.Context) error {

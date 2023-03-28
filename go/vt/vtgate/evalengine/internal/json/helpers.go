@@ -32,6 +32,10 @@ func (v *Value) ToRawBytes() []byte {
 	return v.MarshalTo(nil)
 }
 
+func (v *Value) ToUnencodedBytes() []byte {
+	return []byte(v.s)
+}
+
 func (v *Value) SQLType() sqltypes.Type {
 	return sqltypes.TypeJSON
 }
@@ -61,6 +65,41 @@ func NewString(raw []byte) *Value {
 	return &Value{
 		s: string(raw),
 		t: TypeString,
+	}
+}
+
+func NewBlob(raw []byte) *Value {
+	return &Value{
+		s: string(raw),
+		t: TypeBlob,
+	}
+}
+
+func NewBit(raw []byte) *Value {
+	return &Value{
+		s: string(raw),
+		t: TypeBit,
+	}
+}
+
+func NewDate(raw []byte) *Value {
+	return &Value{
+		s: string(raw),
+		t: TypeDate,
+	}
+}
+
+func NewDateTime(raw []byte) *Value {
+	return &Value{
+		s: string(raw),
+		t: TypeDateTime,
+	}
+}
+
+func NewTime(raw []byte) *Value {
+	return &Value{
+		s: string(raw),
+		t: TypeTime,
 	}
 }
 
