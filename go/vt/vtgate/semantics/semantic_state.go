@@ -20,7 +20,6 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/key"
-	querypb "vitess.io/vitess/go/vt/proto/query"
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
@@ -232,13 +231,12 @@ func (st *SemTable) AddExprs(tbl *sqlparser.AliasedTableExpr, cols sqlparser.Sel
 	}
 }
 
-// TypeFor returns the type of expressions in the query
-func (st *SemTable) TypeFor(e sqlparser.Expr) *querypb.Type {
-	typ, found := st.ExprTypes[e]
-	if found {
-		return &typ.Type
+// TypeForExpr returns the type of expressions in the query
+func (st *SemTable) TypeForExpr(e sqlparser.Expr) (sqltypes.Type, collations.ID, bool) {
+	if typ, found := st.ExprTypes[e]; found {
+		return typ.Type, typ.Collation, true
 	}
-	return nil
+	return -1, collations.Unknown, false
 }
 
 // CollationForExpr returns the collation name of expressions in the query

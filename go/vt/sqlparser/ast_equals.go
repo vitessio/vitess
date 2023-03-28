@@ -122,12 +122,12 @@ func (cmp *Comparator) SQLNode(inA, inB SQLNode) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
-	case Argument:
-		b, ok := inB.(Argument)
+	case *Argument:
+		b, ok := inB.(*Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return cmp.RefOfArgument(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {
@@ -1744,6 +1744,18 @@ func (cmp *Comparator) RefOfAndExpr(a, b *AndExpr) bool {
 	}
 	return cmp.Expr(a.Left, b.Left) &&
 		cmp.Expr(a.Right, b.Right)
+}
+
+// RefOfArgument does deep equals between the two objects.
+func (cmp *Comparator) RefOfArgument(a, b *Argument) bool {
+	if a == b {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return a.Name == b.Name &&
+		a.Type == b.Type
 }
 
 // RefOfArgumentLessWindowExpr does deep equals between the two objects.
@@ -3365,7 +3377,7 @@ func (cmp *Comparator) RefOfOffset(a, b *Offset) bool {
 		return false
 	}
 	return a.V == b.V &&
-		a.Original == b.Original
+		cmp.Expr(a.Original, b.Original)
 }
 
 // OnDup does deep equals between the two objects.
@@ -5510,12 +5522,12 @@ func (cmp *Comparator) Expr(inA, inB Expr) bool {
 			return false
 		}
 		return cmp.RefOfAndExpr(a, b)
-	case Argument:
-		b, ok := inB.(Argument)
+	case *Argument:
+		b, ok := inB.(*Argument)
 		if !ok {
 			return false
 		}
-		return a == b
+		return cmp.RefOfArgument(a, b)
 	case *ArgumentLessWindowExpr:
 		b, ok := inB.(*ArgumentLessWindowExpr)
 		if !ok {

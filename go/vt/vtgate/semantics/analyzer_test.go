@@ -23,6 +23,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/engine/opcode"
@@ -318,14 +319,11 @@ func TestMissingTable(t *testing.T) {
 }
 
 func TestUnknownColumnMap2(t *testing.T) {
-	varchar := querypb.Type_VARCHAR
-	int := querypb.Type_INT32
-
 	authoritativeTblA := vindexes.Table{
 		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col2"),
-			Type: varchar,
+			Type: sqltypes.VarChar,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -333,7 +331,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
-			Type: varchar,
+			Type: sqltypes.VarChar,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -345,7 +343,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewIdentifierCS("a"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
-			Type: int,
+			Type: sqltypes.Int64,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -353,7 +351,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		Name: sqlparser.NewIdentifierCS("b"),
 		Columns: []vindexes.Column{{
 			Name: sqlparser.NewIdentifierCI("col"),
-			Type: int,
+			Type: sqltypes.Int64,
 		}},
 		ColumnListAuthoritative: true,
 	}
@@ -362,7 +360,7 @@ func TestUnknownColumnMap2(t *testing.T) {
 		name   string
 		schema map[string]*vindexes.Table
 		err    bool
-		typ    *querypb.Type
+		typ    querypb.Type
 	}{{
 		name:   "no info about tables",
 		schema: map[string]*vindexes.Table{"a": {}, "b": {}},
@@ -375,22 +373,22 @@ func TestUnknownColumnMap2(t *testing.T) {
 		name:   "non authoritative columns - one authoritative and one not",
 		schema: map[string]*vindexes.Table{"a": &nonAuthoritativeTblA, "b": &authoritativeTblB},
 		err:    false,
-		typ:    &varchar,
+		typ:    sqltypes.VarChar,
 	}, {
 		name:   "non authoritative columns - one authoritative and one not",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &nonAuthoritativeTblB},
 		err:    false,
-		typ:    &varchar,
+		typ:    sqltypes.VarChar,
 	}, {
 		name:   "authoritative columns",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblB},
 		err:    false,
-		typ:    &varchar,
+		typ:    sqltypes.VarChar,
 	}, {
 		name:   "authoritative columns",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblA, "b": &authoritativeTblBWithInt},
 		err:    false,
-		typ:    &int,
+		typ:    sqltypes.Int64,
 	}, {
 		name:   "authoritative columns with overlap",
 		schema: map[string]*vindexes.Table{"a": &authoritativeTblAWithConflict, "b": &authoritativeTblB},
@@ -412,7 +410,8 @@ func TestUnknownColumnMap2(t *testing.T) {
 					} else {
 						require.NoError(t, err)
 						require.NoError(t, tbl.NotSingleRouteErr)
-						typ := tbl.TypeFor(expr)
+						typ, _, found := tbl.TypeForExpr(expr)
+						assert.True(t, found)
 						assert.Equal(t, test.typ, typ)
 					}
 				})
