@@ -383,15 +383,19 @@ func AllowScatterDirective(stmt Statement) bool {
 func GetCriticalityFromStatement(statement Statement) string {
 	commentedStatement, ok := statement.(Commented)
 	// This would mean that the statement lacks comments, so we can't obtain the workload from it. Hence default to
-	// empty workload name
+	// empty criticality
 	if !ok {
 		return ""
 	}
 
 	directives := commentedStatement.GetParsedComments().Directives()
 	criticality, ok := directives.GetString(DirectiveCriticality, "")
-
 	if !ok || criticality == "" {
+		return ""
+	}
+
+	intCriticality, err := strconv.Atoi(criticality)
+	if err != nil || intCriticality < 0 || intCriticality > 100 {
 		return ""
 	}
 

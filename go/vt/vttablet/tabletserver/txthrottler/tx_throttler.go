@@ -277,15 +277,16 @@ func (t *TxThrottler) Throttle(criticality int) (result bool) {
 	if t.state == nil {
 		panic("BUG: Throttle() called on a closed TxThrottler")
 	}
-	result = t.state.throttle()
+
+	// Throttle according to both what the throttle state says, and the criticality. Workloads with higher criticality
+	// are less likely to be throttled.
+	result = t.state.throttle() && rand.Intn(100) < 100-int(criticality)
 	t.requestsTotal.Add(1)
 	if result {
 		t.requestsThrottled.Add(1)
 	}
 
-	// Throttle according to both what the throttle state says, and the criticality. Workloads with higher criticality
-	// are less likely to be throttled.
-	return result && rand.Intn(100) < 100-int(criticality)
+	return result
 }
 
 func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {

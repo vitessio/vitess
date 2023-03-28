@@ -496,3 +496,46 @@ func TestConsolidator(t *testing.T) {
 		})
 	}
 }
+
+func TestGetCriticalityFromStatement(t *testing.T) {
+	testCases := []struct {
+		query               string
+		expectedCriticality string
+	}{
+		{
+			query:               "select * from a_table",
+			expectedCriticality: "",
+		},
+		{
+			query:               "select /*vt+ ANOTHER_DIRECTIVE=324 */ * from another_table",
+			expectedCriticality: "",
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=33 */ * from another_table",
+			expectedCriticality: "33",
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=200 */ * from another_table",
+			expectedCriticality: "",
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=-1 */ * from another_table",
+			expectedCriticality: "",
+		},
+		{
+			query:               "select /*vt+ CRITICALITY=some_text */ * from another_table",
+			expectedCriticality: "",
+		},
+	}
+
+	for _, testCase := range testCases {
+		t.Run(testCase.query, func(t *testing.T) {
+			t.Parallel()
+			stmt, err := Parse(testCase.query)
+			assert.NoError(t, err)
+			assert.Equal(t, testCase.expectedCriticality, GetCriticalityFromStatement(stmt))
+
+		})
+
+	}
+}

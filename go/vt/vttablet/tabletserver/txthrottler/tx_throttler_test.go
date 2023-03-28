@@ -135,10 +135,11 @@ func TestEnabledThrottler(t *testing.T) {
 	assert.True(t, throttler.Throttle(0))
 	assert.Equal(t, int64(2), throttler.requestsTotal.Get())
 	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
-	// This call should not reject due to criticality
-	if result := throttler.Throttle(100); result != false {
-		t.Errorf("want: false, got: %v", result)
-	}
+
+	// This call should not throttle due to criticality. Check that's the case and counters agree.
+	assert.False(t, throttler.Throttle(100))
+	assert.Equal(t, int64(3), throttler.requestsTotal.Get())
+	assert.Equal(t, int64(1), throttler.requestsThrottled.Get())
 	throttler.Close()
 	assert.Zero(t, throttler.throttlerRunning.Get())
 }

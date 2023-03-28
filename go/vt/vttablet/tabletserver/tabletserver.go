@@ -493,7 +493,7 @@ func (tsv *TabletServer) begin(ctx context.Context, target *querypb.Target, save
 			criticality := tsv.config.TxThrottlerDefaultCriticality
 			if options != nil && options.Criticality != "" {
 				optionsCriticality, err := strconv.Atoi(options.Criticality)
-				if err == nil && optionsCriticality >= 0 && optionsCriticality <= 100 {
+				if err == nil {
 					criticality = optionsCriticality
 				}
 			}
