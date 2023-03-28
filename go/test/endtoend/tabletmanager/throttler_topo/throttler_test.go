@@ -315,14 +315,14 @@ func TestInitialThrottler(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 	})
 	t.Run("validating OK response from throttler with low threshold, heartbeats running still", func(t *testing.T) {
 		time.Sleep(1 * time.Second)
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 	})
 	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
 		waitForThrottleCheckStatus(t, primaryTablet, http.StatusTooManyRequests)
@@ -376,7 +376,7 @@ func TestLag(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+		assert.Equalf(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 	})
 	t.Run("primary self-check should still be fine", func(t *testing.T) {
 		resp, err := throttleCheckSelf(primaryTablet)
@@ -447,7 +447,7 @@ func TestCustomQuery(t *testing.T) {
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
-		assert.Equal(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 	})
 	t.Run("test threads running", func(t *testing.T) {
 		sleepDuration := 10 * time.Second
@@ -468,13 +468,13 @@ func TestCustomQuery(t *testing.T) {
 				resp, err := throttleCheck(primaryTablet, false)
 				require.NoError(t, err)
 				defer resp.Body.Close()
-				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+				assert.Equalf(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 			}
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
 				defer resp.Body.Close()
-				assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+				assert.Equalf(t, http.StatusTooManyRequests, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 			}
 		})
 		t.Run("wait for queries to terminate", func(t *testing.T) {
@@ -486,13 +486,13 @@ func TestCustomQuery(t *testing.T) {
 				resp, err := throttleCheck(primaryTablet, false)
 				require.NoError(t, err)
 				defer resp.Body.Close()
-				assert.Equal(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+				assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 			}
 			{
 				resp, err := throttleCheckSelf(primaryTablet)
 				require.NoError(t, err)
 				defer resp.Body.Close()
-				assert.Equal(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
+				assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponse)
 			}
 		})
 	})
