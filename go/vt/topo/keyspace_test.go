@@ -20,6 +20,8 @@ import (
 	"reflect"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
+
 	topodatapb "vitess.io/vitess/go/vt/proto/topodata"
 )
 
@@ -173,5 +175,51 @@ func TestComputeCellServedFrom(t *testing.T) {
 		},
 	}) {
 		t.Fatalf("c2 failed: %v", m)
+	}
+}
+
+func TestValidateKeyspaceName(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name  string
+		valid bool
+	}{
+		{
+			name:  "testks",
+			valid: true,
+		},
+		{
+			name:  "alphnum_ks1-with_a_dash",
+			valid: true,
+		},
+		{
+			name:  "no/slashes/allowed",
+			valid: false,
+		},
+		{
+			name:  "wë!rd ch@r@ct3r$",
+			valid: false,
+		},
+		{
+			name:  "0_cant-start_with-a-number",
+			valid: false,
+		},
+	}
+
+	for _, tcase := range cases {
+		tcase := tcase
+		t.Run(tcase.name, func(t *testing.T) {
+			t.Parallel()
+
+			var assertion func(t assert.TestingT, err error, msgAndArgs ...any) bool
+			if tcase.valid {
+				assertion = assert.NoError
+			} else {
+				assertion = assert.Error
+			}
+
+			assertion(t, ValidateKeyspaceName(tcase.name))
+		})
 	}
 }

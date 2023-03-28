@@ -57,8 +57,7 @@ Prior to v17, it was possible to create a keyspace with invalid characters, whic
 
 Now, the TopoServer's `GetKeyspace` and `CreateKeyspace` methods return an error if given an invalid name.
 
-Keyspace names may no longer contain the following characters:
-- Forward slash ("/").
+Keyspace names may now only contain alphanumerics, dashes (`-`), and underscores (`_`), and must begin with an alphabetical character.
 
 ### <a id="new-flag"/> New command line flags and behavior
 
