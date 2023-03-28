@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 )
 
@@ -69,7 +70,7 @@ func (l *Literal) format(w *formatter, depth int) {
 
 func (bv *BindVariable) format(w *formatter, depth int) {
 	w.WriteByte(':')
-	if bv.tuple {
+	if bv.Type == sqltypes.Tuple {
 		w.WriteByte(':')
 	}
 	w.WriteString(bv.Key)

@@ -22,6 +22,7 @@ import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -53,10 +54,10 @@ func (b *builtinCoalesce) eval(env *ExpressionEnv) (eval, error) {
 	return nil, nil
 }
 
-func (b *builtinCoalesce) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (b *builtinCoalesce) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var ta typeAggregation
 	for _, arg := range b.Arguments {
-		tt, f := arg.typeof(env)
+		tt, f := arg.typeof(env, fields)
 		ta.add(tt, f)
 	}
 	return ta.result(), flagNullable
@@ -254,7 +255,7 @@ func (call *builtinMultiComparison) eval(env *ExpressionEnv) (eval, error) {
 	return getMultiComparisonFunc(args)(args, call.cmp)
 }
 
-func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (call *builtinMultiComparison) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var (
 		integersI int
 		integersU int
@@ -266,7 +267,7 @@ func (call *builtinMultiComparison) typeof(env *ExpressionEnv) (sqltypes.Type, t
 	)
 
 	for _, expr := range call.Arguments {
-		tt, f := expr.typeof(env)
+		tt, f := expr.typeof(env, fields)
 		flags |= f
 
 		switch tt {

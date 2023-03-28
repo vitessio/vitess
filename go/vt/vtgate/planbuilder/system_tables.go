@@ -19,28 +19,11 @@ package planbuilder
 import (
 	"strings"
 
-	"vitess.io/vitess/go/mysql/collations"
-
-	"vitess.io/vitess/go/vt/vterrors"
-
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
+	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators"
 )
-
-type notImplementedSchemaInfoConverter struct{}
-
-func (f *notImplementedSchemaInfoConverter) ColumnLookup(*sqlparser.ColName) (int, error) {
-	return 0, vterrors.VT12001("comparing table schema name with a column name")
-}
-
-func (f *notImplementedSchemaInfoConverter) CollationForExpr(sqlparser.Expr) collations.ID {
-	return collations.Unknown
-}
-
-func (f *notImplementedSchemaInfoConverter) DefaultCollation() collations.ID {
-	return collations.Default()
-}
 
 func (pb *primitiveBuilder) findSysInfoRoutingPredicates(expr sqlparser.Expr, rut *route, reservedVars *sqlparser.ReservedVars) error {
 	isTableSchema, bvName, out, err := extractInfoSchemaRoutingPredicate(expr, reservedVars)
@@ -123,7 +106,7 @@ func extractInfoSchemaRoutingPredicate(
 		return
 	}
 
-	evalExpr, err = evalengine.Translate(other, &notImplementedSchemaInfoConverter{})
+	evalExpr, err = evalengine.Translate(other, &evalengine.Config{ResolveColumn: operators.NotImplementedSchemaInfoResolver})
 	if err != nil {
 		if strings.Contains(err.Error(), evalengine.ErrTranslateExprNotSupported) {
 			// This just means we can't rewrite this particular expression,

@@ -19,6 +19,7 @@ package evalengine
 import (
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
 )
@@ -125,8 +126,8 @@ func (c *ConvertExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (c *ConvertExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	tt, f := c.Inner.typeof(env)
+func (c *ConvertExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	tt, f := c.Inner.typeof(env, fields)
 
 	switch c.Type {
 	case "BINARY":
@@ -192,7 +193,7 @@ func (c *ConvertUsingExpr) eval(env *ExpressionEnv) (eval, error) {
 	return e, nil
 }
 
-func (c *ConvertUsingExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	_, f := c.Inner.typeof(env)
+func (c *ConvertUsingExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	_, f := c.Inner.typeof(env, fields)
 	return sqltypes.VarChar, f | flagNullable
 }

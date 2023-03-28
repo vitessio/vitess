@@ -20,6 +20,7 @@ import (
 	"math"
 
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 )
 
 type (
@@ -36,7 +37,7 @@ func (l *Literal) eval(_ *ExpressionEnv) (eval, error) {
 }
 
 // typeof implements the Expr interface
-func (l *Literal) typeof(*ExpressionEnv) (sqltypes.Type, typeFlag) {
+func (l *Literal) typeof(*ExpressionEnv, []*querypb.Field) (sqltypes.Type, typeFlag) {
 	var f typeFlag
 	switch e := l.inner.(type) {
 	case nil:

@@ -24,6 +24,7 @@ import (
 	"unicode/utf8"
 
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
@@ -193,29 +194,37 @@ func NewLiteralBinaryFromBit(val []byte) (*Literal, error) {
 }
 
 // NewBindVar returns a bind variable
-func NewBindVar(key string, collation collations.TypedCollation) Expr {
+func NewBindVar(key string) *BindVariable {
 	return &BindVariable{
-		Key:    key,
-		col:    collation,
-		coerce: -1,
+		Key: key,
+		Collation: collations.TypedCollation{
+			Collation:    collations.Unknown,
+			Coercibility: collations.CoerceCoercible,
+			Repertoire:   collations.RepertoireUnicode,
+		},
 	}
 }
 
 // NewBindVarTuple returns a bind variable containing a tuple
-func NewBindVarTuple(key string) Expr {
+func NewBindVarTuple(key string) *BindVariable {
 	return &BindVariable{
-		Key:    key,
-		tuple:  true,
-		coerce: -1,
+		Key:   key,
+		Type:  sqltypes.Tuple,
+		typed: true,
 	}
 }
 
 // NewColumn returns a column expression
-func NewColumn(offset int, collation collations.TypedCollation) Expr {
-	return &Column{
-		Offset: offset,
-		coll:   collation,
-	}
+func NewColumn(offset int) *Column {
+	return NewColumnWithCollation(offset, collations.TypedCollation{
+		Collation:    collations.Unknown,
+		Coercibility: collations.CoerceCoercible,
+		Repertoire:   collations.RepertoireUnicode,
+	})
+}
+
+func NewColumnWithCollation(offset int, coll collations.TypedCollation) *Column {
+	return &Column{Offset: offset, Collation: coll}
 }
 
 // NewTupleExpr returns a tuple expression

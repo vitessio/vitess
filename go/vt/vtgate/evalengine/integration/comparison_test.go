@@ -28,6 +28,7 @@ import (
 	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/testcases"
@@ -82,7 +83,7 @@ func normalizeValue(v sqltypes.Value, coll collations.ID) sqltypes.Value {
 	return v
 }
 
-func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string) {
+func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mysql.Conn, expr string, fields []*querypb.Field) {
 	t.Helper()
 
 	localQuery := "SELECT " + expr
@@ -90,14 +91,14 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 	if debugCheckCollations {
 		remoteQuery = fmt.Sprintf("SELECT %s, COLLATION(%s)", expr, expr)
 	}
-	if len(env.Fields) > 0 {
+	if len(fields) > 0 {
 		if _, err := conn.ExecuteFetch(`DROP TEMPORARY TABLE IF EXISTS vteval_test`, -1, false); err != nil {
 			t.Fatalf("failed to drop temporary table: %v", err)
 		}
 
 		var schema strings.Builder
 		schema.WriteString(`CREATE TEMPORARY TABLE vteval_test(autopk int primary key auto_increment, `)
-		for i, field := range env.Fields {
+		for i, field := range fields {
 			if i > 0 {
 				schema.WriteString(", ")
 			}
@@ -112,7 +113,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		if len(env.Row) > 0 {
 			var rowsql strings.Builder
 			rowsql.WriteString(`INSERT INTO vteval_test(`)
-			for i, field := range env.Fields {
+			for i, field := range fields {
 				if i > 0 {
 					rowsql.WriteString(", ")
 				}
@@ -136,7 +137,7 @@ func compareRemoteExprEnv(t *testing.T, env *evalengine.ExpressionEnv, conn *mys
 		remoteQuery = remoteQuery + " FROM vteval_test"
 	}
 
-	local, localType, localErr := evaluateLocalEvalengine(env, localQuery)
+	local, localType, localErr := evaluateLocalEvalengine(env, localQuery, fields)
 	remote, remoteErr := conn.ExecuteFetch(remoteQuery, 1, true)
 
 	var localVal, remoteVal sqltypes.Value
@@ -195,10 +196,9 @@ func TestMySQL(t *testing.T) {
 	for _, tc := range testcases.Cases {
 		t.Run(tc.Name(), func(t *testing.T) {
 			env := evalengine.EmptyExpressionEnv()
-			env.Fields = tc.Schema
 			tc.Run(func(query string, row []sqltypes.Value) {
 				env.Row = row
-				compareRemoteExprEnv(t, env, conn, query)
+				compareRemoteExprEnv(t, env, conn, query, tc.Schema)
 			})
 		})
 	}

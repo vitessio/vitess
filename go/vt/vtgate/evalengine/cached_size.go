@@ -157,7 +157,7 @@ func (cached *Column) CachedSize(alloc bool) int64 {
 	}
 	size := int64(0)
 	if alloc {
-		size += int64(16)
+		size += int64(24)
 	}
 	return size
 }
@@ -173,6 +173,24 @@ func (cached *ComparisonExpr) CachedSize(alloc bool) int64 {
 	size += cached.BinaryExpr.CachedSize(false)
 	// field Op vitess.io/vitess/go/vt/vtgate/evalengine.ComparisonOp
 	if cc, ok := cached.Op.(cachedObject); ok {
+		size += cc.CachedSize(true)
+	}
+	return size
+}
+func (cached *CompiledExpr) CachedSize(alloc bool) int64 {
+	if cached == nil {
+		return int64(0)
+	}
+	size := int64(0)
+	if alloc {
+		size += int64(64)
+	}
+	// field code []vitess.io/vitess/go/vt/vtgate/evalengine.frame
+	{
+		size += hack.RuntimeAllocSize(int64(cap(cached.code)) * int64(8))
+	}
+	// field original vitess.io/vitess/go/vt/vtgate/evalengine.Expr
+	if cc, ok := cached.original.(cachedObject); ok {
 		size += cc.CachedSize(true)
 	}
 	return size

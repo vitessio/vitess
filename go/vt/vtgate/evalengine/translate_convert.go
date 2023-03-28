@@ -40,7 +40,7 @@ func (ast *astCompiler) binaryCollationForCollation(collation collations.ID) col
 
 func (ast *astCompiler) translateConvertCharset(charset string, binary bool) (collations.ID, error) {
 	if charset == "" {
-		collation := ast.lookup.DefaultCollation()
+		collation := ast.cfg.Collation
 		if binary {
 			collation = ast.binaryCollationForCollation(collation)
 		}

@@ -156,7 +156,7 @@ func extractValueFromUpdate(upd *sqlparser.UpdateExpr) (evalengine.Expr, error) 
 		expr = sqlparser.NewArgument(sq.GetArgName())
 	}
 
-	pv, err := evalengine.Translate(expr, semantics.EmptySemTable())
+	pv, err := evalengine.Translate(expr, nil)
 	if err != nil || sqlparser.IsSimpleTuple(expr) {
 		return nil, invalidUpdateExpr(upd, expr)
 	}

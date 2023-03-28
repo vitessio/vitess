@@ -190,7 +190,7 @@ func (rp *RoutingParameters) routeInfoSchemaQuery(ctx context.Context, vcursor V
 		return defaultRoute()
 	}
 
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	var specifiedKS string
 	for _, tableSchema := range rp.SysTableTableSchema {
 		result, err := env.Evaluate(tableSchema)
@@ -333,7 +333,7 @@ func (rp *RoutingParameters) byDestination(ctx context.Context, vcursor VCursor,
 }
 
 func (rp *RoutingParameters) equal(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
@@ -350,7 +350,7 @@ func (rp *RoutingParameters) equal(ctx context.Context, vcursor VCursor, bindVar
 }
 
 func (rp *RoutingParameters) equalMultiCol(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	var rowValue []sqltypes.Value
 	for _, rvalue := range rp.Values {
 		v, err := env.Evaluate(rvalue)
@@ -372,7 +372,7 @@ func (rp *RoutingParameters) equalMultiCol(ctx context.Context, vcursor VCursor,
 }
 
 func (rp *RoutingParameters) in(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
@@ -398,7 +398,7 @@ func (rp *RoutingParameters) inMultiCol(ctx context.Context, vcursor VCursor, bi
 }
 
 func (rp *RoutingParameters) multiEqual(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	value, err := env.Evaluate(rp.Values[0])
 	if err != nil {
 		return nil, nil, err
@@ -416,7 +416,7 @@ func (rp *RoutingParameters) multiEqual(ctx context.Context, vcursor VCursor, bi
 
 func (rp *RoutingParameters) multiEqualMultiCol(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) ([]*srvtopo.ResolvedShard, []map[string]*querypb.BindVariable, error) {
 	var multiColValues [][]sqltypes.Value
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	for _, rvalue := range rp.Values {
 		v, err := env.Evaluate(rvalue)
 		if err != nil {
@@ -564,7 +564,7 @@ func generateRowColValues(vcursor VCursor, bindVars map[string]*querypb.BindVari
 	var multiColValues [][]sqltypes.Value
 	var lv []sqltypes.Value
 	isSingleVal := map[int]any{}
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	for colIdx, rvalue := range values {
 		result, err := env.Evaluate(rvalue)
 		if err != nil {

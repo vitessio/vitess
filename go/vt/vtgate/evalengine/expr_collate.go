@@ -17,13 +17,10 @@ limitations under the License.
 package evalengine
 
 import (
-	"strconv"
-	"strings"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	vtrpcpb "vitess.io/vitess/go/vt/proto/vtrpc"
-	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 )
 
@@ -78,43 +75,9 @@ func (c *CollateExpr) eval(env *ExpressionEnv) (eval, error) {
 	}
 }
 
-func (c *CollateExpr) typeof(env *ExpressionEnv) (sqltypes.Type, typeFlag) {
-	t, f := c.Inner.typeof(env)
+func (c *CollateExpr) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {
+	t, f := c.Inner.typeof(env, fields)
 	return t, f | flagExplicitCollation
-}
-
-type LookupDefaultCollation collations.ID
-
-func (d LookupDefaultCollation) ColumnLookup(_ *sqlparser.ColName) (int, error) {
-	return 0, vterrors.Errorf(vtrpcpb.Code_UNIMPLEMENTED, "column access not supported here")
-}
-
-func (d LookupDefaultCollation) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return collations.Unknown
-}
-
-func (d LookupDefaultCollation) DefaultCollation() collations.ID {
-	return collations.ID(d)
-}
-
-type LookupIntegrationTest struct {
-	Collation collations.ID
-}
-
-func (*LookupIntegrationTest) ColumnLookup(name *sqlparser.ColName) (int, error) {
-	n := name.CompliantName()
-	if strings.HasPrefix(n, "column") {
-		return strconv.Atoi(n[len("column"):])
-	}
-	return 0, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "unknown column: %q", n)
-}
-
-func (tl *LookupIntegrationTest) CollationForExpr(_ sqlparser.Expr) collations.ID {
-	return tl.Collation
-}
-
-func (tl *LookupIntegrationTest) DefaultCollation() collations.ID {
-	return tl.Collation
 }
 
 func evalCollation(e eval) collations.TypedCollation {

@@ -59,9 +59,8 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 	if err != nil {
 		return nil, err
 	}
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	var rows [][]sqltypes.Value
-	env.Fields = result.Fields
 	for _, row := range result.Rows {
 		env.Row = row
 		evalResult, err := env.Evaluate(f.Predicate)
@@ -82,10 +81,9 @@ func (f *Filter) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[s
 
 // TryStreamExecute satisfies the Primitive interface.
 func (f *Filter) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	env := evalengine.EnvWithBindVars(bindVars, vcursor.ConnCollation())
+	env := evalengine.EnvWithBindVars(bindVars)
 	filter := func(results *sqltypes.Result) error {
 		var rows [][]sqltypes.Value
-		env.Fields = results.Fields
 		for _, row := range results.Rows {
 			env.Row = row
 			evalResult, err := env.Evaluate(f.Predicate)
