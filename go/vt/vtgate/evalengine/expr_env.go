@@ -19,6 +19,7 @@ package evalengine
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 
 	"vitess.io/vitess/go/sqltypes"
@@ -41,28 +42,31 @@ type (
 		Row      []sqltypes.Value
 
 		// internal state
-		now      time.Time
-		tz       *time.Location
-		keyspace string
-		user     *querypb.VTGateCallerID
+		now  time.Time
+		vc   VCursor
+		user *querypb.VTGateCallerID
 	}
 )
 
 func (env *ExpressionEnv) time(utc bool) time.Time {
-	if env.now.IsZero() {
-		env.now = time.Now()
-	}
 	if utc {
 		return env.now.UTC()
-	}
-	if env.tz != nil {
-		return env.now.In(env.tz)
 	}
 	return env.now
 }
 
+func (env *ExpressionEnv) currentUser() string {
+	if env.user == nil {
+		return "vt_app@localhost"
+	}
+	user := env.user.GetUsername()
+	if !strings.Contains(user, "@") {
+		user = user + "@localhost"
+	}
+	return user
+}
+
 func (env *ExpressionEnv) Evaluate(expr Expr) (EvalResult, error) {
-	env.now = time.Time{}
 	if p, ok := expr.(*CompiledExpr); ok {
 		return env.EvaluateVM(p)
 	}
@@ -87,11 +91,17 @@ func EmptyExpressionEnv() *ExpressionEnv {
 
 // NewExpressionEnv returns an expression environment with no current row, but with bindvars
 func NewExpressionEnv(ctx context.Context, bindVars map[string]*querypb.BindVariable, vc VCursor) *ExpressionEnv {
-	var keyspace string
-	var tz *time.Location
-	if vc != nil {
-		keyspace = vc.GetKeyspace()
-		tz = vc.TimeZone()
+	env := &ExpressionEnv{BindVars: bindVars, vc: vc}
+	env.user = callerid.ImmediateCallerIDFromContext(ctx)
+
+	// The current time for this ExpressionEnv is set only once, during creation.
+	// This is to ensure that all expressions in the same ExpressionEnv evaluate NOW()
+	// and similar SQL functions to the same value.
+	env.now = time.Now()
+	if env.vc != nil {
+		if tz := env.vc.TimeZone(); tz != nil {
+			env.now = env.now.In(tz)
+		}
 	}
-	return &ExpressionEnv{BindVars: bindVars, tz: tz, keyspace: keyspace, user: callerid.ImmediateCallerIDFromContext(ctx)}
+	return env
 }

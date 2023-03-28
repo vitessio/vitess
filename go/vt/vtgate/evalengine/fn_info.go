@@ -17,8 +17,6 @@ limitations under the License.
 package evalengine
 
 import (
-	"strings"
-
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/servenv"
@@ -30,20 +28,8 @@ type builtinUser struct {
 
 var _ Expr = (*builtinUser)(nil)
 
-func currentUser(env *ExpressionEnv) string {
-	if env.user == nil {
-		return "vt_app@localhost"
-	}
-
-	user := env.user.GetUsername()
-	if !strings.Contains(user, "@") {
-		user = user + "@localhost"
-	}
-	return user
-}
-
 func (call *builtinUser) eval(env *ExpressionEnv) (eval, error) {
-	return newEvalText([]byte(currentUser(env)), collationUtf8mb3), nil
+	return newEvalText([]byte(env.currentUser()), collationUtf8mb3), nil
 }
 
 func (call *builtinUser) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -71,7 +57,10 @@ type builtinDatabase struct {
 var _ Expr = (*builtinDatabase)(nil)
 
 func (call *builtinDatabase) eval(env *ExpressionEnv) (eval, error) {
-	return newEvalText([]byte(env.keyspace), collationUtf8mb3), nil
+	if env.vc == nil {
+		return nil, nil
+	}
+	return newEvalText([]byte(env.vc.GetKeyspace()), collationUtf8mb3), nil
 }
 
 func (call *builtinDatabase) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
