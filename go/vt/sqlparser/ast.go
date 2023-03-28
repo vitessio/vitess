@@ -3161,7 +3161,7 @@ func (*MultiPolygonExpr) iCallable()                   {}
 func (*MultiPointExpr) iCallable()                     {}
 func (*MultiLinestringExpr) iCallable()                {}
 func (*GeomFromTextExpr) iCallable()                   {}
-func (*GeomFromWKBExpr) iCallable()					   {}
+func (*GeomFromWKBExpr) iCallable()                    {}
 
 func (*Sum) iCallable()       {}
 func (*Min) iCallable()       {}
