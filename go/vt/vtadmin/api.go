@@ -1081,7 +1081,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 	clusters, _ := api.getClustersForRequest(req.ClusterIds)
 
 	var (
-		sks map[string]*vtctldatapb.GetSrvKeyspacesResponse
+		sks map[string]*vtctldatapb.GetSrvKeyspacesResponse = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse)
 		wg  sync.WaitGroup
 		er  concurrency.AllErrorRecorder
 		m   sync.Mutex
@@ -1116,7 +1116,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 				clusterM            sync.Mutex
 				clusterWG           sync.WaitGroup
 				clusterRec          concurrency.AllErrorRecorder
-				clusterSrvKeyspaces map[string]*vtctldatapb.GetSrvKeyspacesResponse
+				clusterSrvKeyspaces map[string]*vtctldatapb.GetSrvKeyspacesResponse = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse, len(keyspaces.Keyspaces))
 			)
 
 			for _, keyspace := range keyspaces.Keyspaces {
@@ -1126,7 +1126,7 @@ func (api *API) GetSrvKeyspaces(ctx context.Context, req *vtadminpb.GetSrvKeyspa
 					defer clusterWG.Done()
 					srv_keyspaces, err := c.Vtctld.GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{Keyspace: keyspace.Name, Cells: req.Cells})
 					if err != nil {
-						clusterRec.RecordError(fmt.Errorf("GetVSchema(keyspace = %s): %w", keyspace.Name, err))
+						clusterRec.RecordError(fmt.Errorf("GetSrvKeyspaces(keyspace = %s): %w", keyspace.Name, err))
 						return
 					}
 
