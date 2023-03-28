@@ -114,12 +114,6 @@ func TestMain(m *testing.M) {
 			"--disable_active_reparents",
 		}
 
-		// Tell vtorc not to watch our keyspace(s) as we don't want it to e.g. repair
-		// replication when we explicitly stop it.
-		for i := range clusterInstance.VTOrcProcesses {
-			clusterInstance.VTOrcProcesses[i].ExtraArgs = []string{`--clusters_to_watch=""`}
-		}
-
 		// Start keyspace
 		keyspace := &cluster.Keyspace{
 			Name:      keyspaceName,
@@ -361,6 +355,11 @@ func TestThrottlerAfterMetricsCollected(t *testing.T) {
 
 func TestLag(t *testing.T) {
 	defer cluster.PanicHandler(t)
+	// Temporarily disable VTOrc recoveries because we want to
+	// STOP replication specifically in order to increase the
+	// lag and we DO NOT want VTOrc to try and fix this.
+	clusterInstance.DisableVTOrcRecoveries(t)
+	defer clusterInstance.EnableVTOrcRecoveries(t)
 
 	t.Run("stopping replication", func(t *testing.T) {
 		err := clusterInstance.VtctlclientProcess.ExecuteCommand("StopReplication", replicaTablet.Alias)

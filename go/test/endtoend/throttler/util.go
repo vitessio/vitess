@@ -112,7 +112,6 @@ func WaitForThrottlerStatusEnabled(t *testing.T, tablet *cluster.Vttablet, enabl
 
 	for {
 		body := getHTTPBody(url)
-		t.Logf("tablet %s throttler status: %s", tablet.Alias, body)
 		isEnabled, err := jsonparser.GetBoolean([]byte(body), enabledJSONPath)
 		require.NoError(t, err)
 		if isEnabled == enabled {
