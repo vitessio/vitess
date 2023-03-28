@@ -19,6 +19,7 @@ package vtgate
 import (
 	"context"
 	"fmt"
+	"io"
 	"sort"
 	"strings"
 	"sync/atomic"
@@ -996,7 +997,12 @@ func parseDestinationTarget(targetString string, vschema *vindexes.VSchema) (str
 	return destKeyspace, destTabletType, dest, err
 }
 
-func (vc *vcursorImpl) planPrefixKey(ctx context.Context) string {
+func (vc *vcursorImpl) keyForPlan(ctx context.Context, query string, buf io.StringWriter) {
+	_, _ = buf.WriteString(vc.keyspace)
+	_, _ = buf.WriteString(vindexes.TabletTypeSuffix[vc.tabletType])
+	_, _ = buf.WriteString("+Collate:")
+	_, _ = buf.WriteString(vc.collation.Get().Name())
+
 	if vc.destination != nil {
 		switch vc.destination.(type) {
 		case key.DestinationKeyspaceID, key.DestinationKeyspaceIDs:
@@ -1007,14 +1013,22 @@ func (vc *vcursorImpl) planPrefixKey(ctx context.Context) string {
 					shards[i] = resolved[i].Target.GetShard()
 				}
 				sort.Strings(shards)
-				return fmt.Sprintf("%s%sKsIDsResolved(%s)", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], strings.Join(shards, ","))
+
+				_, _ = buf.WriteString("+KsIDsResolved:")
+				for i, s := range shards {
+					if i > 0 {
+						_, _ = buf.WriteString(",")
+					}
+					_, _ = buf.WriteString(s)
+				}
 			}
 		default:
-			// use destination string (out of the switch)
+			_, _ = buf.WriteString("+")
+			_, _ = buf.WriteString(vc.destination.String())
 		}
-		return fmt.Sprintf("%s%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType], vc.destination.String())
 	}
-	return fmt.Sprintf("%s%s", vc.keyspace, vindexes.TabletTypeSuffix[vc.tabletType])
+	_, _ = buf.WriteString("+Query:")
+	_, _ = buf.WriteString(query)
 }
 
 func (vc *vcursorImpl) GetKeyspace() string {

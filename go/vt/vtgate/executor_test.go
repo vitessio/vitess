@@ -1624,10 +1624,7 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if plan1 != plan2 {
 		t.Errorf("getPlan(query1): plans must be equal: %p %p", plan1, plan2)
 	}
-	want := []string{
-		"@unknown:" + query1,
-	}
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, query1)
 	if logStats2.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats2.SQL)
 	}
@@ -1642,11 +1639,8 @@ func TestGetPlanUnnormalized(t *testing.T) {
 	if plan3 != plan4 {
 		t.Errorf("getPlan(query1, ks): plans must be equal: %p %p", plan3, plan4)
 	}
-	want = []string{
-		KsTestUnsharded + "@unknown:" + query1,
-		"@unknown:" + query1,
-	}
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, query1)
+	assertCacheContains(t, r, unshardedvc, query1)
 	if logStats4.SQL != wantSQL {
 		t.Errorf("logstats sql want \"%s\" got \"%s\"", wantSQL, logStats4.SQL)
 	}
@@ -1664,13 +1658,26 @@ func assertCacheSize(t *testing.T, c cache.Cache, expected int) {
 	}
 }
 
-func assertCacheContains(t *testing.T, e *Executor, want []string) {
+func assertCacheContains(t *testing.T, e *Executor, vc *vcursorImpl, sql string) *engine.Plan {
 	t.Helper()
-	for _, wantKey := range want {
-		if _, ok := e.debugGetPlan(wantKey); !ok {
-			t.Errorf("missing key in plan cache: %v", wantKey)
+
+	var plan *engine.Plan
+	if vc == nil {
+		e.plans.ForEach(func(x any) bool {
+			p := x.(*engine.Plan)
+			if p.Original == sql {
+				plan = p
+			}
+			return true
+		})
+	} else {
+		h := e.hashPlan(context.Background(), vc, sql)
+		if p, ok := e.plans.Get(h); ok {
+			plan = p.(*engine.Plan)
 		}
 	}
+	require.Truef(t, plan != nil, "plan not found for query: %s", sql)
+	return plan
 }
 
 func getPlanCached(t *testing.T, e *Executor, vcursor *vcursorImpl, sql string, comments sqlparser.MarginComments, bindVars map[string]*querypb.BindVariable, skipQueryPlanCache bool) (*engine.Plan, *logstats.LogStats) {
@@ -1782,10 +1789,7 @@ func TestGetPlanNormalized(t *testing.T) {
 	plan2, logStats2 := getPlanCached(t, r, emptyvc, query1, makeComments(" /* comment 2 */"), map[string]*querypb.BindVariable{}, false)
 
 	assert.Equal(t, plan1, plan2)
-	want := []string{
-		"@unknown:" + normalized,
-	}
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, normalized)
 
 	wantSQL := normalized + " /* comment 1 */"
 	assert.Equal(t, wantSQL, logStats1.SQL)
@@ -1805,15 +1809,13 @@ func TestGetPlanNormalized(t *testing.T) {
 
 	plan4, _ := getPlanCached(t, r, unshardedvc, query1, makeComments(" /* comment 6 */"), map[string]*querypb.BindVariable{}, false)
 	assert.Equal(t, plan1, plan4)
-	want = []string{
-		KsTestUnsharded + "@unknown:" + normalized,
-		"@unknown:" + normalized,
-	}
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, normalized)
+	assertCacheContains(t, r, unshardedvc, normalized)
 
 	_, _, err := r.getPlan(context.Background(), emptyvc, "syntax", makeComments(""), map[string]*querypb.BindVariable{}, nil, nil)
 	assert.EqualError(t, err, "syntax error at position 7 near 'syntax'")
-	assertCacheContains(t, r, want)
+	assertCacheContains(t, r, emptyvc, normalized)
+	assertCacheContains(t, r, unshardedvc, normalized)
 }
 
 func TestPassthroughDDL(t *testing.T) {
