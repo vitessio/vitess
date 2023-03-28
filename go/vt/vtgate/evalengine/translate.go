@@ -200,6 +200,8 @@ func (ast *astCompiler) translateLiteral(lit *sqlparser.Literal) (*Literal, erro
 		return NewLiteralBinaryFromHexNum(lit.Bytes())
 	case sqlparser.HexVal:
 		return NewLiteralBinaryFromHex(lit.Bytes())
+	case sqlparser.BitVal:
+		return NewLiteralBinaryFromBit(lit.Bytes())
 	case sqlparser.DateVal:
 		return NewLiteralDateFromBytes(lit.Bytes())
 	case sqlparser.TimeVal:
@@ -453,10 +455,10 @@ func (ast *astCompiler) translateExpr(e sqlparser.Expr) (Expr, error) {
 		return NewColumn(node.V, ast.getCollation(node)), nil
 	case *sqlparser.ComparisonExpr:
 		return ast.translateComparisonExpr(node.Operator, node.Left, node.Right)
-	case sqlparser.Argument:
+	case *sqlparser.Argument:
 		ast.entities.bvars++
 		collation := ast.getCollation(e)
-		return NewBindVar(string(node), collation), nil
+		return NewBindVar(node.Name, collation), nil
 	case sqlparser.ListArg:
 		ast.entities.bvars++
 		return NewBindVarTuple(string(node)), nil

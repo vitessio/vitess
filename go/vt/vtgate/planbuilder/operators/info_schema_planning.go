@@ -140,7 +140,7 @@ func extractInfoSchemaRoutingPredicate(in sqlparser.Expr, reservedVars *sqlparse
 	} else {
 		name = reservedVars.ReserveColName(col)
 	}
-	cmp.Right = sqlparser.NewArgument(name)
+	cmp.Right = sqlparser.NewTypedArgument(name, sqltypes.VarChar)
 	return isSchemaName, name, rhs
 }
 

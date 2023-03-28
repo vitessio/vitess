@@ -110,11 +110,27 @@ func evalToNumeric(e eval) evalNumeric {
 		return &evalFloat{f: parseStringToFloat(e.string())}
 	case *evalJSON:
 		switch e.Type() {
-		case json.TypeTrue:
-			return &evalFloat{f: 1.0}
-		case json.TypeFalse:
+		case json.TypeBoolean:
+			if e == json.ValueTrue {
+				return &evalFloat{f: 1.0}
+			}
 			return &evalFloat{f: 0.0}
-		case json.TypeNumber, json.TypeString:
+		case json.TypeNumber:
+			switch e.NumberType() {
+			case json.NumberTypeInteger:
+				i, ok := e.Int64()
+				if ok {
+					return &evalInt64{i: i}
+				}
+				d, _ := e.Decimal()
+				return newEvalDecimalWithPrec(d, 0)
+			case json.NumberTypeDouble:
+				f, _ := e.Float64()
+				return &evalFloat{f: f}
+			default:
+				panic("unsupported")
+			}
+		case json.TypeString:
 			return &evalFloat{f: parseStringToFloat(e.Raw())}
 		default:
 			return &evalFloat{f: 0}

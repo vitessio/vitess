@@ -358,6 +358,13 @@ func (s *server) VReplicationWaitForPos(ctx context.Context, request *tabletmana
 	return &tabletmanagerdatapb.VReplicationWaitForPosResponse{}, err
 }
 
+func (s *server) UpdateVRWorkflow(ctx context.Context, request *tabletmanagerdatapb.UpdateVRWorkflowRequest) (response *tabletmanagerdatapb.UpdateVRWorkflowResponse, err error) {
+	defer s.tm.HandleRPCPanic(ctx, "UpdateVRWorkflow", request, response, true /*verbose*/, &err)
+	ctx = callinfo.GRPCCallInfo(ctx)
+	response = &tabletmanagerdatapb.UpdateVRWorkflowResponse{}
+	return s.tm.UpdateVRWorkflow(ctx, request)
+}
+
 func (s *server) VDiff(ctx context.Context, request *tabletmanagerdatapb.VDiffRequest) (response *tabletmanagerdatapb.VDiffResponse, err error) {
 	defer s.tm.HandleRPCPanic(ctx, "VDiff", request, response, true /*verbose*/, &err)
 	ctx = callinfo.GRPCCallInfo(ctx)
