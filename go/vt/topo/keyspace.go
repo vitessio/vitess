@@ -18,7 +18,7 @@ package topo
 
 import (
 	"path"
-	"regexp"
+	"strings"
 
 	"context"
 
@@ -54,15 +54,15 @@ func (ki *KeyspaceInfo) SetKeyspaceName(name string) {
 	ki.keyspace = name
 }
 
-var keyspaceNameRegexp = regexp.MustCompile("^[a-zA-Z][a-zA-Z0-9_-]*$")
+var invalidKeyspaceNameChars = "/"
 
 // ValidateKeyspaceNames checks if the provided name is a valid name for a
 // keyspace.
 //
 // As of v17, "all invalid characters" is just the forward slash ("/").
 func ValidateKeyspaceName(name string) error {
-	if !keyspaceNameRegexp.MatchString(name) {
-		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; may only contain alphanumerics, dashes and underscores", name)
+	if strings.ContainsAny(name, invalidKeyspaceNameChars) {
+		return vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "keyspace name %s contains invalid characters; may not contain any of the following: %+v", name, strings.Split(invalidKeyspaceNameChars, ""))
 	}
 
 	return nil
