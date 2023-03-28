@@ -17,13 +17,11 @@ limitations under the License.
 package evalengine
 
 import (
-	"strconv"
 	"time"
-
-	"github.com/lestrrat-go/strftime"
 
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/datetime"
 )
 
 type (
@@ -48,45 +46,30 @@ var _ Expr = (*builtinNow)(nil)
 var _ Expr = (*builtinSysdate)(nil)
 var _ Expr = (*builtinCurdate)(nil)
 
-const formatBufferSize = 32
-
 var (
-	formatTime     [7]*strftime.Strftime
-	formatDateTime [7]*strftime.Strftime
-	formatDate     *strftime.Strftime
+	formatTime     [7]*datetime.Strftime
+	formatDateTime [7]*datetime.Strftime
+	formatDate     *datetime.Strftime
 )
 
-func withSubSecondPrecision(prec int) strftime.Appender {
-	return strftime.AppendFunc(func(b []byte, t time.Time) []byte {
-		l := len(b)
-		b = strconv.AppendUint(b, uint64(t.Nanosecond()), 10)
-		for len(b)-l < prec {
-			b = append(b, '0')
-		}
-		return b[:l+prec]
-	})
-}
-
 func init() {
-	formatTime[0], _ = strftime.New("%H:%M:%S")
-	formatDateTime[0], _ = strftime.New("%Y-%m-%d %H:%M:%S")
-	formatDate, _ = strftime.New("%Y-%m-%d")
+	formatTime[0], _ = datetime.New("%H:%M:%S", 0)
+	formatDateTime[0], _ = datetime.New("%Y-%m-%d %H:%M:%S", 0)
+	formatDate, _ = datetime.New("%Y-%m-%d", 0)
 
 	for i := 1; i <= 6; i++ {
-		spec := strftime.WithSpecification('f', withSubSecondPrecision(i))
-		formatTime[i], _ = strftime.New("%H:%M:%S.%f", spec)
-		formatDateTime[i], _ = strftime.New("%Y-%m-%d %H:%M:%S.%f", spec)
+		formatTime[i], _ = datetime.New("%H:%M:%S.%f", uint8(i))
+		formatDateTime[i], _ = datetime.New("%Y-%m-%d %H:%M:%S.%f", uint8(i))
 	}
 }
 
 func (call *builtinNow) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(call.utc)
-	buf := make([]byte, 0, formatBufferSize)
 	if call.onlyTime {
-		buf = formatTime[call.prec].FormatBuffer(buf, now)
+		buf := formatTime[call.prec].Format(now)
 		return newEvalRaw(sqltypes.Time, buf, collationBinary), nil
 	} else {
-		buf = formatDateTime[call.prec].FormatBuffer(buf, now)
+		buf := formatDateTime[call.prec].Format(now)
 		return newEvalRaw(sqltypes.Datetime, buf, collationBinary), nil
 	}
 }
@@ -99,12 +82,11 @@ func (call *builtinNow) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.T
 }
 
 func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
-	buf := make([]byte, 0, formatBufferSize)
 	now := time.Now()
 	if env.tz != nil {
 		now = now.In(env.tz)
 	}
-	return newEvalRaw(sqltypes.Datetime, formatDateTime[call.prec].FormatBuffer(buf, now), collationBinary), nil
+	return newEvalRaw(sqltypes.Datetime, formatDateTime[call.prec].Format(now), collationBinary), nil
 }
 
 func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
@@ -113,8 +95,7 @@ func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltyp
 
 func (call *builtinCurdate) eval(env *ExpressionEnv) (eval, error) {
 	now := env.time(false)
-	buf := make([]byte, 0, formatBufferSize)
-	return newEvalRaw(sqltypes.Date, formatDate.FormatBuffer(buf, now), collationBinary), nil
+	return newEvalRaw(sqltypes.Date, formatDate.Format(now), collationBinary), nil
 }
 
 func (call *builtinCurdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {

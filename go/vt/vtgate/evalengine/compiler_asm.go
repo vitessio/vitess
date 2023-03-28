@@ -22,17 +22,15 @@ import (
 	"math/bits"
 	"time"
 
-	"github.com/lestrrat-go/strftime"
-
-	"vitess.io/vitess/go/vt/servenv"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/datetime"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 	"vitess.io/vitess/go/vt/vthash"
@@ -2408,19 +2406,19 @@ func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	}
 }
 
-func (asm *assembler) Fn_Now(t querypb.Type, format *strftime.Strftime, utc bool) {
+func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, utc bool) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(t)
-		val.bytes = format.FormatBuffer(make([]byte, 0, formatBufferSize), env.time(utc))
+		val.bytes = format.Format(env.time(utc))
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
 	}, "FN NOW")
 }
 
-func (asm *assembler) Fn_Sysdate(format *strftime.Strftime) {
+func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
 	asm.adjustStack(1)
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
@@ -2429,7 +2427,7 @@ func (asm *assembler) Fn_Sysdate(format *strftime.Strftime) {
 		if env.tz != nil {
 			now = now.In(env.tz)
 		}
-		val.bytes = format.FormatBuffer(make([]byte, 0, formatBufferSize), now)
+		val.bytes = format.Format(now)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1
@@ -2441,7 +2439,7 @@ func (asm *assembler) Fn_Curdate() {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Date)
-		val.bytes = formatDate.FormatBuffer(make([]byte, 0, formatBufferSize), env.time(false))
+		val.bytes = formatDate.Format(env.time(false))
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1

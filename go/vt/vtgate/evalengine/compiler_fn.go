@@ -17,12 +17,11 @@ limitations under the License.
 package evalengine
 
 import (
-	"github.com/lestrrat-go/strftime"
-
 	"vitess.io/vitess/go/mysql/collations"
 	"vitess.io/vitess/go/sqltypes"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/datetime"
 )
 
 func (c *compiler) compileFn(call callable) (ctype, error) {
@@ -530,7 +529,7 @@ func (c *compiler) compileFn_WEIGHT_STRING(call *builtinWeightString) (ctype, er
 }
 
 func (c *compiler) compileFn_Now(call *builtinNow) (ctype, error) {
-	var format *strftime.Strftime
+	var format *datetime.Strftime
 	var t sqltypes.Type
 
 	if call.onlyTime {
