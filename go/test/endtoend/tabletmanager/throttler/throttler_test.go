@@ -99,6 +99,8 @@ func TestMain(m *testing.M) {
 			"--lock_tables_timeout", "5s",
 			"--watch_replication_stream",
 			"--enable_replication_reporter",
+			"--enable-lag-throttler",
+			"--throttle_threshold", throttlerThreshold.String(),
 			"--heartbeat_enable",
 			"--heartbeat_interval", "250ms",
 			"--heartbeat_on_demand_duration", onDemandHeartbeatDuration.String(),
@@ -261,7 +263,7 @@ func TestLag(t *testing.T) {
 		assert.NoError(t, err)
 	})
 	t.Run("accumulating lag, expecting throttler push back", func(t *testing.T) {
-		time.Sleep(3 * throttlerThreshold)
+		time.Sleep(2 * throttlerThreshold)
 
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
