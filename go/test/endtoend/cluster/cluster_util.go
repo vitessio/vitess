@@ -26,6 +26,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buger/jsonparser"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -41,6 +42,8 @@ var (
 	tmClient                 = tmc.NewClient()
 	dbCredentialFile         string
 	InsertTabletTemplateKsID = `insert into %s (id, msg) values (%d, '%s') /* id:%d */`
+	defaultOperationTimeout  = 60 * time.Second
+	defeaultRetryDelay       = 1 * time.Second
 )
 
 // Restart restarts vttablet and mysql.
@@ -380,4 +383,49 @@ func WaitForTabletSetup(vtctlClientProcess *VtctlClientProcess, expectedTablets 
 	}
 
 	return fmt.Errorf("all %d tablet are not in expected state %s", expectedTablets, expectedStatus)
+}
+
+// WaitForHealthyShard waits for the given shard info record in the topo
+// server to list a tablet (alias and uid) as the primary serving tablet
+// for the shard. This is done using "vtctldclient GetShard" and parsing
+// its JSON output. All other watchers should then also see this shard
+// info status as well.
+func WaitForHealthyShard(vtctldclient *VtctldClientProcess, keyspace, shard string) error {
+	var (
+		tmr  = time.NewTimer(defaultOperationTimeout)
+		res  string
+		err  error
+		json []byte
+		cell string
+		uid  int64
+	)
+	for {
+		res, err = vtctldclient.ExecuteCommandWithOutput("GetShard", fmt.Sprintf("%s/%s", keyspace, shard))
+		if err != nil {
+			return err
+		}
+		json = []byte(res)
+
+		cell, err = jsonparser.GetString(json, "shard", "primary_alias", "cell")
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
+			return err
+		}
+		uid, err = jsonparser.GetInt(json, "shard", "primary_alias", "uid")
+		if err != nil && err != jsonparser.KeyPathNotFoundError {
+			return err
+		}
+
+		if cell != "" && uid > 0 {
+			return nil
+		}
+
+		select {
+		case <-tmr.C:
+			return fmt.Errorf("timed out waiting for the %s/%s shard to become healthy in the topo after %v; last seen status: %s; last seen error: %v",
+				keyspace, shard, defaultOperationTimeout, res, err)
+		default:
+		}
+
+		time.Sleep(defeaultRetryDelay)
+	}
 }
