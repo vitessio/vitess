@@ -2423,7 +2423,11 @@ func (asm *assembler) Fn_Sysdate(format *strftime.Strftime) {
 	asm.emit(func(env *ExpressionEnv) int {
 		val := env.vm.arena.newEvalBytesEmpty()
 		val.tt = int16(sqltypes.Datetime)
-		val.bytes = format.FormatBuffer(make([]byte, 0, formatBufferSize), time.Now())
+		now := time.Now()
+		if env.Tz != nil {
+			now = now.In(env.Tz)
+		}
+		val.bytes = format.FormatBuffer(make([]byte, 0, formatBufferSize), now)
 		env.vm.stack[env.vm.sp] = val
 		env.vm.sp++
 		return 1

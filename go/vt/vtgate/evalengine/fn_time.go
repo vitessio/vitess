@@ -84,7 +84,11 @@ func (call *builtinNow) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.T
 
 func (call *builtinSysdate) eval(env *ExpressionEnv) (eval, error) {
 	buf := make([]byte, 0, formatBufferSize)
-	return newEvalRaw(sqltypes.Datetime, formatDateTime[call.prec].FormatBuffer(buf, time.Now()), collationBinary), nil
+	now := time.Now()
+	if env.Tz != nil {
+		now = now.In(env.Tz)
+	}
+	return newEvalRaw(sqltypes.Datetime, formatDateTime[call.prec].FormatBuffer(buf, now), collationBinary), nil
 }
 
 func (call *builtinSysdate) typeof(_ *ExpressionEnv, _ []*querypb.Field) (sqltypes.Type, typeFlag) {
