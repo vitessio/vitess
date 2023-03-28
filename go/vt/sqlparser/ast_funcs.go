@@ -2280,3 +2280,27 @@ func (ty GeomFromWktType) ToString() string {
 		return "Unknown GeomFromWktType"
 	}
 }
+
+// ToString returns the type as a string
+func (ty GeomFromWkbType) ToString() string {
+	switch ty {
+	case GeometryFromWKB:
+		return GeometryFromWKBStr
+	case GeometryCollectionFromWKB:
+		return GeometryCollectionFromWKBStr
+	case PointFromWKB:
+		return PointFromWKBStr
+	case PolygonFromWKB:
+		return PolygonFromWKBStr
+	case LineStringFromWKB:
+		return LineStringFromWKBStr
+	case MultiPointFromWKB:
+		return MultiPointFromWKBStr
+	case MultiLinestringFromWKB:
+		return MultiLinestringFromWKBStr
+	case MultiPolygonFromWKB:
+		return MultiPolygonFromWKBStr
+	default:
+		return "Unknown GeomFromWktType"
+	}
+}
