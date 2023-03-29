@@ -2725,6 +2725,24 @@ var (
 			input:  "create table t (pk int not null, constraint `mykey` primary key `pk_id` (`pk`))",
 			output: "create table t (\n\tpk int not null,\n\tprimary key (pk)\n)",
 		}, {
+			input:  "alter table t default character set utf8mb4",
+			output: "alter table t character set utf8mb4",
+		}, {
+			input:  "alter table t character set = utf8mb4",
+			output: "alter table t character set utf8mb4",
+		}, {
+			input:  "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
+			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
+		}, {
+			input:  "alter table t character set 'utf8mb4' collate = 'utf8mb4_0900_bin'",
+			output: "alter table t character set utf8mb4 collate utf8mb4_0900_bin",
+		}, {
+			input:  "alter table t collate utf8mb4_0900_bin",
+			output: "alter table t collate utf8mb4_0900_bin",
+		}, {
+			input:  "alter table t collate = 'utf8mb4_0900_bin'",
+			output: "alter table t collate utf8mb4_0900_bin",
+		}, {
 			input:  "SELECT _utf8mb4'abc'",
 			output: "select _utf8mb4 'abc'",
 		}, {

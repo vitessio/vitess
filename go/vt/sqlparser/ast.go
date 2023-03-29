@@ -1753,6 +1753,11 @@ type TriggerOrder struct {
 	OtherTriggerName  string
 }
 
+type AlterCollationSpec struct {
+	CharacterSet string
+	Collation    string
+}
+
 type ProcedureSpec struct {
 	ProcName        ProcedureName
 	Definer         string
@@ -1898,6 +1903,9 @@ type DDL struct {
 
 	// ProcedureSpec is set for CREATE PROCEDURE operations
 	ProcedureSpec *ProcedureSpec
+
+	// AlterCollationSpec is set for CHARACTER SET / COLLATE operations on ALTER statements
+	AlterCollationSpec *AlterCollationSpec
 
 	// Temporary is set for CREATE TEMPORARY TABLE operations.
 	Temporary bool
@@ -2122,6 +2130,13 @@ func (node *DDL) alterFormat(buf *TrackedBuffer) {
 		}
 	} else if node.DefaultSpec != nil {
 		buf.Myprintf(" %v", node.DefaultSpec)
+	} else if node.AlterCollationSpec != nil {
+		if len(node.AlterCollationSpec.CharacterSet) > 0 {
+			buf.Myprintf(" character set %s", node.AlterCollationSpec.CharacterSet)
+		}
+		if len(node.AlterCollationSpec.Collation) > 0 {
+			buf.Myprintf(" collate %s", node.AlterCollationSpec.Collation)
+		}
 	}
 }
 
