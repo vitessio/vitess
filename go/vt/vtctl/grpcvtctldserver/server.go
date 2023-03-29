@@ -634,7 +634,7 @@ func (s *VtctldServer) CreateKeyspace(ctx context.Context, req *vtctldatapb.Crea
 		}
 
 		span.Annotate("base_keyspace", req.BaseKeyspace)
-		span.Annotate("snapshot_time", req.SnapshotTime) // TODO: get a proper string repr
+		span.Annotate("snapshot_time", protoutil.TimeFromProto(req.SnapshotTime).String())
 	default:
 		return nil, fmt.Errorf("unknown keyspace type %v", req.Type)
 	}
