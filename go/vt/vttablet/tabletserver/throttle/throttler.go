@@ -317,7 +317,8 @@ func (throttler *Throttler) WatchSrvKeyspaceCallback(srvks *topodatapb.SrvKeyspa
 	throttlerConfig := throttler.normalizeThrottlerConfig(srvks.ThrottlerConfig)
 
 	if throttler.IsEnabled() {
-		// throttler is running and we should apply the config change through Operate() or else we get into race conditions
+		// Throttler is running and we should apply the config change through Operate()
+		// or else we get into race conditions.
 		go func() {
 			throttler.throttlerConfigChan <- throttlerConfig
 		}()

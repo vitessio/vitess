@@ -167,7 +167,7 @@ func WaitForQueryResult(t *testing.T, tablet *cluster.Vttablet, query, result st
 		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timed out waiting for the %q query to produce a result of %s on tablet %s after %v; last seen value: %s",
+			t.Errorf("timed out waiting for the %q query to produce a result of %q on tablet %s after %v; last seen value: %s",
 				query, result, tablet.Alias, timeout, res.Rows[0][0].ToString())
 			return
 		case <-ticker.C:
@@ -203,7 +203,7 @@ func WaitForValidData(t *testing.T, tablet *cluster.Vttablet, timeout time.Durat
 		}
 		select {
 		case <-ctx.Done():
-			t.Errorf("timed out waiting for %s tablet's throttler to return a valid status after %v; last seen value: %+v",
+			t.Errorf("timed out waiting for %s tablet's throttler to return a valid result after %v; last seen value: %+v",
 				tablet.Alias, timeout, checkResp)
 			return
 		case <-ticker.C:
