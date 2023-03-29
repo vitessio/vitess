@@ -1353,6 +1353,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 	case ComResetConnection:
 		// Clean up and reset the connection
 		c.recycleReadPacket()
+		c.discardCursor()
 		handler.ComResetConnection(c)
 		// Reset prepared statements
 		c.PrepareData = make(map[uint32]*PrepareData)
