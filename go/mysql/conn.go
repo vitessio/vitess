@@ -1538,17 +1538,18 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 		}
 
 		go func() {
+			defer func(){
+				// pass along error, even if there's a panic
+				if r := recover(); r != nil {
+					err = r.(error)
+				}
+				if c.cs != nil {
+					close(c.cs.next)
+					c.cs.done <- err
+				}
+			}()
+
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
-				defer func(){
-					// pass along error, even if there's a panic
-					if r := recover(); r != nil {
-						err = r.(error)
-					}
-					if c.cs != nil {
-						close(c.cs.next)
-						c.cs.done <- err
-					}
-				}()
 				// block until query results are sent or receive signal to quit
 				select {
 				case c.cs.next <- qr:
