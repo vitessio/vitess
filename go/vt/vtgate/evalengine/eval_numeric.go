@@ -20,9 +20,10 @@ import (
 	"math"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/json"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 	"vitess.io/vitess/go/vt/vthash"
 )
 
@@ -237,7 +238,7 @@ func (e *evalFloat) SQLType() sqltypes.Type {
 }
 
 func (e *evalFloat) ToRawBytes() []byte {
-	return FormatFloat(sqltypes.Float64, e.f)
+	return mysql.FormatFloat(sqltypes.Float64, e.f)
 }
 
 func (e *evalFloat) negate() evalNumeric {

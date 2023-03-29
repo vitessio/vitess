@@ -20,8 +20,8 @@ import (
 	"math"
 	"strconv"
 
+	"vitess.io/vitess/go/mysql"
 	"vitess.io/vitess/go/sqltypes"
-	"vitess.io/vitess/go/vt/vtgate/evalengine"
 )
 
 var inputJSONObjects = []string{
@@ -71,10 +71,10 @@ var radianInputs = []string{
 	"-1.5e0",
 	"9223372036854775810.4",
 	"-9223372036854775810.4",
-	string(evalengine.FormatFloat(sqltypes.Float64, math.Pi)),
-	string(evalengine.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
-	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
-	string(evalengine.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.Pi)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.MaxFloat64)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat32)),
+	string(mysql.FormatFloat(sqltypes.Float64, math.SmallestNonzeroFloat64)),
 }
 
 var inputComparisonElement = []string{

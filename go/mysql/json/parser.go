@@ -27,8 +27,8 @@ import (
 
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/mysql/decimal"
 	"vitess.io/vitess/go/vt/sqlparser"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 
 	"vitess.io/vitess/go/hack"
 )
