@@ -22,8 +22,12 @@ import (
 )
 
 type (
-	Func          func(semantics.TableSet, ops.Operator) (ops.Operator, TreeIdentity, error)
+	VisitF func(semantics.TableSet, ops.Operator) (ops.Operator, TreeIdentity, error)
+
 	BreakableFunc func(ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error)
+
+	// ShouldVisit is used when we want to control which nodes and ancestors to visit and which to skip
+	ShouldVisit func(ops.Operator) VisitRule
 
 	// TreeIdentity tracks modifications to node and expression trees.
 	// Only return SameTree when it is acceptable to return the original
@@ -57,12 +61,30 @@ func Visit(root ops.Operator, visitor func(ops.Operator) error) error {
 // BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
 // the given operator tree from the bottom up. Each callback [f] returns a TreeIdentity that is aggregated
 // into a final output indicating whether the operator tree was changed.
-func BottomUp(root ops.Operator, rootID semantics.TableSet, resolveID func(ops.Operator) semantics.TableSet, f Func) (ops.Operator, error) {
-	op, _, err := bottomUp(root, rootID, resolveID, f)
+func BottomUp(
+	root ops.Operator,
+	resolveID func(ops.Operator) semantics.TableSet,
+	visit VisitF,
+	shouldVisit ShouldVisit,
+) (ops.Operator, error) {
+	op, _, err := bottomUp(root, semantics.EmptyTableSet(), resolveID, visit, shouldVisit)
 	if err != nil {
 		return nil, err
 	}
 	return op, nil
+}
+
+// BottomUp rewrites an operator tree from the bottom up. BottomUp applies a transformation function to
+// the given operator tree from the bottom up. Each callback [f] returns a TreeIdentity that is aggregated
+// into a final output indicating whether the operator tree was changed.
+func BottomUpAll(
+	root ops.Operator,
+	resolveID func(ops.Operator) semantics.TableSet,
+	visit VisitF,
+) (ops.Operator, error) {
+	return BottomUp(root, resolveID, visit, func(ops.Operator) VisitRule {
+		return VisitChildren
+	})
 }
 
 // TopDown applies a transformation function to the given operator tree from the bottom up. =
@@ -74,7 +96,17 @@ func TopDown(in ops.Operator, rewriter BreakableFunc) (ops.Operator, error) {
 	return op, err
 }
 
-func bottomUp(root ops.Operator, rootID semantics.TableSet, resolveID func(ops.Operator) semantics.TableSet, rewriter Func) (ops.Operator, TreeIdentity, error) {
+func bottomUp(
+	root ops.Operator,
+	rootID semantics.TableSet,
+	resolveID func(ops.Operator) semantics.TableSet,
+	rewriter VisitF,
+	shouldVisit ShouldVisit,
+) (ops.Operator, TreeIdentity, error) {
+	if !shouldVisit(root) {
+		return root, SameTree, nil
+	}
+
 	oldInputs := root.Inputs()
 	anythingChanged := false
 	newInputs := make([]ops.Operator, len(oldInputs))
@@ -93,7 +125,7 @@ func bottomUp(root ops.Operator, rootID semantics.TableSet, resolveID func(ops.O
 		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
 			childID = childID.Merge(resolveID(oldInputs[0]))
 		}
-		in, changed, err := bottomUp(operator, childID, resolveID, rewriter)
+		in, changed, err := bottomUp(operator, childID, resolveID, rewriter, shouldVisit)
 		if err != nil {
 			return nil, SameTree, err
 		}

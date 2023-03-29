@@ -66,8 +66,8 @@ func (v *Vindex) Clone([]ops.Operator) ops.Operator {
 
 var _ ops.PhysicalOperator = (*Vindex)(nil)
 
-func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
-	offset, err := addColumn(v, expr.Expr)
+func (v *Vindex) AddColumn(_ *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
+	offset, err := addColumn(v, expr.Expr, reuseCol)
 	if err != nil {
 		return nil, 0, err
 	}

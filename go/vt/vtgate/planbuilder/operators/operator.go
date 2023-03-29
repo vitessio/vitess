@@ -68,7 +68,7 @@ func PlanQuery(ctx *plancontext.PlanningContext, selStmt sqlparser.Statement) (o
 
 	backup := Clone(op)
 
-	op, err = planHorizons(ctx, op)
+	op, err = planColumns(ctx, op)
 	if err == errNotHorizonPlanned {
 		op = backup
 	} else if err != nil {
@@ -88,7 +88,7 @@ func (noInputs) Inputs() []ops.Operator {
 }
 
 // AddColumn implements the Operator interface
-func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (noColumns) AddColumn(*plancontext.PlanningContext, *sqlparser.AliasedExpr, bool) (ops.Operator, int, error) {
 	return nil, 0, vterrors.VT13001("the noColumns operator cannot accept columns")
 }
 

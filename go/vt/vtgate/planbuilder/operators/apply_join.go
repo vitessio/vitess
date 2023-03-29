@@ -141,7 +141,7 @@ func (a *ApplyJoin) AddJoinPredicate(ctx *plancontext.PlanningContext, expr sqlp
 }
 
 func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
-	newLHS, offset, err := a.LHS.AddColumn(ctx, e)
+	newLHS, offset, err := a.LHS.AddColumn(ctx, e, true)
 	if err != nil {
 		return 0, err
 	}
@@ -149,7 +149,7 @@ func (a *ApplyJoin) pushColLeft(ctx *plancontext.PlanningContext, e *sqlparser.A
 	return offset, nil
 }
 func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.AliasedExpr) (int, error) {
-	newRHS, offset, err := a.RHS.AddColumn(ctx, e)
+	newRHS, offset, err := a.RHS.AddColumn(ctx, e, true)
 	if err != nil {
 		return 0, err
 	}
@@ -157,9 +157,12 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 	return offset, nil
 }
 
-func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
 	// first check if we already are passing through this expression
 	for i, existing := range a.ColumnsAST {
+		if !reuseCol {
+			break
+		}
 		if ctx.SemTable.EqualsExpr(existing, expr.Expr) {
 			return a, i, nil
 		}

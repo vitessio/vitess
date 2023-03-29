@@ -132,10 +132,18 @@ func (d *Derived) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.
 	return d, nil
 }
 
-func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr) (ops.Operator, int, error) {
+func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
 	col, ok := expr.Expr.(*sqlparser.ColName)
 	if !ok {
 		return nil, 0, vterrors.VT13001("cannot push non-colname expression to a derived table")
+	}
+
+	if reuseCol {
+		for offset, column := range d.Columns {
+			if ctx.SemTable.EqualsExpr(col, column) {
+				return d, offset, nil
+			}
+		}
 	}
 
 	i, err := d.findOutputColumn(col)
@@ -148,7 +156,7 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 	d.Columns = append(d.Columns, col)
 	// add it to the source if we were not already passing it through
 	if i <= -1 {
-		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())))
+		newSrc, _, err := d.Source.AddColumn(ctx, aeWrap(sqlparser.NewColName(col.Name.String())), true)
 		if err != nil {
 			return nil, 0, err
 		}
