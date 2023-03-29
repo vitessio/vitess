@@ -1193,49 +1193,48 @@ func (c *Cluster) GetKeyspaces(ctx context.Context) ([]*vtadminpb.Keyspace, erro
 	return keyspaces, nil
 }
 
+// GetSrvKeyspaces returns all SrvKeyspaces for all keyspaces in a cluster.
 func (c *Cluster) GetSrvKeyspaces(ctx context.Context, cells []string) (map[string]*vtctldatapb.GetSrvKeyspacesResponse, error) {
-	getKeyspacesSpan, getKeyspacesCtx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
-	AnnotateSpan(c, getKeyspacesSpan)
+	span, ctx := trace.NewSpan(ctx, "Cluster.GetKeyspaces")
+	AnnotateSpan(c, span)
 
-	keyspaces, err := c.Vtctld.GetKeyspaces(getKeyspacesCtx, &vtctldatapb.GetKeyspacesRequest{})
+	defer span.Finish()
+	keyspaces, err := c.Vtctld.GetKeyspaces(ctx, &vtctldatapb.GetKeyspacesRequest{})
 	if err != nil {
-		getKeyspacesSpan.Finish()
 		return nil, fmt.Errorf("GetKeyspaces(cluster = %s): %w", c.ID, err)
 	}
 
-	getKeyspacesSpan.Finish()
-
 	var (
-		clusterM            sync.Mutex
-		clusterWG           sync.WaitGroup
-		clusterRec          concurrency.AllErrorRecorder
-		clusterSrvKeyspaces = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse, len(keyspaces.Keyspaces))
+		m            sync.Mutex
+		wg           sync.WaitGroup
+		rec          concurrency.AllErrorRecorder
+		srvKeyspaces = make(map[string]*vtctldatapb.GetSrvKeyspacesResponse, len(keyspaces.Keyspaces))
 	)
 
 	for _, keyspace := range keyspaces.Keyspaces {
-		clusterWG.Add(1)
+		wg.Add(1)
 
 		go func(keyspace *vtctldatapb.Keyspace) {
-			defer clusterWG.Done()
+			defer wg.Done()
 			srv_keyspaces, err := c.Vtctld.GetSrvKeyspaces(ctx, &vtctldatapb.GetSrvKeyspacesRequest{Keyspace: keyspace.Name, Cells: cells})
 			if err != nil {
-				clusterRec.RecordError(fmt.Errorf("GetSrvKeyspaces(keyspace = %s): %w", keyspace.Name, err))
+				rec.RecordError(fmt.Errorf("GetSrvKeyspaces(keyspace = %s): %w", keyspace.Name, err))
 				return
 			}
 
-			clusterM.Lock()
-			clusterSrvKeyspaces[keyspace.Name] = srv_keyspaces
-			clusterM.Unlock()
+			m.Lock()
+			srvKeyspaces[keyspace.Name] = srv_keyspaces
+			m.Unlock()
 		}(keyspace)
 	}
 
-	clusterWG.Wait()
+	wg.Wait()
 
-	if clusterRec.HasErrors() {
-		return nil, clusterRec.Error()
+	if rec.HasErrors() {
+		return nil, rec.Error()
 	}
 
-	return clusterSrvKeyspaces, nil
+	return srvKeyspaces, nil
 }
 
 // GetTablets returns all tablets in the cluster.
