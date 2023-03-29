@@ -461,9 +461,13 @@ func TestCustomQuery(t *testing.T) {
 			}(i)
 		}
 		t.Run("exceeds threshold", func(t *testing.T) {
-			time.Sleep(sleepDuration / 2)
-			// by this time we will have testThreshold+1 threads_running, and we should hit the threshold
-			// {"StatusCode":429,"Value":2,"Threshold":2,"Message":"Threshold exceeded"}
+			throttler.WaitForQueryResult(t, primaryTablet,
+				"select if(variable_value > 5, 'true', 'false') as result from performance_schema.global_status where variable_name='threads_running'",
+				"true", sleepDuration/2)
+			throttler.WaitForValidData(t, primaryTablet, sleepDuration/2)
+			// Now we should be reporting ~ customThreshold*2 threads_running, and we should
+			// hit the threshold. For example:
+			// {"StatusCode":429,"Value":6,"Threshold":5,"Message":"Threshold exceeded"}
 			{
 				resp, err := throttleCheck(primaryTablet, false)
 				require.NoError(t, err)
@@ -511,13 +515,17 @@ func TestRestoreDefaultQuery(t *testing.T) {
 			throttler.WaitForThrottlerStatusEnabled(t, tablet, true, throttler.DefaultConfig, throttlerEnabledTimeout)
 		}
 	})
-	t.Run("validating OK response from throttler with low threshold, heartbeats running", func(t *testing.T) {
-		waitForThrottleCheckStatus(t, primaryTablet, http.StatusOK)
+	t.Run("validating OK response from throttler with default threshold, heartbeats running", func(t *testing.T) {
+		resp, err := throttleCheck(primaryTablet, false)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equalf(t, http.StatusOK, resp.StatusCode, "Unexpected response from throttler: %s", getResponseBody(resp))
 	})
-	t.Run("validating pushback response from throttler on low threshold once heartbeats go stale", func(t *testing.T) {
+	t.Run("validating pushback response from throttler on default threshold once heartbeats go stale", func(t *testing.T) {
 		time.Sleep(2 * onDemandHeartbeatDuration) // just... really wait long enough, make sure on-demand stops
 		resp, err := throttleCheck(primaryTablet, false)
 		require.NoError(t, err)
 		defer resp.Body.Close()
+		assert.Equal(t, http.StatusTooManyRequests, resp.StatusCode)
 	})
 }
