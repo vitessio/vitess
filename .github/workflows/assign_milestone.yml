@@ -1,16 +1,20 @@
 name: Assign Milestone
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened]
 
-permissions:
-  pull-requests: write
+permissions: read-all
+
+env:
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
   build:
     name: Assign Milestone
     runs-on: ubuntu-22.04
+    permissions:
+      pull-requests: write
 
     steps:
       - name: Set up Go
@@ -21,12 +25,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v3
 
-      - name: Get current version of Vitess
+      - name: Assign Milestone
         run: |
-          echo "vitess_version=$(go run ./go/tools/version/version.go)" >> $GITHUB_ENV
-          
-      - name: set milestone
-        uses: zoispag/action-assign-milestone@v2
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          milestone: v${{ env.vitess_version }}
+          gh pr edit ${{ github.event.number }} --milestone "v$(go run ./go/tools/version/version.go)"
