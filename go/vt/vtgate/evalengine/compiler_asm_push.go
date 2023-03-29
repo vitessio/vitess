@@ -19,12 +19,12 @@ package evalengine
 import (
 	"vitess.io/vitess/go/hack"
 	"vitess.io/vitess/go/mysql/collations"
+	"vitess.io/vitess/go/mysql/decimal"
+	"vitess.io/vitess/go/mysql/json"
+	"vitess.io/vitess/go/mysql/json/fastparse"
 	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
 	"vitess.io/vitess/go/vt/vterrors"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
-	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json/fastparse"
 )
 
 func push_i(env *ExpressionEnv, raw []byte) int {
