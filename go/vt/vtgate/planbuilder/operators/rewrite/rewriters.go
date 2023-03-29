@@ -22,9 +22,11 @@ import (
 )
 
 type (
-	VisitF func(semantics.TableSet, ops.Operator) (ops.Operator, TreeIdentity, error)
-
-	BreakableFunc func(ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error)
+	// VisitF is the visitor that walks an operator tree
+	VisitF func(
+		op ops.Operator, // op is the operator being visited
+		lhsTables semantics.TableSet, // lhsTables contains the TableSet for all table on the LHS of our parent
+	) (ops.Operator, TreeIdentity, error)
 
 	// ShouldVisit is used when we want to control which nodes and ancestors to visit and which to skip
 	ShouldVisit func(ops.Operator) VisitRule
@@ -48,7 +50,7 @@ const (
 
 // Visit allows for the walking of the operator tree. If any error is returned, the walk is aborted
 func Visit(root ops.Operator, visitor func(ops.Operator) error) error {
-	_, err := TopDown(root, func(op ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error) {
+	_, _, err := breakableTopDown(root, func(op ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error) {
 		err := visitor(op)
 		if err != nil {
 			return nil, SameTree, SkipChildren, err
@@ -87,15 +89,6 @@ func BottomUpAll(
 	})
 }
 
-// TopDown applies a transformation function to the given operator tree from the bottom up. =
-// Each callback [f] returns a TreeIdentity that is aggregated into a final output indicating whether the
-// operator tree was changed.
-// The callback also returns a VisitRule that signals whether the children of this operator should be visited or not
-func TopDown(in ops.Operator, rewriter BreakableFunc) (ops.Operator, error) {
-	op, _, err := breakableTopDown(in, rewriter)
-	return op, err
-}
-
 func bottomUp(
 	root ops.Operator,
 	rootID semantics.TableSet,
@@ -120,7 +113,7 @@ func bottomUp(
 	for i, operator := range oldInputs {
 		// We merge the table set of all the LHS above the current root so that we can
 		// send it down to the current RHS.
-		// We don't want to send the LHS table set to the RHS if the root is an UNION.
+		// We don't want to send the LHS table set to the RHS if the root is a UNION.
 		// Some operators, like SubQuery, can have multiple child operators on the RHS
 		if _, isUnion := root.(noLHSTableSet); !isUnion && i > 0 {
 			childID = childID.Merge(resolveID(oldInputs[0]))
@@ -139,7 +132,7 @@ func bottomUp(
 		root = root.Clone(newInputs)
 	}
 
-	newOp, treeIdentity, err := rewriter(rootID, root)
+	newOp, treeIdentity, err := rewriter(root, rootID)
 	if err != nil {
 		return nil, SameTree, err
 	}
@@ -149,7 +142,10 @@ func bottomUp(
 	return newOp, treeIdentity, nil
 }
 
-func breakableTopDown(in ops.Operator, rewriter BreakableFunc) (ops.Operator, TreeIdentity, error) {
+func breakableTopDown(
+	in ops.Operator,
+	rewriter func(ops.Operator) (ops.Operator, TreeIdentity, VisitRule, error),
+) (ops.Operator, TreeIdentity, error) {
 	newOp, identity, visit, err := rewriter(in)
 	if err != nil || visit == SkipChildren {
 		return newOp, identity, err

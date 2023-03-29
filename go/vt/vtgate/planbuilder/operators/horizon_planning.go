@@ -33,7 +33,7 @@ func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		_, isRoute := operator.(*Route)
 		return rewrite.VisitRule(!isRoute)
 	}
-	visitor := func(id semantics.TableSet, in ops.Operator) (ops.Operator, rewrite.TreeIdentity, error) {
+	visitor := func(in ops.Operator, _ semantics.TableSet) (ops.Operator, rewrite.TreeIdentity, error) {
 		switch in := in.(type) {
 		case *Horizon:
 			op, err := planHorizon(ctx, in, in == root)
@@ -46,6 +46,7 @@ func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 			}
 			return op, rewrite.NewTree, nil
 		case *Derived, *Filter:
+			// TODO we need to do column planning on these
 			return nil, rewrite.SameTree, errNotHorizonPlanned
 		default:
 			return in, rewrite.SameTree, nil
