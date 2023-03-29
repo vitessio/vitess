@@ -44,7 +44,7 @@ import (
 // in tests to generate mocks.
 type healthCheckFactoryFunc func() discovery.LegacyHealthCheck
 type topologyWatcherFactoryFunc func(topoServer *topo.Server, tr discovery.LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface
-type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error)
+type throttlerFactoryFunc func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error)
 
 var (
 	healthCheckFactory     healthCheckFactoryFunc
@@ -52,18 +52,18 @@ var (
 	throttlerFactory       throttlerFactoryFunc
 )
 
-func init() {
-	resetTxThrottlerFactories()
-}
-
 func resetTxThrottlerFactories() {
 	healthCheckFactory = discovery.NewLegacyDefaultHealthCheck
 	topologyWatcherFactory = func(topoServer *topo.Server, tr discovery.LegacyTabletRecorder, cell, keyspace, shard string, refreshInterval time.Duration, topoReadConcurrency int) TopologyWatcherInterface {
 		return discovery.NewLegacyShardReplicationWatcher(context.Background(), topoServer, tr, cell, keyspace, shard, refreshInterval, topoReadConcurrency)
 	}
-	throttlerFactory = func(name, unit string, threadCount int, maxRate, maxReplicationLag int64) (ThrottlerInterface, error) {
-		return throttler.NewThrottler(name, unit, threadCount, maxRate, maxReplicationLag)
+	throttlerFactory = func(name, unit string, threadCount int, maxRate int64, maxReplicationLagConfig throttler.MaxReplicationLagModuleConfig) (ThrottlerInterface, error) {
+		return throttler.NewThrottlerFromConfig(name, unit, threadCount, maxRate, maxReplicationLagConfig, time.Now)
 	}
+}
+
+func init() {
+	resetTxThrottlerFactories()
 }
 
 // ThrottlerInterface defines the public interface that is implemented by go/vt/throttler.Throttler
@@ -238,7 +238,7 @@ func (t *TxThrottler) Open() (err error) {
 	}
 	log.Info("TxThrottler: opening")
 	t.throttlerRunning.Set(1)
-	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard)
+	t.state, err = newTxThrottlerState(t.config, t.target.Keyspace, t.target.Shard, t.target.Cell)
 	return err
 }
 
@@ -278,14 +278,16 @@ func (t *TxThrottler) Throttle(priority int) (result bool) {
 	return result
 }
 
-func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard string,
-) (*txThrottlerState, error) {
+func newTxThrottlerState(config *txThrottlerConfig, keyspace, shard, cell string) (*txThrottlerState, error) {
+	maxReplicationLagModuleConfig := throttler.MaxReplicationLagModuleConfig{Configuration: config.throttlerConfig}
+
 	t, err := throttlerFactory(
 		TxThrottlerName,
 		"TPS",                           /* unit */
 		1,                               /* threadCount */
 		throttler.MaxRateModuleDisabled, /* maxRate */
-		config.throttlerConfig.MaxReplicationLagSec /* maxReplicationLag */)
+		maxReplicationLagModuleConfig,
+	)
 	if err != nil {
 		return nil, err
 	}
