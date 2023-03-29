@@ -16,6 +16,7 @@
 
 import { render, screen } from '@testing-library/react';
 import { ReadOnlyGate } from './ReadOnlyGate';
+import { describe, it, expect } from 'vitest';
 
 // Preserve process.env to restore its original values after each test runs.
 const ORIGINAL_PROCESS_ENV = { ...process.env };

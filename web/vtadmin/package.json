@@ -37,7 +37,8 @@
     "local": "REACT_APP_VTADMIN_API_ADDRESS=\"http://localhost:14200\" REACT_APP_ENABLE_EXPERIMENTAL_TABLET_DEBUG_VARS=\"true\" PORT=14201 vite",
     "start": "vite",
     "build": "vite build",
-    "test": "vite test",
+    "test": "vitest",
+    "preview": "vite preview",
     "lint": "npm run lint:eslint && npm run lint:prettier && npm run lint:stylelint",
     "lint:fix": "npm run lint:eslint:fix && npm run lint:prettier:fix && npm run lint:stylelint:fix",
     "lint:eslint": "eslint --ext js,ts,tsx src",
@@ -80,6 +81,7 @@
     "@types/react-dom": "^18.0.11",
     "@vitejs/plugin-react": "^3.1.0",
     "autoprefixer": "^10.4.2",
+    "jsdom": "^21.1.1",
     "msw": "^0.36.8",
     "postcss": "^8.4.6",
     "prettier": "^2.2.1",
@@ -90,6 +92,7 @@
     "stylelint-config-standard-scss": "^3.0.0",
     "tailwindcss": "^3.0.18",
     "typescript": "^5.0.2",
-    "vite": "^4.2.1"
+    "vite": "^4.2.1",
+    "vitest": "^0.29.8"
   }
 }

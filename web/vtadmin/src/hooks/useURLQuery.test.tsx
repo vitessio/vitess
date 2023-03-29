@@ -20,6 +20,7 @@ import { Router } from 'react-router-dom';
 import { QueryParams } from '../util/queryString';
 
 import { useURLQuery, URLQueryOptions } from './useURLQuery';
+import { describe, it, expect } from 'vitest';
 
 describe('useURLQuery', () => {
     describe('parsing', () => {

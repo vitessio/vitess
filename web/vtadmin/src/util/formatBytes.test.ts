@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 import { formatBytes } from './formatBytes';
+import { describe, expect } from 'vitest';
 
 describe('formatBytes', () => {
     const tests: {

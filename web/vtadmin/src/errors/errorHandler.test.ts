@@ -17,6 +17,7 @@
 import { ErrorHandler, HttpResponseNotOkError } from './errorTypes';
 import * as errorHandler from './errorHandler';
 import * as errorHandlers from './errorHandlers';
+import { describe, it, expect } from 'vitest';
 
 // Since vtadmin uses process.env variables quite a bit, we need to
 // do a bit of a dance to clear them out between test runs.

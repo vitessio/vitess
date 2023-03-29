@@ -24,6 +24,7 @@ import { Router } from 'react-router';
 import { topodata, vtadmin } from '../../../proto/vtadmin';
 import { formatAlias } from '../../../util/tablets';
 import Advanced from './Advanced';
+import { describe, it, expect } from 'vitest';
 
 const makeTablet = (overrides: Partial<vtadmin.ITablet> = {}): vtadmin.Tablet => {
     const defaults: vtadmin.ITablet = {

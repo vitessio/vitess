@@ -20,6 +20,7 @@ import { renderHook } from '@testing-library/react-hooks';
 import * as api from './api';
 import * as httpAPI from '../api/http';
 import { vtadmin as pb } from '../proto/vtadmin';
+import { describe, it, expect } from 'vitest';
 
 jest.mock('../api/http');
 

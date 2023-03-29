@@ -21,6 +21,7 @@ import userEvent from '@testing-library/user-event';
 import { QueryClient, QueryClientProvider } from 'react-query';
 import { Advanced } from './Advanced';
 import { vtadmin } from '../../../proto/vtadmin';
+import { describe, it, expect } from 'vitest';
 
 const ORIGINAL_PROCESS_ENV = process.env;
 const TEST_PROCESS_ENV = {

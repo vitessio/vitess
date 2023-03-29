@@ -25,6 +25,7 @@ import {
     MALFORMED_HTTP_RESPONSE_ERROR,
 } from '../errors/errorTypes';
 import * as errorHandler from '../errors/errorHandler';
+import { describe, it, expect } from 'vitest';
 
 jest.mock('../errors/errorHandler');
 
