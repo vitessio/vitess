@@ -1292,24 +1292,28 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		// while we are still expecting rows
 		for c.cs.pending == nil || len(c.cs.pending.Rows) < int(numRows) {
+			log.Info("RECEIVING QUERY RESULT")
 			// receive rows from next to cs.pending
 			var newqr *sqltypes.Result
 			newqr, ok = <-c.cs.next
 
+			// check if there was an error
+			if err = <- c.cs.done; err != nil {
+				if werr := c.writeErrorPacketFromError(err); werr != nil {
+					log.Errorf("Error writing query error to %s: %v", c, werr)
+					return werr
+				}
+				return nil
+			}
+
 			// channel is closed, meaning there are no more rows
 			if !ok {
-				// check if there was an error
-				if err = <- c.cs.done; err != nil {
-					if werr := c.writeErrorPacketFromError(err); werr != nil {
-						log.Errorf("Error writing query error to %s: %v", c, werr)
-						return werr
-					}
-					return nil
-				}
+				log.Info("CHANNEL CLOSED")
 				break
 			}
 
 			// move rows into buffer
+			log.Info("SUCCESSFULLY RECEIVED QUERY RESULT")
 			if c.cs.pending == nil {
 				c.cs.pending = newqr
 			} else {
@@ -1327,12 +1331,15 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 
 		// reached end of result set
 		if c.cs.pending == nil {
+			log.Infof("REACHED END OF RESULT SET")
 			c.discardCursor()
 			if err = endFetch(); err != nil {
 				return err
 			}
 			return nil
 		}
+
+		log.Infof("WRITING ROWS")
 
 		// cap the number of rows
 		if int(numRows) > len(c.cs.pending.Rows) {
@@ -1347,6 +1354,7 @@ func (c *Conn) handleNextCommand(handler Handler) error {
 		}
 		// no rows left, reset pending
 		if len(c.cs.pending.Rows) == 0 {
+			log.Infof("RESET PENDING")
 			c.cs.pending = nil
 		}
 		return nil
@@ -1387,15 +1395,19 @@ func (c *Conn) writeNumRows(numRows int) (err error) {
 
 // discardCursor stops the statement execute goroutine and clears the cursor state, if it exists
 func (c *Conn) discardCursor() {
-	// close cursor if open
-	if c.cs != nil {
-		if _, ok := <- c.cs.next; ok {
-			c.cs.quit <- nil
+	log.Info("DISCARDING CURSOR")
+	// close cursor if open with unread results
+	if c.cs != nil && c.cs.pending != nil {
+		select {
+		case c.cs.quit <- errors.New("cancel cursor query"):
+			<- c.cs.done
+		case <- c.cs.done:
 		}
-		c.cs = nil
 	}
+	log.Info("CURSOR DISCARDED")
 	c.StatusFlags &= ^uint16(ServerCursorExists)
 	c.StatusFlags |= uint16(ServerCursorLastRowSent)
+	c.cs = nil
 }
 
 // formatID returns a quoted identifier from the one given. Adapted from ast.go
@@ -1552,38 +1564,56 @@ func (c *Conn) execPrepareStatement(stmtID uint32, cursorType byte, handler Hand
 			defer func(){
 				// pass along error, even if there's a panic
 				if r := recover(); r != nil {
-					err = r.(error)
+					err = fmt.Errorf("panic while running query for server-side cursor: %v", r)
 				}
-				if c.cs != nil {
-					close(c.cs.next)
-					c.cs.done <- err
-				}
+				close(c.cs.next)
+				c.cs.done <- err
 			}()
 
 			err = handler.ComStmtExecute(c, prepare, func(qr *sqltypes.Result) error {
 				// block until query results are sent or receive signal to quit
+				log.Infof("EXECUTING RESULTS")
+				var err error
 				select {
 				case c.cs.next <- qr:
-					return nil
-				case err := <-c.cs.quit:
-					return err
+					log.Infof("SENDING QUERY RESULT")
+				case err = <-c.cs.quit:
+					log.Infof("RECEIVED QUIT SIGNAL")
 				}
+				log.Infof("SENDING DONE SIGNAL")
+				c.cs.done <- err
+				return nil
 			})
 		}()
 
-		// Immediately get the very first query result to write the fields
-		if qr, ok := <- c.cs.next; ok {
-			fieldSent = true
-			if len(qr.Fields) == 0 {
-				sendFinished = true
-				err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
-			} else {
-				err = c.writeFields(qr)
-			}
-			c.cs.pending = qr
-		} else {
-			err = <- c.cs.done
+		// Immediately receive the very first query result to write the fields
+		log.Infof("RECEIVING QUERY RESULT (INITIAL)")
+		qr, ok := <- c.cs.next
+		log.Infof("RECEIVING DONE SIGNAL (INITIAL)")
+		err = <- c.cs.done
+		if err != nil {
+			return err
 		}
+		if !ok {
+			if werr := c.writeErrorPacket(ERUnknownError, SSUnknownSQLState, "unknown error: %v", "missing result set"); werr != nil {
+				log.Errorf("Error writing query error to %s: %v", c, werr)
+				return werr
+			}
+			return nil
+		}
+
+		// Write fields
+		log.Infof("WRITING FIELDS")
+		fieldSent = true
+		if len(qr.Fields) == 0 {
+			sendFinished = true
+			err = c.writeOKPacket(qr.RowsAffected, qr.InsertID, c.StatusFlags, 0)
+		} else {
+			err = c.writeFields(qr)
+		}
+
+		// Cache query results to be written upon ComStmtFetch
+		c.cs.pending = qr
 	}
 
 	// If no field was sent, we expect an error.
