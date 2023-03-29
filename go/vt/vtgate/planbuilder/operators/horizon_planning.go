@@ -44,32 +44,41 @@ func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 		case *Horizon:
 			op, err := planHorizon(ctx, in, in == root)
 			if err != nil {
-				if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
-					// we encountered a bug. let's try to back out
-					return nil, false, errNotHorizonPlanned
-				}
 				return nil, false, err
 			}
 			return op, rewrite.NewTree, nil
+		case *Derived:
+			op, err := planDerived(ctx, in, in == root)
+			if err != nil {
+				return nil, false, err
+			}
+			return op, rewrite.NewTree, err
 		case *Filter:
 			err := planFilter(ctx, in)
 			if err != nil {
 				return nil, false, err
 			}
 			return in, rewrite.SameTree, nil
-		case *Derived:
-			// TODO we need to do column planning on these
-			return nil, false, errNotHorizonPlanned
 		default:
 			return in, rewrite.SameTree, nil
 		}
 	}
-	return rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+
+	newOp, err := rewrite.BottomUp(root, TableID, visitor, stopAtRoute)
+	if err != nil {
+		if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
+			// we encountered a bug. let's try to back out
+			return nil, errNotHorizonPlanned
+		}
+		return nil, err
+	}
+
+	return newOp, nil
 }
 
 func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (ops.Operator, error) {
 	rb, isRoute := in.Source.(*Route)
-	if !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
+	if isRoot && !isRoute && ctx.SemTable.NotSingleRouteErr != nil {
 		// If we got here, we don't have a single shard plan
 		return nil, ctx.SemTable.NotSingleRouteErr
 	}
@@ -97,14 +106,42 @@ func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (op
 	case canShortcut:
 		return planSingleRoute(rb, in)
 	default:
-		return pushProjections(ctx, qp, in, isRoot)
+		return pushProjections(ctx, qp, in.Source, isRoot)
 	}
 }
 
-func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, in *Horizon, isRoot bool) (ops.Operator, error) {
+func planDerived(ctx *plancontext.PlanningContext, in *Derived, isRoot bool) (ops.Operator, error) {
+	rb, isRoute := in.Source.(*Route)
+
+	sel, isSel := in.Query.(*sqlparser.Select)
+	if !isSel {
+		return nil, errNotHorizonPlanned
+	}
+
+	qp, err := CreateQPFromSelect(ctx, sel)
+	if err != nil {
+		return nil, err
+	}
+
+	needsOrdering := len(qp.OrderExprs) > 0
+	canShortcut := isRoute && sel.Having == nil && !needsOrdering
+	_, isDerived := in.Source.(*Derived)
+
+	switch {
+	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
+		return nil, errNotHorizonPlanned
+	case canShortcut:
+		// shortcut here means we don't need to plan the derived table, we can just push it under the route
+		rb.Source, in.Source = in.Source, in
+		return rb, nil
+	default:
+		return pushProjections(ctx, qp, in.Source, isRoot)
+	}
+}
+
+func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, src ops.Operator, isRoot bool) (ops.Operator, error) {
 	// if we are at the root, we have to return the columns the user asked for. in all other levels, we reuse as much as possible
 	canReuseCols := !isRoot
-	src := in.Source
 	proj := newSimpleProjection(src)
 	needProj := false
 	for idx, e := range qp.SelectExprs {
@@ -128,7 +165,16 @@ func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, in *
 		proj.ASTColumns = append(proj.ASTColumns, expr)
 		proj.Columns = append(proj.Columns, offset)
 	}
-	if !needProj {
+
+	if needProj {
+		return proj, nil
+	}
+
+	columns, err := src.GetColumns()
+	if err != nil {
+		return nil, err
+	}
+	if len(columns) == qp.GetColumnCount() {
 		return src, nil
 	}
 	return proj, nil

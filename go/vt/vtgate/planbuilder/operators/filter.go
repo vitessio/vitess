@@ -91,6 +91,10 @@ func (f *Filter) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Ali
 	return f, offset, nil
 }
 
+func (f *Filter) GetColumns() ([]sqlparser.Expr, error) {
+	return f.Source.GetColumns()
+}
+
 func (f *Filter) Compact(*plancontext.PlanningContext) (ops.Operator, rewrite.TreeIdentity, error) {
 	if len(f.Predicates) == 0 {
 		return f.Source, rewrite.NewTree, nil

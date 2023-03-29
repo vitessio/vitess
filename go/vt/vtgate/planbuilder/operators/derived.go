@@ -19,6 +19,8 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slices2"
+
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 
 	"vitess.io/vitess/go/vt/sqlparser"
@@ -163,6 +165,10 @@ func (d *Derived) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Al
 		d.Source = newSrc
 	}
 	return d, pos, nil
+}
+
+func (d *Derived) GetColumns() ([]sqlparser.Expr, error) {
+	return slices2.Map(d.Columns, colNameToExpr), nil
 }
 
 func addToIntSlice(columnOffset []int, valToAdd int) ([]int, int) {

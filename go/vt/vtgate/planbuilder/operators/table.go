@@ -17,6 +17,7 @@ limitations under the License.
 package operators
 
 import (
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
@@ -34,7 +35,7 @@ type (
 		noInputs
 	}
 	ColNameColumns interface {
-		GetColumns() []*sqlparser.ColName
+		GetColNames() []*sqlparser.ColName
 		AddCol(*sqlparser.ColName)
 	}
 )
@@ -76,7 +77,11 @@ func (to *Table) AddColumn(_ *plancontext.PlanningContext, expr *sqlparser.Alias
 	return to, offset, nil
 }
 
-func (to *Table) GetColumns() []*sqlparser.ColName {
+func (to *Table) GetColumns() ([]sqlparser.Expr, error) {
+	return slices2.Map(to.Columns, colNameToExpr), nil
+}
+
+func (to *Table) GetColNames() []*sqlparser.ColName {
 	return to.Columns
 }
 func (to *Table) AddCol(col *sqlparser.ColName) {
@@ -96,7 +101,7 @@ func addColumn(op ColNameColumns, e sqlparser.Expr, reuseCol bool) (int, error) 
 		return 0, vterrors.VT13001("cannot push this expression to a table/vindex")
 	}
 	sqlparser.RemoveKeyspaceFromColName(col)
-	cols := op.GetColumns()
+	cols := op.GetColNames()
 	if reuseCol {
 		for idx, column := range cols {
 			if col.Name.Equal(column.Name) {

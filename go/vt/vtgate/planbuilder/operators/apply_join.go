@@ -157,6 +157,10 @@ func (a *ApplyJoin) pushColRight(ctx *plancontext.PlanningContext, e *sqlparser.
 	return offset, nil
 }
 
+func (a *ApplyJoin) GetColumns() ([]sqlparser.Expr, error) {
+	return a.ColumnsAST, nil
+}
+
 func (a *ApplyJoin) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
 	// first check if we already are passing through this expression
 	if reuseCol {

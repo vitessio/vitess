@@ -526,6 +526,10 @@ func (r *Route) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.Alia
 	return r, offset, nil
 }
 
+func (r *Route) GetColumns() ([]sqlparser.Expr, error) {
+	return r.Source.GetColumns()
+}
+
 // TablesUsed returns tables used by MergedWith routes, which are not included
 // in Inputs() and thus not a part of the operator tree
 func (r *Route) TablesUsed() []string {

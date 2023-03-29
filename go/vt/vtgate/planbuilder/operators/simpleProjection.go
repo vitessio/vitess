@@ -19,6 +19,7 @@ package operators
 import (
 	"golang.org/x/exp/slices"
 
+	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -60,4 +61,10 @@ func (s *SimpleProjection) AddPredicate(ctx *plancontext.PlanningContext, expr s
 func (s *SimpleProjection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
 	// TODO implement me
 	panic("implement me")
+}
+
+func exprFromAliasedExpr(from *sqlparser.AliasedExpr) sqlparser.Expr { return from.Expr }
+
+func (s *SimpleProjection) GetColumns() ([]sqlparser.Expr, error) {
+	return slices2.Map(s.ASTColumns, exprFromAliasedExpr), nil
 }
