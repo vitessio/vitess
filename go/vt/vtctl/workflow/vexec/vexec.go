@@ -138,7 +138,7 @@ func (vx *VExec) QueryContext(ctx context.Context, query string) (map[*topo.Tabl
 		return nil, err
 	}
 
-	planner, err := vx.GetPlanner(ctx, table)
+	planner, err := vx.getPlanner(ctx, table)
 	if err != nil {
 		return nil, err
 	}
@@ -247,13 +247,13 @@ func (vx *VExec) initialize(ctx context.Context) error {
 	return nil
 }
 
-// GetPlanner returns an appropriate implementation of a QueryPlanner, depending
+// getPlanner returns an appropriate implementation of a QueryPlanner, depending
 // on the table being queried.
 //
-// On first use, GetPlanner will also cause the VExec instance to discover
+// On first use, getPlanner will also cause the VExec instance to discover
 // target tablets from the topo; that target list will be reused for all future
 // queries made by this instance.
-func (vx *VExec) GetPlanner(ctx context.Context, table string) (QueryPlanner, error) { // TODO: private?
+func (vx *VExec) getPlanner(ctx context.Context, table string) (QueryPlanner, error) {
 	if vx.primaries == nil {
 		if err := vx.initialize(ctx); err != nil {
 			return nil, fmt.Errorf("error while initializing target list: %w", err)
