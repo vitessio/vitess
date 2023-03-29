@@ -17,6 +17,7 @@ limitations under the License.
 package evalengine
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"testing"
@@ -73,10 +74,8 @@ func (tc testCase) run(t *testing.T) {
 	for i, value := range tc.row {
 		fields[i] = &querypb.Field{Type: value.Type()}
 	}
-	env := &ExpressionEnv{
-		BindVars: tc.bv,
-		Row:      tc.row,
-	}
+	env := NewExpressionEnv(context.Background(), tc.bv, nil)
+	env.Row = tc.row
 	ast := &astCompiler{
 		cfg: &Config{
 			Collation:    collations.CollationUtf8mb4ID,

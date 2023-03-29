@@ -263,11 +263,7 @@ func (c *builtinCollation) eval(env *ExpressionEnv) (eval, error) {
 
 	// the collation of a `COLLATION` expr is hardcoded to `utf8_general_ci`,
 	// not to the default collation of our connection. this is probably a bug in MySQL, but we match it
-	return newEvalText([]byte(col.Name()), collations.TypedCollation{
-		Collation:    collations.CollationUtf8ID,
-		Coercibility: collations.CoerceImplicit,
-		Repertoire:   collations.RepertoireASCII,
-	}), nil
+	return newEvalText([]byte(col.Name()), collationUtf8mb3), nil
 }
 
 func (*builtinCollation) typeof(env *ExpressionEnv, fields []*querypb.Field) (sqltypes.Type, typeFlag) {

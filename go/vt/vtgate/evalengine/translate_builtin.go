@@ -228,6 +228,26 @@ func (ast *astCompiler) translateFuncExpr(fn *sqlparser.FuncExpr) (Expr, error) 
 		default:
 			return nil, argError(method)
 		}
+	case "curdate", "current_date":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinCurdate{CallExpr: call}, nil
+	case "user", "current_user", "session_user", "system_user":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinUser{CallExpr: call}, nil
+	case "database", "schema":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinDatabase{CallExpr: call}, nil
+	case "version":
+		if len(args) != 0 {
+			return nil, argError(method)
+		}
+		return &builtinVersion{CallExpr: call}, nil
 	default:
 		return nil, translateExprNotSupported(fn)
 	}
@@ -347,6 +367,34 @@ func (ast *astCompiler) translateCallable(call sqlparser.Callable) (Expr, error)
 			Arguments: args,
 			Method:    "JSON_KEYS",
 		}}, nil
+
+	case *sqlparser.CurTimeFuncExpr:
+		if call.Fsp > 6 {
+			return nil, vterrors.Errorf(vtrpcpb.Code_INVALID_ARGUMENT, "Too-big precision 12 specified for '%s'. Maximum is 6.", call.Name.String())
+		}
+
+		var cexpr = CallExpr{Arguments: nil, Method: call.Name.String()}
+		var utc, onlyTime bool
+		switch call.Name.Lowered() {
+		case "current_time", "curtime":
+			onlyTime = true
+		case "utc_time":
+			onlyTime = true
+			utc = true
+		case "utc_timestamp":
+			utc = true
+		case "sysdate":
+			return &builtinSysdate{
+				CallExpr: cexpr,
+				prec:     uint8(call.Fsp),
+			}, nil
+		}
+		return &builtinNow{
+			CallExpr: cexpr,
+			utc:      utc,
+			onlyTime: onlyTime,
+			prec:     uint8(call.Fsp),
+		}, nil
 
 	default:
 		return nil, translateExprNotSupported(call)

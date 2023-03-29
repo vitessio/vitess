@@ -535,7 +535,7 @@ func (ins *Insert) processGenerateFromValues(
 
 	// Scan input values to compute the number of values to generate, and
 	// keep track of where they should be filled.
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	resolved, err := env.Evaluate(ins.Generate.Values)
 	if err != nil {
 		return 0, err
@@ -667,7 +667,7 @@ func (ins *Insert) getInsertShardedRoute(
 	// require inputs in that format.
 	vindexRowsValues := make([][]sqltypes.Row, len(ins.VindexValues))
 	rowCount := 0
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	colVindexes := ins.ColVindexes
 	if colVindexes == nil {
 		colVindexes = ins.Table.ColumnVindexes

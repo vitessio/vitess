@@ -25,8 +25,11 @@ import (
 	"vitess.io/vitess/go/mysql/collations/charset"
 	"vitess.io/vitess/go/slices2"
 	"vitess.io/vitess/go/sqltypes"
+	querypb "vitess.io/vitess/go/vt/proto/query"
 	"vitess.io/vitess/go/vt/proto/vtrpc"
+	"vitess.io/vitess/go/vt/servenv"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/datetime"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/decimal"
 	"vitess.io/vitess/go/vt/vtgate/evalengine/internal/json"
 	"vitess.io/vitess/go/vt/vthash"
@@ -2400,4 +2403,76 @@ func cmpnum[N interface{ int64 | uint64 | float64 }](a, b N) int {
 	default:
 		return 1
 	}
+}
+
+func (asm *assembler) Fn_Now(t querypb.Type, format *datetime.Strftime, utc bool) {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		val := env.vm.arena.newEvalBytesEmpty()
+		val.tt = int16(t)
+		val.bytes = format.Format(env.time(utc))
+		env.vm.stack[env.vm.sp] = val
+		env.vm.sp++
+		return 1
+	}, "FN NOW")
+}
+
+func (asm *assembler) Fn_Sysdate(format *datetime.Strftime) {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		val := env.vm.arena.newEvalBytesEmpty()
+		val.tt = int16(sqltypes.Datetime)
+		now := SystemTime()
+		if tz := env.currentTimezone(); tz != nil {
+			now = now.In(tz)
+		}
+		val.bytes = format.Format(now)
+		env.vm.stack[env.vm.sp] = val
+		env.vm.sp++
+		return 1
+	}, "FN SYSDATE")
+}
+
+func (asm *assembler) Fn_Curdate() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		val := env.vm.arena.newEvalBytesEmpty()
+		val.tt = int16(sqltypes.Date)
+		val.bytes = formatDate.Format(env.time(false))
+		env.vm.stack[env.vm.sp] = val
+		env.vm.sp++
+		return 1
+	}, "FN CURDATE")
+}
+
+func (asm *assembler) Fn_User() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(env.currentUser()), collationUtf8mb3)
+		env.vm.sp++
+		return 1
+	}, "FN USER")
+}
+
+func (asm *assembler) Fn_Database() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		db := env.currentDatabase()
+		if db == "" {
+			env.vm.stack[env.vm.sp] = nil
+		} else {
+			env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(db), collationUtf8mb3)
+		}
+		env.vm.sp++
+		return 1
+	}, "FN DATABASE")
+}
+
+func (asm *assembler) Fn_Version() {
+	asm.adjustStack(1)
+	asm.emit(func(env *ExpressionEnv) int {
+		env.vm.stack[env.vm.sp] = env.vm.arena.newEvalText([]byte(servenv.MySQLServerVersion()), collationUtf8mb3)
+		env.vm.sp++
+		return 1
+	}, "FN VERSION")
 }

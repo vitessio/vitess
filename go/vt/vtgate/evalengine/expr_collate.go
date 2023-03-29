@@ -48,6 +48,12 @@ var collationJSON = collations.TypedCollation{
 	Repertoire:   collations.RepertoireUnicode,
 }
 
+var collationUtf8mb3 = collations.TypedCollation{
+	Collation:    collations.CollationUtf8ID,
+	Coercibility: collations.CoerceCoercible,
+	Repertoire:   collations.RepertoireASCII,
+}
+
 type (
 	CollateExpr struct {
 		UnaryExpr

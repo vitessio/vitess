@@ -120,7 +120,7 @@ func (upd *Update) updateVindexEntries(ctx context.Context, vcursor VCursor, bin
 	for colNum, field := range subQueryResult.Fields {
 		fieldColNumMap[field.Name] = colNum
 	}
-	env := evalengine.EnvWithBindVars(bindVars)
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 
 	for _, row := range subQueryResult.Rows {
 		ksid, err := resolveKeyspaceID(ctx, vcursor, upd.KsidVindex, row[0:upd.KsidLength])

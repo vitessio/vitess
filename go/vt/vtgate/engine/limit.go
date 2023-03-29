@@ -55,7 +55,7 @@ func (l *Limit) GetTableName() string {
 
 // TryExecute satisfies the Primitive interface.
 func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool) (*sqltypes.Result, error) {
-	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
+	count, offset, err := l.getCountAndOffset(ctx, vcursor, bindVars)
 	if err != nil {
 		return nil, err
 	}
@@ -85,7 +85,7 @@ func (l *Limit) TryExecute(ctx context.Context, vcursor VCursor, bindVars map[st
 
 // TryStreamExecute satisfies the Primitive interface.
 func (l *Limit) TryStreamExecute(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable, wantfields bool, callback func(*sqltypes.Result) error) error {
-	count, offset, err := l.getCountAndOffset(vcursor, bindVars)
+	count, offset, err := l.getCountAndOffset(ctx, vcursor, bindVars)
 	if err != nil {
 		return err
 	}
@@ -163,8 +163,8 @@ func (l *Limit) NeedsTransaction() bool {
 	return l.Input.NeedsTransaction()
 }
 
-func (l *Limit) getCountAndOffset(vcursor VCursor, bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
-	env := evalengine.EnvWithBindVars(bindVars)
+func (l *Limit) getCountAndOffset(ctx context.Context, vcursor VCursor, bindVars map[string]*querypb.BindVariable) (count int, offset int, err error) {
+	env := evalengine.NewExpressionEnv(ctx, bindVars, vcursor)
 	count, err = getIntFrom(env, l.Count)
 	if err != nil {
 		return
