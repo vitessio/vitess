@@ -91,38 +91,47 @@ func planHorizon(ctx *plancontext.PlanningContext, in *Horizon, isRoot bool) (op
 	canShortcut := isRoute && sel.Having == nil && !needsOrdering
 	_, isDerived := in.Source.(*Derived)
 
-	// if we are at the root, we have to return the columns the user asked for. in all other levels, we reuse as much as possible
-	canReuseCols := !isRoot
-
 	switch {
 	case qp.NeedsAggregation() || sel.Having != nil || sel.Limit != nil || isDerived || needsOrdering || qp.NeedsDistinct():
 		return nil, errNotHorizonPlanned
 	case canShortcut:
 		return planSingleRoute(rb, in)
 	default:
-		src := in.Source
-		for idx, e := range qp.SelectExprs {
-			expr, err := e.GetAliasedExpr()
-			if err != nil {
-				return nil, err
-			}
-			if !expr.As.IsEmpty() {
-				// we are not handling column names correct yet, so let's fail here for now
-				return nil, errNotHorizonPlanned
-			}
-			var offset int
-			src, offset, err = src.AddColumn(ctx, expr, canReuseCols)
-			if err != nil {
-				return nil, err
-			}
-			if idx != offset && isRoot {
-				// if we are returning something different from what the user asked for,
-				// we need to add an operator on top to clean up the output
-				return nil, errNotHorizonPlanned
-			}
+		return pushProjections(ctx, qp, in, isRoot)
+	}
+}
+
+func pushProjections(ctx *plancontext.PlanningContext, qp *QueryProjection, in *Horizon, isRoot bool) (ops.Operator, error) {
+	// if we are at the root, we have to return the columns the user asked for. in all other levels, we reuse as much as possible
+	canReuseCols := !isRoot
+	src := in.Source
+	proj := newSimpleProjection(src)
+	needProj := false
+	for idx, e := range qp.SelectExprs {
+		expr, err := e.GetAliasedExpr()
+		if err != nil {
+			return nil, err
 		}
+		if !expr.As.IsEmpty() {
+			// we are not handling column names correct yet, so let's fail here for now
+			return nil, errNotHorizonPlanned
+		}
+		var offset int
+		src, offset, err = src.AddColumn(ctx, expr, canReuseCols)
+		if err != nil {
+			return nil, err
+		}
+
+		if offset != idx {
+			needProj = true
+		}
+		proj.ASTColumns = append(proj.ASTColumns, expr)
+		proj.Columns = append(proj.Columns, offset)
+	}
+	if !needProj {
 		return src, nil
 	}
+	return proj, nil
 }
 
 func planSingleRoute(rb *Route, horizon *Horizon) (ops.Operator, error) {

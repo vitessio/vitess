@@ -59,6 +59,18 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		return transformCorrelatedSubQueryPlan(ctx, op)
 	case *operators.Derived:
 		return transformDerivedPlan(ctx, op)
+	case *operators.SimpleProjection:
+		src, err := transformToLogicalPlan(ctx, op.Source, false)
+		if err != nil {
+			return nil, err
+		}
+
+		return &simpleProjection{
+			logicalPlanCommon: newBuilderCommon(src),
+			eSimpleProj: &engine.SimpleProjection{
+				Cols: op.Columns,
+			},
+		}, nil
 	case *operators.Filter:
 		plan, err := transformToLogicalPlan(ctx, op.Source, false)
 		if err != nil {
