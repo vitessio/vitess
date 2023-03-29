@@ -33,7 +33,6 @@ import (
 	"time"
 
 	"vitess.io/vitess/go/acl"
-	"vitess.io/vitess/go/stats"
 	"vitess.io/vitess/go/vt/log"
 )
 
@@ -72,7 +71,6 @@ func StatusURLPath() string {
 var (
 	binaryName       = filepath.Base(os.Args[0])
 	hostname         string
-	serverStart      = time.Now()
 	blockProfileRate = 0
 
 	globalStatus = newStatusPage("")
@@ -218,7 +216,7 @@ func (sp *statusPage) statusHandler(w http.ResponseWriter, r *http.Request) {
 		Sections:   sp.sections,
 		BinaryName: binaryName,
 		Hostname:   hostname,
-		StartTime:  serverStart.Format(time.RFC1123),
+		StartTime:  GetInitStartTime().Format(time.RFC1123),
 	}
 
 	if err := sp.tmpl.ExecuteTemplate(w, "status", data); err != nil {
@@ -312,8 +310,4 @@ func init() {
 	if err != nil {
 		log.Exitf("os.Hostname: %v", err)
 	}
-
-	_ = stats.NewGaugeFunc("Uptime", "Uptime in nanoseconds", func() int64 {
-		return int64(time.Since(serverStart).Nanoseconds())
-	})
 }
