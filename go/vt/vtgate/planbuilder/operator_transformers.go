@@ -64,13 +64,19 @@ func transformToLogicalPlan(ctx *plancontext.PlanningContext, op ops.Operator, i
 		if err != nil {
 			return nil, err
 		}
+
+		predicate := op.FinalPredicate
 		ast := ctx.SemTable.AndExpressions(op.Predicates...)
-		predicate, err := evalengine.Translate(ast, &evalengine.Config{
-			ResolveColumn: resolveFromPlan(ctx, plan, true),
-			Collation:     ctx.SemTable.Collation,
-		})
-		if err != nil {
-			return nil, err
+
+		// this might already have been done on the operators
+		if predicate == nil {
+			predicate, err = evalengine.Translate(ast, &evalengine.Config{
+				ResolveColumn: resolveFromPlan(ctx, plan, true),
+				Collation:     ctx.SemTable.Collation,
+			})
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		return &filter{

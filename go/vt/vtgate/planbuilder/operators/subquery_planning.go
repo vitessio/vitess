@@ -44,7 +44,7 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		}
 		merged, err := tryMergeSubQueryOp(ctx, outer, innerOp, newInner, preds, newSubQueryMerge(ctx, newInner), ts)
 		if err != nil {
-			return nil, rewrite.SameTree, err
+			return nil, false, err
 		}
 
 		if merged != nil {
@@ -65,13 +65,13 @@ func optimizeSubQuery(ctx *plancontext.PlanningContext, op *SubQuery, ts semanti
 		if inner.ExtractedSubquery.OpCode == int(popcode.PulloutExists) {
 			correlatedTree, err := createCorrelatedSubqueryOp(ctx, innerOp, outer, preds, inner.ExtractedSubquery)
 			if err != nil {
-				return nil, rewrite.SameTree, err
+				return nil, false, err
 			}
 			outer = correlatedTree
 			continue
 		}
 
-		return nil, rewrite.SameTree, vterrors.VT12001("cross-shard correlated subquery")
+		return nil, false, vterrors.VT12001("cross-shard correlated subquery")
 	}
 
 	for _, tree := range unmerged {

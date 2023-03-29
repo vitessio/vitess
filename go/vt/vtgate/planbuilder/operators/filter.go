@@ -18,6 +18,7 @@ package operators
 
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/ops"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
@@ -27,6 +28,10 @@ import (
 type Filter struct {
 	Source     ops.Operator
 	Predicates []sqlparser.Expr
+
+	// FinalPredicate is the evalengine expression that will finally be used.
+	// It contains the ANDed predicates in Predicates, with ColName:s replaced by Offset:s
+	FinalPredicate evalengine.Expr
 }
 
 var _ ops.PhysicalOperator = (*Filter)(nil)

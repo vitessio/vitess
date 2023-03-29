@@ -115,7 +115,7 @@ func optimizeDerived(ctx *plancontext.PlanningContext, op *Derived) (ops.Operato
 func optimizeJoin(ctx *plancontext.PlanningContext, op *Join) (ops.Operator, rewrite.TreeIdentity, error) {
 	join, err := mergeOrJoin(ctx, op.LHS, op.RHS, sqlparser.SplitAndExpression(nil, op.Predicate), !op.LeftJoin)
 	if err != nil {
-		return nil, rewrite.SameTree, err
+		return nil, false, err
 	}
 	return join, rewrite.NewTree, nil
 }

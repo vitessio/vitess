@@ -19,6 +19,7 @@ package operators
 import (
 	"vitess.io/vitess/go/vt/sqlparser"
 	"vitess.io/vitess/go/vt/vterrors"
+	"vitess.io/vitess/go/vt/vtgate/evalengine"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/operators/rewrite"
 	"vitess.io/vitess/go/vt/vtgate/planbuilder/plancontext"
 	"vitess.io/vitess/go/vt/vtgate/semantics"
@@ -28,7 +29,12 @@ import (
 
 var errNotHorizonPlanned = vterrors.VT12001("query cannot be fully operator planned")
 
+// planColumns is the process of figuring out all necessary columns.
+// They can be needed because the user wants to return the value of a column,
+// or because we need a column for filtering, grouping or ordering
 func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Operator, error) {
+	// We only need to do column planning to the point we hit a Route.
+	// Everything underneath the route is handled by the mysql planner
 	stopAtRoute := func(operator ops.Operator) rewrite.VisitRule {
 		_, isRoute := operator.(*Route)
 		return rewrite.VisitRule(!isRoute)
@@ -40,14 +46,20 @@ func planColumns(ctx *plancontext.PlanningContext, root ops.Operator) (ops.Opera
 			if err != nil {
 				if vterr, ok := err.(*vterrors.VitessError); ok && vterr.ID == "VT13001" {
 					// we encountered a bug. let's try to back out
-					return nil, rewrite.SameTree, errNotHorizonPlanned
+					return nil, false, errNotHorizonPlanned
 				}
-				return nil, rewrite.SameTree, err
+				return nil, false, err
 			}
 			return op, rewrite.NewTree, nil
-		case *Derived, *Filter:
+		case *Filter:
+			err := planFilter(ctx, in)
+			if err != nil {
+				return nil, false, err
+			}
+			return in, rewrite.SameTree, nil
+		case *Derived:
 			// TODO we need to do column planning on these
-			return nil, rewrite.SameTree, errNotHorizonPlanned
+			return nil, false, errNotHorizonPlanned
 		default:
 			return in, rewrite.SameTree, nil
 		}
@@ -120,4 +132,28 @@ func planSingleRoute(rb *Route, horizon *Horizon) (ops.Operator, error) {
 
 func aeWrap(e sqlparser.Expr) *sqlparser.AliasedExpr {
 	return &sqlparser.AliasedExpr{Expr: e}
+}
+
+func planFilter(ctx *plancontext.PlanningContext, in *Filter) error {
+	resolveColumn := func(col *sqlparser.ColName) (int, error) {
+		newSrc, offset, err := in.Source.AddColumn(ctx, aeWrap(col), true)
+		if err != nil {
+			return 0, err
+		}
+		in.Source = newSrc
+		return offset, nil
+	}
+	cfg := &evalengine.Config{
+		ResolveType:   ctx.SemTable.TypeForExpr,
+		Collation:     ctx.SemTable.Collation,
+		ResolveColumn: resolveColumn,
+	}
+
+	eexpr, err := evalengine.Translate(sqlparser.AndExpressions(in.Predicates...), cfg)
+	if err != nil {
+		return err
+	}
+
+	in.FinalPredicate = eexpr
+	return nil
 }
