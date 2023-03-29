@@ -55,12 +55,12 @@ func (s *SimpleProjection) Inputs() []ops.Operator {
 
 func (s *SimpleProjection) AddPredicate(ctx *plancontext.PlanningContext, expr sqlparser.Expr) (ops.Operator, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, errNotHorizonPlanned
 }
 
 func (s *SimpleProjection) AddColumn(ctx *plancontext.PlanningContext, expr *sqlparser.AliasedExpr, reuseCol bool) (ops.Operator, int, error) {
 	// TODO implement me
-	panic("implement me")
+	return nil, 0, errNotHorizonPlanned
 }
 
 func exprFromAliasedExpr(from *sqlparser.AliasedExpr) sqlparser.Expr { return from.Expr }
