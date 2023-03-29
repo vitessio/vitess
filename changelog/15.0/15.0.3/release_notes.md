@@ -1,5 +1,5 @@
 # Release of Vitess v15.0.3
-The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/15.0/v15.0.3/changelog.md).
+The entire changelog for this release can be found [here](https://github.com/vitessio/vitess/blob/main/changelog/15.0/15.0.3/changelog.md).
 
 The release includes 52 commits (excluding merges)
 
